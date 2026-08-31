@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Star, ShieldCheck, Trophy, Briefcase, Package, ChevronDown, ChevronUp, AlertCircle, X, ShieldAlert } from "lucide-react";
+import { Star, ShieldCheck, Trophy, Briefcase, Package, ChevronDown, ChevronUp, AlertCircle, X, ShieldAlert, User } from "lucide-react";
 
 interface MeritSectionProps {
   loading?: boolean;
@@ -11,6 +11,15 @@ interface MeritSectionProps {
   assetRating?: number;
   successfulJobsCount?: number;
   viewMode?: "merit" | "ratings" | "both";
+  freelancerServiceRating?: number;
+  freelancerServiceCount?: number;
+  freelancerJobRating?: number;
+  freelancerJobCount?: number;
+  clientServiceRating?: number;
+  clientServiceCount?: number;
+  clientJobRating?: number;
+  clientJobCount?: number;
+  onNavigateToReviews?: (filter: "All" | "As Freelancer" | "As a Client" | "Asset Creation") => void;
 }
 
 const mockDisputes = [
@@ -35,12 +44,20 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
   avgRating = 4.8,
   totalReviews = 47,
   clientRating = 4.9,
-  freelancerRating = 4.8,
-  assetRating = 4.7,
-  successfulJobsCount = 86,
-  viewMode = "both"
+  freelancerRating = 4.7,
+  assetRating = 5.0,
+  successfulJobsCount = 24,
+  viewMode = "both",
+  freelancerServiceRating = 4.8,
+  freelancerServiceCount = 12,
+  freelancerJobRating = 4.6,
+  freelancerJobCount = 8,
+  clientServiceRating = 0,
+  clientServiceCount = 0,
+  clientJobRating = 5.0,
+  clientJobCount = 3,
+  onNavigateToReviews
 }) => {
-  const [isCollapsed, setIsCollapsed] = useState(true);
   const [isDisputeModalOpen, setIsDisputeModalOpen] = useState(false);
 
   if (loading) return <MeritSectionSkeleton viewMode={viewMode} />;
@@ -56,24 +73,12 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
 
   return (
     <div className="font-['Plus Jakarta Sans',sans-serif] space-y-2">
-      {/* Top Controller Toggle Bar */}
-      <div className="flex justify-end">
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-wider hover:text-gray-800 dark:hover:text-zinc-300 transition"
-        >
-          <span>{isCollapsed ? "Expand Metrics" : "Collapse Metrics"}</span>
-          {isCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-        </button>
-      </div>
 
-      <div className={`grid grid-cols-1 gap-4 ${viewMode === "both" ? "md:grid-cols-3" : "max-w-2xl mx-auto w-full"}`}>
+      <div className={`grid grid-cols-1 gap-4 ${viewMode === "both" ? "md:grid-cols-3" : "w-full"}`}>
 
         {/* ==================== LEFT CARD: PERFORMANCE MERIT SCORE ==================== */}
         {(viewMode === "both" || viewMode === "merit") && (
-        <div className={`rounded-2xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white dark:from-white/[0.03] to-transparent relative overflow-hidden group shadow-xl transition-all duration-300 ${
-          isCollapsed ? "p-3 flex flex-row items-center justify-between" : "p-5 flex flex-col justify-between gap-5 min-h-[220px]"
-        }`}>
+        <div className={`rounded-2xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white dark:from-white/[0.03] to-transparent relative overflow-hidden group shadow-xl transition-all duration-300 p-5 flex flex-col justify-between gap-5 min-h-[220px]`}>
           <div
             className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
             style={{ backgroundImage: `linear-gradient(to right, hsl(${hue}, 85%, 55%, 0.08), transparent)` }}
@@ -84,49 +89,41 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
               <ShieldCheck className="h-3.5 w-3.5 transition-colors duration-500" style={{ color: hpColor }} />
               <span className="text-[10px] text-gray-600 dark:text-zinc-400 font-extrabold uppercase tracking-wider block">Performance Merit Score</span>
             </div>
-            {!isCollapsed && (
-              <span className="text-xs text-gray-600 dark:text-zinc-400 font-normal block">Ecosystem Node Trust Index: Verified.</span>
-            )}
+            <span className="text-xs text-gray-600 dark:text-zinc-400 font-normal block">Ecosystem Node Trust Index: Verified.</span>
           </div>
 
-          <div className={`flex items-center justify-between relative z-10 ${isCollapsed ? "gap-4" : "mt-2"}`}>
-            {!isCollapsed && (
-              <span className="text-[10px] text-gray-500 dark:text-zinc-500 italic font-medium max-w-[130px] leading-normal">Accumulated performance total of {totalReviews} reviews</span>
-            )}
+          <div className="flex items-center justify-between relative z-10 mt-2">
+            <span className="text-[10px] text-gray-500 dark:text-zinc-500 italic font-medium max-w-[130px] leading-normal">Accumulated performance total of {totalReviews} reviews</span>
 
             <div
-              className={`relative flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
-                isCollapsed ? "w-14 h-14" : "w-20 h-20"
-              }`}
+              className="relative flex items-center justify-center flex-shrink-0 transition-all duration-300 w-20 h-20"
               style={{ filter: `drop-shadow(${hpGlow})` }}
             >
               <svg className="w-full h-full transform -rotate-90">
                 <circle
-                  cx={isCollapsed ? "28" : "40"}
-                  cy={isCollapsed ? "28" : "40"}
-                  r={isCollapsed ? "22" : "33"}
+                  cx="40"
+                  cy="40"
+                  r="33"
                   className="stroke-white/5"
-                  strokeWidth={isCollapsed ? "3.5" : "4.5"}
+                  strokeWidth="4.5"
                   fill="transparent"
                 />
                 <circle
-                  cx={isCollapsed ? "28" : "40"}
-                  cy={isCollapsed ? "28" : "40"}
-                  r={isCollapsed ? "22" : "33"}
+                  cx="40"
+                  cy="40"
+                  r="33"
                   className="transition-all duration-700 ease-out"
                   style={{ stroke: hpColor }}
-                  strokeWidth={isCollapsed ? "3.5" : "4.5"}
+                  strokeWidth="4.5"
                   fill="transparent"
-                  strokeDasharray={2 * Math.PI * (isCollapsed ? 22 : 33)}
-                  strokeDashoffset={2 * Math.PI * (isCollapsed ? 22 : 33) - (safeScore / 100) * (2 * Math.PI * (isCollapsed ? 22 : 33))}
+                  strokeDasharray={2 * Math.PI * 33}
+                  strokeDashoffset={2 * Math.PI * 33 - (safeScore / 100) * (2 * Math.PI * 33)}
                   strokeLinecap="round"
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span
-                  className={`font-black tracking-tight transition-all duration-300 ${
-                    isCollapsed ? "text-xs" : "text-base"
-                  }`}
+                  className="font-black tracking-tight transition-all duration-300 text-base"
                   style={{ color: hpColor }}
                 >
                   {safeScore}%
@@ -136,118 +133,184 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
           </div>
 
           {/* Dispute Action Trigger Button */}
-          {!isCollapsed && (
-            <div className="relative z-10 pt-2 border-t border-gray-200 dark:border-white/5 mt-1 animate-fadeIn">
-              <button
-                onClick={() => setIsDisputeModalOpen(true)}
-                className="w-full py-1.5 px-3 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-200 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition"
-              >
-                <AlertCircle className="h-3.5 w-3.5 text-amber-500/80" />
-                <span>View Dispute History</span>
-              </button>
-            </div>
-          )}
+          <div className="relative z-10 pt-2 border-t border-gray-200 dark:border-white/5 mt-1 animate-fadeIn">
+            <button
+              onClick={() => setIsDisputeModalOpen(true)}
+              className="w-full py-1.5 px-3 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-200 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition"
+            >
+              <AlertCircle className="h-3.5 w-3.5 text-amber-500/80" />
+              <span>View Dispute History</span>
+            </button>
+          </div>
         </div>
         )}
 
         {/* ==================== RIGHT CARD: RATING BREAKDOWN TABLE ==================== */}
         {(viewMode === "both" || viewMode === "ratings") && (
-        <div className={`${viewMode === "both" ? "md:col-span-2" : ""} rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-dark-base/60 backdrop-blur-md text-gray-800 dark:text-zinc-300 shadow-xl flex flex-col justify-between transition-all duration-300 ${
-          isCollapsed ? "p-3 justify-center gap-2" : "p-5 gap-4"
-        }`}>
-
-          <div className={`text-xs ${isCollapsed ? "space-y-2" : "space-y-3.5"}`}>
-
-            {/* Category 1: Uploaded Assets */}
-            <div className={`grid grid-cols-[1fr_auto_auto] items-center border-b border-gray-200 dark:border-white/5 ${isCollapsed ? "pb-1.5" : "pb-2"}`}>
-              <div className="flex items-center gap-2">
-                <Package className="h-4 w-4 text-zinc-500" />
-                <span className="font-semibold text-gray-800 dark:text-zinc-200">Uploaded Assets</span>
+        <div className={`${viewMode === "both" ? "md:col-span-2" : ""} flex flex-col gap-4`}>
+          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-dark-base/60 backdrop-blur-md text-gray-800 dark:text-zinc-300 shadow-xl flex flex-col justify-between transition-all duration-300 p-5 gap-4">
+            <div className="text-xs space-y-3.5 w-full">
+              
+              {/* Table Header */}
+              <div className="flex justify-end gap-4 sm:gap-6 mb-2 border-b border-gray-200 dark:border-white/5 pb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                <div className="w-16 sm:w-20 text-center">Total Rating</div>
+                <div className="w-16 sm:w-20 text-center">Rating</div>
+                <div className="w-12 sm:w-16 text-right">Amount</div>
               </div>
 
-              <div className={`flex items-center text-gray-500 dark:text-zinc-500 ${isCollapsed ? "pr-2 sm:pr-4" : "pr-4 sm:pr-8"}`}>
-                <span>Vol:</span>
-                <span className="text-gray-700 dark:text-zinc-300 font-mono font-bold ml-1.5 w-6 text-right">4</span>
-                <span className="text-gray-300 dark:text-zinc-700 ml-4">|</span>
-              </div>
-
-              <div className="flex items-center gap-1.5 justify-end w-24">
-                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400 flex-shrink-0" />
-                <span className="text-gray-900 dark:text-white font-bold w-6 text-right">{assetRating.toFixed(1)}</span>
-                <span className="text-gray-500 dark:text-zinc-500 font-normal text-[10px] w-8 text-left ml-0.5">(1k)</span>
-              </div>
-            </div>
-
-            {/* Category 2: Total Successful Works Block */}
-            <div className={`pt-0.5 ${isCollapsed ? "space-y-0" : "space-y-2.5"}`}>
-              <div className="grid grid-cols-[1fr_auto_auto] items-center">
-                <div className="flex items-center gap-2">
-                  <Briefcase className="h-4 w-4 text-zinc-400" />
-                  <span className="font-bold text-gray-900 dark:text-zinc-100">Total Successful Works</span>
-                </div>
-
-                <div className={`flex items-center text-gray-500 dark:text-zinc-500 ${isCollapsed ? "pr-2 sm:pr-4" : "pr-4 sm:pr-8"}`}>
-                  <span>Vol:</span>
-                  <span className="text-gray-700 dark:text-zinc-300 font-mono font-bold ml-1.5 w-6 text-right">{successfulJobsCount}</span>
-                  <span className="text-gray-300 dark:text-zinc-700 ml-4">|</span>
-                </div>
-
-                <div className="flex items-center gap-1.5 justify-end w-24">
-                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400 flex-shrink-0" />
-                  <span className="text-gray-900 dark:text-white font-bold w-6 text-right">{avgRating.toFixed(1)}</span>
-                  <span className="text-gray-500 dark:text-zinc-500 font-normal text-[10px] w-8 text-left ml-0.5">({successfulJobsCount})</span>
-                </div>
-              </div>
-
-              {!isCollapsed && viewMode !== "ratings" && (
-                <div className="border-l border-gray-200 dark:border-white/10 ml-2 space-y-2.5 animate-fadeIn">
-                  {/* Sub-row: As a Client */}
-                  <div className="grid grid-cols-[1fr_auto_auto] items-center pl-4">
-                    <span className="text-gray-600 dark:text-zinc-500">As a Client</span>
-                    <div className="flex items-center text-gray-500 dark:text-zinc-500 pr-4 sm:pr-8">
-                      <span>Vol:</span>
-                      <span className="text-gray-600 dark:text-zinc-400 font-mono ml-1.5 w-6 text-right">6</span>
-                      <span className="text-gray-300 dark:text-zinc-700 ml-4">|</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 justify-end w-24">
-                      <Star className="h-3 w-3 fill-amber-400/60 text-amber-400/60 flex-shrink-0" />
-                      <span className="text-gray-700 dark:text-zinc-400 font-semibold w-6 text-right">{clientRating.toFixed(1)}</span>
-                      <span className="text-gray-500 dark:text-zinc-600 font-normal text-[10px] w-8 text-left ml-0.5">(6)</span>
-                    </div>
+              {/* As a Freelancer Section */}
+              <div className="pt-0.5 space-y-2.5">
+                <div 
+                  className={`flex items-center justify-between ${onNavigateToReviews ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg -mx-2 px-2 py-1 transition-colors" : ""}`}
+                  onClick={() => onNavigateToReviews?.("As Freelancer")}
+                >
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="h-4 w-4 text-zinc-400" />
+                    <span className="font-bold text-gray-900 dark:text-zinc-100">As a Freelancer</span>
                   </div>
-
-                  {/* Sub-row: As a Freelancer */}
-                  <div className="grid grid-cols-[1fr_auto_auto] items-center pl-4">
-                    <span className="text-gray-600 dark:text-zinc-500">As a Freelancer</span>
-                    <div className="flex items-center text-gray-500 dark:text-zinc-500 pr-4 sm:pr-8">
-                      <span>Vol:</span>
-                      <span className="text-gray-600 dark:text-zinc-400 font-mono ml-1.5 w-6 text-right">80</span>
-                      <span className="text-gray-300 dark:text-zinc-700 ml-4">|</span>
+                  <div className="flex justify-end gap-4 sm:gap-6 items-center">
+                    <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-500">
+                      <Star className="h-3.5 w-3.5 fill-current" />
+                      <span className="font-bold text-gray-900 dark:text-white">{freelancerRating.toFixed(1)}</span>
                     </div>
-                    <div className="flex items-center gap-1.5 justify-end w-24">
-                      <Star className="h-3 w-3 fill-amber-400/60 text-amber-400/60 flex-shrink-0" />
-                      <span className="text-gray-700 dark:text-zinc-400 font-semibold w-6 text-right">{freelancerRating.toFixed(1)}</span>
-                      <span className="text-gray-500 dark:text-zinc-600 font-normal text-[10px] w-8 text-left ml-0.5">(80)</span>
-                    </div>
+                    <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
+                    <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-500 font-mono">({freelancerServiceCount + freelancerJobCount})</div>
                   </div>
                 </div>
-              )}
-            </div>
 
+                {viewMode !== "merit" && (
+                  <div className="border-l border-gray-200 dark:border-white/10 ml-2 space-y-2.5 animate-fadeIn">
+                    {/* Service Rating */}
+                    <div className="flex items-center justify-between pl-4">
+                      <span className="text-gray-600 dark:text-zinc-500">Service Rating</span>
+                      <div className="flex justify-end gap-4 sm:gap-6 items-center">
+                        <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
+                        <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-400/70">
+                          <Star className="h-3 w-3 fill-current" />
+                          <span className="font-semibold text-gray-700 dark:text-zinc-400">{freelancerServiceRating.toFixed(1)}</span>
+                        </div>
+                        <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-600 font-mono text-[10px]">({freelancerServiceCount})</div>
+                      </div>
+                    </div>
+
+                    {/* Job Execution Rating */}
+                    <div className="flex items-center justify-between pl-4">
+                      <span className="text-gray-600 dark:text-zinc-500">Job Execution Rating</span>
+                      <div className="flex justify-end gap-4 sm:gap-6 items-center">
+                        <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
+                        <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-400/70">
+                          <Star className="h-3 w-3 fill-current" />
+                          <span className="font-semibold text-gray-700 dark:text-zinc-400">{freelancerJobRating.toFixed(1)}</span>
+                        </div>
+                        <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-600 font-mono text-[10px]">({freelancerJobCount})</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* As a Client Section */}
+              <div className="pt-2 space-y-2.5">
+                <div 
+                  className={`flex items-center justify-between ${onNavigateToReviews ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg -mx-2 px-2 py-1 transition-colors" : ""}`}
+                  onClick={() => onNavigateToReviews?.("As a Client")}
+                >
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-zinc-400" />
+                    <span className="font-bold text-gray-900 dark:text-zinc-100">As a Client</span>
+                  </div>
+                  <div className="flex justify-end gap-4 sm:gap-6 items-center">
+                    <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-500">
+                      <Star className="h-3.5 w-3.5 fill-current" />
+                      <span className="font-bold text-gray-900 dark:text-white">{clientRating.toFixed(1)}</span>
+                    </div>
+                    <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
+                    <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-500 font-mono">({clientServiceCount + clientJobCount})</div>
+                  </div>
+                </div>
+
+                {viewMode !== "merit" && (
+                  <div className="border-l border-gray-200 dark:border-white/10 ml-2 space-y-2.5 animate-fadeIn">
+                    {/* Service Feedback Rating */}
+                    <div className="flex items-center justify-between pl-4">
+                      <span className="text-gray-600 dark:text-zinc-500">Service Feedback Rating</span>
+                      <div className="flex justify-end gap-4 sm:gap-6 items-center">
+                        <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
+                        <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-400/70">
+                          <Star className="h-3 w-3 fill-current" />
+                          <span className="font-semibold text-gray-700 dark:text-zinc-400">{clientServiceRating.toFixed(1)}</span>
+                        </div>
+                        <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-600 font-mono text-[10px]">({clientServiceCount})</div>
+                      </div>
+                    </div>
+
+                    {/* Job Feedback Rating */}
+                    <div className="flex items-center justify-between pl-4">
+                      <span className="text-gray-600 dark:text-zinc-500">Job Feedback Rating</span>
+                      <div className="flex justify-end gap-4 sm:gap-6 items-center">
+                        <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
+                        <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-400/70">
+                          <Star className="h-3 w-3 fill-current" />
+                          <span className="font-semibold text-gray-700 dark:text-zinc-400">{clientJobRating.toFixed(1)}</span>
+                        </div>
+                        <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-600 font-mono text-[10px]">({clientJobCount})</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* As an Asset Creator Section */}
+              <div className="pt-2 space-y-2.5">
+                <div 
+                  className={`flex items-center justify-between ${onNavigateToReviews ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg -mx-2 px-2 py-1 transition-colors" : ""}`}
+                  onClick={() => onNavigateToReviews?.("Asset Creation")}
+                >
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-zinc-400" />
+                    <span className="font-bold text-gray-900 dark:text-zinc-100">As an Asset Creator</span>
+                  </div>
+                  <div className="flex justify-end gap-4 sm:gap-6 items-center">
+                    <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-500">
+                      <Star className="h-3.5 w-3.5 fill-current" />
+                      <span className="font-bold text-gray-900 dark:text-white">{assetRating.toFixed(1)}</span>
+                    </div>
+                    <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
+                    <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-500 font-mono">(0)</div>
+                  </div>
+                </div>
+
+                {viewMode !== "merit" && (
+                  <div className="border-l border-gray-200 dark:border-white/10 ml-2 space-y-2.5 animate-fadeIn">
+                    {/* Uploaded Assets Rating */}
+                    <div className="flex items-center justify-between pl-4">
+                      <span className="text-gray-600 dark:text-zinc-500">Uploaded Assets Rating</span>
+                      <div className="flex justify-end gap-4 sm:gap-6 items-center">
+                        <div className="w-16 sm:w-20 text-center text-gray-400/50">-</div>
+                        <div className="w-16 sm:w-20 flex justify-center items-center gap-1.5 text-amber-400/70">
+                          <Star className="h-3 w-3 fill-current" />
+                          <span className="font-semibold text-gray-700 dark:text-zinc-400">0.0</span>
+                        </div>
+                        <div className="w-12 sm:w-16 text-right text-gray-500 dark:text-zinc-600 font-mono text-[10px]">(0)</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            </div>
           </div>
 
-          {!isCollapsed && (
-            <div className="bg-gradient-to-r from-amber-500/10 via-transparent to-transparent border border-amber-500/10 rounded-xl p-2.5 flex items-center justify-between mt-1 animate-fadeIn">
-              <div className="flex items-center gap-2">
-                <Trophy className="h-3.5 w-3.5 text-amber-400" />
-                <span className="text-[11px] font-bold text-gray-800 dark:text-zinc-300">Overall Rating Index Matrix:</span>
-              </div>
-              <div className="flex items-center gap-1 text-xs font-black text-amber-400 tracking-tight">
-                <Star className="h-3.5 w-3.5 fill-current text-amber-400" />
-                <span>{avgRating.toFixed(1)}</span>
-              </div>
+          <div className="bg-gradient-to-r from-amber-500/20 via-amber-500/5 to-transparent border border-amber-500/30 rounded-xl p-3 flex items-center justify-between animate-fadeIn shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-amber-500" />
+              <span className="text-sm font-black text-gray-900 dark:text-white tracking-wide uppercase">Overall Rating Index Matrix:</span>
             </div>
-          )}
+            <div className="flex items-center gap-1.5 text-lg font-black text-amber-500 tracking-tight">
+              <Star className="h-5 w-5 fill-current text-amber-500" />
+              <span>{avgRating.toFixed(1)}</span>
+            </div>
+          </div>
 
         </div>
         )}

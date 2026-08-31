@@ -5,6 +5,7 @@ import { JobRichText } from "./JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ViewType } from "./job_list_viewtype";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import useGlobalState from "@/lib/global_state";
 
 export interface Job {
   id: string;
@@ -32,6 +33,8 @@ export interface Job {
   skills?: string[];
   isSaved?: boolean;
   isOwnPost?: boolean;
+  isManageablePost?: boolean;
+  isPersonalPost?: boolean;
   hasProposed?: boolean;
   myProposalId?: string | null;
 }
@@ -110,6 +113,7 @@ const JobList: React.FC<JobListProps> = ({
   baseRoute,
 }) => {
   const navigate = useNavigate();
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
 
   const handleEditClick = (e: React.MouseEvent, jobId: string) => {
     e.stopPropagation();
@@ -192,7 +196,7 @@ const JobList: React.FC<JobListProps> = ({
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
 
                     <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                      {!job.isOwnPost && (
+                      {!job.isOwnPost && !isGuestMode && (
                         <button
                           title="Report Post"
                           onClick={(e) => handleReportClick(e, job)}
@@ -201,7 +205,7 @@ const JobList: React.FC<JobListProps> = ({
                           <Flag className="h-3.5 w-3.5" />
                         </button>
                       )}
-                      {job.isOwnPost && (
+                      {job.isManageablePost && (
                         <button
                           title="Edit Post"
                           onClick={(e) => handleEditClick(e, job.id)}
@@ -210,15 +214,17 @@ const JobList: React.FC<JobListProps> = ({
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
                       )}
-                      <button
-                        onClick={(e) => onToggleSave(e, job.id)}
-                        className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
-                          job.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-gray-900 dark:text-white"
-                        }`}
-                      >
-                        <Bookmark className={`h-4 w-4 ${job.isSaved ? "fill-current" : ""}`} />
-                        <span className="text-[10px] font-bold text-gray-700 dark:text-white">{job.savesCount}</span>
-                      </button>
+                      {!isGuestMode && (
+                        <button
+                          onClick={(e) => onToggleSave(e, job.id)}
+                          className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
+                            job.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-gray-900 dark:text-white"
+                          }`}
+                        >
+                          <Bookmark className={`h-4 w-4 ${job.isSaved ? "fill-current" : ""}`} />
+                          <span className="text-[10px] font-bold text-gray-700 dark:text-white">{job.savesCount}</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -322,7 +328,7 @@ const JobList: React.FC<JobListProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {!job.isOwnPost && (
+                      {!job.isOwnPost && !isGuestMode && (
                         <button
                           title="Report Post"
                           onClick={(e) => handleReportClick(e, job)}
@@ -331,7 +337,7 @@ const JobList: React.FC<JobListProps> = ({
                           <Flag className="h-4 w-4" />
                         </button>
                       )}
-                      {job.isOwnPost && (
+                      {job.isManageablePost && (
                         <button
                           title="Edit Post"
                           onClick={(e) => handleEditClick(e, job.id)}
@@ -340,13 +346,15 @@ const JobList: React.FC<JobListProps> = ({
                           <Edit2 className="h-4 w-4" />
                         </button>
                       )}
-                      <button
-                        onClick={(e) => onToggleSave(e, job.id)}
-                        className={`transition-colors flex items-center gap-1 ${job.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-600 hover:text-gray-900 dark:hover:text-gray-900 dark:text-white"}`}
-                      >
-                        <Bookmark className={`h-5 w-5 ${job.isSaved ? "fill-current" : ""}`} />
-                        <span className="text-xs font-bold text-gray-700 dark:text-white">{job.savesCount}</span>
-                      </button>
+                      {!isGuestMode && (
+                        <button
+                          onClick={(e) => onToggleSave(e, job.id)}
+                          className={`transition-colors flex items-center gap-1 ${job.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-600 hover:text-gray-900 dark:hover:text-gray-900 dark:text-white"}`}
+                        >
+                          <Bookmark className={`h-5 w-5 ${job.isSaved ? "fill-current" : ""}`} />
+                          <span className="text-xs font-bold text-gray-700 dark:text-white">{job.savesCount}</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 

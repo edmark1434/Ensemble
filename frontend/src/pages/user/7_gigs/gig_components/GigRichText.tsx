@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import {
   X, Star, Clock, Users, Bookmark, Share2,
-  ChevronRight, ChevronLeft, ChevronDown, PlayCircle, Edit2, Flag, Maximize2, User, FileText, CheckCircle2, HelpCircle, Wrench, MessageSquare, ZoomIn
+  ChevronRight, ChevronLeft, ChevronDown, PlayCircle, Edit2, Flag, Maximize2, User, FileText, CheckCircle2, HelpCircle, Wrench, MessageSquare, ZoomIn, ShoppingCart
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,6 +11,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import PopupReportGig from "./PopupReportGig";
 import { GigsOtherServices } from "./gigs_other_services";
 import useGlobalState from "@/lib/global_state";
+import { formatDistanceToNow } from "date-fns";
 
 interface GigRichTextProps {
   gig?: Gig | null;
@@ -30,10 +31,11 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   const isPage = layout === "page";
   const navigate = useNavigate();
   const user = useGlobalState(state => state.user);
+  const isGuestMode = useGlobalState(state => state.isGuestMode);
   const [activeTierIdx, setActiveTierIdx] = useState(0);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
-  const isOwner = gig && user && String(user.account_id) === String(gig.client_account_id);
+  const isOwner = gig?.isOwnGig;
 
   // Lightbox Modal state
   const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
@@ -42,6 +44,24 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   const [isMilestonesOpen, setIsMilestonesOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(true);
   const [isQuestionnairesOpen, setIsQuestionnairesOpen] = useState(false);
+  const [reviewFilter, setReviewFilter] = useState<number | null>(null);
+
+  const formatTimeAgo = (dateStr: string | undefined) => {
+    if (!dateStr) return "Just now";
+    try {
+      let str = formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+      str = str.replace(/minutes?/, (m) => m === 'minutes' ? 'mins' : 'min')
+               .replace(/hours?/, (m) => m === 'hours' ? 'hrs' : 'hr')
+               .replace(/seconds?/, (m) => m === 'seconds' ? 'secs' : 'sec')
+               .replace(/days?/, 'd')
+               .replace(/months?/, 'm')
+               .replace(/years?/, (m) => m === 'years' ? 'yrs' : 'yr')
+               .replace('about ', '');
+      return str;
+    } catch {
+      return "Just now";
+    }
+  };
 
   // Compile all images for next/prev lightbox switching
   const allImages = React.useMemo(() => {
@@ -195,6 +215,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   }
 
   const activeTier = gig?.tiers?.[activeTierIdx];
+  const hasServiceRating = (gig.ratingCount || 0) > 0;
 
   const termsContent =
     gig?.termsOfService ||
@@ -215,7 +236,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   const handleViewProfile = () => {
     if (!gig) return;
 
-    if (gig.isOwnGig) {
+    if (gig.isPersonalGig) {
       navigate("/profile");
       return;
     }
@@ -264,16 +285,23 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
         </div>
 
         <div className="text-left min-w-0">
-          <p className="text-[9px] uppercase text-gray-500 dark:text-zinc-500 font-bold tracking-wider">
-            Service Creator
+          <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate mb-1">
+            {gig.postedBy}
           </p>
-          <div className="flex items-center gap-2">
-            <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate">
-              {gig.postedBy}
-            </p>
-            <div className="flex items-center gap-1 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 border border-gray-100 dark:border-white/5 shrink-0">
-              <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
-              <span>{gig.clientRating || 0} ({gig.ratingCount || 0})</span>
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-zinc-400">
+              <span>Freelancer Rating:</span>
+              <div className="flex items-center gap-0.5 font-medium text-gray-700 dark:text-zinc-200">
+                <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
+                <span>{gig.clientRating || 0} ({gig.ratingCount || 0})</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-zinc-400">
+              <span>Service Rating:</span>
+              <div className="flex items-center gap-0.5 font-medium text-gray-700 dark:text-zinc-200">
+                <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
+                <span>{hasServiceRating ? `${gig.clientRating || 0} (${gig.ratingCount || 0})` : "N/A"}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -457,31 +485,113 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
     );
   };
 
-  const renderReviews = () => (
-    <section className="pt-4 border-t border-gray-200 dark:border-white/5 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-base font-bold text-gray-900 dark:text-white">Rates & Reviews</h3>
-          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">Feedback from clients on completed orders</p>
-        </div>
-        <div className="flex items-center gap-2 bg-gray-50 dark:bg-white/5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10">
-          <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-          <span className="text-sm font-bold text-gray-900 dark:text-white">{gig.clientRating || 5.0}</span>
-          <span className="text-xs text-gray-400 dark:text-zinc-500">({gig.ratingCount || 0} reviews)</span>
-        </div>
-      </div>
+    const renderReviews = () => {
+    const reviews = gig.reviews || [];
+    const filteredReviews = reviewFilter !== null ? reviews.filter(r => r.stars === reviewFilter) : reviews;
 
-      <div className="p-6 rounded-2xl border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.01] flex flex-col items-center justify-center text-center space-y-2">
-        <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-400 dark:text-zinc-500">
-          <MessageSquare className="h-5 w-5" />
+    return (
+      <section className="pt-4 border-t border-gray-200 dark:border-white/5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">Rates & Reviews</h3>
+            <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">Feedback from clients on completed orders</p>
+          </div>
+          <div className="flex items-center gap-2 bg-gray-50 dark:bg-white/5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10">
+            <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+            {gig.ratingCount > 0 ? (
+              <>
+                <span className="text-sm font-bold text-gray-900 dark:text-white">{gig.clientRating}</span>
+                <span className="text-xs text-gray-400 dark:text-zinc-500">({gig.ratingCount} reviews)</span>
+              </>
+            ) : (
+              <span className="text-sm font-bold text-gray-900 dark:text-white">N/A</span>
+            )}
+          </div>
         </div>
-        <p className="text-xs font-semibold text-gray-700 dark:text-zinc-300">No public reviews yet</p>
-        <p className="text-[11px] text-gray-500 dark:text-zinc-500 max-w-sm">
-          Reviews and verified client ratings will appear here once orders for this service are completed.
-        </p>
-      </div>
-    </section>
-  );
+
+        {reviews.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-2">
+            {[5, 4, 3, 2, 1].map(star => {
+              const count = reviews.filter(r => r.stars === star).length;
+              return (
+                <button
+                  key={star}
+                  onClick={() => setReviewFilter(reviewFilter === star ? null : star)}
+                  disabled={count === 0}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                    reviewFilter === star 
+                      ? "bg-yellow-50 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-500 border-yellow-200 dark:border-yellow-500/30" 
+                      : "bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10"
+                  } ${count === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  <Star className={`h-3 w-3 ${reviewFilter === star ? "text-yellow-500 fill-yellow-500" : "text-gray-400 dark:text-zinc-500"}`} />
+                  {star} <span className="opacity-70 font-normal">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <motion.div layout className="relative min-h-[200px]">
+          <AnimatePresence mode="wait">
+            {filteredReviews.length === 0 ? (
+                <motion.div
+                  key="empty"
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  transition={{ duration: 0.15 }}
+                  className="p-6 rounded-2xl border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.01] flex flex-col items-center justify-center text-center space-y-2 absolute inset-0"
+                >
+                <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-400 dark:text-zinc-500">
+                    <MessageSquare className="h-5 w-5" />
+                </div>
+                <p className="text-xs font-semibold text-gray-700 dark:text-zinc-300">No reviews found</p>
+                <p className="text-[11px] text-gray-500 dark:text-zinc-500 max-w-sm">
+                    Try selecting a different star rating to see what clients are saying.
+                </p>
+                </motion.div>
+            ) : (
+                <motion.div
+                  key={reviewFilter || 'all'}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-4 max-h-[480px] overflow-y-auto thin-gallery-scrollbar pr-2 pb-2"
+                >
+                    {filteredReviews.map((rev, i) => (
+                        <div key={rev.ratingId || i} className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-3">
+                                    {rev.reviewerAvatar ? (
+                                        <img src={rev.reviewerAvatar.startsWith('http') ? rev.reviewerAvatar : (import.meta.env.VITE_CLOUDFRONT_URL || '') + (rev.reviewerAvatar.startsWith('/') ? '' : '/') + rev.reviewerAvatar} alt={rev.reviewerName} className="h-8 w-8 rounded-full object-cover bg-gray-100 dark:bg-white/10" />
+                                    ) : (
+                                        <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold">
+                                            {rev.reviewerName.charAt(0)}
+                                        </div>
+                                    )}
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-900 dark:text-white">{rev.reviewerName}</p>
+                                        <p className="text-[10px] text-gray-500 dark:text-zinc-400">{new Date(rev.createdAt).toLocaleDateString()}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    {[...Array(5)].map((_, i) => (
+                                        <Star key={i} className={`h-3.5 w-3.5 ${i < rev.stars ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300 dark:text-zinc-600'}`} />
+                                    ))}
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-700 dark:text-zinc-300 whitespace-pre-wrap">{rev.feedback}</p>
+                        </div>
+                    ))}
+                </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </section>
+    );
+  };
 
   return (
     <>
@@ -512,9 +622,11 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
               <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
                 <Share2 className="h-4 w-4" />
               </button>
-              <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
-                <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-blue-500 text-blue-500" : ""}`} />
-              </button>
+              {!isGuestMode && (
+                <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
+                  <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-blue-500 text-blue-500" : ""}`} />
+                </button>
+              )}
               <button onClick={onClose} className="hidden lg:block p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
                 <X className="h-5 w-5" />
               </button>
@@ -525,12 +637,19 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
         {/* SCROLLABLE CONTENT */}
         <div className={`${isPage ? "w-full" : "flex-1 overflow-y-auto custom-scrollbar p-6"}`}>
           <div className={`${isPage ? "flex flex-col lg:flex-row gap-8 items-start" : ""}`}>
-            <div className={`${isPage ? "flex-1 min-w-0" : ""}`}>
+            <motion.div layout className={`${isPage ? "flex-1 min-w-0" : ""}`}>
 
               {/* BADGES */}
               <div className="mt-4 flex flex-wrap items-center gap-2 mb-6">
-                <span className={`px-2.5 py-1 rounded text-[11px] font-bold border ${gig.status?.toLowerCase() === "closed" ? "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20" : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20"}`}>
-                  {gig.status || "Open"}
+                <span className={`relative overflow-hidden px-2.5 py-1 rounded text-[11px] font-black border ${
+                  gig.status?.toLowerCase() === "closed" 
+                    ? "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20" 
+                    : "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
+                }`}>
+                  <span className="relative z-10">{gig.status || "Open"}</span>
+                  {(!gig.status || gig.status?.toLowerCase() !== "closed") && (
+                    <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                  )}
                 </span>
                 <span className="px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-bold text-gray-600 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
                   {gig.category}
@@ -551,7 +670,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                   {gig.title}
                 </h1>
                 <div className="flex shrink-0">
-                  {gig.isOwnGig ? (
+                  {gig.canManageGig ? (
                     <button
                       onClick={() => navigate(`/gigs/edit/${gig.id}`)}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs hover:bg-blue-500/20 transition-colors"
@@ -560,16 +679,20 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                       <Edit2 className="h-3.5 w-3.5" />
                       Edit Service
                     </button>
+                  ) : gig.isOwnGig ? (
+                    <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-bold text-blue-400">Your Team service</span>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={handleOpenReport}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 font-bold text-xs hover:bg-gray-50 dark:hover:bg-white/10 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                      title="Report Service"
-                    >
-                      <Flag className="h-3.5 w-3.5" />
-                      Report Gig
-                    </button>
+                    !isGuestMode && (
+                      <button
+                        type="button"
+                        onClick={handleOpenReport}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 font-bold text-xs hover:bg-gray-50 dark:hover:bg-white/10 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                        title="Report Service"
+                      >
+                        <Flag className="h-3.5 w-3.5" />
+                        Report Gig
+                      </button>
+                    )
                   )}
                 </div>
               </div>
@@ -591,6 +714,24 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                     {/* Bottom Gradient Scrim */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
 
+                    <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/50 backdrop-blur-sm text-white text-xs font-semibold border border-white/10">
+                        <ShoppingCart className="h-4 w-4" />
+                        <span>{gig.ordersCount || 0} Orders</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/50 backdrop-blur-sm text-xs font-semibold border border-white/10">
+                        <Star className={`h-4 w-4 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
+                        <span className={hasServiceRating ? "text-yellow-400" : "text-gray-300 dark:text-zinc-400"}>
+                          {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="absolute bottom-4 left-4 flex items-center gap-1.5 text-white text-[12px] font-medium drop-shadow-md z-10">
+                      <Clock className="h-3.5 w-3.5 text-zinc-300" />
+                      <span>Posted {formatTimeAgo(gig.postedAt)}</span>
+                    </div>
+
                     {/* Expand Badge Overlay */}
                     <div className="absolute top-4 right-4 z-10 p-2 rounded-xl bg-black/50 backdrop-blur-md text-white/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[11px] font-bold">
                       <ZoomIn className="h-4 w-4" />
@@ -599,7 +740,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
 
                     {/* Skills Overlay with single Wrench Icon */}
                     {gig.skills && gig.skills.length > 0 && (
-                      <div className="absolute bottom-4 left-4 right-4 z-10" onClick={(e) => e.stopPropagation()}>
+                      <div className="absolute bottom-12 left-4 right-4 z-10" onClick={(e) => e.stopPropagation()}>
                         <div className="flex flex-wrap gap-2 items-center">
                           <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-black/60 backdrop-blur-md border border-white/15 text-zinc-300 shadow-sm shrink-0">
                             <Wrench className="h-3.5 w-3.5" />
@@ -696,11 +837,15 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                           </div>
 
                           <button
-                            onClick={() => !isOwner && navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
-                            disabled={isOwner}
-                            className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
+                            onClick={() => !isOwner && !isGuestMode && navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
+                            disabled={isOwner || isGuestMode}
+                            className={`w-full py-3.5 rounded-xl font-bold text-sm transition-colors shadow-lg ${
+                              isOwner ? 'bg-gray-400 dark:bg-zinc-700 cursor-not-allowed text-white shadow-none' :
+                              isGuestMode ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' :
+                              'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
+                            }`}
                           >
-                            {isOwner ? "You own this service" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
+                            {isOwner ? "You own this service" : isGuestMode ? "Login to Continue" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
                           </button>
                         </div>
                       </div>
@@ -718,7 +863,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                 )}
 
               </div>
-            </div>
+            </motion.div>
 
             {/* PAGE RIGHT SIDEBAR */}
             {isPage && (
@@ -743,26 +888,46 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                         </button>
                       ))}
                     </div>
-                    <div className="p-6">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="text-lg font-bold text-gray-900 dark:text-white">{activeTier?.title}</h4>
-                        <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
-                      </div>
-                      <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier?.description}</p>
-
-                      <div className="flex flex-col gap-3 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-6">
-                        <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier?.daysOfDelivery} Days Delivery</span>
-                        <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier?.revisions} Revisions</span>
-                      </div>
-
-                      <button
-                        onClick={() => !isOwner && !gig.hasPendingOrder && navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
-                        disabled={isOwner || gig.hasPendingOrder}
-                        className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
+                    <AnimatePresence mode="wait">
+                      <motion.div 
+                        key={activeTierIdx}
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className="p-6"
                       >
-                        {isOwner ? "You own this service" : gig.hasPendingOrder ? "Pending Order Exists" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
-                      </button>
-                    </div>
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="text-lg font-bold text-gray-900 dark:text-white">{activeTier?.title}</h4>
+                          <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier?.description}</p>
+
+                        <div className="flex flex-col gap-3 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-6">
+                          <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier?.daysOfDelivery} Days Delivery</span>
+                          <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier?.revisions} Revisions</span>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            if (isOwner || isGuestMode) return;
+                            if (gig.hasPendingOrder && gig.pendingOrderId) {
+                              navigate(`/gigs/orders/sent/${gig.pendingOrderId}`);
+                            } else {
+                              navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
+                            }
+                          }}
+                          disabled={isOwner || isGuestMode}
+                          className={`w-full py-3.5 rounded-xl font-bold text-sm transition-colors shadow-lg ${
+                            isOwner ? 'bg-gray-400 dark:bg-zinc-700 cursor-not-allowed text-white shadow-none' :
+                            isGuestMode ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' :
+                            'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
+                          }`}
+                        >
+                          {isOwner ? "You own this service" : isGuestMode ? "Login to Continue" : gig.hasPendingOrder ? "View My Order" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
+                        </button>
+                      </motion.div>
+                    </AnimatePresence>
                   </div>
                   {gig.additionalWorkRate > 0 && (
                     <p className="text-[11px] text-gray-500 mt-3 text-center">
@@ -784,24 +949,35 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
           </div>
 
           {/* 6. OTHER SERVICES YOU MAY LIKE (STANDALONE COMPONENT) */}
-          {isPage && <GigsOtherServices currentGigId={gig.id} />}
+          {isPage && (
+            <motion.div layout>
+              <GigsOtherServices currentGigId={gig.id} />
+            </motion.div>
+          )}
 
           {!isPage && <div className="h-24"></div>}
         </div>
 
         {/* ACTION BAR (MOBILE ONLY) */}
         {!isPage && (
-          <div className="lg:hidden absolute bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-dark-surface/80 backdrop-blur-md border-t border-gray-200 dark:border-white/10 flex justify-between items-center gap-4">
+          <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-white/80 dark:bg-dark-base/80 backdrop-blur-md border-t border-gray-200 dark:border-white/10 flex items-center justify-between lg:hidden shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] dark:shadow-none">
             <div className="flex flex-col">
-              <span className="text-xs text-gray-500">Selected: {activeTier?.tierName}</span>
+              <span className="text-xs text-gray-500 font-bold tracking-wider uppercase">Total Price</span>
               <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
             </div>
             <button
-              onClick={() => !isOwner && !gig.hasPendingOrder && navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
-              disabled={isOwner || gig.hasPendingOrder}
+              onClick={() => {
+                if (isOwner) return;
+                if (gig.hasPendingOrder && gig.pendingOrderId) {
+                  navigate(`/gigs/orders/sent/${gig.pendingOrderId}`);
+                } else {
+                  navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
+                }
+              }}
+              disabled={isOwner}
               className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
             >
-              {isOwner ? "You own this service" : gig.hasPendingOrder ? "Pending Order" : "Order Now"}
+              {isOwner ? "You own this service" : gig.hasPendingOrder ? "View My Order" : "Order Now"}
             </button>
           </div>
         )}

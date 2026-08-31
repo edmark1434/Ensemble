@@ -3,6 +3,7 @@ import { lazy, Suspense, type ComponentType, useEffect } from 'react'
 import {ToastProvider} from "@/components/utility/toast_provider.tsx";
 import {ToastTestingWidget} from "@/components/utility/ToastTestingWidget.tsx";
 import {DevModeWidget} from "@/components/utility/DevModeWidget.tsx";
+import { GlobalLoader } from '@/components/ui/GlobalLoader';
 import useGlobalState from '@/lib/global_state';
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
@@ -17,6 +18,7 @@ import Projects from '@/pages/user/2_projects/Projects.tsx'
 import Projects_Selection from '@/pages/user/2_projects/Projects_Selection.tsx'
 import Teams from '@/pages/user/3_teams/Teams.tsx'
 import SelectedTeam from '@/pages/user/3_teams/SelectedTeam.tsx'
+import TeamTaskWorkspace from '@/pages/user/3_teams/team_tasks/TeamTaskWorkspace.tsx'
 import Forums from './pages/user/4_forums/Forums.tsx'
 import SelectedGroup from '@/pages/user/4_forums/SelectedGroup.tsx'
 import ExpandDiscussion from '@/pages/user/4_forums/ExpandDiscussion.tsx'
@@ -143,18 +145,16 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [theme, setTheme]);
 
+  useEffect(() => {
+    document.body.style.backgroundColor = theme === 'dark' ? '#080a12' : '#f9fafb';
+  }, [theme]);
+
   return (
     <>
       <ToastProvider />
       <ToastTestingWidget />
       <DevModeWidget />
-      <Suspense
-        fallback={
-          <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-dark-base text-sm text-zinc-400">
-            Loading...
-          </div>
-        }
-      >
+      <Suspense fallback={<GlobalLoader />}>
       <Routes>
       <Route path="/admin" element={<AdminLoginPage />} />
       <Route path="/staff" element={<StaffLoginPage />} />
@@ -217,6 +217,7 @@ function App() {
           <Route path='/teams'>
             <Route index element={<Teams />} />
             <Route path=':id/business-verification' element={<BusinessVerification />} />
+            <Route path=':id/tasks/:contractId' element={<TeamTaskWorkspace />} />
             <Route path=':id' element={<SelectedTeam />} />
           </Route>
 
@@ -241,6 +242,7 @@ function App() {
             <Route index element={<ProposalsSelectJobPage />} />
             <Route path='incoming/:jobPostId' element={<ProposalsIncomingPage />} />
             <Route path='sent' element={<ProposalsSentPage />} />
+            <Route path='team-sent' element={<ProposalsSentPage />} />
           </Route>
 
           {/* Standalone Creation, Edit & View Details Pages */}

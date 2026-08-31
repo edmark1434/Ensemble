@@ -1,8 +1,11 @@
+import useGlobalState from "@/lib/global_state";
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Shield, Eye, Lock, Database, Globe, UserCheck } from "lucide-react";
 
 const PagePrivacyPolicy: React.FC = () => {
+  const theme = useGlobalState((state) => state.theme);
+
   const navigate = useNavigate();
 
   const sections = [
@@ -21,14 +24,14 @@ const PagePrivacyPolicy: React.FC = () => {
   };
 
   return (
-    <div style={{ background: "#080a12", minHeight: "100vh", color: "#fff", padding: "80px 24px", position: "relative" }}>
+    <div style={{ background: theme === 'dark' ? "#121214" : "#f9fafb", minHeight: "100vh", color: theme === 'dark' ? '#ffffff' : '#111827', padding: "80px 24px", position: "relative" }}>
 
       <style>{`
         .policy-section { margin-bottom: 56px; scroll-margin-top: 100px; }
-        .policy-section h2 { color: #fff; font-size: 22px; font-weight: 700; margin-bottom: 18px; display: flex; align-items: center; gap: 12px; }
+        .policy-section h2 { color: ${theme === 'dark' ? "#ffffff" : "#111827"}; font-size: 22px; font-weight: 700; margin-bottom: 18px; display: flex; align-items: center; gap: 12px; }
         .policy-section p { color: #94a3b8; line-height: 1.8; font-size: 15px; margin-bottom: 16px; }
         .data-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 20px; }
-        .data-card { background: rgba(255,255,255,0.03); border: 1px solid #1e2130; padding: 20px; border-radius: 12px; }
+        .data-card { background: rgba(255,255,255,0.03); border: 1px solid ${theme === 'dark' ? "#27272a" : "#e5e7eb"}; padding: 20px; border-radius: 12px; }
         .data-card h4 { font-size: 14px; color: #2dd4bf; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 1px; }
         .data-card p { font-size: 13px; margin: 0; color: #64748b; }
         .nav-link { color: #64748b; font-size: 13px; cursor: pointer; transition: color 0.2s; padding: 8px 0; display: block; text-decoration: none; }
@@ -42,9 +45,9 @@ const PagePrivacyPolicy: React.FC = () => {
         <div style={{ marginBottom: 64 }}>
           <button
             onClick={() => navigate(-1)}
-            style={{ background: "none", border: "none", color: "#7a8499", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 32, fontSize: 14, fontWeight: 600 }}
-            onMouseEnter={(e: any) => e.currentTarget.style.color = "#fff"}
-            onMouseLeave={(e: any) => e.currentTarget.style.color = "#7a8499"}
+            style={{ background: "none", border: "none", color: theme === 'dark' ? "#7a8499" : "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 32, fontSize: 14, fontWeight: 600 }}
+            onMouseEnter={(e: any) => e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827'}
+            onMouseLeave={(e: any) => e.currentTarget.style.color = theme === 'dark' ? "#7a8499" : "#6b7280"}
           >
             <ArrowLeft size={16} /> Back
           </button>
@@ -128,8 +131,8 @@ const PagePrivacyPolicy: React.FC = () => {
             <section id="contact" className="policy-section">
               <h2>8. Contact Us</h2>
               <p>For privacy-related inquiries or to exercise your data rights, please contact our Data Privacy Officer at:</p>
-              <div style={{ background: "#0d0f1a", padding: "20px 24px", borderRadius: 12, border: "1px solid #1e2130", display: "inline-block" }}>
-                <span style={{ color: "#fff", fontWeight: 700 }}>privacy@ensemble.dev</span>
+              <div style={{ background: theme === 'dark' ? "#18181b" : theme === 'dark' ? "#ffffff" : "#111827", padding: "20px 24px", borderRadius: 12, border: "1px solid #1e2130", display: "inline-block" }}>
+                <span style={{ color: theme === 'dark' ? '#ffffff' : '#111827', fontWeight: 700 }}>privacy@ensemble.dev</span>
               </div>
             </section>
 

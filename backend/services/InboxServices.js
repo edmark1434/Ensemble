@@ -1,6 +1,7 @@
 const { randomUUID } = require('crypto');
 const {
     createInboxRepositories,
+    createOrGetInboxByContextRepositories,
     createMessageRepositories,
     createReplyRepositories,
     getMessageByIdRepositories,
@@ -20,14 +21,27 @@ const {
     getInboxByAccountId,
     getInboxByTwoAccountIds,
 } = require('../repositories/InboxRepositories');
+const { getProposalByIdRepositories } = require('../repositories/JobRepositories');
+const { getOrderByIdRepository } = require('../repositories/GigRepositories');
 const { checkAccountIdService } = require('./AccountServices');
 const { getProfileCurrentAvatarByAccountIdService } = require('./ProfileServices');
 const { createNotificationServices } = require('./NotificationServices');
 const { getAccountById } = require('../repositories/AccountRepositories');
 const { pool } = require('../lib/Database');
 const { createReport } = require('../repositories/ModeratorSharedRepositories');
+const { getTaskById } = require('../repositories/DashboardRepositories');
+const { getAuthorizedActorAccountIds } = require('./MarketplaceActorServices');
 
-const CONVERSATION_TYPES = ['direct', 'engagement', 'group', 'ticket', 'dispute'];
+const CONVERSATION_TYPES = [
+    'direct',
+    'engagement',
+    'marketplace_job',
+    'marketplace_gig',
+    'revision',
+    'group',
+    'ticket',
+    'dispute',
+];
 const MESSAGE_TYPES = ['text', 'image', 'video', 'audio', 'file', 'system'];
 const ENGAGEMENT_CONTEXT_FIELDS = [
     'engagement_id',
@@ -131,13 +145,39 @@ function activeMember(inbox, accountId) {
     );
 }
 
+async function resolveConversationActorAccountId(inbox, accountId) {
+    const personalAccountId = await requireAccount(accountId);
+    const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
+    const actorIdSet = new Set(actorIds.map(String));
+    const member = inbox?.members?.find(
+        (candidate) =>
+            actorIdSet.has(String(candidate.account_id)) &&
+            !['left', 'removed'].includes(candidate.status)
+    );
+    return member ? String(member.account_id) : null;
+}
+
+function attachViewerAccountId(inbox, actorIds) {
+    if (!inbox) return inbox;
+    const actorIdSet = new Set((actorIds || []).map(String));
+    const viewerMember = inbox.members?.find(
+        (member) =>
+            actorIdSet.has(String(member.account_id)) &&
+            !['left', 'removed'].includes(member.status)
+    );
+    return {
+        ...inbox,
+        viewer_account_id: viewerMember ? String(viewerMember.account_id) : null,
+    };
+}
+
 async function requireConversationMember(conversationId, accountId) {
     requireValue(conversationId, 'Conversation ID is required');
     const inbox = await getInboxByIdRepositories(conversationId);
     if (!inbox) {
         throw new ChatServiceError('Conversation not found', 404);
     }
-    if (!activeMember(inbox, accountId)) {
+    if (!await resolveConversationActorAccountId(inbox, accountId)) {
         throw new ChatServiceError('You are not an active member of this conversation', 403);
     }
     return inbox;
@@ -150,7 +190,8 @@ async function requireMessageMember(messageId, accountId) {
         throw new ChatServiceError('Message not found', 404);
     }
     const inbox = await requireConversationMember(message.conversation_id, accountId);
-    return { inbox, message };
+    const actorAccountId = await resolveConversationActorAccountId(inbox, accountId);
+    return { inbox, message, actorAccountId };
 }
 
 const CHAT_REPORT_REASONS = new Set([
@@ -284,6 +325,7 @@ async function persistChatNotifications({
     message,
     prefix,
     onNotification,
+    referencePath,
 }) {
     const activeRecipientIds = new Set(
         (inbox.members || [])
@@ -304,15 +346,18 @@ async function persistChatNotifications({
     const actorName = await actorDisplayName(actorId);
     return (await Promise.all([...recipients].map(async (accountId) => {
         try {
-            const notification = await createNotificationServices({
-                account_id: accountId,
-                message: `${actorName} ${message}`,
-                is_read: false,
-                reference_table: 'inbox',
-                reference_prefix: prefix,
-                reference_path: `/inbox/direct?conversation=${inbox._id}`,
-                reference_id: randomUUID(),
-            });
+            let notification = null;
+            if (prefix !== 'CHAT_MESSAGE') {
+                notification = await createNotificationServices({
+                    account_id: accountId,
+                    message: `${actorName} ${message}`,
+                    is_read: false,
+                    reference_table: 'inbox',
+                    reference_prefix: prefix,
+                    reference_path: referencePath || `/inbox/direct?conversation=${inbox._id}`,
+                    reference_id: randomUUID(),
+                });
+            }
             if (onNotification) await onNotification(accountId, notification);
             return notification;
         } catch (error) {
@@ -406,6 +451,287 @@ async function createEngagementChatServices(payload, accountId) {
     return inbox;
 }
 
+const MARKETPLACE_CONTEXT_TYPES = new Set(['job_proposal', 'gig_order']);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function requireUuid(value, message) {
+    const normalized = String(value || '').trim();
+    if (!UUID_PATTERN.test(normalized)) {
+        throw new ChatServiceError(message);
+    }
+    return normalized;
+}
+
+function marketplacePreview(value) {
+    const preview = String(value || '').trim();
+    return preview ? preview.slice(0, 320) : null;
+}
+
+function marketplaceMembers(clientAccountId, freelancerAccountId) {
+    const now = new Date();
+    const accountIds = [...new Set([
+        String(clientAccountId || ''),
+        String(freelancerAccountId || ''),
+    ].filter(Boolean))];
+
+    if (accountIds.length !== 2) {
+        throw new ChatServiceError('Marketplace conversation participants are invalid', 409);
+    }
+
+    return accountIds.map((memberAccountId) => ({
+        account_id: memberAccountId,
+        role: 'member',
+        status: 'active',
+        joined_at: now,
+    }));
+}
+
+async function resolveMarketplaceContext(contextType, contextId, accountIds) {
+    if (contextType === 'job_proposal') {
+        const proposal = await getProposalByIdRepositories(contextId, accountIds);
+        if (!proposal) {
+            throw new ChatServiceError('Proposal not found', 404);
+        }
+        const proposalStatus = String(proposal.status || '').toLowerCase();
+        if (!['shortlisted', 'accepted'].includes(proposalStatus)) {
+            throw new ChatServiceError(
+                'A proposal discussion is available after the proposal is shortlisted or accepted',
+                409
+            );
+        }
+
+        const members = marketplaceMembers(
+            proposal.client_account_id,
+            proposal.freelancer_account_id
+        );
+        await validateMemberAccounts(members);
+        const actorAccountId = members
+            .map((member) => String(member.account_id))
+            .find((memberAccountId) =>
+                accountIds.some((id) => String(id) === memberAccountId)
+            );
+
+        return {
+            conversationType: 'marketplace_job',
+            actorAccountId,
+            context: { proposal_id: String(proposal.proposal_id) },
+            notificationMessage: `opened a discussion for "${proposal.job_title || 'Job proposal'}".`,
+            inboxPayload: {
+                conversation_name: proposal.job_title || 'Job proposal',
+                conversation_type: 'marketplace_job',
+                proposal_id: String(proposal.proposal_id),
+                job_id: String(proposal.job_id),
+                client_account_id: String(proposal.client_account_id),
+                freelancer_account_id: String(proposal.freelancer_account_id),
+                listing_type: 'job',
+                listing_title: proposal.job_title || 'Job proposal',
+                listing_preview: marketplacePreview(proposal.letter),
+                listing_path: `/jobs/postings/${proposal.job_id}`,
+                client_context_path: `/jobs/proposals/received/${proposal.proposal_id}`,
+                freelancer_context_path: `/jobs/proposals/sent/${proposal.proposal_id}`,
+                marketplace_status: proposal.status || null,
+                marketplace_amount_credits: Number(proposal.rate_credits) || 0,
+                members,
+            },
+        };
+    }
+
+    const order = await getOrderByIdRepository(contextId, accountIds);
+    if (!order) {
+        throw new ChatServiceError('Gig order not found', 404);
+    }
+
+    const members = marketplaceMembers(
+        order.client_account_id,
+        order.freelancer_account_id
+    );
+    await validateMemberAccounts(members);
+    const actorAccountId = members
+        .map((member) => String(member.account_id))
+        .find((memberAccountId) =>
+            accountIds.some((id) => String(id) === memberAccountId)
+        );
+
+    return {
+        conversationType: 'marketplace_gig',
+        actorAccountId,
+        context: { gig_request_id: String(order.id) },
+        notificationMessage: `opened a discussion for "${order.gig_title || 'Gig order'}".`,
+        inboxPayload: {
+            conversation_name: order.gig_title || 'Gig order',
+            conversation_type: 'marketplace_gig',
+            gig_request_id: String(order.id),
+            gig_id: String(order.gig_id),
+            client_account_id: String(order.client_account_id),
+            freelancer_account_id: String(order.freelancer_account_id),
+            listing_type: 'gig',
+            listing_title: order.gig_title || 'Gig order',
+            listing_preview: marketplacePreview(order.project_brief),
+            listing_path: `/gigs/services/${order.gig_id}/page`,
+            client_context_path: `/gigs/orders/sent/${order.id}`,
+            freelancer_context_path:
+                `/gigs/orders/incoming/${order.gig_id}/order/${order.id}`,
+            marketplace_status: order.status || null,
+            marketplace_amount_credits: Number(order.price) || 0,
+            members,
+        },
+    };
+}
+
+async function createMarketplaceChatServices(payload, accountId, callbacks = {}) {
+    const actorId = await requireAccount(accountId);
+    const contextType = String(payload?.context_type || '').trim();
+    if (!MARKETPLACE_CONTEXT_TYPES.has(contextType)) {
+        throw new ChatServiceError('Invalid marketplace context type');
+    }
+    const contextId = requireUuid(
+        payload?.context_id,
+        'A valid marketplace context ID is required'
+    );
+
+    const authorizedActorIds = await getAuthorizedActorAccountIds(actorId);
+    const resolved = await resolveMarketplaceContext(
+        contextType,
+        contextId,
+        authorizedActorIds
+    );
+    const marketplaceActorId = resolved.actorAccountId;
+    if (!marketplaceActorId) {
+        throw new ChatServiceError('Marketplace conversation is unauthorized', 403);
+    }
+    const now = new Date();
+    const { inbox, created } = await createOrGetInboxByContextRepositories(
+        resolved.conversationType,
+        resolved.context,
+        {
+            ...resolved.inboxPayload,
+            pinned_messages: [],
+            created_at: now,
+            updated_at: now,
+            deleted_at: null,
+        }
+    );
+
+    if (!inbox) {
+        throw new ChatServiceError('Unable to create marketplace conversation', 500);
+    }
+    if (!activeMember(inbox, marketplaceActorId)) {
+        throw new ChatServiceError(
+            'You are not a member of this marketplace conversation',
+            403
+        );
+    }
+
+    if (created) {
+        await persistChatNotifications({
+            inbox,
+            actorId: marketplaceActorId,
+            message: resolved.notificationMessage,
+            prefix: 'CHAT_MARKETPLACE_CREATED',
+            referencePath: `/inbox/marketplace?conversation=${inbox._id}`,
+            onNotification: callbacks.onNotification,
+        });
+
+        if (callbacks.onConversationCreated) {
+            await Promise.allSettled(
+                inbox.members.map((member) =>
+                    callbacks.onConversationCreated(String(member.account_id), inbox)
+                )
+            );
+        }
+    }
+
+    return {
+        inbox: attachViewerAccountId(inbox, [marketplaceActorId]),
+        created,
+    };
+}
+
+async function createRevisionChatServices(payload, accountId, callbacks = {}) {
+    const actorId = await requireAccount(accountId);
+    const contractId = requireUuid(
+        payload?.contract_id,
+        'A valid contract ID is required'
+    );
+    const task = await getTaskById(contractId, actorId);
+
+    if (!task) {
+        throw new ChatServiceError('Contract task not found', 404);
+    }
+
+    const members = marketplaceMembers(
+        task.client_account_id,
+        task.freelancer_account_id
+    );
+    await validateMemberAccounts(members);
+
+    const isGig = String(task.contract_type || '').toLowerCase() === 'gig';
+    const listingId = String(task.job_id || '');
+    const listingTitle = String(
+        task.job_title || (isGig ? 'Gig contract' : 'Job contract')
+    );
+    const now = new Date();
+    const { inbox, created } = await createOrGetInboxByContextRepositories(
+        'revision',
+        { contract_id: contractId },
+        {
+            conversation_name: `${listingTitle} revisions`,
+            conversation_type: 'revision',
+            contract_id: contractId,
+            ...(isGig ? { gig_id: listingId } : { job_id: listingId }),
+            client_account_id: String(task.client_account_id),
+            freelancer_account_id: String(task.freelancer_account_id),
+            listing_type: isGig ? 'gig' : 'job',
+            listing_title: listingTitle,
+            listing_preview:
+                'Discuss milestone submissions, review feedback, and revisions for this contract.',
+            listing_path: isGig
+                ? `/gigs/services/${listingId}/page`
+                : `/jobs/postings/${listingId}`,
+            client_context_path: `/dashboard/review/${contractId}`,
+            freelancer_context_path: `/dashboard/tasks/${contractId}`,
+            marketplace_status: task.contract_status || null,
+            marketplace_amount_credits: Number(task.contract_value) || 0,
+            revision_price_credits: Number(task.revision_price_credits) || 0,
+            members,
+            pinned_messages: [],
+            created_at: now,
+            updated_at: now,
+            deleted_at: null,
+        }
+    );
+
+    if (!inbox) {
+        throw new ChatServiceError('Unable to create revision conversation', 500);
+    }
+    if (!activeMember(inbox, actorId)) {
+        throw new ChatServiceError(
+            'You are not a member of this revision conversation',
+            403
+        );
+    }
+
+    if (created) {
+        await persistChatNotifications({
+            inbox,
+            actorId,
+            message: `opened a revision discussion for "${listingTitle}".`,
+            prefix: 'CHAT_REVISION_CREATED',
+            referencePath: `/inbox/marketplace?conversation=${inbox._id}`,
+            onNotification: callbacks.onNotification,
+        });
+
+        if (callbacks.onConversationCreated) {
+            await Promise.allSettled(
+                inbox.members.map((member) =>
+                    callbacks.onConversationCreated(String(member.account_id), inbox)
+                )
+            );
+        }
+    }
+
+    return { inbox, created };
+}
 async function createInboxServices(payload, accountId) {
     if (payload.conversation_type === 'group') {
         return await createGroupServices(payload, accountId);
@@ -453,9 +779,10 @@ async function createOrReuseDirectChatServices(payload, accountId) {
 }
 
 async function buildMessage(payload, accountId) {
-    const senderId = await requireAccount(accountId);
+    const personalSenderId = await requireAccount(accountId);
     const conversationId = String(requireValue(payload.conversation_id, 'conversation_id is required'));
-    const inbox = await requireConversationMember(conversationId, senderId);
+    const inbox = await requireConversationMember(conversationId, personalSenderId);
+    const senderId = await resolveConversationActorAccountId(inbox, personalSenderId);
     const messageType = payload.message_type || 'text';
     if (!MESSAGE_TYPES.includes(messageType) || messageType === 'system') {
         throw new ChatServiceError('Invalid message type');
@@ -501,7 +828,7 @@ async function createMessageServices(payload, accountId, options = {}) {
     if (!options.suppressNotifications) {
         await persistChatNotifications({
             inbox,
-            actorId: accountId,
+            actorId: document.sender_id,
             message: 'sent you a message.',
             prefix: 'CHAT_MESSAGE',
             onNotification: options.onNotification,
@@ -511,7 +838,7 @@ async function createMessageServices(payload, accountId, options = {}) {
 }
 
 async function replyMessageServices(parentMessageId, payload, accountId, options = {}) {
-    const { inbox, message: parent } = await requireMessageMember(parentMessageId, accountId);
+    const { inbox, message: parent, actorAccountId } = await requireMessageMember(parentMessageId, accountId);
     if (payload.conversation_id && String(payload.conversation_id) !== String(parent.conversation_id)) {
         throw new ChatServiceError('Reply conversation does not match the parent message');
     }
@@ -528,7 +855,7 @@ async function replyMessageServices(parentMessageId, payload, accountId, options
     const reply = await getMessageByIdRepositories(insertedId);
     await persistChatNotifications({
         inbox,
-        actorId: accountId,
+        actorId: actorAccountId,
         recipientIds: [parent.sender_id],
         message: 'replied to your message.',
         prefix: 'CHAT_REPLY',
@@ -538,18 +865,18 @@ async function replyMessageServices(parentMessageId, payload, accountId, options
 }
 
 async function reactMessageServices(messageId, reactType, accountId, options = {}) {
-    const { inbox, message } = await requireMessageMember(messageId, accountId);
+    const { inbox, message, actorAccountId } = await requireMessageMember(messageId, accountId);
     const reaction = String(reactType || '').trim();
     if (!reaction || reaction.length > 32) {
         throw new ChatServiceError('A valid reaction is required');
     }
     const updated = await setMessageReactionRepositories(messageId, {
-        account_id: accountId,
+        account_id: actorAccountId,
         react_type: reaction,
     });
     await persistChatNotifications({
         inbox,
-        actorId: accountId,
+        actorId: actorAccountId,
         recipientIds: [message.sender_id],
         message: `reacted ${reaction} to your message.`,
         prefix: 'CHAT_REACTION',
@@ -559,8 +886,8 @@ async function reactMessageServices(messageId, reactType, accountId, options = {
 }
 
 async function removeMessageReactionServices(messageId, accountId) {
-    await requireMessageMember(messageId, accountId);
-    return await removeMessageReactionRepositories(messageId, accountId);
+    const { actorAccountId } = await requireMessageMember(messageId, accountId);
+    return await removeMessageReactionRepositories(messageId, actorAccountId);
 }
 
 async function pinMessageServices(conversationId, messageId, accountId) {
@@ -574,9 +901,10 @@ async function pinMessageServices(conversationId, messageId, accountId) {
     ) {
         throw new ChatServiceError('Message not found in this conversation', 404);
     }
+    const actorAccountId = await resolveConversationActorAccountId(inbox, accountId);
     return await pinMessageRepositories(conversationId, {
         message_id: String(messageId),
-        pinned_by: String(accountId),
+        pinned_by: actorAccountId,
         pinned_at: new Date(),
     });
 }
@@ -587,8 +915,8 @@ async function unpinMessageServices(conversationId, messageId, accountId) {
 }
 
 async function editMessageServices(messageId, messageContent, accountId) {
-    const { message } = await requireMessageMember(messageId, accountId);
-    if (String(message.sender_id) !== String(accountId)) {
+    const { message, actorAccountId } = await requireMessageMember(messageId, accountId);
+    if (String(message.sender_id) !== actorAccountId) {
         throw new ChatServiceError('You can only edit your own messages', 403);
     }
     const content = String(messageContent || '').trim();
@@ -599,8 +927,8 @@ async function editMessageServices(messageId, messageContent, accountId) {
 }
 
 async function deleteMessageServices(messageId, accountId) {
-    const { message } = await requireMessageMember(messageId, accountId);
-    if (String(message.sender_id) !== String(accountId)) {
+    const { message, actorAccountId } = await requireMessageMember(messageId, accountId);
+    if (String(message.sender_id) !== actorAccountId) {
         throw new ChatServiceError('You can only delete your own messages', 403);
     }
     return await deleteMessageRepositories(messageId);
@@ -764,22 +1092,18 @@ async function removeGroupMemberServices(conversationId, targetAccountId, accoun
 }
 
 async function getConversationByConvoIdServices(conversationId, accountId) {
-    const inbox = await getInboxByIdRepositories(conversationId);
-    if (
-        !inbox ||
-        !inbox.members.some(
-            (member) => String(member.account_id) === String(accountId)
-        )
-    ) {
-        throw new ChatServiceError('Conversation access denied', 403);
-    }
+    const memberInbox = await requireConversationMember(conversationId, accountId);
+    const viewerAccountId = await resolveConversationActorAccountId(
+        memberInbox,
+        accountId
+    );
     const conversation = await getConversationByConvoId(conversationId);
     const [normalizedInbox] = await normalizeLinkedConversations([
         conversation.Inbox,
     ]);
     return {
         ...conversation,
-        Inbox: normalizedInbox,
+        Inbox: attachViewerAccountId(normalizedInbox, [viewerAccountId]),
     };
 }
 
@@ -820,16 +1144,17 @@ async function typingEventServices(conversationId, isTyping, accountId) {
 }
 
 async function markConversationReadServices(conversationId, accountId) {
-    await requireConversationMember(conversationId, accountId);
+    const inbox = await requireConversationMember(conversationId, accountId);
+    const actorAccountId = await resolveConversationActorAccountId(inbox, accountId);
     const readAt = new Date();
     const result = await markConversationMessagesReadRepositories(
         conversationId,
-        accountId,
+        actorAccountId,
         readAt
     );
     return {
         conversation_id: String(conversationId),
-        account_id: String(accountId),
+        account_id: actorAccountId,
         read_at: readAt,
         modified_count: result.modifiedCount,
     };
@@ -1188,25 +1513,32 @@ async function getActiveGroupCallServices(conversationId, accountId) {
 }
 
 async function getInboxByAccountIdServices(accountId, conversationType) {
-    await requireAccount(accountId);
+    const personalAccountId = await requireAccount(accountId);
     validateConversationType(conversationType);
-    const inboxes = await getInboxByAccountId(accountId, conversationType);
-    return await normalizeLinkedConversations(inboxes);
+    const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
+    const inboxes = await getInboxByAccountId(actorIds, conversationType);
+    const normalizedInboxes = await normalizeLinkedConversations(inboxes);
+    return normalizedInboxes.map((inbox) =>
+        attachViewerAccountId(inbox, actorIds)
+    );
 }
 
 async function getAllInboxesByAccountIdServices(accountId) {
-    await requireAccount(accountId);
+    const personalAccountId = await requireAccount(accountId);
+    const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
     const conversations = await Promise.all(
-        CONVERSATION_TYPES.map((type) => getInboxByAccountId(accountId, type))
+        CONVERSATION_TYPES.map((type) => getInboxByAccountId(actorIds, type))
     );
     const normalizedConversations = await normalizeLinkedConversations(
         conversations.flat()
     );
-    return normalizedConversations.sort((left, right) => {
-        const leftTime = new Date(left.last_message_time || left.updated_at || 0);
-        const rightTime = new Date(right.last_message_time || right.updated_at || 0);
-        return rightTime - leftTime;
-    });
+    return normalizedConversations
+        .map((inbox) => attachViewerAccountId(inbox, actorIds))
+        .sort((left, right) => {
+            const leftTime = new Date(left.last_message_time || left.updated_at || 0);
+            const rightTime = new Date(right.last_message_time || right.updated_at || 0);
+            return rightTime - leftTime;
+        });
 }
 
 async function checkInboxByTwoAccountIdsServices(payload, accountId) {
@@ -1248,6 +1580,8 @@ module.exports = {
     createInboxServices,
     createGroupServices,
     createEngagementChatServices,
+    createMarketplaceChatServices,
+    createRevisionChatServices,
     createOrReuseDirectChatServices,
     createMessageServices,
     replyMessageServices,

@@ -27,6 +27,7 @@ import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import UserHeader from "@/components/nav/user_header";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import NewDiscussionModal from "@/pages/user/4_forums/forum_modals/NewDiscussionModal.tsx";
 import ReportGroupModal from "@/pages/user/4_forums/forum_modals/ReportGroupModal";
 import CreateGroupModal from "@/pages/user/4_forums/forum_modals/CreateGroupModal.tsx";
@@ -50,6 +51,13 @@ type ForumTag = {
   tag_name?: string;
 };
 
+type PublicForumIdentity = {
+  user_id: string;
+  display_name: string;
+  handle?: string | null;
+  avatar_preset_url?: string | null;
+};
+
 type Comment = {
   user_id: number;
   comment: string;
@@ -67,6 +75,7 @@ type Comment = {
   depth?: number;
   children?: Comment[];
   is_edited?: boolean;
+  author_identity?: PublicForumIdentity | null;
 };
 
 type Post = {
@@ -90,6 +99,7 @@ type Post = {
     user_id: number;
   }[];
   comments: Comment[];
+  author_identity?: PublicForumIdentity | null;
 };
 
 type FeedResponse = {
@@ -129,7 +139,7 @@ type MemberWithDetails = {
 };
 
 // ==================== CONSTANTS ====================
-const DEFAULT_AVATAR = "https://i.pravatar.cc/150?u=default";
+const DEFAULT_AVATAR = "/default-avatar.png";
 
 const gradientOptions = [
   "from-cyan-500 via-blue-500 to-indigo-500",
@@ -150,6 +160,7 @@ const tabOptions: { key: ForumTab; label: string }[] = [
 const sortOptions = [
   { value: "latest", label: "Latest", icon: <Clock className="h-3 w-3" /> },
   { value: "trending", label: "Trending", icon: <ThumbsUp className="h-3 w-3" /> },
+  { value: "popular", label: "Popular", icon: <ThumbsUp className="h-3 w-3" /> },
   { value: "hot", label: "Hot", icon: <MessageCircle className="h-3 w-3" /> },
 ];
 
@@ -1108,6 +1119,7 @@ const Forums = () => {
   const [replyCommentText, setReplyCommentText] = useState<string>("");
   const [isNewDiscussionOpen, setIsNewDiscussionOpen] = useState(false);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
   const [postMenuOpen, setPostMenuOpen] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [deletingPost, setDeletingPost] = useState<Post | null>(null);
@@ -1136,16 +1148,34 @@ const Forums = () => {
   const navigate = useNavigate();
   
   const user = useGlobalState((state) => state.user);
-  const currentUserId = user?.user_id || user?.userId || 1;
-  const currentUserName = user?.displayName || user?.name || "Unknown User";
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const currentUserId = user?.user_id || user?.userId || 0;
+  const isForumAuthenticated = !isGuestMode && Boolean(user?.account_id && currentUserId);
+  const currentUserName = user?.displayName || user?.name || "Guest";
   const [currentUserAvatar, setCurrentUserAvatar] = useState(user?.avatar || DEFAULT_AVATAR);
 
   useEffect(() => {
-    void loadCurrentForumAvatar(user?.avatar).then(setCurrentUserAvatar);
-  }, [user?.avatar]);
+    if (!isForumAuthenticated) {
+      setCurrentUserAvatar(DEFAULT_AVATAR);
+      return;
+    }
+
+    let cancelled = false;
+    void loadCurrentForumAvatar(user?.avatar).then((avatar) => {
+      if (!cancelled) setCurrentUserAvatar(avatar);
+    });
+    return () => { cancelled = true; };
+  }, [isForumAuthenticated, user?.avatar]);
+
+  const requireForumAuthentication = (message: string) => {
+    if (isForumAuthenticated) return true;
+    showErrorToast(message);
+    navigate("/login");
+    return false;
+  };
 
   const [joinedGroups, setJoinedGroups] = useState<Group[]>([]);
-  const availableFilterGroups = joinedGroups;
+  const availableFilterGroups = isForumAuthenticated ? joinedGroups : groupsList;
 
   const updatePostLists = (postId: string, update: (post: Post) => Post) => {
     const updateMatchingPost = (posts: Post[]) =>
@@ -1167,10 +1197,21 @@ const Forums = () => {
 
   // ==================== EFFECTS ====================
   useEffect(() => {
-    if (joinedGroups.length > 0 && selectedGroupIds.length === 0) {
-      setSelectedGroupIds(joinedGroups.map((group : any) => group.id));
+    if (!isForumAuthenticated) {
+      setSelectedGroupIds([]);
+      setSortBy("popular");
+      return;
     }
-  }, [joinedGroups]);
+    if (joinedGroups.length > 0 && selectedGroupIds.length === 0) {
+      setSelectedGroupIds(joinedGroups.map((group) => group.id));
+    }
+  }, [isForumAuthenticated, joinedGroups]);
+
+  useEffect(() => {
+    if (!isForumAuthenticated && ["my-groups", "my-discussions", "saved"].includes(activeTab)) {
+      setActiveTab("feed");
+    }
+  }, [activeTab, isForumAuthenticated]);
 
   // Load group metadata independently from paginated discussion feeds.
   useEffect(() => {
@@ -1184,12 +1225,14 @@ const Forums = () => {
           ...group,
           id: group._id,
           gradient: gradientOptions[index % gradientOptions.length],
-          joined: group.members?.some((member :any) => member.userId === currentUserId) || false,
+          joined: isForumAuthenticated && (group.members?.some((member: any) => member.userId === currentUserId) || false),
         }));
         normalizedGroups = normalizedGroups.filter((group : any) => group.status === "active");
-        const userJoinedGroups = normalizedGroups.filter((group : any) => 
-          group.members?.some((member : any) => member.userId === currentUserId)
-        );
+        const userJoinedGroups = isForumAuthenticated
+          ? normalizedGroups.filter((group: any) =>
+              group.members?.some((member: any) => member.userId === currentUserId)
+            )
+          : [];
         
         if (cancelled) return;
         setJoinedGroups(userJoinedGroups);
@@ -1206,11 +1249,12 @@ const Forums = () => {
 
     loadForumData();
     return () => { cancelled = true; };
-  }, [reloadKey, currentUserId]);
+  }, [reloadKey, currentUserId, isForumAuthenticated]);
 
   const loadFeedPage = useCallback(async (cursor: string | null, append: boolean) => {
     if (!["feed", "my-discussions", "saved"].includes(activeTab)) return;
-    if (activeTab === "feed" && selectedGroupIds.length === 0) {
+    if (!isForumAuthenticated && activeTab !== "feed") return;
+    if (isForumAuthenticated && activeTab === "feed" && selectedGroupIds.length === 0) {
       setGroupDiscussions([]);
       setNextCursor(null);
       setHasMore(false);
@@ -1226,10 +1270,10 @@ const Forums = () => {
           : "/api/forum/discussions/saved";
       const response = await api.get<FeedResponse>(url, {
         params: {
-          type: sortBy,
+          type: isForumAuthenticated ? sortBy : "popular",
           limit: 10,
           cursor: cursor || undefined,
-          groupIds: activeTab === "feed" ? selectedGroupIds.join(",") : undefined,
+          groupIds: activeTab === "feed" && selectedGroupIds.length > 0 ? selectedGroupIds.join(",") : undefined,
         },
       });
       const page = response.data.discussions || [];
@@ -1240,20 +1284,19 @@ const Forums = () => {
       setNextCursor(response.data.pagination.nextCursor);
       setHasMore(response.data.pagination.hasMore);
 
-      const userIds = [...new Set(page.flatMap((post) => [
-        post.user_id,
-        ...(post.comments || []).map((comment) => comment.user_id),
-      ]).filter(Boolean))];
-      if (userIds.length) {
-        const detailsResponse = await api.post('api/users/list-of-details', { userIds });
-        setMembersDetailsMap((current) => {
-          const next = { ...current };
-          for (const details of detailsResponse.data.usersList || []) {
-            next[details.user_id] = identityFromDetails(details);
+      const identities: Record<number, { name: string; avatar: string }> = {};
+      for (const post of page) {
+        if (post.author_identity) {
+          identities[post.user_id] = identityFromDetails(post.author_identity);
+        }
+        for (const comment of post.comments || []) {
+          if (comment.author_identity) {
+            identities[comment.user_id] = identityFromDetails(comment.author_identity);
           }
-          next[currentUserId] = { name: currentUserName, avatar: currentUserAvatar };
-          return next;
-        });
+        }
+      }
+      if (Object.keys(identities).length > 0) {
+        setMembersDetailsMap((current) => ({ ...current, ...identities }));
       }
     } catch (error) {
       console.error("Error loading discussion feed:", error);
@@ -1266,7 +1309,7 @@ const Forums = () => {
     } finally {
       append ? setLoadingMore(false) : setLoading(false);
     }
-  }, [activeTab, selectedGroupIds, sortBy, currentUserId, currentUserName, currentUserAvatar]);
+  }, [activeTab, selectedGroupIds, sortBy, currentUserId, currentUserName, currentUserAvatar, isForumAuthenticated]);
 
   useEffect(() => {
     setNextCursor(null);
@@ -1286,6 +1329,11 @@ const Forums = () => {
 
   // ==================== JOIN GROUP ====================
   const joinGroup = async (groupId: string) => {
+    if (!isForumAuthenticated) {
+      showErrorToast("Sign in to join a forum group");
+      navigate("/login");
+      return;
+    }
     setJoiningGroupId(groupId);
     try {
       await api.put(`/api/forum/groups/members/${groupId}`, {
@@ -1311,8 +1359,8 @@ const Forums = () => {
   }, []);
 
   const selectAllGroups = useCallback(() => {
-    setSelectedGroupIds(joinedGroups.map((group) => group.id));
-  }, [joinedGroups]);
+    setSelectedGroupIds(availableFilterGroups.map((group) => group.id));
+  }, [availableFilterGroups]);
 
   const clearAllGroups = useCallback(() => setSelectedGroupIds([]), []);
 
@@ -1329,7 +1377,9 @@ const Forums = () => {
     let posts: Post[] = [];
     
     if (activeTab === "feed") {
-      posts = groupDiscussions.filter((post) => selectedGroupIds.includes(String(post.forum_group_id)));
+      posts = selectedGroupIds.length === 0
+        ? groupDiscussions
+        : groupDiscussions.filter((post) => selectedGroupIds.includes(String(post.forum_group_id)));
     } else if (activeTab === "my-discussions") {
       posts = myDiscussionPosts.filter((post) => post.user_id === currentUserId);
     } else if (activeTab === "saved") {
@@ -1360,8 +1410,8 @@ const Forums = () => {
         authorName = membersDetailsMap[post.user_id].name;
         authorAvatar = membersDetailsMap[post.user_id].avatar;
       } else {
-        authorName = `User ${post.user_id}`;
-        authorAvatar = `https://i.pravatar.cc/150?u=${post.user_id}`;
+        authorName = "Forum member";
+        authorAvatar = DEFAULT_AVATAR;
       }
       
       const isLiked = post.likes?.some(like => like.user_id === currentUserId) || false;
@@ -1401,6 +1451,7 @@ const Forums = () => {
 
   // ==================== REPLY HANDLERS ====================
   const handleReplyImageUpload = async (postId: string, files: FileList | null) => {
+    if (!requireForumAuthentication("Sign in to reply to discussions")) return;
     if (!files) return;
 
     const newImages: ImageAttachment[] = [];
@@ -1469,6 +1520,7 @@ const Forums = () => {
   };
 
   const handleReply = async (postId: string) => {
+    if (!requireForumAuthentication("Sign in to reply to discussions")) return;
     const replyContent = replyText[postId]?.trim();
     const replyImageList = replyImages[postId] || [];
 
@@ -1515,6 +1567,7 @@ const Forums = () => {
   };
 
   const handleCommentReply = async (postId: string, parentCommentId: string) => {
+    if (!requireForumAuthentication("Sign in to reply to comments")) return;
     const replyContent = replyCommentText.trim();
     const replyImageList = commentReplyImages;
 
@@ -1562,6 +1615,7 @@ const Forums = () => {
   };
 
   const handleCommentReplyImageUpload = async (files: FileList | null) => {
+    if (!requireForumAuthentication("Sign in to reply to comments")) return;
     if (!files) return;
 
     const newImages: ImageAttachment[] = [];
@@ -1620,6 +1674,7 @@ const Forums = () => {
   };
 
   const handleReplyClick = (postId: string, commentId: string, authorName: string, authorId: number) => {
+    if (!requireForumAuthentication("Sign in to reply to comments")) return;
     setReplyingTo({ commentId, authorName, authorId });
     setReplyCommentText("");
     setCommentReplyImages([]);
@@ -1678,6 +1733,7 @@ const Forums = () => {
 
   // ==================== LIKE HANDLERS ====================
   const handleLikePost = async (postId: string) => {
+    if (!requireForumAuthentication("Sign in to like discussions")) return;
     const currentPost = displayPosts.find(p => p.id === postId);
     if (!currentPost) return;
     
@@ -1709,6 +1765,7 @@ const Forums = () => {
   };
 
   const handleLikeComment = async (postId: string, commentId: string) => {
+    if (!requireForumAuthentication("Sign in to like comments")) return;
     const currentPost = groupDiscussions.find((post) => String(post._id) === postId);
     const currentComment = currentPost?.comments?.find(c => c.comment_id === commentId);
     if (!currentComment) return;
@@ -1768,6 +1825,7 @@ const Forums = () => {
 
   // ==================== SAVE POST ====================
   const handleSavePost = async (postId: string) => {
+    if (!requireForumAuthentication("Sign in to save discussions")) return;
     const currentPost = displayPosts.find(p => p.id === postId);
     if (!currentPost) return;
     
@@ -1890,12 +1948,16 @@ const Forums = () => {
   };
 
   const handleActionClick = useCallback(() => {
+    if (!isForumAuthenticated) {
+      setIsGuestLoginOpen(true);
+      return;
+    }
     if (activeTab === "groups" || activeTab === "my-groups") {
       setIsCreateGroupOpen(true);
     } else {
       setIsNewDiscussionOpen(true);
     }
-  }, [activeTab]);
+  }, [activeTab, isForumAuthenticated]);
 
   // ==================== RENDER HELPERS ====================
   const renderFilterSidebar = () => (
@@ -1910,9 +1972,9 @@ const Forums = () => {
           <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isFilterVisible ? "rotate-180" : ""}`} />
         </button>
 
-        {selectedGroupIds.length !== joinedGroups.length && (
+        {selectedGroupIds.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 dark:text-zinc-500">{Math.abs(selectedGroupIds.length - joinedGroups.length)}</span>
+            <span className="text-xs text-gray-500 dark:text-zinc-500">{selectedGroupIds.length}</span>
             <button onClick={clearAllGroups} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300">
               <X className="h-3 w-3" />
               Clear
@@ -1925,7 +1987,7 @@ const Forums = () => {
         <div className="space-y-4 animate-slide-in">
           <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-linear-to-br from-white/5 to-transparent p-4 backdrop-blur-sm">
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">My Groups</h3>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{isForumAuthenticated ? "My Groups" : "All Groups"}</h3>
               <div className="flex gap-2">
                 <button onClick={selectAllGroups} className="text-[10px] text-blue-400 hover:text-blue-300">Select All</button>
                 <button onClick={clearAllGroups} className="text-[10px] text-red-400 hover:text-red-300">Clear</button>
@@ -1947,7 +2009,7 @@ const Forums = () => {
                 </button>
               ))}
               {availableFilterGroups.length === 0 && (
-                <p className="text-xs text-gray-500 dark:text-zinc-500">You haven't joined any groups yet.</p>
+                <p className="text-xs text-gray-500 dark:text-zinc-500">No active groups are available.</p>
               )}
             </div>
           </div>
@@ -1959,9 +2021,10 @@ const Forums = () => {
               {sortOptions.map((option) => (
                 <button
                   key={option.value}
-                  onClick={() => setSortBy(option.value)}
-                  className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs transition-all duration-200 ${
-                    sortBy === option.value
+                  onClick={() => { if (isForumAuthenticated) setSortBy(option.value); }}
+                  disabled={!isForumAuthenticated}
+                  className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs transition-all duration-200 disabled:cursor-default ${
+                    (isForumAuthenticated ? sortBy : "popular") === option.value
                       ? "bg-blue-500 text-gray-900 dark:text-white shadow-lg shadow-blue-500/25"
                       : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:border-white/30 hover:text-gray-900 dark:text-white"
                   }`}
@@ -2294,7 +2357,7 @@ const Forums = () => {
   }
 
   // ==================== MAIN RENDER ====================
-  const feedBlocked = activeTab === "feed" && selectedGroupIds.length === 0;
+  const feedBlocked = isForumAuthenticated && activeTab === "feed" && selectedGroupIds.length === 0;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
@@ -2343,7 +2406,7 @@ const Forums = () => {
             </div>
 
             <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-gray-200 dark:border-white/10 pb-3">
-              {tabOptions.map((tab) => (
+              {tabOptions.filter((tab) => isForumAuthenticated || ["feed", "groups"].includes(tab.key)).map((tab) => (
                 <button
                   key={tab.key}
                   type="button"
@@ -2390,7 +2453,7 @@ const Forums = () => {
                     <Users className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
                     "No groups selected",
                     "Select at least one group from the filters to see its discussions",
-                    "Select All My Groups",
+                    isForumAuthenticated ? "Select All My Groups" : "Select All Groups",
                     selectAllGroups
                   )
                 ) : displayPosts.length === 0 ? (
@@ -2399,14 +2462,16 @@ const Forums = () => {
                     searchQuery ? "No matching discussions" : "No discussions yet",
                     searchQuery ? `No discussions found matching "${searchQuery}"` : "Start a discussion in one of your selected groups",
                     !searchQuery ? "Create Discussion" : undefined,
-                    !searchQuery ? () => setIsNewDiscussionOpen(true) : undefined
+                    !searchQuery ? handleActionClick : undefined
                   )
                 ) : (
                   <>
                     <p className="text-sm text-gray-500 dark:text-zinc-500">
                       {searchQuery 
                         ? `Found ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
-                        : `Showing ${displayPosts.length} discussions from your joined groups`}
+                        : isForumAuthenticated
+                          ? `Showing ${displayPosts.length} discussions from your joined groups`
+                          : `Showing ${displayPosts.length} discussions from all forums by popularity`}
                     </p>
                     {displayPosts.map((post) => renderPostCard(post, true))}
                   </>
@@ -2422,7 +2487,7 @@ const Forums = () => {
                     searchQuery ? "No matching discussions" : "No discussions yet",
                     searchQuery ? `No discussions found matching "${searchQuery}"` : "Start a new discussion in one of your groups!",
                     !searchQuery ? "Create Discussion" : undefined,
-                    !searchQuery ? () => setIsNewDiscussionOpen(true) : undefined
+                    !searchQuery ? handleActionClick : undefined
                   )
                 ) : (
                   <>
@@ -2468,7 +2533,7 @@ const Forums = () => {
       </div>
 
       <NewDiscussionModal
-        isOpen={isNewDiscussionOpen}
+        isOpen={isForumAuthenticated && isNewDiscussionOpen}
         onClose={() => setIsNewDiscussionOpen(false)}
         onCreatePost={handleCreatePost}
         availableGroups={joinedGroups.map((group) => ({ id: group.id, name: group.group_name, tags: group.tags }))}
@@ -2476,7 +2541,7 @@ const Forums = () => {
       />
 
       <CreateGroupModal
-        isOpen={isCreateGroupOpen}
+        isOpen={isForumAuthenticated && isCreateGroupOpen}
         onClose={() => {
           setIsCreateGroupOpen(false);
           refreshForumData();
@@ -2520,6 +2585,13 @@ const Forums = () => {
           setReportingPost(null);
           showSuccessToast("Discussion reported");
         }}
+      />
+
+      <GuestLoginModal
+        isOpen={isGuestLoginOpen}
+        onClose={() => setIsGuestLoginOpen(false)}
+        title="Log in to create forum content"
+        message="Please log in or create an account before starting a discussion or creating a forum group."
       />
 
       <style>{`

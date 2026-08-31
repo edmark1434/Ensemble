@@ -31,6 +31,7 @@ import {
   uploadChatAttachment,
 } from "../inbox_functions/inbox_upload_image";
 import api from "@/lib/axios";
+import { MarketplaceContextCard } from "./marketplace_context_card";
 
 interface InboxSideDetailsProps {
   selectedConversation: Inbox;
@@ -145,7 +146,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   const canManageMembers = ["owner", "admin"].includes(currentMember?.role || "");
   useEffect(() => {
     const query = memberSearch.replace(/^@/, "").trim();
-    if (!showMemberSearch || query.length < 2) {
+    if (!showMemberSearch || query.length < 1) {
       setMemberSearchResults([]);
       setIsSearchingMembers(false);
       return;
@@ -303,6 +304,12 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           )}
         </div>
 
+
+        <MarketplaceContextCard
+          conversation={selectedConversation}
+          currentUserId={currentUserId}
+          variant="details"
+        />
         {/* Collapsible Sections Container */}
         <div className="p-2 space-y-2 flex-1">
           {/* 1. Customize Chat (Group Rename) */}

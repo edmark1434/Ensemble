@@ -10,6 +10,7 @@ const {
     removeForumGroupMember,
 } = require('../repositories/ForumGroupRepositories');
 const { emitForumEvent } = require('../lib/WebSocket');
+const { attachGroupMemberIdentities } = require('./ForumIdentityServices');
 const dotenv = require('dotenv');
 dotenv.config();
 function actorId(session = {}) {
@@ -81,7 +82,8 @@ async function listForumGroupsByMemberId(memberId) {
 
 async function getForumGroup(groupId) {
     dataValidation({ groupId }, 'update');
-    return await getForumGroupById(groupId);
+    const group = await getForumGroupById(groupId);
+    return attachGroupMemberIdentities(group);
 }
 
 async function updateForumGroupServices(groupId, updatePayload, session = {}) {

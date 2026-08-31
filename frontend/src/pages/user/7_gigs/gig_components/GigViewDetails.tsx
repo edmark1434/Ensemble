@@ -1,9 +1,11 @@
 import React, { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Users, Star, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart, Flag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Gig } from "../gig_datasets";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import PopupReportGig from "./PopupReportGig";
+import useGlobalState from "@/lib/global_state";
 
 interface GigViewDetailsProps {
   selectedGig: Gig | null;
@@ -14,19 +16,24 @@ interface GigViewDetailsProps {
 
 const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, onReportGig, onToggleSave }) => {
   const navigate = useNavigate();
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const [activeTierIdx, setActiveTierIdx] = useState(0);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const activeTier = selectedGig?.tiers[activeTierIdx];
 
   const handleOpenCheckout = () => {
-    navigate(`/gigs/services/${selectedGig?.id}/order`, { state: { tierIndex: activeTierIdx } });
+    if (selectedGig?.hasPendingOrder && selectedGig?.pendingOrderId) {
+      navigate(`/gigs/orders/sent/${selectedGig.pendingOrderId}`);
+    } else {
+      navigate(`/gigs/services/${selectedGig?.id}/order`, { state: { tierIndex: activeTierIdx } });
+    }
   };
 
   const handleViewProfile = () => {
     if (!selectedGig) return;
 
-    if (selectedGig.isOwnGig) {
+    if (selectedGig.isPersonalGig) {
       navigate("/profile");
       return;
     }
@@ -91,7 +98,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
               />
               <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
 
-              {onToggleSave && (
+              {onToggleSave && !isGuestMode && (
                 <button
                   title="Save Gig"
                   onClick={(e) => {
@@ -101,7 +108,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                   className={`absolute top-4 right-4 rounded-full p-2 backdrop-blur-sm transition z-10 ${
                     selectedGig.isSaved
                       ? "bg-black/50 text-yellow-500 hover:bg-black/70"
-                      : "bg-black/50 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-black/70"
+                      : "bg-black/50 text-gray-500 dark:text-zinc-400 hover:text-gray-900 hover:bg-black/70"
                   }`}
                 >
                   <Bookmark className={`h-4 w-4 ${selectedGig.isSaved ? "fill-current" : ""}`} />
@@ -114,13 +121,16 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
+                      className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
                         selectedGig.status?.toLowerCase() === "open" || !selectedGig.status
-                          ? "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20"
-                          : "bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20"
+                          ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
+                          : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                       }`}
                     >
-                      {selectedGig.status || "Open"}
+                      <span className="relative z-10">{selectedGig.status || "Open"}</span>
+                      {(selectedGig.status?.toLowerCase() === "open" || !selectedGig.status) && (
+                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                      )}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300">
                       {selectedGig.category}
@@ -132,7 +142,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     )}
                   </div>
 
-                  {!selectedGig.isOwnGig && (
+                  {!selectedGig.isOwnGig && !isGuestMode && (
                     <button
                       type="button"
                       title="Report Gig"
@@ -153,10 +163,6 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                   <div className="flex items-center gap-1.5">
                     <Clock className="h-3 w-3 text-gray-500 dark:text-zinc-500" />
                     <span>First Draft: {selectedGig.firstDraftDelivery}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Users className="h-3 w-3 text-gray-500 dark:text-zinc-500" />
-                    <span>{selectedGig.slots} Slots Available</span>
                   </div>
                 </div>
               </div>
@@ -183,23 +189,32 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                         </button>
                       ))}
                     </div>
-                    <div className="p-4">
-                      <div className="mb-2">
-                        <h4 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
-                          {activeTier.title}
-                        </h4>
-                        <div className="mt-1 flex items-center gap-1.5 text-base font-black text-yellow-500">
-                          <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
-                          <span>{activeTier.price?.toLocaleString()}</span>
+                    <AnimatePresence mode="wait">
+                      <motion.div 
+                        key={activeTierIdx}
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className="p-4"
+                      >
+                        <div className="mb-2">
+                          <h4 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                            {activeTier.title}
+                          </h4>
+                          <div className="mt-1 flex items-center gap-1.5 text-base font-black text-yellow-500">
+                            <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
+                            <span>{activeTier.price?.toLocaleString()}</span>
+                          </div>
                         </div>
-                      </div>
-                      <p className="text-xs text-gray-600 dark:text-zinc-400 mb-4">{activeTier.description}</p>
+                        <p className="text-xs text-gray-600 dark:text-zinc-400 mb-4">{activeTier.description}</p>
 
-                      <div className="flex items-center gap-4 text-[11px] font-medium text-gray-700 dark:text-zinc-300">
-                        <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-gray-400" /> {activeTier.daysOfDelivery} Days Delivery</span>
-                        <span className="flex items-center gap-1.5"><PlayCircle className="h-3.5 w-3.5 text-gray-400" /> {activeTier.revisions} Revisions</span>
-                      </div>
-                    </div>
+                        <div className="flex items-center gap-4 text-[11px] font-medium text-gray-700 dark:text-zinc-300">
+                          <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-gray-400" /> {activeTier.daysOfDelivery} Days Delivery</span>
+                          <span className="flex items-center gap-1.5"><PlayCircle className="h-3.5 w-3.5 text-gray-400" /> {activeTier.revisions} Revisions</span>
+                        </div>
+                      </motion.div>
+                    </AnimatePresence>
                   </div>
                 </div>
               )}
@@ -318,11 +333,11 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
               {/* Creator Profile Card */}
               <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="relative h-8 w-8 shrink-0">
+                  <div className="relative h-9 w-9 shrink-0">
                     <img
                       src={hasValidAvatar ? selectedGig.clientAvatar : undefined}
                       alt=""
-                      className={`h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-white/10 ${!hasValidAvatar ? 'hidden' : ''}`}
+                      className={`h-9 w-9 rounded-full object-cover border border-gray-200 dark:border-white/10 ${!hasValidAvatar ? 'hidden' : ''}`}
                       onError={(e) => {
                         e.currentTarget.style.display = 'none';
                         const fallback = e.currentTarget.nextElementSibling;
@@ -337,16 +352,23 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     </div>
                   </div>
                   <div className="text-left min-w-0">
-                    <p className="text-[9px] uppercase text-gray-500 dark:text-zinc-500 font-bold tracking-wider">
-                      Service Creator
+                    <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate mb-1">
+                      {selectedGig.postedBy}
                     </p>
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate">
-                        {selectedGig.postedBy}
-                      </p>
-                      <div className="flex items-center gap-1 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 border border-gray-100 dark:border-white/5 shrink-0">
-                        <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
-                        <span>{selectedGig.clientRating} ({selectedGig.ratingCount})</span>
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-zinc-400">
+                        <span>Freelancer Rating:</span>
+                        <div className="flex items-center gap-0.5 font-medium text-gray-700 dark:text-zinc-200">
+                          <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
+                          <span>{selectedGig.clientRating} ({selectedGig.ratingCount})</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-zinc-400">
+                        <span>Service Rating:</span>
+                        <div className="flex items-center gap-0.5 font-medium text-gray-700 dark:text-zinc-200">
+                          <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
+                          <span>{selectedGig.ratingCount > 0 ? `${selectedGig.clientRating} (${selectedGig.ratingCount})` : "N/A"}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -362,7 +384,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 </button>
               </div>
 
-              {selectedGig.isOwnGig ? (
+              {selectedGig.canManageGig ? (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
@@ -386,10 +408,24 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     <ShoppingCart className="h-4 w-4 text-blue-400" /> Manage Orders
                   </button>
                 </div>
+              ) : selectedGig.isOwnGig ? (
+                <div className="w-full rounded-xl border border-blue-500/20 bg-blue-500/10 py-3 text-center text-xs font-bold text-blue-400">
+                  This service was posted by a Team you belong to
+                </div>
               ) : (
                 <>
                   <div className="flex items-center justify-between px-1">
-                    <span className="text-[11px] text-gray-500">Total</span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                        <ShoppingCart className="h-3.5 w-3.5 text-gray-400" />
+                        <span>{selectedGig.ordersCount || 0} Orders</span>
+                      </div>
+                      <span className="text-gray-300 dark:text-zinc-700">•</span>
+                      <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                        <Users className="h-3.5 w-3.5 text-gray-400" />
+                        <span>{selectedGig.slots} Slots Available</span>
+                      </div>
+                    </div>
                     <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString() || "0"}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -397,16 +433,20 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                       onClick={() => {
                         navigate(`/gigs/services/${selectedGig.id}/page`);
                       }}
-                      className="px-4 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5 py-3 text-xs font-bold text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-white/10 transition active:scale-[0.98] shrink-0 border border-gray-200 dark:border-white/10"
+                      className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                     >
                       View Full
                     </button>
                     <button
-                      onClick={handleOpenCheckout}
-                      disabled={!activeTier}
-                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => !isGuestMode && handleOpenCheckout()}
+                      disabled={isGuestMode}
+                      className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg ${
+                        isGuestMode 
+                          ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' 
+                          : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]'
+                      }`}
                     >
-                      Order {activeTier?.tierName || "Package"}
+                      {isGuestMode ? "Login to Order" : (selectedGig.hasPendingOrder ? "View My Order" : `Order ${activeTier?.tierName || "Package"}`)}
                     </button>
                   </div>
                 </>

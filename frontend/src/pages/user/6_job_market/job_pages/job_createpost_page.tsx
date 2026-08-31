@@ -1,9 +1,11 @@
 import React, { useState } from "react";
+import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
+import { requireVerifiedAccount } from "@/lib/accountVerification";
 
 // Sub-components & Popups
 import JobCreateHeader from "../job_components/job_creation_components/job_create_header";
@@ -130,6 +132,7 @@ const JobCreatePostPage: React.FC = () => {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
+      await requireVerifiedAccount();
       const rawMinBudget = getRawNumber(minBudget);
       const rawMaxBudget = getRawNumber(maxBudget);
       let fileId = null;
@@ -146,6 +149,7 @@ const JobCreatePostPage: React.FC = () => {
         status: "Open",
         posted_as: postingAs === "self" ? "Self" : "Team",
         team_id: postingAs === "self" ? null : selectedTeam,
+        acting_team_id: postingAs === "self" ? null : selectedTeam,
         tags: skills, // Note: Backend may need adaptation if these are strings instead of IDs
         payment_type: "Fixed",
         experience_level: difficulty,
@@ -161,7 +165,8 @@ const JobCreatePostPage: React.FC = () => {
       setIsSuccessOpen(true);
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to submit job post.");
+      const message = err.response?.data?.message || err.message || "Failed to submit job post.";
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }

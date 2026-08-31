@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { FC } from "react";
 import { useNavigate } from "react-router-dom";
 import FadeInScroll from "@/components/ui/FadeInScroll";
+import useGlobalState from "@/lib/global_state";
 
 type FooterLinks = Record<string, string[]>;
 
@@ -13,8 +14,6 @@ interface FooterProps {
 const T_FOOT = {
   fontDisplay: "'Plus Jakarta Sans', sans-serif",
   fontBody:    "'Plus Jakarta Sans', sans-serif",
-  muted:       "#7a8499",
-  border:      "#1e2130",
 } as const;
 
 const FOOTER_LINKS: FooterLinks = {
@@ -24,10 +23,10 @@ const FOOTER_LINKS: FooterLinks = {
   Legal:     ["Privacy", "Terms"],
 };
 
-const Logo: FC<{ size?: number }> = ({ size = 22 }) => (
+const Logo: FC<{ size?: number; theme?: 'light' | 'dark' }> = ({ size = 22, theme = 'dark' }) => (
   <div style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
-    <img src="/ensemble_lg.svg" alt="Ensemble Logo" style={{ width: size + 6, height: size + 6, display: "block" }} />
-    <span style={{ fontSize: size, fontWeight: 700, fontFamily: T_FOOT.fontDisplay, letterSpacing: .5, color: "#fff" }}>
+    <img src="/ensemble_lg.svg" alt="Ensemble Logo" style={{ width: size + 6, height: size + 6, display: "block", filter: theme === 'light' ? "invert(1)" : "invert(0)" }} />
+    <span style={{ fontSize: size, fontWeight: 700, fontFamily: T_FOOT.fontDisplay, letterSpacing: .5, color: theme === 'dark' ? "#fff" : "#111827", transition: "color 0.3s ease" }}>
       Ensemble
     </span>
   </div>
@@ -35,6 +34,7 @@ const Logo: FC<{ size?: number }> = ({ size = 22 }) => (
 
 const SectionFooter: FC<FooterProps> = ({ isMuted = false }) => {
   const navigate = useNavigate();
+  const theme = useGlobalState((state) => state.theme);
   const minimalHoverAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -59,11 +59,12 @@ const SectionFooter: FC<FooterProps> = ({ isMuted = false }) => {
 
   return (
     <footer style={{
-      borderTop: `1px solid ${T_FOOT.border}`,
+      borderTop: theme === 'dark' ? "1px solid rgba(255,255,255,0.05)" : "1px solid rgba(0,0,0,0.05)",
       padding: "80px 60px 40px",
-      background: "#06080f",
+      background: theme === 'dark' ? "#121214" : "#f9fafb",
       position: "relative",
-      overflow: "hidden"
+      overflow: "hidden",
+      transition: "background 0.3s ease, border-color 0.3s ease"
     }}>
       <div style={{
         position: "absolute",
@@ -71,7 +72,7 @@ const SectionFooter: FC<FooterProps> = ({ isMuted = false }) => {
         right: "5%",
         width: "400px",
         height: "400px",
-        background: "rgba(74, 111, 165, 0.05)",
+        background: theme === 'dark' ? "rgba(74, 111, 165, 0.05)" : "rgba(59, 130, 246, 0.05)",
         filter: "blur(100px)",
         borderRadius: "50%",
         pointerEvents: "none"
@@ -89,14 +90,15 @@ const SectionFooter: FC<FooterProps> = ({ isMuted = false }) => {
           zIndex: 2
         }}>
           <div>
-            <Logo size={22} />
+            <Logo size={22} theme={theme} />
             <p style={{
-              color: T_FOOT.muted,
+              color: theme === 'dark' ? "#a1a1aa" : "#6b7280",
               fontSize: 14,
               lineHeight: 1.7,
               marginTop: 20,
               maxWidth: 280,
-              fontFamily: T_FOOT.fontBody
+              fontFamily: T_FOOT.fontBody,
+              transition: "color 0.3s ease"
             }}>
               The parallel workflow platform for modern film production teams and creative professionals.
             </p>
@@ -107,11 +109,12 @@ const SectionFooter: FC<FooterProps> = ({ isMuted = false }) => {
               <div style={{
                 fontSize: 12,
                 fontWeight: 700,
-                color: "#fff",
+                color: theme === 'dark' ? "#fff" : "#111827",
                 letterSpacing: 1.5,
                 textTransform: "uppercase",
                 marginBottom: 24,
-                fontFamily: T_FOOT.fontDisplay
+                fontFamily: T_FOOT.fontDisplay,
+                transition: "color 0.3s ease"
               }}>
                 {col}
               </div>
@@ -121,11 +124,11 @@ const SectionFooter: FC<FooterProps> = ({ isMuted = false }) => {
                   onClick={() => handleLinkClick(l)}
                   onMouseEnter={(e) => {
                     playMinimalHover(); // Fires your custom hover variant sound asset
-                    e.currentTarget.style.color = "#fff";
+                    e.currentTarget.style.color = theme === 'dark' ? "#fff" : "#111827";
                   }}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = T_FOOT.muted)}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = theme === 'dark' ? "#a1a1aa" : "#6b7280")}
                   style={{
-                    color: T_FOOT.muted,
+                    color: theme === 'dark' ? "#a1a1aa" : "#6b7280",
                     fontSize: 14,
                     marginBottom: 12,
                     cursor: "pointer",
@@ -141,7 +144,7 @@ const SectionFooter: FC<FooterProps> = ({ isMuted = false }) => {
         </div>
 
         <div style={{
-          borderTop: `1px solid rgba(255,255,255,0.06)`,
+          borderTop: theme === 'dark' ? "1px solid rgba(255,255,255,0.05)" : "1px solid rgba(0,0,0,0.05)",
           paddingTop: 32,
           display: "flex",
           justifyContent: "space-between",
@@ -151,34 +154,34 @@ const SectionFooter: FC<FooterProps> = ({ isMuted = false }) => {
           flexWrap: "wrap",
           gap: 12,
           position: "relative",
-          zIndex: 2
+          zIndex: 2,
+          transition: "border-color 0.3s ease"
         }}>
-          <span style={{ color: T_FOOT.muted, fontSize: 13 }}>
+          <span style={{ color: theme === 'dark' ? "#71717a" : "#9ca3af", fontSize: 13, transition: "color 0.3s ease" }}>
             © 2026 Ensemble, RavenLabs Dev. All rights reserved.
           </span>
           <div style={{ display: "flex", gap: 24 }}>
             <span
               className="footer-social-link"
-              onMouseEnter={playMinimalHover}
-              style={{ color: "#3a4050", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}
-              onMouseEnter={(e) => { playMinimalHover(); e.currentTarget.style.color = "#fff"; }}
-              onMouseLeave={(e) => e.currentTarget.style.color = "#3a4050"}
+              style={{ color: theme === 'dark' ? "#52525b" : "#9ca3af", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}
+              onMouseEnter={(e) => { playMinimalHover(); e.currentTarget.style.color = theme === 'dark' ? "#fff" : "#111827"; }}
+              onMouseLeave={(e) => e.currentTarget.style.color = theme === 'dark' ? "#52525b" : "#9ca3af"}
             >
               Twitter
             </span>
             <span
               className="footer-social-link"
-              style={{ color: "#3a4050", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}
-              onMouseEnter={(e) => { playMinimalHover(); e.currentTarget.style.color = "#fff"; }}
-              onMouseLeave={(e) => e.currentTarget.style.color = "#3a4050"}
+              style={{ color: theme === 'dark' ? "#52525b" : "#9ca3af", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}
+              onMouseEnter={(e) => { playMinimalHover(); e.currentTarget.style.color = theme === 'dark' ? "#fff" : "#111827"; }}
+              onMouseLeave={(e) => e.currentTarget.style.color = theme === 'dark' ? "#52525b" : "#9ca3af"}
             >
               GitHub
             </span>
             <span
               className="footer-social-link"
-              style={{ color: "#3a4050", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}
-              onMouseEnter={(e) => { playMinimalHover(); e.currentTarget.style.color = "#fff"; }}
-              onMouseLeave={(e) => e.currentTarget.style.color = "#3a4050"}
+              style={{ color: theme === 'dark' ? "#52525b" : "#9ca3af", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}
+              onMouseEnter={(e) => { playMinimalHover(); e.currentTarget.style.color = theme === 'dark' ? "#fff" : "#111827"; }}
+              onMouseLeave={(e) => e.currentTarget.style.color = theme === 'dark' ? "#52525b" : "#9ca3af"}
             >
               Discord
             </span>

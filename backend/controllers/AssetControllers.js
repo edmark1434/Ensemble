@@ -1,4 +1,5 @@
 const {
+  getAssetPostingEligibilityServices,
   listAssetsServices,
   getAssetServices,
   createAssetServices,
@@ -32,15 +33,23 @@ function handleAssetError(res, error) {
   });
 }
 
+async function getAssetPostingEligibilityController(req, res) {
+  try {
+    return res.json({
+      success: true,
+      eligibility: await getAssetPostingEligibilityServices(req.user.account_id),
+    });
+  } catch (error) { return handleAssetError(res, error); }
+}
 async function listAssetsController(req, res) {
   try {
-    return res.json({ success: true, ...(await listAssetsServices(req.user.account_id, req.query)) });
+    return res.json({ success: true, ...(await listAssetsServices(req.user?.account_id, req.query)) });
   } catch (error) { return handleAssetError(res, error); }
 }
 
 async function getAssetController(req, res) {
   try {
-    return res.json({ success: true, asset: await getAssetServices(req.params.assetId, req.user.account_id) });
+    return res.json({ success: true, asset: await getAssetServices(req.params.assetId, req.user?.account_id) });
   } catch (error) { return handleAssetError(res, error); }
 }
 
@@ -103,7 +112,7 @@ async function purchaseAssetController(req, res) {
 
 async function listCommentsController(req, res) {
   try {
-    return res.json({ success: true, comments: await listCommentsServices(req.params.assetId, req.user.account_id) });
+    return res.json({ success: true, comments: await listCommentsServices(req.params.assetId, req.user?.account_id) });
   } catch (error) { return handleAssetError(res, error); }
 }
 
@@ -201,7 +210,7 @@ async function listAssetReviewsController(req, res) {
   try {
     return res.json({
       success: true,
-      reviews: await listAssetReviewsServices(req.params.assetId, req.user.account_id),
+      reviews: await listAssetReviewsServices(req.params.assetId, req.user?.account_id),
     });
   } catch (error) { return handleAssetError(res, error); }
 }
@@ -234,6 +243,7 @@ async function deleteAssetReviewController(req, res) {
 }
 
 module.exports = {
+  getAssetPostingEligibilityController,
   listAssetsController,
   getAssetController,
   createAssetController,

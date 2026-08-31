@@ -118,8 +118,11 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
                 : "Type a message..."
             }
             rows={1}
-            className="w-full rounded-2xl border border-gray-300 dark:border-white/15 bg-gray-50 dark:bg-white/5 py-2.5 pl-4 pr-11 text-sm text-gray-900 dark:text-white outline-none resize-none placeholder:text-gray-500 dark:text-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition inbox-scroll-thin max-h-[18rem] overflow-y-auto"
-            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+            className="w-full rounded-2xl border border-gray-300 dark:border-white/15 bg-gray-50 dark:bg-white/5 py-2.5 pl-4 pr-11 text-sm text-gray-900 dark:text-white outline-none resize-none placeholder:text-gray-500 dark:placeholder:text-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition inbox-scroll-thin max-h-[18rem] overflow-y-auto"
+            style={{
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
+              lineHeight: "1.25rem",
+            }}
             value={messageInput}
             onChange={(e) => setMessageInput(e.target.value)}
             onKeyDown={(e) => {

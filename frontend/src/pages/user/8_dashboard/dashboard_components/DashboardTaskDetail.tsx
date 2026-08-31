@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '@/lib/axios';
 import useGlobalState from "@/lib/global_state";
@@ -6,6 +6,7 @@ import { ArrowLeft, Send, ExternalLink, LoaderCircle, Star } from 'lucide-react'
 import { MilestoneActivityFeed } from './MilestoneActivityFeed';
 import UserHeader from "@/components/nav/user_header";
 import { RateReviewModal } from './RateReviewModal';
+import socket from '@/lib/socket';
 
 export const DashboardTaskDetail = () => {
     const { id } = useParams(); // contractId
@@ -18,16 +19,21 @@ export const DashboardTaskDetail = () => {
     const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
     const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
-    const fetchTask = async () => {
+    const fetchTask = useCallback(async () => {
         try {
             const response = await api.get(`/api/dashboard/tasks/${id}`);
             if (response.data.success) {
                 const fetchedTask = response.data.data;
                 setTask(fetchedTask);
-                if (!activeMilestoneId && fetchedTask?.milestones?.length > 0) {
-                    const active = fetchedTask.milestones.find((m: any) => m.status === 'active' || m.status === 'submitted_for_review');
-                    setActiveMilestoneId(active ? active.id : fetchedTask.milestones[0].id);
-                }
+                setActiveMilestoneId((current) => {
+                    if (current || !fetchedTask?.milestones?.length) return current;
+                    const active = fetchedTask.milestones.find(
+                        (milestone: any) =>
+                            milestone.status === 'active' ||
+                            milestone.status === 'submitted_for_review'
+                    );
+                    return active ? active.id : fetchedTask.milestones[0].id;
+                });
             }
         } catch (error) {
             console.error("Error fetching task details:", error);
@@ -35,11 +41,47 @@ export const DashboardTaskDetail = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id, navigate]);
 
     useEffect(() => {
         fetchTask();
-    }, [id]);
+    }, [fetchTask]);
+
+    useEffect(() => {
+        const handleTaskUpdated = (event: {
+            contract_id?: string;
+            task?: { contract_id?: string; [key: string]: unknown };
+        }) => {
+            if (
+                String(event?.contract_id || '') === String(id || '') &&
+                event?.task
+            ) {
+                setTask(event.task);
+                setLoading(false);
+            }
+        };
+        const handleReconnect = () => {
+            void fetchTask();
+        };
+
+        socket.on('dashboardTaskUpdated', handleTaskUpdated);
+        socket.io.on('reconnect', handleReconnect);
+        return () => {
+            socket.off('dashboardTaskUpdated', handleTaskUpdated);
+            socket.io.off('reconnect', handleReconnect);
+        };
+    }, [fetchTask, id]);
+
+    const applyTaskUpdate = (updatedTask?: unknown) => {
+        const nextTask = updatedTask as
+            | { contract_id?: string; [key: string]: unknown }
+            | undefined;
+        if (String(nextTask?.contract_id || '') === String(id || '')) {
+            setTask(nextTask);
+            return;
+        }
+        void fetchTask();
+    };
 
     if (loading) {
         return (
@@ -86,10 +128,10 @@ export const DashboardTaskDetail = () => {
         <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
             <UserHeader pageTitle={isFreelancer ? "My Task" : "To Review"} credits={user?.wallet?.balance_credits || 0} />
             
-            <div className="mx-auto max-w-7xl p-6 md:p-8 h-[calc(100vh-100px)] flex flex-col">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 min-h-0">
+            <div className="mx-auto flex min-h-[calc(100dvh-100px)] max-w-7xl flex-col p-4 sm:p-6 md:p-8 lg:h-[calc(100vh-100px)] lg:min-h-0">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:flex-1 lg:min-h-0 lg:gap-8">
                     {/* Left Column */}
-                    <div className="lg:col-span-5 flex flex-col h-full gap-6">
+                    <div className="flex flex-col gap-6 lg:col-span-5 lg:h-full lg:min-h-0">
                         <div>
                             <button 
                                 onClick={() => navigate(location.pathname.includes('/review/') ? '/dashboard/review' : '/dashboard/tasks')}
@@ -106,17 +148,17 @@ export const DashboardTaskDetail = () => {
                                         {computedStatus}
                                     </span>
                                     <span className="text-[10px] uppercase font-bold px-2 py-1 rounded-md border bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20 shrink-0">
-                                        Job
+                                        {task.contract_type === 'gig' ? 'Gig' : 'Job'}
                                     </span>
                                 </div>
                                 <div className="flex items-start gap-3">
                                     <h1 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight break-words line-clamp-3">{task.job_title}</h1>
                                     <a 
-                                        href={`/jobs/postings/${task.job_id}`} 
+                                        href={task.contract_type === 'gig' ? `/gigs/services/${task.job_id}` : `/jobs/postings/${task.job_id}`} 
                                         target="_blank" 
                                         rel="noreferrer" 
                                         className="flex items-center justify-center p-1.5 rounded-md bg-white dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition-colors shrink-0 mt-0.5"
-                                        title="View Original Job Post"
+                                        title={task.contract_type === 'gig' ? "View Original Gig Post" : "View Original Job Post"}
                                     >
                                         <ExternalLink className="h-4 w-4" />
                                     </a>
@@ -155,7 +197,7 @@ export const DashboardTaskDetail = () => {
                         </div>
 
                         {/* Milestones Stepper */}
-                        <div className="bg-white dark:bg-dark-surface/70 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex-1 overflow-y-auto inbox-scroll-thin min-h-0">
+                        <div className="inbox-scroll-thin max-h-[50dvh] min-h-0 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-dark-surface/70 dark:shadow-none lg:max-h-none lg:flex-1">
                             <div className="flex items-center justify-between mb-5">
                                 <h2 className="text-base font-bold text-gray-900 dark:text-white uppercase tracking-wide">Milestones</h2>
                                 <button 
@@ -236,13 +278,13 @@ export const DashboardTaskDetail = () => {
                     </div>
 
                     {/* Right Column: Interaction Panel (Submit Work / Review Work) */}
-                    <div className="lg:col-span-7 flex flex-col h-full min-h-0 rounded-2xl overflow-hidden">
+                    <div className="flex h-[calc(100dvh-2rem)] min-h-[32rem] scroll-mt-24 flex-col overflow-hidden rounded-2xl lg:col-span-7 lg:h-full lg:min-h-0">
                         {activeMilestone ? (
                             <MilestoneActivityFeed 
                                 task={task} 
                                 activeMilestone={activeMilestone} 
                                 isFreelancer={isFreelancer} 
-                                onRefreshTask={fetchTask}
+                                onRefreshTask={applyTaskUpdate}
                                 canReviewContract={allMilestonesDone && !myReview}
                                 onOpenReviewModal={() => setIsReviewModalOpen(true)}
                             />

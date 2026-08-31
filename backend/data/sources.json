@@ -4,6 +4,7 @@
   { "category": "public", "name": "How to Work", "url": "/landing/HowToWork", "file": "public/how-to-work.md", "enabled": true },
   { "category": "platform", "name": "About Ensemble", "url": "/landing/AboutUs", "file": "platform/about-and-features.md", "enabled": true },
   { "category": "account", "name": "Account and Verification", "url": "/settings", "file": "account/account-and-verification.md", "enabled": true },
+  { "category": "verification", "name": "Personal and Team Verification Guide", "url": "/account-verification-status", "file": "verification/verification.md", "enabled": true },
   { "category": "collaboration", "name": "Collaboration Workspace", "url": "/projects", "file": "collaboration/collaboration.md", "enabled": true },
   { "category": "communication", "name": "Chat, Inbox, Calls, and Meetings", "url": "/inbox/*", "file": "communication/chat-and-calls.md", "enabled": true },
   { "category": "collaboration", "name": "Forums", "url": "/forums", "file": "collaboration/forums.md", "enabled": true },

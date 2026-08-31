@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from "react";
+import toast from "react-hot-toast";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
+import { requireVerifiedAccount } from "@/lib/accountVerification";
+import MarketplaceIdentitySelector from "@/components/marketplace/MarketplaceIdentitySelector";
 
 // Sub-components & Wizard Steps
 import ProposalCreateHeader from "../proposals_components/proposals_creation_components/proposal_create_header";
@@ -27,6 +30,7 @@ const ProposalsCreatePage: React.FC = () => {
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [actingTeamId, setActingTeamId] = useState("");
   
   const { createProposal, fetchJobs } = useJobs();
 
@@ -150,6 +154,7 @@ const ProposalsCreatePage: React.FC = () => {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
+      if (!actingTeamId) await requireVerifiedAccount();
       if (!id) throw new Error("Job ID is missing.");
       
       const payload = {
@@ -160,6 +165,7 @@ const ProposalsCreatePage: React.FC = () => {
         tos_title: sampleTosTemplates.find(t => t.id === selectedTosId)?.name || "Custom Terms",
         tos_content: tosContent,
         terms_id: null,  
+        acting_team_id: actingTeamId || null,
         milestones: milestones.map(m => ({
           title: m.name,
           description: m.description,
@@ -172,7 +178,8 @@ const ProposalsCreatePage: React.FC = () => {
       setIsSuccessOpen(true);
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to submit proposal.");
+      const message = err.response?.data?.message || err.message || "Failed to submit proposal.";
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -259,6 +266,14 @@ const ProposalsCreatePage: React.FC = () => {
 
             {currentSlide === 4 && (
               <motion.div key="step-4" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
+                <div className="mb-5 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.02]">
+                  <MarketplaceIdentitySelector
+                    teamId={actingTeamId}
+                    onChange={setActingTeamId}
+                    label="Submit this proposal as"
+                    requireTeamVerification={false}
+                  />
+                </div>
                 <ProposalReviewStep
                   job={job}
                   bidAmount={bidAmount}

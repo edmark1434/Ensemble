@@ -64,11 +64,11 @@ async function getAccountByHandleService(handle) {
     }
 }
 
-async function searchUserAccountsByHandleService(handle, accountId) {
+async function searchUserAccountsByHandleService(handle, accountId, role = null) {
     const query = String(handle || '').replace(/^@/, '').trim();
-    if (query.length < 2) return [];
+    if (query.length < 1) return [];
     console.log(`test query: ${query}`);
-    return await searchUserAccountsByHandle(query, accountId, 10);
+    return await searchUserAccountsByHandle(query, accountId, 50, role);
 }
 
 async function getAccountWalletService(accountId, type) { 

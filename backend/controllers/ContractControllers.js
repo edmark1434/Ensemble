@@ -2,18 +2,21 @@ const ContractRepositories = require('../repositories/ContractRepositories');
 const { pool } = require('../lib/Database');
 const { getIo } = require('../lib/WebSocket');
 const { createNotificationServices } = require('../services/NotificationServices');
+const { getAuthorizedActorAccountIds } = require('../services/MarketplaceActorServices');
 
 async function sendJobOfferController(req, res) {
     try {
         // req.user from auth middleware (assuming verifyToken is used)
-        const clientId = req.user.account_id || req.user.accountId;
+        const personalAccountId = req.user.account_id || req.user.accountId;
+        const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
         const { proposalId, rateCredits, startsAt } = req.body;
 
         if (!proposalId || !rateCredits) {
             return res.status(400).json({ success: false, message: 'Proposal ID and rate are required' });
         }
 
-        const result = await ContractRepositories.sendJobOffer(clientId, proposalId, rateCredits, startsAt);
+        const result = await ContractRepositories.sendJobOffer(actorIds, proposalId, rateCredits, startsAt);
+        const clientId = result.client_account_id;
 
         try {
             const propQ = await pool.query(`
@@ -89,7 +92,8 @@ async function acceptJobOfferController(req, res) {
             return res.status(400).json({ success: false, message: 'Contract ID is required' });
         }
 
-        const result = await ContractRepositories.acceptJobOffer(freelancerId, contractId);
+        const actorIds = await getAuthorizedActorAccountIds(freelancerId);
+        const result = await ContractRepositories.acceptJobOffer(actorIds, contractId);
 
         return res.status(200).json({
             success: true,
@@ -99,7 +103,15 @@ async function acceptJobOfferController(req, res) {
     } catch (error) {
         console.error("Error in acceptJobOfferController:", error);
         
-        if (error.message === "Contract not found or not pending signature for this user") {
+        const businessErrors = new Set([
+            "Contract not found or not pending signature for this user",
+            "Contract has an invalid rate",
+            "Client escrow wallet not found",
+            "Freelancer escrow wallet not found",
+            "Escrow wallet is not active",
+            "Client escrow balance is insufficient",
+        ]);
+        if (businessErrors.has(error.message)) {
             return res.status(400).json({ success: false, message: error.message });
         }
 
@@ -110,7 +122,8 @@ async function acceptJobOfferController(req, res) {
 async function getContractsController(req, res) {
     try {
         const accountId = req.user.account_id || req.user.accountId;
-        const contracts = await ContractRepositories.getContractsByUserId(accountId);
+        const actorIds = await getAuthorizedActorAccountIds(accountId);
+        const contracts = await ContractRepositories.getContractsByUserId(actorIds);
         return res.status(200).json({ success: true, data: contracts });
     } catch (error) {
         console.error("Error in getContractsController:", error);
@@ -128,7 +141,8 @@ async function rejectJobOfferController(req, res) {
             return res.status(400).json({ success: false, message: 'Contract ID is required' });
         }
 
-        const result = await ContractRepositories.rejectJobOffer(freelancerId, contractId, reason);
+        const actorIds = await getAuthorizedActorAccountIds(freelancerId);
+        const result = await ContractRepositories.rejectJobOffer(actorIds, contractId, reason);
 
         return res.status(200).json({
             success: true,
@@ -138,7 +152,15 @@ async function rejectJobOfferController(req, res) {
     } catch (error) {
         console.error("Error in rejectJobOfferController:", error);
         
-        if (error.message === "Contract not found or not pending signature for this user") {
+        const businessErrors = new Set([
+            "Contract not found or not pending signature for this user",
+            "Contract has an invalid rate",
+            "Client escrow wallet not found",
+            "Freelancer escrow wallet not found",
+            "Escrow wallet is not active",
+            "Client escrow balance is insufficient",
+        ]);
+        if (businessErrors.has(error.message)) {
             return res.status(400).json({ success: false, message: error.message });
         }
 

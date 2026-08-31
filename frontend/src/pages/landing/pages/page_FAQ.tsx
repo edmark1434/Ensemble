@@ -1,3 +1,4 @@
+import useGlobalState from "@/lib/global_state";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, ArrowLeft, HelpCircle } from "lucide-react";
@@ -38,24 +39,26 @@ const FAQ_ITEMS = [
 ];
 
 const PageFAQ: React.FC = () => {
+  const theme = useGlobalState((state) => state.theme);
+
   const navigate = useNavigate();
   const [openIdx, setOpenIdx] = useState<number | null>(null);
 
   return (
-    <div style={{ background: "#080a12", minHeight: "100vh", color: "#fff", padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
+    <div style={{ background: theme === 'dark' ? "#121214" : "#f9fafb", minHeight: "100vh", color: theme === 'dark' ? '#ffffff' : '#111827', padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
 
       {/* Component Micro-Styles */}
       <style>{`
         .faq-card {
-          background: #0d0f1a;
-          border: 1px solid #1e2130;
+          background: ${theme === 'dark' ? "#18181b" : "#ffffff"};
+          border: 1px solid ${theme === 'dark' ? "#27272a" : "#e5e7eb"};
           borderRadius: 16px;
           overflow: hidden;
           transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .faq-card.active {
           border-color: #3b82f6;
-          background: rgba(13, 15, 26, 0.8);
+          background: ${theme === 'dark' ? 'rgba(24, 24, 27, 0.8)' : 'rgba(255, 255, 255, 0.8)'};
           box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.1);
         }
         @keyframes faqSlideIn {
@@ -64,7 +67,7 @@ const PageFAQ: React.FC = () => {
         }
         .faq-answer {
           padding: 0 32px 24px 32px;
-          color: #7a8499;
+          color: ${theme === 'dark' ? "#7a8499" : "#6b7280"};
           font-size: 15px;
           line-height: 1.6;
           animation: faqSlideIn 0.2s ease forwards;
@@ -79,9 +82,9 @@ const PageFAQ: React.FC = () => {
         {/* Navigation Action */}
         <button
           onClick={() => navigate(-1)}
-          style={{ background: "none", border: "none", color: "#7a8499", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 36, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
-          onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "#fff"; }}
-          onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "#7a8499"; }}
+          style={{ background: "none", border: "none", color: theme === 'dark' ? "#7a8499" : "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 36, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
+          onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827'; }}
+          onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = theme === 'dark' ? "#7a8499" : "#6b7280"; }}
         >
           <ArrowLeft size={16} /> Back
         </button>
@@ -107,10 +110,10 @@ const PageFAQ: React.FC = () => {
                   onClick={() => setOpenIdx(isOpen ? null : idx)}
                   style={{ width: "100%", background: "none", border: "none", padding: "24px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", textAlign: "left" }}
                 >
-                  <span style={{ fontSize: 16, fontWeight: 600, color: isOpen ? "#fff" : "#cbd5e1", transition: "color 0.2s", paddingRight: 16 }}>
+                  <span style={{ fontSize: 16, fontWeight: 600, color: isOpen ? theme === 'dark' ? '#ffffff' : '#111827' : theme === 'dark' ? "#cbd5e1" : "#4b5563", transition: "color 0.2s", paddingRight: 16 }}>
                     {item.q}
                   </span>
-                  <ChevronDown size={18} color={isOpen ? "#3b82f6" : "#7a8499"} style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.25s", flexShrink: 0 }} />
+                  <ChevronDown size={18} color={isOpen ? "#3b82f6" : theme === 'dark' ? "#7a8499" : "#6b7280"} style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.25s", flexShrink: 0 }} />
                 </button>
                 {isOpen && (
                   <div className="faq-answer">

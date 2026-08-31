@@ -26,11 +26,12 @@ import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
 import { JobRichText } from "../../job_components/JobRichText";
-
+import { toast } from "react-hot-toast";
 import { sampleIncomingProposals, sampleSentProposals } from "../proposals_datasets";
 import { sampleJobs } from "../../job_datasets";
 import type { ProposalItemData, ProposalStatus } from "../proposals_components/proposals_list";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 
 export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   const { proposalId, contractId } = useParams<{ proposalId: string, contractId?: string }>();
@@ -83,6 +84,10 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             contractId: p.contract_id,
             jobTitle: p.job_title || "Unknown Job",
             partyName: (isIncoming ? p.freelancer_name || p.freelancer_handle : p.client_name || p.client_handle) || "Unknown",
+            clientAccountId: p.client_account_id,
+            freelancerAccountId: p.freelancer_account_id,
+            clientTeamId: p.client_team_id || undefined,
+            freelancerTeamId: p.freelancer_team_id || undefined,
             clientName: p.client_name || p.client_handle || "Unknown Client",
             clientAvatar: p.client_avatar_path
               ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.client_avatar_path.startsWith('/') ? '' : '/'}${p.client_avatar_path}`
@@ -207,6 +212,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             }
           : null
       );
+      toast.success("You have successfully accepted the job offer!");
       setIsAcceptConfirmOpen(false);
       navigate("/jobs/proposals");
     } catch (error: any) {
@@ -264,8 +270,12 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
     }
   };
 
-  const handleViewProfile = (userName: string) => {
-    navigate(`/profile/${encodeURIComponent(userName)}`);
+  const handleViewProfile = (accountId?: string, teamId?: string) => {
+    if (teamId) {
+      navigate(`/teams/${encodeURIComponent(teamId)}`);
+      return;
+    }
+    if (accountId) navigate(`/profile/${encodeURIComponent(accountId)}`);
   };
 
   const handleViewTargetJob = () => {
@@ -416,7 +426,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={() => handleViewProfile(proposerName)}
+                  onClick={() => handleViewProfile(proposal.freelancerAccountId, proposal.freelancerTeamId)}
                   className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                 >
                   <User className="h-3.5 w-3.5 text-emerald-400" />
@@ -436,7 +446,11 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                       <button
                         title="Open Discussion Chat"
                         onClick={() =>
-                          navigate(`/inbox?user=${encodeURIComponent(proposal.partyName)}`)
+                          void openMarketplaceConversation({
+                            contextType: "job_proposal",
+                            contextId: proposal.id,
+                            navigate,
+                          })
                         }
                         className="p-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition-colors border border-blue-500/30"
                       >
@@ -496,7 +510,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   </div>
 
                   <button
-                    onClick={() => handleViewProfile(jobAuthorName)}
+                    onClick={() => handleViewProfile(proposal.clientAccountId, proposal.clientTeamId)}
                     className="px-2.5 py-1 text-[10px] font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 rounded-lg border border-gray-200 dark:border-white/10 transition shrink-0 flex items-center gap-1"
                   >
                     <User className="h-3 w-3 text-blue-400" />
@@ -679,7 +693,11 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 <>
                   <button
                     onClick={() =>
-                      navigate(`/inbox?user=${encodeURIComponent(proposal.partyName)}`)
+                      void openMarketplaceConversation({
+                        contextType: "job_proposal",
+                        contextId: proposal.id,
+                        navigate,
+                      })
                     }
                     className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-2.5 text-xs font-semibold text-gray-600 dark:text-zinc-300 transition-all duration-300 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
                   >
@@ -806,7 +824,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   <FileText className="h-5 w-5 text-emerald-400" /> Formal Contract Details
                 </h3>
                 <button
-                  onClick={() => setIsAcceptConfirmOpen(false)}
+                  onClick={() => navigate(-1)}
                   className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white transition-colors"
                 >
                   <XCircle className="h-5 w-5" />

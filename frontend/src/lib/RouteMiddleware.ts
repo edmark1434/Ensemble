@@ -1,10 +1,12 @@
-import { createElement, useEffect, useMemo, useState } from "react";
+import { createElement, Fragment, useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import useGlobalState from "./global_state";
 import api from "./axios";
 import { getStaffHomePath } from "./staffRoutes";
 import { ONBOARDING_COMPLETED_EVENT, wasOnboardingCompleted } from "./onboardingEvents";
 import { ProfileLoadingState } from "@/pages/user/7_profile/Displays/ProfileLoadingState.tsx";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
+import { isGuestAllowedPath } from "./guestRouteAccess";
 
 type OnboardingGateState = {
     accountId: string | null;
@@ -64,21 +66,54 @@ function getRedirectPath(user: { type?: string; role?: string | null } | null) {
 }
 
 export default function RouteMiddleware() {
-    const { user } = useGlobalState();
+    const { user, isGuestMode } = useGlobalState();
     const navigate = useNavigate();
     const location = useLocation();
     const [resolvedUser, setResolvedUser] = useState(user);
     const [isCheckingSession, setIsCheckingSession] = useState(!user);
+    const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
     const [onboardingGate, setOnboardingGate] = useState<OnboardingGateState>(() => ({
         accountId: user?.type === 'User' ? String(user.account_id) : null,
         path: user?.type === 'User' ? undefined : null,
         verificationFailed: false,
     }));
-    const basePublicRoutes = ['/', '/login', '/signup', '/admin', '/staff'];
+    const basePublicRoutes = [
+        '/',
+        '/login',
+        '/signup',
+        '/admin',
+        '/staff',
+        '/verify-email',
+        '/forgot-password',
+        '/reset-password',
+    ];
     const isPublicRoute =
         basePublicRoutes.includes(location.pathname) ||
         location.pathname.startsWith('/landing/');
     const isOnboardingRoute = location.pathname.startsWith('/setup/');
+
+    const isGuestAllowedRoute = isGuestAllowedPath(location.pathname);
+    const isGuestAccessBlocked = !resolvedUser
+        && isGuestMode
+        && !isPublicRoute
+        && !isGuestAllowedRoute;
+
+    useEffect(() => {
+        if (!isCheckingSession && !resolvedUser && !isGuestMode && isGuestAllowedRoute) {
+            useGlobalState.getState().setIsGuestMode(true);
+        }
+    }, [isCheckingSession, resolvedUser, isGuestMode, isGuestAllowedRoute]);
+
+    useEffect(() => {
+        if (isCheckingSession || !isGuestAccessBlocked) return;
+        setIsGuestLoginOpen(true);
+        navigate('/home', { replace: true });
+    }, [isCheckingSession, isGuestAccessBlocked, navigate]);
+
+    useEffect(() => {
+        if (resolvedUser) setIsGuestLoginOpen(false);
+    }, [resolvedUser]);
+
     useEffect(() => {
         let cancelled = false;
 
@@ -225,22 +260,26 @@ export default function RouteMiddleware() {
     }, [isCheckingSession, onboardingPath, resolvedUser, isOnboardingRoute, navigate]);
 
     useEffect(() => {
-        if (isCheckingSession || resolvedUser || isPublicRoute) {
+        if (isCheckingSession || resolvedUser || isGuestMode || isPublicRoute || isGuestAllowedRoute) {
             return;
         }
 
         navigate('/', { replace: true });
-    }, [isCheckingSession, resolvedUser, isPublicRoute, navigate]);
+    }, [isCheckingSession, resolvedUser, isGuestMode, isPublicRoute, isGuestAllowedRoute, navigate]);
 
     if (onboardingVerificationFailed) {
         return createElement(RouteLoadingShell);
     }
 
-    if ((isCheckingSession || (resolvedUser?.type === 'User' && onboardingPath === undefined)) && !isPublicRoute && !isOnboardingRoute) {
+    if (isGuestAccessBlocked) {
         return createElement(RouteLoadingShell);
     }
 
-    if (!resolvedUser && !isPublicRoute) {
+    if ((isCheckingSession || (resolvedUser?.type === 'User' && onboardingPath === undefined)) && !isGuestMode && !isPublicRoute && !isOnboardingRoute && !isGuestAllowedRoute) {
+        return createElement(RouteLoadingShell);
+    }
+
+    if (!resolvedUser && !isGuestMode && !isPublicRoute && !isGuestAllowedRoute) {
         return createElement(RouteLoadingShell);
     }
 
@@ -248,5 +287,15 @@ export default function RouteMiddleware() {
         return createElement(RouteLoadingShell);
     }
 
-    return createElement(Outlet);
+    return createElement(
+        Fragment,
+        null,
+        createElement(Outlet),
+        createElement(GuestLoginModal, {
+            isOpen: isGuestLoginOpen,
+            onClose: () => setIsGuestLoginOpen(false),
+            title: 'Login required',
+            message: 'This page is available to signed-in members. Log in or create an account to continue.',
+        }),
+    );
 }

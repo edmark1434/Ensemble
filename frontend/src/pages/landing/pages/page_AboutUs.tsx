@@ -1,3 +1,4 @@
+import useGlobalState from "@/lib/global_state";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Code, X, Briefcase, Cpu, Layers, ExternalLink, Globe } from "lucide-react";
@@ -86,6 +87,8 @@ const TEAM_MEMBERS = [
 ];
 
 const PageAboutUs: React.FC = () => {
+  const theme = useGlobalState((state) => state.theme);
+
   const navigate = useNavigate();
   const [selectedMember, setSelectedMember] = useState<typeof TEAM_MEMBERS[0] | null>(null);
 
@@ -195,7 +198,7 @@ const PageAboutUs: React.FC = () => {
   };
 
   return (
-    <div style={{ background: "#080a12", minHeight: "100vh", color: "#fff", padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
+    <div style={{ background: theme === 'dark' ? "#121214" : "#f9fafb", minHeight: "100vh", color: theme === 'dark' ? '#ffffff' : '#111827', padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
 
       {/* Target Cursor System[cite: 19] */}
       <TargetCursor
@@ -232,8 +235,8 @@ const PageAboutUs: React.FC = () => {
 
       <style>{`
         .member-card {
-          background: rgba(13, 15, 26, 0.8); 
-          border: 1px solid #1e2130;
+          background: ${theme === 'dark' ? 'rgba(24, 24, 27, 0.8)' : 'rgba(255, 255, 255, 0.8)'}; 
+          border: 1px solid ${theme === 'dark' ? "#27272a" : "#e5e7eb"};
           border-radius: 24px;
           overflow: hidden;
           transition: border-color 0.3s, background-color 0.3s, box-shadow 0.3s;
@@ -249,7 +252,7 @@ const PageAboutUs: React.FC = () => {
         .banner-container {
           width: 100%;
           height: 320px;
-          background: #0d0f1a;
+          background: ${theme === 'dark' ? "#18181b" : "#ffffff"};
           overflow: hidden;
           border-bottom: 1px solid #1e2130;
           position: relative;
@@ -282,7 +285,7 @@ const PageAboutUs: React.FC = () => {
           position: relative;
           aspect-ratio: 1 / 1;
           background: rgba(30, 33, 48, 0.3);
-          border: 1px solid #1e2130;
+          border: 1px solid ${theme === 'dark' ? "#27272a" : "#e5e7eb"};
           border-radius: 12px;
           overflow: hidden;
           text-decoration: none;
@@ -314,7 +317,7 @@ const PageAboutUs: React.FC = () => {
           z-index: 2;
           font-size: 12px;
           font-weight: 700;
-          color: #fff;
+          color: ${theme === 'dark' ? "#ffffff" : "#111827"};
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -344,17 +347,17 @@ const PageAboutUs: React.FC = () => {
             onClick={() => { playSoftClick(); navigate(-1); }} // Updated to play softclick on navigate back
             onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
               playHover();
-              e.currentTarget.style.color = "#fff";
+              e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827';
             }}
-            onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "#7a8499"; }}
+            onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = theme === 'dark' ? "#7a8499" : "#6b7280"; }}
             className="cursor-target"
-            style={{ background: "none", border: "none", color: "#7a8499", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 40, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
+            style={{ background: "none", border: "none", color: theme === 'dark' ? "#7a8499" : "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 40, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
           >
             <ArrowLeft size={16} /> Back
           </button>
 
           <h1 style={{ fontSize: "clamp(32px, 5vw, 44px)", fontWeight: 800, marginBottom: 24, letterSpacing: "-0.02em" }}>About Ensemble</h1>
-          <p style={{ color: "#7a8499", fontSize: 18, marginBottom: 24, lineHeight: 1.6 }}>
+          <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 18, marginBottom: 24, lineHeight: 1.6 }}>
             Ensemble is a structure-first real-time video collaboration application designed to eliminate friction in film production pipelines.
           </p>
         </motion.div>
@@ -377,7 +380,7 @@ const PageAboutUs: React.FC = () => {
               <h2 style={{ fontSize: 12, color: "#f15c5c", fontWeight: 700, textTransform: "uppercase", letterSpacing: 3, marginBottom: 6 }}>
                 Engineered By
               </h2>
-              <p style={{ fontSize: 20, fontWeight: 800, margin: 0, color: "#fff" }}>
+              <p style={{ fontSize: 20, fontWeight: 800, margin: 0, color: theme === 'dark' ? '#ffffff' : '#111827' }}>
                 RavenLabs Development
               </p>
             </div>
@@ -413,7 +416,7 @@ const PageAboutUs: React.FC = () => {
                 </div>
 
                 <div style={{ padding: "24px 20px" }}>
-                  <h3 style={{ fontSize: 17, fontWeight: 700, color: "#fff", marginBottom: 6, marginTop: 0 }}>
+                  <h3 style={{ fontSize: 17, fontWeight: 700, color: theme === 'dark' ? '#ffffff' : '#111827', marginBottom: 6, marginTop: 0 }}>
                     {member.name}
                   </h3>
                   <p style={{ color: "#ef4444", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, margin: "0 0 20px 0" }}>
@@ -474,22 +477,22 @@ const PageAboutUs: React.FC = () => {
                 onClick={() => { playSoftClick(); setSelectedMember(null); }} // Updated to trigger softclick when closing the detail pane
                 onMouseEnter={(e) => {
                   playHover();
-                  e.currentTarget.style.color = "#fff";
+                  e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827';
                 }}
-                onMouseLeave={(e) => e.currentTarget.style.color = "#7a8499"}
+                onMouseLeave={(e) => e.currentTarget.style.color = theme === 'dark' ? "#7a8499" : "#6b7280"}
                 className="cursor-target"
-                style={{ position: "absolute", top: 24, right: 24, width: 36, height: 36, borderRadius: "50%", background: "rgba(30, 33, 48, 0.4)", border: "1px solid rgba(255,255,255,0.08)", color: "#7a8499", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", backdropFilter: "blur(4px)", zIndex: 10, transition: "color 0.2s" }}
+                style={{ position: "absolute", top: 24, right: 24, width: 36, height: 36, borderRadius: "50%", background: "rgba(30, 33, 48, 0.4)", border: "1px solid rgba(255,255,255,0.08)", color: theme === 'dark' ? "#7a8499" : "#6b7280", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", backdropFilter: "blur(4px)", zIndex: 10, transition: "color 0.2s" }}
               >
                 <X size={18} />
               </button>
 
               <div style={{ padding: "48px 32px", flex: 1, position: "relative", zIndex: 1 }}>
-                <h2 style={{ fontSize: 26, fontWeight: 800, color: "#fff", marginBottom: 4, marginTop: 0 }}>{selectedMember.name}</h2>
+                <h2 style={{ fontSize: 26, fontWeight: 800, color: theme === 'dark' ? '#ffffff' : '#111827', marginBottom: 4, marginTop: 0 }}>{selectedMember.name}</h2>
                 <p style={{ color: "#ef4444", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 36, marginTop: 0 }}>{selectedMember.role}</p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#7a8499", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: theme === 'dark' ? "#7a8499" : "#6b7280", marginBottom: 8 }}>
                       <Briefcase size={16} />
                       <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Core Focus</span>
                     </div>
@@ -497,7 +500,7 @@ const PageAboutUs: React.FC = () => {
                   </div>
 
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#7a8499", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: theme === 'dark' ? "#7a8499" : "#6b7280", marginBottom: 8 }}>
                       <Layers size={16} />
                       <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Biography</span>
                     </div>
@@ -505,7 +508,7 @@ const PageAboutUs: React.FC = () => {
                   </div>
 
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#7a8499", marginBottom: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: theme === 'dark' ? "#7a8499" : "#6b7280", marginBottom: 12 }}>
                       <Cpu size={16} />
                       <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Expertise Stack</span>
                     </div>
@@ -518,10 +521,10 @@ const PageAboutUs: React.FC = () => {
                     </div>
                   </div>
 
-                  <div style={{ borderTop: "1px solid #1e2130", paddingTop: 28, display: "flex", flexDirection: "column", gap: 28 }}>
+                  <div style={{ borderTop: theme === 'dark' ? "1px solid #27272a" : "1px solid #e5e7eb", paddingTop: 28, display: "flex", flexDirection: "column", gap: 28 }}>
                     {/* Social links */}
                     <div>
-                      <div style={{ color: "#7a8499", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>
+                      <div style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>
                         Socials
                       </div>
                       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
@@ -536,7 +539,7 @@ const PageAboutUs: React.FC = () => {
 
                     {/* Projects portfolio cubes */}
                     <div>
-                      <div style={{ color: "#7a8499", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>
+                      <div style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>
                         Projects
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

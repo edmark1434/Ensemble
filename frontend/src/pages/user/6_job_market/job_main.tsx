@@ -75,9 +75,9 @@ const JobMain: React.FC = () => {
   const userInfo = useGlobalState((state) => state.user);
   const [loading, setLoading] = useState(true);
   const [viewType, setViewType] = useState<ViewType>("grid");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(location.state?.searchQuery || "");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const [activeCategoryFilter, setActiveCategoryFilter] = useState("All");
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState(location.state?.category || "All");
   const [jobsList, setJobsList] = useState<Job[]>([]);
   const [showFilters, setShowFilters] = useState(true);
 
@@ -131,7 +131,9 @@ const JobMain: React.FC = () => {
              : "/placeholder.svg",
           skills: j.tags || [],
           isSaved: j.is_saved || false,
-          isOwnPost: userInfo?.account_id === j.client_account_id,
+          isOwnPost: Boolean(j.is_own_post),
+          isManageablePost: Boolean(j.is_manageable_post),
+          isPersonalPost: Boolean(j.is_personal_post),
           hasProposed: j.has_proposed || false,
           myProposalId: j.my_proposal_id || null
         }));

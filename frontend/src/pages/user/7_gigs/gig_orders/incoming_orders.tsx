@@ -39,8 +39,6 @@ export const IncomingOrders: React.FC = () => {
       const formatAvatarUrl = (url: string) => {
         if (!url) return "";
         if (url.startsWith("http")) return url;
-        if (url.startsWith("/public/")) return url.replace("/public/", "/");
-        if (url.match(/^\/p\d+\.png$/) || url.match(/^p\d+\.png$/)) return url.startsWith('/') ? url : `/${url}`;
         return `${cloudFrontUrl}/${url.replace(/^\//, '')}`;
       };
 
@@ -48,6 +46,18 @@ export const IncomingOrders: React.FC = () => {
           ...o,
           client_avatar: formatAvatarUrl(o.client_avatar),
       }));
+      
+      const counts = { All: fetchedOrders.length, Pending: 0, Accepted: 0, Rejected: 0 };
+      fetchedOrders.forEach((o: any) => {
+        const s = o.status || 'Pending';
+        if (counts[s as keyof typeof counts] !== undefined) {
+          counts[s as keyof typeof counts]++;
+        }
+      });
+      if (context?.setChildOrdersCounts) {
+        context.setChildOrdersCounts(counts);
+      }
+
       setOrders(mappedOrders);
       setLoading(false);
     }).catch((err) => {
@@ -108,6 +118,11 @@ export const IncomingOrders: React.FC = () => {
     );
   }
 
+  const filteredOrders = orders.filter((o) => {
+    if (!context?.activeStatus || context.activeStatus === "All") return true;
+    return o.status === context.activeStatus;
+  });
+
   return (
     <div className="space-y-4 w-full">
       <div className="flex items-center justify-between gap-4 p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface backdrop-blur-sm">
@@ -141,10 +156,20 @@ export const IncomingOrders: React.FC = () => {
             </div>
           </div>
         </div>
+        <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate(`/gigs/edit/${targetGig?.id}`)}
+              className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 text-xs font-bold transition shrink-0"
+            >
+              Edit Service
+            </button>
+        </div>
       </div>
 
       <div className={viewType === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-4"}>
-        {orders.map((order) => (
+        {filteredOrders.length === 0 ? (
+          <div className="col-span-full py-10 text-center text-sm text-gray-500">No {context?.activeStatus} orders found.</div>
+        ) : filteredOrders.map((order) => (
             <div
               key={order.id}
               onClick={() => navigate(`/gigs/orders/incoming/${gigId}/order/${order.id}`)}

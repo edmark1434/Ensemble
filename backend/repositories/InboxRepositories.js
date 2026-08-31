@@ -35,6 +35,37 @@ async function createInboxRepositories(inboxPayload = {}) {
     }
 }
 
+async function createOrGetInboxByContextRepositories(
+    conversationType,
+    context,
+    inboxPayload
+) {
+    const filter = {
+        conversation_type: conversationType,
+        deleted_at: null,
+        ...context,
+    };
+    try {
+        const result = await InboxCollection.updateOne(
+            filter,
+            { $setOnInsert: inboxPayload },
+            { upsert: true }
+        );
+        return {
+            inbox: await InboxCollection.findOne(filter),
+            created: Boolean(result.upsertedId),
+        };
+    } catch (error) {
+        if (error?.code === 11000) {
+            return {
+                inbox: await InboxCollection.findOne(filter),
+                created: false,
+            };
+        }
+        throw error;
+    }
+}
+
 async function createMessageRepositories(messagePayload = {}) {
     try{
         const result = await MessageCollection.insertOne(messagePayload);
@@ -455,12 +486,16 @@ async function checkInboxExists(inboxId) {
 
 async function getInboxByAccountId(account_id, conversation_type) {
     try {
+        const accountIds = (Array.isArray(account_id) ? account_id : [account_id])
+            .map((value) => String(value || '').trim())
+            .filter(Boolean);
+        if (!accountIds.length) return [];
         const inboxes = await InboxCollection.aggregate([
             {
                 $match: {
                     members: {
                         $elemMatch: {
-                            account_id: String(account_id),
+                            account_id: { $in: accountIds },
                             ...(conversation_type === 'group'
                                 ? {}
                                 : { status: { $nin: ['left', 'removed'] } }),
@@ -672,6 +707,7 @@ async function getInboxByTwoAccountIds(accountId1, accountId2, conversation_type
 
 module.exports = {
     createInboxRepositories,
+    createOrGetInboxByContextRepositories,
     createMessageRepositories,
     createReplyRepositories,
     getMessageByIdRepositories,

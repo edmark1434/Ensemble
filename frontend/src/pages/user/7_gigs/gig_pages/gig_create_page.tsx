@@ -1,10 +1,12 @@
 import React, { useState } from "react";
+import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
+import { requireVerifiedAccount } from "@/lib/accountVerification";
 
 // Types
 import type { GigTier, Milestone, Questionnaire } from "../gig_datasets";
@@ -27,6 +29,7 @@ const GigCreatePage: React.FC = () => {
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
+  const [actingTeamId, setActingTeamId] = useState("");
 
   // --- SLIDE 1: CORE INFO ---
   const [title, setTitle] = useState("");
@@ -159,6 +162,7 @@ const GigCreatePage: React.FC = () => {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
+      await requireVerifiedAccount();
       let thumbnailFileId = null;
       let galleryFileIds: string[] = [];
 
@@ -198,13 +202,15 @@ const GigCreatePage: React.FC = () => {
         skills,
         thumbnailFileId,
         galleryFileIds,
+        acting_team_id: actingTeamId || null,
       };
 
       await api.post("/api/gigs", gigPayload);
       setIsSuccessOpen(true);
     } catch (err: any) {
       console.error("Error creating gig:", err);
-      alert(err.response?.data?.message || err.message || "Failed to create gig");
+      const message = err.response?.data?.message || err.message || "Failed to create gig";
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -396,6 +402,8 @@ const GigCreatePage: React.FC = () => {
                       milestones={milestones}
                       additionalWorkRate={additionalWorkRate}
                       questionnaires={questionnaires}
+                      actingTeamId={actingTeamId}
+                      setActingTeamId={setActingTeamId}
                       onBack={() => handleNext(5)}
                       onSubmit={handleSubmit}
                       onEdit={(step) => setCurrentSlide(step)}

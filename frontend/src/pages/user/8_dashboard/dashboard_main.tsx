@@ -8,6 +8,7 @@ import UserHeader from "@/components/nav/user_header";
 import { DashboardTaskList } from './dashboard_components/DashboardTaskList';
 import { RateReviewModal } from './dashboard_components/RateReviewModal';
 import { ClaimCreditsModal } from './dashboard_components/ClaimCreditsModal';
+import socket from '@/lib/socket';
 
 // ============================================================================
 // SKELETON COMPONENT FOR LOADING STATE
@@ -36,6 +37,7 @@ const DashboardSkeletonLoader: React.FC = () => (
 
 interface DashboardTask {
     contract_id: string;
+    contract_type: string;
     contract_status: string;
     job_title: string;
     client_name: string;
@@ -77,6 +79,34 @@ const DashboardMain = () => {
 
     useEffect(() => {
         fetchTasks();
+    }, []);
+
+    useEffect(() => {
+        const handleTaskUpdated = (event: { contract_id?: string; task?: DashboardTask }) => {
+            if (!event?.task || !event.contract_id) return;
+            setTasks((current) => {
+                const exists = current.some(
+                    (task) => String(task.contract_id) === String(event.contract_id)
+                );
+                return exists
+                    ? current.map((task) =>
+                        String(task.contract_id) === String(event.contract_id)
+                            ? event.task!
+                            : task
+                    )
+                    : [event.task!, ...current];
+            });
+        };
+        const handleReconnect = () => {
+            void fetchTasks();
+        };
+
+        socket.on('dashboardTaskUpdated', handleTaskUpdated);
+        socket.io.on('reconnect', handleReconnect);
+        return () => {
+            socket.off('dashboardTaskUpdated', handleTaskUpdated);
+            socket.io.off('reconnect', handleReconnect);
+        };
     }, []);
 
     const fetchTasks = async () => {
@@ -304,7 +334,7 @@ const DashboardMain = () => {
                                                     <div className="flex-1 flex flex-col justify-center min-w-0 pr-4">
                                                         <div className="flex items-center gap-2 mb-1.5">
                                                             <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{task.job_title}</h4>
-                                                            <a href={`/jobs/postings/${task.job_id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white transition-colors shrink-0" title="View Original Job Post">
+                                                            <a href={task.contract_type === 'gig' ? `/gigs/services/${task.job_id}` : `/jobs/postings/${task.job_id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white transition-colors shrink-0" title={task.contract_type === 'gig' ? "View Original Gig Post" : "View Original Job Post"}>
                                                                 <ExternalLink className="h-3.5 w-3.5" />
                                                             </a>
                                                         </div>
@@ -327,7 +357,7 @@ const DashboardMain = () => {
                                                             {computedStatus}
                                                         </span>
                                                         <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded border bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20">
-                                                            Job
+                                                            {task.contract_type === 'gig' ? 'Gig' : 'Job'}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -370,7 +400,7 @@ const DashboardMain = () => {
                                                     <div className="flex-1 flex flex-col justify-center min-w-0 pr-4">
                                                         <div className="flex items-center gap-2 mb-1.5">
                                                             <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{task.job_title}</h4>
-                                                            <a href={`/jobs/postings/${task.job_id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white transition-colors shrink-0" title="View Original Job Post">
+                                                            <a href={task.contract_type === 'gig' ? `/gigs/services/${task.job_id}` : `/jobs/postings/${task.job_id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white transition-colors shrink-0" title={task.contract_type === 'gig' ? "View Original Gig Post" : "View Original Job Post"}>
                                                                 <ExternalLink className="h-3.5 w-3.5" />
                                                             </a>
                                                         </div>
@@ -393,7 +423,7 @@ const DashboardMain = () => {
                                                             {computedStatus}
                                                         </span>
                                                         <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded border bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20">
-                                                            Job
+                                                            {task.contract_type === 'gig' ? 'Gig' : 'Job'}
                                                         </span>
                                                     </div>
                                                 </div>

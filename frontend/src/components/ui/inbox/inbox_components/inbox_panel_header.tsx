@@ -96,31 +96,43 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
     <div className="sticky top-0 z-10 bg-white dark:bg-dark-surface/95 backdrop-blur-sm border-b border-gray-200 dark:border-white/10 p-4 flex items-center justify-between flex-shrink-0">
       <div className="flex min-w-0 items-center gap-3">
         <div className="relative flex-shrink-0">
-          <img
-            src={avatar}
-            alt={name}
-            className="h-10 w-10 rounded-full object-cover"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.src = `https://ui-avatars.com/api/?name=${name.substring(
-                0,
-                2
-              )}&background=6366f1&color=fff&bold=true`;
-            }}
-          />
-          {!isGroup && !isTicket && (
-            <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-dark-surface ${isOnline ? "bg-green-500" : "bg-zinc-600"}`} />
+          {name.startsWith("User ") && name.length === 13 ? (
+            <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-zinc-700 animate-pulse" />
+          ) : (
+            <img
+              src={avatar}
+              alt={name}
+              className="h-10 w-10 rounded-full object-cover ring-2 ring-gray-100 dark:ring-white/5"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.src = `https://ui-avatars.com/api/?name=${name.substring(
+                  0,
+                  2
+                )}&background=6366f1&color=fff&bold=true`;
+              }}
+            />
+          )}
+          {selectedConversation.conversation_type === "direct" && (
+            <span
+              className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-dark-surface ${
+                isOnline ? "bg-green-500" : "bg-gray-400 dark:bg-zinc-500"
+              }`}
+            />
           )}
         </div>
-        <div className="min-w-0">
-          <h2
-            className="font-semibold text-gray-900 dark:text-white text-sm"
-            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-          >
-            {name}
-          </h2>
+        <div className="min-w-0 flex-1">
+          {name.startsWith("User ") && name.length === 13 ? (
+            <div className="h-4 w-32 bg-gray-200 dark:bg-zinc-700 animate-pulse rounded mb-1" />
+          ) : (
+            <h2
+              className="truncate font-semibold text-gray-900 dark:text-white"
+              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+            >
+              {name}
+            </h2>
+          )}
           <p
-            className="text-xs text-gray-500 dark:text-zinc-500"
+            className="truncate text-xs text-gray-500 dark:text-zinc-400"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
             {statusLabel}

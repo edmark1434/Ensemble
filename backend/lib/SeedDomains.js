@@ -543,216 +543,244 @@ async function seedGigsDomain(ctx) {
   const { users, tags, files } = ctx;
   if (users.length < 4) return null;
 
-  const seller = users[3];
-  const buyers = [users[0], users[1], users[2]];
+  const getSeller = (index) => users[(index % (users.length - 1)) + 1].account_id;
 
-  const gigRes = await pool.query(
-    `INSERT INTO gigs (
-       title, description, category, payment_type, no_of_concurrent_max, status, freelancer_account_id
-     ) VALUES
-       ($1, $2, 'Video Editing', 'fixed', 3, 'active', $3),
-       ($4, $5, 'Animation', 'fixed', 2, 'active', $6),
-       ($7, $8, 'Audio Production', 'fixed', 1, 'paused', $3)
-     RETURNING gig_id, title`,
-    [
-      cap('Cinematic color grade', 50),
-      'Professional Rec.709 and HDR grades for short films and ads.',
-      seller.account_id,
-      cap('Logo animation pack', 50),
-      'Clean logo stings in 1080p and 4K with source project files.',
-      users[4]?.account_id || seller.account_id,
-      cap('Podcast audiogram set', 50),
-      'Turn podcast clips into branded vertical audiograms.',
-    ]
-  );
-  const gigs = gigRes.rows;
-  const primaryGig = gigs[0];
+  const gigTemplates = [
+    {
+      title: "I will edit your YouTube gaming highlights",
+      description: "Fast-paced, engaging edits for your Twitch VODs or gaming footage. I add memes, sound effects, subtitles, and zooms to retain audience retention and maximize watch time on your channel.",
+      category: "YouTube",
+      status: "Open",
+      slots: 10,
+      tiers: [
+        { title: "Basic - Short Highlight", desc: "Up to 5 mins of edited gameplay from a 30 min VOD.", price: 500, days: 2, revs: 1 },
+        { title: "Standard - Standard Vid", desc: "Up to 10 mins of highly edited gameplay from 1 hr VOD.", price: 1200, days: 4, revs: 2 },
+        { title: "Premium - Full Stream", desc: "Up to 20 mins of premium editing from a 4 hour stream.", price: 2500, days: 7, revs: 4 }
+      ]
+    },
+    {
+      title: "I can create cinematic wedding video edits",
+      description: "Turn your special day into a cinematic masterpiece. I handle color grading, audio synchronization, slow-motion enhancements, and emotional storytelling to create a beautiful wedding film.",
+      category: "Events",
+      status: "Open",
+      slots: 5,
+      tiers: [
+        { title: "Basic - Teaser Video", desc: "A 1-minute cinematic teaser trailer of the wedding.", price: 1000, days: 4, revs: 1 },
+        { title: "Standard - Highlight Film", desc: "A 5-8 minute cinematic highlight film with color grading.", price: 3000, days: 10, revs: 3 },
+        { title: "Premium - Documentary", desc: "Full 20+ minute documentary style film + highlight video.", price: 6000, days: 21, revs: 5 }
+      ]
+    },
+    {
+      title: "I will edit your corporate promotional videos",
+      description: "Professional and sleek edits for your business. Perfect for product launches, brand overviews, and internal communications. Includes royalty-free music, lower thirds, and brand coloring.",
+      category: "Corporate",
+      status: "Open",
+      slots: 8,
+      tiers: [
+        { title: "Basic - Simple Promo", desc: "Up to 2 mins with basic cuts, text, and music.", price: 800, days: 3, revs: 2 },
+        { title: "Standard - Brand Story", desc: "Up to 5 mins with advanced B-roll integration and grading.", price: 1800, days: 7, revs: 4 },
+        { title: "Premium - Full Campaign", desc: "Multiple cuts for different platforms + source files.", price: 3500, days: 14, revs: 6 }
+      ]
+    },
+    {
+      title: "I can produce engaging TikTok and Reels",
+      description: "Maximize your viral potential on TikTok, IG Reels, and YouTube Shorts. I provide Alex Hormozi-style captions, fast cuts, engaging sound design, and trend-focused editing.",
+      category: "Social",
+      status: "Open",
+      slots: 10,
+      tiers: [
+        { title: "Basic - Single Short", desc: "1 fully edited short-form video up to 60 seconds.", price: 200, days: 2, revs: 1 },
+        { title: "Standard - Weekly Pack", desc: "5 edited short-form videos with animated captions.", price: 900, days: 7, revs: 2 },
+        { title: "Premium - Monthly Viral", desc: "20 short-form videos optimized for multi-platform posting.", price: 3000, days: 21, revs: 5 }
+      ]
+    },
+    {
+      title: "I will color grade your short films or ads",
+      description: "Professional color correction and grading using DaVinci Resolve. I ensure shot matching, skin tone preservation, and cinematic look development tailored to your narrative.",
+      category: "Corporate",
+      status: "Open",
+      slots: 4,
+      tiers: [
+        { title: "Basic - Color Correction", desc: "Basic balancing and exposure matching up to 2 mins.", price: 400, days: 3, revs: 1 },
+        { title: "Standard - Cinematic Grade", desc: "Advanced look development and grading up to 5 mins.", price: 1200, days: 6, revs: 3 },
+        { title: "Premium - Feature Film", desc: "Full workflow for short films up to 20 minutes.", price: 3500, days: 14, revs: 5 }
+      ]
+    },
+    {
+      title: "I can edit your travel vlog dynamically",
+      description: "Bring your travel memories to life. I use dynamic transitions, speed ramps, immersive soundscapes, and vibrant color grading to make your travel vlog stand out.",
+      category: "YouTube",
+      status: "Open",
+      slots: 6,
+      tiers: [
+        { title: "Basic - Simple Vlog", desc: "Up to 5 minutes of clean cuts and background music.", price: 300, days: 3, revs: 1 },
+        { title: "Standard - Dynamic Edit", desc: "Up to 10 mins with speed ramps and sound design.", price: 800, days: 6, revs: 2 },
+        { title: "Premium - Cinematic Vlog", desc: "Up to 20 mins of premium editing and advanced grading.", price: 1800, days: 10, revs: 4 }
+      ]
+    },
+    {
+      title: "I will mix and master your video audio",
+      description: "Bad audio ruins good video. I will clean up dialogue, remove background noise, add Foley and sound effects, and master the final mix to industry broadcast standards.",
+      category: "Corporate",
+      status: "Open",
+      slots: 8,
+      tiers: [
+        { title: "Basic - Noise Removal", desc: "Clean up dialogue and remove hums/hisses up to 5 mins.", price: 200, days: 2, revs: 1 },
+        { title: "Standard - Audio Mix", desc: "Full sound design, music mixing, and dialogue cleanup (10 min).", price: 600, days: 4, revs: 2 },
+        { title: "Premium - Pro Master", desc: "Broadcast-ready mastering and spatial audio for short films.", price: 1500, days: 7, revs: 4 }
+      ]
+    },
+    {
+      title: "I can add VFX and motion graphics",
+      description: "Take your project to the next level with custom After Effects work. I offer green screen keying, rotoscoping, object removal, 3D tracking, and custom motion graphics.",
+      category: "Corporate",
+      status: "Open",
+      slots: 5,
+      tiers: [
+        { title: "Basic - Simple VFX", desc: "Basic screen replacements or simple green screen keying (3 shots).", price: 500, days: 4, revs: 2 },
+        { title: "Standard - Motion Pack", desc: "Custom lower thirds, title animations, and object tracking.", price: 1500, days: 8, revs: 3 },
+        { title: "Premium - Advanced Comp", desc: "Complex rotoscoping, 3D camera tracking, and heavy VFX.", price: 4000, days: 15, revs: 5 }
+      ]
+    },
+    {
+      title: "I will edit professional talking head videos",
+      description: "Perfect for online courses, interviews, and corporate messaging. I ensure crisp cuts, remove dead air, and add supporting B-roll or text overlays to keep viewers engaged.",
+      category: "Corporate",
+      status: "Open",
+      slots: 10,
+      tiers: [
+        { title: "Basic - Clean Cuts", desc: "Up to 10 mins of removing mistakes and dead air.", price: 300, days: 2, revs: 1 },
+        { title: "Standard - Engaging Edit", desc: "Up to 15 mins with B-roll, text pop-ups, and audio fix.", price: 700, days: 5, revs: 2 },
+        { title: "Premium - Course Module", desc: "Up to 30 mins of highly polished educational content.", price: 1500, days: 8, revs: 3 }
+      ]
+    },
+    {
+      title: "I can create a dynamic logo reveal",
+      description: "Make a strong first impression with a custom logo animation. No templates used—100% custom motion graphics tailored to your brand's style and guidelines.",
+      category: "Social",
+      status: "Open",
+      slots: 8,
+      tiers: [
+        { title: "Basic - Simple Reveal", desc: "Clean and minimal 2D logo animation (up to 5 secs).", price: 200, days: 3, revs: 1 },
+        { title: "Standard - Dynamic Intro", desc: "Complex 2D motion graphics with custom sound design.", price: 600, days: 5, revs: 2 },
+        { title: "Premium - 3D Logo Reveal", desc: "Fully modeled 3D logo reveal with premium textures.", price: 1500, days: 10, revs: 4 }
+      ]
+    },
+    {
+      title: "I will edit your music video to the beat",
+      description: "High-energy music video editing. I sync multicam footage, apply creative coloring, add flashy transitions, and edit perfectly on the beat to match the song's energy.",
+      category: "Events",
+      status: "Open",
+      slots: 5,
+      tiers: [
+        { title: "Basic - Performance Cut", desc: "Simple multicam sync and cuts for up to 3 minutes.", price: 600, days: 5, revs: 2 },
+        { title: "Standard - Visual Edit", desc: "Added transitions, stylized color grading, and effects.", price: 1500, days: 10, revs: 3 },
+        { title: "Premium - Director's Cut", desc: "Heavy VFX, glitch effects, intense grading, and source files.", price: 3500, days: 15, revs: 5 }
+      ]
+    },
+    {
+      title: "I can add animated subtitles and lower thirds",
+      description: "Make your videos accessible and engaging. I manually transcribe and design highly readable, beautifully animated subtitles and custom lower thirds for any video format.",
+      category: "Social",
+      status: "Close",
+      slots: 10,
+      tiers: [
+        { title: "Basic - Standard Subs", desc: "Up to 5 minutes of standard SRT/burned-in subtitles.", price: 100, days: 2, revs: 1 },
+        { title: "Standard - Animated Subs", desc: "Up to 10 minutes of styled, animated word-by-word subs.", price: 350, days: 4, revs: 2 }
+      ]
+    },
+    {
+      title: "I will do a green screen compositing",
+      description: "Professional chroma keying and compositing. I will remove your green/blue screen flawlessly, fix edge spill, and composite the subject seamlessly into a new background.",
+      category: "Corporate",
+      status: "Close",
+      slots: 7,
+      tiers: [
+        { title: "Basic - Simple Key", desc: "Keying out a well-lit green screen up to 1 minute.", price: 150, days: 2, revs: 1 },
+        { title: "Standard - Full Composite", desc: "Keying + matching lighting/color to new background (3 min).", price: 500, days: 5, revs: 3 }
+      ]
+    }
+  ];
 
-  const featureRes = await pool.query(
-    `INSERT INTO gig_features (name, gig_id)
-     VALUES
-       ('Color matched look', $1),
-       ('Shot matching', $1),
-       ('Export presets', $1)
-     RETURNING gig_feature_id, name`,
-    [primaryGig.gig_id]
-  );
+  let gigsToReturn = [];
+  let sellerAccounts = new Set();
 
-  let primaryTierRes;
+  for (let i = 0; i < gigTemplates.length; i++) {
+    const template = gigTemplates[i];
+    const sellerAccountId = getSeller(i);
+    sellerAccounts.add(sellerAccountId);
 
-  for (const gig of gigs) {
-    const tierRes = await pool.query(
-      `INSERT INTO gig_tiers (
-         title, description, rate_credits, delivery_days, no_of_revisions_max, gig_id
-       ) VALUES
-         ('Basic', 'Standard delivery package', 800, 3, 1, $1),
-         ('Standard', 'Advanced delivery with source files', 1600, 5, 2, $1),
-         ('Premium', 'Premium delivery + extras', 3200, 7, 3, $1)
-       RETURNING gig_tier_id, title`,
+    const gigRes = await pool.query(
+      `INSERT INTO gigs (
+         title, description, category, payment_type, no_of_concurrent_max, status, freelancer_account_id
+       ) VALUES ($1, $2, $3, 'fixed', $4, $5, $6)
+       RETURNING gig_id, title, freelancer_account_id`,
+      [cap(template.title, 50), template.description, template.category, template.slots, template.status, sellerAccountId]
+    );
+    const gig = gigRes.rows[0];
+    gigsToReturn.push(gig);
+
+    // Tiers
+    for (const tier of template.tiers) {
+      await pool.query(
+        `INSERT INTO gig_tiers (title, description, rate_credits, delivery_days, no_of_revisions_max, gig_id) VALUES ($1, $2, $3, $4, $5, $6)`,
+        [tier.title, tier.desc, tier.price, tier.days, tier.revs, gig.gig_id]
+      );
+    }
+
+    // Milestones
+    await pool.query(
+      `INSERT INTO gig_milestones (index, name, description, gig_id) VALUES
+       (1, 'Project Kickoff & Asset Delivery', 'Transferring footage and discussing the creative direction.', $1),
+       (2, 'First Draft / Rough Cut', 'Delivering the initial assembly and structural edit for review.', $1),
+       (3, 'Final Polish & Color', 'Applying VFX, color grading, sound design, and final export.', $1)`,
       [gig.gig_id]
     );
 
-    if (gig.gig_id === primaryGig.gig_id) {
-      primaryTierRes = tierRes;
-      for (const tier of tierRes.rows) {
-        for (const feature of featureRes.rows) {
-          await pool.query(
-            `INSERT INTO gig_tier_features (gig_tier_id, gig_feature_id, is_included)
-             VALUES ($1,$2,$3)
-             ON CONFLICT DO NOTHING`,
-            [
-              tier.gig_tier_id,
-              feature.gig_feature_id,
-              tier.title !== 'Basic' || feature.name !== 'Export presets',
-            ]
-          );
-        }
+    // Images
+    const gigFileRes = await pool.query(
+      `INSERT INTO files (name, path, mime_type, size_bytes) VALUES ($1, $2, 'image/png', 0) RETURNING file_id`,
+      ['placeholder.png', 'https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/120ffbd6-72f6-4da9-98bd-ddf780450a66/placeholder_1787070142838_f09d8787.png']
+    );
+    const gigPlaceholderId = gigFileRes.rows[0].file_id;
+
+    for (let j = 0; j < 4; j++) {
+      await pool.query(
+        `INSERT INTO gig_attachments (gig_id, file_id, index) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+        [gig.gig_id, gigPlaceholderId, j]
+      );
+    }
+
+    // Questionnaire
+    await pool.query(
+      `INSERT INTO gig_requirements (type, question, is_required, gig_id) VALUES
+       ('text', 'What is the target audience for this video?', true, $1),
+       ('file', 'Attach a link or file for a reference video.', false, $1)`,
+      [gig.gig_id]
+    );
+
+    // Tags
+    for(let j=0; j < Math.min(4, tags.length); j++) {
+      if (tags[j]) {
+        await pool.query(
+          `INSERT INTO gig_tags (gig_id, tag_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+          [gig.gig_id, tags[j].tag_id]
+        );
       }
     }
   }
 
-
-  const reqRes = await pool.query(
-    `INSERT INTO gig_requirements (type, question, is_required, gig_id)
-     VALUES
-       ('text', 'Project style notes', true, $1),
-       ('choice', 'Delivery format', true, $1),
-       ('file', 'Reference stills', false, $1)
-     RETURNING gig_requirement_id, type`,
-    [primaryGig.gig_id]
-  );
-  const choiceReq = reqRes.rows.find((r) => r.type === 'choice') || reqRes.rows[0];
-  await pool.query(
-    `INSERT INTO gig_requirement_choices (name, gig_requirement_id)
-     VALUES ('ProRes', $1), ('H.264', $1), ('DNxHR', $1)`,
-    [choiceReq.gig_requirement_id]
-  );
-
-  const addonRes = await pool.query(
-    `INSERT INTO gig_addons (name, price_credits, additional_days, gig_id)
-     VALUES
-       ('Extra revision', 200, 1, $1),
-       ('Same-day rush', 500, 0, $1)
-     RETURNING gig_addon_id`,
-    [primaryGig.gig_id]
-  );
-
-  await pool.query(
-    `INSERT INTO gig_milestones (index, name, description, gig_id)
-     VALUES
-       (1, 'Look development', 'Create primary LUT and stills', $1),
-       (2, 'Final grade', 'Apply grade across timeline', $1)`,
-    [primaryGig.gig_id]
-  );
-
-  const gigFileRes = await pool.query(
-    `INSERT INTO files (name, path, mime_type, size_bytes) VALUES ($1, $2, 'image/png', 0) RETURNING file_id`,
-    ['gig_placeholder.png', 'https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/120ffbd6-72f6-4da9-98bd-ddf780450a66/placeholder_1787070142838_f09d8787.png']
-  );
-  const gigPlaceholderId = gigFileRes.rows[0].file_id;
-
-  if (gigPlaceholderId) {
-    // Primary Gig
+  // Insert Terms of Service for the sellers
+  for (const accountId of sellerAccounts) {
     await pool.query(
-      `INSERT INTO gig_attachments (gig_id, file_id, index) VALUES ($1,$2,0) ON CONFLICT DO NOTHING`,
-      [gigs[0].gig_id, gigPlaceholderId]
-    );
-    // Support image
-    await pool.query(
-      `INSERT INTO gig_attachments (gig_id, file_id, index) VALUES ($1,$2,1) ON CONFLICT DO NOTHING`,
-      [gigs[0].gig_id, gigPlaceholderId]
-    );
-    // Other Gigs
-    await pool.query(
-      `INSERT INTO gig_attachments (gig_id, file_id, index) VALUES ($1,$2,0) ON CONFLICT DO NOTHING`,
-      [gigs[1].gig_id, gigPlaceholderId]
-    );
-    await pool.query(
-      `INSERT INTO gig_attachments (gig_id, file_id, index) VALUES ($1,$2,0) ON CONFLICT DO NOTHING`,
-      [gigs[2].gig_id, gigPlaceholderId]
-    );
-  }
-  if (tags[2]) {
-    await pool.query(
-      `INSERT INTO gig_tags (gig_id, tag_id) VALUES ($1,$2)
-       ON CONFLICT DO NOTHING`,
-      [primaryGig.gig_id, tags[2].tag_id]
+      `INSERT INTO terms_of_service (terms_title, terms_description, terms_type, is_default, account_id)
+       VALUES ($1, $2, 'gigs', false, $3)`,
+      ['Video Editing Terms of Service', '1. Client must provide all raw footage before the deadline starts.\n2. Revisions do not cover completely new creative directions.\n3. Final project files (Premiere/Resolve) are provided upon completion.', accountId]
     );
   }
 
-  const requestRes = await pool.query(
-    `INSERT INTO gig_requests (status, client_account_id, gig_tier_id)
-     VALUES
-       ('accepted', $1, $2),
-       ('pending', $3, $4),
-       ('completed', $5, $2)
-     RETURNING gig_request_id, status`,
-    [
-      buyers[0].account_id,
-      primaryTierRes.rows[1].gig_tier_id,
-      buyers[1].account_id,
-      primaryTierRes.rows[0].gig_tier_id,
-      buyers[2].account_id,
-    ]
-  );
-
-  await pool.query(
-    `INSERT INTO gig_request_addons (gig_request_id, gig_addon_id)
-     VALUES ($1,$2) ON CONFLICT DO NOTHING`,
-    [requestRes.rows[0].gig_request_id, addonRes.rows[0].gig_addon_id]
-  );
-
-  for (const req of reqRes.rows) {
-    await pool.query(
-      `INSERT INTO gig_responses (response, gig_request_id, gig_requirement_id)
-       VALUES ($1,$2,$3)`,
-      [
-        req.type === 'choice' ? 'ProRes' : 'Warm cinematic look with soft contrast.',
-        requestRes.rows[0].gig_request_id,
-        req.gig_requirement_id,
-      ]
-    );
-  }
-
-  if (files[3] && (await tableExists('gig_response_attachments'))) {
-    const response = (
-      await pool.query(
-        `SELECT gig_response_id FROM gig_responses WHERE gig_request_id = $1 LIMIT 1`,
-        [requestRes.rows[0].gig_request_id]
-      )
-    ).rows[0];
-    if (response) {
-      await pool.query(
-        `INSERT INTO gig_response_attachments (gig_response_id, file_id, index)
-         VALUES ($1,$2,0) ON CONFLICT DO NOTHING`,
-        [response.gig_response_id, files[3].file_id]
-      );
-    }
-  }
-
-  const gigContractRes = await pool.query(
-    `INSERT INTO contracts (
-       contract_type, payment_type, starts_at, rate_credits, revision_price_credits, status, is_private
-     ) VALUES ('gig', 'fixed', NOW() - interval '2 days', 1600, 200, 'active', false)
-     RETURNING contract_id`
-  );
-  await pool.query(
-    `INSERT INTO gig_contracts (contract_id, gig_request_id) VALUES ($1,$2)`,
-    [gigContractRes.rows[0].contract_id, requestRes.rows[0].gig_request_id]
-  );
-
-  const gigEscrow = await pool.query(
-    `INSERT INTO wallets (type, status, balance_credits, frozen_balance_credits)
-     VALUES ('escrow wallets', 'active', 1600, 1600)
-     RETURNING wallet_id`
-  );
-  await pool.query(
-    `INSERT INTO escrow_wallets (wallet_id, contract_id) VALUES ($1,$2)`,
-    [gigEscrow.rows[0].wallet_id, gigContractRes.rows[0].contract_id]
-  );
-
-  console.log(`✅ Seeded ${gigs.length} gigs with tiers, requests, and gig contract`);
-  return { gigs, requests: requestRes.rows };
+  console.log(`✅ Seeded ${gigsToReturn.length} customized video gigs with tiers (0 orders)`);
+  return { gigs: gigsToReturn, requests: [] };
 }
 
 async function seedMarketplaceCatalog(ctx, projects) {

@@ -26,6 +26,7 @@ const {getIo} = require('../lib/WebSocket');
 const { reconcileCashoutsServices } = require('../services/CashoutServices');
 const { cleanupExpiredOnboardingAvatars } = require('../services/OnboardingServices');
 const { reconcileDiditVerificationSessionsServices } = require('../services/AccountVerificationServices');
+const { reconcileOverdueTeamTasksServices } = require('../services/TeamTaskServices');
 
 const config = {
     auth: {
@@ -297,6 +298,7 @@ let isPaymentJobRunning = false;
 let isSubscriptionJobRunning = false;
 let isCashoutJobRunning = false;
 let isVerificationJobRunning = false;
+let isTeamTaskDeadlineJobRunning = false;
 
 function startPaymentReconciliationJob() {
 
@@ -386,6 +388,22 @@ function startPaymentReconciliationJob() {
             console.error("Didit verification reconciliation failed:", err.message);
         } finally {
             isVerificationJobRunning = false;
+        }
+    });
+
+    // Mark passed Team task deadlines overdue and recover notifications missed during downtime.
+    cron.schedule("* * * * *", async () => {
+        if (isTeamTaskDeadlineJobRunning) return;
+        isTeamTaskDeadlineJobRunning = true;
+        try {
+            const result = await reconcileOverdueTeamTasksServices(100);
+            if (result.updated || result.notified) {
+                console.log(`Reconciled Team task deadlines; overdue ${result.updated}, notified ${result.notified}.`);
+            }
+        } catch (err) {
+            console.error("Team task deadline reconciliation failed:", err.message);
+        } finally {
+            isTeamTaskDeadlineJobRunning = false;
         }
     });
 

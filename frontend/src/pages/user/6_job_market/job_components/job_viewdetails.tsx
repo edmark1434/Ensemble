@@ -4,6 +4,7 @@ import { JobRichText } from "./JobRichText";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import useGlobalState from "@/lib/global_state";
 
 interface JobViewDetailsProps {
   selectedJob: Job | null;
@@ -14,11 +15,12 @@ interface JobViewDetailsProps {
 
 const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, onReportJob, onToggleSave }) => {
   const navigate = useNavigate();
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
 
   const handleViewProfile = () => {
     if (!selectedJob) return;
 
-    if (selectedJob.isOwnPost) {
+    if (selectedJob.isPersonalPost) {
       navigate("/profile");
     } else {
       navigate(`/profile/${selectedJob.client_account_id}`);
@@ -56,7 +58,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               />
               <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
               
-              {onToggleSave && (
+              {onToggleSave && !isGuestMode && (
                 <button
                   title="Save Job Post"
                   onClick={(e) => {
@@ -66,7 +68,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   className={`absolute top-4 right-4 rounded-full p-2 backdrop-blur-sm transition z-10 ${
                     selectedJob.isSaved
                       ? "bg-black/50 text-yellow-500 hover:bg-black/70"
-                      : "bg-black/50 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-black/70"
+                      : "bg-black/50 text-gray-500 dark:text-zinc-400 hover:text-gray-900 hover:bg-black/70"
                   }`}
                 >
                   <Bookmark className={`h-4 w-4 ${selectedJob.isSaved ? "fill-current" : ""}`} />
@@ -95,11 +97,11 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                     </span>
                   </div>
 
-                  {!selectedJob.isOwnPost && (
+                  {!selectedJob.isOwnPost && !isGuestMode && (
                     <button
                       title="Report Job Post"
                       onClick={() => onReportJob && onReportJob(selectedJob)}
-                      className="p-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-red-400 transition border border-gray-200 dark:border-white/10 flex items-center gap-1 text-xs"
+                      className="p-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-red-400 transition border border-gray-200 dark:border-white/10 flex items-center gap-1 text-xs"
                     >
                       <Flag className="h-3.5 w-3.5" />
                       <span className="text-[10px] font-medium">Report</span>
@@ -231,7 +233,11 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                 </span>
               </div>
 
-              {!selectedJob.isOwnPost ? (
+              {selectedJob.isOwnPost && !selectedJob.isManageablePost ? (
+                <div className="w-full rounded-xl border border-blue-500/20 bg-blue-500/10 py-3 text-center text-xs font-bold text-blue-400">
+                  This job was posted by a Team you belong to
+                </div>
+              ) : !selectedJob.isOwnPost ? (
                 selectedJob.hasProposed ? (
                   <button
                     onClick={() => navigate(`/jobs/proposals/sent/${selectedJob.myProposalId}`)}
@@ -241,10 +247,16 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   </button>
                 ) : (
                   <button
-                    onClick={() => navigate(`/jobs/${selectedJob.id}/make-proposal`)}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 active:scale-[0.98]"
+                    onClick={() => !isGuestMode && navigate(`/jobs/${selectedJob.id}/make-proposal`)}
+                    disabled={isGuestMode}
+                    className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg ${
+                      isGuestMode 
+                        ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' 
+                        : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]'
+                    }`}
                   >
-                    <Send className="h-3.5 w-3.5" /> Send Proposal
+                    <Send className="h-3.5 w-3.5" /> 
+                    {isGuestMode ? "Login to Apply" : "Send Proposal"}
                   </button>
                 )
               ) : (

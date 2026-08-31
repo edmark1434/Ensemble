@@ -53,6 +53,12 @@ import { ChatImagePreview } from "./inbox_functions/chat_image_preview";
 const EMPTY_MESSAGES: Message[] = [];
 const EMPTY_TYPING_ACCOUNTS: string[] = [];
 const MESSAGE_PAGE_SIZE = 30;
+const MARKETPLACE_CONVERSATION_TYPES = new Set([
+  "engagement",
+  "marketplace_job",
+  "marketplace_gig",
+  "revision",
+]);
 
 interface ProfileIdentity {
   name?: string;
@@ -74,6 +80,9 @@ const InboxMain = () => {
       (conversation) =>
         String(conversation._id) === String(activeConversationId)
     ) || null;
+  const currentActorId = String(
+    selectedConversation?.viewer_account_id || currentUserId
+  );
   const messages = useChatState((state) =>
     activeConversationId
       ? state.messagesByConversation[activeConversationId] || EMPTY_MESSAGES
@@ -346,7 +355,7 @@ const InboxMain = () => {
     () =>
       inboxList.filter((inbox) =>
         isMarketplace
-          ? inbox.conversation_type === "engagement"
+          ? MARKETPLACE_CONVERSATION_TYPES.has(inbox.conversation_type)
           : ["direct", "group", "ticket", "dispute"].includes(
               inbox.conversation_type
             )
@@ -370,6 +379,7 @@ const InboxMain = () => {
   useEffect(() => {
     const requestedConversationId = String(
       (location.state as { conversationId?: string } | null)?.conversationId ||
+        new URLSearchParams(location.search).get("conversation") ||
         ""
     );
     const activeIsVisible = tabConversations.some(
@@ -399,6 +409,7 @@ const InboxMain = () => {
     handleSelectConversation,
     location.state,
     location.pathname,
+    location.search,
     navigate,
     selectConversation,
     tabConversations,
@@ -430,7 +441,7 @@ const InboxMain = () => {
     if (!selectedConversation) return filteredConversations;
 
     const selectedBelongsToTab = isMarketplace
-      ? selectedConversation.conversation_type === "engagement"
+      ? MARKETPLACE_CONVERSATION_TYPES.has(selectedConversation.conversation_type)
       : ["direct", "group", "ticket", "dispute"].includes(
           selectedConversation.conversation_type
         );
@@ -477,12 +488,12 @@ const InboxMain = () => {
         .reverse()
         .find(
           (message) =>
-            String(message.sender_id) === currentUserId &&
+            String(message.sender_id) === currentActorId &&
             (message.read_by || []).some(
-              (reader) => String(reader.account_id) !== currentUserId
+              (reader) => String(reader.account_id) !== currentActorId
             )
         )?._id,
-    [currentUserId, visibleMessages]
+    [currentActorId, visibleMessages]
   );
   const hasOlderMessages = visibleMessageCount < messages.length;
 
@@ -583,7 +594,7 @@ const InboxMain = () => {
     const remove = Boolean(
       message?.message_react?.some(
         (reaction) =>
-          String(reaction.account_id) === currentUserId &&
+          String(reaction.account_id) === currentActorId &&
           reaction.react_type === emoji
       )
     );
@@ -642,7 +653,7 @@ const InboxMain = () => {
   };
 
   const renderMessage = (message: ExtendedMessage, index: number) => {
-    const isSender = String(message.sender_id) === currentUserId;
+    const isSender = String(message.sender_id) === currentActorId;
     const isMenuOpen = activeMenuId === message._id;
     const isPickerOpen = activeEmojiPickerId === message._id;
     const pinned = isPinned(message._id);
@@ -664,7 +675,7 @@ const InboxMain = () => {
     );
 
     const isSeen = (message.read_by || []).some(
-      (reader) => String(reader.account_id) !== currentUserId
+      (reader) => String(reader.account_id) !== currentActorId
     );
     const messageStatus: "sent" | "seen" = isSeen ? "seen" : "sent";
     const recipientAvatar = selectedConversation
@@ -680,7 +691,7 @@ const InboxMain = () => {
           new Set(
             (message.read_by || [])
               .map((reader) => String(reader.account_id))
-              .filter((accountId) => accountId !== currentUserId)
+              .filter((accountId) => accountId !== currentActorId)
           )
         ).map((accountId) => {
           const profile = profiles[accountId];
@@ -783,8 +794,8 @@ const InboxMain = () => {
                   hasText ? "px-4 py-2.5" : "p-1.5"
                 } ${
                   isSender
-                    ? "bg-gradient-to-r from-blue-600 to-blue-500 text-gray-900 dark:text-white rounded-br-none"
-                    : "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white rounded-bl-none border border-gray-100 dark:border-white/5"
+                    ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none"
+                    : "bg-gray-100 dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 rounded-bl-none border border-gray-100 dark:border-zinc-700/50"
                 } ${pinned ? "ring-1 ring-yellow-400/40" : ""}`}
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
@@ -792,7 +803,7 @@ const InboxMain = () => {
                   <InboxReplyQuote
                     replyToMessageId={message.message_id_reply}
                     messages={messages}
-                    currentUserId={currentUserId}
+                    currentUserId={currentActorId}
                     onJumpToReply={handleJumpToMessage}
                   />
                 )}
@@ -895,7 +906,7 @@ const InboxMain = () => {
                 {!hasRestrictedMessageTools && (
                   <InboxReactionBadges
                     reactions={message.message_react}
-                    currentUserId={currentUserId}
+                    currentUserId={currentActorId}
                     isSender={isSender}
                     onToggleReaction={(emoji) => handleToggleReaction(message._id, emoji)}
                   />
@@ -1183,9 +1194,9 @@ const InboxMain = () => {
             onJumpToPinned={handleJumpToMessage}
             textareaRef={textareaRef}
             onUpdateGroupName={handleUpdateGroupName}
-            currentUserId={currentUserId}
+            currentUserId={currentActorId}
             getMemberName={(accountId: string) =>
-              accountId === currentUserId
+              accountId === currentActorId
                 ? "You"
                 : profiles[accountId]?.name || `User ${accountId.slice(0, 8)}`
             }

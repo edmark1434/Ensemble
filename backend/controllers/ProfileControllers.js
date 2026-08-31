@@ -7,7 +7,8 @@ const {
     profileSocialMediaUpdateService,
     updateProfileDetailsServices,
     getProfileAvatarsByAccountIdService,
-    getProfileCurrentAvatarByAccountIdService
+    getProfileCurrentAvatarByAccountIdService,
+    getProfileReviewsByAccountIdService
 } = require('../services/ProfileServices');
 const {
     getProfileAttachmentsService,
@@ -189,7 +190,7 @@ async function getProfileAttachmentsController(req, res) {
     try {
         const attachments = await getProfileAttachmentsService(
             req.params.accountId,
-            req.session.account_id
+            req.session?.account_id
         );
         return res.status(200).json({ success: true, attachments });
     } catch (err) {
@@ -240,7 +241,25 @@ async function deleteProfileAttachmentController(req, res) {
     }
 }
 
+async function getProfileReviewsController(req, res) {
+    try {
+        const { accountId } = req.params;
+        const reviews = await getProfileReviewsByAccountIdService(accountId);
+        return res.status(200).json({
+            success: true,
+            data: reviews
+        });
+    } catch (err) {
+        console.error('Error fetching reviews:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'An error occurred while fetching reviews.'
+        });
+    }
+}
+
 module.exports = {
+    getProfileReviewsController,
     updateTaglineAndDescriptionController,
     getPersonalDetailsController,
     updateProfileUserController,

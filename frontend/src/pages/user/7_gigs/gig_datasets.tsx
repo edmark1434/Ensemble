@@ -42,6 +42,7 @@ export interface Gig {
   category: string;
   status?: string;
   hasPendingOrder?: boolean;
+  pendingOrderId?: string;
   slots: number;
   termsOfService: string;
   skills: string[];
@@ -52,6 +53,14 @@ export interface Gig {
   tiers: GigTier[];
   additionalWorkRate: number;
   questionnaires: Questionnaire[];
+  reviews?: {
+    ratingId: string;
+    stars: number;
+    feedback: string;
+    createdAt: string;
+    reviewerName: string;
+    reviewerAvatar?: string;
+  }[];
 
   // UI helpers (similar to Jobs)
   postedAt: string;
@@ -60,6 +69,8 @@ export interface Gig {
   ratingCount: number;
   isSaved: boolean;
   isOwnGig: boolean;
+  canManageGig?: boolean;
+  isPersonalGig?: boolean;
   savesCount?: number;
   ordersCount?: number;
   freelancerAccountId?: string;

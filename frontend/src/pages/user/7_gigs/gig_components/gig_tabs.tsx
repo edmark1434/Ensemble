@@ -2,16 +2,20 @@ import React from "react";
 import { Grid3x3, Bookmark, Briefcase } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
+import useGlobalState from "@/lib/global_state";
 
 const GigTabs: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
 
-  const tabs = [
+  const allTabs = [
     { path: "/gigs/services", label: "All Services", icon: <Grid3x3 className="h-4 w-4" /> },
     { path: "/gigs/saved-services", label: "My Saved", icon: <Bookmark className="h-4 w-4" /> },
     { path: "/gigs/my-services", label: "My Services", icon: <Briefcase className="h-4 w-4" /> }
   ];
+
+  const tabs = isGuestMode ? allTabs.filter(tab => tab.label === "All Services") : allTabs;
 
   return (
     <div className="flex gap-1 relative">

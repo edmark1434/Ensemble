@@ -56,7 +56,7 @@ export const ProposalsMain: React.FC = () => {
 
   // Route check
   const isJobSelectionPage = location.pathname === "/jobs/proposals";
-  const isSentPage = location.pathname.startsWith("/jobs/proposals/sent");
+  const isSentPage = location.pathname.startsWith("/jobs/proposals/sent") || location.pathname.startsWith("/jobs/proposals/team-sent");
 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");

@@ -28,10 +28,10 @@ function drawWatermark(context: CanvasRenderingContext2D, width: number, height:
   context.restore();
 }
 
-async function resizeImage(file: File, maxWidth: number, maxHeight: number, quality: number, watermark: boolean, suffix: string) {
+async function resizeImage(file: File, maxWidth: number, maxHeight: number, quality: number, watermark: boolean, suffix: string, maxScale = 1) {
   const bitmap = await createImageBitmap(file);
   try {
-    const scale = Math.min(1, maxWidth / bitmap.width, maxHeight / bitmap.height);
+    const scale = Math.min(maxScale, maxWidth / bitmap.width, maxHeight / bitmap.height);
     const width = Math.max(1, Math.round(bitmap.width * scale));
     const height = Math.max(1, Math.round(bitmap.height * scale));
     const canvas = document.createElement("canvas");
@@ -49,7 +49,7 @@ async function resizeImage(file: File, maxWidth: number, maxHeight: number, qual
 
 export async function createAssetProxy(file: File, type: AssetType): Promise<File> {
   if (type === "image") {
-    return resizeImage(file, 1600, 1600, 0.72, true, "proxy");
+    return resizeImage(file, 640, 640, 0.36, true, "low-quality-preview", 0.55);
   }
   if (type === "video") return createVideoFramePreview(file);
   return createAudioVisualPreview(file);
@@ -81,7 +81,7 @@ function createVideoFramePreview(file: File): Promise<File> {
       try {
         const sourceWidth = video.videoWidth || 1280;
         const sourceHeight = video.videoHeight || 720;
-        const scale = Math.min(1, 960 / sourceWidth, 540 / sourceHeight);
+        const scale = Math.min(0.55, 640 / sourceWidth, 360 / sourceHeight);
         const width = Math.max(1, Math.round(sourceWidth * scale));
         const height = Math.max(1, Math.round(sourceHeight * scale));
         const canvas = document.createElement("canvas");
@@ -91,7 +91,7 @@ function createVideoFramePreview(file: File): Promise<File> {
         if (!context) throw new Error("Video preview processing is unavailable in this browser.");
         context.drawImage(video, 0, 0, width, height);
         drawWatermark(context, width, height);
-        resolve(await canvasToFile(canvas, `${baseName(file.name)}-preview.webp`, 0.72));
+        resolve(await canvasToFile(canvas, `${baseName(file.name)}-low-quality-preview.webp`, 0.36));
       } catch (error) {
         reject(error);
       } finally {
@@ -119,8 +119,8 @@ function createVideoFramePreview(file: File): Promise<File> {
 
 async function createAudioVisualPreview(file: File): Promise<File> {
   const canvas = document.createElement("canvas");
-  canvas.width = 960;
-  canvas.height = 540;
+  canvas.width = 640;
+  canvas.height = 360;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Audio preview processing is unavailable in this browser.");
   context.fillStyle = "#0d1324";
@@ -128,18 +128,18 @@ async function createAudioVisualPreview(file: File): Promise<File> {
   context.fillStyle = "#2563eb";
   const bars = 32;
   const gap = 10;
-  const barWidth = (canvas.width - 180 - gap * (bars - 1)) / bars;
+  const barWidth = (canvas.width - 120 - gap * (bars - 1)) / bars;
   for (let index = 0; index < bars; index += 1) {
     const seed = (file.size + index * 37) % 160;
     const height = 55 + seed;
-    const x = 90 + index * (barWidth + gap);
+    const x = 60 + index * (barWidth + gap);
     context.fillRect(x, (canvas.height - height) / 2, barWidth, height);
   }
   context.fillStyle = "rgba(255,255,255,0.9)";
-  context.font = "600 30px Inter, Arial, sans-serif";
+  context.font = "600 24px Inter, Arial, sans-serif";
   context.textAlign = "center";
-  context.fillText("Audio Preview", canvas.width / 2, 450);
+  context.fillText("Audio Preview", canvas.width / 2, 305);
   context.textAlign = "start";
   drawWatermark(context, canvas.width, canvas.height);
-  return canvasToFile(canvas, `${baseName(file.name)}-preview.webp`, 0.72);
+  return canvasToFile(canvas, `${baseName(file.name)}-low-quality-preview.webp`, 0.36);
 }

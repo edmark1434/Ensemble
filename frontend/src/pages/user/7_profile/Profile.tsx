@@ -85,6 +85,20 @@ interface UserDetail {
   subscriptionType?: "Free" | "Premium" | "Business";
   followers_count?: number;
   following_count?: number;
+  avg_rating?: string | number;
+  total_reviews?: string | number;
+  client_rating?: string | number;
+  freelancer_rating?: string | number;
+  asset_rating?: string | number;
+  successful_jobs_count?: string | number;
+  freelancer_service_rating?: string | number;
+  freelancer_service_count?: string | number;
+  freelancer_job_rating?: string | number;
+  freelancer_job_count?: string | number;
+  client_service_rating?: string | number;
+  client_service_count?: string | number;
+  client_job_rating?: string | number;
+  client_job_count?: string | number;
 }
 
 const services = [
@@ -602,7 +616,21 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             social_links: accountLinkResponse.data.links || accountLinkResponse.data || [],
             subscriptionType: profileData.subscriptiontype || "Free",
             followers_count: Number(profileData.followers_count) || 0,
-            following_count: Number(profileData.following_count) || 0
+            following_count: Number(profileData.following_count) || 0,
+            avg_rating: profileData.avg_rating,
+            total_reviews: profileData.total_reviews,
+            freelancer_rating: profileData.freelancer_rating,
+            client_rating: profileData.client_rating,
+            asset_rating: profileData.asset_rating,
+            successful_jobs_count: profileData.successful_jobs_count,
+            freelancer_service_rating: profileData.freelancer_service_rating,
+            freelancer_service_count: profileData.freelancer_service_count,
+            freelancer_job_rating: profileData.freelancer_job_rating,
+            freelancer_job_count: profileData.freelancer_job_count,
+            client_service_rating: profileData.client_service_rating,
+            client_service_count: profileData.client_service_count,
+            client_job_rating: profileData.client_job_rating,
+            client_job_count: profileData.client_job_count
           });
         } catch (skillsError) {
           console.error("Error fetching user skills:", skillsError);
@@ -629,7 +657,21 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             social_links: accountLinkResponse.data.links || accountLinkResponse.data || [],
             subscriptionType: profileData.subscriptiontype || "Free",
             followers_count: Number(profileData.followers_count) || 0,
-            following_count: Number(profileData.following_count) || 0
+            following_count: Number(profileData.following_count) || 0,
+            avg_rating: profileData.avg_rating,
+            total_reviews: profileData.total_reviews,
+            freelancer_rating: profileData.freelancer_rating,
+            client_rating: profileData.client_rating,
+            asset_rating: profileData.asset_rating,
+            successful_jobs_count: profileData.successful_jobs_count,
+            freelancer_service_rating: profileData.freelancer_service_rating,
+            freelancer_service_count: profileData.freelancer_service_count,
+            freelancer_job_rating: profileData.freelancer_job_rating,
+            freelancer_job_count: profileData.freelancer_job_count,
+            client_service_rating: profileData.client_service_rating,
+            client_service_count: profileData.client_service_count,
+            client_job_rating: profileData.client_job_rating,
+            client_job_count: profileData.client_job_count
           });
         }
 
@@ -837,6 +879,27 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
               loading={loading}
               skills={userDetails?.skills}
               onEditClick={isOwner ? () => setIsSkillsModalOpen(true) : undefined}
+            />
+            
+            <MeritSection_ProfileDisplay
+              loading={loading}
+              meritScore={userDetails?.merit_score}
+              avgRating={userDetails?.avg_rating ? Number(parseFloat(userDetails.avg_rating as string).toFixed(1)) : 0.0}
+              totalReviews={userDetails?.total_reviews ? Number(userDetails.total_reviews) : 0}
+              clientRating={userDetails?.client_rating ? Number(parseFloat(userDetails.client_rating as string).toFixed(1)) : 0.0}
+              freelancerRating={userDetails?.freelancer_rating ? Number(parseFloat(userDetails.freelancer_rating as string).toFixed(1)) : 0.0}
+              assetRating={userDetails?.asset_rating ? Number(parseFloat(userDetails.asset_rating as string).toFixed(1)) : 0.0}
+              successfulJobsCount={userDetails?.successful_jobs_count ? Number(userDetails.successful_jobs_count) : 0}
+              freelancerServiceRating={userDetails?.freelancer_service_rating ? Number(parseFloat(userDetails.freelancer_service_rating as string).toFixed(1)) : 0.0}
+              freelancerServiceCount={userDetails?.freelancer_service_count ? Number(userDetails.freelancer_service_count) : 0}
+              freelancerJobRating={userDetails?.freelancer_job_rating ? Number(parseFloat(userDetails.freelancer_job_rating as string).toFixed(1)) : 0.0}
+              freelancerJobCount={userDetails?.freelancer_job_count ? Number(userDetails.freelancer_job_count) : 0}
+              clientServiceRating={userDetails?.client_service_rating ? Number(parseFloat(userDetails.client_service_rating as string).toFixed(1)) : 0.0}
+              clientServiceCount={userDetails?.client_service_count ? Number(userDetails.client_service_count) : 0}
+              clientJobRating={userDetails?.client_job_rating ? Number(parseFloat(userDetails.client_job_rating as string).toFixed(1)) : 0.0}
+              clientJobCount={userDetails?.client_job_count ? Number(userDetails.client_job_count) : 0}
+              viewMode="merit"
+              isOwner={isOwner}
             />
             <SocialLinksSection_ProfileDisplay
               loading={loading}

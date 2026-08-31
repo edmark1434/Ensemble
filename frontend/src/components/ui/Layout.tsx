@@ -30,8 +30,8 @@ export const emitIncomingMessage = (sender: ChatTarget) => {
 
 const Layout = () => {
   const location = useLocation();
-  const [marginLeft, setMarginLeft] = useState("16rem");
   const user = useGlobalState((state) => state.user);
+  const isSidebarCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
   const initializeChat = useChatState((state) => state.initialize);
   const openDirectChat = useChatState((state) => state.openDirectChat);
   const openFloatingConversation = useChatState(
@@ -54,28 +54,12 @@ const Layout = () => {
     unreadCount: unreadCounts[String(chat.id)] || 0,
   }));
 
-  useEffect(() => {
-    if (user?.account_id) initializeChat(String(user.account_id));
-  }, [initializeChat, user?.account_id]);
+  // Dynamic margin left based on sidebar state
+  const marginLeft = isSidebarCollapsed ? "5rem" : "16rem";
 
   useEffect(() => {
-    const checkSidebarState = () => {
-      const sidebar = document.querySelector("aside");
-      if (sidebar) {
-        setMarginLeft(sidebar.classList.contains("w-20") ? "5rem" : "16rem");
-      }
-    };
-    const observer = new MutationObserver(checkSidebarState);
-    const sidebar = document.querySelector("aside");
-    if (sidebar) {
-      observer.observe(sidebar, {
-        attributes: true,
-        attributeFilter: ["class"],
-      });
-    }
-    checkSidebarState();
-    return () => observer.disconnect();
-  }, []);
+    if (user?.account_id) initializeChat(String(user.account_id));
+  }, [user?.account_id, initializeChat]);
 
   const openChatWithUser = useCallback(
     (target?: ChatTarget) => {

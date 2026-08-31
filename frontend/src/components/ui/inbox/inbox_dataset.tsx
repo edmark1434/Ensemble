@@ -32,17 +32,27 @@ export interface ReadBy {
 
 export interface Inbox {
   _id: string;
+  viewer_account_id?: string | null;
   conversation_name: string;
   conversation_image_key?: string;
   conversation_type: string;
   contract_id?: string;
   job_id?: string;
   gig_id?: string;
+  proposal_id?: string;
+  gig_request_id?: string;
   engagement_id?: string;
   asset_id?: string;
   ticket_id?: string;
   support_ticket_id?: string;
   dispute_id?: string;
+  client_account_id?: string;
+  freelancer_account_id?: string;
+  client_context_path?: string;
+  freelancer_context_path?: string;
+  marketplace_status?: string;
+  marketplace_amount_credits?: number;
+  revision_price_credits?: number;
   ticket_details?: {
     ticket_number?: string | null;
     subject?: string | null;

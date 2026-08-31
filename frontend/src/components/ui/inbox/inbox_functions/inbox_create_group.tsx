@@ -32,7 +32,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
 
   useEffect(() => {
     const query = searchTerm.replace(/^@/, "").trim();
-    if (query.length < 2) {
+    if (query.length < 1) {
       setSearchResults([]);
       setIsSearching(false);
       return;

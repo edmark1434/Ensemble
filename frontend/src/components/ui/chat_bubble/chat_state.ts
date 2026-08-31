@@ -155,6 +155,11 @@ interface ChatState {
     listing_preview?: string;
     listing_path?: string;
   }) => Promise<Inbox>;
+  createMarketplace: (payload: {
+    context_type: "job_proposal" | "gig_order";
+    context_id: string;
+  }) => Promise<Inbox>;
+  createRevision: (payload: { contract_id: string }) => Promise<Inbox>;
   updateGroupMember: (
     conversationId: string,
     accountId: string,
@@ -623,19 +628,21 @@ function emitWithAck<T>(event: string, payload: unknown): Promise<T> {
 function reconcileMessage(message: Message, isNewMessage = false) {
   if (!message?._id || !message.conversation_id) return;
   const conversationId = String(message.conversation_id);
-  const existedBefore = (
-    useChatState.getState().messagesByConversation[conversationId] ||
-    EMPTY_MESSAGES
-  ).some((current) => String(current._id) === String(message._id));
+  const currentState = useChatState.getState();
+  const currentMessages = currentState.messagesByConversation[conversationId] || EMPTY_MESSAGES;
+  const alreadyExists = currentMessages.some((current) => String(current._id) === String(message._id));
+  const isIncoming = authenticatedAccountId && String(message.sender_id) !== authenticatedAccountId;
+
+  if (isNewMessage && !alreadyExists && isIncoming) {
+    try {
+      const audio = new Audio("/sounds/notify-chat.mp3");
+      audio.play().catch(() => {});
+    } catch (e) {}
+  }
+
+  const existedBefore = currentMessages.some((current) => String(current._id) === String(message._id));
+
   useChatState.setState((state) => {
-    const currentMessages =
-      state.messagesByConversation[conversationId] || EMPTY_MESSAGES;
-    const alreadyExists = currentMessages.some(
-      (current) => String(current._id) === String(message._id)
-    );
-    const isIncoming =
-      authenticatedAccountId &&
-      String(message.sender_id) !== authenticatedAccountId;
     const isActive =
       state.activeConversationId === conversationId &&
       typeof document !== "undefined" &&
@@ -644,6 +651,65 @@ function reconcileMessage(message: Message, isNewMessage = false) {
       isNewMessage && !alreadyExists && isIncoming && !isActive
         ? (state.unreadCounts[conversationId] || 0) + 1
         : state.unreadCounts[conversationId] || 0;
+
+    let newFloatingWindows = [...state.floatingWindows];
+    if (isNewMessage && !alreadyExists && isIncoming) {
+      const conv = state.conversations.find(c => String(c._id) === conversationId);
+      const alreadyFloating = newFloatingWindows.some(fw => String(fw.inbox_id || fw.id) === conversationId);
+      let targetId = conversationId;
+
+      if (!alreadyFloating && conv) {
+        let targetName = conv.title || "User";
+        let targetAvatar = conv.profile_image || undefined;
+        
+        if (conv.conversation_type === "direct") {
+          const other = (conv.members || []).find((m: any) => String(m.account_id) !== authenticatedAccountId);
+          if (other) {
+            targetName = other.name || other.username || targetName;
+            targetAvatar = other.avatar_preset_url || targetAvatar;
+            targetId = String(other.account_id);
+            if (targetName === "User") {
+              api.get(`/api/accounts/profile/${targetId}`).then(res => {
+                const profile = res.data?.data || res.data;
+                if (profile) {
+                  useChatState.setState(s => ({
+                    floatingWindows: s.floatingWindows.map(fw =>
+                      String(fw.id) === String(targetId)
+                        ? { ...fw, name: profile.name || profile.username || fw.name, avatarUrl: profile.avatar_preset_url || profile.avatarUrl || fw.avatarUrl }
+                        : fw
+                    )
+                  }));
+                }
+              }).catch(() => {});
+            }
+          }
+        }
+        newFloatingWindows.push({
+          id: targetId,
+          inbox_id: conversationId,
+          name: targetName,
+          avatarUrl: targetAvatar,
+        });
+        
+        // Fetch conversation history so the new window isn't empty
+        setTimeout(() => {
+          useChatState.getState().loadConversation(conversationId).catch(() => {});
+        }, 100);
+      } else if (alreadyFloating) {
+         const existing = newFloatingWindows.find(fw => String(fw.inbox_id || fw.id) === conversationId);
+         if (existing) targetId = String(existing.id);
+      }
+
+      if (conv?.conversation_type === "direct") {
+        api.get(`/api/accounts/${targetId}/follow-status`)
+          .then(res => {
+            if (res.data && res.data.isFollowing && res.data.isFollowedBy) {
+              useChatState.setState({ activeFloatingId: targetId, isFloatingOpen: true });
+            }
+          })
+          .catch(err => console.error("Could not check follow status", err));
+      }
+    }
 
     return {
       messagesByConversation: {
@@ -657,6 +723,7 @@ function reconcileMessage(message: Message, isNewMessage = false) {
         ...state.unreadCounts,
         [conversationId]: unreadCount,
       },
+      floatingWindows: newFloatingWindows,
       conversations: state.conversations
         .map((conversation) => {
           if (String(conversation._id) !== conversationId) return conversation;
@@ -825,6 +892,15 @@ function bindSocketListeners() {
     }));
   });
 
+
+  socket.on("conversationCreated", (conversation: Inbox) => {
+    useChatState.setState((state) => ({
+      conversations: upsertConversation(state.conversations, conversation),
+    }));
+    socket.emit("joinRoom", {
+      conversation_id: String(conversation._id),
+    });
+  });
   socket.on(
     "conversationRenamed",
     ({
@@ -1326,13 +1402,21 @@ function bindSocketListeners() {
   );
 }
 
+const initialFloatingState = (() => {
+  try {
+    const data = localStorage.getItem("chat_floating_state");
+    if (data) return JSON.parse(data);
+  } catch (e) {}
+  return { floatingWindows: [], activeFloatingId: null, isFloatingOpen: false };
+})();
+
 const useChatState = create<ChatState>((set, get) => ({
   conversations: [],
   messagesByConversation: {},
   activeConversationId: null,
-  floatingWindows: [],
-  activeFloatingId: null,
-  isFloatingOpen: false,
+  floatingWindows: initialFloatingState.floatingWindows,
+  activeFloatingId: initialFloatingState.activeFloatingId,
+  isFloatingOpen: initialFloatingState.isFloatingOpen,
   unreadCounts: {},
   typingByConversation: {},
   onlineAccounts: {},
@@ -1417,27 +1501,73 @@ const useChatState = create<ChatState>((set, get) => ({
       try {
         const response = await api.get<Inbox[]>("/api/inbox");
         const conversations = response.data || [];
-        set((state) => ({
-          conversations: conversations
-            .reduce<Inbox[]>(
-              (result, conversation) =>
-                upsertConversation(result, conversation),
-              []
-            )
-            .sort(
-              (left, right) =>
-                conversationTime(right) - conversationTime(left)
-            ),
-          unreadCounts: {
-            ...state.unreadCounts,
-            ...Object.fromEntries(
-              conversations.map((conversation) => [
-                String(conversation._id),
-                conversation.unread_count || 0,
-              ])
-            ),
-          },
-        }));
+        set((state) => {
+          const newUnreads = conversations.filter(c => (c.unread_count || 0) > 0);
+          const currentFloatingIds = new Set(state.floatingWindows.map(fw => String(fw.inbox_id || fw.id)));
+          
+          let newFloatingWindows = [...state.floatingWindows];
+          newUnreads.forEach(conv => {
+            const id = String(conv._id);
+            if (!currentFloatingIds.has(id)) {
+              let targetName = conv.title || "User";
+              let targetAvatar = conv.profile_image || undefined;
+              let targetId = id;
+              
+              if (conv.conversation_type === "direct") {
+                const other = (conv.members || []).find(m => String(m.account_id) !== authenticatedAccountId);
+                if (other) {
+                  targetName = other.name || other.username || targetName;
+                  targetAvatar = other.avatar_preset_url || targetAvatar;
+                  targetId = String(other.account_id);
+                  if (targetName === "User") {
+                    api.get(`/api/accounts/profile/${targetId}`).then(res => {
+                      const profile = res.data?.data || res.data;
+                      if (profile) {
+                        useChatState.setState(s => ({
+                          floatingWindows: s.floatingWindows.map(fw =>
+                            String(fw.id) === String(targetId)
+                              ? { ...fw, name: profile.name || profile.username || fw.name, avatarUrl: profile.avatar_preset_url || profile.avatarUrl || fw.avatarUrl }
+                              : fw
+                          )
+                        }));
+                      }
+                    }).catch(() => {});
+                  }
+                }
+              }
+
+              newFloatingWindows.push({
+                id: targetId,
+                inbox_id: id,
+                name: targetName,
+                avatarUrl: targetAvatar,
+              });
+            }
+          });
+
+          return {
+            conversations: conversations
+              .reduce<Inbox[]>(
+                (result, conversation) =>
+                  upsertConversation(result, conversation),
+                []
+              )
+              .sort(
+                (left, right) =>
+                  conversationTime(right) - conversationTime(left)
+              ),
+            unreadCounts: {
+              ...state.unreadCounts,
+              ...Object.fromEntries(
+                conversations.map((conversation) => [
+                  String(conversation._id),
+                  conversation.unread_count || 0,
+                ])
+              ),
+            },
+            floatingWindows: newFloatingWindows,
+          };
+        });
         conversations
           .filter((conversation) => conversation.conversation_type === "group")
           .forEach((conversation) => {
@@ -1582,7 +1712,9 @@ const useChatState = create<ChatState>((set, get) => ({
       floatingWindows: [
         chatTarget,
         ...state.floatingWindows.filter(
-          (window) => String(window.id) !== conversationId
+          (window) =>
+            String(window.id) !== conversationId &&
+            String(window.inbox_id) !== conversationId
         ),
       ].slice(0, 4),
       activeFloatingId: conversationId,
@@ -1604,10 +1736,13 @@ const useChatState = create<ChatState>((set, get) => ({
   removeFloatingWindow: (windowId) =>
     set((state) => {
       const floatingWindows = state.floatingWindows.filter(
-        (window) => String(window.id) !== String(windowId)
+        (window) =>
+          String(window.id) !== String(windowId) &&
+          String(window.inbox_id) !== String(windowId)
       );
       const removedActive =
-        String(state.activeFloatingId) === String(windowId);
+        String(state.activeFloatingId) === String(windowId) ||
+        state.floatingWindows.find(w => String(w.id) === String(state.activeFloatingId))?.inbox_id === String(windowId);
       return {
         floatingWindows,
         activeFloatingId: removedActive
@@ -1644,6 +1779,35 @@ const useChatState = create<ChatState>((set, get) => ({
     return response.data;
   },
 
+
+  createMarketplace: async (payload) => {
+    const response = await api.post<{ inbox: Inbox; created: boolean }>(
+      "/api/inbox/marketplace",
+      payload
+    );
+    const inbox = response.data.inbox;
+    set((state) => ({
+      conversations: upsertConversation(state.conversations, inbox),
+    }));
+    socket.emit("joinRoom", {
+      conversation_id: String(inbox._id),
+    });
+    return inbox;
+  },
+  createRevision: async (payload) => {
+    const response = await api.post<{ inbox: Inbox; created: boolean }>(
+      "/api/inbox/revision",
+      payload
+    );
+    const inbox = response.data.inbox;
+    set((state) => ({
+      conversations: upsertConversation(state.conversations, inbox),
+    }));
+    socket.emit("joinRoom", {
+      conversation_id: String(inbox._id),
+    });
+    return inbox;
+  },
   updateGroupMember: async (conversationId, accountId, updates) => {
     const conversation = await emitWithAck<Inbox>("updateGroupMember", {
       conversation_id: String(conversationId),
@@ -2217,3 +2381,19 @@ export const selectActiveMessages = (state: ChatState) =>
     : EMPTY_MESSAGES;
 
 export default useChatState;
+useChatState.subscribe((state, prevState) => {
+  if (
+    state.floatingWindows !== prevState.floatingWindows ||
+    state.activeFloatingId !== prevState.activeFloatingId ||
+    state.isFloatingOpen !== prevState.isFloatingOpen
+  ) {
+    localStorage.setItem(
+      "chat_floating_state",
+      JSON.stringify({
+        floatingWindows: state.floatingWindows,
+        activeFloatingId: state.activeFloatingId,
+        isFloatingOpen: state.isFloatingOpen,
+      })
+    );
+  }
+});

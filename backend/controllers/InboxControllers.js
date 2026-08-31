@@ -2,6 +2,8 @@ const {
     createInboxServices,
     createGroupServices,
     createEngagementChatServices,
+    createMarketplaceChatServices,
+    createRevisionChatServices,
     createMessageServices,
     replyMessageServices,
     reactMessageServices,
@@ -20,6 +22,7 @@ const {
     checkInboxByTwoAccountIdsServices,
     getInboxByTwoAccountIdsServices,
 } = require('../services/InboxServices');
+const { getIo } = require('../lib/WebSocket');
 
 function accountId(req) {
     return req.session.account_id;
@@ -51,6 +54,44 @@ async function createEngagementChatController(req, res) {
     try {
         const result = await createEngagementChatServices(req.body, accountId(req));
         return res.status(201).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function createMarketplaceChatController(req, res) {
+    try {
+        const io = getIo();
+        const result = await createMarketplaceChatServices(
+            req.body,
+            accountId(req),
+            {
+                onNotification: (recipientId, notification) =>
+                    io.to(String(recipientId)).emit('notification', notification),
+                onConversationCreated: (recipientId, inbox) =>
+                    io.to(String(recipientId)).emit('conversationCreated', inbox),
+            }
+        );
+        return res.status(result.created ? 201 : 200).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function createRevisionChatController(req, res) {
+    try {
+        const io = getIo();
+        const result = await createRevisionChatServices(
+            req.body,
+            accountId(req),
+            {
+                onNotification: (recipientId, notification) =>
+                    io.to(String(recipientId)).emit('notification', notification),
+                onConversationCreated: (recipientId, inbox) =>
+                    io.to(String(recipientId)).emit('conversationCreated', inbox),
+            }
+        );
+        return res.status(result.created ? 201 : 200).json(result);
     } catch (error) {
         return sendError(res, error);
     }
@@ -270,6 +311,8 @@ module.exports = {
     createGroupController,
     createEngagementChatController,
     createMessageController,
+    createMarketplaceChatController,
+    createRevisionChatController,
     replyMessageController,
     reactMessageController,
     removeMessageReactionController,

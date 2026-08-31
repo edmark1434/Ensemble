@@ -6,6 +6,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import { formatDistanceToNow } from "date-fns";
 import type { Gig } from "../gig_datasets";
 import PopupReportGig from "./PopupReportGig";
+import useGlobalState from "@/lib/global_state";
 
 export type ViewType = "grid" | "list";
 
@@ -73,12 +74,21 @@ export const GigList: React.FC<GigListProps> = ({
   baseRoute,
 }) => {
   const navigate = useNavigate();
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const [reportingGig, setReportingGig] = useState<Gig | null>(null);
 
   const formatTimeAgo = (dateStr: string | undefined) => {
     if (!dateStr) return "Just now";
     try {
-      return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+      let str = formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+      str = str.replace(/minutes?/, (m) => m === 'minutes' ? 'mins' : 'min')
+               .replace(/hours?/, (m) => m === 'hours' ? 'hrs' : 'hr')
+               .replace(/seconds?/, (m) => m === 'seconds' ? 'secs' : 'sec')
+               .replace(/days?/, 'd')
+               .replace(/months?/, 'm')
+               .replace(/years?/, (m) => m === 'years' ? 'yrs' : 'yr')
+               .replace('about ', '');
+      return str;
     } catch {
       return "Just now";
     }
@@ -123,6 +133,7 @@ export const GigList: React.FC<GigListProps> = ({
           {gigs.map((gig) => {
             const isActive = activeGigId === gig.id;
             const isOpen = gig.status?.toLowerCase() === "open" || !gig.status;
+            const hasServiceRating = gig.ratingCount > 0;
 
             if (viewType === "grid") {
               return (
@@ -147,10 +158,24 @@ export const GigList: React.FC<GigListProps> = ({
                         alt={gig.title}
                         className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/80 via-transparent to-transparent pointer-events-none" />
 
-                      <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                        {!gig.isOwnGig && (
+                      {/* Orders and Service Rating Badges grouped at top-left */}
+                      <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
+                        <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
+                          <ShoppingCart className="h-3 w-3" />
+                          <span>{gig.ordersCount || 0} Orders</span>
+                        </div>
+                        <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
+                          <Star className={`h-3 w-3 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
+                          <span className={hasServiceRating ? "text-yellow-400" : "text-gray-300 dark:text-zinc-400"}>
+                            {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
+                        {!gig.isOwnGig && !isGuestMode && (
                           <button
                             type="button"
                             title="Report Post"
@@ -163,7 +188,7 @@ export const GigList: React.FC<GigListProps> = ({
                             <Flag className="h-3.5 w-3.5" />
                           </button>
                         )}
-                        {gig.isOwnGig && (
+                        {gig.canManageGig && (
                           <button
                             type="button"
                             title="Edit Service"
@@ -176,32 +201,37 @@ export const GigList: React.FC<GigListProps> = ({
                             <Edit2 className="h-3.5 w-3.5" />
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={(e) => onToggleSave(e, gig.id)}
-                          className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
-                            gig.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
-                          }`}
-                        >
-                          <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-current" : ""}`} />
-                        </button>
+                        {!isGuestMode && (
+                          <button
+                            type="button"
+                            onClick={(e) => onToggleSave(e, gig.id)}
+                            className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
+                              gig.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                            }`}
+                          >
+                            <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-current" : ""}`} />
+                          </button>
+                        )}
                       </div>
                     </div>
 
                     {/* Category & Status Badges */}
                     <div className="flex flex-wrap items-center gap-1.5 mb-2">
                       <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                        className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
                           isOpen
-                            ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
+                            ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
                             : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                         }`}
                       >
-                        {isOpen ? "Open" : "Closed"}
+                        <span className="relative z-10">{isOpen ? "Open" : "Closed"}</span>
+                        {isOpen && (
+                          <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                        )}
                       </span>
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {gig.category || "General"}
-                      </span>
+                        </span>
                       {gig.tiers && gig.tiers.length > 0 && (
                         <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                           {gig.tiers.length} Tiers
@@ -246,9 +276,10 @@ export const GigList: React.FC<GigListProps> = ({
                       </div>
                       <div className="text-left leading-tight truncate">
                         <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 truncate">{gig.postedBy}</p>
+                        {/* Freelancer Overall Rating */}
                         <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">
                           <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
-                          <span>{gig.clientRating} ({gig.ratingCount})</span>
+                          <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
                         </div>
                       </div>
                     </div>
@@ -285,8 +316,24 @@ export const GigList: React.FC<GigListProps> = ({
                     alt={gig.title}
                     className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105 absolute inset-0"
                   />
-                  <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                    {!gig.isOwnGig && (
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/80 via-transparent to-transparent pointer-events-none" />
+
+                  {/* Orders and Service Rating badges grouped */}
+                  <div className="absolute bottom-2 left-2 flex items-center gap-2 z-10">
+                    <div className="flex items-center gap-1 text-white text-[11px] font-semibold drop-shadow-md">
+                      <ShoppingCart className="h-3 w-3" />
+                      <span>{gig.ordersCount || 0} Orders</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px] font-semibold drop-shadow-md">
+                      <Star className={`h-3 w-3 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
+                      <span className={hasServiceRating ? "text-yellow-400" : "text-gray-300 dark:text-zinc-400"}>
+                        {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
+                    {!gig.isOwnGig && !isGuestMode && (
                       <button
                         type="button"
                         title="Report Post"
@@ -299,7 +346,7 @@ export const GigList: React.FC<GigListProps> = ({
                         <Flag className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    {gig.isOwnGig && (
+                    {gig.canManageGig && (
                       <button
                         type="button"
                         title="Edit Service"
@@ -312,15 +359,17 @@ export const GigList: React.FC<GigListProps> = ({
                         <Edit2 className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={(e) => onToggleSave(e, gig.id)}
-                      className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
-                        gig.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
-                      }`}
-                    >
-                      <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-current" : ""}`} />
-                    </button>
+                    {!isGuestMode && (
+                      <button
+                        type="button"
+                        onClick={(e) => onToggleSave(e, gig.id)}
+                        className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
+                          gig.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                        }`}
+                      >
+                        <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-current" : ""}`} />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -410,9 +459,10 @@ export const GigList: React.FC<GigListProps> = ({
                       </div>
                       <div className="text-left leading-tight truncate">
                         <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 truncate">{gig.postedBy}</p>
+                        {/* Freelancer Overall Rating */}
                         <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">
                           <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
-                          <span>{gig.clientRating} ({gig.ratingCount})</span>
+                          <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
                         </div>
                       </div>
                     </div>

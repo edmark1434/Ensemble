@@ -1,5 +1,38 @@
 const { pool } = require('../lib/Database');
-const pgvector = require('pgvector');
+
+function serializeEmbedding(embedding) {
+  if (!Array.isArray(embedding) || !embedding.length || embedding.some((value) => !Number.isFinite(value))) {
+    throw new Error('Document embedding must be a non-empty array of finite numbers');
+  }
+  return JSON.stringify(embedding);
+}
+
+function parseEmbedding(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== 'string') return null;
+  try {
+    const embedding = JSON.parse(value);
+    return Array.isArray(embedding) && embedding.every((item) => Number.isFinite(item))
+      ? embedding
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function cosineSimilarity(left, right) {
+  if (!left.length || left.length !== right.length) return null;
+  let dotProduct = 0;
+  let leftMagnitude = 0;
+  let rightMagnitude = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    dotProduct += left[index] * right[index];
+    leftMagnitude += left[index] ** 2;
+    rightMagnitude += right[index] ** 2;
+  }
+  if (!leftMagnitude || !rightMagnitude) return null;
+  return dotProduct / (Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude));
+}
 
 async function replaceDocumentChunks({ url, chunks }) {
   const client = await pool.connect();
@@ -9,14 +42,14 @@ async function replaceDocumentChunks({ url, chunks }) {
     for (const chunk of chunks) {
       await client.query(`
         INSERT INTO document_chunks (title, heading, url, content, chunk_index, embedding)
-        VALUES ($1, $2, $3, $4, $5, $6::vector)
+        VALUES ($1, $2, $3, $4, $5, $6)
       `, [
         chunk.title,
         chunk.heading,
         url,
         chunk.content,
         chunk.chunkIndex,
-        pgvector.toSql(chunk.embedding),
+        serializeEmbedding(chunk.embedding),
       ]);
     }
     await client.query('COMMIT');
@@ -30,19 +63,31 @@ async function replaceDocumentChunks({ url, chunks }) {
 }
 
 async function searchDocumentChunks(embedding, limit = 5, minSimilarity = 0.2) {
+  const queryEmbedding = parseEmbedding(embedding);
+  if (!queryEmbedding?.length) throw new Error('Search embedding must be a non-empty array of finite numbers');
+  const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 5, 1), 20);
+  const configuredCandidates = Number.parseInt(process.env.RAG_MAX_SEARCH_CANDIDATES, 10);
+  const candidateLimit = Math.min(
+    Math.max(Number.isInteger(configuredCandidates) ? configuredCandidates : 5000, safeLimit),
+    10000,
+  );
+  const similarityFloor = Number.isFinite(Number(minSimilarity)) ? Number(minSimilarity) : 0.2;
   const result = await pool.query(`
-    SELECT id, title, heading, url, content, chunk_index,
-           1 - (embedding <=> $1::vector) AS similarity
+    SELECT id, title, heading, url, content, chunk_index, embedding
     FROM document_chunks
     WHERE embedding IS NOT NULL
-      AND 1 - (embedding <=> $1::vector) >= $3
-    ORDER BY embedding <=> $1::vector, id
-    LIMIT $2
-  `, [pgvector.toSql(embedding), limit, minSimilarity]);
-  return result.rows.map((row) => ({
-    ...row,
-    similarity: Number(row.similarity),
-  }));
+    ORDER BY id DESC
+    LIMIT $1
+  `, [candidateLimit]);
+  return result.rows
+    .map(({ embedding: storedEmbedding, ...row }) => {
+      const parsedEmbedding = parseEmbedding(storedEmbedding);
+      const similarity = parsedEmbedding ? cosineSimilarity(queryEmbedding, parsedEmbedding) : null;
+      return similarity == null ? null : { ...row, similarity };
+    })
+    .filter((row) => row && row.similarity >= similarityFloor)
+    .sort((left, right) => right.similarity - left.similarity || String(left.id).localeCompare(String(right.id)))
+    .slice(0, safeLimit);
 }
 
 async function getDocumentChunkCount() {

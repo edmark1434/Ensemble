@@ -81,6 +81,9 @@ export const InboxList: React.FC<InboxListProps> = ({
   return (
     <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-surface inbox-scroll-thin">
       {conversations.map((inbox) => {
+        const viewerAccountId = String(
+          inbox.viewer_account_id || currentAccountId || ""
+        );
         const isActive = selectedConversation?._id === inbox._id;
         const name = getConversationName(inbox);
         const avatar = getAvatar(inbox);
@@ -89,7 +92,7 @@ export const InboxList: React.FC<InboxListProps> = ({
         const lastMessage = readableLastMessage
           ? `${
               String(inbox.last_message_sender_id) ===
-              String(currentAccountId)
+              viewerAccountId
                 ? "You"
                 : getAccountName?.(String(inbox.last_message_sender_id)) ||
                   getConversationName(inbox)
@@ -99,7 +102,7 @@ export const InboxList: React.FC<InboxListProps> = ({
         const unreadCount = inbox.unread_count || 0;
         const otherMember = inbox.members?.find(
           (member) =>
-            String(member.account_id) !== String(currentAccountId)
+            String(member.account_id) !== viewerAccountId
         );
         const isOnline = otherMember
           ? Boolean(onlineAccounts[String(otherMember.account_id)])
@@ -119,18 +122,22 @@ export const InboxList: React.FC<InboxListProps> = ({
             }`}
           >
             <div className="relative flex-shrink-0">
-              <img
-                src={avatar}
-                alt={name}
-                className="h-10 w-10 rounded-full object-cover"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = `https://ui-avatars.com/api/?name=${name.substring(
-                    0,
-                    2
-                  )}&background=6366f1&color=fff&bold=true`;
-                }}
-              />
+              {name.startsWith("User ") && name.length === 13 ? (
+                <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-zinc-700 animate-pulse" />
+              ) : (
+                <img
+                  src={avatar}
+                  alt={name}
+                  className="h-10 w-10 rounded-full object-cover"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = `https://ui-avatars.com/api/?name=${name.substring(
+                      0,
+                      2
+                    )}&background=6366f1&color=fff&bold=true`;
+                  }}
+                />
+              )}
               {inbox.conversation_type === "direct" && (
                 <span
                   className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-dark-surface ${
@@ -146,12 +153,16 @@ export const InboxList: React.FC<InboxListProps> = ({
             {!isCollapsed && (
               <>
                 <div className="flex-1 text-left min-w-0">
-                  <p
-                    className="font-medium text-gray-900 dark:text-white truncate text-sm"
-                    style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                  >
-                    {name}
-                  </p>
+                  {name.startsWith("User ") && name.length === 13 ? (
+                    <div className="h-4 w-24 bg-gray-200 dark:bg-zinc-700 animate-pulse rounded mb-1" />
+                  ) : (
+                    <p
+                      className="font-medium text-gray-900 dark:text-white truncate text-sm"
+                      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                    >
+                      {name}
+                    </p>
+                  )}
                   <p
                     className="text-xs text-gray-500 dark:text-zinc-500 truncate"
                     style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}

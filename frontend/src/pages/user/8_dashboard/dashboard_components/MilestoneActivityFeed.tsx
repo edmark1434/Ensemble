@@ -1,25 +1,86 @@
-import React from 'react';
-import { CheckCircle, Clock, FileText, AlertCircle, Paperclip, MessageSquare, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { CheckCircle, FileText, AlertCircle, MessageSquare, CheckCircle2 } from 'lucide-react';
 import { MilestoneSubmissionForm } from './MilestoneSubmissionForm';
 import { ClientReviewPanel } from './ClientReviewPanel';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+import useChatState from '@/components/ui/chat_bubble/chat_state';
 
 interface FeedItem {
     id: string;
     message: string;
-    attachments: any[];
+    attachments: string[];
     status: 'progress' | 'submitted_for_review' | 'revision_request' | 'approval';
     submitted_at: string;
 }
 
+interface DashboardTask {
+    contract_id: string;
+    contract_type: string;
+    job_id?: string;
+    client_account_id: string;
+    client_name: string;
+    client_avatar?: string | null;
+    freelancer_account_id: string;
+    freelancer_name: string;
+    freelancer_avatar?: string | null;
+}
+
+interface MilestoneDetails {
+    id: string;
+    name: string;
+    status: string;
+    deadline: string;
+    submissions?: FeedItem[];
+}
+
 interface Props {
-    task: any;
-    activeMilestone: any;
+    task: DashboardTask;
+    activeMilestone: MilestoneDetails;
     isFreelancer: boolean;
-    onRefreshTask: () => void;
+    onRefreshTask: (task?: unknown) => void;
     canReviewContract?: boolean;
     onOpenReviewModal?: () => void;
 }
 
+const CLOUDFRONT_BASE_URL = String(
+    import.meta.env.VITE_CLOUDFRONT_URL || 'https://d2dl0agwn9kque.cloudfront.net'
+).replace(/\/+$/, '');
+
+const resolveAttachmentUrl = (value: string) => {
+    const rawUrl = String(value || '').trim();
+    if (!rawUrl) return '';
+
+    let objectKey = rawUrl.replace(/^\/+/, '');
+
+    try {
+        const parsedUrl = new URL(rawUrl);
+        const hostname = parsedUrl.hostname.toLowerCase();
+        const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
+
+        if (hostname === 's3.amazonaws.com') {
+            // Path-style S3 URLs contain the bucket as the first path segment.
+            objectKey = pathSegments.slice(1).join('/');
+        } else if (hostname.endsWith('.s3.amazonaws.com') || hostname.includes('.s3.')) {
+            // Virtual-hosted S3 URLs already expose only the object key in the path.
+            objectKey = pathSegments.join('/');
+        } else {
+            return rawUrl;
+        }
+    } catch {
+        // Stored relative paths are CloudFront object keys.
+    }
+
+    return objectKey ? `${CLOUDFRONT_BASE_URL}/${objectKey}` : rawUrl;
+};
+
+const isImageAttachment = (url: string) => {
+    try {
+        return /\.(?:avif|gif|jpe?g|png|svg|webp)$/i.test(new URL(url).pathname);
+    } catch {
+        return /\.(?:avif|gif|jpe?g|png|svg|webp)$/i.test(url.split(/[?#]/, 1)[0]);
+    }
+};
 const formatRelativeTime = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -46,6 +107,52 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
     const isLocked = activeMilestone?.status === 'locked';
     const isCompleted = activeMilestone?.status === 'completed';
     const isSubmittedForReview = activeMilestone?.status === 'submitted_for_review';
+    const [isOpeningChat, setIsOpeningChat] = useState(false);
+
+    const openRevisionChat = async () => {
+        const contractId = String(task?.contract_id || '').trim();
+
+        if (!contractId) {
+            toast.error('The revision discussion could not be identified.');
+            return;
+        }
+
+        setIsOpeningChat(true);
+        try {
+            const chatState = useChatState.getState();
+            const inbox = await chatState.createRevision({ contract_id: contractId });
+            const conversationId = String(inbox._id);
+            const peerAccountId = String(
+                isFreelancer ? task.client_account_id : task.freelancer_account_id
+            );
+            const peerName = String(
+                isFreelancer ? task.client_name : task.freelancer_name
+            );
+            const peerAvatar = isFreelancer
+                ? task.client_avatar
+                : task.freelancer_avatar;
+
+            await chatState.openFloatingConversation({
+                id: conversationId,
+                inbox_id: conversationId,
+                account_id: peerAccountId,
+                name: peerName || inbox.conversation_name || 'Revision discussion',
+                avatarUrl: peerAvatar ? resolveAttachmentUrl(String(peerAvatar)) : undefined,
+                conversationType: inbox.conversation_type,
+                listingType: inbox.listing_type,
+                listingTitle: inbox.listing_title,
+                listingPreview: inbox.listing_preview,
+                listingPath: inbox.listing_path,
+            });
+        } catch (error) {
+            const message = axios.isAxiosError(error)
+                ? error.response?.data?.error || error.response?.data?.message
+                : null;
+            toast.error(message || 'Unable to open the revision discussion.');
+        } finally {
+            setIsOpeningChat(false);
+        }
+    };
     
     if (isLocked) {
         return (
@@ -63,7 +170,7 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
         <div className="flex flex-col h-full bg-white dark:bg-dark-surface/70 rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden shadow-xl">
             
             {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 flex items-center justify-between">
+            <div className="flex flex-col gap-3 border-b border-gray-200 bg-gray-50 px-4 py-4 dark:border-white/10 dark:bg-white/5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <div>
                     <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                         {activeMilestone.name}
@@ -73,12 +180,24 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                         {feed.length} updates • Deadline: {new Date(activeMilestone.deadline).toLocaleDateString()}
                     </p>
                 </div>
-                <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                    isCompleted ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 
-                    isSubmittedForReview ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 
-                    'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                }`}>
-                    {activeMilestone.status.replace(/_/g, ' ')}
+                <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+                    <button
+                        type="button"
+                        onClick={() => void openRevisionChat()}
+                        disabled={isOpeningChat}
+                        title={`Chat with ${isFreelancer ? task.client_name : task.freelancer_name} about revisions`}
+                        aria-label={`Chat with ${isFreelancer ? task.client_name : task.freelancer_name} about revisions`}
+                        className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-500 transition-colors hover:bg-blue-500/20 hover:text-blue-400 disabled:cursor-wait disabled:opacity-60"
+                    >
+                        <MessageSquare className={`h-4 w-4 ${isOpeningChat ? 'animate-pulse' : ''}`} />
+                    </button>
+                    <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        isCompleted ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                        isSubmittedForReview ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                        'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                    }`}>
+                        {activeMilestone.status.replace(/_/g, ' ')}
+                    </div>
                 </div>
             </div>
 
@@ -92,10 +211,13 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                 ) : (
                     feed.map((item) => {
                         const isFreelancerMsg = item.status === 'progress' || item.status === 'submitted_for_review';
+                        const isOwnMessage = isFreelancer
+                            ? isFreelancerMsg
+                            : !isFreelancerMsg;
                         
                         return (
-                            <div key={item.id} className={`flex w-full ${isFreelancerMsg ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`flex gap-3 max-w-[90%] ${isFreelancerMsg ? 'flex-row-reverse' : 'flex-row'}`}>
+                            <div key={item.id} className={`flex w-full ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`flex gap-3 max-w-[90%] ${isOwnMessage ? 'flex-row-reverse' : 'flex-row'}`}>
                                     <div className="shrink-0 mt-5">
                                         <img 
                                             src={isFreelancerMsg
@@ -106,7 +228,7 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                                             className="w-8 h-8 rounded-full object-cover border border-zinc-700"
                                         />
                                     </div>
-                                    <div className={`flex flex-col ${isFreelancerMsg ? 'items-end' : 'items-start'}`}>
+                                    <div className={`flex flex-col ${isOwnMessage ? 'items-end' : 'items-start'}`}>
                                         <div className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1 px-1 flex gap-2">
                                             <span>{isFreelancerMsg ? task.freelancer_name : task.client_name}</span>
                                             <span>•</span>
@@ -118,11 +240,11 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                                             </span>
                                         </div>
                                         <div className={`rounded-2xl p-4 ${
-                                            item.status === 'submitted_for_review' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 rounded-tr-none' :
-                                            item.status === 'approval' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 rounded-tl-none' :
-                                            item.status === 'revision_request' ? 'bg-red-500/20 border border-red-500/30 text-red-600 dark:text-white rounded-tl-none' :
-                                            'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white rounded-tr-none'
-                                        }`}>
+                                            item.status === 'submitted_for_review' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' :
+                                            item.status === 'approval' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' :
+                                            item.status === 'revision_request' ? 'bg-red-500/20 border border-red-500/30 text-red-600 dark:text-white' :
+                                            'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white'
+                                        } ${isOwnMessage ? 'rounded-tr-none' : 'rounded-tl-none'}`}>
                                     
                                     {item.status === 'submitted_for_review' && (
                                         <div className="mb-2 font-bold text-xs uppercase tracking-wider text-blue-100 dark:text-blue-200 border-b border-blue-400/30 pb-2 flex items-center gap-2">
@@ -146,24 +268,28 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                                     
                                     {item.attachments && item.attachments.length > 0 && (
                                         <div className="mt-4 grid grid-cols-2 gap-2">
-                                            {item.attachments.map((url, i) => (
-                                                <a 
-                                                    key={i} 
-                                                    href={url} 
-                                                    target="_blank" 
-                                                    rel="noreferrer"
-                                                    className="flex items-center justify-center bg-black/30 rounded-xl overflow-hidden aspect-video border border-white/10 hover:border-white/30 transition group relative"
-                                                >
-                                                    {url.match(/\.(jpeg|jpg|gif|png)$/i) ? (
-                                                        <img src={url} alt="Attachment" className="object-cover w-full h-full opacity-80 group-hover:opacity-100 transition" />
-                                                    ) : (
-                                                        <div className="flex flex-col items-center">
-                                                            <FileText className="h-6 w-6 text-zinc-400 mb-1" />
-                                                            <span className="text-[10px] text-zinc-400">View File</span>
-                                                        </div>
-                                                    )}
-                                                </a>
-                                            ))}
+                                            {item.attachments.map((attachmentUrl, i) => {
+                                                const resolvedUrl = resolveAttachmentUrl(attachmentUrl);
+
+                                                return (
+                                                    <a
+                                                        key={`${item.id}-attachment-${i}`}
+                                                        href={resolvedUrl}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="group relative flex min-h-24 max-w-full items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30 transition hover:border-white/30"
+                                                    >
+                                                        {isImageAttachment(resolvedUrl) ? (
+                                                            <img src={resolvedUrl} alt="Attachment" className="block h-auto max-h-[32rem] w-auto max-w-full object-contain opacity-80 transition group-hover:opacity-100" />
+                                                        ) : (
+                                                            <div className="flex flex-col items-center">
+                                                                <FileText className="mb-1 h-6 w-6 text-zinc-400" />
+                                                                <span className="text-[10px] text-zinc-400">View File</span>
+                                                            </div>
+                                                        )}
+                                                    </a>
+                                                );
+                                            })}
                                         </div>
                                     )}
                                     </div>

@@ -1,4 +1,9 @@
-const DashboardRepositories = require('../Repositories/DashboardRepositories');
+const DashboardRepositories = require('../repositories/DashboardRepositories');
+const {
+    submitMilestoneServices,
+    reviewMilestoneServices,
+    buyRevisionServices,
+} = require('../services/DashboardServices');
 
 async function getTasks(req, res) {
     try {
@@ -48,64 +53,37 @@ async function getContractTasks(req, res) {
 
 async function submitMilestone(req, res) {
     try {
-        const accountId = req.user?.account_id || req.user?.accountId;
-        const { contractId, milestoneId } = req.params;
-        const { message, attachments, status } = req.body;
-        
-        if (!accountId) {
-            return res.status(401).json({ success: false, message: 'Unauthorized' });
-        }
-
-        // Verify the user is the freelancer for this contract
-        const isAuthorized = await DashboardRepositories.verifyFreelancer(contractId, accountId);
-        if (!isAuthorized) {
-            return res.status(403).json({ success: false, message: 'Forbidden' });
-        }
-
-        const submission = await DashboardRepositories.addMilestoneSubmission(milestoneId, message, attachments, status);
-        
-        // If status is submitted_for_review, update milestone status
-        if (status === 'submitted_for_review') {
-            await DashboardRepositories.updateMilestoneStatus(milestoneId, 'submitted_for_review');
-        }
-
-        return res.status(200).json({ success: true, submission });
+        const result = await submitMilestoneServices({
+            accountId: req.user?.account_id || req.user?.accountId,
+            contractId: req.params.contractId,
+            milestoneId: req.params.milestoneId,
+            payload: req.body,
+        });
+        return res.status(200).json({ success: true, ...result });
     } catch (error) {
-        console.error("Error in submitMilestone:", error);
-        res.status(500).json({ success: false, message: "Internal server error" });
+        console.error('Error in submitMilestone:', error);
+        return res.status(error.statusCode || 500).json({
+            success: false,
+            message: error.statusCode ? error.message : 'Internal server error',
+        });
     }
 }
 //jp
 async function reviewMilestone(req, res) {
     try {
-        const accountId = req.user?.account_id || req.user?.accountId;
-        const { contractId, milestoneId } = req.params;
-        const { message, attachments, status } = req.body; // status = 'approval' or 'revision_request'
-        
-        if (!accountId) {
-            return res.status(401).json({ success: false, message: 'Unauthorized' });
-        }
-
-        // Verify the user is the client for this contract
-        const isAuthorized = await DashboardRepositories.verifyClient(contractId, accountId);
-        if (!isAuthorized) {
-            return res.status(403).json({ success: false, message: 'Forbidden' });
-        }
-
-        const submission = await DashboardRepositories.addMilestoneSubmission(milestoneId, message, attachments, status);
-        
-        if (status === 'approval') {
-            await DashboardRepositories.updateMilestoneStatus(milestoneId, 'completed');
-            // Unlock next milestone if there is one
-            await DashboardRepositories.unlockNextMilestone(contractId, milestoneId);
-        } else if (status === 'revision_request') {
-            await DashboardRepositories.updateMilestoneStatus(milestoneId, 'active');
-        }
-
-        return res.status(200).json({ success: true, submission });
+        const result = await reviewMilestoneServices({
+            accountId: req.user?.account_id || req.user?.accountId,
+            contractId: req.params.contractId,
+            milestoneId: req.params.milestoneId,
+            payload: req.body,
+        });
+        return res.status(200).json({ success: true, ...result });
     } catch (error) {
-        console.error("Error in reviewMilestone:", error);
-        res.status(500).json({ success: false, message: "Internal server error" });
+        console.error('Error in reviewMilestone:', error);
+        return res.status(error.statusCode || 500).json({
+            success: false,
+            message: error.statusCode ? error.message : 'Internal server error',
+        });
     }
 }
 
@@ -139,30 +117,25 @@ async function reviewContract(req, res) {
 
 async function buyRevision(req, res) {
     try {
-        const accountId = req.user?.account_id || req.user?.accountId;
-        const { contractId, milestoneId } = req.params;
-        const { priceCredits } = req.body;
-
-        if (!accountId) {
-            return res.status(401).json({ success: false, message: 'Unauthorized' });
-        }
-
-        if (priceCredits === undefined || priceCredits === null || priceCredits < 0) {
-            return res.status(400).json({ success: false, message: 'Invalid price.' });
-        }
-
-        // Verify the user is the client for this contract
-        const isAuthorized = await DashboardRepositories.verifyClient(contractId, accountId);
-        if (!isAuthorized) {
-            return res.status(403).json({ success: false, message: 'Forbidden' });
-        }
-
-        await DashboardRepositories.buyRevision(contractId, milestoneId, priceCredits);
-
-        return res.status(200).json({ success: true, message: 'Revision purchased successfully.' });
+        const result = await buyRevisionServices({
+            accountId: req.user?.account_id || req.user?.accountId,
+            contractId: req.params.contractId,
+            milestoneId: req.params.milestoneId,
+            payload: req.body,
+        });
+        return res.status(200).json({
+            success: true,
+            message: result.transaction.already_processed
+                ? 'Revision purchase already processed.'
+                : 'Revision purchased successfully.',
+            ...result,
+        });
     } catch (error) {
-        console.error("Error in buyRevision:", error);
-        res.status(500).json({ success: false, message: "Internal server error" });
+        console.error('Error in buyRevision:', error);
+        return res.status(error.statusCode || 500).json({
+            success: false,
+            message: error.statusCode ? error.message : 'Internal server error',
+        });
     }
 }
 

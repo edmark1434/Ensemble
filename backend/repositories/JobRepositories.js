@@ -70,7 +70,7 @@ async function createJobRepositories(jobData) {
     }
 }
 
-async function getAllJobsRepositories(filters = {}, accountId = null) {
+async function getAllJobsRepositories(filters = {}, accountId = null, actorIds = [], affiliatedAccountIds = actorIds) {
     try {
         let query = `
             SELECT 
@@ -82,8 +82,11 @@ async function getAllJobsRepositories(filters = {}, accountId = null) {
                 (SELECT COUNT(*) FROM proposals p WHERE p.job_id = j.job_id AND p.status = 'Hired' AND p.deleted_at IS NULL) as hired_count,
                 (SELECT COUNT(*) FROM job_saves js WHERE js.job_id = j.job_id) as saves_count,
                 CASE WHEN $1::uuid IS NOT NULL THEN (SELECT EXISTS(SELECT 1 FROM job_saves js WHERE js.job_id = j.job_id AND js.account_id = $1)) ELSE FALSE END as is_saved,
-                CASE WHEN $1::uuid IS NOT NULL THEN (SELECT EXISTS(SELECT 1 FROM proposals p WHERE p.job_id = j.job_id AND p.freelancer_account_id = $1 AND p.deleted_at IS NULL)) ELSE FALSE END as has_proposed,
-                CASE WHEN $1::uuid IS NOT NULL THEN (SELECT p.proposal_id FROM proposals p WHERE p.job_id = j.job_id AND p.freelancer_account_id = $1 AND p.deleted_at IS NULL LIMIT 1) ELSE NULL END as my_proposal_id,
+                CASE WHEN cardinality($2::uuid[]) > 0 THEN (SELECT EXISTS(SELECT 1 FROM proposals p WHERE p.job_id = j.job_id AND p.freelancer_account_id = ANY($2::uuid[]) AND p.deleted_at IS NULL)) ELSE FALSE END as has_proposed,
+                CASE WHEN cardinality($2::uuid[]) > 0 THEN (SELECT p.proposal_id FROM proposals p WHERE p.job_id = j.job_id AND p.freelancer_account_id = ANY($2::uuid[]) AND p.deleted_at IS NULL ORDER BY p.created_at DESC LIMIT 1) ELSE NULL END as my_proposal_id,
+                j.client_account_id = ANY($3::uuid[]) AS is_own_post,
+                j.client_account_id = ANY($2::uuid[]) AS is_manageable_post,
+                j.client_account_id = $1::uuid AS is_personal_post,
                 (SELECT f.path FROM job_attachments ja JOIN files f ON ja.file_id = f.file_id WHERE ja.job_id = j.job_id AND ja.index = 0 LIMIT 1) as thumbnail_path,
                 (SELECT ARRAY_AGG(t.name) FROM job_tags jt JOIN tags t ON jt.tag_id = t.tag_id WHERE jt.job_id = j.job_id) as tags
             FROM jobs j
@@ -91,7 +94,7 @@ async function getAllJobsRepositories(filters = {}, accountId = null) {
             WHERE j.deleted_at IS NULL
         `;
         
-        const values = [accountId];
+        const values = [accountId, actorIds, affiliatedAccountIds];
         // Apply filters if needed (e.g. status)
         if (filters.status) {
             values.push(filters.status);
@@ -108,7 +111,7 @@ async function getAllJobsRepositories(filters = {}, accountId = null) {
     }
 }
 
-async function updateJobRepositories(jobId, accountId, jobData) {
+async function updateJobRepositories(jobId, accountIds, jobData) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -117,12 +120,12 @@ async function updateJobRepositories(jobId, accountId, jobData) {
             UPDATE jobs
             SET title = $1, description = $2, category = $3, experience_level = $4,
                 updated_at = NOW()
-            WHERE job_id = $5 AND client_account_id = $6
+            WHERE job_id = $5 AND client_account_id = ANY($6::uuid[])
             RETURNING *;
         `;
         const values = [
             jobData.title, jobData.description, jobData.category, jobData.experience_level,
-            jobId, accountId
+            jobId, accountIds
         ];
         const res = await client.query(query, values);
         const updatedJob = res.rows[0];
@@ -172,7 +175,7 @@ async function updateJobRepositories(jobId, accountId, jobData) {
     }
 }
 
-async function deleteJobRepositories(jobId, accountId) {
+async function deleteJobRepositories(jobId, accountIds) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -192,9 +195,9 @@ async function deleteJobRepositories(jobId, accountId) {
         const jobUpdate = await client.query(`
             UPDATE jobs
             SET deleted_at = NOW(), status = 'Deleted'
-            WHERE job_id = $1 AND client_account_id = $2 AND deleted_at IS NULL
+            WHERE job_id = $1 AND client_account_id = ANY($2::uuid[]) AND deleted_at IS NULL
             RETURNING *;
-        `, [jobId, accountId]);
+        `, [jobId, accountIds]);
 
         if (jobUpdate.rows.length === 0) {
             throw new Error('Job not found or unauthorized.');
@@ -222,6 +225,36 @@ async function createProposalRepositories(proposalData) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+
+        const jobResult = await client.query(
+            `SELECT client_account_id,
+                    client_account_id = ANY($2::uuid[]) AS is_affiliated_listing
+             FROM jobs
+             WHERE job_id = $1 AND deleted_at IS NULL AND status = 'Open'
+             FOR UPDATE`,
+            [proposalData.job_id, proposalData.prohibited_client_account_ids || []]
+        );
+        if (!jobResult.rows[0]) {
+            const error = new Error('Job not found or is not accepting proposals');
+            error.statusCode = 404;
+            throw error;
+        }
+        if (jobResult.rows[0].is_affiliated_listing) {
+            const error = new Error('You cannot submit a proposal to a job posted by your account or an active Team.');
+            error.statusCode = 409;
+            throw error;
+        }
+        const duplicate = await client.query(
+            `SELECT 1 FROM proposals
+             WHERE job_id = $1 AND freelancer_account_id = $2 AND deleted_at IS NULL
+             LIMIT 1`,
+            [proposalData.job_id, proposalData.freelancer_account_id]
+        );
+        if (duplicate.rows.length) {
+            const error = new Error('This account has already submitted a proposal for the job');
+            error.statusCode = 409;
+            throw error;
+        }
 
         // 0. Insert Terms of Service
         let termsId = proposalData.terms_id;
@@ -274,7 +307,7 @@ async function createProposalRepositories(proposalData) {
     }
 }
 
-async function getProposalsByJobIdRepositories(jobId) {
+async function getProposalsByJobIdRepositories(jobId, accountIds) {
     try {
         const query = `
             SELECT 
@@ -282,6 +315,7 @@ async function getProposalsByJobIdRepositories(jobId) {
                 a.display_name as freelancer_name,
                 a.handle as freelancer_handle,
                 (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as freelancer_avatar_path,
+                (SELECT ft.team_id FROM teams ft WHERE ft.account_id = p.freelancer_account_id AND ft.deleted_at IS NULL LIMIT 1) as freelancer_team_id,
                 t.terms_title, t.terms_type,
                 j.title as job_title,
                 j.category as job_category,
@@ -290,10 +324,10 @@ async function getProposalsByJobIdRepositories(jobId) {
             LEFT JOIN accounts a ON p.freelancer_account_id = a.account_id
             LEFT JOIN jobs j ON p.job_id = j.job_id
             LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
-            WHERE p.job_id = $1 AND p.deleted_at IS NULL AND p.status != 'Archived'
+            WHERE p.job_id = $1 AND j.client_account_id = ANY($2::uuid[]) AND p.deleted_at IS NULL AND p.status != 'Archived'
             ORDER BY p.created_at DESC
         `;
-        const res = await pool.query(query, [jobId]);
+        const res = await pool.query(query, [jobId, accountIds]);
         return res.rows;
     } catch (err) {
         console.error('Error in getProposalsByJobIdRepositories:', err);
@@ -301,13 +335,15 @@ async function getProposalsByJobIdRepositories(jobId) {
     }
 }
 
-async function getProposalsByFreelancerRepositories(accountId) {
+async function getProposalsByFreelancerRepositories(accountIds) {
     try {
         const query = `
             SELECT 
                 p.*,
                 j.title as job_title,
                 j.category as job_category,
+                COALESCE(j.team_id, (SELECT ct.team_id FROM teams ct WHERE ct.account_id = j.client_account_id AND ct.deleted_at IS NULL LIMIT 1)) as client_team_id,
+                (SELECT ft.team_id FROM teams ft WHERE ft.account_id = p.freelancer_account_id AND ft.deleted_at IS NULL LIMIT 1) as freelancer_team_id,
                 c.display_name as client_name,
                 c.handle as client_handle,
                 (SELECT f.path FROM files f WHERE f.file_id = c.avatar_file_id LIMIT 1) as client_avatar_path,
@@ -317,10 +353,10 @@ async function getProposalsByFreelancerRepositories(accountId) {
             LEFT JOIN jobs j ON p.job_id = j.job_id
             LEFT JOIN accounts c ON j.client_account_id = c.account_id
             LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
-            WHERE p.freelancer_account_id = $1 AND p.deleted_at IS NULL AND p.status != 'Archived'
+            WHERE p.freelancer_account_id = ANY($1::uuid[]) AND p.deleted_at IS NULL AND p.status != 'Archived'
             ORDER BY p.created_at DESC
         `;
-        const res = await pool.query(query, [accountId]);
+        const res = await pool.query(query, [accountIds]);
         return res.rows;
     } catch (err) {
         console.error('Error in getProposalsByFreelancerRepositories:', err);
@@ -328,13 +364,16 @@ async function getProposalsByFreelancerRepositories(accountId) {
     }
 }
 
-async function getProposalByIdRepositories(proposalId) {
+async function getProposalByIdRepositories(proposalId, accountIds) {
     try {
         const query = `
             SELECT 
                 p.*,
                 j.title as job_title,
                 j.category as job_category,
+                j.client_account_id as client_account_id,
+                COALESCE(j.team_id, (SELECT ct.team_id FROM teams ct WHERE ct.account_id = j.client_account_id AND ct.deleted_at IS NULL LIMIT 1)) as client_team_id,
+                (SELECT ft.team_id FROM teams ft WHERE ft.account_id = p.freelancer_account_id AND ft.deleted_at IS NULL LIMIT 1) as freelancer_team_id,
                 j.created_at as job_created_at,
                 j.status as job_status,
                 j.deleted_at as job_deleted_at,
@@ -352,9 +391,11 @@ async function getProposalByIdRepositories(proposalId) {
             LEFT JOIN accounts c ON j.client_account_id = c.account_id
             LEFT JOIN accounts f_acc ON p.freelancer_account_id = f_acc.account_id
             LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
-            WHERE p.proposal_id = $1 AND p.deleted_at IS NULL
+            WHERE p.proposal_id = $1
+              AND p.deleted_at IS NULL
+              AND (p.freelancer_account_id = ANY($2::uuid[]) OR j.client_account_id = ANY($2::uuid[]))
         `;
-        const res = await pool.query(query, [proposalId]);
+        const res = await pool.query(query, [proposalId, accountIds]);
         return res.rows[0];
     } catch (err) {
         console.error('Error in getProposalByIdRepositories:', err);
@@ -362,15 +403,15 @@ async function getProposalByIdRepositories(proposalId) {
     }
 }
 
-async function withdrawProposalRepositories(proposalId, accountId) {
+async function withdrawProposalRepositories(proposalId, accountIds) {
     try {
         const query = `
             UPDATE proposals
             SET deleted_at = NOW(), status = 'Withdrawn'
-            WHERE proposal_id = $1 AND freelancer_account_id = $2 AND deleted_at IS NULL
+            WHERE proposal_id = $1 AND freelancer_account_id = ANY($2::uuid[]) AND deleted_at IS NULL
             RETURNING *;
         `;
-        const res = await pool.query(query, [proposalId, accountId]);
+        const res = await pool.query(query, [proposalId, accountIds]);
         return res.rows[0];
     } catch (err) {
         console.error('Error in withdrawProposalRepositories:', err);
@@ -378,17 +419,17 @@ async function withdrawProposalRepositories(proposalId, accountId) {
     }
 }
 
-async function updateProposalStatusRepositories(proposalId, accountId, status, rejectReason) {
+async function updateProposalStatusRepositories(proposalId, accountIds, status, rejectReason) {
     try {
         // This is mainly for Client updating status (Accept/Reject/Shortlist)
         const query = `
             UPDATE proposals p
             SET status = $1, reject_reason = $2, updated_at = NOW()
             FROM jobs j
-            WHERE p.proposal_id = $3 AND p.job_id = j.job_id AND j.client_account_id = $4
+            WHERE p.proposal_id = $3 AND p.job_id = j.job_id AND j.client_account_id = ANY($4::uuid[])
             RETURNING p.*;
         `;
-        const res = await pool.query(query, [status, rejectReason, proposalId, accountId]);
+        const res = await pool.query(query, [status, rejectReason, proposalId, accountIds]);
         return res.rows[0];
     } catch (err) {
         console.error('Error in updateProposalStatusRepositories:', err);

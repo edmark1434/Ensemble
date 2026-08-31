@@ -201,6 +201,19 @@ async function getAccountVerificationByAccountId(accountId) {
         throw err;
     }
 }
+async function isAccountVerifiedByAccountId(accountId) {
+    const result = await pool.query(
+        `SELECT EXISTS (
+            SELECT 1
+            FROM verifications
+            WHERE account_id = $1
+              AND is_verified = TRUE
+        ) AS is_verified`,
+        [accountId]
+    );
+
+    return result.rows[0]?.is_verified === true;
+}
 async function getAccountVerificationStatusByAccountId(accountId) {
     try {
         const result = await pool.query(
@@ -209,7 +222,7 @@ async function getAccountVerificationStatusByAccountId(accountId) {
                 v.is_verified,
                 avs.expires_at
             FROM verifications AS v
-            JOIN account_verification_sessions AS avs
+            LEFT JOIN account_verification_sessions AS avs
                 ON v.verification_session_id = avs.verification_session_id
             WHERE v.account_id = $1
             LIMIT 1
@@ -462,6 +475,7 @@ module.exports = {
     updateAccountVerifications,
     createAccountVerificationRepository,
     getAccountVerificationByAccountId,
+    isAccountVerifiedByAccountId,
     getAccountVerificationSessionsByAccountId,
     getAccountVerificationSessionBySessionId,
     getPendingDiditVerificationSessions,

@@ -66,14 +66,16 @@ interface UserNavProps {
 const UserNav: React.FC<UserNavProps> = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const isCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
+    const setIsCollapsed = useGlobalState((state) => state.setIsSidebarCollapsed);
+    const isGuestMode = useGlobalState((state) => state.isGuestMode);
     const [isJobsOpen, setIsJobsOpen] = useState(false);
     const [isGigsOpen, setIsGigsOpen] = useState(false);
 
-    const primaryNavState = primaryNavInitial;
-    const jobsState = jobsItemsInitial;
-    const gigsState = gigsItemsInitial;
-    const activityState = activityRecordsInitial;
+    const primaryNavState = isGuestMode ? primaryNavInitial.filter(item => item.label !== "Teams" && item.label !== "Projects") : primaryNavInitial;
+    const jobsState = isGuestMode ? jobsItemsInitial.filter(item => item.label !== "Proposals") : jobsItemsInitial;
+    const gigsState = isGuestMode ? gigsItemsInitial.filter(item => item.label !== "Orders") : gigsItemsInitial;
+    const activityState = isGuestMode ? [] : activityRecordsInitial;
 
     const handleLogoClick = () => {
        const { user: currentUser, isAuthenticated: auth } = useGlobalState.getState();
@@ -362,14 +364,15 @@ const UserNav: React.FC<UserNavProps> = () => {
                    {isCollapsed && <div className="my-4 border-t border-gray-200 dark:border-white/10 mx-2" />}
 
                    {/* 3. Activity & Records Section */}
-                   <div className={isCollapsed ? "mt-0 space-y-1" : "mt-6"}>
-                      {!isCollapsed && (
-                         <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-500">
-                            Activity & Records
-                         </p>
-                      )}
-                      <ul className="space-y-1">
-                         {activityState.map(({ label, icon: Icon, to }) => (
+                   {activityState.length > 0 && (
+                     <div className={isCollapsed ? "mt-0 space-y-1" : "mt-6"}>
+                        {!isCollapsed && (
+                           <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-500">
+                              Activity & Records
+                           </p>
+                        )}
+                        <ul className="space-y-1">
+                           {activityState.map(({ label, icon: Icon, to }) => (
                             <li key={label} className="w-full">
                                {!isCollapsed ? (
                                   <NavLink to={to}>
@@ -425,6 +428,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                          ))}
                       </ul>
                    </div>
+                   )}
                 </nav>
              </LayoutGroup>
 
