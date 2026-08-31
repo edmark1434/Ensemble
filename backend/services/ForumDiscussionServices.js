@@ -20,6 +20,7 @@ const { emitForumEvent, getIo } = require('../lib/WebSocket');
 const { createNotificationServices } = require('./NotificationServices');
 const { getAccountByHandle } = require('../repositories/AccountRepositories');
 const { getUserById } = require('../repositories/UserRepositories');
+const { attachDiscussionIdentities } = require('./ForumIdentityServices');
 
 const forumDiscussionsCollection = lazyCollection('forum_discussions');
 
@@ -497,7 +498,7 @@ async function getForumDiscussionByGroupId(groupId) {
     return await getForumDiscussionByGroupIdRepository(groupId);
 }
 
-const FEED_TYPES = new Set(['latest', 'trending', 'hot']);
+const FEED_TYPES = new Set(['latest', 'trending', 'popular', 'hot']);
 
 function decodeFeedCursor(cursor) {
     if (!cursor) return null;
@@ -537,7 +538,7 @@ async function getForumDiscussionFeedServices({
 } = {}) {
     const normalizedType = String(type).toLowerCase();
     if (!FEED_TYPES.has(normalizedType)) {
-        throw new Error('Feed type must be latest, trending, or hot');
+        throw new Error('Feed type must be latest, trending, popular, or hot');
     }
 
     const normalizedLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 10, 1), 50);
@@ -554,10 +555,11 @@ async function getForumDiscussionFeedServices({
         cursor: decodeFeedCursor(cursor),
         limit: normalizedLimit,
     });
-    const discussions = result.discussions.map((discussion) => {
+    const publicDiscussions = result.discussions.map((discussion) => {
         const { _feedSort, _feedSticky, _activeGroup, ...publicDiscussion } = discussion;
         return publicDiscussion;
     });
+    const discussions = await attachDiscussionIdentities(publicDiscussions);
     const lastDiscussion = result.discussions[result.discussions.length - 1];
 
     return {

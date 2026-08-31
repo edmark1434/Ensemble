@@ -26,6 +26,7 @@ const {
 } = require('../controllers/ForumDiscussionControllers');
 const requireAuth = require('../middleware/RequireAuth');
 const checkSession = require('../middleware/CheckSession');
+const optionalSession = require('../middleware/OptionalSession');
 const {
 	createGroupReportController,
 	createMemberReportController,
@@ -33,14 +34,14 @@ const {
 } = require('../controllers/ForumReportControllers');
 
 router.post('/create-group', [checkSession, requireAuth], createForumGroup);
-router.get('/groups', [checkSession, requireAuth], getAllForumGroupsController);
+router.get('/groups', optionalSession, getAllForumGroupsController);
 router.get('/groups/joined', [checkSession, requireAuth], getJoinedForumGroupsController);
 router.get('/groups/member/:memberId', [checkSession, requireAuth], getForumGroupsByMemberIdController);
-router.get('/groups/:groupId', [checkSession, requireAuth], getForumGroupByIdController);
+router.get('/groups/:groupId', optionalSession, getForumGroupByIdController);
 
 router.post('/discussions', [checkSession, requireAuth], createForumDiscussionController);
-router.get('/discussions/feed', [checkSession, requireAuth], getForumDiscussionFeedController);
-router.get('/discussions/group/:groupId', [checkSession, requireAuth], getForumDiscussionByGroupIdController);
+router.get('/discussions/feed', optionalSession, getForumDiscussionFeedController);
+router.get('/discussions/group/:groupId', optionalSession, getForumDiscussionByGroupIdController);
 router.get('/discussions/saved', [checkSession, requireAuth], getForumDiscussionSavedByUserIdController);
 router.get('/user/discussions', [checkSession, requireAuth], getForumDiscussionsByUserIdController);
 router.get('/users/:userId/discussions', [checkSession, requireAuth], getForumDiscussionsByUserIdController);

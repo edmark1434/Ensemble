@@ -82,6 +82,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
 
   const userInfo = useGlobalState((state) => state.user);
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isGuestView = isGuestMode || !userInfo?.account_id;
   const [showHeader, setShowHeader] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(true);
   const [userCredits, setCredits] = useState(0);
@@ -170,34 +171,39 @@ useEffect(() => {
 }, [userInfo?.account_id]);
   
 useEffect(() => {
+  if (isGuestView) {
+    setNotifications([]);
+    return;
+  }
+
+  let cancelled = false;
   const fetchNotifications = async () => {
     try {
       const { data } = await api.get("/api/notifications/");
+      if (cancelled) return;
 
-      const fetchedNotifications: Notification[] =
-        data.notifications ?? [];
-
-      // Remove duplicates just in case
+      const fetchedNotifications: Notification[] = data.notifications ?? [];
       const uniqueNotifications = Array.from(
         new Map(
-          fetchedNotifications.map((n) => [
-            n.notification_id,
-            n,
+          fetchedNotifications.map((notification) => [
+            notification.notification_id,
+            notification,
           ])
         ).values()
       );
 
       setNotifications(uniqueNotifications);
     } catch (err) {
-      console.error("Failed to fetch notifications", err);
+      if (!cancelled) console.error("Failed to fetch notifications", err);
     }
   };
 
-  fetchNotifications();
-}, []);
+  void fetchNotifications();
+  return () => { cancelled = true; };
+}, [isGuestView, userInfo?.account_id]);
 
   useEffect(() => {
-    if (isGuestMode) {
+    if (isGuestView) {
       setShowHeader(true);
       setIsCheckingAccess(false);
       return;
@@ -242,7 +248,7 @@ useEffect(() => {
       }
     };
     checkRole();
-  }, []);
+  }, [isGuestView, userInfo?.account_id]);
 
   useEffect(() => {
     const query = headerSearchInput.replace(/^@/, "").trim();
@@ -358,7 +364,7 @@ useEffect(() => {
       <header
         className="sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/95 backdrop-blur-md transition-all duration-300"
       >
-        <div className={`flex items-center justify-between px-5 md:px-5 gap-4 ${isGuestMode ? 'py-5' : 'py-4'}`}>
+        <div className={`flex items-center justify-between px-5 md:px-5 gap-4 ${isGuestView ? 'py-5' : 'py-4'}`}>
           <div className="flex items-center gap-8 flex-1 min-w-0">
             <div className="h-7 w-32 bg-gray-200 dark:bg-white/10 rounded animate-pulse shrink-0 hidden sm:block"></div>
             <div className="w-full max-w-xs h-[30px] bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
@@ -384,13 +390,13 @@ useEffect(() => {
       <header
         className="sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/95 backdrop-blur-md transition-all duration-300"
       >
-        <div className={`flex items-center justify-between px-5 md:px-5 gap-4 ${isGuestMode ? 'py-5' : 'py-4'}`}>
+        <div className={`flex items-center justify-between px-5 md:px-5 gap-4 ${isGuestView ? 'py-5' : 'py-4'}`}>
           <div className="flex items-center gap-8 flex-1 min-w-0">
             <h1 className="text-xl font-semibold text-gray-900 dark:text-white shrink-0 hidden sm:block" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               {pageTitle}
             </h1>
 
-            {!isGuestMode && (
+            {!isGuestView && (
               <form ref={creatorSearchRef} onSubmit={handleHeaderSearchSubmit} className="relative w-full max-w-xs group">
                 <Search
                   onClick={handleHeaderSearchSubmit}
@@ -447,7 +453,7 @@ useEffect(() => {
           </div>
 
           <div className="flex items-center gap-4 shrink-0">
-            {isGuestMode ? (
+            {isGuestView ? (
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => navigate("/login")}
