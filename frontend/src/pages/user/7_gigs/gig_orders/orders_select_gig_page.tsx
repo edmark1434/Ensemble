@@ -19,7 +19,7 @@ export const OrdersSelectGigPage: React.FC = () => {
     api.get("/api/gigs").then((res) => {
       if (res.data && res.data.data) {
         const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
-        const rawGigs = res.data.data.filter((g: any) => g.isOwnGig);
+        const rawGigs = res.data.data.filter((g: any) => g.canManageGig);
         const mappedGigs = rawGigs.map((g: any) => ({
           ...g,
           thumbnail: g.thumbnail && !g.thumbnail.startsWith('http') 

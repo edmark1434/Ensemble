@@ -20,7 +20,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
   const handleViewProfile = () => {
     if (!selectedJob) return;
 
-    if (selectedJob.isOwnPost) {
+    if (selectedJob.isPersonalPost) {
       navigate("/profile");
     } else {
       navigate(`/profile/${selectedJob.client_account_id}`);
@@ -233,7 +233,11 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                 </span>
               </div>
 
-              {!selectedJob.isOwnPost ? (
+              {selectedJob.isOwnPost && !selectedJob.isManageablePost ? (
+                <div className="w-full rounded-xl border border-blue-500/20 bg-blue-500/10 py-3 text-center text-xs font-bold text-blue-400">
+                  This job was posted by a Team you belong to
+                </div>
+              ) : !selectedJob.isOwnPost ? (
                 selectedJob.hasProposed ? (
                   <button
                     onClick={() => navigate(`/jobs/proposals/sent/${selectedJob.myProposalId}`)}

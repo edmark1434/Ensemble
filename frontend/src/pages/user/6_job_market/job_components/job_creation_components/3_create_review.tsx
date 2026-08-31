@@ -3,6 +3,7 @@ import { Check, User, Users, ChevronDown } from "lucide-react";
 import { JobRichText } from "../JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import MarketplaceIdentitySelector from "@/components/marketplace/MarketplaceIdentitySelector";
 
 export const sampleUserTeams = [
   { id: "team-01", name: "Alpha Developers Lab" },
@@ -276,15 +277,14 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
 
           {postingAs === "team" && (
             <div className="pt-2">
-              <CustomDropdown
-                label="Select Studio Team"
-                value={selectedTeam}
-                options={sampleUserTeams.map((t) => t.name)}
-                placeholder="Select Team..."
-                error={errors.selectedTeam}
-                onSelect={(val) => {
-                  setSelectedTeam(val);
-                  clearError("selectedTeam");
+              <MarketplaceIdentitySelector
+                label="Select team"
+                teamId={selectedTeam}
+                teamsOnly
+                requireTeamVerification={false}
+                onChange={(teamId) => {
+                  setSelectedTeam(teamId);
+                  if (teamId) clearError("selectedTeam");
                 }}
               />
             </div>

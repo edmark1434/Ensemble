@@ -33,6 +33,8 @@ export interface Job {
   skills?: string[];
   isSaved?: boolean;
   isOwnPost?: boolean;
+  isManageablePost?: boolean;
+  isPersonalPost?: boolean;
   hasProposed?: boolean;
   myProposalId?: string | null;
 }
@@ -203,7 +205,7 @@ const JobList: React.FC<JobListProps> = ({
                           <Flag className="h-3.5 w-3.5" />
                         </button>
                       )}
-                      {job.isOwnPost && (
+                      {job.isManageablePost && (
                         <button
                           title="Edit Post"
                           onClick={(e) => handleEditClick(e, job.id)}
@@ -335,7 +337,7 @@ const JobList: React.FC<JobListProps> = ({
                           <Flag className="h-4 w-4" />
                         </button>
                       )}
-                      {job.isOwnPost && (
+                      {job.isManageablePost && (
                         <button
                           title="Edit Post"
                           onClick={(e) => handleEditClick(e, job.id)}

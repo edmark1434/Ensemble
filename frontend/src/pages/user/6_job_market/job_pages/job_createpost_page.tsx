@@ -149,6 +149,7 @@ const JobCreatePostPage: React.FC = () => {
         status: "Open",
         posted_as: postingAs === "self" ? "Self" : "Team",
         team_id: postingAs === "self" ? null : selectedTeam,
+        acting_team_id: postingAs === "self" ? null : selectedTeam,
         tags: skills, // Note: Backend may need adaptation if these are strings instead of IDs
         payment_type: "Fixed",
         experience_level: difficulty,

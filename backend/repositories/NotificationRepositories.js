@@ -75,14 +75,14 @@ async function createCashoutNotificationOnce(notification) {
     }
 }
 
-async function getNotificationsByAccountId(accountId) {
+async function getNotificationsByAccountId(accountIds) {
     try {
         const query = `
             SELECT * FROM notifications
-            WHERE account_id = $1
+            WHERE account_id = ANY($1::uuid[])
             ORDER BY created_at DESC;
         `;
-        const { rows } = await pool.query(query, [accountId]);
+        const { rows } = await pool.query(query, [accountIds]);
         return rows;
     } catch (err) {
         console.error("Error fetching notifications:", err);
@@ -90,16 +90,16 @@ async function getNotificationsByAccountId(accountId) {
     }
 }
 
-async function markNotificationAsRead(notificationId, accountId) {
+async function markNotificationAsRead(notificationId, accountIds) {
     try {
         const query = `
             UPDATE notifications
             SET is_read = true
             WHERE notification_id = $1
-              AND account_id = $2
+              AND account_id = ANY($2::uuid[])
             RETURNING *;
         `;
-        const { rows } = await pool.query(query, [notificationId, accountId]);
+        const { rows } = await pool.query(query, [notificationId, accountIds]);
         return rows[0];
     } catch (err) {
         console.error("Error marking notification as read:", err);
@@ -107,15 +107,15 @@ async function markNotificationAsRead(notificationId, accountId) {
     }
 }
 
-async function markAllNotificationsAsRead(accountId) {
+async function markAllNotificationsAsRead(accountIds) {
     try {
         const query = `
             UPDATE notifications
             SET is_read = true
-            WHERE account_id = $1
+            WHERE account_id = ANY($1::uuid[])
             RETURNING *;
         `;
-        const { rows } = await pool.query(query, [accountId]);
+        const { rows } = await pool.query(query, [accountIds]);
         return rows;
     } catch (err) {
         console.error("Error marking notifications as read:", err);

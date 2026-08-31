@@ -206,7 +206,9 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
 
   const handleConfirmAccept = async () => {
     if (!proposal) return;
-    if(walletBalance < proposal.bidAmount) {
+    const personalAccountId = user?.account_id;
+    const usesPersonalWallet = String(proposal.clientAccountId) === String(personalAccountId);
+    if (usesPersonalWallet && walletBalance < proposal.bidAmount) {
       toast.error("Insufficient wallet balance to accept this proposal. Please top up your wallet.");
       return;
     }
@@ -855,13 +857,17 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                 <p className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed">
                   Are you sure you want to accept this proposal by <strong className="text-gray-900 dark:text-white">{proposal.partyName}</strong>?
                 </p>
-                <p className="text-[11px] text-gray-500 dark:text-zinc-400 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3 rounded-xl border border-gray-100 dark:border-white/5">
+                <div className="text-[11px] text-gray-500 dark:text-zinc-400 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3 rounded-xl border border-gray-100 dark:border-white/5">
                   <div className="flex items-center justify-between mb-2">
                     <span className="block mb-1 text-gray-500 dark:text-zinc-400">Agreed Bid: <strong className="text-gray-900 dark:text-white text-xs">{proposal.bidAmount.toLocaleString()}</strong></span>
-                    <span className="block mb-1 text-gray-500 dark:text-zinc-400 text-[10px]">Available Balance: <strong className={walletBalance >= proposal.bidAmount ? "text-emerald-400" : "text-red-400"}>{walletBalance.toLocaleString()}</strong></span>
+                    {String(proposal.clientAccountId) === String(user?.account_id) ? (
+                      <span className="block mb-1 text-gray-500 dark:text-zinc-400 text-[10px]">Available Balance: <strong className={walletBalance >= proposal.bidAmount ? "text-emerald-400" : "text-red-400"}>{walletBalance.toLocaleString()}</strong></span>
+                    ) : (
+                      <span className="block mb-1 text-gray-500 dark:text-zinc-400 text-[10px]">Team wallet balance is validated securely when the offer is sent.</span>
+                    )}
                   </div>
                   Accepting will automatically form a binding escrow contract for the agreed bid across {proposal.milestones.length} milestone phases.
-                </p>
+                </div>
                 <div className="pt-2">
                   <label className="text-xs font-medium text-gray-500 dark:text-zinc-400">Contract Start Date (Optional)</label>
                   <input

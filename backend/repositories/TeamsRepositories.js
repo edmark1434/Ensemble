@@ -108,10 +108,29 @@ async function distributeTeamFunds(teamId, recipients) {
     return {transactions,distributed_credits:total,available_balance:Number(source.balance_credits)-total};
   } catch(error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
 }
+async function listMarketplacePosts(teamId, type) {
+  if (type === 'jobs') {
+    return (await pool.query(`SELECT j.job_id AS id,j.title,j.description,j.category,j.status,j.created_at,
+      j.rate_credits_min,j.rate_credits_max,j.no_of_hires,
+      (SELECT COUNT(*)::int FROM proposals p WHERE p.job_id=j.job_id AND p.deleted_at IS NULL) AS activity_count,
+      (SELECT f.path FROM job_attachments ja JOIN files f ON f.file_id=ja.file_id WHERE ja.job_id=j.job_id ORDER BY ja.index LIMIT 1) AS thumbnail_path
+      FROM teams t JOIN jobs j ON j.client_account_id=t.account_id
+      WHERE t.team_id=$1 AND t.deleted_at IS NULL AND j.deleted_at IS NULL
+      ORDER BY j.created_at DESC`, [teamId])).rows;
+  }
+  return (await pool.query(`SELECT g.gig_id AS id,g.title,g.description,g.category,g.status,g.created_at,
+    COALESCE((SELECT MIN(gt.rate_credits) FROM gig_tiers gt WHERE gt.gig_id=g.gig_id),0)::int AS rate_credits_min,
+    NULL::int AS rate_credits_max,g.no_of_concurrent_max AS no_of_hires,
+    (SELECT COUNT(*)::int FROM gig_requests gr JOIN gig_tiers gt ON gt.gig_tier_id=gr.gig_tier_id WHERE gt.gig_id=g.gig_id) AS activity_count,
+    (SELECT f.path FROM gig_attachments ga JOIN files f ON f.file_id=ga.file_id WHERE ga.gig_id=g.gig_id ORDER BY ga.index LIMIT 1) AS thumbnail_path
+    FROM teams t JOIN gigs g ON g.freelancer_account_id=t.account_id
+    WHERE t.team_id=$1 AND t.deleted_at IS NULL AND LOWER(g.status) NOT IN ('archived','deleted')
+    ORDER BY g.created_at DESC`, [teamId])).rows;
+}
 async function reviews(teamId){return (await pool.query(`SELECT tr.*,a.display_name,a.handle,f.path avatar_path FROM team_reviews tr JOIN accounts a ON a.account_id=tr.reviewer_account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id WHERE tr.team_id=$1 ORDER BY tr.created_at DESC`,[teamId])).rows;}
 async function addReview(teamId,accountId,data){return (await pool.query(`INSERT INTO team_reviews(team_id,reviewer_account_id,rating,comment,reference_type,reference_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[teamId,accountId,data.rating,data.comment||null,data.referenceType||null,data.referenceId||null])).rows[0];}
 async function addReport(teamId,accountId,data){const team=await getTeam(teamId,accountId);return (await pool.query(`INSERT INTO reports(type,reference_table,reference_prefix,reference_id,status,by_account_id,for_account_id,target_type,target_id,target_label,reason,description) VALUES('Team Report','teams','TEAM',$1,'Open',$2,$3,'Team',$1,$4,$5,$6) RETURNING *`,[teamId,accountId,team.account_id,team.display_name,data.category,data.description])).rows[0];}
 async function getTeamInbox(teamId){return TeamInbox.findOne({team_id:String(teamId),conversation_type:'group',deleted_at:null});}
 async function createTeamInbox(team,members){const now=new Date();const result=await TeamInbox.insertOne({team_id:String(team.team_id),team_account_id:String(team.account_id),conversation_name:team.display_name,conversation_type:'group',conversation_image_key:team.avatar_path||null,members:members.map(m=>({account_id:String(m.account_id),role:m.role==='Owner'?'owner':'member',status:'active',joined_at:now})),pinned_messages:[],created_at:now,updated_at:now,deleted_at:null});return TeamInbox.findOne({_id:result.insertedId});}
 async function syncTeamInboxMembers(teamId,members){const inbox=await getTeamInbox(teamId);if(!inbox)return null;const active=new Map(members.map(m=>[String(m.account_id),m])),now=new Date();const merged=(inbox.members||[]).map(m=>active.has(String(m.account_id))?{...m,status:'active',role:active.get(String(m.account_id)).role==='Owner'?'owner':'member'}:{...m,status:'removed',left_at:now});for(const m of members)if(!merged.some(x=>String(x.account_id)===String(m.account_id)))merged.push({account_id:String(m.account_id),role:m.role==='Owner'?'owner':'member',status:'active',joined_at:now});await TeamInbox.updateOne({_id:inbox._id},{$set:{members:merged,updated_at:now}});return TeamInbox.findOne({_id:inbox._id});}
-module.exports={createTeam,getUserId,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers};
+module.exports={createTeam,getUserId,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers};

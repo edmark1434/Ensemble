@@ -236,7 +236,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   const handleViewProfile = () => {
     if (!gig) return;
 
-    if (gig.isOwnGig) {
+    if (gig.isPersonalGig) {
       navigate("/profile");
       return;
     }
@@ -670,7 +670,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                   {gig.title}
                 </h1>
                 <div className="flex shrink-0">
-                  {gig.isOwnGig ? (
+                  {gig.canManageGig ? (
                     <button
                       onClick={() => navigate(`/gigs/edit/${gig.id}`)}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs hover:bg-blue-500/20 transition-colors"
@@ -679,6 +679,8 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                       <Edit2 className="h-3.5 w-3.5" />
                       Edit Service
                     </button>
+                  ) : gig.isOwnGig ? (
+                    <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-bold text-blue-400">Your Team service</span>
                   ) : (
                     !isGuestMode && (
                       <button
