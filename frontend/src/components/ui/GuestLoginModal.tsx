@@ -63,14 +63,20 @@ export const GuestLoginModal: React.FC<GuestLoginModalProps> = ({
               
               <div className="flex w-full flex-col gap-3 sm:flex-row">
                 <button
-                  onClick={() => navigate('/login')}
+                  onClick={() => {
+                    onClose();
+                    navigate('/login');
+                  }}
                   className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gray-100 px-4 py-4 text-sm font-bold text-gray-900 transition hover:bg-gray-200 dark:bg-white/5 dark:text-white dark:hover:bg-white/10 active:scale-[0.97]"
                 >
                   <LogIn className="h-4 w-4" />
                   Log In
                 </button>
                 <button
-                  onClick={() => navigate('/signup')}
+                  onClick={() => {
+                    onClose();
+                    navigate('/signup');
+                  }}
                   className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-4 text-sm font-bold text-white shadow-xl shadow-blue-500/20 transition hover:bg-blue-700 active:scale-[0.97]"
                 >
                   <UserPlus className="h-4 w-4" />

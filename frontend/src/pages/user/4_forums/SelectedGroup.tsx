@@ -34,8 +34,10 @@ import {
   Loader2,
   Reply,
   ChevronRight,
+  UserPlus,
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import NewDiscussionModal from "@/pages/user/4_forums/forum_modals/NewDiscussionModal";
 import EditGroupModal from "@/pages/user/4_forums/forum_modals/EditGroupModal";
 import ReportGroupModal from "@/pages/user/4_forums/forum_modals/ReportGroupModal.tsx";
@@ -813,6 +815,10 @@ const SelectedGroup = () => {
   const [showDeleteGroupModal, setShowDeleteGroupModal] = useState(false);
   const [showReportMemberModal, setShowReportMemberModal] = useState(false);
   const [showRemoveMemberModal, setShowRemoveMemberModal] = useState(false);
+  const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
+  const [guestLoginMessage, setGuestLoginMessage] = useState("Please log in or create an account to interact with this forum group.");
+  const [joiningGroup, setJoiningGroup] = useState(false);
+  const [groupReloadKey, setGroupReloadKey] = useState(0);
   const [selectedMember, setSelectedMember] = useState<MemberWithDetails | null>(null);
 
   const [postMenuOpen, setPostMenuOpen] = useState<string | null>(null);
@@ -848,8 +854,8 @@ const SelectedGroup = () => {
 
   const requireForumAuthentication = (message: string) => {
     if (isForumAuthenticated) return true;
-    showErrorToast(message);
-    navigate("/login");
+    setGuestLoginMessage(message);
+    setIsGuestLoginOpen(true);
     return false;
   };
   
@@ -931,7 +937,7 @@ const SelectedGroup = () => {
     };
 
     fetchData();
-  }, [id, sortBy]);
+  }, [id, sortBy, groupReloadKey, navigate]);
 
   const loadMorePosts = async () => {
     if (!id || !nextCursor || loadingMore) return;
@@ -1773,6 +1779,21 @@ const SelectedGroup = () => {
   const canEditPermissions = isOwner;
   const canRemoveMembers = isOwner;
 
+  const handleJoinGroup = async () => {
+    if (!requireForumAuthentication("Please log in or create an account to join this forum group.")) return;
+    if (!group || isActiveMember || joiningGroup) return;
+    setJoiningGroup(true);
+    try {
+      await api.put("/api/forum/groups/members/" + group._id, { user_id: currentUserId });
+      showSuccessToast("Successfully joined group");
+      setGroupReloadKey((current) => current + 1);
+    } catch {
+      showErrorToast("Failed to join group");
+    } finally {
+      setJoiningGroup(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
@@ -1913,6 +1934,12 @@ const SelectedGroup = () => {
               <div>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{group.group_name}</h1>
                 <p className="mt-2 text-gray-700 dark:text-zinc-200 max-w-2xl">{group.description}</p>
+                {!isActiveMember && (
+                  <button type="button" onClick={() => void handleJoinGroup()} disabled={joiningGroup} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
+                    {joiningGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                    {joiningGroup ? "Joining..." : "Join Group"}
+                  </button>
+                )}
               </div>
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-zinc-300">
@@ -2413,6 +2440,12 @@ const SelectedGroup = () => {
           setReportingPost(null);
           showSuccessToast("Discussion reported");
         }}
+      />
+      <GuestLoginModal
+        isOpen={isGuestLoginOpen}
+        onClose={() => setIsGuestLoginOpen(false)}
+        title="Log in to continue"
+        message={guestLoginMessage}
       />
     </div>
   );

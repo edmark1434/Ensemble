@@ -31,13 +31,13 @@ const {
 const optionalAuth = require('../middleware/OptionalAuth');
 
 router.get('/', optionalAuth, listAssetsController);
+router.get('/posting-eligibility', [checkSession, requireAuth], getAssetPostingEligibilityController);
 router.get('/:assetId', optionalAuth, getAssetController);
 router.get('/:assetId/reviews', optionalAuth, listAssetReviewsController);
 router.get('/:assetId/comments', optionalAuth, listCommentsController);
 
 router.use(checkSession, requireAuth);
 
-router.get('/posting-eligibility', getAssetPostingEligibilityController);
 router.post('/', createAssetController);
 router.post('/:assetId/purchase', purchaseAssetController);
 router.put('/:assetId/like', likeAssetController);

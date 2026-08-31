@@ -1,28 +1,24 @@
-# Current Task — Add Verification Support Knowledge
+# Current Task — Protect Guest Forum Creation Actions
 
-Create a detailed, source-grounded verification guide for the AI support assistant and register it for documentation ingestion.
+Ensure guest forum creation entry points use the shared login/signup prompt without redirecting or opening authenticated creation modals.
 
 ## Acceptance Criteria
 
-- [x] The guide distinguishes signup email, personal identity, and Team business verification.
-- [x] Personal and Team requirements, steps, statuses, resubmission, review estimates, and safety guidance are documented.
-- [x] Verified benefits and unverified restrictions match implemented platform behavior without claiming unsupported guarantees.
-- [x] Relevant user navigation routes are included.
-- [x] The source is enabled in the RAG documentation catalog.
-- [x] Documentation ingestion and focused semantic retrieval are verified.
+- [x] Guest New Discussion opens the shared login/signup modal without a toast or redirect.
+- [x] Guest Create a Group opens the shared login/signup modal without a toast or redirect.
+- [x] Empty-state Create Discussion actions use the same guarded behavior.
+- [x] New Discussion and Create Group modals cannot render for guests.
+- [x] Authenticated creation behavior remains unchanged.
+- [x] Frontend type/build verification passes.
 
-Status: Completed August 31, 2026.
+Status: Completed September 1, 2026.
 
 ## Implementation Notes
 
-Added a dedicated verification knowledge source based on the personal verification status flow, Didit status processing, Team business verification validation, marketplace eligibility checks, and current frontend navigation. The guide separates email activation, personal KYC, and Team business review; documents required evidence and file limits; explains statuses, benefits, restrictions, expiration, resubmission, troubleshooting, and privacy; and avoids promising approval, deadlines, credits, subscription upgrades, or escrow effects.
-
-Registered the guide as an enabled RAG source at `/account-verification-status`.
+The main Forums creation action and empty-state discussion actions now share an authentication-aware handler. Guests receive the existing login/signup modal and remain on Forums, while signed-in users continue opening the relevant creation modal. Both creation modal open props include a defensive authenticated-state condition.
 
 ## Verification
 
-- `sources.json` parsed successfully as JSON.
-- `npm run rag:ingest` completed successfully for 20 sources and ingested 24 guide chunks.
-- The document store contains 131 chunks after ingestion.
-- Focused searches for unverified restrictions, Cooperative documents, and Team Admin eligibility all ranked the new verification guide first.
-- Scoped `git diff --check` passed with only line-ending notices.
+- npm run build passed (tsc --noEmit and Vite production build).
+- Existing dynamic-import and large-chunk build warnings remain unchanged.
+- Scoped git diff check completed with only line-ending notices.
