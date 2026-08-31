@@ -174,7 +174,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         const time = getCurrentTime();
         const result = cloneIntoNewTracks(clip, time, {
           trackItemsMap, trackItemIds, transitionsMap, transitionIds, tracks, duration,
-        });
+        }, "top");
         if (!result) return;
 
         stateManager.updateState(

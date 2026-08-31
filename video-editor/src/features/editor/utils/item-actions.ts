@@ -112,6 +112,14 @@ export function getClipboard(): SelectionSnapshot | null {
 // (duplicate); pass a time in ms to anchor the earliest item there,
 // shifting the rest by the same amount (paste). New items are never
 // reselected afterward — selection stays wherever it was.
+//
+// trackPlacement controls where the new track block lands:
+//   "aboveGroup" — directly above wherever the source tracks currently
+//     sit (right for duplicate: the source is still live and visible).
+//   "top" — always at the very top of the stack (right for paste: the
+//     clipboard's origin can be stale, or, after a cut, an emptied-out
+//     track you don't care about anymore — anchoring to it just puts
+//     things back where they came from).
 // ---------------------------------------------------------------------
 
 export interface ClonedIntoNewTracks {
@@ -135,7 +143,8 @@ export function cloneIntoNewTracks(
     transitionIds: string[];
     tracks: ITrack[];
     duration: number;
-  }
+  },
+  trackPlacement: "aboveGroup" | "top" = "aboveGroup"
 ): ClonedIntoNewTracks | null {
   if (snapshot.items.length === 0) return null;
 
@@ -207,18 +216,18 @@ export function cloneIntoNewTracks(
       targetTrack?.items.push(newId);
     });
 
-  // Insert the whole block of new tracks together, directly above the
-  // topmost track in the source selection — not interleaved with the
-  // originals. `newTracks` is already in the same top-to-bottom order as
-  // `snapshot.trackOrder`, so it drops in as one contiguous group.
-  // (If your track order is reversed, splice at `insertAt + 1` instead
-  // to insert the block below the group.)
+  // `newTracks` is already in the same top-to-bottom order as
+  // `snapshot.trackOrder`, so either placement mode drops it in as one
+  // contiguous group.
   const tracks = [...state.tracks];
-  const insertAt = snapshot.trackOrder
-    .map((oldId) => tracks.findIndex((t) => t.id === oldId))
-    .find((idx) => idx !== -1);
-
-  insertAt === undefined ? tracks.push(...newTracks) : tracks.splice(insertAt, 0, ...newTracks);
+  if (trackPlacement === "top") {
+    tracks.splice(0, 0, ...newTracks);
+  } else {
+    const insertAt = snapshot.trackOrder
+      .map((oldId) => tracks.findIndex((t) => t.id === oldId))
+      .find((idx) => idx !== -1);
+    insertAt === undefined ? tracks.push(...newTracks) : tracks.splice(insertAt, 0, ...newTracks);
+  }
 
   const trackItemsMap = { ...state.trackItemsMap, ...newItemsMap };
   const trackItemIds = [...state.trackItemIds, ...newIds];
