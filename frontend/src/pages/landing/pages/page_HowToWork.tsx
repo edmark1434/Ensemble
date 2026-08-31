@@ -1,5 +1,5 @@
 import useGlobalState from "@/lib/global_state";
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -13,7 +13,8 @@ import {
   Upload,
   Coins,
   FileCheck,
-  Wallet
+  Wallet,
+  ArrowRight
 } from "lucide-react";
 
 type WorkTrack = "gigs" | "jobs" | "assets";
@@ -23,6 +24,38 @@ const PageHowToWork: React.FC = () => {
 
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<WorkTrack>("gigs");
+
+  const minimalHoverAudioRef = useRef<HTMLAudioElement | null>(null);
+  const clickAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    minimalHoverAudioRef.current = new Audio("/sounds/minimalhover.mp3");
+    minimalHoverAudioRef.current.volume = 0.25;
+    clickAudioRef.current = new Audio("/sounds/softclick.mp3");
+    clickAudioRef.current.volume = 0.4;
+  }, []);
+
+  const playMinimalHover = () => {
+    if (!minimalHoverAudioRef.current) return;
+    minimalHoverAudioRef.current.currentTime = 0;
+    minimalHoverAudioRef.current.play().catch(() => {});
+  };
+
+  const playClick = () => {
+    if (!clickAudioRef.current) return;
+    clickAudioRef.current.currentTime = 0;
+    clickAudioRef.current.play().catch(() => {});
+  };
+
+  const handleBack = () => {
+    playClick();
+    navigate("/");
+  };
+
+  const handleTab = (tab: WorkTrack) => {
+    playClick();
+    setActiveTab(tab);
+  };
 
   const GIGS_STEPS = [
     { icon: <PlusCircle size={22} />, title: "1. Post a Gig Post / Your Service", desc: "Package your skills into specific offers with fixed pricing tiers, delivery turnarounds, and examples of your best work." },
@@ -63,10 +96,16 @@ const PageHowToWork: React.FC = () => {
   const { steps, accent, bg } = getTrackDetails();
 
   return (
-    <div style={{ background: theme === 'dark' ? "#121214" : "#f9fafb", minHeight: "100vh", color: theme === 'dark' ? '#ffffff' : '#111827', padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
+    <div className="page-enter" style={{ background: theme === 'dark' ? "#121214" : "#f9fafb", minHeight: "100vh", color: theme === 'dark' ? '#ffffff' : '#111827', padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
 
-      {/* Optimized Micro-Styles */}
       <style>{`
+        @keyframes swipeInRight {
+          from { opacity: 0; transform: translateX(30px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        .page-enter {
+          animation: swipeInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
         .segment-btn {
           flex: 1; padding: 14px; border: none; font-size: 14px; font-weight: 700; cursor: pointer; border-radius: 12px; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
@@ -74,7 +113,7 @@ const PageHowToWork: React.FC = () => {
           background: ${theme === 'dark' ? "#18181b" : "#ffffff"}; border: 1px solid ${theme === 'dark' ? "#27272a" : "#e5e7eb"}; padding: 28px; border-radius: 18px; display: flex; gap: 24px; align-items: start; position: relative; transition: all 0.25s ease;
         }
         .step-card:hover {
-          border-color: var(--dynamic-accent); transform: translateX(4px); background: #111424;
+          border-color: var(--dynamic-accent); transform: translateX(4px); background: ${theme === 'dark' ? '#111424' : '#f0fdfa'};
         }
         @media (max-width: 768px) {
           .segment-bar { flex-direction: column; gap: 6px; padding: 10px !important; }
@@ -89,37 +128,37 @@ const PageHowToWork: React.FC = () => {
         height: "500px",
         background: accent,
         opacity: 0.04,
-        filter: "blur(140px)",
-        top: "30%",
-        left: "50%",
-        transform: "translate(-50%, -50%)",
-        pointerEvents: "none",
-        transition: "background 0.5s ease"
+        filter: "blur(120px)",
+        top: "20%",
+        right: "-10%",
+        borderRadius: "50%",
+        pointerEvents: "none"
       }} />
 
-      <div style={{ maxWidth: 760, margin: "0 auto", position: "relative", zIndex: 2 }}>
+      <div style={{ maxWidth: 800, margin: "0 auto", position: "relative", zIndex: 10 }}>
         {/* Navigation Head */}
-        <button
-          onClick={() => navigate(-1)}
-          style={{ background: "none", border: "none", color: theme === 'dark' ? "#7a8499" : "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 36, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
-          onMouseEnter={(e) => e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827'}
-          onMouseLeave={(e) => e.currentTarget.style.color = theme === 'dark' ? "#7a8499" : "#6b7280"}
-        >
-          <ArrowLeft size={16} /> Back
-        </button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 40 }}>
+          <button onClick={handleBack} style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 14, fontWeight: 600, cursor: "pointer", padding: 0, transition: "color 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.color = theme === 'dark' ? "#fff" : "#111827"; playMinimalHover(); }} onMouseLeave={(e) => e.currentTarget.style.color = theme === 'dark' ? "#7a8499" : "#6b7280"}>
+            <ArrowLeft size={16} /> Back
+          </button>
+          
+          <button onClick={() => { playClick(); navigate("/landing/HowToHire"); }} style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", color: accent, fontSize: 14, fontWeight: 600, cursor: "pointer", padding: 0, transition: "opacity 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.8"; playMinimalHover(); }} onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}>
+            How to Hire <ArrowRight size={16} />
+          </button>
+        </div>
 
         <h1 style={{ fontSize: "clamp(32px, 5vw, 42px)", fontWeight: 800, marginBottom: 16, letterSpacing: "-0.02em" }}>How to Work on Ensemble</h1>
         <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 17, marginBottom: 44, lineHeight: 1.6 }}>Grow your production career, secure premium contracts, and monetize creative assets on your own terms.</p>
 
         {/* Premium 3-Way Structural Switcher Bar */}
-        <div className="segment-bar" style={{ display: "flex", background: "rgba(255,255,255,0.02)", border: "1px solid #1e2130", padding: 6, borderRadius: 16, marginBottom: 48, gap: 4 }}>
-          <button className="segment-btn" style={{ background: activeTab === "gigs" ? "#2dd4bf" : "transparent", color: activeTab === "gigs" ? theme === 'dark' ? "#121214" : "#f9fafb" : theme === 'dark' ? "#7a8499" : "#6b7280" }} onClick={() => setActiveTab("gigs")}>
+        <div className="segment-bar" style={{ display: "flex", background: theme === 'dark' ? "rgba(255,255,255,0.02)" : "#f3f4f6", border: theme === 'dark' ? "1px solid #1e2130" : "1px solid #e5e7eb", padding: 6, borderRadius: 16, marginBottom: 48, gap: 4 }}>
+          <button className="segment-btn" style={{ background: activeTab === "gigs" ? "#2dd4bf" : "transparent", color: activeTab === "gigs" ? theme === 'dark' ? "#121214" : "#f9fafb" : theme === 'dark' ? "#7a8499" : "#6b7280" }} onClick={() => handleTab("gigs")} onMouseEnter={playMinimalHover}>
             A. GIGS (Sell Services)
           </button>
-          <button className="segment-btn" style={{ background: activeTab === "jobs" ? "#a855f7" : "transparent", color: activeTab === "jobs" ? theme === 'dark' ? '#ffffff' : '#111827' : theme === 'dark' ? "#7a8499" : "#6b7280" }} onClick={() => setActiveTab("jobs")}>
+          <button className="segment-btn" style={{ background: activeTab === "jobs" ? "#a855f7" : "transparent", color: activeTab === "jobs" ? theme === 'dark' ? '#ffffff' : '#111827' : theme === 'dark' ? "#7a8499" : "#6b7280" }} onClick={() => handleTab("jobs")} onMouseEnter={playMinimalHover}>
             B. JOBS (Send Bids)
           </button>
-          <button className="segment-btn" style={{ background: activeTab === "assets" ? "#10b981" : "transparent", color: activeTab === "assets" ? theme === 'dark' ? "#121214" : "#f9fafb" : theme === 'dark' ? "#7a8499" : "#6b7280" }} onClick={() => setActiveTab("assets")}>
+          <button className="segment-btn" style={{ background: activeTab === "assets" ? "#10b981" : "transparent", color: activeTab === "assets" ? theme === 'dark' ? "#121214" : "#f9fafb" : theme === 'dark' ? "#7a8499" : "#6b7280" }} onClick={() => handleTab("assets")} onMouseEnter={playMinimalHover}>
             C. ASSET CREATION
           </button>
         </div>
@@ -127,7 +166,7 @@ const PageHowToWork: React.FC = () => {
         {/* Dynamic Card Feed Loop */}
         <div style={{ display: "flex", flexDirection: "column", gap: 20, ["--dynamic-accent" as any]: accent }}>
           {steps.map((step, idx) => (
-            <div key={idx} className="step-card">
+            <div key={idx} className="step-card" onMouseEnter={playMinimalHover}>
               <div style={{ background: bg, color: accent, padding: 12, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.3s ease" }}>
                 {step.icon}
               </div>

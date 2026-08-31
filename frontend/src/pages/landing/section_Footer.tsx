@@ -25,7 +25,7 @@ const FOOTER_LINKS: FooterLinks = {
 
 const Logo: FC<{ size?: number; theme?: 'light' | 'dark' }> = ({ size = 22, theme = 'dark' }) => (
   <div style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
-    <img src="/ensemble_lg.svg" alt="Ensemble Logo" style={{ width: size + 6, height: size + 6, display: "block" }} />
+    <img src="/ensemble_lg.svg" alt="Ensemble Logo" style={{ width: size + 6, height: size + 6, display: "block", filter: theme === 'light' ? "invert(1)" : "invert(0)" }} />
     <span style={{ fontSize: size, fontWeight: 700, fontFamily: T_FOOT.fontDisplay, letterSpacing: .5, color: theme === 'dark' ? "#fff" : "#111827", transition: "color 0.3s ease" }}>
       Ensemble
     </span>
