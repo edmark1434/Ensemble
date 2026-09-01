@@ -3,10 +3,12 @@ import type * as awarenessProtocol from "y-protocols/awareness";
 export interface LiveTransformPatch {
   left?: number;
   top?: number;
-  transform?: string; // full CSS transform string
+  transform?: string;
   width?: number;
   height?: number;
   fontSize?: number;
+  from?: number; // ms
+  to?: number;   // ms
 }
 
 export type LiveTransformState = Record<string /* itemId */, LiveTransformPatch>;

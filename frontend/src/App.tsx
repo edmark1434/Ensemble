@@ -3,6 +3,7 @@ import { lazy, Suspense, type ComponentType, useEffect } from 'react'
 import {ToastProvider} from "@/components/utility/toast_provider.tsx";
 import {ToastTestingWidget} from "@/components/utility/ToastTestingWidget.tsx";
 import {DevModeWidget} from "@/components/utility/DevModeWidget.tsx";
+import { GlobalLoader } from '@/components/ui/GlobalLoader';
 import useGlobalState from '@/lib/global_state';
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
@@ -144,18 +145,16 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [theme, setTheme]);
 
+  useEffect(() => {
+    document.body.style.backgroundColor = theme === 'dark' ? '#080a12' : '#f9fafb';
+  }, [theme]);
+
   return (
     <>
       <ToastProvider />
       <ToastTestingWidget />
       <DevModeWidget />
-      <Suspense
-        fallback={
-          <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-dark-base text-sm text-zinc-400">
-            Loading...
-          </div>
-        }
-      >
+      <Suspense fallback={<GlobalLoader />}>
       <Routes>
       <Route path="/admin" element={<AdminLoginPage />} />
       <Route path="/staff" element={<StaffLoginPage />} />

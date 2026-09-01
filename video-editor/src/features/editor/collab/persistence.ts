@@ -67,9 +67,15 @@ export function attachPersistence(
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
       body: toArrayBuffer(merged),
-    }).catch((err) => {
-      console.error("Failed to persist collab update", err);
-    });
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`persist failed: ${res.status}`);
+      })
+      .catch((err) => {
+        console.error("Failed to persist collab update, requeuing", err);
+        pending.unshift(merged); // put it back so the next flush retries it
+        if (!flushTimer) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS);
+      });
   };
 
   // Unlike fetch, sendBeacon is guaranteed by the browser to be sent even
@@ -85,8 +91,13 @@ export function attachPersistence(
     }
   };
 
-  const handleUpdate = (update: Uint8Array, origin: unknown) => {
-    if (origin !== localOrigin) return;
+  const handleUpdate = (
+    update: Uint8Array,
+    _origin: unknown,
+    _doc: Y.Doc,
+    transaction: Y.Transaction,
+  ) => {
+    if (!transaction.local) return; // skips remote sync + initial hydration only
     pending.push(update);
     if (!flushTimer) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS);
   };

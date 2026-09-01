@@ -52,13 +52,28 @@ function sanitizeDetails(details: any): any {
 
 const NON_SYNCED_ITEM_KEYS = ["isMain"];
 
-// item-level granularity (see earlier decision): details stored as a plain
-// value, not a nested Y.Map. Two users editing the same item's details at the
-// same instant last-write-wins on the whole details blob.
+// A track item can carry transitionInfo: { isFrom, isTo, transition } from
+// designcombo/state's transition linking. Ops that clone item fields (split
+// is the one that bit us) can leave `transition` missing/incomplete once the
+// transition it pointed at no longer exists. Never persist that half-built
+// shape — stateManager.updateState() and canvas.renderTransitions() both
+// dereference transitionInfo.transition.fromId assuming it's whole.
+function sanitizeTransitionInfo(transitionInfo: any): any {
+  if (!transitionInfo) return transitionInfo;
+  const t = transitionInfo.transition;
+  if (!t || !t.id || !t.fromId || !t.toId) return undefined;
+  return transitionInfo;
+}
+
 export function itemToY(item: ITrackItem): Y.Map<any> {
   const y = new Y.Map<any>();
   for (const [key, value] of Object.entries(item)) {
     if (NON_SYNCED_ITEM_KEYS.includes(key)) continue;
+    if (key === "transitionInfo") {
+      const clean = sanitizeTransitionInfo(value);
+      if (clean !== undefined) y.set(key, clean);
+      continue;
+    }
     y.set(key, key === "details" ? sanitizeDetails(value) : value);
   }
   return y;
@@ -120,13 +135,51 @@ export interface DocSnapshot {
 export function readStateFromDoc(schema: CollabSchema): DocSnapshot {
   const trackItemsMap: Record<string, ITrackItem> = {};
   schema.trackItems.forEach((y, id) => {
-    trackItemsMap[id] = fromY<ITrackItem>(y);
+    const item = fromY<ITrackItem>(y);
+    const info = sanitizeTransitionInfo((item as any).transitionInfo);
+    if (info === undefined) delete (item as any).transitionInfo;
+    else (item as any).transitionInfo = info;
+    trackItemsMap[id] = item;
   });
 
   const transitionsMap: Record<string, ITransition> = {};
   schema.transitions.forEach((y, id) => {
     transitionsMap[id] = fromY<ITransition>(y);
   });
+
+  // A transition can outlive one of its endpoints (e.g. the endpoint gets
+  // replaced by a split's two new ids) — drop it before it reaches
+  // stateManager/canvas.renderTransitions(), which assume both ids resolve.
+  for (const [id, t] of Object.entries(transitionsMap)) {
+    if (!(t.fromId in trackItemsMap) || !(t.toId in trackItemsMap)) {
+      delete transitionsMap[id];
+    }
+  }
+
+  // A track item's own transitionInfo.transition is a *cached copy*, not a
+  // reference — an op that updates the canonical entry in transitionsMap
+  // (or drops it entirely, per the loop above) can leave some item still
+  // holding the old copy: same transition id, but stale/mismatched
+  // fromId/toId, or pointing at an id that no longer exists in
+  // transitionsMap at all. sanitizeTransitionInfo above only checks that
+  // the cached copy is internally well-formed — it can't catch it being
+  // *out of date* relative to the map. Reconcile every item's copy against
+  // the now-final transitionsMap here, once, in the one place both are
+  // guaranteed consistent — this is what stateManager.updateState() and
+  // canvas.renderTransitions() both assume going in.
+  for (const item of Object.values(trackItemsMap)) {
+    const info = (item as any).transitionInfo;
+    if (!info?.transition) {
+      if (info) delete (item as any).transitionInfo;
+      continue;
+    }
+    const canonical = transitionsMap[info.transition.id];
+    if (!canonical || canonical.fromId !== info.transition.fromId || canonical.toId !== info.transition.toId) {
+      delete (item as any).transitionInfo;
+    } else {
+      info.transition = canonical; // keep item and map pointing at the same object
+    }
+  }
 
   const markers: IMarker[] = [];
   schema.markers.forEach((y) => {

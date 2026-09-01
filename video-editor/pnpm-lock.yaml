@@ -6,6 +6,7 @@ settings:
 
 overrides:
   '@designcombo/transitions>remotion': ^4.0.503
+  fabric: 6.7.0
 
 importers:
 
@@ -179,6 +180,9 @@ importers:
       dotenv:
         specifier: ^17.0.0
         version: 17.0.0
+      fabric:
+        specifier: 6.7.0
+        version: 6.7.0
       ffprobe-static:
         specifier: ^3.1.0
         version: 3.1.0
@@ -6915,14 +6919,14 @@ snapshots:
 
   '@mapbox/node-pre-gyp@1.0.11':
     dependencies:
-      detect-libc: 2.0.4
+      detect-libc: 2.1.2
       https-proxy-agent: 5.0.1
       make-dir: 3.1.0
       node-fetch: 2.7.0
       nopt: 5.0.0
       npmlog: 5.0.1
       rimraf: 3.0.2
-      semver: 7.7.4
+      semver: 7.8.5
       tar: 6.2.1
     transitivePeerDependencies:
       - encoding
@@ -9401,7 +9405,7 @@ snapshots:
 
   agent-base@6.0.2:
     dependencies:
-      debug: 4.4.1
+      debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
     optional: true
@@ -10189,7 +10193,7 @@ snapshots:
     dependencies:
       '@tootallnate/once': 2.0.0
       agent-base: 6.0.2
-      debug: 4.4.1
+      debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
     optional: true
@@ -10197,7 +10201,7 @@ snapshots:
   https-proxy-agent@5.0.1:
     dependencies:
       agent-base: 6.0.2
-      debug: 4.4.1
+      debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
     optional: true

@@ -123,7 +123,7 @@ const DownloadProgressModal = () => {
       open={displayProgressModal}
       onOpenChange={actions.setDisplayProgressModal}
     >
-      <DialogContent className="border bg-card px-2 py-8 gap-6 overflow-hidden sm:max-w-md">
+      <DialogContent className="z-[300] border bg-card px-2 py-8 gap-6 overflow-hidden sm:max-w-md">
         <DialogHeader className="px-6 -mt-0.75">
           <DialogTitle className="text-md font-semibold">Export</DialogTitle>
         </DialogHeader>

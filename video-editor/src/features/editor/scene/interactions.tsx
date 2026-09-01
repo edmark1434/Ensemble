@@ -232,7 +232,7 @@ export function SceneInteractions({
       el.style.height = `${bottom - top}px`;
 
       const boxHeight = bottom - top;
-      const LABEL_OUTSIDE_THRESHOLD = 24;
+      const LABEL_OUTSIDE_THRESHOLD = 36;
       if (boxHeight <= LABEL_OUTSIDE_THRESHOLD) {
         label.style.left = "-2px";
         label.style.top = "-18px";
@@ -241,8 +241,8 @@ export function SceneInteractions({
         label.style.overflow = "visible";
         label.style.textOverflow = "clip";
       } else {
-        label.style.left = "-2px";
-        label.style.top = "0px";
+        label.style.left = "-1px";
+        label.style.top = "-1px";
         label.style.maxWidth = "100%";
         label.style.borderRadius = "0 0 0px 0";
         label.style.overflow = "hidden";

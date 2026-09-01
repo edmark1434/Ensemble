@@ -5,8 +5,9 @@ import StateManager, {
   LAYER_DELETE,
   LAYER_SELECT,
   HISTORY_UNDO,
-  HISTORY_REDO, ACTIVE_PASTE, LAYER_CLONE, LAYER_COPY, TIMELINE_SCALE_CHANGED, EDIT_OBJECT,
+  HISTORY_REDO, TIMELINE_SCALE_CHANGED, EDIT_OBJECT,
 } from "@designcombo/state";
+import { buildSelectionSnapshot, cloneIntoNewTracks, setClipboard, getClipboard } from "../utils/item-actions";
 import { getCurrentTime } from "../utils/time";
 import useStore from "../store/use-store";
 import {timeMsToUnits} from "@designcombo/timeline";
@@ -39,12 +40,19 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
     const playheadPxNew = timeMsToUnits(currentTimeMs, newScale.zoom);
     const newScrollLeft = Math.max(0, playheadPxNew - playheadScreenX);
 
+    // Presence overlays are plain Fabric objects with no trackItemsMap/
+    // transitionsMap entry — the scale-change relayout chokes on them.
+    // Pull them off the canvas before dispatching, put them back once
+    // the new zoom has settled.
+    (timeline as any)?._presenceOverlays?.clear();
+
     dispatch(TIMELINE_SCALE_CHANGED, {
       payload: { scale: newScale }
     });
 
     Promise.resolve().then(() => {
       timeline?.scrollTo({ scrollLeft: newScrollLeft });
+      (timeline as any)?._presenceOverlays?.redraw();
     });
   };
 
@@ -91,11 +99,19 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         e.preventDefault();
         if (!activeIds.length) return;
         const time = getCurrentTime();
-        activeIds.forEach((id) => {
-          dispatch(LAYER_SELECT, { payload: { trackItemIds: [id] } });
+
+        if (activeIds.length === 1) {
           dispatch(ACTIVE_SPLIT, { payload: {}, options: { time } });
-        });
-        dispatch(LAYER_SELECT, { payload: { trackItemIds: activeIds } });
+          dispatch(LAYER_SELECT, { payload: { trackItemIds: [] } });
+        }
+
+        // group splitting buggy asf
+
+        // activeIds.forEach((id) => {
+        //   dispatch(LAYER_SELECT, { payload: { trackItemIds: [id] } });
+        //   dispatch(ACTIVE_SPLIT, { payload: {}, options: { time } });
+        // });
+        // dispatch(LAYER_SELECT, { payload: { trackItemIds: [] } });
       }
 
       // select all
@@ -115,7 +131,9 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       if (mod && e.code === "KeyC") {
         e.preventDefault();
         if (!activeIds.length) return;
-        dispatch(LAYER_COPY);
+        const { trackItemsMap, transitionsMap, tracks } = useStore.getState();
+        const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
+        if (snapshot.items.length) setClipboard(snapshot);
       }
 
       // duplicate
@@ -123,92 +141,60 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         e.preventDefault();
         if (!activeIds.length) return;
 
-        const doDuplicate = async () => {
-          const before = useStore.getState().trackItemIds;
-          dispatch(LAYER_CLONE);
-          await Promise.resolve();
+        const { trackItemsMap, transitionsMap, tracks, trackItemIds, transitionIds, duration } = useStore.getState();
+        const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
+        const result = cloneIntoNewTracks(snapshot, null, {
+          trackItemsMap, trackItemIds, transitionsMap, transitionIds, tracks, duration,
+        });
+        if (!result) return;
 
-          const after = useStore.getState();
-          const newIds = after.trackItemIds.filter(id => !before.includes(id));
-          if (!newIds.length) return;
-
-          const updatedMap = { ...after.trackItemsMap };
-          newIds.forEach(id => {
-            const item = updatedMap[id];
-            if (!item) return;
-            updatedMap[id] = {
-              ...item,
-              details: {
-                ...item.details,
-                locked: false,
-              },
-            };
-          });
-
-          stateManager.updateState(
-            { trackItemsMap: updatedMap },
-            { updateHistory: true, kind: "update" }
-          );
-        };
-        doDuplicate().then(r => {});
+        stateManager.updateState(
+          {
+            tracks: result.tracks,
+            trackItemsMap: result.trackItemsMap,
+            trackItemIds: result.trackItemIds,
+            transitionsMap: result.transitionsMap,
+            transitionIds: result.transitionIds,
+            duration: result.duration,
+          },
+          { updateHistory: true, kind: "update" }
+        );
       }
 
       // cut
       if (mod && e.code === "KeyX") {
         e.preventDefault();
         if (!activeIds.length) return;
-        dispatch(LAYER_COPY);
+        const { trackItemsMap, transitionsMap, tracks } = useStore.getState();
+        const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
+        if (snapshot.items.length) setClipboard(snapshot);
         dispatch(LAYER_DELETE);
       }
 
       // paste
       if (mod && e.code === "KeyV") {
         e.preventDefault();
-        const doPaste = async () => {
-          const before = useStore.getState().trackItemIds;
-          dispatch(ACTIVE_PASTE);
-          await Promise.resolve();
+        const clip = getClipboard();
+        if (!clip) return;
 
-          const after = useStore.getState();
-          const newIds = after.trackItemIds.filter(id => !before.includes(id));
-          if (!newIds.length) return;
+        const { trackItemsMap, transitionsMap, tracks, trackItemIds, transitionIds, duration } = useStore.getState();
+        const time = getCurrentTime();
+        const result = cloneIntoNewTracks(clip, time, {
+          trackItemsMap, trackItemIds, transitionsMap, transitionIds, tracks, duration,
+        }, "top");
+        if (!result) return;
 
-          const { fps: currentFps } = useStore.getState();
-          const currentFrame = useStore.getState().playerRef?.current?.getCurrentFrame() ?? 0;
-          const currentTime = (currentFrame / currentFps) * 1000;
-          const minFrom = Math.min(
-            ...newIds.map(id => after.trackItemsMap[id]?.display.from ?? 0)
-          );
-          const offset = currentTime - minFrom;
-
-          const updatedMap = { ...after.trackItemsMap };
-          newIds.forEach(id => {
-            const item = updatedMap[id];
-            if (!item) return;
-            updatedMap[id] = {
-              ...item,
-              display: {
-                from: item.display.from + offset,
-                to: item.display.to + offset,
-              },
-              details: {
-                ...item.details,
-                locked: false,
-              },
-            };
-          });
-
-          const newDuration = Object.values(updatedMap).reduce(
-            (max, item) => Math.max(max, item.display?.to ?? 0),
-            after.duration
-          );
-
-          stateManager.updateState(
-            { trackItemsMap: updatedMap, duration: newDuration },
-            { updateHistory: true, kind: "update" }
-          );
-        };
-        doPaste().then(r => {});
+        stateManager.updateState(
+          {
+            tracks: result.tracks,
+            trackItemsMap: result.trackItemsMap,
+            trackItemIds: result.trackItemIds,
+            transitionsMap: result.transitionsMap,
+            transitionIds: result.transitionIds,
+            duration: result.duration,
+          },
+          { updateHistory: true, kind: "update" }
+        );
       }
 
       // zoom in

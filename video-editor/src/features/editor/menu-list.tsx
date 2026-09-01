@@ -26,7 +26,7 @@ const MENU_ITEMS = [
   {id: "uploads",     icon: CloudUpload,        label: "Uploads",     ariaLabel: "Add and manage uploads"},
   {id: "texts",       icon: Type,               label: "Texts",       ariaLabel: "Add and edit text elements" },
   {id: "captions",    icon: ClosedCaption,      label: "Captions",    ariaLabel: "Add and edit captions" },
-  {id: "transitions", icon: ArrowBigRightDash,  label: "Transitions", ariaLabel: "Add transition effects" },
+  // {id: "transitions", icon: ArrowBigRightDash,  label: "Transitions", ariaLabel: "Add transition effects" },
 ] as const;
 
 // Memoized menu button component for better performance

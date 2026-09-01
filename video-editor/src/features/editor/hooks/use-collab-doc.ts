@@ -44,9 +44,11 @@ export function useCollabDoc(
     let teardownMirrorOutStore: (() => void) | null = null;
     let teardownPersistence: (() => void) | null = null;
     let teardownWsProvider: (() => void) | null = null;
+    let teardownTimelineWatch: (() => void) | null = null;
     let activeSessionId: number | null = null;
+    let timelineResyncInterval: ReturnType<typeof setInterval> | null = null;
 
-    const doc = new Y.Doc();
+    const doc = new Y.Doc({ gc: false });
     const schema = createCollabSchema(doc);
     const syncGuard = createSyncGuard();
     const localOrigin = userId;
@@ -76,6 +78,40 @@ export function useCollabDoc(
         teardownMirrorOutStore = setupMirrorOutFromStore(schema, localOrigin, syncGuard);
         teardownPersistence = attachPersistence(schema, projectId, sessionId, localOrigin);
         teardownWsProvider = attachWsProvider(schema, projectId, userId);
+        teardownTimelineWatch = useStore.subscribe((state, prevState) => {
+          if (state.timeline && !prevState.timeline) {
+            const resyncTransitions = () => {
+              const canvas = useStore.getState().timeline as any;
+              if (!canvas) return;
+              const current = stateManager.getState();
+              canvas.transitionsMap = current.transitionsMap ?? {};
+              canvas.transitionIds = Object.keys(current.transitionsMap ?? {});
+              if (Object.keys(current.transitionsMap ?? {}).length > 0) {
+                try {
+                  canvas.renderTransitions();
+                } catch (err) {
+                  console.error("useCollabDoc: renderTransitions failed on canvas mount", err);
+                }
+              }
+              canvas.requestRenderAll();
+            };
+
+            // Timeline's own mount hydration can finish *after* `timeline` shows
+            // up in the store and clobber transitionsMap once it does — a single
+            // sync here can lose that race. Keep re-asserting for a few seconds
+            // so whichever runs last is always the correct data, then stop.
+            resyncTransitions();
+            let ticks = 0;
+            timelineResyncInterval = setInterval(() => {
+              resyncTransitions();
+              ticks += 1;
+              if (ticks >= 10) {
+                clearInterval(timelineResyncInterval!);
+                timelineResyncInterval = null;
+              }
+            }, 300);
+          }
+        });
 
         const isBlank = schema.trackItemIds.length === 0 && schema.tracks.length === 0;
 
@@ -106,12 +142,24 @@ export function useCollabDoc(
         } else {
           const snapshot = readStateFromDoc(schema);
 
-          // guard this too, now that mirror-out exists — without it, this
-          // read-from-doc immediately triggers mirror-out's stateManager/
-          // zustand subscriptions and gets written straight back as if it
-          // were a brand new local edit
           syncGuard.isApplyingRemote = true;
           try {
+            const canvas = useStore.getState().timeline as any;
+            const transitionsChanged =
+              JSON.stringify(canvas?.transitionsMap ?? {}) !== JSON.stringify(snapshot.transitionsMap);
+
+            if (canvas && transitionsChanged) {
+              canvas.transitionsMap = snapshot.transitionsMap;
+              canvas.transitionIds = snapshot.transitionIds;
+              canvas.getTrackItems().forEach((item: any) => {
+                const info = item.transitionInfo;
+                const t = info?.transition;
+                if (info && (!t || !t.id || !t.fromId || !t.toId)) {
+                  item.transitionInfo = undefined;
+                }
+              });
+            }
+
             stateManager.updateState(
               {
                 trackItemsMap: snapshot.trackItemsMap,
@@ -130,6 +178,17 @@ export function useCollabDoc(
               ...(snapshot.fps !== undefined ? { fps: snapshot.fps } : {}),
               ...(snapshot.background ? { background: snapshot.background } : {}),
             });
+
+            if (canvas && transitionsChanged) {
+              if (Object.keys(snapshot.transitionsMap).length > 0) {
+                try {
+                  canvas.renderTransitions();
+                } catch (renderErr) {
+                  console.error("useCollabDoc: renderTransitions failed on initial load", renderErr);
+                }
+              }
+              canvas.requestRenderAll();
+            }
           } finally {
             syncGuard.isApplyingRemote = false;
           }
@@ -155,6 +214,8 @@ export function useCollabDoc(
       teardownMirrorOutStore?.();
       teardownPersistence?.();
       teardownWsProvider?.();
+      teardownTimelineWatch?.();
+      if (timelineResyncInterval) clearInterval(timelineResyncInterval);
       if (activeSessionId !== null) endSession(activeSessionId);
       useStore.getState().setCollabSchema(null, null);
       undoManager.destroy();

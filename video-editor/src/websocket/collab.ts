@@ -36,7 +36,7 @@ async function getOrCreateRoom(publicProjectId: string): Promise<Room> {
   if (existing) return existing;
 
   const roomPromise = (async () => {
-    const doc = new Y.Doc();
+    const doc = new Y.Doc({ gc: false });
     const awareness = new awarenessProtocol.Awareness(doc);
     const room: Room = { doc, awareness, clients: new Map() };
 
