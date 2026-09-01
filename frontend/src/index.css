@@ -144,7 +144,8 @@ body {
   font-weight: 800;
   box-shadow: inset 0 1px 1px rgba(255,255,255,0.8), 0 1px 3px rgba(0,0,0,0.1);
 }
-@keyframes rainbowShineSlide {
+
+@keyframes rainbowShineSlide {
   0% {
     transform: translateX(-100%);
     opacity: 0;
@@ -187,4 +188,30 @@ body {
 }
 .animate-badge-shine {
   animation: badge-shine 3s infinite;
+}
+/* Platform-wide interactive control fallback */
+button:not(:disabled),
+input[type="button"]:not(:disabled),
+input[type="submit"]:not(:disabled),
+input[type="reset"]:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer !important;
+}
+
+button:disabled,
+input[type="button"]:disabled,
+input[type="submit"]:disabled,
+input[type="reset"]:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button:not(:disabled):hover,
+  input[type="button"]:not(:disabled):hover,
+  input[type="submit"]:not(:disabled):hover,
+  input[type="reset"]:not(:disabled):hover,
+  [role="button"]:not([aria-disabled="true"]):hover {
+    filter: brightness(1.1);
+  }
 }

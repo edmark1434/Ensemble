@@ -93,7 +93,7 @@ export default function VerifyEmail() {
       );
         if (setUser) setUser(response.data.credentials);
         if (setIsAuthenticated) setIsAuthenticated(true);
-        navigate("/setup/personal-details");
+        navigate("/setup/upload-image");
     } catch (err:any) {
       console.log("Verification error:", err.response);
       setError(err.response?.data?.message || "Verification failed. Please try again.");
@@ -176,6 +176,32 @@ export default function VerifyEmail() {
           to { transform: rotate(360deg); }
         }
 
+        .onboarding-primary-button:not(:disabled):hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px rgba(255, 255, 255, 0.16);
+        }
+
+        .onboarding-primary-button:not(:disabled):active {
+          transform: translateY(0) scale(0.97);
+          box-shadow: 0 3px 8px rgba(255, 255, 255, 0.1);
+        }
+
+        .onboarding-link-button {
+          transition: color 0.2s ease, transform 0.15s ease;
+        }
+
+        .onboarding-link-button:not(:disabled):hover {
+          transform: translateY(-1px);
+        }
+
+        .onboarding-link-button:not(:disabled):active {
+          transform: scale(0.94);
+        }
+
+        .setup-card button:focus-visible {
+          outline: 2px solid #7aadde;
+          outline-offset: 3px;
+        }
         .loading-spinner {
           width: 16px;
           height: 16px;
@@ -205,11 +231,11 @@ export default function VerifyEmail() {
           {/* Static Progress Tracking */}
           <div style={{ marginBottom: 40 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: T.accent, letterSpacing: 0.5 }}>ACCOUNT SETUP</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>1 / 5</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: T.accent, letterSpacing: 0.5 }}>EMAIL VERIFICATION</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>1 / 1</span>
             </div>
             <div style={{ width: "100%", height: 4, background: T.border, borderRadius: 2, overflow: "hidden" }}>
-              <div style={{ width: "20%", height: "100%", background: T.accent, borderRadius: 2, transition: "width 0.5s cubic-bezier(0.16, 1, 0.3, 1)" }} />
+              <div style={{ width: "100%", height: "100%", background: T.accent, borderRadius: 2, transition: "width 0.5s cubic-bezier(0.16, 1, 0.3, 1)" }} />
             </div>
           </div>
 
@@ -268,6 +294,7 @@ export default function VerifyEmail() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <button
+                className="onboarding-primary-button"
                 onClick={handleVerify}
                 disabled={loading}
                 style={{
@@ -294,6 +321,7 @@ export default function VerifyEmail() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 13, color: T.dim }}>
                 <span>Didn't receive code?</span>
                 <button
+                  className="onboarding-link-button"
                   onClick={handleResendCode}
                   disabled={!canResend}
                   style={{

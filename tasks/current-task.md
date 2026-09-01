@@ -1,35 +1,26 @@
-# Current Task — Granular Marketplace Asset Content Editing
+# Current Task — Platform-wide Button Interaction Feedback
 
-Allow asset owners to keep or unselect individual current thumbnails/package files, add replacements, and save the resulting asset package securely.
+Add a safe global fallback so clickable buttons across the platform visibly respond to hover and use the correct cursor.
 
 ## Acceptance Criteria
 
-- [x] Edit Asset displays every current thumbnail and package-file preview as selected by default.
-- [x] Owners can click an existing item to toggle it between `Keep` and `Removed`.
-- [x] Owners can combine retained current items with newly uploaded thumbnails and original files.
-- [x] Final content validation requires 1–8 thumbnails and the appropriate original/template deliverables.
-- [x] Template project links load through the authenticated owner endpoint and remain individually editable/removable.
-- [x] Backend validates every retained relation ID belongs to the asset being edited.
-- [x] Backend validates every new upload's ownership, intent consumption, MIME type, storage folder, size, and uniqueness.
-- [x] Selected current relations and new uploads are rebuilt in one transaction with correct positions and primary thumbnail/proxy pointers.
-- [x] Metadata-only edits preserve content, asset type remains immutable, and content replacement remains locked after an active purchase.
-- [x] Backend syntax checks and the frontend production build pass.
+- [x] Enabled native buttons use the pointer cursor.
+- [x] Button-like inputs use the pointer cursor.
+- [x] Custom controls with role="button" use the pointer cursor.
+- [x] Disabled and aria-disabled controls use the not-allowed cursor.
+- [x] Pointer devices receive visible hover feedback.
+- [x] Touch devices do not receive sticky hover styling.
+- [x] Frontend TypeScript and production build pass.
 
-## Final Flow
+## Implementation Notes
 
-1. Current content opens selected as `Keep`.
-2. Clicking a current item marks it `Removed`; clicking again restores it.
-3. New uploads are appended to the selected existing package.
-4. The client sends retained relation IDs plus new upload IDs.
-5. The backend verifies retained ownership and new uploads, validates the final combined counts, then rebuilds the selected content atomically.
-6. Unselected relations are removed from the asset while retained and newly uploaded content remain available in the saved listing.
+- Added one global fallback in frontend/src/index.css rather than modifying unrelated components individually.
+- Used brightness-based hover feedback to avoid changing layout or overriding component transform animations.
+- Existing component-specific hover styles remain active.
+
+Status: Completed.
 
 ## Verification
 
-- `node --check backend/repositories/AssetRepositories.js` passed.
-- `node --check backend/services/AssetServices.js` passed.
-- `cd frontend && npm run build` passed (`tsc --noEmit` and Vite production build).
-- Escaped-newline scan returned no matches.
-- `git diff --check` passed after formatting cleanup.
-
-Status: Completed.
+- frontend npm run build passed (TypeScript and Vite production build).
+- Scoped git diff --check passed.
