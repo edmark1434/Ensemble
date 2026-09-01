@@ -225,6 +225,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
     const price = Number(priceCredits);
     const pendingTag = cleanTag(tagInput);
     const submittedTags = [...tags];
+    if (pendingTag.length > 50) return setError("Each tag must be 50 characters or fewer.");
     if (pendingTag && !submittedTags.some((tag) => tag.toLowerCase() === pendingTag.toLowerCase())) submittedTags.push(pendingTag);
     if (!cleanName || cleanName.length > 50) return setError("Enter an asset title up to 50 characters.");
     if (!cleanDescription || cleanDescription.length > 5000) return setError("Enter an asset description up to 5,000 characters.");
