@@ -23,7 +23,9 @@ export default function AssetProjectLinks({ assetId, links, canAccess, onRequire
       const response = await api.get<{ url: string }>(`/api/assets/${assetId}/project-links/${link.media_asset_project_link_id}/access`);
       const url = response.data.url;
       if (!url) throw new Error("Project link was not returned.");
-      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      const parsed = new URL(url);
+      if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Project link URL is invalid.");
+      const opened = window.open(parsed.toString(), "_blank", "noopener,noreferrer");
       if (opened) opened.opener = null;
     } catch (error) {
       const message = typeof error === "object" && error && "response" in error
