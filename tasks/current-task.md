@@ -1,26 +1,24 @@
-# Current Task — Platform-wide Button Interaction Feedback
+# Current Task — Remove Asset Project-Link Submission
 
-Add a safe global fallback so clickable buttons across the platform visibly respond to hover and use the correct cursor.
+Keep template assets thumbnail-based with optional original package files, while removing support for project links from asset create and update payloads.
 
 ## Acceptance Criteria
 
-- [x] Enabled native buttons use the pointer cursor.
-- [x] Button-like inputs use the pointer cursor.
-- [x] Custom controls with role="button" use the pointer cursor.
-- [x] Disabled and aria-disabled controls use the not-allowed cursor.
-- [x] Pointer devices receive visible hover feedback.
-- [x] Touch devices do not receive sticky hover styling.
-- [x] Frontend TypeScript and production build pass.
+- [x] Template assets still accept carousel thumbnails.
+- [x] Template assets still accept optional original files.
+- [x] Empty or omitted project-link lists remain compatible.
+- [x] Non-empty project-link lists are rejected by backend validation.
+- [x] Backend syntax check and scoped diff check pass.
 
 ## Implementation Notes
 
-- Added one global fallback in frontend/src/index.css rather than modifying unrelated components individually.
-- Used brightness-based hover feedback to avoid changing layout or overriding component transform animations.
-- Existing component-specific hover styles remain active.
+- The frontend asset editor already has no project-link field, so no frontend change is required.
+- Project links are rejected at the service boundary to prevent manually crafted requests from adding them.
+- Existing optional template original-file and preview handling is unchanged.
 
 Status: Completed.
 
 ## Verification
 
-- frontend npm run build passed (TypeScript and Vite production build).
+- node --check services/AssetServices.js passed.
 - Scoped git diff --check passed.

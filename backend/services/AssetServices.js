@@ -106,34 +106,15 @@ function normalizeTags(value, { creating = false } = {}) {
   return normalized;
 }
 
-function normalizeProjectLinks(value, type) {
+function normalizeProjectLinks(value) {
   if (value == null) return [];
   if (!Array.isArray(value)) {
     throw new AssetError('Project links must be provided as a list.', 400, 'VALIDATION_ERROR');
   }
-  if (value.length === 0) return [];
-  if (type !== 'template') {
-    throw new AssetError('Project links are only supported for template assets.', 400, 'VALIDATION_ERROR');
+  if (value.length > 0) {
+    throw new AssetError('Project links are no longer supported.', 400, 'VALIDATION_ERROR');
   }
-  return value.map((link, index) => {
-    if (!link || typeof link !== 'object' || Array.isArray(link)) {
-      throw new AssetError(`Project link ${index + 1} is invalid.`, 400, 'VALIDATION_ERROR');
-    }
-    const label = cleanText(link.label, `Project link ${index + 1} label`, 100);
-    const provider = cleanText(link.provider, `Project link ${index + 1} provider`, 50);
-    const url = cleanText(link.url, `Project link ${index + 1} url`, 2048);
-    if (url.length < 8) {
-      throw new AssetError(`Project link ${index + 1} url is invalid.`, 400, 'VALIDATION_ERROR');
-    }
-    let parsed;
-    try { parsed = new URL(url); } catch {
-      throw new AssetError(`Project link ${index + 1} url is invalid.`, 400, 'VALIDATION_ERROR');
-    }
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      throw new AssetError(`Project link ${index + 1} url must start with http:// or https://.`, 400, 'VALIDATION_ERROR');
-    }
-    return { label, provider, url: parsed.toString() };
-  });
+  return [];
 }
 
 function validateAssetPayload(payload, { creating = false } = {}) {
@@ -222,7 +203,7 @@ function validateAssetPayload(payload, { creating = false } = {}) {
     const thumbnailFileIds = thumbnailInput.map((fileId, index) =>
       requireUuid(fileId, `Replacement thumbnail file ID ${index + 1}`));
     const projectLinks = replaceProjectLinks
-      ? normalizeProjectLinks(content.projectLinks, content.type)
+      ? normalizeProjectLinks(content.projectLinks)
       : [];
     const allFileIds = [...originalFileIds, ...previewFileIds, ...thumbnailFileIds];
     if (new Set(allFileIds).size !== allFileIds.length) {
@@ -289,7 +270,7 @@ function validateAssetPayload(payload, { creating = false } = {}) {
   }
   const thumbnailFileIds = thumbnailInput.map((fileId, index) =>
     requireUuid(fileId, `Thumbnail file ID ${index + 1}`));
-  const projectLinks = normalizeProjectLinks(payload?.projectLinks, type);
+  const projectLinks = normalizeProjectLinks(payload?.projectLinks);
 
   const allFileIds = [...originalFileIds, ...previewFileIds, ...thumbnailFileIds];
   if (new Set(allFileIds).size !== allFileIds.length) {
