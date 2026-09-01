@@ -6,6 +6,7 @@ const {
   updateAssetServices,
   deleteAssetServices,
   getAssetDownloadServices,
+  getAssetProjectLinkAccessServices,
   getAssetOriginalPreviewServices,
   purchaseAssetServices,
   listCommentsServices,
@@ -82,6 +83,20 @@ async function getAssetDownloadController(req, res) {
         req.params.assetId,
         req.user.account_id,
         req.params.bundleFileId || null
+      )),
+    });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
+async function getAssetProjectLinkAccessController(req, res) {
+  try {
+    res.set('Cache-Control', 'no-store');
+    return res.json({
+      success: true,
+      ...(await getAssetProjectLinkAccessServices(
+        req.params.assetId,
+        req.params.projectLinkId,
+        req.user.account_id
       )),
     });
   } catch (error) { return handleAssetError(res, error); }
@@ -250,6 +265,7 @@ module.exports = {
   updateAssetController,
   deleteAssetController,
   getAssetDownloadController,
+  getAssetProjectLinkAccessController,
   getAssetOriginalPreviewController,
   purchaseAssetController,
   listCommentsController,

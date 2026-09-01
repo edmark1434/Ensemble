@@ -9,6 +9,7 @@ const {
   updateAssetController,
   deleteAssetController,
   getAssetDownloadController,
+  getAssetProjectLinkAccessController,
   getAssetOriginalPreviewController,
   purchaseAssetController,
   listCommentsController,
@@ -47,6 +48,7 @@ router.delete('/:assetId/save', unsaveAssetController);
 router.post('/:assetId/reviews', createAssetReviewController);
 router.patch('/:assetId/reviews/:reviewId', updateAssetReviewController);
 router.delete('/:assetId/reviews/:reviewId', deleteAssetReviewController);
+router.get('/:assetId/project-links/:projectLinkId/access', getAssetProjectLinkAccessController);
 router.get('/:assetId/files/:bundleFileId/original-preview', getAssetOriginalPreviewController);
 router.get('/:assetId/files/:bundleFileId/download', getAssetDownloadController);
 router.get('/:assetId/original-preview', getAssetOriginalPreviewController);
