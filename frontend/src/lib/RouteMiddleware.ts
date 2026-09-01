@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import useGlobalState from "./global_state";
 import api from "./axios";
 import { getStaffHomePath } from "./staffRoutes";
-import { ONBOARDING_COMPLETED_EVENT, wasOnboardingCompleted } from "./onboardingEvents";
+import { ONBOARDING_COMPLETED_EVENT, ONBOARDING_STEP_CHANGED_EVENT, wasOnboardingCompleted } from "./onboardingEvents";
 import { ProfileLoadingState } from "@/pages/user/7_profile/Displays/ProfileLoadingState.tsx";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { isGuestAllowedPath } from "./guestRouteAccess";
@@ -35,7 +35,7 @@ function requestOnboardingPath(accountId: string) {
     const request = api.get('/api/onboarding/state')
         .then((response) => response.data.completed
             ? null
-            : response.data.path || '/setup/personal-details')
+            : response.data.path || '/setup/upload-image')
         .then((path) => wasOnboardingCompleted(accountId) ? null : path)
         .finally(() => {
             pendingOnboardingRequests.delete(accountId);
@@ -211,6 +211,21 @@ export default function RouteMiddleware() {
         return () => window.removeEventListener(ONBOARDING_COMPLETED_EVENT, handleOnboardingCompleted);
     }, [resolvedUser?.account_id, resolvedUser?.type]);
 
+    useEffect(() => {
+        const handleOnboardingStepChanged = (event: Event) => {
+            if (!resolvedUser || resolvedUser.type !== 'User') return;
+
+            const accountId = String(resolvedUser.account_id);
+            const detail = (event as CustomEvent<{ accountId?: string | null; path?: string }>).detail;
+            if (detail?.accountId && detail.accountId !== accountId) return;
+            if (!detail?.path?.startsWith('/setup/')) return;
+
+            setOnboardingGate({ accountId, path: detail.path, verificationFailed: false });
+        };
+
+        window.addEventListener(ONBOARDING_STEP_CHANGED_EVENT, handleOnboardingStepChanged);
+        return () => window.removeEventListener(ONBOARDING_STEP_CHANGED_EVENT, handleOnboardingStepChanged);
+    }, [resolvedUser?.account_id, resolvedUser?.type]);
     const resolvedAccountId = resolvedUser?.type === 'User'
         ? String(resolvedUser.account_id)
         : null;
@@ -252,12 +267,12 @@ export default function RouteMiddleware() {
 
     useEffect(() => {
         if (isCheckingSession || onboardingPath === undefined || !resolvedUser || resolvedUser.type !== 'User') return;
-        if (onboardingPath && !isOnboardingRoute) {
+        if (onboardingPath && location.pathname !== onboardingPath) {
             navigate(onboardingPath, { replace: true });
         } else if (!onboardingPath && isOnboardingRoute) {
             navigate('/home', { replace: true });
         }
-    }, [isCheckingSession, onboardingPath, resolvedUser, isOnboardingRoute, navigate]);
+    }, [isCheckingSession, onboardingPath, resolvedUser, isOnboardingRoute, location.pathname, navigate]);
 
     useEffect(() => {
         if (isCheckingSession || resolvedUser || isGuestMode || isPublicRoute || isGuestAllowedRoute) {

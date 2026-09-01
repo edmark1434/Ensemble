@@ -89,7 +89,6 @@ const SystemSettingsPage = lazyPage(() => import('./pages/admin/systemSettings/S
 const StaffPortalLayout = lazyPage(() => import('./pages/staff/StaffPortalLayout'));
 const StaffDashboard = lazyPage(() => import('./pages/staff/StaffDashboard'));
 const VerifyEmail = lazyPage(() => import('@/pages/setup_account/00_VerifyEmail.tsx'));
-const PersonalDetails = lazyPage(() => import('@/pages/setup_account/01_PersonalDetails.tsx'));
 const UploadImage = lazyPage(() => import('@/pages/setup_account/02_UploadImage.tsx'));
 const Survey = lazyPage(() => import('@/pages/setup_account/04_Survey.tsx'));
 const ForumModeratorLayout = lazyPage(() => import('./pages/moderator/forum-moderator/Layout'));
@@ -162,7 +161,7 @@ function App() {
         <Route path="/setup/verify-email" element={<VerifyEmail />} />
 
       <Route element={<RouteMiddleware />}>
-        <Route path="/setup/personal-details" element={<PersonalDetails />} />
+
         <Route path="/setup/upload-image" element={<UploadImage />} />
         <Route path="/setup/survey" element={<Survey />} />
         {/* Public Routes */}

@@ -21,7 +21,7 @@ const ALLOWED_FOLDERS = process.env.UPLOAD_ALLOWED_FOLDERS
 
 const ALLOWED_CONTENT_TYPES = (process.env.UPLOAD_ALLOWED_TYPES
     ? process.env.UPLOAD_ALLOWED_TYPES.split(',').map(t => t.trim())
-    : ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'application/pdf', 'video/mp4', 'audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/ogg'])
+    : ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'application/pdf', 'application/zip', 'application/x-zip-compressed', 'video/mp4', 'audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/ogg'])
     .filter(type => type !== 'image/svg+xml');
 
 const CONTENT_TYPE_EXTENSIONS = {
@@ -32,6 +32,8 @@ const CONTENT_TYPE_EXTENSIONS = {
     'image/webp': ['webp'],
     'image/avif': ['avif'],
     'application/pdf': ['pdf'],
+    'application/zip': ['zip'],
+    'application/x-zip-compressed': ['zip'],
     'video/mp4': ['mp4'],
     'audio/mpeg': ['mp3'],
     'audio/wav': ['wav'],
@@ -46,6 +48,7 @@ const ABSOLUTE_MAX_FILE_SIZE = process.env.UPLOAD_ABSOLUTE_MAX_FILE_SIZE
 const MB = 1024 * 1024;
 const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/avif'];
 const AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/ogg'];
+const ARCHIVE_TYPES = ['application/zip', 'application/x-zip-compressed'];
 const UPLOAD_POLICIES = {
     profile: { types: IMAGE_TYPES, imageLimit: 5 * MB },
     gallery: { types: [...IMAGE_TYPES, 'video/mp4'], imageLimit: 20 * MB, videoLimit: 25 * MB },
@@ -57,7 +60,7 @@ const UPLOAD_POLICIES = {
     documents: { types: [...IMAGE_TYPES, 'application/pdf'], imageLimit: 10 * MB, pdfLimit: 25 * MB },
     jobs: { types: [...IMAGE_TYPES, 'application/pdf'], imageLimit: 10 * MB, pdfLimit: 25 * MB },
     assets: { types: [...IMAGE_TYPES, 'video/mp4', ...AUDIO_TYPES], imageLimit: 25 * MB, videoLimit: 100 * MB, audioLimit: 50 * MB },
-    'asset-originals': { types: [...IMAGE_TYPES, 'video/mp4', ...AUDIO_TYPES], imageLimit: 25 * MB, videoLimit: 100 * MB, audioLimit: 50 * MB },
+    'asset-originals': { types: [...IMAGE_TYPES, 'video/mp4', ...AUDIO_TYPES, 'application/pdf', ...ARCHIVE_TYPES], imageLimit: 25 * MB, videoLimit: 100 * MB, audioLimit: 50 * MB, pdfLimit: 25 * MB, archiveLimit: 100 * MB },
     gig_thumbnails: { types: IMAGE_TYPES, imageLimit: 5 * MB },
     gig_galleries: { types: [...IMAGE_TYPES, 'video/mp4'], imageLimit: 20 * MB, videoLimit: 25 * MB },
     gig_orders: { types: [...IMAGE_TYPES, 'video/mp4', ...AUDIO_TYPES, 'application/pdf'], imageLimit: 20 * MB, videoLimit: 50 * MB, audioLimit: 25 * MB, pdfLimit: 20 * MB },
@@ -70,11 +73,13 @@ function getUploadPolicy(folder, contentType) {
     }
     const categoryLimit = contentType === 'application/pdf'
         ? policy.pdfLimit
-        : contentType.startsWith('video/')
-            ? policy.videoLimit
-            : contentType.startsWith('audio/')
-                ? policy.audioLimit
-                : policy.imageLimit;
+        : ARCHIVE_TYPES.includes(contentType)
+            ? policy.archiveLimit
+            : contentType.startsWith('video/')
+                ? policy.videoLimit
+                : contentType.startsWith('audio/')
+                    ? policy.audioLimit
+                    : policy.imageLimit;
     return {
         allowedTypes: policy.types.filter(type => ALLOWED_CONTENT_TYPES.includes(type)),
         maxFileSize: Math.min(categoryLimit || ABSOLUTE_MAX_FILE_SIZE, ABSOLUTE_MAX_FILE_SIZE),
