@@ -80,16 +80,38 @@ export function useCollabDoc(
         teardownWsProvider = attachWsProvider(schema, projectId, userId);
         teardownTimelineWatch = useStore.subscribe((state, prevState) => {
           if (state.timeline && !prevState.timeline) {
-            const resyncTransitions = () => {
+            const resyncCanvas = () => {
               const canvas = useStore.getState().timeline as any;
               if (!canvas) return;
               const current = stateManager.getState();
+
+              const onCanvas = new Set(canvas.getTrackItems().map((item: any) => item.id));
+              const inState: string[] = current.trackItemIds ?? [];
+              const missingIds = inState.filter((id) => !onCanvas.has(id));
+              const staleIds = [...onCanvas].filter((id) => !inState.includes(id as string));
+
+              if (missingIds.length > 0 || staleIds.length > 0) {
+                try {
+                  if (staleIds.length > 0) canvas.deleteTrackItemById(staleIds);
+                  canvas.tracks = current.tracks;
+                  canvas.trackItemsMap = current.trackItemsMap;
+                  missingIds.forEach((id) => canvas.addTrackItem({ ...current.trackItemsMap[id] }));
+                  canvas.trackItemIds = current.trackItemIds;
+                  canvas.renderTracks();
+                  canvas.alignItemsToTrack();
+                  canvas.updateTrackItemCoords();
+                  canvas.calcBounding();
+                  canvas.refreshTrackLayout();
+                } catch (err) {
+                  console.error("useCollabDoc: track item resync failed on canvas mount", err);
+                }
+              }
+
+              // existing transitions logic stays as-is, just rename resyncTransitions -> resyncCanvas
               canvas.transitionsMap = current.transitionsMap ?? {};
               canvas.transitionIds = Object.keys(current.transitionsMap ?? {});
               if (Object.keys(current.transitionsMap ?? {}).length > 0) {
-                try {
-                  canvas.renderTransitions();
-                } catch (err) {
+                try { canvas.renderTransitions(); } catch (err) {
                   console.error("useCollabDoc: renderTransitions failed on canvas mount", err);
                 }
               }
@@ -100,10 +122,10 @@ export function useCollabDoc(
             // up in the store and clobber transitionsMap once it does — a single
             // sync here can lose that race. Keep re-asserting for a few seconds
             // so whichever runs last is always the correct data, then stop.
-            resyncTransitions();
+            resyncCanvas();
             let ticks = 0;
             timelineResyncInterval = setInterval(() => {
-              resyncTransitions();
+              resyncCanvas();
               ticks += 1;
               if (ticks >= 10) {
                 clearInterval(timelineResyncInterval!);
@@ -167,6 +189,8 @@ export function useCollabDoc(
                 transitionsMap: snapshot.transitionsMap,
                 transitionIds: snapshot.transitionIds,
                 tracks: snapshot.tracks,
+                ...(snapshot.size ? { size: snapshot.size } : {}),
+                ...(snapshot.fps !== undefined ? { fps: snapshot.fps } : {}),
                 ...(snapshot.duration !== undefined ? { duration: snapshot.duration } : {}),
               },
               { updateHistory: false },

@@ -79,26 +79,28 @@ export const useStateManagerEvents = (stateManager: StateManager) => {
     // Subscribe to state update details
     const resizeDesignSubscription = stateManager.subscribeToUpdateStateDetails(
       (newState) => {
-        setState(newState);
+        const { background, size, fps, ...rest } = newState as any;
+        setState(rest);
       }
     );
 
     // Subscribe to scale changes
     const scaleSubscription = stateManager.subscribeToScale((newState) => {
-      setState(newState);
+      const { background, size, fps, ...rest } = newState as any;
+      setState(rest);
     });
 
     // Subscribe to general state changes
     const tracksSubscription = stateManager.subscribeToState((newState) => {
-      setState(newState);
+      const { background, size, fps, ...rest } = newState as any;
+      setState(rest);
     });
 
     // Subscribe to duration changes
-    const durationSubscription = stateManager.subscribeToDuration(
-      (newState) => {
-        setState(newState);
-      }
-    );
+    const durationSubscription = stateManager.subscribeToDuration((newState) => {
+      const { background, size, fps, ...rest } = newState as any;
+      setState(rest);
+    });
 
     // Subscribe to track item updates
     const updateTrackItemsMap = stateManager.subscribeToUpdateTrackItem(

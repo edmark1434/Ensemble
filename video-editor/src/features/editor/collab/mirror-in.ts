@@ -95,10 +95,14 @@ export function setupMirrorIn(
           }
           canvas.requestRenderAll();
         }
+
+        console.log("1", useStore.getState()?.timeline?.getTrackItems().length);
+        console.log("2", useStore.getState().timeline?.state.getState().trackItemIds.length);
+        console.log("3", Object.values(stateManager.getState().trackItemsMap).map(i => ({
+          id: i.id, type: i.type, hasDetails: !!i.details
+        })));
       } finally {
-        Promise.resolve().then(() => {
-          syncGuard.isApplyingRemote = false;
-        });
+        syncGuard.isApplyingRemote = false;
       }
     } catch (err) {
       console.error("mirror-in: failed to apply transaction", err);
