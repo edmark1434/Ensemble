@@ -1026,7 +1026,6 @@ async function seedConfigurationSamples() {
     `INSERT INTO configuration (
        configuration_key, name, description, current_value_literal, default_value_literal
      ) VALUES
-       ('max_upload_mb', 'Max upload size (MB)', 'Maximum file upload size', '250', '100'),
        ('support_sla_hours', 'Support SLA hours', 'Target first-response SLA', '24', '24')
      ON CONFLICT (configuration_key) DO UPDATE
        SET current_value_literal = EXCLUDED.current_value_literal,

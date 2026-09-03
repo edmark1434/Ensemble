@@ -1315,8 +1315,8 @@ function AutomatedSettingsSection({
       <SidePanel title="Persistence">
         <p className="text-xs leading-relaxed text-zinc-500">
           These values are stored in the{' '}
-          <code className="text-zinc-400">platform_settings</code> row with key{' '}
-          <code className="text-zinc-400">moderation</code>. Changes apply to future automated
+          <code className="text-zinc-400">configuration</code> table under{' '}
+          <code className="text-zinc-400">moderation.*</code> keys. Changes apply to future automated
           actions immediately.
         </p>
       </SidePanel>

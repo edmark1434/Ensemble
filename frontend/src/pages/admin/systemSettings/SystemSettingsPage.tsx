@@ -360,7 +360,7 @@ export default function SystemSettingsPage() {
             <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
               <span className="inline-flex items-center gap-1">
                 <Database className="h-3 w-3 text-emerald-400" />
-                Loaded from <code className="text-zinc-400">platform_settings</code>
+                Loaded from <code className="text-zinc-400">configuration</code>
               </span>
               <span>·</span>
               <span>@{user?.username || 'admin'}</span>
@@ -747,7 +747,7 @@ export default function SystemSettingsPage() {
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-5">
             <h2 className="font-semibold text-white">Change history</h2>
-            <p className="mt-1 text-xs text-zinc-500">Recent writes to platform_settings</p>
+            <p className="mt-1 text-xs text-zinc-500">Recent writes to configuration</p>
             <ul className="mt-4 space-y-2">
               {data.changeHistory.length ? (
                 data.changeHistory.map((h) => (

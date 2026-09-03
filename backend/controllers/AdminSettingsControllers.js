@@ -22,11 +22,7 @@ async function patchAdminSettings(req, res) {
         message: 'Request must include section and values object',
       });
     }
-    const data = await updateSettingsSection(
-      section,
-      values,
-      req.session?.staffId || req.session?.staff_id || null
-    );
+    const data = await updateSettingsSection(section, values);
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating settings:', err);

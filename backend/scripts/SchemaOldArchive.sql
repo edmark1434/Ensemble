@@ -13,7 +13,7 @@
 -- wallets(wallet_id, type, status, balance_credits, frozen_balance_credits)
 -- account_wallets(wallet_id, account_id)
 -- credit_transactions(credit_transaction_id, type, amount_credits, status, source_wallet_id, destination_wallet_id)
--- platform_settings(setting_key PK, setting_value jsonb, updated_at, updated_by_staff_id)
+-- configuration(configuration_key PK, name, description, current_value_literal, default_value_literal, updated_at)
 
 -- Moderation / support
 -- reports, disputes, violations, marketplace_listings
@@ -108,11 +108,13 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
     related_dispute_id UUID
 );
 
-CREATE TABLE IF NOT EXISTS platform_settings (
-    setting_key VARCHAR(100) PRIMARY KEY,
-    setting_value JSONB NOT NULL DEFAULT '{}',
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_by_staff_id UUID REFERENCES staff(staff_id)
+CREATE TABLE IF NOT EXISTS configuration (
+    configuration_key VARCHAR(100) PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    current_value_literal TEXT NOT NULL,
+    default_value_literal TEXT NOT NULL,
+    updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS reports (

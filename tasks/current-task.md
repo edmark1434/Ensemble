@@ -1,18 +1,16 @@
-# Current Task — Seed recommended ENSEMBLE platform fees
+# Current Task — Replace platform_settings with configuration
 
-Load the recommended fee structure into `platform_settings.economy`, including cashout/withdrawal fee, and wire cashout + marketplace fees to read from settings.
+Move admin platform settings off the JSON `platform_settings` table and onto the existing `configuration` table (`configuration_key`, `name`, `description`, `current_value_literal`, `default_value_literal`, `updated_at`).
 
 ## Acceptance Criteria
 
-- [x] Migration upserts recommended fee settings and marketplace settings.
-- [x] Cashout fee uses `fee-cashout` from platform settings (3.5% default).
-- [x] Asset marketplace sale fee uses 15% from settings.
-- [x] Admin defaults match the recommended structure.
-
-Status: Completed.
+- [x] New append-only migration widens `configuration` literals, copies each setting into its own row, and drops `platform_settings`.
+- [x] Admin settings read/write, economy fees, moderation automation, cashout minimums, and RAG public settings use `configuration`.
+- [x] Nested values (packages, fees, IP lists) are stored as string literals and reconstructed for the existing admin APIs.
+- [x] Seed, archive schema notes, and admin UI copy reference `configuration`.
 
 ## Verification
 
-- Migration `1800600000000_145-seed-recommended-platform-fees` applied.
-- Platform fee loader returns 12 fee rows, cashout 3.5%, marketplace 15%.
-- Backend syntax checks passed; frontend build passed.
+- Apply `1810700000000_146-replace-platform-settings-with-configuration` against a non-production database.
+- Confirm `/api/admin/settings-overview` still returns platform/moderation/economy/notifications/security sections.
+- Confirm cashout and marketplace fees still resolve from `economy.feeSettings` / marketplace literals.

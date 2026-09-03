@@ -1,6 +1,6 @@
 const { pool } = require('../lib/Database');
 const { getMongoClient, connectMongoDB } = require('../lib/MongoDb');
-const { DEFAULT_SETTINGS } = require('./AdminSettingsRepositories');
+const { DEFAULT_SETTINGS, getSectionValue } = require('./AdminSettingsRepositories');
 const { fetchDisputesList, fetchReportsList } = require('./AdminTicketsRepositories');
 
 function normalizeStatus(status) {
@@ -513,7 +513,7 @@ async function getModerationOverview(staffSession = null) {
     reportStats,
     listingStats,
     violationStats,
-    moderationSettingsRow,
+    moderationSettings,
   ] = await Promise.all([
     pool.query(`
       SELECT
@@ -599,9 +599,7 @@ async function getModerationOverview(staffSession = null) {
           AND LOWER(COALESCE(status, 'active')) NOT IN ('cleared', 'pardoned', 'resolved')
       `)
       .catch(() => ({ rows: [{ active_violations: 0 }] })),
-    pool
-      .query(`SELECT setting_value FROM platform_settings WHERE setting_key = 'moderation'`)
-      .catch(() => ({ rows: [] })),
+    getSectionValue('moderation').catch(() => DEFAULT_SETTINGS.moderation),
   ]);
 
   const users = usersResult.rows;
@@ -643,7 +641,7 @@ async function getModerationOverview(staffSession = null) {
           'disputes',
           'violations',
           'marketplace_listings',
-          'platform_settings',
+          'configuration',
           'account_verification',
         ],
         accountCount: stats.total_accounts,
@@ -657,7 +655,7 @@ async function getModerationOverview(staffSession = null) {
         discussions: forum.discussions,
       },
       notYetInDatabase: [],
-      persisted: ['reports', 'disputes', 'violations', 'marketplace_listings', 'platform_settings'],
+      persisted: ['reports', 'disputes', 'violations', 'marketplace_listings', 'configuration'],
     },
     summary: {
       yourPendingCases: currentStaffId
@@ -703,7 +701,7 @@ async function getModerationOverview(staffSession = null) {
     automatedSettings: (() => {
       const saved = {
         ...DEFAULT_SETTINGS.moderation,
-        ...(moderationSettingsRow.rows[0]?.setting_value || {}),
+        ...(moderationSettings || {}),
       };
       // Link scanning can only run while the forum database is reachable.
       if (!forum.connected) saved.forumLinkScanning = false;

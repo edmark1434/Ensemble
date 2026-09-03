@@ -298,7 +298,7 @@ async function resetSeedTables() {
         tickets,
         reports,
         marketplace_listings,
-        platform_settings,
+        configuration,
         disputes,
         violations,
         restrictions,
