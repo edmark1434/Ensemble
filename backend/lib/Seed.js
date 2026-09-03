@@ -913,6 +913,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     const title = buildDefaultDisputeTitle({
       disputerName: names.rows[0]?.disputer_name,
       disputeeName: names.rows[0]?.disputee_name,
+      type: partyType,
     });
 
     const res = await pool.query(

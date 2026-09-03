@@ -1,14 +1,9 @@
-# Current Task — Normalize dispute numbers
+# Current Task — Drop dispute sanction_notes
 
-Replace demo codes like `DIS-OPEN01` / `DIS-RSLV01` with sequential `DIS-50001` numbers (same pattern as tickets `TKT-50001`).
+Keep a single notes field: `resolution_notes`. Drop `sanction_notes` (merge existing text into resolution notes first). Keep `sanction_type`.
 
 ## Acceptance Criteria
 
-- [x] Migration renumbers existing disputes to `DIS-#####`.
-- [x] Seed uses sequential `DIS-50001+` numbers.
-- [x] Shared `nextDisputeNumber()` helper for future creates.
-
-## Verification
-
-- Dispute desk shows `DIS-50001`-style numbers.
-- Applied `1811300000000_152-normalize-dispute-numbers`.
+- [ ] Migration merges then drops `sanction_notes`.
+- [ ] Backend/seed stop writing `sanction_notes`.
+- [ ] Frontend detail modal removes Sanction notes field.

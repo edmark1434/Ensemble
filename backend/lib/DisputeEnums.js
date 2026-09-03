@@ -79,19 +79,22 @@ function normalizeDisputeStatus(value, fallback = 'pending_review') {
 }
 
 /**
- * Default dispute title: "{Disputee} v {Disputer} Transaction Dispute"
+ * Default dispute title: "{Disputee} v {Disputer} {Type} Dispute"
  * Disputee = respondent (accused / opposing party)
  * Disputer = initiator (who filed)
+ * Type comes from dispute.type (Feedback, Contract, Transaction, …)
  */
 function buildDefaultDisputeTitle({
   disputeeName,
   disputerName,
   respondentName,
   initiatorName,
+  type,
 } = {}) {
   const disputee = String(disputeeName || respondentName || 'Disputee').trim() || 'Disputee';
   const disputer = String(disputerName || initiatorName || 'Disputer').trim() || 'Disputer';
-  return `${disputee} v ${disputer} Transaction Dispute`;
+  const kind = normalizeDisputeType(type, 'General');
+  return `${disputee} v ${disputer} ${kind} Dispute`;
 }
 
 module.exports = {
