@@ -528,10 +528,7 @@ export default function ModeratorDisputeDetailModal({
                         aria-pressed={active}
                         onClick={() => {
                           setStatus(s);
-                          if (isDisputeClosed(s)) {
-                            setOutcome((prev) => prev || "resolved");
-                          } else {
-                            setOutcome("");
+                          if (!isDisputeClosed(s)) {
                             setSanctionType("");
                             setSanctionNotes("");
                           }
@@ -597,32 +594,6 @@ export default function ModeratorDisputeDetailModal({
                     Admin override: you can reassign this dispute without a release.
                   </span>
                 )}
-                {canAssignMyself && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void runAction({ action: "self_assign" }, "You are now assigned")}
-                    className={`mt-2 inline-flex w-fit items-center gap-1.5 ${HANDLER_ACTION_BTN} ${HANDLER_TONES.claim}`}
-                  >
-                    <Hand className={HANDLER_ACTION_ICON} />
-                    Assign myself
-                  </button>
-                )}
-                {canRelease && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() =>
-                      void runAction(
-                        { action: "release" },
-                        "Case released — another Support Moderator can claim it"
-                      )
-                    }
-                    className={`mt-2 inline-flex w-fit items-center gap-1.5 ${HANDLER_ACTION_BTN} ${HANDLER_TONES.release}`}
-                  >
-                    Release case
-                  </button>
-                )}
                 {!canEditHandler && !assigneeLocked && (
                   <span className="text-[11px] text-amber-200/80">
                     {!perms?.staffId
@@ -632,7 +603,7 @@ export default function ModeratorDisputeDetailModal({
                 )}
                 {canAssignMyself && !canAct && (
                   <span className="text-[11px] text-sky-200/70">
-                    Click Assign myself to become the handler — no need to hunt yourself in the list.
+                    Click Assign myself above to become the handler — no need to hunt yourself in the list.
                   </span>
                 )}
               </label>
