@@ -8,7 +8,6 @@ import * as awarenessProtocol from "y-protocols/awareness";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import { loadLatestProjectState } from "@/lib/collab/persistence-store";
-import { resolveProjectId } from "@/utils/resolve-ids";
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
@@ -31,8 +30,8 @@ function broadcast(room: Room, message: Uint8Array, origin: WebSocket | null) {
   }
 }
 
-async function getOrCreateRoom(publicProjectId: string): Promise<Room> {
-  const existing = rooms.get(publicProjectId);
+async function getOrCreateRoom(projectId: string): Promise<Room> {
+  const existing = rooms.get(projectId);
   if (existing) return existing;
 
   const roomPromise = (async () => {
@@ -40,7 +39,6 @@ async function getOrCreateRoom(publicProjectId: string): Promise<Room> {
     const awareness = new awarenessProtocol.Awareness(doc);
     const room: Room = { doc, awareness, clients: new Map() };
 
-    const projectId = await resolveProjectId(publicProjectId);
     const { snapshot, updates } = await loadLatestProjectState(projectId);
     if (snapshot || updates.length > 0) {
       doc.transact(() => {
@@ -75,8 +73,8 @@ async function getOrCreateRoom(publicProjectId: string): Promise<Room> {
     return room;
   })();
 
-  rooms.set(publicProjectId, roomPromise);
-  roomPromise.catch(() => rooms.delete(publicProjectId));
+  rooms.set(projectId, roomPromise);
+  roomPromise.catch(() => rooms.delete(projectId));
   return roomPromise;
 }
 

@@ -1,4 +1,4 @@
-import {create, type ExtractState, type StoreApi} from 'zustand'
+import {create} from 'zustand'
 
 // Define User type
 // interface User {

@@ -16,7 +16,7 @@ export interface PersistedState {
 // exactly what it merges, in the same transaction that writes the new
 // snapshot row. So "current state" is just: newest snapshot + everything
 // still on the table. No timestamp filtering needed.
-export async function loadLatestProjectState(projectId: number): Promise<PersistedState> {
+export async function loadLatestProjectState(projectId: string): Promise<PersistedState> {
   const snapshotRow = await db
     .selectFrom("project_yjs_snapshots")
     .innerJoin("yjs_snapshots", "yjs_snapshots.yjs_snapshot_id", "project_yjs_snapshots.yjs_snapshot_id")

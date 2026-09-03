@@ -460,10 +460,42 @@ const Controls = ({ panelRef }: { panelRef: React.RefObject<HTMLDivElement | nul
   );
 };
 
-const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
-  const { userId, projectId } = useStore();
+const Editor = ({
+  id,
+  userId,
+  width,
+  height,
+}: {
+  id?: string;
+  userId?: string;
+  width?: number;
+  height?: number;
+}) => {
+  const [storeSynced, setStoreSynced] = useState(false);
+  useEffect(() => {
+    if (userId && id) {
+      useStore.setState({
+        userId,
+        projectId: id,
+        ...(width && height ? { size: { width, height } } : {}),
+      });
+    }
+    setStoreSynced(true);
+  }, [id, userId, width, height]);
 
-  const { scene } = useSceneStore();
+  const { userId: storeUserId, projectId } = useStore();
+
+  // only true once the seeding effect above has run AND the store actually
+  // holds both values (whether they came from props here or were set
+  // elsewhere, e.g. a new-project creation flow)
+  const collabReady = storeSynced && !!storeUserId && !!projectId;
+
+  const collab = useCollabDoc(
+    collabReady ? projectId : undefined,
+    collabReady ? storeUserId : undefined,
+    stateManager,
+  );
+
   const timelinePanelRef = useRef<ImperativePanelHandle>(null);
   const sceneRef = useRef<SceneRef>(null);
   const { timeline, playerRef } = useStore();
@@ -477,8 +509,6 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     setTypeControlItem,
   } = useLayoutStore();
   const isLargeScreen = useIsLargeScreen();
-
-  const collab = useCollabDoc(projectId, userId, stateManager);
 
   useTimelineEvents();
 
@@ -559,7 +589,7 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     );
   }
 
-  if (!loaded || !collab?.ready) {
+  if (!storeSynced || !loaded || !collab?.ready) {
     return (
       <div className="fixed top-0 left-0 z-50 flex h-screen w-screen items-center justify-center gap-4 bg-card">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

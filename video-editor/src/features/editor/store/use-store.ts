@@ -208,8 +208,10 @@ const useStore = create<ITimelineStore>((set, get) => ({
   projectName: "My Project",
   setProjectName: (name: string) => set({ projectName: name }),
 
-  userId: "dev-user-id",
-  projectId: "dev-project-id",
+  // userId: "dev-user-id",
+  // projectId: "dev-project-id",
+  userId: "",
+  projectId: "",
 
   stateManager: null,
   setStateManager: (stateManager) => set({ stateManager }),

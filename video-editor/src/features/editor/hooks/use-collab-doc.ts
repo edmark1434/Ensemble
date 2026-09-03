@@ -30,13 +30,13 @@ export interface CollabDoc {
 // See flagged note in chat re: resolving that before this hook is wired in.
 export function useCollabDoc(
   projectId: string | undefined,
-  userId: string,
+  userId: string | undefined,
   stateManager: StateManager,
 ): CollabDoc | null {
   const [collab, setCollab] = useState<CollabDoc | null>(null);
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || !userId) return;
 
     let cancelled = false;
     let teardownMirrorIn: (() => void) | null = null;

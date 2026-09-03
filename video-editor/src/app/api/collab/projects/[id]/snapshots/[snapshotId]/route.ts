@@ -6,7 +6,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { resolveProjectId } from "@/utils/resolve-ids";
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const ab = new ArrayBuffer(bytes.byteLength);
@@ -18,21 +17,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; snapshotId: string }> }
 ) {
-  const { id, snapshotId: snapshotIdParam } = await params;
+  const { id: projectId, snapshotId: snapshotIdParam } = await params;
 
   const snapshotId = Number(snapshotIdParam);
   if (!Number.isFinite(snapshotId)) {
     return NextResponse.json({ error: "invalid snapshotId" }, { status: 400 });
-  }
-
-  let projectId: number;
-  try {
-    projectId = await resolveProjectId(id);
-  } catch {
-    return NextResponse.json(
-      { error: `project not found for public_id "${id}"` },
-      { status: 404 }
-    );
   }
 
   try {
