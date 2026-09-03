@@ -105,7 +105,6 @@ export type Dispute = {
   creditAmount: number;
   approvedAt?: string | null;
   approvedByStaffId?: number | string | null;
-  outcome?: string | null;
   sanctionType?: string | null;
   sanctionNotes?: string | null;
   relatedCreditTransactionId?: number | string | null;

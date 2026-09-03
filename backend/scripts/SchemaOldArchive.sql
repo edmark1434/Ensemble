@@ -156,7 +156,6 @@ CREATE TABLE IF NOT EXISTS disputes (
     assigned_staff_id UUID REFERENCES staff(staff_id),
     approved_at TIMESTAMPTZ,
     approved_by_staff_id UUID REFERENCES staff(staff_id),
-    outcome VARCHAR(50),
     sanction_type VARCHAR(50),
     sanction_notes TEXT,
     related_credit_transaction_id UUID REFERENCES credit_transactions(credit_transaction_id),

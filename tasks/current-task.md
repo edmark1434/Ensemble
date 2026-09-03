@@ -1,16 +1,16 @@
-# Current Task — Align ticket tables to ERD
+# Current Task — Remove dispute outcome
 
-Remove the extra ticket catalog tables so the schema matches the ticket ERD: `tickets` plus `ticket_chats`.
+Drop `disputes.outcome` from the database and remove outcome from moderator/admin dispute UI. Closed state is represented by `status = closed` only; optional sanctions remain on closed disputes.
 
 ## Acceptance Criteria
 
-- [x] Drop `ticket_type_catalog`, `ticket_status_catalog`, and `ticket_priority_catalog`.
-- [x] Keep `type`, `status`, and `priority` on `tickets` as constrained enum-like columns.
-- [x] Keep `ticket_chats` as the ticket-to-chat link (`ticket_id`, `chat_id`).
-- [x] Admin ticket type/status/priority lists come from `TicketEnums`, not catalog tables.
+- [x] Migration drops `disputes.outcome` and its index (with `down` restore).
+- [x] Backend seed/repos/enums no longer read or write `outcome`.
+- [x] Dispute desk and detail modal no longer show or filter by outcome.
+- [x] Migration applied locally (`149-drop-dispute-outcome`).
 
 ## Verification
 
-- Apply `1810800000000_147-align-tickets-to-erd`.
-- Confirm the three catalog tables are gone.
-- Confirm ticket create/list still accepts the same type, status, and priority labels.
+- Apply `1811000000000_149-drop-dispute-outcome`.
+- Confirm dispute list/detail load without outcome fields.
+- Confirm closing a dispute and optional sanctions still work via status + sanction fields.

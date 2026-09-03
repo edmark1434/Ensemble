@@ -669,7 +669,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       credits: 3500,
       hold: true,
       approved: false,
-      outcome: null,
       sanctionType: null,
       sanctionNotes: null,
       resolutionNotes: null,
@@ -690,7 +689,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       credits: 12000,
       hold: true,
       approved: true,
-      outcome: null,
       sanctionType: null,
       sanctionNotes: null,
       resolutionNotes: null,
@@ -712,7 +710,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       credits: 2000,
       hold: true,
       approved: true,
-      outcome: null,
       sanctionType: null,
       sanctionNotes: null,
       resolutionNotes: null,
@@ -734,7 +731,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       credits: 4500,
       hold: true,
       approved: true,
-      outcome: null,
       sanctionType: null,
       sanctionNotes: null,
       resolutionNotes: null,
@@ -757,7 +753,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       credits: 6500,
       hold: true,
       approved: true,
-      outcome: null,
       sanctionType: null,
       sanctionNotes: null,
       resolutionNotes: null,
@@ -780,7 +775,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       credits: 5200,
       hold: true,
       approved: false,
-      outcome: null,
       sanctionType: null,
       sanctionNotes: null,
       resolutionNotes: null,
@@ -801,7 +795,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       credits: 900,
       hold: false,
       approved: true,
-      outcome: 'sanctioned',
       sanctionType: 'warn',
       sanctionNotes: 'Formal warning issued to respondent for repeated SLA breaches.',
       resolutionNotes: 'Sanction applied after both parties were heard.',
@@ -824,7 +817,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       hold: true,
       holdStatus: 'released',
       approved: true,
-      outcome: 'resolved',
       sanctionType: null,
       sanctionNotes: null,
       resolutionNotes: 'Rating adjusted after review; partial credit return agreed.',
@@ -847,7 +839,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       credits: 1800,
       hold: false,
       approved: true,
-      outcome: null,
       sanctionType: null,
       sanctionNotes: null,
       resolutionNotes: null,
@@ -869,7 +860,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       credits: 800,
       hold: false,
       approved: true,
-      outcome: 'dismissed',
       sanctionType: null,
       sanctionNotes: null,
       resolutionNotes: 'Dismissed — purchase was outside the refund policy window.',
@@ -891,7 +881,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       credits: 8000,
       hold: false,
       approved: true,
-      outcome: null,
       sanctionType: null,
       sanctionNotes: null,
       resolutionNotes: null,
@@ -917,13 +906,13 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         initiator_account_id, respondent_account_id,
         related_entity_type, related_entity_id, assigned_staff_id,
         credit_amount_involved, opened_at, resolution_notes,
-        approved_at, approved_by_staff_id, outcome, sanction_type, sanction_notes,
+        approved_at, approved_by_staff_id, sanction_type, sanction_notes,
         type, by_account_id, for_account_id, resolved_at
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
         NOW() - ($13 || ' days')::interval, $14,
-        $15, $16, $17, $18, $19,
-        $20, $7, $8, $21
+        $15, $16, $17, $18,
+        $19, $7, $8, $20
       )
       RETURNING dispute_id, dispute_number, initiator_account_id, respondent_account_id`,
       [
@@ -943,7 +932,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         d.resolutionNotes,
         d.approved ? new Date(Date.now() - (d.daysAgo - 0.5) * 86400000) : null,
         d.approved ? (d.assigneeId || supportStaffId) : null,
-        d.outcome,
         d.sanctionType,
         d.sanctionNotes,
         d.entityType || 'general',
@@ -1293,7 +1281,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   console.log('   DIS-WAIT01  awaiting disputee reply  → prompt message sample');
   console.log('   DIS-REVW01  under review + publish   → private + published party comments');
   console.log('   DIS-FEED01  unfair feedback (contract) → under review sample');
-  console.log('   DIS-SANC01 / DIS-RSLV01 / DIS-DSSM01 → closed outcome samples');
+  console.log('   DIS-SANC01 / DIS-RSLV01 / DIS-DSSM01 → closed samples');
 }
 
 async function seedTeams(userAccountIds) {

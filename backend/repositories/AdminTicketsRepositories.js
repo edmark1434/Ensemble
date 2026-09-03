@@ -319,7 +319,6 @@ function mapDisputeRow(row) {
     creditAmount: Number(row.credit_amount_involved || 0),
     approvedAt: row.approved_at || null,
     approvedByStaffId: row.approved_by_staff_id || null,
-    outcome: row.outcome || null,
     sanctionType: row.sanction_type || null,
     sanctionNotes: row.sanction_notes || null,
     relatedCreditTransactionId: row.related_credit_transaction_id || null,
@@ -421,18 +420,6 @@ async function getTicketsOverview(staffSession = null) {
         COUNT(*) FILTER (WHERE LOWER(status) = 'awaiting_response')::int AS awaiting_response,
         COUNT(*) FILTER (WHERE LOWER(status) = 'under_review')::int AS under_review,
         COUNT(*) FILTER (WHERE LOWER(status) = 'closed')::int AS closed,
-        COUNT(*) FILTER (
-          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, '')) = 'sanctioned'
-        )::int AS sanctioned,
-        COUNT(*) FILTER (
-          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, '')) = 'dismissed'
-        )::int AS dismissed,
-        COUNT(*) FILTER (
-          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, 'resolved')) = 'resolved'
-        )::int AS resolved,
-        COUNT(*) FILTER (
-          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, '')) = 'withdrawn'
-        )::int AS withdrawn,
         COUNT(*) FILTER (
           WHERE LOWER(status) IN ('pending_review', 'open', 'awaiting_response', 'under_review')
         )::int AS open_count,
@@ -544,10 +531,7 @@ async function getTicketsOverview(staffSession = null) {
         { label: 'Open', value: Number(dc.open_only || 0), color: '#f87171' },
         { label: 'Awaiting Response', value: Number(dc.awaiting_response || 0), color: '#f59e0b' },
         { label: 'Under Review', value: Number(dc.under_review), color: '#fbbf24' },
-        { label: 'Closed · Resolved', value: Number(dc.resolved || 0), color: '#34d399' },
-        { label: 'Closed · Sanctioned', value: Number(dc.sanctioned || 0), color: '#a78bfa' },
-        { label: 'Closed · Dismissed', value: Number(dc.dismissed || 0), color: '#94a3b8' },
-        { label: 'Closed · Withdrawn', value: Number(dc.withdrawn || 0), color: '#64748b' },
+        { label: 'Closed', value: Number(dc.closed || 0), color: '#94a3b8' },
       ].filter((x) => x.value > 0),
     },
     types,
@@ -1394,17 +1378,13 @@ function isQueueHandlerRole(role) {
 }
 
 const DISPUTE_WORKFLOW = ['pending_review', 'open', 'awaiting_response', 'under_review', 'closed'];
-const DISPUTE_OUTCOMES = ['resolved', 'sanctioned', 'dismissed', 'withdrawn'];
 const DISPUTE_LEGACY_CLOSED_STATUS = ['resolved', 'sanctioned', 'dismissed', 'withdrawn'];
 
-function normalizeDisputeStatusAndOutcome(patch) {
+function normalizeDisputeStatusPatch(patch) {
   const next = { ...patch };
   if (next.status != null) {
     let status = String(next.status).toLowerCase().trim();
     if (DISPUTE_LEGACY_CLOSED_STATUS.includes(status)) {
-      if (next.outcome === undefined || next.outcome === null || next.outcome === '') {
-        next.outcome = status;
-      }
       status = 'closed';
     }
     if (!DISPUTE_WORKFLOW.includes(status)) {
@@ -1413,19 +1393,6 @@ function normalizeDisputeStatusAndOutcome(patch) {
       );
     }
     next.status = status;
-  }
-  if (next.outcome != null && next.outcome !== '') {
-    const outcome = String(next.outcome).toLowerCase().trim();
-    if (!DISPUTE_OUTCOMES.includes(outcome)) {
-      throw new Error(
-        `Invalid dispute outcome "${next.outcome}". Use: ${DISPUTE_OUTCOMES.join(', ')}.`
-      );
-    }
-    next.outcome = outcome;
-    if (next.status === undefined) next.status = 'closed';
-  }
-  if (next.status === 'closed') {
-    if (!next.outcome) next.outcome = 'resolved';
   }
   return next;
 }
@@ -1478,7 +1445,7 @@ function buildDisputePermissions(row, staff, session = null) {
     canView: true,
     /** Any staff may post staff-only replies; only Support/Admin handle the case */
     canReply: hasStaffSession,
-    /** Approve / status / outcome / publish — assignee, or Admin override */
+    /** Approve / status / publish — assignee, or Admin override */
     canAct: Boolean(isAdmin || (isAssignee && designated)),
     /** Admin may pick / reassign Support handlers at any time */
     canAssignOthers: Boolean(isAdmin),
@@ -1615,7 +1582,6 @@ async function updateDispute(disputeId, patch, staffSession) {
     await pool.query(
       `UPDATE disputes
        SET status = 'closed',
-           outcome = 'dismissed',
            visibility = COALESCE(NULLIF(visibility, 'pending'), 'public'),
            approved_at = COALESCE(approved_at, NOW()),
            approved_by_staff_id = COALESCE(approved_by_staff_id, $1),
@@ -1633,12 +1599,11 @@ async function updateDispute(disputeId, patch, staffSession) {
     throw new Error('View only — assign yourself to this dispute to make changes.');
   }
 
-  const normalized = normalizeDisputeStatusAndOutcome(patch);
+  const normalized = normalizeDisputeStatusPatch(patch);
   const allowed = [
     'status',
     'priority',
     'resolution_notes',
-    'outcome',
     'sanction_type',
     'sanction_notes',
     'visibility',
@@ -1655,11 +1620,8 @@ async function updateDispute(disputeId, patch, staffSession) {
     }
   }
 
-  // Reopening clears outcome / sanctions
+  // Reopening clears sanctions
   if (normalized.status && normalized.status !== 'closed') {
-    if (normalized.outcome === undefined) {
-      sets.push(`outcome = NULL`);
-    }
     if (normalized.sanction_type === undefined) {
       sets.push(`sanction_type = NULL`);
     }
@@ -1692,8 +1654,6 @@ async function updateDispute(disputeId, patch, staffSession) {
     if (status === 'closed') {
       sets.push(`resolved_at = NOW()`);
     }
-  } else if (normalized.outcome) {
-    sets.push(`resolved_at = NOW()`);
   }
 
   if (!sets.length) {
