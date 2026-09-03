@@ -5,6 +5,7 @@ const {
   normalizeTicketType,
   isClosedStatus,
 } = require('../lib/TicketEnums');
+const { normalizeDisputeType, normalizeDisputePriority } = require('../lib/DisputeEnums');
 
 function normalizeStatus(status) {
   // Keep dispute/report helpers on snake-ish labels; tickets use Title Case via ticketEnums.
@@ -114,9 +115,10 @@ function mapDisputeRow(row) {
     number: row.dispute_number,
     title: row.title,
     reason: row.reason,
-    // Keep status/priority as DB snake_case for filters/forms; format in UI.
+    type: normalizeDisputeType(row.type || row.related_entity_type),
+    // Status stays snake_case; priority is Title Case in DB, lowercased for desk filters.
     status: String(row.status || 'open').toLowerCase(),
-    priority: String(row.priority || 'medium').toLowerCase(),
+    priority: String(normalizeDisputePriority(row.priority || 'Medium')).toLowerCase(),
     visibility: String(row.visibility || 'pending').toLowerCase(),
     initiator: {
       accountId: row.initiator_account_id,
@@ -128,7 +130,9 @@ function mapDisputeRow(row) {
       name: row.respondent_name || 'Unknown',
       username: row.respondent_handle || '—',
     },
-    relatedEntityType: row.related_entity_type ? displayLabel(row.related_entity_type) : null,
+    relatedEntityType: row.related_entity_type
+      ? normalizeDisputeType(row.related_entity_type)
+      : null,
     relatedEntityId: row.related_entity_id,
     assignee: row.assigned_staff_id
       ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }

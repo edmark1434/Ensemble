@@ -10,6 +10,11 @@ const {
 const { CONVERSATION_TYPE: DISPUTE_CHAT_TYPE } = require('../repositories/DisputeChatRepositories');
 const { seedDomainExamples } = require('./SeedDomains');
 const { CREDIT_TRANSACTION_TYPES, CREDIT_TRANSACTION_TYPE } = require('./CreditTransactionEnums');
+const {
+  normalizeDisputeType,
+  normalizeDisputePriority,
+  buildDefaultDisputeTitle,
+} = require('./DisputeEnums');
 
 function cap(value, max) {
   if (value == null) return value;
@@ -656,7 +661,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   const disputes = [
     {
       number: 'DIS-PEND01',
-      title: 'Milestone payment withheld',
       reason: 'Buyer filed a dispute after the final milestone was marked complete but credits were not released.',
       status: 'pending_review',
       visibility: 'pending',
@@ -676,7 +680,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       number: 'DIS-OPEN01',
-      title: 'Payment not released from escrow',
       reason: 'Seller claims buyer abandoned milestone review after delivery.',
       status: 'open',
       visibility: 'public',
@@ -697,7 +700,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       number: 'DIS-WAIT01',
-      title: 'Deliverable quality dispute',
       reason: 'Disputer says the gig delivery does not match the agreed brief.',
       status: 'awaiting_response',
       visibility: 'public',
@@ -718,7 +720,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       number: 'DIS-REVW01',
-      title: 'Asset license disagreement',
       reason: 'Marketplace buyer disputes commercial usage rights on a purchased pack.',
       status: 'under_review',
       visibility: 'public',
@@ -740,7 +741,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     {
       // Assigned to Maya — Admin is view-only until Designated handler reassign / Assign myself when free.
       number: 'DIS-OPEN02',
-      title: 'Escrow release stalled after revision',
       reason: 'Buyer asked for revisions after approving the milestone; seller wants escrow released.',
       status: 'open',
       visibility: 'public',
@@ -762,7 +762,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     {
       // Pending but already with Support — Admin is view-only until self-assign / reassign.
       number: 'DIS-PEND02',
-      title: 'Unauthorized account credit transfer',
       reason: 'User claims credits were moved from their wallet without consent after a shared-team dispute.',
       status: 'pending_review',
       visibility: 'pending',
@@ -782,7 +781,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       number: 'DIS-SANC01',
-      title: 'Repeated late delivery pattern',
       reason: 'Buyer documented three late milestones on the same seller within 30 days.',
       status: 'closed',
       visibility: 'public',
@@ -802,7 +800,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       number: 'DIS-RSLV01',
-      title: 'Unfair contract feedback after delivery',
       reason:
         'Freelancer disputes a 1-star contract rating as retaliatory and factually inaccurate after milestone acceptance.',
       status: 'closed',
@@ -825,7 +822,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     {
       // Open unfair-feedback dispute on a completed contract — Admin/Maya can handle.
       number: 'DIS-FEED01',
-      title: 'Retaliatory feedback on closed contract',
       reason:
         'Client left unfair written feedback after accepting the final deliverable; freelancer requests review and rating correction.',
       status: 'under_review',
@@ -847,7 +843,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       number: 'DIS-DSSM01',
-      title: 'Refund window expired',
       reason: 'Buyer requested a refund outside the marketplace refund window.',
       status: 'closed',
       visibility: 'public',
@@ -868,7 +863,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     // Legacy-style samples for Jobs / Marketplace queues
     {
       number: 'DIS-21126',
-      title: 'Team revenue split',
       reason: 'Members disagree on credit distribution.',
       status: 'open',
       visibility: 'public',
@@ -900,6 +894,27 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   for (const d of disputes) {
     const initiatorId = userAccountIds[d.initiatorIdx % userAccountIds.length];
     const respondentId = userAccountIds[d.respondentIdx % userAccountIds.length];
+    const partyType = normalizeDisputeType(d.entityType || 'General');
+    const priority = normalizeDisputePriority(d.priority || 'High');
+
+    const names = await pool.query(
+      `
+      SELECT
+        COALESCE(NULLIF(TRIM(ia.display_name), ''), NULLIF(TRIM(iu.first_name || ' ' || iu.last_name), ''), ia.handle, 'Disputer') AS disputer_name,
+        COALESCE(NULLIF(TRIM(ra.display_name), ''), NULLIF(TRIM(ru.first_name || ' ' || ru.last_name), ''), ra.handle, 'Disputee') AS disputee_name
+      FROM accounts ia
+      LEFT JOIN users iu ON iu.account_id = ia.account_id
+      CROSS JOIN accounts ra
+      LEFT JOIN users ru ON ru.account_id = ra.account_id
+      WHERE ia.account_id = $1 AND ra.account_id = $2
+      `,
+      [initiatorId, respondentId]
+    );
+    const title = buildDefaultDisputeTitle({
+      disputerName: names.rows[0]?.disputer_name,
+      disputeeName: names.rows[0]?.disputee_name,
+    });
+
     const res = await pool.query(
       `INSERT INTO disputes (
         dispute_number, title, reason, status, priority, visibility,
@@ -917,14 +932,14 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       RETURNING dispute_id, dispute_number, initiator_account_id, respondent_account_id`,
       [
         d.number,
-        d.title,
+        title,
         d.reason,
         d.status,
-        d.priority,
+        priority,
         d.visibility,
         initiatorId,
         respondentId,
-        d.entityType,
+        partyType,
         d.entityId,
         d.assigneeId,
         d.credits,
@@ -934,7 +949,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         d.approved ? (d.assigneeId || supportStaffId) : null,
         d.sanctionType,
         d.sanctionNotes,
-        d.entityType || 'general',
+        partyType,
         ['closed'].includes(d.status)
           ? new Date(Date.now() - (d.daysAgo - 1) * 86400000)
           : null,
@@ -942,7 +957,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     );
     const row = res.rows[0];
     disputeIds.push(row.dispute_id);
-    disputeByNumber[d.number] = { ...row, ...d };
+    disputeByNumber[d.number] = { ...row, ...d, title, entityType: partyType, priority };
 
     if (d.hold) {
       await seedDisputeCreditHold(row.dispute_id, respondentId, d.credits, d.holdStatus || 'held');

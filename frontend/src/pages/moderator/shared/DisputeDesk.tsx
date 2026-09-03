@@ -140,6 +140,9 @@ const KNOWN_ENTITY_TYPES = [
   'Gig',
   'Marketplace',
   'Team',
+  'Forum',
+  'Transaction',
+  'General',
 ] as const;
 
 const HANDLER_ROLES = new Set([

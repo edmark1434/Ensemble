@@ -11,6 +11,7 @@ const DISPUTE_TYPES = Object.freeze([
   'Feedback',
   'Forum',
   'Transaction',
+  'Team',
   'General',
 ]);
 
@@ -38,6 +39,7 @@ const LEGACY_TYPE_MAP = Object.freeze({
   transaction: 'Transaction',
   payment: 'Transaction',
   credit: 'Transaction',
+  team: 'Team',
   general: 'General',
   other: 'General',
 });

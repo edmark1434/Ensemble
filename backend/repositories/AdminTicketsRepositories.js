@@ -31,6 +31,10 @@ const {
   normalizeTicketPriority,
   isClosedStatus,
 } = require('../lib/TicketEnums');
+const {
+  normalizeDisputeType,
+  normalizeDisputePriority,
+} = require('../lib/DisputeEnums');
 const { mapTicketRow } = require('./ModeratorSharedRepositories');
 const {
   FORUM_REPORT_TYPES,
@@ -297,9 +301,10 @@ function mapDisputeRow(row) {
     number: row.dispute_number,
     title: row.title,
     reason: row.reason,
-    // Keep status/priority as DB snake_case for filters/forms; format in UI.
+    type: normalizeDisputeType(row.type || row.related_entity_type),
+    // Status stays snake_case; priority is Title Case in DB, lowercased for desk filters.
     status: String(row.status || 'open').toLowerCase(),
-    priority: String(row.priority || 'medium').toLowerCase(),
+    priority: String(normalizeDisputePriority(row.priority || 'Medium')).toLowerCase(),
     visibility: String(row.visibility || 'pending').toLowerCase(),
     initiator: {
       accountId: row.initiator_account_id,
@@ -311,7 +316,9 @@ function mapDisputeRow(row) {
       name: row.respondent_name || 'Unknown',
       username: row.respondent_handle || '—',
     },
-    relatedEntityType: row.related_entity_type ? displayLabel(row.related_entity_type) : null,
+    relatedEntityType: row.related_entity_type
+      ? normalizeDisputeType(row.related_entity_type)
+      : null,
     relatedEntityId: row.related_entity_id,
     assignee: row.assigned_staff_id
       ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
@@ -1393,6 +1400,15 @@ function normalizeDisputeStatusPatch(patch) {
       );
     }
     next.status = status;
+  }
+  if (next.priority != null) {
+    next.priority = normalizeDisputePriority(next.priority);
+  }
+  if (next.type != null) {
+    next.type = normalizeDisputeType(next.type);
+  }
+  if (next.related_entity_type != null && next.related_entity_type !== '') {
+    next.related_entity_type = normalizeDisputeType(next.related_entity_type);
   }
   return next;
 }

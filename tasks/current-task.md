@@ -1,16 +1,16 @@
-# Current Task — Remove dispute outcome
+# Current Task — Dispute type Title Case + default titles
 
-Drop `disputes.outcome` from the database and remove outcome from moderator/admin dispute UI. Closed state is represented by `status = closed` only; optional sanctions remain on closed disputes.
+Ensure `disputes.type` / related entity types use Title Case, auto-set titles to `{Disputee} v {Disputer} Transaction Dispute`, and keep create/seed paths consistent.
 
 ## Acceptance Criteria
 
-- [x] Migration drops `disputes.outcome` and its index (with `down` restore).
-- [x] Backend seed/repos/enums no longer read or write `outcome`.
-- [x] Dispute desk and detail modal no longer show or filter by outcome.
-- [x] Migration applied locally (`149-drop-dispute-outcome`).
+- [x] Migration 148 Title-Cases existing `type`, `related_entity_type`, `priority`, and regenerates titles.
+- [x] Migration 150 adds `Team` to the type CHECK enum.
+- [x] Seed inserts Title Case types/priorities and default party-based titles.
+- [x] Dispute updates normalize priority/type to Title Case before write (CHECK-safe).
+- [x] Explain initiator/respondent/related entity/assigned/approved columns to the user.
 
 ## Verification
 
-- Apply `1811000000000_149-drop-dispute-outcome`.
-- Confirm dispute list/detail load without outcome fields.
-- Confirm closing a dispute and optional sanctions still work via status + sanction fields.
+- Confirm sample dispute rows show Title Case types and `… Transaction Dispute` titles.
+- Confirm patching priority from the desk still succeeds.
