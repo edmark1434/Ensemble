@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -9,24 +9,6 @@ interface UserLogoutModalProps {
 }
 
 const UserLogoutModal: React.FC<UserLogoutModalProps> = ({ isOpen, onClose, onConfirm }) => {
-  const [countdown, setCountdown] = useState(3);
-
-  useEffect(() => {
-    if (isOpen) {
-      setCountdown(3);
-      const timer = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [isOpen]);
-
   return (
     <AnimatePresence>
       {isOpen && (
@@ -64,14 +46,9 @@ const UserLogoutModal: React.FC<UserLogoutModalProps> = ({ isOpen, onClose, onCo
               <button
                 type="button"
                 onClick={onConfirm}
-                disabled={countdown > 0}
-                className={`flex w-full items-center justify-center gap-3 rounded-2xl py-4 text-sm font-bold text-white shadow-xl transition-all duration-300 ${
-                  countdown > 0
-                    ? "bg-red-400 cursor-not-allowed opacity-70"
-                    : "bg-red-500 shadow-red-500/20 hover:bg-red-600 active:scale-[0.97]"
-                }`}
+                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-red-500 py-4 text-sm font-bold text-white shadow-xl shadow-red-500/20 transition-all duration-300 hover:bg-red-600 active:scale-[0.97]"
               >
-                {countdown > 0 ? `Sign Out Now (${countdown}s)` : "Sign Out Now"}
+                Sign Out Now
               </button>
 
               <button

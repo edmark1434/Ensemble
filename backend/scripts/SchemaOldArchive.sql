@@ -17,7 +17,7 @@
 
 -- Moderation / support
 -- reports, disputes, violations, marketplace_listings
--- tickets, ticket_chats, ticket_type_catalog, ticket_status_catalog, ticket_priority_catalog
+-- tickets (type/status/priority enums), ticket_chats (ticket_id + chat_id)
 
 CREATE TABLE IF NOT EXISTS accounts (
     account_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

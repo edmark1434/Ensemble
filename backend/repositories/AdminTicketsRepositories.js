@@ -144,80 +144,27 @@ async function assertStaffAssignableToQueue(staffId, queueKey) {
   }
 }
 
-/** Prefer DB catalog (migration 109); fall back to ticketEnums.js */
-async function getTicketCatalog() {
-  try {
-    const [types, statuses, priorities] = await Promise.all([
-      pool.query(`
-        SELECT type_label, queue_role, sort_order, description
-        FROM ticket_type_catalog
-        WHERE is_active = TRUE
-        ORDER BY sort_order, type_label
-      `),
-      pool.query(`
-        SELECT status_label, sort_order, is_closed
-        FROM ticket_status_catalog
-        WHERE is_active = TRUE
-        ORDER BY sort_order, status_label
-      `),
-      pool.query(`
-        SELECT priority_label, sort_order
-        FROM ticket_priority_catalog
-        WHERE is_active = TRUE
-        ORDER BY sort_order, priority_label
-      `),
-    ]);
-
-    const typeRows = types.rows;
-    const escalateByRole = {};
-    for (const row of typeRows) {
-      const role = row.queue_role;
-      if (!escalateByRole[role]) escalateByRole[role] = [];
-      escalateByRole[role].push(row.type_label);
-    }
-    // Admin can escalate to any type
-    escalateByRole.Admin = typeRows.map((r) => r.type_label);
-    escalateByRole.Administrator = escalateByRole.Admin;
-
-    return {
-      types: typeRows.map((r) => r.type_label),
-      typeDetails: typeRows.map((r) => ({
-        label: r.type_label,
-        queueRole: r.queue_role,
-        description: r.description || null,
-      })),
-      statuses: statuses.rows.map((r) => r.status_label),
-      priorities: priorities.rows.map((r) => r.priority_label),
-      escalateByRole,
-      escalateRoles: [
+function getTicketCatalog() {
+  return {
+    types: [...TICKET_TYPES],
+    typeDetails: TICKET_TYPES.map((label) => ({
+      label,
+      queueRole:
+        Object.entries(ROLE_TO_TICKET_TYPES).find(([, list]) => list.includes(label))?.[0] ||
         'Support Moderator',
-        'Marketplace Moderator',
-        'Forum Moderator',
-        'Jobs N Gigs Moderator',
-        'Admin',
-      ],
-    };
-  } catch (err) {
-    console.warn('ticket catalog unavailable, using enums:', err.message);
-    return {
-      types: [...TICKET_TYPES],
-      typeDetails: TICKET_TYPES.map((label) => ({
-        label,
-        queueRole: Object.entries(ROLE_TO_TICKET_TYPES).find(([, list]) => list.includes(label))?.[0] || 'Support Moderator',
-        description: null,
-      })),
-      statuses: [...TICKET_STATUSES],
-      priorities: [...TICKET_PRIORITIES],
-      escalateByRole: { ...ROLE_TO_TICKET_TYPES },
-      escalateRoles: [
-        'Support Moderator',
-        'Marketplace Moderator',
-        'Forum Moderator',
-        'Jobs N Gigs Moderator',
-        'Admin',
-      ],
-    };
-  }
+      description: null,
+    })),
+    statuses: [...TICKET_STATUSES],
+    priorities: [...TICKET_PRIORITIES],
+    escalateByRole: { ...ROLE_TO_TICKET_TYPES },
+    escalateRoles: [
+      'Support Moderator',
+      'Marketplace Moderator',
+      'Forum Moderator',
+      'Jobs N Gigs Moderator',
+      'Admin',
+    ],
+  };
 }
 
 function mongoDb() {
@@ -620,9 +567,6 @@ async function getTicketsOverview(staffSession = null) {
       tables: [
         'tickets',
         'ticket_chats',
-        'ticket_type_catalog',
-        'ticket_status_catalog',
-        'ticket_priority_catalog',
         'inbox/messages (mongo)',
         'disputes',
         'reports',

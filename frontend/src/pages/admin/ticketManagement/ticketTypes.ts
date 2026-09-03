@@ -260,7 +260,7 @@ export type TicketsOverview = {
     openByPriority: { label: string; value: number }[];
     disputeStatusMix: ChartSegment[];
   };
-  /** Distinct ticket types from ticket_type_catalog */
+  /** Distinct ticket types from tickets.type enum values */
   types: string[];
   typeDetails?: { label: string; queueRole: string; description?: string | null }[];
   escalateByRole?: Record<string, string[]>;
