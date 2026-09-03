@@ -47,8 +47,8 @@ async function ensureDisputeChat(disputeId, disputeRow) {
     members.push({ account_id: String(accountId), role, joined_at: new Date() });
   };
 
-  addMember(disputeRow.initiator_account_id || disputeRow.by_account_id, 'member');
-  addMember(disputeRow.respondent_account_id || disputeRow.for_account_id, 'member');
+  addMember(disputeRow.by_account_id, 'member');
+  addMember(disputeRow.for_account_id, 'member');
 
   const insertResult = await createInboxRepositories({
     conversation_name: disputeRow.dispute_number

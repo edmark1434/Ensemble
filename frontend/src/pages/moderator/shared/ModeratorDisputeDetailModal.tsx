@@ -275,7 +275,7 @@ export default function ModeratorDisputeDetailModal({
     // Admin may designate or reassign a handler anytime
     if (canAssignOthers) {
       await runAction(
-        { assigned_staff_id: next ? next : null },
+        { handled_by_staff_id: next ? next : null },
         next ? "Handler assigned" : "Handler cleared"
       );
     }
@@ -295,7 +295,7 @@ export default function ModeratorDisputeDetailModal({
     }
     if (adminMode && viewOnly && canAssignOthers && !assigneeLocked) {
       await runAction(
-        { assigned_staff_id: assigneeId ? assigneeId : null },
+        { handled_by_staff_id: assigneeId ? assigneeId : null },
         "Assignment updated"
       );
       return;
@@ -316,9 +316,9 @@ export default function ModeratorDisputeDetailModal({
       }
       // Admin may change handler anytime; others use Release / Assign myself while locked.
       if (!assigneeLocked && (canAssignOthers || canAssignMyself)) {
-        payload.assigned_staff_id = assigneeId ? assigneeId : null;
+        payload.handled_by_staff_id = assigneeId ? assigneeId : null;
       } else if (canAssignOthers) {
-        payload.assigned_staff_id = assigneeId ? assigneeId : null;
+        payload.handled_by_staff_id = assigneeId ? assigneeId : null;
       }
     }
     const closing = isDisputeClosed(nextStatus);
@@ -425,7 +425,7 @@ export default function ModeratorDisputeDetailModal({
             <div>
               <h3 className="text-xl font-semibold text-white">{dispute.title}</h3>
               <p className="mt-1 text-sm text-zinc-500">
-                @{dispute.initiator.username} vs @{dispute.respondent.username} · {dispute.relatedEntityType || "general"} ·{" "}
+                @{dispute.initiator.username} vs @{dispute.respondent.username} · {dispute.type || "General"} ·{" "}
                 {dispute.creditAmount.toLocaleString()} credits · opened {formatDateTime(dispute.openedAt)}
               </p>
               {dispute.reason && <p className="mt-2 text-sm text-zinc-400">{dispute.reason}</p>}

@@ -380,8 +380,8 @@ async function fetchRecentModerationActivity() {
         st.role AS executed_by_role,
         sa.handle AS executed_by_handle
       FROM disputes d
-      LEFT JOIN accounts ia ON ia.account_id = COALESCE(d.initiator_account_id, d.by_account_id)
-      LEFT JOIN staff st ON st.staff_id = COALESCE(d.assigned_staff_id, d.handled_by_staff_id)
+      LEFT JOIN accounts ia ON ia.account_id = d.by_account_id
+      LEFT JOIN staff st ON st.staff_id = d.handled_by_staff_id
       LEFT JOIN accounts sa ON sa.account_id = st.account_id
       ORDER BY COALESCE(d.updated_at, d.opened_at, d.created_at) DESC
       LIMIT 25
@@ -904,8 +904,13 @@ async function updatePendingCase(caseId, body, session) {
     const patch = {};
     if (body.status !== undefined) patch.status = normalizeWritableStatus(body.status);
     if (body.priority !== undefined) patch.priority = normalizeWritablePriority(body.priority);
-    if (body.assignedStaffId !== undefined || body.assigned_staff_id !== undefined) {
-      patch.assigned_staff_id = body.assignedStaffId ?? body.assigned_staff_id;
+    if (
+      body.assignedStaffId !== undefined ||
+      body.assigned_staff_id !== undefined ||
+      body.handled_by_staff_id !== undefined
+    ) {
+      patch.handled_by_staff_id =
+        body.handled_by_staff_id ?? body.assignedStaffId ?? body.assigned_staff_id;
     }
     if (body.reason !== undefined) patch.reason = body.reason;
     if (body.title !== undefined) patch.title = body.title;
@@ -1038,15 +1043,14 @@ async function assignMyselfToPendingCase(caseId, body, session) {
   if (source === 'dispute') {
     const result = await pool.query(
       `UPDATE disputes
-       SET assigned_staff_id = $1,
-           handled_by_staff_id = COALESCE(handled_by_staff_id, $1),
+       SET handled_by_staff_id = $1,
            status = CASE
-             WHEN LOWER(COALESCE(status, 'open')) IN ('open', 'pending') THEN 'in_progress'
+             WHEN LOWER(COALESCE(status, 'open')) IN ('open', 'pending') THEN 'under_review'
              ELSE status
            END,
            updated_at = NOW()
-       WHERE dispute_id = $2 AND deleted_at IS NULL
-       RETURNING dispute_id, assigned_staff_id, status`,
+       WHERE dispute_id = $2
+       RETURNING dispute_id, handled_by_staff_id, status`,
       [staffId, id]
     );
     if (!result.rows.length) throw new Error('Dispute not found');

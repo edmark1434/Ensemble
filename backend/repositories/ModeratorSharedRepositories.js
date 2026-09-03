@@ -115,27 +115,23 @@ function mapDisputeRow(row) {
     number: row.dispute_number,
     title: row.title,
     reason: row.reason,
-    type: normalizeDisputeType(row.type || row.related_entity_type),
+    type: normalizeDisputeType(row.type),
     // Status stays snake_case; priority is Title Case in DB, lowercased for desk filters.
     status: String(row.status || 'open').toLowerCase(),
     priority: String(normalizeDisputePriority(row.priority || 'Medium')).toLowerCase(),
     visibility: String(row.visibility || 'pending').toLowerCase(),
     initiator: {
-      accountId: row.initiator_account_id,
+      accountId: row.by_account_id,
       name: row.initiator_name || 'Unknown',
       username: row.initiator_handle || '—',
     },
     respondent: {
-      accountId: row.respondent_account_id,
+      accountId: row.for_account_id,
       name: row.respondent_name || 'Unknown',
       username: row.respondent_handle || '—',
     },
-    relatedEntityType: row.related_entity_type
-      ? normalizeDisputeType(row.related_entity_type)
-      : null,
-    relatedEntityId: row.related_entity_id,
-    assignee: row.assigned_staff_id
-      ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
+    assignee: row.handled_by_staff_id
+      ? { staffId: row.handled_by_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
       : null,
     creditAmount: Number(row.credit_amount_involved || 0),
     approvedAt: row.approved_at || null,
@@ -395,13 +391,13 @@ async function createReport({
   return mapReportRow(result.rows[0]);
 }
 
-// Scoped disputes list. Filter by related entity types and status.
+// Scoped disputes list. Filter by dispute type and status.
 async function fetchScopedDisputes({ entityTypesIn, status } = {}) {
   const where = [];
   const params = [];
   if (entityTypesIn && entityTypesIn.length) {
     params.push(entityTypesIn);
-    where.push(`LOWER(d.related_entity_type) = ANY($${params.length})`);
+    where.push(`LOWER(d.type) = ANY($${params.length})`);
   }
   if (status && status !== 'all') {
     params.push(String(status).toLowerCase());
@@ -420,11 +416,11 @@ async function fetchScopedDisputes({ entityTypesIn, status } = {}) {
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
       st.role AS assignee_role
     FROM disputes d
-    LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
+    LEFT JOIN accounts ia ON ia.account_id = d.by_account_id
     LEFT JOIN users iu ON iu.account_id = ia.account_id
-    LEFT JOIN accounts ra ON ra.account_id = d.respondent_account_id
+    LEFT JOIN accounts ra ON ra.account_id = d.for_account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
+    LEFT JOIN staff st ON st.staff_id = d.handled_by_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     ${whereSql}
     ORDER BY d.opened_at DESC
@@ -440,7 +436,7 @@ async function scopedDisputeCounts({ entityTypesIn } = {}) {
   const params = [];
   if (entityTypesIn && entityTypesIn.length) {
     params.push(entityTypesIn);
-    where.push(`LOWER(related_entity_type) = ANY($${params.length})`);
+    where.push(`LOWER(type) = ANY($${params.length})`);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 

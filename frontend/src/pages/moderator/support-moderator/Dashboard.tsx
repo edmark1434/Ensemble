@@ -406,7 +406,7 @@ export default function SupportModeratorDashboard() {
                   <div className="min-w-0">
                     <p className="truncate text-zinc-200">{d.title}</p>
                     <p className="text-[11px] text-zinc-500">
-                      {d.number} · {d.relatedEntityType || "—"} ·{" "}
+                      {d.number} · {d.type || "—"} ·{" "}
                       <span className="text-amber-300/80">{d.creditAmount.toLocaleString()} credits</span>
                     </p>
                   </div>

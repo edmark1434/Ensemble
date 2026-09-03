@@ -100,8 +100,6 @@ export type Dispute = {
   visibility?: string;
   initiator: TicketPerson;
   respondent: TicketPerson;
-  relatedEntityType: string | null;
-  relatedEntityId: string | null;
   assignee: TicketAssignee | null;
   creditAmount: number;
   approvedAt?: string | null;

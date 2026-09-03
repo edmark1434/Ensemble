@@ -556,7 +556,7 @@ export default function JobsModeratorDashboard() {
                       <p className="truncate text-sm font-medium text-white">{d.title}</p>
                       <p className="text-[11px] text-zinc-500">
                         {d.number} · {d.creditAmount.toLocaleString()} credits ·{' '}
-                        {d.relatedEntityType || '—'}
+                        {d.type || '—'}
                       </p>
                     </div>
                     <StatusBadge status={d.status} />

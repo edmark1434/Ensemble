@@ -301,27 +301,23 @@ function mapDisputeRow(row) {
     number: row.dispute_number,
     title: row.title,
     reason: row.reason,
-    type: normalizeDisputeType(row.type || row.related_entity_type),
+    type: normalizeDisputeType(row.type),
     // Status stays snake_case; priority is Title Case in DB, lowercased for desk filters.
     status: String(row.status || 'open').toLowerCase(),
     priority: String(normalizeDisputePriority(row.priority || 'Medium')).toLowerCase(),
     visibility: String(row.visibility || 'pending').toLowerCase(),
     initiator: {
-      accountId: row.initiator_account_id,
+      accountId: row.by_account_id,
       name: row.initiator_name || 'Unknown',
       username: row.initiator_handle || '—',
     },
     respondent: {
-      accountId: row.respondent_account_id,
+      accountId: row.for_account_id,
       name: row.respondent_name || 'Unknown',
       username: row.respondent_handle || '—',
     },
-    relatedEntityType: row.related_entity_type
-      ? normalizeDisputeType(row.related_entity_type)
-      : null,
-    relatedEntityId: row.related_entity_id,
-    assignee: row.assigned_staff_id
-      ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
+    assignee: row.handled_by_staff_id
+      ? { staffId: row.handled_by_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
       : null,
     creditAmount: Number(row.credit_amount_involved || 0),
     approvedAt: row.approved_at || null,
@@ -674,11 +670,11 @@ async function fetchDisputesList() {
       ct.amount_credits AS hold_amount,
       ct.type AS hold_type
     FROM disputes d
-    LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
+    LEFT JOIN accounts ia ON ia.account_id = d.by_account_id
     LEFT JOIN users iu ON iu.account_id = ia.account_id
-    LEFT JOIN accounts ra ON ra.account_id = d.respondent_account_id
+    LEFT JOIN accounts ra ON ra.account_id = d.for_account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
+    LEFT JOIN staff st ON st.staff_id = d.handled_by_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = d.related_credit_transaction_id
     ORDER BY d.opened_at DESC
@@ -718,7 +714,7 @@ async function fetchStaffWorkload() {
           AND t.deleted_at IS NULL
           AND t.status NOT IN ('Resolved', 'Closed')) AS open_tickets,
       (SELECT COUNT(*)::int FROM disputes d
-        WHERE d.assigned_staff_id = s.staff_id
+        WHERE d.handled_by_staff_id = s.staff_id
           AND LOWER(d.status) <> 'closed') AS open_disputes,
       (SELECT COUNT(*)::int FROM reports r
         WHERE r.assigned_staff_id = s.staff_id AND LOWER(r.status) = 'open' AND r.deleted_at IS NULL) AS open_reports
@@ -1407,9 +1403,6 @@ function normalizeDisputeStatusPatch(patch) {
   if (next.type != null) {
     next.type = normalizeDisputeType(next.type);
   }
-  if (next.related_entity_type != null && next.related_entity_type !== '') {
-    next.related_entity_type = normalizeDisputeType(next.related_entity_type);
-  }
   return next;
 }
 
@@ -1428,11 +1421,11 @@ async function loadDisputeRow(disputeId) {
       ct.amount_credits AS hold_amount,
       ct.type AS hold_type
     FROM disputes d
-    LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
+    LEFT JOIN accounts ia ON ia.account_id = d.by_account_id
     LEFT JOIN users iu ON iu.account_id = ia.account_id
-    LEFT JOIN accounts ra ON ra.account_id = d.respondent_account_id
+    LEFT JOIN accounts ra ON ra.account_id = d.for_account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
+    LEFT JOIN staff st ON st.staff_id = d.handled_by_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = d.related_credit_transaction_id
     WHERE d.dispute_id = $1
@@ -1446,7 +1439,7 @@ function buildDisputePermissions(row, staff, session = null) {
   const staffId =
     normalizeStaffId(staff?.staff_id) || normalizeStaffId(sessionStaffId(session));
   const role = staff?.role || session?.role || null;
-  const assigneeId = normalizeStaffId(row?.assigned_staff_id);
+  const assigneeId = normalizeStaffId(row?.handled_by_staff_id);
   const isAssignee = Boolean(staffId && assigneeId && staffId === assigneeId);
   const isAdmin = isAdminRole(role);
   const unassigned = !assigneeId;
@@ -1482,6 +1475,11 @@ async function updateDispute(disputeId, patch, staffSession) {
   const row = await loadDisputeRow(disputeId);
   if (!row) return null;
 
+  // Accept legacy assigned_staff_id alias from older clients.
+  if (patch.handled_by_staff_id === undefined && patch.assigned_staff_id !== undefined) {
+    patch.handled_by_staff_id = patch.assigned_staff_id;
+  }
+
   const perms = buildDisputePermissions(row, staff, staffSession);
   const action = String(patch.action || '').toLowerCase().trim();
 
@@ -1490,12 +1488,12 @@ async function updateDispute(disputeId, patch, staffSession) {
     if (!perms.canSelfAssign && !perms.canAssignMyself) {
       throw new Error('Only Support Moderators or Admin can claim disputes.');
     }
-    if (row.assigned_staff_id && !perms.isAdmin) {
+    if (row.handled_by_staff_id && !perms.isAdmin) {
       throw new Error('This dispute already has a handler. They must release the case first.');
     }
     await pool.query(
       `UPDATE disputes
-       SET assigned_staff_id = $1,
+       SET handled_by_staff_id = $1,
            updated_at = NOW()
        WHERE dispute_id = $2`,
       [staff.staff_id, disputeId]
@@ -1510,7 +1508,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     if (perms.isAdmin && !perms.isAssignee) {
       await pool.query(
         `UPDATE disputes
-         SET assigned_staff_id = NULL,
+         SET handled_by_staff_id = NULL,
              updated_at = NOW()
          WHERE dispute_id = $1`,
         [disputeId]
@@ -1518,9 +1516,9 @@ async function updateDispute(disputeId, patch, staffSession) {
     } else {
       await pool.query(
         `UPDATE disputes
-         SET assigned_staff_id = NULL,
+         SET handled_by_staff_id = NULL,
              updated_at = NOW()
-         WHERE dispute_id = $1 AND assigned_staff_id = $2`,
+         WHERE dispute_id = $1 AND handled_by_staff_id = $2`,
         [disputeId, staff.staff_id]
       );
     }
@@ -1528,13 +1526,13 @@ async function updateDispute(disputeId, patch, staffSession) {
   }
 
   // Admin may designate / reassign Support handlers (override lock)
-  if (patch.assigned_staff_id !== undefined && !action) {
+  if (patch.handled_by_staff_id !== undefined && !action) {
     const nextAssignee =
-      patch.assigned_staff_id === null || patch.assigned_staff_id === ''
+      patch.handled_by_staff_id === null || patch.handled_by_staff_id === ''
         ? null
-        : patch.assigned_staff_id;
+        : patch.handled_by_staff_id;
     const nextNorm = normalizeStaffId(nextAssignee);
-    const curNorm = normalizeStaffId(row.assigned_staff_id);
+    const curNorm = normalizeStaffId(row.handled_by_staff_id);
 
     if (curNorm && nextNorm !== curNorm && !perms.canAssignOthers) {
       throw new Error(
@@ -1559,7 +1557,7 @@ async function updateDispute(disputeId, patch, staffSession) {
       }
       await pool.query(
         `UPDATE disputes
-         SET assigned_staff_id = $1,
+         SET handled_by_staff_id = $1,
              updated_at = NOW()
          WHERE dispute_id = $2`,
         [nextAssignee, disputeId]
@@ -1567,7 +1565,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     }
 
     const otherKeys = Object.keys(patch).filter(
-      (k) => !['assigned_staff_id', 'action'].includes(k)
+      (k) => !['handled_by_staff_id', 'assigned_staff_id', 'action'].includes(k)
     );
     if (!otherKeys.length) {
       return getDisputeDetail(disputeId, staffSession);
@@ -1647,10 +1645,10 @@ async function updateDispute(disputeId, patch, staffSession) {
     sets.push(`resolved_at = NULL`);
   }
 
-  if (normalized.assigned_staff_id !== undefined && (actPerms.canAct || actPerms.canAssignOthers)) {
+  if (normalized.handled_by_staff_id !== undefined && (actPerms.canAct || actPerms.canAssignOthers)) {
     // Non-admin assignment changes while locked go through Release case — ignore here.
-    const nextNorm = normalizeStaffId(normalized.assigned_staff_id);
-    const curNorm = normalizeStaffId(refreshed.assigned_staff_id);
+    const nextNorm = normalizeStaffId(normalized.handled_by_staff_id);
+    const curNorm = normalizeStaffId(refreshed.handled_by_staff_id);
     if (curNorm && nextNorm !== curNorm && !actPerms.canAssignOthers) {
       throw new Error(
         'This dispute already has a handler. They must release the case before it can be reassigned.'
@@ -1689,7 +1687,7 @@ async function getDisputeDetail(disputeId, staffSession = null) {
   const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
   const permissions = buildDisputePermissions(row, staff, staffSession);
   const assignableStaff = await fetchAssignableStaffForQueue('disputes', {
-    includeStaffId: row.assigned_staff_id || row.handled_by_staff_id,
+    includeStaffId: row.handled_by_staff_id,
   });
 
   let messages = [];

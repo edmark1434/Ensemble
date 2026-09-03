@@ -171,16 +171,16 @@ async function fetchHistoryForAccounts(accountIds) {
         d.status,
         d.opened_at,
         d.updated_at,
-        d.initiator_account_id,
-        d.respondent_account_id,
+        d.by_account_id,
+        d.for_account_id,
         COALESCE(sa.display_name, st.first_name || ' ' || st.last_name, 'Staff') AS handler_name,
         COALESCE(ra.display_name, ra.handle, 'Counterparty') AS against_name
       FROM disputes d
-      LEFT JOIN staff st ON st.staff_id = COALESCE(d.assigned_staff_id, d.handled_by_staff_id)
+      LEFT JOIN staff st ON st.staff_id = d.handled_by_staff_id
       LEFT JOIN accounts sa ON sa.account_id = st.account_id
-      LEFT JOIN accounts ra ON ra.account_id = d.respondent_account_id
-      WHERE d.initiator_account_id = ANY($1::uuid[])
-         OR d.respondent_account_id = ANY($1::uuid[])
+      LEFT JOIN accounts ra ON ra.account_id = d.for_account_id
+      WHERE d.by_account_id = ANY($1::uuid[])
+         OR d.for_account_id = ANY($1::uuid[])
       ORDER BY COALESCE(d.opened_at, d.created_at) DESC
       `,
       [accountIds]
@@ -206,7 +206,7 @@ async function fetchHistoryForAccounts(accountIds) {
   }
 
   for (const row of disputesResult.rows) {
-    const relatedIds = [row.initiator_account_id, row.respondent_account_id].filter(Boolean);
+    const relatedIds = [row.by_account_id, row.for_account_id].filter(Boolean);
     for (const accountId of relatedIds) {
       const bucket = map.get(accountId);
       if (!bucket) continue;

@@ -308,7 +308,7 @@ export default function DisputeDesk({
   const entityTypes = useMemo(() => {
     const set = new Set<string>(KNOWN_ENTITY_TYPES);
     for (const d of disputes) {
-      const t = String(d.relatedEntityType || '').trim();
+      const t = String(d.type || '').trim();
       if (t) set.add(t);
     }
     return [...set].sort((a, b) => a.localeCompare(b));
@@ -361,7 +361,7 @@ export default function DisputeDesk({
       }
       if (
         advanced.entityType !== 'all' &&
-        String(d.relatedEntityType || '').toLowerCase() !== advanced.entityType.toLowerCase()
+        String(d.type || '').toLowerCase() !== advanced.entityType.toLowerCase()
       ) {
         return false;
       }
@@ -378,9 +378,8 @@ export default function DisputeDesk({
         d.respondent?.username,
         d.assignee?.name,
         d.status,
+        d.type,
         d.visibility,
-        d.relatedEntityType,
-        d.relatedEntityId,
       ]
         .filter(Boolean)
         .join(' ')

@@ -1,5 +1,5 @@
 /**
- * Dispute enums — Title Case labels for dispute.type / related_entity_type.
+ * Dispute enums — Title Case labels for dispute.type.
  * Workflow status remains snake_case tokens used by the dispute desk.
  */
 

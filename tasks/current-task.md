@@ -1,16 +1,18 @@
-# Current Task — Dispute type Title Case + default titles
+# Current Task — Collapse duplicate dispute columns
 
-Ensure `disputes.type` / related entity types use Title Case, auto-set titles to `{Disputee} v {Disputer} Transaction Dispute`, and keep create/seed paths consistent.
+Remove duplicate dispute columns and standardize on the original names:
+
+- Parties: `by_account_id` / `for_account_id` (drop `initiator_account_id` / `respondent_account_id`)
+- Kind: `type` only (drop `related_entity_type` / `related_entity_id`)
+- Handler: `handled_by_staff_id` (drop `assigned_staff_id`)
 
 ## Acceptance Criteria
 
-- [x] Migration 148 Title-Cases existing `type`, `related_entity_type`, `priority`, and regenerates titles.
-- [x] Migration 150 adds `Team` to the type CHECK enum.
-- [x] Seed inserts Title Case types/priorities and default party-based titles.
-- [x] Dispute updates normalize priority/type to Title Case before write (CHECK-safe).
-- [x] Explain initiator/respondent/related entity/assigned/approved columns to the user.
+- [x] Migration backfills then drops the duplicate columns.
+- [x] Backend list/detail/update/seed/chat use `by` / `for` / `type` / `handled_by_staff_id`.
+- [x] Frontend dispute desk/modal still show parties, type, and handler.
 
 ## Verification
 
-- Confirm sample dispute rows show Title Case types and `… Transaction Dispute` titles.
-- Confirm patching priority from the desk still succeeds.
+- Applied `1811200000000_151-collapse-duplicate-dispute-columns`.
+- Dispute desk loads; claim/release/assign use `handled_by_staff_id`.

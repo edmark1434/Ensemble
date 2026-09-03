@@ -146,14 +146,14 @@ CREATE TABLE IF NOT EXISTS disputes (
     dispute_number VARCHAR(20) UNIQUE,
     title VARCHAR(255),
     reason TEXT,
+    type VARCHAR(50) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'open',
-    priority VARCHAR(20) NOT NULL DEFAULT 'high',
+    priority VARCHAR(20) NOT NULL DEFAULT 'High',
     visibility VARCHAR(20) NOT NULL DEFAULT 'pending',
-    initiator_account_id UUID REFERENCES accounts(account_id),
-    respondent_account_id UUID REFERENCES accounts(account_id),
-    related_entity_type VARCHAR(50),
-    related_entity_id VARCHAR(100),
-    assigned_staff_id UUID REFERENCES staff(staff_id),
+    by_account_id UUID NOT NULL REFERENCES accounts(account_id),
+    for_account_id UUID NOT NULL REFERENCES accounts(account_id),
+    handled_by_staff_id UUID REFERENCES staff(staff_id),
+    escalated_by_staff_id UUID REFERENCES staff(staff_id),
     approved_at TIMESTAMPTZ,
     approved_by_staff_id UUID REFERENCES staff(staff_id),
     sanction_type VARCHAR(50),
@@ -161,9 +161,11 @@ CREATE TABLE IF NOT EXISTS disputes (
     related_credit_transaction_id UUID REFERENCES credit_transactions(credit_transaction_id),
     credit_amount_involved INTEGER NOT NULL DEFAULT 0,
     opened_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     resolved_at TIMESTAMPTZ,
-    resolution_notes TEXT
+    resolution_notes TEXT,
+    deleted_at TIMESTAMP WITHOUT TIME ZONE
 );
 
 -- Live DBs also add: credit_transactions.related_dispute_id → disputes(dispute_id)

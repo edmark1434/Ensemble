@@ -442,8 +442,8 @@ async function seedDisputeChatThread(disputeId, disputeRow, staffAccountId, mess
     seen.add(String(accountId));
     members.push({ account_id: String(accountId), role, joined_at: new Date() });
   };
-  addMember(disputeRow.initiator_account_id, 'member');
-  addMember(disputeRow.respondent_account_id, 'member');
+  addMember(disputeRow.by_account_id, 'member');
+  addMember(disputeRow.for_account_id, 'member');
   addMember(staffAccountId, 'admin');
 
   const insertResult = await createInboxRepositories({
@@ -918,18 +918,17 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     const res = await pool.query(
       `INSERT INTO disputes (
         dispute_number, title, reason, status, priority, visibility,
-        initiator_account_id, respondent_account_id,
-        related_entity_type, related_entity_id, assigned_staff_id,
+        by_account_id, for_account_id, handled_by_staff_id,
         credit_amount_involved, opened_at, resolution_notes,
         approved_at, approved_by_staff_id, sanction_type, sanction_notes,
-        type, by_account_id, for_account_id, resolved_at
+        type, resolved_at
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
-        NOW() - ($13 || ' days')::interval, $14,
-        $15, $16, $17, $18,
-        $19, $7, $8, $20
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        NOW() - ($11 || ' days')::interval, $12,
+        $13, $14, $15, $16,
+        $17, $18
       )
-      RETURNING dispute_id, dispute_number, initiator_account_id, respondent_account_id`,
+      RETURNING dispute_id, dispute_number, by_account_id, for_account_id`,
       [
         d.number,
         title,
@@ -939,8 +938,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         d.visibility,
         initiatorId,
         respondentId,
-        partyType,
-        d.entityId,
         d.assigneeId,
         d.credits,
         String(d.daysAgo),
@@ -989,7 +986,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
             authorRole: 'disputer',
             authorName: 'Disputer',
             authorType: 'user',
-            senderId: open.initiator_account_id,
+            senderId: open.by_account_id,
           },
         ]);
       }
@@ -1023,7 +1020,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
             authorRole: 'disputee',
             authorName: 'Disputee',
             authorType: 'user',
-            senderId: review.respondent_account_id,
+            senderId: review.for_account_id,
           },
           {
             body: 'The product page title said “commercial pack” — I bought it for a client project.',
@@ -1031,7 +1028,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
             authorRole: 'disputer',
             authorName: 'Disputer',
             authorType: 'user',
-            senderId: review.initiator_account_id,
+            senderId: review.by_account_id,
           },
           {
             body: 'Internal: listing copy is ambiguous; check screenshot attachments before ruling.',
@@ -1048,7 +1045,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
             authorRole: 'disputee',
             authorName: 'Disputee',
             authorType: 'user',
-            senderId: review.respondent_account_id,
+            senderId: review.for_account_id,
           },
         ]);
       }
@@ -1069,7 +1066,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
             authorRole: 'disputer',
             authorName: 'Disputer',
             authorType: 'user',
-            senderId: open2.initiator_account_id,
+            senderId: open2.by_account_id,
           },
           {
             body: 'Internal: Keep hold in place until both parties agree on the revision scope.',
@@ -1100,7 +1097,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
             authorRole: 'disputer',
             authorName: 'Disputer',
             authorType: 'user',
-            senderId: feedback.initiator_account_id,
+            senderId: feedback.by_account_id,
           },
           {
             body: 'Internal: Check contract acceptance timestamps vs rating created_at before deciding.',
