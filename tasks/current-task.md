@@ -1,18 +1,14 @@
-# Current Task — Collapse duplicate dispute columns
+# Current Task — Normalize dispute numbers
 
-Remove duplicate dispute columns and standardize on the original names:
-
-- Parties: `by_account_id` / `for_account_id` (drop `initiator_account_id` / `respondent_account_id`)
-- Kind: `type` only (drop `related_entity_type` / `related_entity_id`)
-- Handler: `handled_by_staff_id` (drop `assigned_staff_id`)
+Replace demo codes like `DIS-OPEN01` / `DIS-RSLV01` with sequential `DIS-50001` numbers (same pattern as tickets `TKT-50001`).
 
 ## Acceptance Criteria
 
-- [x] Migration backfills then drops the duplicate columns.
-- [x] Backend list/detail/update/seed/chat use `by` / `for` / `type` / `handled_by_staff_id`.
-- [x] Frontend dispute desk/modal still show parties, type, and handler.
+- [x] Migration renumbers existing disputes to `DIS-#####`.
+- [x] Seed uses sequential `DIS-50001+` numbers.
+- [x] Shared `nextDisputeNumber()` helper for future creates.
 
 ## Verification
 
-- Applied `1811200000000_151-collapse-duplicate-dispute-columns`.
-- Dispute desk loads; claim/release/assign use `handled_by_staff_id`.
+- Dispute desk shows `DIS-50001`-style numbers.
+- Applied `1811300000000_152-normalize-dispute-numbers`.

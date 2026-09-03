@@ -660,7 +660,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
 
   const disputes = [
     {
-      number: 'DIS-PEND01',
+      number: 'DIS-50001',
       reason: 'Buyer filed a dispute after the final milestone was marked complete but credits were not released.',
       status: 'pending_review',
       visibility: 'pending',
@@ -679,7 +679,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       daysAgo: 1,
     },
     {
-      number: 'DIS-OPEN01',
+      number: 'DIS-50002',
       reason: 'Seller claims buyer abandoned milestone review after delivery.',
       status: 'open',
       visibility: 'public',
@@ -699,7 +699,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       chatKey: 'open',
     },
     {
-      number: 'DIS-WAIT01',
+      number: 'DIS-50003',
       reason: 'Disputer says the gig delivery does not match the agreed brief.',
       status: 'awaiting_response',
       visibility: 'public',
@@ -719,7 +719,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       chatKey: 'wait',
     },
     {
-      number: 'DIS-REVW01',
+      number: 'DIS-50004',
       reason: 'Marketplace buyer disputes commercial usage rights on a purchased pack.',
       status: 'under_review',
       visibility: 'public',
@@ -740,7 +740,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       // Assigned to Maya — Admin is view-only until Designated handler reassign / Assign myself when free.
-      number: 'DIS-OPEN02',
+      number: 'DIS-50005',
       reason: 'Buyer asked for revisions after approving the milestone; seller wants escrow released.',
       status: 'open',
       visibility: 'public',
@@ -761,7 +761,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       // Pending but already with Support — Admin is view-only until self-assign / reassign.
-      number: 'DIS-PEND02',
+      number: 'DIS-50006',
       reason: 'User claims credits were moved from their wallet without consent after a shared-team dispute.',
       status: 'pending_review',
       visibility: 'pending',
@@ -780,7 +780,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       daysAgo: 2,
     },
     {
-      number: 'DIS-SANC01',
+      number: 'DIS-50007',
       reason: 'Buyer documented three late milestones on the same seller within 30 days.',
       status: 'closed',
       visibility: 'public',
@@ -799,7 +799,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       daysAgo: 20,
     },
     {
-      number: 'DIS-RSLV01',
+      number: 'DIS-50008',
       reason:
         'Freelancer disputes a 1-star contract rating as retaliatory and factually inaccurate after milestone acceptance.',
       status: 'closed',
@@ -821,7 +821,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       // Open unfair-feedback dispute on a completed contract — Admin/Maya can handle.
-      number: 'DIS-FEED01',
+      number: 'DIS-50009',
       reason:
         'Client left unfair written feedback after accepting the final deliverable; freelancer requests review and rating correction.',
       status: 'under_review',
@@ -842,7 +842,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       chatKey: 'feedback',
     },
     {
-      number: 'DIS-DSSM01',
+      number: 'DIS-50010',
       reason: 'Buyer requested a refund outside the marketplace refund window.',
       status: 'closed',
       visibility: 'public',
@@ -862,7 +862,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     // Legacy-style samples for Jobs / Marketplace queues
     {
-      number: 'DIS-21126',
+      number: 'DIS-50011',
       reason: 'Members disagree on credit distribution.',
       status: 'open',
       visibility: 'public',
@@ -965,10 +965,10 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   try {
     await connectMongoDB();
     if (getMongoClient()) {
-      const open = disputeByNumber['DIS-OPEN01'];
-      const wait = disputeByNumber['DIS-WAIT01'];
-      const review = disputeByNumber['DIS-REVW01'];
-      const open2 = disputeByNumber['DIS-OPEN02'];
+      const open = disputeByNumber['DIS-50002'];
+      const wait = disputeByNumber['DIS-50003'];
+      const review = disputeByNumber['DIS-50004'];
+      const open2 = disputeByNumber['DIS-50005'];
 
       if (open) {
         await seedDisputeChatThread(open.dispute_id, open, supportAccountId, [
@@ -1080,7 +1080,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         ]);
       }
 
-      const feedback = disputeByNumber['DIS-FEED01'];
+      const feedback = disputeByNumber['DIS-50009'];
       if (feedback) {
         await seedDisputeChatThread(feedback.dispute_id, feedback, supportAccountId, [
           {
@@ -1122,12 +1122,12 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     // ticket_number, reason, type, priority, status, channel, account_id, handled_by, related_report, related_dispute, lastAuthor, escalatedTo
     ['TKT-50001', 'Cannot verify payment method', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[0], supportStaffId, reportIds[0], null, 'user', null],
     ['TKT-50002', 'Account locked after password reset', 'Account Access', 'High', 'In Progress', 'web', userAccountIds[3], supportStaffId, null, null, 'user', null],
-    ['TKT-50003', 'Credits missing after package purchase', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[4], adminStaffId, null, disputeByNumber['DIS-OPEN01']?.dispute_id || null, 'staff', null],
+    ['TKT-50003', 'Credits missing after package purchase', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[4], adminStaffId, null, disputeByNumber['DIS-50002']?.dispute_id || null, 'staff', null],
     ['TKT-50004', 'Forum group ownership transfer', 'Forums', 'Medium', 'In Progress', 'web', userAccountIds[2], forumStaffId, reportIds[1], null, 'user', null],
     ['TKT-50005', 'How to invite team members?', 'Other', 'Low', 'Resolved', 'web', userAccountIds[6], supportStaffId, null, null, 'staff', null],
     ['TKT-50006', 'Marketplace listing rejected', 'Asset Marketplace', 'Medium', 'Open', 'web', userAccountIds[7], marketplaceStaffId, reportIds[7], null, 'user', null],
     ['TKT-50007', 'Two-factor not receiving codes', 'Account Verification', 'High', 'Open', 'web', userAccountIds[1], null, null, null, 'user', null],
-    ['TKT-50008', 'Dispute escalation request', 'Contracts and Milestones', 'High', 'In Progress', 'web', userAccountIds[5], null, null, disputeByNumber['DIS-21126']?.dispute_id || null, 'user', 'Jobs N Gigs Moderator'],
+    ['TKT-50008', 'Dispute escalation request', 'Contracts and Milestones', 'High', 'In Progress', 'web', userAccountIds[5], null, null, disputeByNumber['DIS-50011']?.dispute_id || null, 'user', 'Jobs N Gigs Moderator'],
     ['TKT-50009', 'Asset purchase never delivered', 'Asset Marketplace', 'High', 'In Progress', 'web', userAccountIds[9], marketplaceStaffId, null, null, 'staff', null],
     ['TKT-50010', 'Gig milestone stuck in review', 'Jobs and Gigs', 'High', 'Open', 'web', userAccountIds[0], jobsStaffId, null, null, 'user', null],
     ['TKT-50011', 'Freelancer proposal spam', 'Jobs and Gigs', 'Medium', 'In Progress', 'web', userAccountIds[4], jobsStaffId, null, null, 'staff', null],
@@ -1286,14 +1286,14 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
 
   console.log(`✅ Seeded ${tickets.length} tickets, ${disputes.length} disputes, ${reports.length} reports`);
   console.log('   Demo disputes:');
-  console.log('   DIS-PEND01  pending + unassigned     → Admin/Maya: Assign myself, then Approve');
-  console.log('   DIS-PEND02  pending + Maya owns      → Admin: view-only / reassign via Designated handler');
-  console.log('   DIS-OPEN02  public + Maya owns       → Admin: view-only / reassign via Designated handler');
-  console.log('   DIS-OPEN01  public + private reply    → middleman chat sample');
-  console.log('   DIS-WAIT01  awaiting disputee reply  → prompt message sample');
-  console.log('   DIS-REVW01  under review + publish   → private + published party comments');
-  console.log('   DIS-FEED01  unfair feedback (contract) → under review sample');
-  console.log('   DIS-SANC01 / DIS-RSLV01 / DIS-DSSM01 → closed samples');
+  console.log('   DIS-50001  pending + unassigned     → Admin/Maya: Assign myself, then Approve');
+  console.log('   DIS-50006  pending + Maya owns      → Admin: view-only / reassign via Designated handler');
+  console.log('   DIS-50005  public + Maya owns       → Admin: view-only / reassign via Designated handler');
+  console.log('   DIS-50002  public + private reply    → middleman chat sample');
+  console.log('   DIS-50003  awaiting disputee reply  → prompt message sample');
+  console.log('   DIS-50004  under review + publish   → private + published party comments');
+  console.log('   DIS-50009  unfair feedback (contract) → under review sample');
+  console.log('   DIS-50007 / DIS-50008 / DIS-50010 → closed samples');
 }
 
 async function seedTeams(userAccountIds) {

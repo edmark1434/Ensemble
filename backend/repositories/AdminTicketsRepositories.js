@@ -225,6 +225,18 @@ async function nextTicketNumber() {
   return `TKT-${result.rows[0].next_num}`;
 }
 
+async function nextDisputeNumber() {
+  const result = await pool.query(`
+    SELECT COALESCE(
+      MAX(CAST(SUBSTRING(dispute_number FROM 5) AS INTEGER)),
+      50000
+    ) + 1 AS next_num
+    FROM disputes
+    WHERE dispute_number ~ '^DIS-[0-9]+$'
+  `);
+  return `DIS-${result.rows[0].next_num}`;
+}
+
 /**
  * Create a support ticket in Postgres. Optional first message goes to Mongo chat.
  * @returns {Promise<{ticket, messages, chatId, chatAvailable, assignableStaff}>}
@@ -1993,6 +2005,8 @@ module.exports = {
   getTicketDetail,
   getTicketCatalog,
   createSupportTicket,
+  nextTicketNumber,
+  nextDisputeNumber,
   updateTicket,
   addTicketMessage,
   updateDispute,
