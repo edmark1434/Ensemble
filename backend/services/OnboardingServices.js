@@ -1,5 +1,4 @@
 const redisClient = require('../lib/Redis');
-const axios = require('axios');
 const { ListObjectsV2Command, DeleteObjectsCommand } = require('@aws-sdk/client-s3');
 const s3 = require('../lib/AmazonS3');
 const { generateOnboardingAvatarUploadUrl } = require('./FileServices');
@@ -8,9 +7,8 @@ const { getOnboardingCompletion, persistCompletedOnboarding, getReferencedOnboar
 
 const ONBOARDING_TTL_SECONDS = 60 * 60 * 24 * 30;
 const AVATAR_CLEANUP_CURSOR_KEY = 'onboarding:avatar-cleanup-cursor';
-const DEFAULT_STEP = 'personal_details';
+const DEFAULT_STEP = 'avatar';
 const STEP_PATHS = {
-    personal_details: '/setup/personal-details',
     avatar: '/setup/upload-image',
     survey_1: '/setup/survey',
     survey_2: '/setup/survey',
@@ -37,8 +35,16 @@ async function readState(userId) {
     if (!raw) return { current_step: DEFAULT_STEP, data: {}, updated_at: new Date().toISOString() };
     try {
         const parsed = JSON.parse(raw);
-        return { current_step: parsed.current_step || DEFAULT_STEP, data: parsed.data || {}, updated_at: parsed.updated_at || new Date().toISOString() };
-    } catch {
+        const data = { ...(parsed.data || {}) };
+        const isLegacyPersonalState = parsed.current_step === 'personal_details' || Boolean(data.personal_details);
+        delete data.personal_details;
+        const requestedStep = parsed.current_step === 'personal_details' ? DEFAULT_STEP : parsed.current_step;
+        const currentStep = STEP_PATHS[requestedStep] ? requestedStep : DEFAULT_STEP;
+        const state = { current_step: currentStep, data, updated_at: parsed.updated_at || new Date().toISOString() };
+        if (isLegacyPersonalState) return writeState(userId, state);
+        return state;
+    } catch (error) {
+        if (error instanceof OnboardingError) throw error;
         throw new OnboardingError('Onboarding progress is unavailable.', 500, 'INVALID_ONBOARDING_STATE');
     }
 }
@@ -61,63 +67,10 @@ async function getOnboardingState(userId) {
     return { completed: false, ...state, data: restoredData, path: STEP_PATHS[state.current_step] || STEP_PATHS[DEFAULT_STEP] };
 }
 
-function validatePersonalDetails(input = {}) {
-    const birthDate = String(input.birthDate || '').trim();
-    const country = String(input.country || '').trim();
-    const zipCode = String(input.zipCode || '').trim();
-    const address = String(input.address || '').trim();
-    const middleName = String(input.middleName || '').trim();
-    const suffix = String(input.suffix || '').trim();
-    const birthMatch = birthDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    const parsedBirthDate = birthMatch ? new Date(`${birthDate}T00:00:00Z`) : null;
-    const isExactBirthDate = parsedBirthDate
-        && !Number.isNaN(parsedBirthDate.getTime())
-        && parsedBirthDate.getUTCFullYear() === Number(birthMatch[1])
-        && parsedBirthDate.getUTCMonth() + 1 === Number(birthMatch[2])
-        && parsedBirthDate.getUTCDate() === Number(birthMatch[3])
-        && parsedBirthDate <= new Date();
-    if (!isExactBirthDate) throw new OnboardingError('A valid birth date is required.', 422, 'INVALID_BIRTH_DATE');
-    if (!country || country.length > 100) throw new OnboardingError('Country is required.', 422, 'INVALID_COUNTRY');
-    if (!zipCode || zipCode.length > 20) throw new OnboardingError('A valid ZIP code is required.', 422, 'INVALID_ZIP_CODE');
-    if (!address || address.length > 500) throw new OnboardingError('Address is required.', 422, 'INVALID_ADDRESS');
-    if (middleName.length > 100 || suffix.length > 30) throw new OnboardingError('Personal details are too long.', 422, 'INVALID_PERSONAL_DETAILS');
-    return { middleName, suffix, birthDate, country, zipCode, address };
-}
-
-async function savePersonalDetails(userId, input) {
-    const state = await readState(userId);
-    state.data.personal_details = validatePersonalDetails(input);
-    state.current_step = 'avatar';
-    return writeState(userId, state);
-}
-
-async function searchAddresses(query) {
-    const text = String(query || '').trim();
-    if (text.length < 3) return [];
-    if (text.length > 160) throw new OnboardingError('Address search is too long.', 422, 'INVALID_ADDRESS_SEARCH');
-    if (!process.env.GEOAPIFY_API_KEY) throw new OnboardingError('Address search is not configured.', 503, 'ADDRESS_SEARCH_NOT_CONFIGURED');
-    try {
-        const { data } = await axios.get('https://api.geoapify.com/v1/geocode/autocomplete', {
-            params: { text, format: 'json', limit: 6, lang: 'en', apiKey: process.env.GEOAPIFY_API_KEY },
-            timeout: 10000,
-        });
-        return (data?.results || []).map((result) => ({
-            id: result.place_id,
-            label: result.formatted,
-            address: result.formatted,
-            country: result.country || '',
-            zipCode: result.postcode || '',
-        })).filter((result) => result.id && result.label);
-    } catch (error) {
-        if (error instanceof OnboardingError) throw error;
-        throw new OnboardingError('Address suggestions are temporarily unavailable.', 502, 'ADDRESS_SEARCH_FAILED');
-    }
-}
-
 async function issueAvatarUpload(userId, input = {}) {
     const state = await readState(userId);
     const draft = state.data.avatar;
-    if (!state.data.personal_details || draft?.type !== 'custom' || draft.path) throw new OnboardingError('A custom avatar draft is required.', 409, 'ONBOARDING_STEP_REQUIRED');
+    if (draft?.type !== 'custom' || draft.path) throw new OnboardingError('A custom avatar draft is required.', 409, 'ONBOARDING_STEP_REQUIRED');
     const name = String(input.filename || '').trim();
     const mimeType = String(input.contentType || '').trim().toLowerCase();
     const sizeBytes = Number(input.sizeBytes);
@@ -157,7 +110,6 @@ function validateAvatar(input = {}) {
 
 async function saveAvatar(userId, input) {
     const state = await readState(userId);
-    if (!state.data.personal_details) throw new OnboardingError('Complete personal details first.', 409, 'ONBOARDING_STEP_REQUIRED');
     const avatar = validateAvatar(input);
     if (avatar.type === 'custom' && avatar.path) {
         const issued = state.data.pending_avatar_upload;
@@ -220,8 +172,7 @@ async function saveSurveyProgress(userId, input) {
 async function setCurrentStep(userId, requestedStep) {
     const state = await readState(userId);
     const step = String(requestedStep || '');
-    const allowed = step === 'personal_details'
-        || (step === 'avatar' && state.data.personal_details)
+    const allowed = step === 'avatar'
         || (step === 'survey_1' && state.data.avatar)
         || (step === 'survey_2' && state.data.survey);
     if (!allowed) throw new OnboardingError('That onboarding step is not available yet.', 409, 'ONBOARDING_STEP_REQUIRED');
@@ -231,7 +182,7 @@ async function setCurrentStep(userId, requestedStep) {
 
 async function completeOnboarding(userId, accountId, input) {
     const state = await readState(userId);
-    if (!state.data.personal_details || !state.data.avatar) throw new OnboardingError('Required onboarding steps are incomplete.', 409, 'ONBOARDING_INCOMPLETE');
+    if (!state.data.avatar) throw new OnboardingError('Required onboarding steps are incomplete.', 409, 'ONBOARDING_INCOMPLETE');
     if (state.data.avatar.type === 'custom' && !state.data.avatar.path) throw new OnboardingError('Upload the custom avatar before completing onboarding.', 409, 'AVATAR_UPLOAD_REQUIRED');
     state.data.survey = await validateSurvey(input, 'all');
     state.current_step = 'survey_2';
@@ -269,4 +220,4 @@ async function cleanupExpiredOnboardingAvatars() {
     return { scanned: listed.KeyCount || 0, deleted: removable.length };
 }
 
-module.exports = { OnboardingError, getOnboardingState, savePersonalDetails, searchAddresses, issueAvatarUpload, saveAvatar, finalizeAvatarUpload, saveSurveyProgress, setCurrentStep, completeOnboarding, cleanupExpiredOnboardingAvatars, stateKey };
+module.exports = { OnboardingError, getOnboardingState, issueAvatarUpload, saveAvatar, finalizeAvatarUpload, saveSurveyProgress, setCurrentStep, completeOnboarding, cleanupExpiredOnboardingAvatars, stateKey };

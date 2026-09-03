@@ -80,7 +80,9 @@ async function getPublicForumUserIdentities(userIds = []) {
 async function createUser({
     account_id = null,
     firstName = null,
+    middleName = null,
     lastName = null,
+    suffix = null,
     emailAddress,
     passwordHash,
     firebaseUserUuid = null,
@@ -91,18 +93,22 @@ async function createUser({
             `INSERT INTO users (
                 account_id,
                 first_name,
+                middle_name,
                 last_name,
+                suffix,
                 email_address,
                 password_hash,
                 firebase_user_uuid,
                 is_email_verified
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING user_id, first_name, last_name, email_address, firebase_user_uuid`,
             [
                 account_id,
                 firstName,
+                middleName,
                 lastName,
+                suffix,
                 emailAddress,
                 passwordHash,
                 firebaseUserUuid,

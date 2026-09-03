@@ -5,7 +5,7 @@ import ShapeGrid from "../../components/ui/ShapeGrid";
 import api from "@/lib/axios";
 import { deleteAvatarDraft, getAvatarDraft } from "@/lib/onboardingAvatarDraft";
 import useGlobalState from "@/lib/global_state";
-import { notifyOnboardingCompleted } from "@/lib/onboardingEvents";
+import { notifyOnboardingCompleted, notifyOnboardingStepChanged } from "@/lib/onboardingEvents";
 
 const T = {
   bg:        "#080a12",
@@ -282,6 +282,7 @@ export default function Survey() {
     } else {
       try {
         await api.post('/api/onboarding/current-step', { current_step: 'avatar' });
+        notifyOnboardingStepChanged('/setup/upload-image', useGlobalState.getState().user?.account_id);
         navigate("/setup/upload-image");
       } catch {
         setErrors({ submit: 'Unable to return to the avatar step.' });
@@ -334,7 +335,8 @@ export default function Survey() {
               {question.options.map((option) => {
                 const isActive = selectedValues.includes(option.option_value);
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={option.option_id}
                     className={`purpose-card ${isActive ? "active" : ""}`}
                     onClick={() => toggleMultiSelect(question.question_id, option.option_value)}
@@ -354,7 +356,7 @@ export default function Survey() {
                         <Check className="h-3 w-3" />
                       </div>
                     )}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -509,6 +511,8 @@ export default function Survey() {
           justify-content: space-between;
           gap: 12px;
           text-align: left;
+          width: 100%;
+          font: inherit;
         }
 
         .purpose-card:hover {
@@ -538,6 +542,49 @@ export default function Survey() {
           margin-top: 4px;
         }
 
+        .purpose-card:hover {
+          background: rgba(255, 255, 255, 0.04);
+          transform: translateY(-1px);
+          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .purpose-card.active:hover {
+          background: rgba(74, 111, 165, 0.1);
+        }
+
+        .purpose-card:active {
+          transform: scale(0.98);
+          box-shadow: none;
+        }
+
+        .onboarding-secondary-button {
+          transition: all 0.2s ease;
+        }
+
+        .onboarding-secondary-button:not(:disabled):hover {
+          border-color: #4a6fa5 !important;
+          background: rgba(74, 111, 165, 0.12) !important;
+          transform: translateY(-2px);
+        }
+
+        .onboarding-secondary-button:not(:disabled):active {
+          transform: translateY(0) scale(0.97);
+        }
+
+        .onboarding-primary-button:not(:disabled):hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px rgba(255, 255, 255, 0.16);
+        }
+
+        .onboarding-primary-button:not(:disabled):active {
+          transform: translateY(0) scale(0.97);
+          box-shadow: 0 3px 8px rgba(255, 255, 255, 0.1);
+        }
+
+        .setup-card button:focus-visible {
+          outline: 2px solid #7aadde;
+          outline-offset: 3px;
+        }
         @keyframes smooth-fade-in {
           0% { opacity: 0; transform: translateY(10px); }
           100% { opacity: 1; transform: translateY(0); }
@@ -562,11 +609,11 @@ export default function Survey() {
           <div style={{ marginBottom: 40 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: T.accent, letterSpacing: 0.5 }}>ACCOUNT SETUP</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>5 / 5</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{subStep === 1 ? "2 / 3" : "3 / 3"}</span>
             </div>
 
             <div style={{ width: "100%", height: 4, background: T.border, borderRadius: 2, overflow: "hidden", marginBottom: 6 }}>
-              <div style={{ width: "100%", height: "100%", background: T.accent, borderRadius: 2 }} />
+              <div style={{ width: subStep === 1 ? "66.667%" : "100%", height: "100%", background: T.accent, borderRadius: 2, transition: "width 0.4s cubic-bezier(0.16, 1, 0.3, 1)" }} />
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
@@ -625,10 +672,12 @@ export default function Survey() {
             <div style={{ display: "flex", gap: 12 }}>
               <button
                 type="button"
+                className="onboarding-secondary-button"
                 onClick={handleBackAction}
+                disabled={loading}
                 style={{
                   flex: 1, background: "none", border: `1px solid ${T.border}`, color: T.text, padding: "12px 20px",
-                  borderRadius: 30, fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
+                  borderRadius: 30, fontWeight: 600, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
                 }}
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -637,6 +686,7 @@ export default function Survey() {
 
               <button
                 type="submit"
+                className="onboarding-primary-button"
                 disabled={loading}
                 style={{
                   flex: 2, background: loading ? "#555" : "#fff", color: "#080a12", border: "none", padding: "12px 20px",

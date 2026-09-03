@@ -1,5 +1,18 @@
-export type AssetType = "image" | "video" | "audio";
+export type AssetType = "image" | "video" | "audio" | "template";
 export type AssetStatus = "draft" | "published";
+
+export interface AssetThumbnail {
+  media_asset_thumbnail_id: string;
+  path: string;
+  position: number;
+}
+
+export interface AssetProjectLink {
+  media_asset_project_link_id: string;
+  label: string;
+  provider: string;
+  position: number;
+}
 
 export interface AssetBundleFile {
   media_asset_bundle_file_id: string;
@@ -29,7 +42,11 @@ export interface AssetRecord {
   duration_seconds: number | null;
   proxy_path: string;
   thumbnail_path: string;
-  mime_type: string;
+  thumbnails: AssetThumbnail[];
+  thumbnail_count: number;
+  project_links: AssetProjectLink[];
+  project_link_count: number;
+  mime_type: string | null;
   size_bytes: number | null;
   bundle_files: AssetBundleFile[];
   bundle_file_count: number;

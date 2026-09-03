@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Image, ArrowRight, ArrowLeft, Upload, Check, AlertTriangle } from "lucide-react";
+import { Image, ArrowRight, Upload, Check, AlertTriangle } from "lucide-react";
 import ShapeGrid from "../../components/ui/ShapeGrid";
 import api from "../../lib/axios";
 import type { AxiosError } from "axios";
 import toast from "react-hot-toast";
 import { deleteAvatarDraft, getAvatarDraft, saveAvatarDraft } from "../../lib/onboardingAvatarDraft";
+import { notifyOnboardingStepChanged } from "../../lib/onboardingEvents";
+import useGlobalState from "../../lib/global_state";
 
 const T = {
   bg:        "#080a12",
@@ -39,14 +41,6 @@ export default function UploadImage() {
   const [isSaved, setIsSaved] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null); // ✅ ADDED: Store file in state
   const [savedCustomAvatar, setSavedCustomAvatar] = useState<{ type: "custom"; draft_id: string; name: string; mime_type: string; size_bytes: number } | null>(null);
-  const handleBack = async () => {
-    try {
-      await api.post('/api/onboarding/current-step', { current_step: 'personal_details' });
-      navigate('/setup/personal-details');
-    } catch {
-      toast.error('Unable to return to personal details.');
-    }
-  };
   const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
   const ALLOWED_MIME_TYPES = [
     'image/jpeg',
@@ -428,10 +422,8 @@ export default function UploadImage() {
       }
 
       setIsSaved(true);
-      
-      setTimeout(() => {
-        navigate("/setup/survey");
-      }, 500);
+      notifyOnboardingStepChanged('/setup/survey', useGlobalState.getState().user?.account_id);
+      navigate("/setup/survey");
 
     } catch (err) {
       console.error(err);
@@ -550,6 +542,22 @@ export default function UploadImage() {
           height: 16px;
         }
 
+        .avatar-upload-button:not(:disabled):active {
+          transform: scale(0.92) !important;
+        }
+
+        .preset-circle:active:not(.disabled) {
+          transform: scale(0.94);
+        }
+
+        .onboarding-primary-button:not(:disabled):active {
+          transform: scale(0.95) !important;
+        }
+
+        .setup-card button:focus-visible {
+          outline: 2px solid #7aadde;
+          outline-offset: 3px;
+        }
         @keyframes smooth-fade-in {
           0% { opacity: 0; transform: translateY(10px); }
           100% { opacity: 1; transform: translateY(0); }
@@ -581,10 +589,10 @@ export default function UploadImage() {
           <div style={{ marginBottom: 40 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: T.accent, letterSpacing: 0.5 }}>ACCOUNT SETUP</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>3 / 5</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>1 / 3</span>
             </div>
             <div style={{ width: "100%", height: 4, background: T.border, borderRadius: 2, overflow: "hidden" }}>
-              <div style={{ width: "60%", height: "100%", background: T.accent, borderRadius: 2, transition: "width 0.5s cubic-bezier(0.16, 1, 0.3, 1)" }} />
+              <div style={{ width: "33.333%", height: "100%", background: T.accent, borderRadius: 2, transition: "width 0.5s cubic-bezier(0.16, 1, 0.3, 1)" }} />
             </div>
           </div>
 
@@ -644,6 +652,8 @@ export default function UploadImage() {
                 </div>
 
                 <button
+                  type="button"
+                  className="avatar-upload-button"
                   onClick={triggerFileUpload}
                   disabled={isUploading || isSaved}
                   style={{
@@ -666,10 +676,12 @@ export default function UploadImage() {
                   title="Upload Custom Image"
                   onMouseEnter={(e) => {
                     if (!isUploading && !isSaved) {
+                      e.currentTarget.style.background = "#e8e8e8";
                       e.currentTarget.style.transform = "scale(1.1)";
                     }
                   }}
                   onMouseLeave={(e) => {
+                    e.currentTarget.style.background = isUploading || isSaved ? "#555" : "#fff";
                     e.currentTarget.style.transform = "scale(1)";
                   }}
                 >
@@ -737,40 +749,7 @@ export default function UploadImage() {
             <div style={{ display: "flex", gap: 12 }}>
               <button
                 type="button"
-                onClick={() => void handleBack()}
-                disabled={isUploading}
-                style={{
-                  flex: 1,
-                  background: "none",
-                  border: `1px solid ${T.border}`,
-                  color: isUploading ? T.dim : T.text,
-                  padding: "12px 20px",
-                  borderRadius: 30,
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: isUploading ? "not-allowed" : "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                  opacity: isUploading ? 0.5 : 1,
-                  transition: "all 0.2s ease"
-                }}
-                onMouseEnter={(e) => {
-                  if (!isUploading) {
-                    e.currentTarget.style.borderColor = T.borderFoc;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = T.border;
-                }}
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </button>
-
-              <button
-                type="button"
+                className="onboarding-primary-button"
                 onClick={handleNext}
                 disabled={isUploading || isSaved || loading || !previewUrl}
                 style={{
