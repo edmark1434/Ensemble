@@ -23,8 +23,8 @@ interface MeritSectionProps {
 }
 
 const mockDisputes = [
-  { id: "DSP-9041", type: "Asset Licensing", status: "Resolved", date: "2026-03-14", outcome: "In Favor of User" },
-  { id: "DSP-8832", type: "Milestone Delivery", status: "Resolved", date: "2025-11-02", outcome: "Mutually Settled" }
+  { id: "DIS-50041", type: "Marketplace", status: "Closed", date: "2026-03-14" },
+  { id: "DIS-50032", type: "Contract", status: "Closed", date: "2025-11-02" },
 ];
 
 export const MeritSectionSkeleton: React.FC<{ viewMode?: "merit" | "ratings" | "both" }> = ({ viewMode = "both" }) => (
@@ -341,7 +341,7 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
                     <th className="pb-2">Ticket ID</th>
                     <th className="pb-2">Classification</th>
                     <th className="pb-2">Date</th>
-                    <th className="pb-2 text-right">Outcome</th>
+                    <th className="pb-2 text-right">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-white/[0.03] text-gray-700 dark:text-zinc-300 font-mono">
@@ -352,7 +352,7 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
                       <td className="py-2.5 text-gray-500 dark:text-zinc-500">{dispute.date}</td>
                       <td className="py-2.5 text-right font-sans">
                         <span className="bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-200 dark:border-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px] font-medium">
-                          {dispute.outcome}
+                          {dispute.status}
                         </span>
                       </td>
                     </tr>

@@ -1,14 +1,15 @@
-# Current Task — Drop dispute sanction_notes
+# Current Task — Audit dispute UI against schema
 
-Keep a single notes field: `resolution_notes`. Drop `sanction_notes` (merge existing text into resolution notes first). Keep `sanction_type`.
+Verify frontend/backend dispute UIs match the collapsed schema: no outcome, related_entity_*, initiator/respondent columns, assigned_staff_id, or sanction_notes; use by/for, type, handled_by_staff_id, resolution_notes, type-aware titles, DIS-##### numbers.
 
 ## Acceptance Criteria
 
-- [x] Migration merges then drops `sanction_notes`.
-- [x] Backend/seed stop writing `sanction_notes`.
-- [x] Frontend detail modal removes Sanction notes field.
+- [x] No frontend dispute refs to removed fields (`outcome`, `relatedEntity*`, `sanctionNotes`).
+- [x] Desk/modal/dashboards use `type` and handler via `assignee` / `handled_by_staff_id`.
+- [x] Profile mock disputes aligned (status, `DIS-#####`).
+- [x] Frontend build passes (`tsc` + vite).
 
 ## Verification
 
-- Applied `1811500000000_154-drop-dispute-sanction-notes`.
-- Detail modal shows sanction type + resolution notes only.
+- `cd frontend && npm run build` succeeded.
+- Dispute desk shows type chip + Type filter; detail uses resolution notes + sanction type only.

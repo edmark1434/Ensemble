@@ -94,7 +94,7 @@ export type Dispute = {
   number: string;
   title: string;
   reason: string | null;
-  type?: string;
+  type: string;
   status: string;
   priority: string;
   visibility?: string;

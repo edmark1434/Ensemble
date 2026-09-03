@@ -626,13 +626,13 @@ export default function DisputeDesk({
                   </div>
                 </FilterField>
 
-                <FilterField label="Entity type">
+                <FilterField label="Type">
                   <select
                     value={advanced.entityType}
                     onChange={(e) => patchAdvanced({ entityType: e.target.value })}
                     className={selectCls}
                   >
-                    <option value="all">All entities</option>
+                    <option value="all">All types</option>
                     {entityTypes.map((t) => (
                       <option key={t} value={t}>
                         {titleCase(t)}
@@ -699,11 +699,18 @@ export default function DisputeDesk({
                     <td className="px-5 py-3.5">
                       <p className="font-medium text-white">{d.number}</p>
                       <p className="mt-0.5 line-clamp-1 text-xs text-zinc-500">{d.title}</p>
-                      <span
-                        className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] ${priorityClass(d.priority)}`}
-                      >
-                        {titleCase(d.priority)}
-                      </span>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <span
+                          className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] ${priorityClass(d.priority)}`}
+                        >
+                          {titleCase(d.priority)}
+                        </span>
+                        {d.type && (
+                          <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-zinc-300">
+                            {d.type}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5">
                       <p className="text-zinc-200">@{d.initiator.username}</p>
