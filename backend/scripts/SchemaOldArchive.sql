@@ -157,7 +157,6 @@ CREATE TABLE IF NOT EXISTS disputes (
     approved_at TIMESTAMPTZ,
     approved_by_staff_id UUID REFERENCES staff(staff_id),
     sanction_type VARCHAR(50),
-    sanction_notes TEXT,
     related_credit_transaction_id UUID REFERENCES credit_transactions(credit_transaction_id),
     credit_amount_involved INTEGER NOT NULL DEFAULT 0,
     opened_at TIMESTAMPTZ DEFAULT NOW(),

@@ -335,7 +335,6 @@ function mapDisputeRow(row) {
     approvedAt: row.approved_at || null,
     approvedByStaffId: row.approved_by_staff_id || null,
     sanctionType: row.sanction_type || null,
-    sanctionNotes: row.sanction_notes || null,
     relatedCreditTransactionId: row.related_credit_transaction_id || null,
     creditHold: row.hold_status
       ? {
@@ -1631,7 +1630,6 @@ async function updateDispute(disputeId, patch, staffSession) {
     'priority',
     'resolution_notes',
     'sanction_type',
-    'sanction_notes',
     'visibility',
   ];
   const sets = [];
@@ -1650,9 +1648,6 @@ async function updateDispute(disputeId, patch, staffSession) {
   if (normalized.status && normalized.status !== 'closed') {
     if (normalized.sanction_type === undefined) {
       sets.push(`sanction_type = NULL`);
-    }
-    if (normalized.sanction_notes === undefined) {
-      sets.push(`sanction_notes = NULL`);
     }
     sets.push(`resolved_at = NULL`);
   }

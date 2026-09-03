@@ -167,7 +167,6 @@ export default function ModeratorDisputeDetailModal({
   const [assigneeId, setAssigneeId] = useState("");
   const [resolutionNotes, setResolutionNotes] = useState("");
   const [sanctionType, setSanctionType] = useState("");
-  const [sanctionNotes, setSanctionNotes] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -181,7 +180,6 @@ export default function ModeratorDisputeDetailModal({
         setAssigneeId(d.dispute.assignee?.staffId?.toString() || "");
         setResolutionNotes(d.dispute.resolutionNotes || "");
         setSanctionType(d.dispute.sanctionType || "");
-        setSanctionNotes(d.dispute.sanctionNotes || "");
       }
     } catch {
       showErrorToast("Failed to load dispute");
@@ -309,10 +307,8 @@ export default function ModeratorDisputeDetailModal({
     if (adminMode) {
       if (isDisputeClosed(nextStatus)) {
         if (sanctionType) payload.sanction_type = sanctionType;
-        payload.sanction_notes = sanctionNotes || null;
       } else {
         payload.sanction_type = null;
-        payload.sanction_notes = null;
       }
       // Admin may change handler anytime; others use Release / Assign myself while locked.
       if (!assigneeLocked && (canAssignOthers || canAssignMyself)) {
@@ -633,30 +629,32 @@ export default function ModeratorDisputeDetailModal({
                   )}
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-zinc-500">
-                  Sanction notes
+                  Resolution notes
                   <textarea
-                    value={sanctionNotes}
-                    onChange={(e) => setSanctionNotes(e.target.value)}
+                    value={resolutionNotes}
+                    onChange={(e) => setResolutionNotes(e.target.value)}
                     rows={2}
-                    disabled={viewOnly || !isDisputeClosed(status)}
-                    placeholder="Details of the sanction…"
+                    disabled={viewOnly}
+                    placeholder="How was (or will) this dispute be settled?"
                     className="resize-none rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
                   />
                 </label>
               </div>
             )}
 
-            <label className="flex flex-col gap-1 text-xs text-zinc-500">
-              Resolution notes
-              <textarea
-                value={resolutionNotes}
-                onChange={(e) => setResolutionNotes(e.target.value)}
-                rows={2}
-                disabled={viewOnly}
-                placeholder="How was (or will) this dispute be settled?"
-                className="resize-none rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
-              />
-            </label>
+            {!adminMode && (
+              <label className="flex flex-col gap-1 text-xs text-zinc-500">
+                Resolution notes
+                <textarea
+                  value={resolutionNotes}
+                  onChange={(e) => setResolutionNotes(e.target.value)}
+                  rows={2}
+                  disabled={viewOnly}
+                  placeholder="How was (or will) this dispute be settled?"
+                  className="resize-none rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
+                />
+              </label>
+            )}
 
             <div className="flex flex-wrap gap-2">
               {(canAct ||
