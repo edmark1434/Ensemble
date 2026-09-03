@@ -3,7 +3,6 @@
 import { connection, NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { buildPublicUrl } from "@/lib/s3";
-import { resolveProjectId, resolveUserIdByAccountPublicId } from "@/utils/resolve-ids";
 
 type UploadScope = "mine" | "project" | "mine-in-project";
 const VALID_SCOPES: UploadScope[] = ["mine", "project", "mine-in-project"];
@@ -12,17 +11,17 @@ export async function GET(request: NextRequest) {
   await connection();
 
   const searchParams = new URL(request.url).searchParams;
-  const projectPublicId = searchParams.get("projectId");
-  const userPublicId = searchParams.get("userId");
+  const projectId = searchParams.get("projectId");
+  const userId = searchParams.get("userId");
   const scopeParam = searchParams.get("scope") as UploadScope | null;
   const scope: UploadScope =
     scopeParam && VALID_SCOPES.includes(scopeParam) ? scopeParam : "project";
 
-  if (!projectPublicId) {
+  if (!projectId) {
     return NextResponse.json({ error: "projectId is required" }, { status: 400 });
   }
 
-  if ((scope === "mine" || scope === "mine-in-project") && !userPublicId) {
+  if ((scope === "mine" || scope === "mine-in-project") && !userId) {
     return NextResponse.json(
       { error: "userId is required for this scope" },
       { status: 400 }
@@ -30,17 +29,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const projectId = await resolveProjectId(projectPublicId);
-    const ownerUserId =
-      scope === "mine" || scope === "mine-in-project"
-        ? await resolveUserIdByAccountPublicId(userPublicId!)
-        : null;
+    // projectId/userId from the query string are already the real
+    // project_id / user_id UUIDs - no more public_id resolution.
+    const ownerUserId = scope === "mine" || scope === "mine-in-project" ? userId! : null;
 
     let query = db
       .selectFrom("media_assets")
       .innerJoin("files", "files.file_id", "media_assets.original_file_id")
       .select([
-        "media_assets.public_id",
+        "media_assets.media_asset_id",
         "media_assets.name",
         "media_assets.type",
         "media_assets.width",
@@ -65,7 +62,7 @@ export async function GET(request: NextRequest) {
     const rows = await query.orderBy("media_assets.created_at", "desc").execute();
 
     const uploads = rows.map((row) => ({
-      id: row.public_id,
+      id: row.media_asset_id,
       fileName: row.name,
       type: row.type,
       url: buildPublicUrl(row.path),

@@ -8,7 +8,6 @@ import {
   createPresignedPutUrl,
   getContentType
 } from "@/lib/s3";
-import { resolveUserIdByAccountPublicId } from "@/utils/resolve-ids";
 import { resolveUniqueFileName } from "@/utils/resolve-unique-filename";
 
 interface PresignRequest {
@@ -37,7 +36,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ownerUserId = await resolveUserIdByAccountPublicId(userId);
+    // userId is already the user_id UUID — no more public_id -> internal id lookup.
+    const ownerUserId = userId;
 
     const uploads = [];
     const reservedInBatch = new Set<string>();
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
 
       const contentType = getContentType(uniqueFileName);
       const fileId = nanoid();
-      const filePath = buildS3Key(userId, fileId, uniqueFileName); // userId (public) still fine here — it's just the S3 folder prefix
+      const filePath = buildS3Key(userId, fileId, uniqueFileName); // just the S3 folder prefix, unrelated to the db file_id
       const presignedUrl = await createPresignedPutUrl(filePath, contentType);
 
       uploads.push({

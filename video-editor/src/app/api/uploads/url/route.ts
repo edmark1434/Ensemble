@@ -9,7 +9,6 @@ import {
   uploadBufferToS3
 } from "@/lib/s3";
 import { db } from "@/lib/db";
-import { resolveUserIdByAccountPublicId, resolveProjectId } from "@/utils/resolve-ids";
 import {probeAudioVideoDuration, probeImageDimensions, probeVideoMetadata} from "@/utils/media-probe";
 import { resolveUniqueFileName } from "@/utils/resolve-unique-filename";
 import {MAX_FILE_SIZE_BYTES} from "@/constants/upload-limits";
@@ -96,10 +95,10 @@ export async function POST(request: NextRequest) {
       typeof entry === "string" ? { url: entry } : entry
     );
 
-    const [ownerUserId, resolvedProjectId] = await Promise.all([
-      resolveUserIdByAccountPublicId(userId),
-      resolveProjectId(projectId)
-    ]);
+    // userId/projectId are already the real user_id / project_id UUIDs —
+    // no more public_id -> internal id resolution.
+    const ownerUserId = userId;
+    const resolvedProjectId = projectId;
 
     const reservedInBatch = new Set<string>();
     const entriesWithNames = [];
@@ -168,7 +167,6 @@ export async function POST(request: NextRequest) {
         const mediaAsset = await db
           .insertInto("media_assets")
           .values({
-            public_id: nanoid(),
             owner_user_id: ownerUserId,
             project_id: resolvedProjectId,
             name: fileName,
@@ -180,7 +178,7 @@ export async function POST(request: NextRequest) {
             height: resolvedHeight,
             duration_seconds: resolvedDuration
           })
-          .returning(["media_asset_id", "public_id"])
+          .returning("media_asset_id")
           .executeTakeFirstOrThrow();
 
         return {
@@ -190,7 +188,7 @@ export async function POST(request: NextRequest) {
           originalUrl: sourceUrl,
           folder: "uploads",
           url: buildPublicUrl(filePath),
-          mediaAssetId: mediaAsset.public_id,
+          mediaAssetId: mediaAsset.media_asset_id,
           width: resolvedWidth,
           height: resolvedHeight,
           durationSeconds: resolvedDuration

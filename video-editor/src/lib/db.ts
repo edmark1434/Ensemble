@@ -2,7 +2,7 @@ import { Pool } from "pg";
 import { Kysely, PostgresDialect, Generated } from "kysely";
 
 interface FilesTable {
-  file_id: Generated<number>;
+  file_id: Generated<string>;
   name: string;
   path: string;
   mime_type: string;
@@ -16,9 +16,9 @@ interface MediaAssetsTable {
   owner_user_id: string;
   project_id: string;
   name: string;
-  original_file_id: number;
-  proxy_file_id: number | null;
-  thumbnail_file_id: number | null;
+  original_file_id: string;
+  proxy_file_id: string;
+  thumbnail_file_id: string;
   type: string;
   width: number | null;
   height: number | null;
