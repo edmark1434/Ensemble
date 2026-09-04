@@ -1094,41 +1094,41 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   }
 
   const tickets = [
-    // ticket_number, reason, type, priority, status, channel, account_id, handled_by, related_report, related_dispute, lastAuthor, escalatedTo
-    ['TKT-50001', 'Cannot verify payment method', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[0], supportStaffId, reportIds[0], null, 'user', null],
-    ['TKT-50002', 'Account locked after password reset', 'Account Access', 'High', 'In Progress', 'web', userAccountIds[3], supportStaffId, null, null, 'user', null],
-    ['TKT-50003', 'Credits missing after package purchase', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[4], adminStaffId, null, disputeByNumber['DIS-50002']?.dispute_id || null, 'staff', null],
-    ['TKT-50004', 'Forum group ownership transfer', 'Forums', 'Medium', 'In Progress', 'web', userAccountIds[2], forumStaffId, reportIds[1], null, 'user', null],
-    ['TKT-50005', 'How to invite team members?', 'Other', 'Low', 'Resolved', 'web', userAccountIds[6], supportStaffId, null, null, 'staff', null],
-    ['TKT-50006', 'Marketplace listing rejected', 'Asset Marketplace', 'Medium', 'Open', 'web', userAccountIds[7], marketplaceStaffId, reportIds[7], null, 'user', null],
-    ['TKT-50007', 'Two-factor not receiving codes', 'Account Verification', 'High', 'Open', 'web', userAccountIds[1], null, null, null, 'user', null],
-    ['TKT-50008', 'Dispute escalation request', 'Contracts and Milestones', 'High', 'In Progress', 'web', userAccountIds[5], null, null, disputeByNumber['DIS-50011']?.dispute_id || null, 'user', 'Jobs N Gigs Moderator'],
-    ['TKT-50009', 'Asset purchase never delivered', 'Asset Marketplace', 'High', 'In Progress', 'web', userAccountIds[9], marketplaceStaffId, null, null, 'staff', null],
-    ['TKT-50010', 'Gig milestone stuck in review', 'Jobs and Gigs', 'High', 'Open', 'web', userAccountIds[0], jobsStaffId, null, null, 'user', null],
-    ['TKT-50011', 'Freelancer proposal spam', 'Jobs and Gigs', 'Medium', 'In Progress', 'web', userAccountIds[4], jobsStaffId, null, null, 'staff', null],
-    ['TKT-50012', 'Refund status check', 'Credit Top-ups', 'Medium', 'Open', 'web', userAccountIds[2], supportStaffId, null, null, 'user', null],
-    ['TKT-50013', 'Cannot upload portfolio', 'Account Access', 'Low', 'Open', 'web', userAccountIds[8], supportStaffId, null, null, 'user', null],
-    ['TKT-50014', 'Cancel annual subscription', 'Subscriptions and Plans', 'Medium', 'Open', 'web', userAccountIds[1], supportStaffId, null, null, 'staff', null],
-    ['TKT-50015', 'Payout not arriving', 'Withdrawing Earnings', 'High', 'Open', 'web', userAccountIds[5], null, null, null, 'user', 'Support Moderator'],
-    ['TKT-50016', 'Timeline editor crash on export', 'Video Editor', 'Medium', 'In Progress', 'web', userAccountIds[6], supportStaffId, null, null, 'user', null],
+    // ticket_number, reason, type, priority, status, channel, account_id, handled_by, related_dispute, lastAuthor, escalatedTo
+    ['TKT-50001', 'Cannot verify payment method', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[0], supportStaffId, null, 'user', null],
+    ['TKT-50002', 'Account locked after password reset', 'Account Access', 'High', 'In Progress', 'web', userAccountIds[3], supportStaffId, null, 'user', null],
+    ['TKT-50003', 'Credits missing after package purchase', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[4], adminStaffId, disputeByNumber['DIS-50002']?.dispute_id || null, 'staff', null],
+    ['TKT-50004', 'Forum group ownership transfer', 'Forums', 'Medium', 'In Progress', 'web', userAccountIds[2], forumStaffId, null, 'user', null],
+    ['TKT-50005', 'How to invite team members?', 'Other', 'Low', 'Resolved', 'web', userAccountIds[6], supportStaffId, null, 'staff', null],
+    ['TKT-50006', 'Marketplace listing rejected', 'Asset Marketplace', 'Medium', 'Open', 'web', userAccountIds[7], marketplaceStaffId, null, 'user', null],
+    ['TKT-50007', 'Two-factor not receiving codes', 'Account Verification', 'High', 'Open', 'web', userAccountIds[1], null, null, 'user', null],
+    ['TKT-50008', 'Dispute escalation request', 'Contracts and Milestones', 'High', 'In Progress', 'web', userAccountIds[5], null, disputeByNumber['DIS-50011']?.dispute_id || null, 'user', 'Jobs N Gigs Moderator'],
+    ['TKT-50009', 'Asset purchase never delivered', 'Asset Marketplace', 'High', 'In Progress', 'web', userAccountIds[9], marketplaceStaffId, null, 'staff', null],
+    ['TKT-50010', 'Gig milestone stuck in review', 'Jobs and Gigs', 'High', 'Open', 'web', userAccountIds[0], jobsStaffId, null, 'user', null],
+    ['TKT-50011', 'Freelancer proposal spam', 'Jobs and Gigs', 'Medium', 'In Progress', 'web', userAccountIds[4], jobsStaffId, null, 'staff', null],
+    ['TKT-50012', 'Refund status check', 'Credit Top-ups', 'Medium', 'Open', 'web', userAccountIds[2], supportStaffId, null, 'user', null],
+    ['TKT-50013', 'Cannot upload portfolio', 'Account Access', 'Low', 'Open', 'web', userAccountIds[8], supportStaffId, null, 'user', null],
+    ['TKT-50014', 'Cancel annual subscription', 'Subscriptions and Plans', 'Medium', 'Open', 'web', userAccountIds[1], supportStaffId, null, 'staff', null],
+    ['TKT-50015', 'Payout not arriving', 'Withdrawing Earnings', 'High', 'Open', 'web', userAccountIds[5], null, null, 'user', 'Support Moderator'],
+    ['TKT-50016', 'Timeline editor crash on export', 'Video Editor', 'Medium', 'In Progress', 'web', userAccountIds[6], supportStaffId, null, 'user', null],
   ];
 
   const ticketIds = [];
   for (const t of tickets) {
-    const escalatedTo = t[11];
+    const escalatedTo = t[10];
     const res = await pool.query(
       `INSERT INTO tickets (
         ticket_number, reason, type, priority, status, channel,
         account_id, handled_by_staff_id,
-        related_report_id, related_dispute_id,
+        related_dispute_id,
         last_message_author_type, message_count, last_message_at,
         escalated_to_role, escalated_by_staff_id,
         created_at, resolved_at
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
-        $12, NOW() - ($13 || ' hours')::interval,
-        $14,$15,
-        NOW() - ($16 || ' hours')::interval, $17
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        $11, NOW() - ($12 || ' hours')::interval,
+        $13,$14,
+        NOW() - ($15 || ' hours')::interval, $16
       )
       RETURNING ticket_id`,
       [
@@ -1142,7 +1142,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         t[7],
         t[8],
         t[9],
-        t[10],
         faker.number.int({ min: 1, max: 8 }),
         String(faker.number.int({ min: 1, max: 48 })),
         escalatedTo,

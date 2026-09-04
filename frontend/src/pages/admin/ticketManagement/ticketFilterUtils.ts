@@ -11,7 +11,7 @@ import {
 
 export type TicketQueueFilter = 'all' | 'Support' | 'Forums' | 'Marketplace' | 'Jobs and Gigs' | 'Admin';
 export type TicketAssigneeFilter = 'all' | 'assigned' | 'unassigned';
-export type TicketFlagFilter = 'all' | 'awaiting' | 'escalated' | 'open_only' | 'has_report' | 'has_dispute';
+export type TicketFlagFilter = 'all' | 'awaiting' | 'escalated' | 'open_only' | 'has_dispute';
 export type TicketSortKey = 'priority_desc' | 'priority_asc' | 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc';
 export type TicketDesk = 'admin' | 'support';
 
@@ -143,7 +143,6 @@ export function ticketMatchesSearch(ticket: SupportTicket, rawQuery: string): bo
     ticket.escalatedBy?.name,
     ticket.escalatedBy?.role,
     ticket.escalatedToRole,
-    ticket.relatedReportId,
     ticket.relatedDisputeId,
     ticket.messageCount,
     ticket.id,
@@ -217,7 +216,6 @@ export function filterTickets(tickets: SupportTicket[], filters: TicketFilterSta
 
     if (filters.flag === 'awaiting' && !t.waitingForResponse) return false;
     if (filters.flag === 'escalated' && !t.isEscalated) return false;
-    if (filters.flag === 'has_report' && !t.relatedReportId) return false;
     if (filters.flag === 'has_dispute' && !t.relatedDisputeId) return false;
     if (filters.flag === 'open_only' && t.status !== 'Open' && t.status !== 'In Progress') {
       return false;

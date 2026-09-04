@@ -263,12 +263,12 @@ async function createSupportTicket(input, session = null) {
     INSERT INTO tickets (
       ticket_number, reason, type, priority, status, channel,
       account_id, handled_by_staff_id,
-      related_report_id, related_dispute_id,
+      related_dispute_id,
       message_count, last_message_at
     ) VALUES (
       $1, $2, $3, $4, $5, $6,
       $7, $8,
-      $9, $10,
+      $9,
       0, NULL
     )
     RETURNING ticket_id
@@ -282,7 +282,6 @@ async function createSupportTicket(input, session = null) {
       channel,
       requesterAccountId,
       handledBy,
-      input?.relatedReportId || null,
       input?.relatedDisputeId || null,
     ]
   );

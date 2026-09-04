@@ -408,7 +408,6 @@ export default function TicketFiltersPanel({
           <option value="awaiting">Awaiting Reply</option>
           <option value="escalated">Escalated</option>
           <option value="open_only">Open / In Progress</option>
-          <option value="has_report">Has Related Report</option>
           <option value="has_dispute">Has Related Dispute</option>
         </select>
       </Field>

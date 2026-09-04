@@ -61,7 +61,6 @@ function mapTicketRow(row) {
     isEscalated: Boolean(row.escalated_to_role || row.escalated_by_staff_id),
     waitingForResponse,
     lastMessageAuthorType: row.last_message_author_type || null,
-    relatedReportId: row.related_report_id,
     relatedDisputeId: row.related_dispute_id,
     messageCount: Number(row.message_count || 0),
     lastMessageAt: row.last_message_at,

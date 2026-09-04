@@ -122,7 +122,6 @@ export default function ModeratorTicketDesk({
       flag === "awaiting" ||
       flag === "escalated" ||
       flag === "open_only" ||
-      flag === "has_report" ||
       flag === "has_dispute" ||
       flag === "all"
     ) {

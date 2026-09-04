@@ -31,7 +31,6 @@ export type SupportTicket = {
   isEscalated?: boolean;
   waitingForResponse?: boolean;
   lastMessageAuthorType?: string | null;
-  relatedReportId: number | string | null;
   relatedDisputeId: number | string | null;
   messageCount: number;
   lastMessageAt: string | null;
