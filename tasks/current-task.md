@@ -1,14 +1,14 @@
-# Current Task — Dispute visibility boolean
+# Current Task — Drop dispute approval columns
 
-Change `disputes.visibility` from varchar (`pending` / `parties` / `public`) to boolean (`false` = hidden, `true` = visible).
+Remove `approved_at` and `approved_by_staff_id` from disputes. Approval remains status + visibility only (Approve → open + visible).
 
 ## Acceptance Criteria
 
-- [x] Migration converts values and alters column type.
-- [x] Backend mappers/updates/seed use boolean.
-- [x] Frontend desk/modal filter and badges use Visible / Hidden.
+- [x] Migration drops both columns.
+- [x] Backend seed/repos stop reading/writing them.
+- [x] Frontend types/UI have no approval timestamp/staff fields.
 
 ## Verification
 
-- Applied `1811600000000_155-dispute-visibility-boolean`.
-- `false` = hidden (pending approval); `true` = visible after approve.
+- Applied `1811700000000_156-drop-dispute-approval-columns`.
+- Approve still sets `status = open` and `visibility = true`.

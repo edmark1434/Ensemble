@@ -333,8 +333,6 @@ function mapDisputeRow(row) {
       ? { staffId: row.handled_by_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
       : null,
     creditAmount: Number(row.credit_amount_involved || 0),
-    approvedAt: row.approved_at || null,
-    approvedByStaffId: row.approved_by_staff_id || null,
     sanctionType: row.sanction_type || null,
     relatedCreditTransactionId: row.related_credit_transaction_id || null,
     creditHold: row.hold_status
@@ -1597,11 +1595,9 @@ async function updateDispute(disputeId, patch, staffSession) {
       `UPDATE disputes
        SET status = 'open',
            visibility = TRUE,
-           approved_at = COALESCE(approved_at, NOW()),
-           approved_by_staff_id = COALESCE(approved_by_staff_id, $1),
            updated_at = NOW()
-       WHERE dispute_id = $2`,
-      [staff.staff_id, disputeId]
+       WHERE dispute_id = $1`,
+      [disputeId]
     );
     return getDisputeDetail(disputeId, staffSession);
   }
@@ -1612,13 +1608,11 @@ async function updateDispute(disputeId, patch, staffSession) {
       `UPDATE disputes
        SET status = 'closed',
            visibility = TRUE,
-           approved_at = COALESCE(approved_at, NOW()),
-           approved_by_staff_id = COALESCE(approved_by_staff_id, $1),
-           resolution_notes = COALESCE($2, resolution_notes),
+           resolution_notes = COALESCE($1, resolution_notes),
            resolved_at = NOW(),
            updated_at = NOW()
-       WHERE dispute_id = $3`,
-      [staff.staff_id, patch.resolution_notes || null, disputeId]
+       WHERE dispute_id = $2`,
+      [patch.resolution_notes || null, disputeId]
     );
     return getDisputeDetail(disputeId, staffSession);
   }
@@ -1671,10 +1665,6 @@ async function updateDispute(disputeId, patch, staffSession) {
     const status = String(normalized.status).toLowerCase();
     if (status === 'open' && !Boolean(refreshed.visibility)) {
       sets.push(`visibility = TRUE`);
-      sets.push(`approved_at = COALESCE(approved_at, NOW())`);
-      sets.push(`approved_by_staff_id = COALESCE(approved_by_staff_id, $${idx})`);
-      values.push(staff.staff_id);
-      idx += 1;
     }
     if (status === 'closed') {
       sets.push(`resolved_at = NOW()`);

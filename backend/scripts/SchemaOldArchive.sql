@@ -154,8 +154,6 @@ CREATE TABLE IF NOT EXISTS disputes (
     for_account_id UUID NOT NULL REFERENCES accounts(account_id),
     handled_by_staff_id UUID REFERENCES staff(staff_id),
     escalated_by_staff_id UUID REFERENCES staff(staff_id),
-    approved_at TIMESTAMPTZ,
-    approved_by_staff_id UUID REFERENCES staff(staff_id),
     sanction_type VARCHAR(50),
     related_credit_transaction_id UUID REFERENCES credit_transactions(credit_transaction_id),
     credit_amount_involved INTEGER NOT NULL DEFAULT 0,

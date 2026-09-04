@@ -102,8 +102,6 @@ export type Dispute = {
   respondent: TicketPerson;
   assignee: TicketAssignee | null;
   creditAmount: number;
-  approvedAt?: string | null;
-  approvedByStaffId?: number | string | null;
   sanctionType?: string | null;
   relatedCreditTransactionId?: number | string | null;
   creditHold?: DisputeCreditHold | null;

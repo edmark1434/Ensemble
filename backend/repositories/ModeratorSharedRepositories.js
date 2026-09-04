@@ -134,8 +134,6 @@ function mapDisputeRow(row) {
       ? { staffId: row.handled_by_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
       : null,
     creditAmount: Number(row.credit_amount_involved || 0),
-    approvedAt: row.approved_at || null,
-    approvedByStaffId: row.approved_by_staff_id || null,
     sanctionType: row.sanction_type || null,
     relatedCreditTransactionId: row.related_credit_transaction_id || null,
     creditHold: row.hold_status

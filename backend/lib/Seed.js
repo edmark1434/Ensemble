@@ -672,7 +672,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: null,
       credits: 3500,
       hold: true,
-      approved: false,
       sanctionType: null,
       resolutionNotes: null,
       daysAgo: 1,
@@ -690,7 +689,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 12000,
       hold: true,
-      approved: true,
       sanctionType: null,
       resolutionNotes: null,
       daysAgo: 5,
@@ -709,7 +707,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 2000,
       hold: true,
-      approved: true,
       sanctionType: null,
       resolutionNotes: null,
       daysAgo: 4,
@@ -728,7 +725,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 4500,
       hold: true,
-      approved: true,
       sanctionType: null,
       resolutionNotes: null,
       daysAgo: 8,
@@ -748,7 +744,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 6500,
       hold: true,
-      approved: true,
       sanctionType: null,
       resolutionNotes: null,
       daysAgo: 3,
@@ -768,7 +763,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 5200,
       hold: true,
-      approved: false,
       sanctionType: null,
       resolutionNotes: null,
       daysAgo: 2,
@@ -786,7 +780,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 900,
       hold: false,
-      approved: true,
       sanctionType: 'warn',
       resolutionNotes:
         'Sanction applied after both parties were heard. Formal warning issued to respondent for repeated SLA breaches.',
@@ -807,7 +800,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       credits: 2500,
       hold: true,
       holdStatus: 'released',
-      approved: true,
       sanctionType: null,
       resolutionNotes: 'Rating adjusted after review; partial credit return agreed.',
       daysAgo: 45,
@@ -827,7 +819,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 1800,
       hold: false,
-      approved: true,
       sanctionType: null,
       resolutionNotes: null,
       daysAgo: 4,
@@ -846,7 +837,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 800,
       hold: false,
-      approved: true,
       sanctionType: null,
       resolutionNotes: 'Dismissed — purchase was outside the refund policy window.',
       daysAgo: 30,
@@ -865,7 +855,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: adminStaffId,
       credits: 8000,
       hold: false,
-      approved: true,
       sanctionType: null,
       resolutionNotes: null,
       daysAgo: 12,
@@ -911,13 +900,11 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         dispute_number, title, reason, status, priority, visibility,
         by_account_id, for_account_id, handled_by_staff_id,
         credit_amount_involved, opened_at, resolution_notes,
-        approved_at, approved_by_staff_id, sanction_type,
-        type, resolved_at
+        sanction_type, type, resolved_at
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
         NOW() - ($11 || ' days')::interval, $12,
-        $13, $14, $15,
-        $16, $17
+        $13, $14, $15
       )
       RETURNING dispute_id, dispute_number, by_account_id, for_account_id`,
       [
@@ -933,8 +920,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         d.credits,
         String(d.daysAgo),
         d.resolutionNotes,
-        d.approved ? new Date(Date.now() - (d.daysAgo - 0.5) * 86400000) : null,
-        d.approved ? (d.assigneeId || supportStaffId) : null,
         d.sanctionType,
         partyType,
         ['closed'].includes(d.status)
