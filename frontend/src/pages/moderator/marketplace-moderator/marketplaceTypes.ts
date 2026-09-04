@@ -30,7 +30,6 @@ export type MarketplaceTicket = {
   category: string;
   priority: string;
   status: string;
-  channel: string;
   requester: { accountId: number; name: string; username: string; email: string | null };
   assignee: { staffId: number; name: string; role: string } | null;
   messageCount: number;

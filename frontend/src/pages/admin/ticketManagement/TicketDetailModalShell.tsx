@@ -590,10 +590,6 @@ export default function TicketDetailModalShell({
                       <dt className="text-zinc-600">Updated</dt>
                       <dd>{formatDateTime(t.updatedAt)}</dd>
                     </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-zinc-600">Channel</dt>
-                      <dd className="capitalize">{t.channel || 'web'}</dd>
-                    </div>
                   </dl>
                 </section>
 

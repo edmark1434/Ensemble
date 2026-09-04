@@ -57,7 +57,6 @@ async function getSupportTickets({ status, search, type, category, priority } = 
       LOWER(t.reason) LIKE $${params.length}
       OR LOWER(COALESCE(t.ticket_number, '')) LIKE $${params.length}
       OR LOWER(COALESCE(t.type, '')) LIKE $${params.length}
-      OR LOWER(COALESCE(t.channel, '')) LIKE $${params.length}
       OR LOWER(COALESCE(ra.handle, '')) LIKE $${params.length}
       OR LOWER(COALESCE(ra.display_name, '')) LIKE $${params.length}
       OR LOWER(COALESCE(ru.email_address, '')) LIKE $${params.length}

@@ -249,7 +249,6 @@ async function createSupportTicket(input, session = null) {
   const type = normalizeTicketType(input?.type || input?.category || 'Other');
   const priority = normalizeTicketPriority(input?.priority || 'Medium');
   const status = normalizeTicketStatus(input?.status || 'Open');
-  const channel = String(input?.channel || 'web').trim().toLowerCase() || 'web';
   const requesterAccountId = input?.requesterAccountId || sessionAccountId(session);
   if (!requesterAccountId) throw new Error('Requester account is required');
 
@@ -261,14 +260,12 @@ async function createSupportTicket(input, session = null) {
   const insert = await pool.query(
     `
     INSERT INTO tickets (
-      ticket_number, reason, type, priority, status, channel,
+      ticket_number, reason, type, priority, status,
       account_id, handled_by_staff_id,
-      related_dispute_id,
       message_count, last_message_at
     ) VALUES (
-      $1, $2, $3, $4, $5, $6,
-      $7, $8,
-      $9,
+      $1, $2, $3, $4, $5,
+      $6, $7,
       0, NULL
     )
     RETURNING ticket_id
@@ -279,10 +276,8 @@ async function createSupportTicket(input, session = null) {
       type,
       priority,
       status,
-      channel,
       requesterAccountId,
       handledBy,
-      input?.relatedDisputeId || null,
     ]
   );
 

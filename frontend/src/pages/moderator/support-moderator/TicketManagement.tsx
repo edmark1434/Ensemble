@@ -110,7 +110,6 @@ function filtersFromSearchParams(params: URLSearchParams): TicketFilterState {
     flag === "awaiting" ||
     flag === "escalated" ||
     flag === "open_only" ||
-    flag === "has_dispute" ||
     flag === "all"
   ) {
     next.flag = flag as TicketFlagFilter;
@@ -256,13 +255,6 @@ export default function SupportTicketManagement() {
     return [...new Set([...TICKET_TYPE_OPTIONS, ...fromData])];
   }, [allTickets]);
 
-  const ticketChannels = useMemo(() => {
-    const fromData = [
-      ...new Set(allTickets.map((t) => String(t.channel || "web").toLowerCase()).filter(Boolean)),
-    ];
-    return fromData.length ? fromData.sort() : ["web", "email", "in_app"];
-  }, [allTickets]);
-
   const recentActivity = data?.recentActivity || data?.ticketLog || [];
 
   const mySummary = useMemo(() => {
@@ -405,7 +397,6 @@ export default function SupportTicketManagement() {
             totalCount={allTickets.length}
             summary={summary}
             ticketTypes={ticketTypes}
-            channels={ticketChannels}
             moderators={staffWorkload.map((s) => ({
               staffId: s.staffId,
               name: s.name,
@@ -427,7 +418,6 @@ export default function SupportTicketManagement() {
             totalCount={myTickets.length}
             summary={mySummary}
             ticketTypes={ticketTypes}
-            channels={ticketChannels}
             moderators={staffWorkload.map((s) => ({
               staffId: s.staffId,
               name: s.name,
@@ -594,7 +584,6 @@ function TicketsTab({
   totalCount,
   summary,
   ticketTypes,
-  channels,
   moderators,
   filters,
   onFiltersChange,
@@ -615,7 +604,6 @@ function TicketsTab({
     awaitingReplyTickets?: number;
   };
   ticketTypes: string[];
-  channels: string[];
   moderators: { staffId: number | string; name: string; role: string }[];
   filters: TicketFilterState;
   onFiltersChange: (next: TicketFilterState) => void;
@@ -683,7 +671,6 @@ function TicketsTab({
           filters={filters}
           onChange={onFiltersChange}
           ticketTypes={ticketTypes}
-          channels={channels}
           moderators={moderators}
           accent="sky"
           desk="support"

@@ -122,7 +122,6 @@ export default function ModeratorTicketDesk({
       flag === "awaiting" ||
       flag === "escalated" ||
       flag === "open_only" ||
-      flag === "has_dispute" ||
       flag === "all"
     ) {
       next.flag = flag as TicketFlagFilter;
@@ -178,11 +177,6 @@ export default function ModeratorTicketDesk({
       }
     }
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [tickets]);
-
-  const channels = useMemo(() => {
-    const set = new Set(tickets.map((t) => String(t.channel || "web").toLowerCase()));
-    return [...set].sort();
   }, [tickets]);
 
   const summary = useMemo(() => {
@@ -300,7 +294,6 @@ export default function ModeratorTicketDesk({
           filters={filters}
           onChange={setFilters}
           ticketTypes={typeCatalog}
-          channels={channels}
           moderators={moderators}
           accent={accent}
           showQueue={false}

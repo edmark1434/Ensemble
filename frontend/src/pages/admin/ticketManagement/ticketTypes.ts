@@ -22,7 +22,6 @@ export type SupportTicket = {
   category?: string;
   priority: string;
   status: string;
-  channel: string;
   requester: TicketPerson;
   assignee: TicketAssignee | null;
   escalatedBy?: TicketAssignee | null;
@@ -31,7 +30,6 @@ export type SupportTicket = {
   isEscalated?: boolean;
   waitingForResponse?: boolean;
   lastMessageAuthorType?: string | null;
-  relatedDisputeId: number | string | null;
   messageCount: number;
   lastMessageAt: string | null;
   createdAt: string;

@@ -35,7 +35,6 @@ function mapTicketRow(row) {
     category: normalizeTicketType(row.type || row.category),
     priority: normalizeTicketPriority(row.priority),
     status,
-    channel: row.channel || 'web',
     requester: {
       accountId: row.account_id || row.requester_account_id,
       userId: row.requester_user_id || row.user_id || null,
@@ -61,7 +60,6 @@ function mapTicketRow(row) {
     isEscalated: Boolean(row.escalated_to_role || row.escalated_by_staff_id),
     waitingForResponse,
     lastMessageAuthorType: row.last_message_author_type || null,
-    relatedDisputeId: row.related_dispute_id,
     messageCount: Number(row.message_count || 0),
     lastMessageAt: row.last_message_at,
     createdAt: row.created_at,
