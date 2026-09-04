@@ -70,10 +70,10 @@ function priorityClass(priority: string) {
   return 'bg-sky-500/15 text-sky-300 border-sky-500/25';
 }
 
-function visibilityClass(visibility: string) {
-  const v = visibility.toLowerCase();
-  if (v === 'public') return 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20';
-  return 'bg-zinc-500/10 text-zinc-400 border-white/10';
+function visibilityClass(visibility: boolean) {
+  return visibility
+    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+    : 'bg-zinc-500/10 text-zinc-400 border-white/10';
 }
 
 type StatusFilter =
@@ -94,7 +94,7 @@ type WorkflowStatusFilter =
   | 'closed';
 
 type PriorityFilter = 'all' | 'high' | 'medium' | 'low';
-type VisibilityFilter = 'all' | 'pending' | 'parties' | 'public';
+type VisibilityFilter = 'all' | 'visible' | 'hidden';
 type AssigneeFilter = 'all' | 'unassigned' | 'assigned' | string; // string = staffId
 
 type FlagFilter = 'all' | 'credit_hold';
@@ -339,12 +339,8 @@ export default function DisputeDesk({
       if (advanced.priority !== 'all' && String(d.priority).toLowerCase() !== advanced.priority) {
         return false;
       }
-      if (
-        advanced.visibility !== 'all' &&
-        String(d.visibility || 'pending').toLowerCase() !== advanced.visibility
-      ) {
-        return false;
-      }
+      if (advanced.visibility === 'visible' && !d.visibility) return false;
+      if (advanced.visibility === 'hidden' && d.visibility) return false;
       if (advanced.assignee === 'unassigned' && d.assignee) return false;
       if (advanced.assignee === 'assigned' && !d.assignee) return false;
       if (
@@ -592,9 +588,8 @@ export default function DisputeDesk({
                     className={selectCls}
                   >
                     <option value="all">All visibility</option>
-                    <option value="pending">Pending</option>
-                    <option value="parties">Parties</option>
-                    <option value="public">Public</option>
+                    <option value="visible">Visible</option>
+                    <option value="hidden">Hidden</option>
                   </select>
                 </FilterField>
 
@@ -733,9 +728,9 @@ export default function DisputeDesk({
                     </td>
                     <td className="px-4 py-3.5">
                       <span
-                        className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${visibilityClass(d.visibility || 'pending')}`}
+                        className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${visibilityClass(Boolean(d.visibility))}`}
                       >
-                        {titleCase(d.visibility || 'pending')}
+                        {d.visibility ? 'Visible' : 'Hidden'}
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-zinc-300">

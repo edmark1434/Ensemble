@@ -34,6 +34,7 @@ const {
 const {
   normalizeDisputeType,
   normalizeDisputePriority,
+  normalizeDisputeVisibility,
 } = require('../lib/DisputeEnums');
 const { mapTicketRow } = require('./ModeratorSharedRepositories');
 const {
@@ -317,7 +318,7 @@ function mapDisputeRow(row) {
     // Status stays snake_case; priority is Title Case in DB, lowercased for desk filters.
     status: String(row.status || 'open').toLowerCase(),
     priority: String(normalizeDisputePriority(row.priority || 'Medium')).toLowerCase(),
-    visibility: String(row.visibility || 'pending').toLowerCase(),
+    visibility: Boolean(row.visibility),
     initiator: {
       accountId: row.by_account_id,
       name: row.initiator_name || 'Unknown',
@@ -1414,6 +1415,9 @@ function normalizeDisputeStatusPatch(patch) {
   if (next.type != null) {
     next.type = normalizeDisputeType(next.type);
   }
+  if (next.visibility !== undefined) {
+    next.visibility = normalizeDisputeVisibility(next.visibility);
+  }
   return next;
 }
 
@@ -1592,7 +1596,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     await pool.query(
       `UPDATE disputes
        SET status = 'open',
-           visibility = 'public',
+           visibility = TRUE,
            approved_at = COALESCE(approved_at, NOW()),
            approved_by_staff_id = COALESCE(approved_by_staff_id, $1),
            updated_at = NOW()
@@ -1607,7 +1611,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     await pool.query(
       `UPDATE disputes
        SET status = 'closed',
-           visibility = COALESCE(NULLIF(visibility, 'pending'), 'public'),
+           visibility = TRUE,
            approved_at = COALESCE(approved_at, NOW()),
            approved_by_staff_id = COALESCE(approved_by_staff_id, $1),
            resolution_notes = COALESCE($2, resolution_notes),
@@ -1665,8 +1669,8 @@ async function updateDispute(disputeId, patch, staffSession) {
 
   if (normalized.status) {
     const status = String(normalized.status).toLowerCase();
-    if (status === 'open' && String(refreshed.visibility || '') === 'pending') {
-      sets.push(`visibility = 'public'`);
+    if (status === 'open' && !Boolean(refreshed.visibility)) {
+      sets.push(`visibility = TRUE`);
       sets.push(`approved_at = COALESCE(approved_at, NOW())`);
       sets.push(`approved_by_staff_id = COALESCE(approved_by_staff_id, $${idx})`);
       values.push(staff.staff_id);

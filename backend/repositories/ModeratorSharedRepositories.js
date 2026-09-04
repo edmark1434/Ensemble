@@ -119,7 +119,7 @@ function mapDisputeRow(row) {
     // Status stays snake_case; priority is Title Case in DB, lowercased for desk filters.
     status: String(row.status || 'open').toLowerCase(),
     priority: String(normalizeDisputePriority(row.priority || 'Medium')).toLowerCase(),
-    visibility: String(row.visibility || 'pending').toLowerCase(),
+    visibility: Boolean(row.visibility),
     initiator: {
       accountId: row.by_account_id,
       name: row.initiator_name || 'Unknown',

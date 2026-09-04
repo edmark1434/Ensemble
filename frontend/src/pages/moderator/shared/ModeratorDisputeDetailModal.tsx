@@ -430,7 +430,7 @@ export default function ModeratorDisputeDetailModal({
                   Status: {titleCaseLabel(dispute.status)}
                 </span>
                 <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
-                  Visibility: {titleCaseLabel(dispute.visibility || "pending")}
+                  Visibility: {dispute.visibility ? "Visible" : "Hidden"}
                 </span>
                 {dispute.creditHold && (
                   <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-200">

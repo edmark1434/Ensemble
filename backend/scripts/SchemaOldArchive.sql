@@ -149,7 +149,7 @@ CREATE TABLE IF NOT EXISTS disputes (
     type VARCHAR(50) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'open',
     priority VARCHAR(20) NOT NULL DEFAULT 'High',
-    visibility VARCHAR(20) NOT NULL DEFAULT 'pending',
+    visibility BOOLEAN NOT NULL DEFAULT FALSE,
     by_account_id UUID NOT NULL REFERENCES accounts(account_id),
     for_account_id UUID NOT NULL REFERENCES accounts(account_id),
     handled_by_staff_id UUID REFERENCES staff(staff_id),

@@ -97,7 +97,7 @@ export type Dispute = {
   type: string;
   status: string;
   priority: string;
-  visibility?: string;
+  visibility?: boolean;
   initiator: TicketPerson;
   respondent: TicketPerson;
   assignee: TicketAssignee | null;

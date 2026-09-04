@@ -78,6 +78,17 @@ function normalizeDisputeStatus(value, fallback = 'pending_review') {
   return fallback;
 }
 
+/** true = visible; false = hidden (pending approval). */
+function normalizeDisputeVisibility(value, fallback = false) {
+  if (value == null || value === '') return fallback;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  const raw = String(value).trim().toLowerCase();
+  if (['true', 't', '1', 'yes', 'public', 'parties', 'visible'].includes(raw)) return true;
+  if (['false', 'f', '0', 'no', 'pending', 'hidden', 'private'].includes(raw)) return false;
+  return fallback;
+}
+
 /**
  * Default dispute title: "{Disputee} v {Disputer} {Type} Dispute"
  * Disputee = respondent (accused / opposing party)
@@ -104,5 +115,6 @@ module.exports = {
   normalizeDisputeType,
   normalizeDisputePriority,
   normalizeDisputeStatus,
+  normalizeDisputeVisibility,
   buildDefaultDisputeTitle,
 };
