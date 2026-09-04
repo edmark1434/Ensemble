@@ -808,13 +808,14 @@ async function seedMarketplaceCatalog(ctx, projects) {
     const res = await pool.query(
       `INSERT INTO media_assets (
          name, type, width, height, duration_seconds, is_marketed,
-         owner_user_id, proxy_file_id, thumbnail_file_id
-       ) VALUES ($1,'video',1920,1080,$2,true,$3,$4,$5)
+         owner_user_id, original_file_id, proxy_file_id, thumbnail_file_id
+       ) VALUES ($1,'video',1920,1080,$2,true,$3,$4,$5,$6)
        RETURNING media_asset_id`,
       [
         cap(`Demo Clip ${i + 1}`, 50),
         15 + i * 5,
         owner.user_id,
+        fileA.file_id,
         fileB.file_id,
         fileC.file_id,
       ]

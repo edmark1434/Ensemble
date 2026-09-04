@@ -1,24 +1,23 @@
-# Current Task — Remove Asset Project-Link Submission
+# Current Task — Remove Carousel Thumbnail Watermarks
 
-Keep template assets thumbnail-based with optional original package files, while removing support for project links from asset create and update payloads.
+Remove the “Ensemble Preview” watermark from marketplace carousel thumbnails without weakening protected previews of original asset files.
 
 ## Acceptance Criteria
 
-- [x] Template assets still accept carousel thumbnails.
-- [x] Template assets still accept optional original files.
-- [x] Empty or omitted project-link lists remain compatible.
-- [x] Non-empty project-link lists are rejected by backend validation.
-- [x] Backend syntax check and scoped diff check pass.
+- [x] Image/video/audio listing thumbnails are generated without a watermark.
+- [x] Template carousel thumbnails remain watermark-free.
+- [x] Image, video, audio, PDF, and ZIP original-file previews remain watermarked.
+- [x] Frontend build and scoped diff checks pass.
 
 ## Implementation Notes
 
-- The frontend asset editor already has no project-link field, so no frontend change is required.
-- Project links are rejected at the service boundary to prevent manually crafted requests from adding them.
-- Existing optional template original-file and preview handling is unchanged.
+- Thumbnail generation and document/archive preview generation now use separate derivative helpers.
+- Existing uploaded thumbnails are unchanged; newly uploaded or replacement thumbnails use the watermark-free behavior.
+- Protected original-file previews and the original-preview modal watermark remain unchanged.
 
 Status: Completed.
 
 ## Verification
 
-- node --check services/AssetServices.js passed.
-- Scoped git diff --check passed.
+- `npm run build` passed in `frontend`.
+- Scoped `git diff --check` passed.

@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, FileArchive, FileAudio, FileImage, FileText, Fil
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import { mediaUrl, type AssetRecord, type AssetStatus, type AssetType } from "./assetTypes";
-import { createAssetProxy, prepareAssetThumbnail, prepareTemplateThumbnail } from "./assetDerivatives";
+import { createAssetDocumentPreview, createAssetProxy, prepareAssetThumbnail, prepareTemplateThumbnail } from "./assetDerivatives";
 import { getAssetPostingEligibility } from "./assetPostingEligibility";
 import { showErrorToast } from "@/components/utility/toast";
 
@@ -268,7 +268,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
             const kind = sourceKind(file);
             return kind && ["image", "video", "audio"].includes(kind)
               ? createAssetProxy(file, kind as Exclude<AssetType, "template">)
-              : prepareAssetThumbnail(thumbnailFiles[Math.min(index, thumbnailFiles.length - 1)]);
+              : createAssetDocumentPreview(thumbnailFiles[Math.min(index, thumbnailFiles.length - 1)]);
           }))
           : [];
         const preparedThumbnails = replaceThumbnails
@@ -330,7 +330,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
         const kind = sourceKind(file);
         return kind && ["image", "video", "audio"].includes(kind)
           ? createAssetProxy(file, kind as Exclude<AssetType, "template">)
-          : prepareAssetThumbnail(thumbnailFiles[Math.min(index, thumbnailFiles.length - 1)]);
+          : createAssetDocumentPreview(thumbnailFiles[Math.min(index, thumbnailFiles.length - 1)]);
       }));
       const [originalUploads, previewUploads, thumbnailUploads] = await Promise.all([
         Promise.all(files.map((file) => uploadFileWithIntent(file, "asset-originals"))),
