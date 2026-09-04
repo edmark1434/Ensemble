@@ -601,11 +601,11 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
         })
       );
 
-      const grouped = new Map<number, { color: string; userId?: string; ids: string[] }>();
+      const grouped = new Map<number, { color: string; userName?: string; ids: string[] }>();
       occupied.forEach((editor, id) => {
         const entry = grouped.get(editor.clientId);
         if (entry) entry.ids.push(id);
-        else grouped.set(editor.clientId, { color: editor.color, userId: editor.userId, ids: [id] });
+        else grouped.set(editor.clientId, { color: editor.color, userName: editor.userName, ids: [id] });
       });
 
       overlaysByClient.forEach((rect, clientId) => {
@@ -635,7 +635,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
         if (entry.ids.length === 1) singleSelectionClientIds.add(clientId);
       });
 
-      grouped.forEach(({ color, userId, ids }, clientId) => {
+      grouped.forEach(({ color, userName, ids }, clientId) => {
         const items = ids.map(findItem).filter(Boolean);
         if (items.length === 0) return;
         const left = Math.min(...items.map((i) => i.left));
@@ -685,14 +685,14 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
           }
         }
 
-        if (userId) {
+        if (userName) {
           const LABEL_PAD_X = 4;
           const LABEL_PAD_TOP = 4;
           const LABEL_PAD_BOTTOM = 2;
 
           let label = labelsByClient.get(clientId);
           if (!label) {
-            label = new FabricText(userId, {
+            label = new FabricText(userName, {
               selectable: false,
               evented: false,
               excludeFromExport: true,
@@ -706,7 +706,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
             canvas.add(label);
             labelsByClient.set(clientId, label);
           }
-          if (label.text !== userId) label.set({ text: userId });
+          if (label.text !== userName) label.set({ text: userName });
 
           let labelBg = labelBgsByClient.get(clientId);
           if (!labelBg) {

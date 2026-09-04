@@ -19,11 +19,13 @@ export type LiveTransformState = Record<string /* itemId */, LiveTransformPatch>
 export interface LiveTransformClientState {
   patches: LiveTransformState;
   userId?: string;
+  userName?: string;
 }
 
 export interface SelectionClientState {
   itemIds: string[];
   userId?: string;
+  userName?: string;
 }
 
 const FIELD = "liveTransform";
@@ -37,6 +39,10 @@ let lastSent = 0;
 
 function getUserId(state: any): string | undefined {
   return state?.user?.id;
+}
+
+function getUserName(state: any): string | undefined {
+  return state?.user?.name;
 }
 
 export function broadcastLiveTransform(
@@ -73,7 +79,7 @@ export function subscribeToRemoteLiveTransforms(
       // it's gone stale, that client's *End handler never fired and this
       // field was left dangling — don't trust it forever.
       if (updatedAt === undefined || now - updatedAt > STALE_MS) return;
-      result.set(clientId, { patches, userId: getUserId(state) });
+      result.set(clientId, { patches, userId: getUserId(state), userName: getUserName(state) });
     });
     onChange(result);
   };
@@ -108,6 +114,7 @@ export interface RemoteActiveEditor {
   clientId: number;
   color: string;
   userId?: string;
+  userName?: string;
 }
 
 // An item id present in some other client's liveTransform patches means
@@ -118,10 +125,10 @@ export function getRemoteActiveEditors(
   statesByClient: Map<number, LiveTransformClientState>,
 ): Map<string, RemoteActiveEditor> {
   const editors = new Map<string, RemoteActiveEditor>();
-  statesByClient.forEach(({ patches, userId }, clientId) => {
+  statesByClient.forEach(({ patches, userId, userName }, clientId) => {
     Object.keys(patches).forEach((itemId) => {
       if (!editors.has(itemId)) {
-        editors.set(itemId, { clientId, color: getColorForClientId(clientId), userId });
+        editors.set(itemId, { clientId, color: getColorForClientId(clientId), userId, userName });
       }
     });
   });
@@ -156,7 +163,7 @@ export function subscribeToRemoteSelections(
       if (clientId === awareness.clientID) return;
       const ids = state?.[SELECTION_FIELD] as string[] | null | undefined;
       if (!ids || ids.length === 0) return;
-      result.set(clientId, { itemIds: ids, userId: getUserId(state) });
+      result.set(clientId, { itemIds: ids, userId: getUserId(state), userName: getUserName(state) });
     });
     onChange(result);
   };
@@ -173,10 +180,10 @@ export function getRemoteSelectionOwners(
   statesByClient: Map<number, SelectionClientState>,
 ): Map<string, RemoteActiveEditor> {
   const owners = new Map<string, RemoteActiveEditor>();
-  statesByClient.forEach(({ itemIds, userId }, clientId) => {
+  statesByClient.forEach(({ itemIds, userId, userName }, clientId) => {
     itemIds.forEach((itemId) => {
       if (!owners.has(itemId)) {
-        owners.set(itemId, { clientId, color: getColorForClientId(clientId), userId });
+        owners.set(itemId, { clientId, color: getColorForClientId(clientId), userId, userName });
       }
     });
   });

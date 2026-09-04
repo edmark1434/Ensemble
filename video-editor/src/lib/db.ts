@@ -55,6 +55,7 @@ interface AccountsTable {
 interface UsersTable {
   user_id: Generated<string>;
   account_id: string;
+  first_name: string;
 }
 
 interface SessionsTable {

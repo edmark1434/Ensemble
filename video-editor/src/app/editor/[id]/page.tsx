@@ -48,10 +48,16 @@ export default async function EditorPage({
   const membership = await db
     .selectFrom("project_members")
     .innerJoin("projects", "projects.project_id", "project_members.project_id")
+    .innerJoin("users", "users.user_id", "project_members.user_id")
     .where("project_members.project_id", "=", id)
     .where("project_members.user_id", "=", decoded.userId)
     .where("project_members.deleted_at", "is", null)
-    .select(["project_members.role", "projects.width", "projects.height"])
+    .select([
+      "project_members.role",
+      "projects.width",
+      "projects.height",
+      "users.first_name",
+    ])
     .executeTakeFirst();
 
   if (!membership) {
@@ -62,6 +68,7 @@ export default async function EditorPage({
     <Editor
       id={id}
       userId={decoded.userId}
+      userName={membership.first_name}
       width={membership.width}
       height={membership.height}
       role={membership.role}

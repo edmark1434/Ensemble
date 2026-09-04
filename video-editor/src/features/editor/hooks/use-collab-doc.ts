@@ -31,6 +31,7 @@ export interface CollabDoc {
 export function useCollabDoc(
   projectId: string | undefined,
   userId: string | undefined,
+  userName: string | undefined,
   stateManager: StateManager,
 ): CollabDoc | null {
   const [collab, setCollab] = useState<CollabDoc | null>(null);
@@ -77,7 +78,7 @@ export function useCollabDoc(
         teardownMirrorOutStateManager = setupMirrorOutFromStateManager(schema, stateManager, localOrigin, syncGuard);
         teardownMirrorOutStore = setupMirrorOutFromStore(schema, localOrigin, syncGuard);
         teardownPersistence = attachPersistence(schema, projectId, sessionId, localOrigin);
-        teardownWsProvider = attachWsProvider(schema, projectId, userId);
+        teardownWsProvider = attachWsProvider(schema, projectId, userId, userName);
         teardownTimelineWatch = useStore.subscribe((state, prevState) => {
           if (state.timeline && !prevState.timeline) {
             const resyncCanvas = () => {
@@ -247,7 +248,7 @@ export function useCollabDoc(
       doc.destroy();
       setCollab(null);
     };
-  }, [projectId, userId, stateManager]);
+  }, [projectId, userId, userName, stateManager]);
 
   return collab;
 }

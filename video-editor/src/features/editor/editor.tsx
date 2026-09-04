@@ -472,12 +472,14 @@ const Controls = ({ panelRef }: { panelRef: React.RefObject<HTMLDivElement | nul
 const Editor = ({
   id,
   userId,
+  userName,
   width,
   height,
   role,
 }: {
   id?: string;
   userId?: string;
+  userName?: string;
   width?: number;
   height?: number;
   role?: string;
@@ -487,14 +489,15 @@ const Editor = ({
     if (userId && id) {
       useStore.setState({
         userId,
+        userName,
         projectId: id,
         ...(width && height ? { size: { width, height } } : {}),
       });
     }
     setStoreSynced(true);
-  }, [id, userId, width, height]);
+  }, [id, userId, userName, width, height]);
 
-  const { userId: storeUserId, projectId } = useStore();
+  const { userId: storeUserId, userName: storeUserName, projectId } = useStore();
 
   // only true once the seeding effect above has run AND the store actually
   // holds both values (whether they came from props here or were set
@@ -504,6 +507,7 @@ const Editor = ({
   const collab = useCollabDoc(
     collabReady ? projectId : undefined,
     collabReady ? storeUserId : undefined,
+    collabReady ? storeUserName : undefined,
     stateManager,
   );
 

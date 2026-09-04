@@ -175,11 +175,11 @@ export function SceneInteractions({
         .filter(([id]) => inFrame(id))
     );
 
-    const grouped = new Map<number, { color: string; userId?: string; ids: string[] }>();
+    const grouped = new Map<number, { color: string; userName?: string; ids: string[] }>();
     remoteOccupied.forEach((editor, id) => {
       const entry = grouped.get(editor.clientId);
       if (entry) entry.ids.push(id);
-      else grouped.set(editor.clientId, { color: editor.color, userId: editor.userId, ids: [id] });
+      else grouped.set(editor.clientId, { color: editor.color, userName: editor.userName, ids: [id] });
     });
 
     overlayElsRef.current.forEach((el, clientId) => {
@@ -189,7 +189,7 @@ export function SceneInteractions({
       }
     });
 
-    grouped.forEach(({ color, userId, ids }, clientId) => {
+    grouped.forEach(({ color, userName, ids }, clientId) => {
       const { trackItemsMap: currentTrackItemsMap } = useStore.getState();
       const rects = ids
         .filter((id) => currentTrackItemsMap[id]?.type !== "audio")
@@ -252,8 +252,8 @@ export function SceneInteractions({
       }
 
       label.style.backgroundColor = color;
-      label.style.display = userId ? "block" : "none";
-      if (userId && label.textContent !== userId) label.textContent = userId;
+      label.style.display = userName ? "block" : "none";
+      if (userName && label.textContent !== userName) label.textContent = userName;
     });
 
     // Per-item borders: rotate/skew with each item individually, read live off
