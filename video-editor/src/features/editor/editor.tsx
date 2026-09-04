@@ -79,7 +79,7 @@ const IconPlayerPauseFilled = ({ size }: { size: number }) => (
     </svg>
 );
 
-const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen }: any) => {
+const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnly }: any) => {
   const { fps, duration, markers, timeline, scale, trackItemIds, muted, setMuted } = useStore();
   const currentFrame = useCurrentPlayerFrame(playerRef);
   const [playing, setPlaying] = useState(false);
@@ -169,7 +169,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen }: any) 
       className="relative flex flex-col w-full h-full bg-card"
       onMouseMove={handleMouseMove}
     >
-      {!isLargeScreen && !isFullscreen && (
+      {!isLargeScreen && !isFullscreen && !viewOnly && (
         <div className=" top-0 left-0 right-0 z-500 bg-primary text-black text-xs font-medium text-center py-1.5 px-2">
           Mobile view is only in preview mode for now
         </div>
@@ -182,7 +182,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen }: any) 
             The project is currently empty, no preview available
           </div>
         ) : (
-          <Scene ref={sceneRef} stateManager={stateManager} />
+          <Scene ref={sceneRef} stateManager={stateManager} viewOnly={viewOnly} />
         )}
       </div>
 
@@ -345,6 +345,7 @@ const Panels = ({
   trackItem,
   loaded,
   isLargeScreen,
+  viewOnly,
 }: any) => {
   const { showMenuItem, setControlsPanelRef } = useLayoutStore();
   const menuPanelRef = useRef<ImperativePanelHandle>(null);
@@ -362,10 +363,18 @@ const Panels = ({
     setControlsPanelRef(controlsPanelRef);
   }, []);
 
-  if (!isLargeScreen) {
+  if (!isLargeScreen || viewOnly) {
     return (
       <div className="relative flex h-full w-full flex-col bg-background">
-        <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} />
+        <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} viewOnly={viewOnly} />
+        <div
+          aria-hidden
+          inert
+          style={{ position: "absolute", top: -99999, left: -99999, width: 1200, height: 300, pointerEvents: "none" }}
+        >
+          <Timeline stateManager={stateManager} />
+          <MenuItem />
+        </div>
       </div>
     );
   }
@@ -403,7 +412,7 @@ const Panels = ({
               maxSize={showMenuItem ? 45 : 75}
               className="relative bg-card min-w-0"
             >
-              <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} isLargeScreen={isLargeScreen} />
+              <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} isLargeScreen={isLargeScreen} viewOnly={viewOnly} />
             </ResizablePanel>
 
             <ResizableHandle className="bg-border/90" />
@@ -465,11 +474,13 @@ const Editor = ({
   userId,
   width,
   height,
+  role,
 }: {
   id?: string;
   userId?: string;
   width?: number;
   height?: number;
+  role?: string;
 }) => {
   const [storeSynced, setStoreSynced] = useState(false);
   useEffect(() => {
@@ -508,7 +519,9 @@ const Editor = ({
     setLabelControlItem,
     setTypeControlItem,
   } = useLayoutStore();
+
   const isLargeScreen = useIsLargeScreen();
+  const viewOnly = role === "Viewer";
 
   useTimelineEvents();
 
@@ -569,7 +582,7 @@ const Editor = ({
     setTypeControlItem("");
   }, [isLargeScreen]);
 
-  useKeyboardShortcuts(stateManager, collab?.undoManager);
+  useKeyboardShortcuts(stateManager, collab?.undoManager, viewOnly);
 
   useEffect(() => {
     useStore.getState().setStateManager(stateManager);
@@ -604,6 +617,7 @@ const Editor = ({
         user={null}
         stateManager={stateManager}
         undoManager={collab?.undoManager}
+        viewOnly={viewOnly}
       />
 
       <div className="flex flex-1 h-[calc(100vh-56px)]">
@@ -621,6 +635,7 @@ const Editor = ({
                 trackItem={trackItem}
                 loaded={loaded}
                 isLargeScreen={isLargeScreen}
+                viewOnly={viewOnly}
               />
             </ResizablePanel>
           </ResizablePanelGroup>
@@ -632,6 +647,7 @@ const Editor = ({
             trackItem={trackItem}
             loaded={loaded}
             isLargeScreen={isLargeScreen}
+            viewOnly={viewOnly}
           />
         )}
       </div>

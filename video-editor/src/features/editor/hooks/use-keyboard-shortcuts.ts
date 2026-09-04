@@ -18,7 +18,10 @@ import {TIMELINE_OFFSET_CANVAS_LEFT} from "@/features/editor/constants/constants
 import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
 import type * as Y from "yjs";
 
-export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y.UndoManager) {
+export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y.UndoManager, viewOnly?: boolean) {
+  const viewOnlyRef = useRef(viewOnly);
+  viewOnlyRef.current = viewOnly;
+
   const timelineOffsetX = useTimelineOffsetX();
   const timelineOffsetXRef = useRef(timelineOffsetX);
   timelineOffsetXRef.current = timelineOffsetX;
@@ -68,34 +71,34 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       const mod = e.ctrlKey || e.metaKey;
       const { activeIds, playerRef } = useStore.getState();
 
-      // open / close keyboard shortcuts dialog
-      if (mod && e.code === "Slash") {
+      // open / close keyboard shortcuts dialog — no ScenePlayer equivalent, edit-mode only
+      if (!viewOnlyRef.current && mod && e.code === "Slash") {
         e.preventDefault();
         const { isShortcutsModalOpen, setShortcutsModalOpen } = useStore.getState();
         setShortcutsModalOpen(!isShortcutsModalOpen);
       }
 
-      // play / pause
+      // play / pause — mirrors the ScenePlayer play/pause button, always available
       if (e.code === "Space") {
         e.preventDefault()
         playerRef?.current?.isPlaying() ? playerRef?.current.pause() : playerRef?.current.play()
       }
 
       // undo / redo
-      if (mod && e.code === "KeyZ") {
+      if (!viewOnlyRef.current && mod && e.code === "KeyZ") {
         e.preventDefault();
         if (!undoManagerRef.current) return;
         e.shiftKey ? undoManagerRef.current.redo() : undoManagerRef.current.undo();
       }
 
       // delete
-      if (e.code === "Delete") {
+      if (!viewOnlyRef.current && e.code === "Delete") {
         if (!activeIds.length) return;
         dispatch(LAYER_DELETE);
       }
 
       // split
-      if (mod && e.code === "KeyB") {
+      if (!viewOnlyRef.current && mod && e.code === "KeyB") {
         e.preventDefault();
         if (!activeIds.length) return;
         const time = getCurrentTime();
@@ -115,7 +118,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       }
 
       // select all
-      if (mod && e.code === "KeyA") {
+      if (!viewOnlyRef.current && mod && e.code === "KeyA") {
         e.preventDefault();
         const { trackItemsMap, transitionsMap } = useStore.getState();
         const trackIds = Object.keys(trackItemsMap).filter(
@@ -128,7 +131,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       }
 
       // copy
-      if (mod && e.code === "KeyC") {
+      if (!viewOnlyRef.current && mod && e.code === "KeyC") {
         e.preventDefault();
         if (!activeIds.length) return;
         const { trackItemsMap, transitionsMap, tracks } = useStore.getState();
@@ -137,7 +140,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       }
 
       // duplicate
-      if (mod && e.code === "KeyD") {
+      if (!viewOnlyRef.current && mod && e.code === "KeyD") {
         e.preventDefault();
         if (!activeIds.length) return;
 
@@ -162,7 +165,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       }
 
       // cut
-      if (mod && e.code === "KeyX") {
+      if (!viewOnlyRef.current && mod && e.code === "KeyX") {
         e.preventDefault();
         if (!activeIds.length) return;
         const { trackItemsMap, transitionsMap, tracks } = useStore.getState();
@@ -172,7 +175,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       }
 
       // paste
-      if (mod && e.code === "KeyV") {
+      if (!viewOnlyRef.current && mod && e.code === "KeyV") {
         e.preventDefault();
         const clip = getClipboard();
         if (!clip) return;
@@ -198,21 +201,21 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       }
 
       // zoom in
-      if (mod && (e.code === "Equal" || e.code === "NumpadAdd")) {
+      if (!viewOnlyRef.current && mod && (e.code === "Equal" || e.code === "NumpadAdd")) {
         e.preventDefault();
         const { scale } = useStore.getState();
         applyScale(getNextZoomLevel(scale));
       }
 
       // zoom out
-      if (mod && (e.code === "Minus" || e.code === "NumpadSubtract")) {
+      if (!viewOnlyRef.current && mod && (e.code === "Minus" || e.code === "NumpadSubtract")) {
         e.preventDefault();
         const { scale } = useStore.getState();
         applyScale(getPreviousZoomLevel(scale));
       }
 
       // zoom to fit
-      if (!mod && e.shiftKey && e.code === "KeyZ") {
+      if (!viewOnlyRef.current && !mod && e.shiftKey && e.code === "KeyZ") {
         e.preventDefault();
         const { scale, duration, activeIds, trackItemsMap } = useStore.getState();
 
@@ -238,13 +241,13 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       }
 
       // toggle timeline maximize / minimize
-      if (e.code === "Backquote") {
+      if (!viewOnlyRef.current && e.code === "Backquote") {
         e.preventDefault();
         useStore.getState().toggleTimelineFullHeight();
       }
 
       // previous frame / previous second
-      if (mod && e.code === "ArrowLeft") {
+      if (!viewOnlyRef.current && mod && e.code === "ArrowLeft") {
         e.preventDefault();
         const { playerRef, fps } = useStore.getState();
         const current = playerRef?.current?.getCurrentFrame() ?? 0;
@@ -253,7 +256,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       }
 
       // next frame / next second
-      if (mod && e.code === "ArrowRight") {
+      if (!viewOnlyRef.current && mod && e.code === "ArrowRight") {
         e.preventDefault();
         const { playerRef, fps } = useStore.getState();
         const current = playerRef?.current?.getCurrentFrame() ?? 0;
@@ -262,7 +265,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       }
 
       // nudge selected item(s) position
-      if (!mod && (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "ArrowUp" || e.code === "ArrowDown")) {
+      if (!viewOnlyRef.current && !mod && (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "ArrowUp" || e.code === "ArrowDown")) {
         e.preventDefault();
         const { activeIds, trackItemsMap } = useStore.getState();
         if (!activeIds.length) return;
@@ -296,8 +299,8 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         }
       }
 
-      // add / remove marker
-      if (!mod && !e.shiftKey && e.code === "KeyM") {
+      // add / remove marker — no equivalent control in ScenePlayer, edit-mode only
+      if (!viewOnlyRef.current && !mod && !e.shiftKey && e.code === "KeyM") {
         e.preventDefault();
         const { playerRef, fps, markers, addMarker, removeMarker } = useStore.getState();
         const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
@@ -306,7 +309,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         existing ? removeMarker(existing.id) : addMarker(timeMs);
       }
 
-      // previous marker / jump to start
+      // previous marker / jump to start — mirrors ScenePlayer's "jump to prev" button, always available
       if (mod && e.shiftKey && e.code === "KeyM") {
         e.preventDefault();
         const { playerRef, fps, markers } = useStore.getState();
@@ -322,7 +325,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         scrollTimelineToFrame(targetFrame, prevMarker ? "marker" : "start", timelineOffsetXRef.current);
       }
 
-      // next marker / jump to end
+      // next marker / jump to end — mirrors ScenePlayer's "jump to next" button, always available
       if (!mod && e.shiftKey && e.code === "KeyM") {
         e.preventDefault();
         const { playerRef, fps, markers, duration } = useStore.getState();
@@ -339,7 +342,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         scrollTimelineToFrame(targetFrame, nextMarker ? "marker" : "end", timelineOffsetXRef.current);
       }
 
-      // jump to start
+      // jump to start — mirrors ScenePlayer's "jump to prev" button fallback, always available
       if (e.code === "Home") {
         e.preventDefault();
         const { playerRef } = useStore.getState();
@@ -347,7 +350,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         scrollTimelineToFrame(0, "start", timelineOffsetXRef.current);
       }
 
-      // jump to end
+      // jump to end — mirrors ScenePlayer's "jump to next" button fallback, always available
       if (e.code === "End") {
         e.preventDefault();
         const { playerRef, fps, duration } = useStore.getState();
@@ -356,7 +359,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         scrollTimelineToFrame(lastFrame, "end", timelineOffsetXRef.current);
       }
 
-      // fullscreen
+      // fullscreen — mirrors the ScenePlayer fullscreen button, always available
       if (!mod && !e.shiftKey && e.code === "KeyF") {
         e.preventDefault();
         if (!document.fullscreenElement) {
@@ -367,7 +370,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         }
       }
 
-      // mute preview
+      // mute preview — mirrors the ScenePlayer mute button, always available
       if (mod && !e.shiftKey && e.code === "KeyM") {
         e.preventDefault();
         const { playerRef, muted, setMuted } = useStore.getState();

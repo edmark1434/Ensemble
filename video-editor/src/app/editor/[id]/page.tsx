@@ -64,6 +64,7 @@ export default async function EditorPage({
       userId={decoded.userId}
       width={membership.width}
       height={membership.height}
+      role={membership.role}
     />
   );
 }

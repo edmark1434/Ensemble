@@ -39,3 +39,30 @@ export async function createProject({
     return project.project_id;
   });
 }
+
+export async function updateProject({
+  projectId,
+  name,
+  width,
+  height,
+}: {
+  projectId: string;
+  name?: string;
+  width?: number;
+  height?: number;
+}): Promise<void> {
+  const updates: Record<string, unknown> = {};
+  if (name !== undefined) updates.name = name;
+  if (width !== undefined) updates.width = width;
+  if (height !== undefined) updates.height = height;
+
+  if (Object.keys(updates).length === 0) return;
+  updates.updated_at = new Date();
+
+  await db
+    .updateTable("projects")
+    .set(updates)
+    .where("project_id", "=", projectId)
+    .where("deleted_at", "is", null)
+    .execute();
+}
