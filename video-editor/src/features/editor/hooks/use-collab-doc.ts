@@ -80,7 +80,19 @@ export function useCollabDoc(
         teardownPersistence = attachPersistence(schema, projectId, sessionId, localOrigin);
         teardownWsProvider = attachWsProvider(schema, projectId, userId, userName);
         teardownTimelineWatch = useStore.subscribe((state, prevState) => {
-          if (state.timeline && !prevState.timeline) {
+          // Compare identity, not just nullity — every remount produces a
+          // genuinely new CanvasTimeline instance, and each one needs this
+          // resync, not just the very first canvas of the session.
+          if (state.timeline && state.timeline !== prevState.timeline) {
+            // A previous canvas's resync loop is now pointed at a dead
+            // canvas — stop it before starting a new one, or the two
+            // loops share `timelineResyncInterval` and can end up
+            // clearing each other's interval id instead of their own.
+            if (timelineResyncInterval) {
+              clearInterval(timelineResyncInterval);
+              timelineResyncInterval = null;
+            }
+
             const resyncCanvas = () => {
               const canvas = useStore.getState().timeline as any;
               if (!canvas) return;

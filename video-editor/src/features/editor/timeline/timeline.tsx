@@ -477,6 +477,13 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     return () => {
       unsubscribeTransitionZOrder();
       canvas.purge();
+      // Clear the store's reference to this now-destroyed canvas. Without
+      // this, remounting Timeline (e.g. toggling mobile/desktop view) never
+      // looks like a null -> non-null transition to the resync watcher in
+      // useCollabDoc, so it skips re-populating the new canvas and it's
+      // left blank.
+      const { timeline: currentTimeline } = useStore.getState();
+      if (currentTimeline === canvas) useStore.setState({ timeline: null });
     };
   }, []);
 
