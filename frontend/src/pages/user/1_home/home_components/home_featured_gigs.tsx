@@ -132,7 +132,7 @@ export const HomeFeaturedGigs: React.FC = () => {
                       No Thumbnail
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
 
                   {/* Orders and Service Rating grouped together at top-left */}
                   <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">

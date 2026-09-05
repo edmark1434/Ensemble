@@ -171,7 +171,7 @@ export const GigList: React.FC<GigListProps> = ({
                         alt={gig.title}
                         className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/80 via-transparent to-transparent pointer-events-none" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
 
                       {/* Orders and Service Rating Badges grouped at top-left */}
                       <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
@@ -329,7 +329,7 @@ export const GigList: React.FC<GigListProps> = ({
                     alt={gig.title}
                     className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105 absolute inset-0"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/80 via-transparent to-transparent pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
 
                   {/* Orders and Service Rating badges grouped */}
                   <div className="absolute bottom-2 left-2 flex items-center gap-2 z-10">
