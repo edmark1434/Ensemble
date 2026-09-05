@@ -42,11 +42,13 @@ import type * as Y from "yjs";
 export default function Navbar({
   user,
   stateManager,
-  undoManager
+  undoManager,
+  viewOnly
 }: {
   user: unknown | null;
   stateManager: StateManager;
   undoManager?: Y.UndoManager;
+  viewOnly?: boolean;
 }) {
   const isLargeScreen = useIsLargeScreen();
   const isMediumScreen = useIsMediumScreen();
@@ -128,57 +130,61 @@ export default function Navbar({
         </div>
 
         <div className=" pointer-events-auto flex h-10 items-center px-1.5">
-          <Tooltip delayDuration={10}>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={handleUndo}
-                className="hover:!bg-accent/30"
-                variant="ghost"
-                size="icon"
-                disabled={!canUndo}
-              >
-                <Icons.undo width={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent
-              side="top" align="center" sideOffset={1}
-              className={"flex gap-2 items-center"}
-            >
-              Undo
-              <KbdGroup>
-                <Kbd>Ctrl</Kbd>
-                <span>+</span>
-                <Kbd>Z</Kbd>
-              </KbdGroup>
-            </TooltipContent>
-          </Tooltip>
+          {!viewOnly && (
+            <>
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleUndo}
+                    className="hover:!bg-accent/30"
+                    variant="ghost"
+                    size="icon"
+                    disabled={!canUndo}
+                  >
+                    <Icons.undo width={20} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="top" align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  Undo
+                  <KbdGroup>
+                    <Kbd>Ctrl</Kbd>
+                    <span>+</span>
+                    <Kbd>Z</Kbd>
+                  </KbdGroup>
+                </TooltipContent>
+              </Tooltip>
 
-          <Tooltip delayDuration={10}>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={handleRedo}
-                className="hover:!bg-accent/30"
-                variant="ghost"
-                size="icon"
-                disabled={!canRedo}
-              >
-                <Icons.redo width={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent
-              side="top" align="center" sideOffset={1}
-              className={"flex gap-2 items-center"}
-            >
-              Redo
-              <KbdGroup>
-                <Kbd>Ctrl</Kbd>
-                <span>+</span>
-                <Kbd>Shift</Kbd>
-                <span>+</span>
-                <Kbd>Z</Kbd>
-              </KbdGroup>
-            </TooltipContent>
-          </Tooltip>
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleRedo}
+                    className="hover:!bg-accent/30"
+                    variant="ghost"
+                    size="icon"
+                    disabled={!canRedo}
+                  >
+                    <Icons.redo width={20} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="top" align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  Redo
+                  <KbdGroup>
+                    <Kbd>Ctrl</Kbd>
+                    <span>+</span>
+                    <Kbd>Shift</Kbd>
+                    <span>+</span>
+                    <Kbd>Z</Kbd>
+                  </KbdGroup>
+                </TooltipContent>
+              </Tooltip>
+            </>
+          )}
 
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
@@ -215,39 +221,43 @@ export default function Navbar({
 
       <div className="flex h-13 items-center justify-end gap-2">
         <div className=" pointer-events-auto flex h-10 items-center gap-2 rounded-md px-2.5">
-          <Tooltip delayDuration={10}>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={() => setShortcutsModalOpen(true)}
-                className="hover:!bg-accent/30"
-                variant="ghost"
-                size="icon"
+          {!viewOnly && (
+            <Tooltip delayDuration={10}>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => setShortcutsModalOpen(true)}
+                  className="hover:!bg-accent/30"
+                  variant="ghost"
+                  size="icon"
+                >
+                  <Keyboard size={20} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent
+                side="bottom" align="center" sideOffset={1}
+                className={"flex gap-2 items-center"}
               >
-                <Keyboard size={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent
-              side="bottom" align="center" sideOffset={1}
-              className={"flex gap-2 items-center"}
-            >
-              Keyboard shortcuts
-              <KbdGroup>
-                <Kbd>Ctrl</Kbd>
-                <span>+</span>
-                <Kbd>/</Kbd>
-              </KbdGroup>
-            </TooltipContent>
-          </Tooltip>
+                Keyboard shortcuts
+                <KbdGroup>
+                  <Kbd>Ctrl</Kbd>
+                  <span>+</span>
+                  <Kbd>/</Kbd>
+                </KbdGroup>
+              </TooltipContent>
+            </Tooltip>
+          )}
 
           <DownloadPopover stateManager={stateManager} />
-          <Button
-            className="flex h-8 gap-2 border border-border"
-            variant="default"
-            size={isMediumScreen ? "sm" : "icon"}
-          >
-            <Send width={16} />
-            <span className="hidden md:block">Share</span>
-          </Button>
+          {!viewOnly && (
+            <Button
+              className="flex h-8 gap-2 border border-border"
+              variant="default"
+              size={isMediumScreen ? "sm" : "icon"}
+            >
+              <Send width={16} />
+              <span className="hidden md:block">Share</span>
+            </Button>
+          )}
 
         </div>
       </div>

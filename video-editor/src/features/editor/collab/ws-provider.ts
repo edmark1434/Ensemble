@@ -10,7 +10,7 @@ const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
 const remoteOrigin = "ws-remote";
 
-export function attachWsProvider(schema: CollabSchema, projectId: string, userId: string): () => void {
+export function attachWsProvider(schema: CollabSchema, projectId: string, userId: string, userName?: string): () => void {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   const wsUrl = `${proto}//${window.location.host}/collab?projectId=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
 
@@ -19,7 +19,7 @@ export function attachWsProvider(schema: CollabSchema, projectId: string, userId
 
   const { awareness } = schema;
 
-  awareness.setLocalStateField("user", { id: userId });
+  awareness.setLocalStateField("user", { id: userId, name: userName });
 
   // Updates that fire before the socket is OPEN (e.g. hydrateDocFromState
   // on mount) get buffered here instead of dropped, then flushed on open.

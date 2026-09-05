@@ -30,13 +30,14 @@ export interface CollabDoc {
 // See flagged note in chat re: resolving that before this hook is wired in.
 export function useCollabDoc(
   projectId: string | undefined,
-  userId: string,
+  userId: string | undefined,
+  userName: string | undefined,
   stateManager: StateManager,
 ): CollabDoc | null {
   const [collab, setCollab] = useState<CollabDoc | null>(null);
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || !userId) return;
 
     let cancelled = false;
     let teardownMirrorIn: (() => void) | null = null;
@@ -44,9 +45,11 @@ export function useCollabDoc(
     let teardownMirrorOutStore: (() => void) | null = null;
     let teardownPersistence: (() => void) | null = null;
     let teardownWsProvider: (() => void) | null = null;
+    let teardownTimelineWatch: (() => void) | null = null;
     let activeSessionId: number | null = null;
+    let timelineResyncInterval: ReturnType<typeof setInterval> | null = null;
 
-    const doc = new Y.Doc();
+    const doc = new Y.Doc({ gc: false });
     const schema = createCollabSchema(doc);
     const syncGuard = createSyncGuard();
     const localOrigin = userId;
@@ -75,7 +78,75 @@ export function useCollabDoc(
         teardownMirrorOutStateManager = setupMirrorOutFromStateManager(schema, stateManager, localOrigin, syncGuard);
         teardownMirrorOutStore = setupMirrorOutFromStore(schema, localOrigin, syncGuard);
         teardownPersistence = attachPersistence(schema, projectId, sessionId, localOrigin);
-        teardownWsProvider = attachWsProvider(schema, projectId, userId);
+        teardownWsProvider = attachWsProvider(schema, projectId, userId, userName);
+        teardownTimelineWatch = useStore.subscribe((state, prevState) => {
+          // Compare identity, not just nullity — every remount produces a
+          // genuinely new CanvasTimeline instance, and each one needs this
+          // resync, not just the very first canvas of the session.
+          if (state.timeline && state.timeline !== prevState.timeline) {
+            // A previous canvas's resync loop is now pointed at a dead
+            // canvas — stop it before starting a new one, or the two
+            // loops share `timelineResyncInterval` and can end up
+            // clearing each other's interval id instead of their own.
+            if (timelineResyncInterval) {
+              clearInterval(timelineResyncInterval);
+              timelineResyncInterval = null;
+            }
+
+            const resyncCanvas = () => {
+              const canvas = useStore.getState().timeline as any;
+              if (!canvas) return;
+              const current = stateManager.getState();
+
+              const onCanvas = new Set(canvas.getTrackItems().map((item: any) => item.id));
+              const inState: string[] = current.trackItemIds ?? [];
+              const missingIds = inState.filter((id) => !onCanvas.has(id));
+              const staleIds = [...onCanvas].filter((id) => !inState.includes(id as string));
+
+              if (missingIds.length > 0 || staleIds.length > 0) {
+                try {
+                  if (staleIds.length > 0) canvas.deleteTrackItemById(staleIds);
+                  canvas.tracks = current.tracks;
+                  canvas.trackItemsMap = current.trackItemsMap;
+                  missingIds.forEach((id) => canvas.addTrackItem({ ...current.trackItemsMap[id] }));
+                  canvas.trackItemIds = current.trackItemIds;
+                  canvas.renderTracks();
+                  canvas.alignItemsToTrack();
+                  canvas.updateTrackItemCoords();
+                  canvas.calcBounding();
+                  canvas.refreshTrackLayout();
+                } catch (err) {
+                  console.error("useCollabDoc: track item resync failed on canvas mount", err);
+                }
+              }
+
+              // existing transitions logic stays as-is, just rename resyncTransitions -> resyncCanvas
+              canvas.transitionsMap = current.transitionsMap ?? {};
+              canvas.transitionIds = Object.keys(current.transitionsMap ?? {});
+              if (Object.keys(current.transitionsMap ?? {}).length > 0) {
+                try { canvas.renderTransitions(); } catch (err) {
+                  console.error("useCollabDoc: renderTransitions failed on canvas mount", err);
+                }
+              }
+              canvas.requestRenderAll();
+            };
+
+            // Timeline's own mount hydration can finish *after* `timeline` shows
+            // up in the store and clobber transitionsMap once it does — a single
+            // sync here can lose that race. Keep re-asserting for a few seconds
+            // so whichever runs last is always the correct data, then stop.
+            resyncCanvas();
+            let ticks = 0;
+            timelineResyncInterval = setInterval(() => {
+              resyncCanvas();
+              ticks += 1;
+              if (ticks >= 10) {
+                clearInterval(timelineResyncInterval!);
+                timelineResyncInterval = null;
+              }
+            }, 300);
+          }
+        });
 
         const isBlank = schema.trackItemIds.length === 0 && schema.tracks.length === 0;
 
@@ -106,12 +177,24 @@ export function useCollabDoc(
         } else {
           const snapshot = readStateFromDoc(schema);
 
-          // guard this too, now that mirror-out exists — without it, this
-          // read-from-doc immediately triggers mirror-out's stateManager/
-          // zustand subscriptions and gets written straight back as if it
-          // were a brand new local edit
           syncGuard.isApplyingRemote = true;
           try {
+            const canvas = useStore.getState().timeline as any;
+            const transitionsChanged =
+              JSON.stringify(canvas?.transitionsMap ?? {}) !== JSON.stringify(snapshot.transitionsMap);
+
+            if (canvas && transitionsChanged) {
+              canvas.transitionsMap = snapshot.transitionsMap;
+              canvas.transitionIds = snapshot.transitionIds;
+              canvas.getTrackItems().forEach((item: any) => {
+                const info = item.transitionInfo;
+                const t = info?.transition;
+                if (info && (!t || !t.id || !t.fromId || !t.toId)) {
+                  item.transitionInfo = undefined;
+                }
+              });
+            }
+
             stateManager.updateState(
               {
                 trackItemsMap: snapshot.trackItemsMap,
@@ -119,6 +202,8 @@ export function useCollabDoc(
                 transitionsMap: snapshot.transitionsMap,
                 transitionIds: snapshot.transitionIds,
                 tracks: snapshot.tracks,
+                ...(snapshot.size ? { size: snapshot.size } : {}),
+                ...(snapshot.fps !== undefined ? { fps: snapshot.fps } : {}),
                 ...(snapshot.duration !== undefined ? { duration: snapshot.duration } : {}),
               },
               { updateHistory: false },
@@ -130,6 +215,17 @@ export function useCollabDoc(
               ...(snapshot.fps !== undefined ? { fps: snapshot.fps } : {}),
               ...(snapshot.background ? { background: snapshot.background } : {}),
             });
+
+            if (canvas && transitionsChanged) {
+              if (Object.keys(snapshot.transitionsMap).length > 0) {
+                try {
+                  canvas.renderTransitions();
+                } catch (renderErr) {
+                  console.error("useCollabDoc: renderTransitions failed on initial load", renderErr);
+                }
+              }
+              canvas.requestRenderAll();
+            }
           } finally {
             syncGuard.isApplyingRemote = false;
           }
@@ -155,6 +251,8 @@ export function useCollabDoc(
       teardownMirrorOutStore?.();
       teardownPersistence?.();
       teardownWsProvider?.();
+      teardownTimelineWatch?.();
+      if (timelineResyncInterval) clearInterval(timelineResyncInterval);
       if (activeSessionId !== null) endSession(activeSessionId);
       useStore.getState().setCollabSchema(null, null);
       undoManager.destroy();
@@ -162,7 +260,7 @@ export function useCollabDoc(
       doc.destroy();
       setCollab(null);
     };
-  }, [projectId, userId, stateManager]);
+  }, [projectId, userId, userName, stateManager]);
 
   return collab;
 }

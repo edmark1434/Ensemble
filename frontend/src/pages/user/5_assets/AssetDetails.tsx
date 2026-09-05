@@ -4,9 +4,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
+import useGlobalState from "@/lib/global_state";
 import AssetEditorModal from "./AssetEditorModal";
-import AssetMedia from "./AssetMedia";
+import AssetThumbnailCarousel from "./AssetThumbnailCarousel";
+
 import AssetOriginalModal from "./AssetOriginalModal";
 import AssetPurchaseModal from "./AssetPurchaseModal";
 import { mediaUrl, readableDuration, readableSize, type AssetBundleFile, type AssetComment, type AssetPurchaseResponse, type AssetRecord, type AssetReply, type AssetReview } from "./assetTypes";
@@ -39,6 +42,9 @@ function DetailSkeleton() {
 export default function AssetDetails() {
   const { assetId = "" } = useParams();
   const navigate = useNavigate();
+  const user = useGlobalState((state) => state.user);
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isGuestView = isGuestMode || !user?.account_id;
   const [asset, setAsset] = useState<AssetRecord | null>(null);
   const [comments, setComments] = useState<AssetComment[]>([]);
   const [reviews, setReviews] = useState<AssetReview[]>([]);
@@ -63,6 +69,7 @@ export default function AssetDetails() {
   const [deleting, setDeleting] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
   const [selectedOriginalFile, setSelectedOriginalFile] = useState<AssetBundleFile | null>(null);
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
   const [engagementPending, setEngagementPending] = useState<"like" | "save" | null>(null);
@@ -114,6 +121,10 @@ export default function AssetDetails() {
 
   const updateEngagement = async (kind: "like" | "save") => {
     if (!asset || engagementPending) return;
+    if (isGuestView) {
+      setIsGuestLoginOpen(true);
+      return;
+    }
     const enabled = kind === "like" ? asset.is_liked : asset.is_saved;
     setEngagementPending(kind);
     try {
@@ -167,6 +178,10 @@ export default function AssetDetails() {
 
   const postComment = async (event: FormEvent) => {
     event.preventDefault();
+    if (isGuestView) {
+      setIsGuestLoginOpen(true);
+      return;
+    }
     const clean = comment.trim();
     if (!clean) return;
     setPosting(true);
@@ -201,6 +216,10 @@ export default function AssetDetails() {
 
   const postReply = async (event: FormEvent, commentId: string) => {
     event.preventDefault();
+    if (isGuestView) {
+      setIsGuestLoginOpen(true);
+      return;
+    }
     const clean = replyText.trim();
     if (!clean || postingReplyCommentId) return;
     setPostingReplyCommentId(commentId);
@@ -308,6 +327,15 @@ export default function AssetDetails() {
         : "Asset purchased successfully.");
   };
 
+  const requestPurchase = () => {
+    if (isGuestView) {
+      setPurchaseOpen(false);
+      setIsGuestLoginOpen(true);
+      return;
+    }
+    setPurchaseOpen(true);
+  };
+
   const deleteDialogOpen = assetToDelete || Boolean(commentToDelete) || Boolean(replyToDelete) || Boolean(reviewToDelete);
   const deleteDialogTitle = assetToDelete ? "Delete asset?" : reviewToDelete ? "Delete review?" : replyToDelete ? "Delete reply?" : "Delete comment?";
   const deleteDialogMessage = assetToDelete
@@ -347,7 +375,7 @@ export default function AssetDetails() {
         <button type="button" onClick={() => navigate("/assets")} className="mb-5 inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"><ArrowLeft className="h-4 w-4" /> Back to Assets</button>
 
         <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#0d0f1a] dark:shadow-none">
-          <AssetMedia asset={asset} thumbnailOnly />
+          <AssetThumbnailCarousel asset={asset} />
           <div className="p-5 md:p-7">
             <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
               <div className="min-w-0">
@@ -360,12 +388,12 @@ export default function AssetDetails() {
                 <button type="button" onClick={() => void updateEngagement("save")} disabled={Boolean(engagementPending)} className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${asset.is_saved ? "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`} aria-pressed={asset.is_saved}><Bookmark className={`h-4 w-4 ${asset.is_saved ? "fill-current" : ""}`} /> {asset.is_saved ? "Saved" : "Save"}</button>
                 <span className="mr-2 inline-flex items-center gap-2 text-lg font-bold text-amber-600 dark:text-amber-300"><Coins className="h-5 w-5" /> {asset.price_credits.toLocaleString()} credits</span>
                 {asset.can_download ? (
-                  <button type="button" onClick={() => document.getElementById("asset-bundle-files")?.scrollIntoView({ behavior: "smooth", block: "center" })} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
-                    <PackageOpen className="h-4 w-4" /> View {asset.bundle_file_count} {asset.bundle_file_count === 1 ? "file" : "files"}
+                  <button type="button" onClick={() => document.getElementById("asset-deliverables")?.scrollIntoView({ behavior: "smooth", block: "center" })} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
+                    <PackageOpen className="h-4 w-4" /> View contents
                   </button>
                 ) : (
-                  <button type="button" onClick={() => setPurchaseOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
-                    <ShoppingCart className="h-4 w-4" /> {asset.price_credits === 0 ? "Get asset" : "Purchase asset"}
+                  <button type="button" onClick={requestPurchase} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
+                    <ShoppingCart className="h-4 w-4" /> {asset.type === "template" ? "Use this template" : asset.price_credits === 0 ? "Get asset" : "Purchase asset"}
                   </button>
                 )}
                 {asset.is_owner && <><button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"><Pencil className="h-4 w-4" /> Edit</button><button type="button" onClick={() => setAssetToDelete(true)} className="rounded-xl border border-red-500/20 p-2.5 text-red-600 transition hover:bg-red-500/10 dark:text-red-300" aria-label="Delete asset"><Trash2 className="h-4 w-4" /></button></>}
@@ -399,27 +427,30 @@ export default function AssetDetails() {
               </div>
             )}
 
-            <section id="asset-bundle-files" className="mt-6 scroll-mt-24 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.025]">
-              <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-                <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Package contents</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset.bundle_file_count} protected original {asset.bundle_file_count === 1 ? "file" : "files"}</p></div>
-                <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400">Low-quality previews · originals require ownership</span>
-              </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {asset.bundle_files.map((bundleFile) => (
-                  <BundleFilePreview
-                    key={`${bundleFile.media_asset_bundle_file_id}:${asset.can_download}`}
-                    bundleFile={bundleFile}
-                    canAccessOriginal={Boolean(asset.can_download)}
-                    downloading={downloadingFileId === bundleFile.media_asset_bundle_file_id}
-                    downloadDisabled={Boolean(downloadingFileId)}
-                    onOpen={() => asset.can_download
-                      ? setSelectedOriginalFile(bundleFile)
-                      : setPurchaseOpen(true)}
-                    onDownload={() => void downloadOriginal(bundleFile)}
-                  />
-                ))}
-              </div>
-            </section>
+            <div id="asset-deliverables" className="scroll-mt-24">
+              {asset.bundle_file_count > 0 && (asset.type !== "template" || asset.can_download) && (
+                <section className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.025]">
+                  <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                    <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Package contents</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset.bundle_file_count} protected original {asset.bundle_file_count === 1 ? "file" : "files"}</p></div>
+                    <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400">Low-quality previews · originals require ownership</span>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {asset.bundle_files.map((bundleFile) => (
+                      <BundleFilePreview
+                        key={`${bundleFile.media_asset_bundle_file_id}:${asset.can_download}`}
+                        bundleFile={bundleFile}
+                        canAccessOriginal={Boolean(asset.can_download)}
+                        downloading={downloadingFileId === bundleFile.media_asset_bundle_file_id}
+                        downloadDisabled={Boolean(downloadingFileId)}
+                        onOpen={() => asset.can_download ? setSelectedOriginalFile(bundleFile) : requestPurchase()}
+                        onDownload={() => void downloadOriginal(bundleFile)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+            </div>
 
             <dl className="mt-6 grid gap-3 border-t border-gray-200 pt-5 text-sm sm:grid-cols-2 lg:grid-cols-4 dark:border-white/10">
               <Metadata icon={Calendar} label="Published" value={formatDate(asset.created_at)} />
@@ -434,8 +465,8 @@ export default function AssetDetails() {
           <section className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-[#0d0f1a]">
             <div className="flex items-center justify-between"><div><h2 className="text-lg font-bold">Comments</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">Join the conversation about this asset.</p></div><span className="text-xs text-gray-500 dark:text-zinc-500">{comments.length}</span></div>
             <form onSubmit={postComment} className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <textarea value={comment} onChange={(event) => setComment(event.target.value)} maxLength={2000} rows={2} placeholder="Write a comment..." className="min-h-20 flex-1 resize-y rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-[#080a12] dark:text-white" />
-              <button type="submit" disabled={posting || !comment.trim()} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">{posting && <Loader2 className="h-4 w-4 animate-spin" />} Post</button>
+              <textarea value={comment} onChange={(event) => setComment(event.target.value)} onClick={() => isGuestView && setIsGuestLoginOpen(true)} readOnly={isGuestView} maxLength={2000} rows={2} placeholder={isGuestView ? "Log in to write a comment..." : "Write a comment..."} className="min-h-20 flex-1 resize-y rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-[#080a12] dark:text-white" />
+              <button type="submit" disabled={posting || (!isGuestView && !comment.trim())} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">{posting && <Loader2 className="h-4 w-4 animate-spin" />} Post</button>
             </form>
 
             <div className="mt-6 space-y-4">
@@ -468,7 +499,7 @@ export default function AssetDetails() {
                       <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-gray-700 dark:text-zinc-300">{item.comment}</p>
                     )}
 
-                    <button type="button" onClick={() => { setReplyingToCommentId((current) => current === item.asset_comment_id ? null : item.asset_comment_id); setReplyText(""); }} className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-blue-600 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-blue-300">
+                    <button type="button" onClick={() => { if (isGuestView) { setIsGuestLoginOpen(true); return; } setReplyingToCommentId((current) => current === item.asset_comment_id ? null : item.asset_comment_id); setReplyText(""); }} className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-blue-600 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-blue-300">
                       <CornerDownRight className="h-3.5 w-3.5" /> Reply{item.replies.length ? ` · ${item.replies.length}` : ""}
                     </button>
 
@@ -567,7 +598,13 @@ export default function AssetDetails() {
       </main>
 
       <AssetEditorModal open={editorOpen} asset={asset} onClose={() => setEditorOpen(false)} onSaved={(updated) => { setAsset(updated); setEditorOpen(false); showSuccessToast("Asset updated."); }} />
-      {!asset.is_owner && <AssetPurchaseModal open={purchaseOpen} asset={asset} onClose={() => setPurchaseOpen(false)} onPurchased={handlePurchased} />}
+      {!asset.is_owner && !isGuestView && <AssetPurchaseModal open={purchaseOpen} asset={asset} onClose={() => setPurchaseOpen(false)} onPurchased={handlePurchased} />}
+      <GuestLoginModal
+        isOpen={isGuestLoginOpen}
+        onClose={() => setIsGuestLoginOpen(false)}
+        title="Log in to continue"
+        message="Please log in or create an account to purchase, open project links, like, save, comment on, or reply about this asset."
+      />
       {selectedOriginalFile && <AssetOriginalModal open asset={asset} bundleFile={selectedOriginalFile} onClose={() => setSelectedOriginalFile(null)} />}
       <ConfirmationModal isOpen={deleteDialogOpen} title={deleteDialogTitle} message={deleteDialogMessage} confirmText={deleting ? "Deleting..." : "Delete"} cancelText="Cancel" onConfirm={() => void deleteSelected()} onCancel={() => { if (!deleting) { setAssetToDelete(false); setCommentToDelete(null); setReplyToDelete(null); setReviewToDelete(null); } }} />
     </div>
@@ -621,7 +658,10 @@ function BundleFilePreview({
         ) : (
           <span className="absolute inset-0 flex items-center justify-center"><BundleFileIcon mimeType={bundleFile.mime_type} /></span>
         )}
-        {!canAccessOriginal && <span className="absolute inset-0 bg-black/5" aria-hidden="true" />}
+        {!canAccessOriginal && <>
+          <span className="absolute inset-0 bg-black/5" aria-hidden="true" />
+          <span className="pointer-events-none absolute bottom-2 right-2 rounded bg-black/65 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white" aria-hidden="true">Ensemble</span>
+        </>}
         <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100"><Eye className="h-7 w-7 text-white" /></span>
       </button>
       <div className="flex items-center justify-between gap-2 p-3">

@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { splitExt, resolveUniqueFileNameFromTaken } from "./filename";
 
 export async function resolveUniqueFileName(
-  ownerUserId: number,
+  ownerUserId: string,
   fileName: string,
   reservedNames: Set<string> = new Set()
 ): Promise<string> {

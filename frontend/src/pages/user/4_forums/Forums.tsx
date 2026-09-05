@@ -27,6 +27,7 @@ import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import UserHeader from "@/components/nav/user_header";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import NewDiscussionModal from "@/pages/user/4_forums/forum_modals/NewDiscussionModal.tsx";
 import ReportGroupModal from "@/pages/user/4_forums/forum_modals/ReportGroupModal";
 import CreateGroupModal from "@/pages/user/4_forums/forum_modals/CreateGroupModal.tsx";
@@ -1118,6 +1119,7 @@ const Forums = () => {
   const [replyCommentText, setReplyCommentText] = useState<string>("");
   const [isNewDiscussionOpen, setIsNewDiscussionOpen] = useState(false);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
   const [postMenuOpen, setPostMenuOpen] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [deletingPost, setDeletingPost] = useState<Post | null>(null);
@@ -1947,8 +1949,7 @@ const Forums = () => {
 
   const handleActionClick = useCallback(() => {
     if (!isForumAuthenticated) {
-      showErrorToast("Sign in to create forum content");
-      navigate("/login");
+      setIsGuestLoginOpen(true);
       return;
     }
     if (activeTab === "groups" || activeTab === "my-groups") {
@@ -1956,7 +1957,7 @@ const Forums = () => {
     } else {
       setIsNewDiscussionOpen(true);
     }
-  }, [activeTab, isForumAuthenticated, navigate]);
+  }, [activeTab, isForumAuthenticated]);
 
   // ==================== RENDER HELPERS ====================
   const renderFilterSidebar = () => (
@@ -2461,7 +2462,7 @@ const Forums = () => {
                     searchQuery ? "No matching discussions" : "No discussions yet",
                     searchQuery ? `No discussions found matching "${searchQuery}"` : "Start a discussion in one of your selected groups",
                     !searchQuery ? "Create Discussion" : undefined,
-                    !searchQuery ? () => setIsNewDiscussionOpen(true) : undefined
+                    !searchQuery ? handleActionClick : undefined
                   )
                 ) : (
                   <>
@@ -2486,7 +2487,7 @@ const Forums = () => {
                     searchQuery ? "No matching discussions" : "No discussions yet",
                     searchQuery ? `No discussions found matching "${searchQuery}"` : "Start a new discussion in one of your groups!",
                     !searchQuery ? "Create Discussion" : undefined,
-                    !searchQuery ? () => setIsNewDiscussionOpen(true) : undefined
+                    !searchQuery ? handleActionClick : undefined
                   )
                 ) : (
                   <>
@@ -2532,7 +2533,7 @@ const Forums = () => {
       </div>
 
       <NewDiscussionModal
-        isOpen={isNewDiscussionOpen}
+        isOpen={isForumAuthenticated && isNewDiscussionOpen}
         onClose={() => setIsNewDiscussionOpen(false)}
         onCreatePost={handleCreatePost}
         availableGroups={joinedGroups.map((group) => ({ id: group.id, name: group.group_name, tags: group.tags }))}
@@ -2540,7 +2541,7 @@ const Forums = () => {
       />
 
       <CreateGroupModal
-        isOpen={isCreateGroupOpen}
+        isOpen={isForumAuthenticated && isCreateGroupOpen}
         onClose={() => {
           setIsCreateGroupOpen(false);
           refreshForumData();
@@ -2584,6 +2585,13 @@ const Forums = () => {
           setReportingPost(null);
           showSuccessToast("Discussion reported");
         }}
+      />
+
+      <GuestLoginModal
+        isOpen={isGuestLoginOpen}
+        onClose={() => setIsGuestLoginOpen(false)}
+        title="Log in to create forum content"
+        message="Please log in or create an account before starting a discussion or creating a forum group."
       />
 
       <style>{`

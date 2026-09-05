@@ -2,15 +2,12 @@ import { Button } from "@/components/ui/button";
 import { dispatch } from "@designcombo/events";
 import StateManager, {
   ACTIVE_SPLIT,
-  LAYER_CLONE,
   LAYER_DELETE,
   TIMELINE_SCALE_CHANGED,
   EDIT_OBJECT,
   LAYER_SELECT,
-  LAYER_COPY,
-  ACTIVE_PASTE
 } from "@designcombo/state";
-import { PLAYER_PAUSE, PLAYER_PLAY } from "../constants/events";
+import { buildSelectionSnapshot, cloneIntoNewTracks, setClipboard, getClipboard } from "../utils/item-actions";
 import { frameToTimeString, getCurrentTime, timeToString } from "../utils/time";
 import useStore from "../store/use-store";
 import {
@@ -91,93 +88,70 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
   };
 
   const doActiveSplit = () => {
+    if (activeIds.length !== 1) return;
     const time = getCurrentTime();
-    activeIds.forEach((id) => {
-      dispatch(LAYER_SELECT, { payload: { trackItemIds: [id] } });
-      dispatch(ACTIVE_SPLIT, { payload: {}, options: { time } });
-    });
-    // Restore full selection after
-    dispatch(LAYER_SELECT, { payload: { trackItemIds: activeIds } });
+    dispatch(ACTIVE_SPLIT, { payload: {}, options: { time } });
+    dispatch(LAYER_SELECT, { payload: { trackItemIds: [] } });
   };
 
   const doActiveCopy = () => {
-    dispatch(LAYER_COPY);
+    if (!activeIds.length) return;
+    const { trackItemsMap, transitionsMap, tracks } = useStore.getState();
+    const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
+    if (snapshot.items.length) setClipboard(snapshot);
   };
+
   const doActiveCut = () => {
-    dispatch(LAYER_COPY);
+    if (!activeIds.length) return;
+    const { trackItemsMap, transitionsMap, tracks } = useStore.getState();
+    const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
+    if (snapshot.items.length) setClipboard(snapshot);
     dispatch(LAYER_DELETE);
   };
-  const doActivePaste = async () => {
-    const before = useStore.getState().trackItemIds;
 
-    dispatch(ACTIVE_PASTE);
-    await Promise.resolve();
+  const doActivePaste = () => {
+    const clip = getClipboard();
+    if (!clip) return;
 
-    const after = useStore.getState();
-    const newIds = after.trackItemIds.filter(id => !before.includes(id));
-
-    if (!newIds.length) return;
-
-    const currentTime = (currentFrame / fps) * 1000;
-    const minFrom = Math.min(
-      ...newIds.map(id => after.trackItemsMap[id]?.display.from ?? 0)
-    );
-    const offset = currentTime - minFrom;
-
-    const updatedMap = { ...after.trackItemsMap };
-    newIds.forEach(id => {
-      const item = updatedMap[id];
-      if (!item) return;
-      updatedMap[id] = {
-        ...item,
-        display: {
-          from: item.display.from + offset,
-          to: item.display.to + offset,
-        },
-        details: {
-          ...item.details,
-          locked: false,
-        },
-      };
-    });
-
-    const newDuration = Object.values(updatedMap).reduce(
-      (max, item) => Math.max(max, item.display?.to ?? 0),
-      after.duration
-    );
+    const { trackItemsMap, transitionsMap, tracks, trackItemIds, transitionIds, duration } = useStore.getState();
+    const time = getCurrentTime();
+    const result = cloneIntoNewTracks(clip, time, {
+      trackItemsMap, trackItemIds, transitionsMap, transitionIds, tracks, duration,
+    }, "top");
+    if (!result) return;
 
     stateManager.updateState(
-      { trackItemsMap: updatedMap, duration: newDuration },
+      {
+        tracks: result.tracks,
+        trackItemsMap: result.trackItemsMap,
+        trackItemIds: result.trackItemIds,
+        transitionsMap: result.transitionsMap,
+        transitionIds: result.transitionIds,
+        duration: result.duration,
+      },
       { updateHistory: true, kind: "update" }
     );
   };
 
-  const doActiveDuplicate = async () => {
-    const before = useStore.getState().trackItemIds;
+  const doActiveDuplicate = () => {
+    if (!activeIds.length) return;
 
-    dispatch(LAYER_CLONE);
-    await Promise.resolve();
-
-    const after = useStore.getState();
-    const newIds = after.trackItemIds.filter(id => !before.includes(id));
-
-    if (!newIds.length) return;
-
-    const updatedMap = { ...after.trackItemsMap };
-    newIds.forEach(id => {
-      const item = updatedMap[id];
-      if (!item) return;
-      updatedMap[id] = {
-        ...item,
-        details: {
-          ...item.details,
-          locked: false,
-        },
-      };
+    const { trackItemsMap, transitionsMap, tracks, trackItemIds, transitionIds, duration } = useStore.getState();
+    const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
+    const result = cloneIntoNewTracks(snapshot, null, {
+      trackItemsMap, trackItemIds, transitionsMap, transitionIds, tracks, duration,
     });
+    if (!result) return;
 
     stateManager.updateState(
-      { trackItemsMap: updatedMap },
+      {
+        tracks: result.tracks,
+        trackItemsMap: result.trackItemsMap,
+        trackItemIds: result.trackItemIds,
+        transitionsMap: result.transitionsMap,
+        transitionIds: result.transitionIds,
+        duration: result.duration,
+      },
       { updateHistory: true, kind: "update" }
     );
   };
@@ -187,20 +161,26 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
     const playheadPxOld = timeMsToUnits(currentTimeMs, scale.zoom);
 
     const currentScrollLeft = timeline && (timeline as any).spacing
-        ? -(timeline as any).viewportTransform[4] + (timeline as any).spacing.left
-        : 0;
+      ? -(timeline as any).viewportTransform[4] + (timeline as any).spacing.left
+      : 0;
 
     const playheadScreenX = playheadPxOld - currentScrollLeft;
     const playheadPxNew = timeMsToUnits(currentTimeMs, newScale.zoom);
     const newScrollLeft = Math.max(0, playheadPxNew - playheadScreenX);
 
+    // Presence overlays are plain Fabric objects with no trackItemsMap/
+    // transitionsMap entry — the scale-change relayout chokes on them.
+    // Pull them off the canvas before dispatching, put them back once
+    // the new zoom has settled.
+    (timeline as any)?._presenceOverlays?.clear();
+
     dispatch(TIMELINE_SCALE_CHANGED, {
       payload: { scale: newScale }
     });
 
-    // Microtask: runs after dispatch is processed but before next paint
     Promise.resolve().then(() => {
       timeline?.scrollTo({ scrollLeft: newScrollLeft });
+      (timeline as any)?._presenceOverlays?.redraw();
     });
   };
 
@@ -385,7 +365,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
               </Tooltip>
             )}
 
-            {activeIds.length > 0 && !isLocked && !isTransitionSelected && (
+            {activeIds.length === 1 && !isLocked && !isTransitionSelected && (
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button

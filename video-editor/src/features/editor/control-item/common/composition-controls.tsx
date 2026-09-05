@@ -14,28 +14,53 @@ import { ColorPickerField } from "./color-picker-field";
 
 const FRAME_RATE_OPTIONS = [3, 15, 24, 30, 60];
 
+export async function patchProject(
+  projectId: string,
+  updates: { name?: string; width?: number; height?: number }
+) {
+  const res = await fetch(`/api/projects/${projectId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) throw new Error("Failed to update project");
+  return res.json();
+}
+
 export const CompositionControls = () => {
-  const { projectName, setProjectName, size, fps, background, setState } = useStore();
+  const { projectId, projectName, setProjectName, size, fps, background, setState } = useStore();
+
+  const handleNameCommit = async (name: string) => {
+    const previous = projectName;
+    setProjectName(name);
+    try {
+      await patchProject(projectId, { name });
+    } catch (err) {
+      console.error("Failed to save project name", err);
+      setProjectName(previous);
+    }
+  };
+
+  const handleSizeCommit = async (width: number, height: number) => {
+    const previous = size;
+    setState({ size: { width, height } });
+    try {
+      await patchProject(projectId, { width, height });
+    } catch (err) {
+      console.error("Failed to save project size", err);
+      setState({ size: previous });
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
         <Label className="font-sans text-sm font-semibold">Project</Label>
         <div className="flex flex-col gap-3">
-          <ProjectName value={projectName} onCommit={setProjectName} />
-
-          <SizeFields
-            width={size.width}
-            height={size.height}
-            onCommit={(width, height) => setState({ size: { width, height } })}
-          />
-
-          {/*<FrameRate value={fps} onChange={(v) => setState({ fps: v })} />*/}
-
+          <ProjectName value={projectName} onCommit={handleNameCommit} />
+          <SizeFields width={size.width} height={size.height} onCommit={handleSizeCommit} />
           <div className="flex flex-col gap-2 flex-1">
-            <div className="flex flex-1 items-center text-xs text-muted-foreground">
-              Background
-            </div>
+            <div className="flex flex-1 items-center text-xs text-muted-foreground">Background</div>
             <ColorPickerField
               value={background.value}
               onChange={(v) => setState({ background: { type: "color", value: v } })}

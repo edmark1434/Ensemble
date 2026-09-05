@@ -1,4 +1,4 @@
-const { OnboardingError, getOnboardingState, savePersonalDetails, searchAddresses, issueAvatarUpload, saveAvatar, finalizeAvatarUpload, saveSurveyProgress, setCurrentStep, completeOnboarding } = require('../services/OnboardingServices');
+const { OnboardingError, getOnboardingState, issueAvatarUpload, saveAvatar, finalizeAvatarUpload, saveSurveyProgress, setCurrentStep, completeOnboarding } = require('../services/OnboardingServices');
 
 function sendError(res, error) {
     const status = error instanceof OnboardingError ? error.statusCode : 500;
@@ -8,14 +8,6 @@ function sendError(res, error) {
 
 async function getState(req, res) {
     try { return res.json({ success: true, ...(await getOnboardingState(req.session.userId)) }); }
-    catch (error) { return sendError(res, error); }
-}
-async function savePersonal(req, res) {
-    try { return res.json({ success: true, ...(await savePersonalDetails(req.session.userId, req.body)) }); }
-    catch (error) { return sendError(res, error); }
-}
-async function getAddressSuggestions(req, res) {
-    try { return res.json({ success: true, places: await searchAddresses(req.query.q) }); }
     catch (error) { return sendError(res, error); }
 }
 async function createAvatarUpload(req, res) {
@@ -43,4 +35,4 @@ async function finish(req, res) {
     catch (error) { return sendError(res, error); }
 }
 
-module.exports = { getState, savePersonal, getAddressSuggestions, createAvatarUpload, saveAvatarStep, finalizeAvatar, saveSurvey, changeStep, finish };
+module.exports = { getState, createAvatarUpload, saveAvatarStep, finalizeAvatar, saveSurvey, changeStep, finish };

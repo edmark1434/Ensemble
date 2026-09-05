@@ -228,6 +228,7 @@ function Input({
 
 // ─── Password strength meter ──────────────────────────────────────────────────
 const STRONG_PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9\s]).{8,}$/;
+const SIGNUP_SUFFIXES = ["Jr.", "Sr.", "II", "III", "IV", "V"] as const;
 
 function StrengthMeter({ password }: { password: string }) {
   const requirements = [
@@ -396,7 +397,9 @@ function Checkbox({ checked, onChange, label }: { checked: boolean; onChange: (v
 // ─── Type definitions ─────────────────────────────────────────────────────────
 interface FormData {
   firstName: string;
+  middleName: string;
   lastName: string;
+  suffix: string;
   username: string;
   email: string;
   password: string;
@@ -405,7 +408,9 @@ interface FormData {
 
 interface Errors {
   firstName?: string;
+  middleName?: string;
   lastName?: string;
+  suffix?: string;
   username?: string;
   email?: string;
   password?: string;
@@ -423,7 +428,9 @@ export default function SignupPage({
 } = {}) {
   const [form, setForm] = useState<FormData>({
     firstName: "",
+    middleName: "",
     lastName: "",
+    suffix: "",
     username: "",
     email: "",
     password: "",
@@ -505,7 +512,9 @@ export default function SignupPage({
   const validate = useCallback(() => {
     const e: Errors = {};
     if (!form.firstName.trim()) e.firstName = "First name is required.";
+    if (form.middleName.trim().length > 64) e.middleName = "Middle name must be 64 characters or fewer.";
     if (!form.lastName.trim()) e.lastName = "Last name is required.";
+    if (form.suffix && !SIGNUP_SUFFIXES.includes(form.suffix as typeof SIGNUP_SUFFIXES[number])) e.suffix = "Select a valid suffix.";
     if (!form.username.trim()) e.username = "Username is required.";
     else if (!/^[a-zA-Z0-9_]{3,20}$/.test(form.username)) e.username = "Use 3-20 letters, numbers, or underscores.";
     if (!form.email) e.email = "Email is required.";
@@ -533,7 +542,9 @@ export default function SignupPage({
         `${import.meta.env.VITE_BASE_URL}/api/users/signup-save-session`,
         {
           firstName: form.firstName,
+          middleName: form.middleName,
           lastName: form.lastName,
+          suffix: form.suffix,
           username: form.username,
           email: form.email,
           password: form.password,
@@ -759,6 +770,32 @@ export default function SignupPage({
                 onChange={update("lastName")}
                 error={errors.lastName}
               />
+            </div>
+          </div>
+
+          <div className="fade-in-up delay-500" style={{ display: "flex", gap: 12, marginBottom: 0 }}>
+            <div style={{ flex: 1 }}>
+              <Input
+                label="Middle name (optional)"
+                placeholder="Optional"
+                value={form.middleName}
+                onChange={update("middleName")}
+                error={errors.middleName}
+              />
+            </div>
+            <div style={{ flex: 1, marginBottom: 20 }}>
+              <label style={{ display: "block", color: T.muted, fontSize: 12, fontWeight: 500, marginBottom: 8, fontFamily: T.fontBody }}>
+                Suffix (optional)
+              </label>
+              <select
+                value={form.suffix}
+                onChange={(event) => setForm((current) => ({ ...current, suffix: event.target.value }))}
+                style={{ width: "100%", padding: "12px 14px", background: T.bgInput, border: `1px solid ${errors.suffix ? T.error : T.border}`, borderRadius: 12, color: T.text, fontSize: 14, outline: "none", fontFamily: T.fontBody }}
+              >
+                <option value="">None</option>
+                {SIGNUP_SUFFIXES.map((suffix) => <option key={suffix} value={suffix}>{suffix}</option>)}
+              </select>
+              {errors.suffix && <p style={{ color: T.error, fontSize: 11, marginTop: 6, fontFamily: T.fontBody }}>{errors.suffix}</p>}
             </div>
           </div>
 

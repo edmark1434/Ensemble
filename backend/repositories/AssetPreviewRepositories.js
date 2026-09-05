@@ -45,7 +45,7 @@ async function replaceAssetBundlePreviewRepository({
   try {
     await client.query('BEGIN');
     const { rows: [bundle] } = await client.query(
-      `SELECT media_asset_id, position, preview_file_id
+      `SELECT media_asset_id, file_id, position, preview_file_id
        FROM media_asset_bundle_files
        WHERE media_asset_bundle_file_id = $1
          AND deleted_at IS NULL
@@ -76,14 +76,25 @@ async function replaceAssetBundlePreviewRepository({
       return null;
     }
 
-    if (Number(bundle.position) === 0) {
-      await client.query(
-        `UPDATE media_assets
-         SET proxy_file_id = $2
-         WHERE media_asset_id = $1 AND deleted_at IS NULL`,
-        [bundle.media_asset_id, preview.file_id]
-      );
-    }
+    await client.query(
+      `UPDATE media_assets
+       SET proxy_file_id = $2
+       WHERE deleted_at IS NULL
+         AND (
+           media_asset_id = $1
+           OR (
+             original_file_id = $3
+             AND media_asset_id IN (
+               SELECT sibling.media_asset_id
+               FROM market_media_assets source
+               JOIN market_media_assets sibling
+                 ON sibling.market_asset_id = source.market_asset_id
+               WHERE source.media_asset_id = $1
+             )
+           )
+         )`,
+      [bundle.media_asset_id, preview.file_id, bundle.file_id]
+    );
     await client.query('COMMIT');
     return { previewFileId: preview.file_id };
   } catch (error) {

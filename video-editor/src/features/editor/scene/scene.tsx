@@ -12,8 +12,9 @@ const Scene = forwardRef<
   SceneRef,
   {
     stateManager: StateManager;
+    viewOnly?: boolean;
   }
->(({ stateManager }, ref) => {
+>(({ stateManager, viewOnly }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { size, trackItemIds } = useStore();
   const { zoom, handlePinch, recalculateZoom } = useZoom(
@@ -82,6 +83,7 @@ const Scene = forwardRef<
             containerRef={containerRef as React.RefObject<HTMLDivElement>}
             zoom={zoom}
             size={size}
+            viewOnly={viewOnly}
           />
         </Board>
       </div>

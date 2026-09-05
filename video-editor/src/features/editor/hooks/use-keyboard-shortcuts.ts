@@ -5,8 +5,9 @@ import StateManager, {
   LAYER_DELETE,
   LAYER_SELECT,
   HISTORY_UNDO,
-  HISTORY_REDO, ACTIVE_PASTE, LAYER_CLONE, LAYER_COPY, TIMELINE_SCALE_CHANGED, EDIT_OBJECT,
+  HISTORY_REDO, TIMELINE_SCALE_CHANGED, EDIT_OBJECT,
 } from "@designcombo/state";
+import { buildSelectionSnapshot, cloneIntoNewTracks, setClipboard, getClipboard } from "../utils/item-actions";
 import { getCurrentTime } from "../utils/time";
 import useStore from "../store/use-store";
 import {timeMsToUnits} from "@designcombo/timeline";
@@ -17,7 +18,10 @@ import {TIMELINE_OFFSET_CANVAS_LEFT} from "@/features/editor/constants/constants
 import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
 import type * as Y from "yjs";
 
-export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y.UndoManager) {
+export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y.UndoManager, viewOnly?: boolean) {
+  const viewOnlyRef = useRef(viewOnly);
+  viewOnlyRef.current = viewOnly;
+
   const timelineOffsetX = useTimelineOffsetX();
   const timelineOffsetXRef = useRef(timelineOffsetX);
   timelineOffsetXRef.current = timelineOffsetX;
@@ -39,12 +43,19 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
     const playheadPxNew = timeMsToUnits(currentTimeMs, newScale.zoom);
     const newScrollLeft = Math.max(0, playheadPxNew - playheadScreenX);
 
+    // Presence overlays are plain Fabric objects with no trackItemsMap/
+    // transitionsMap entry — the scale-change relayout chokes on them.
+    // Pull them off the canvas before dispatching, put them back once
+    // the new zoom has settled.
+    (timeline as any)?._presenceOverlays?.clear();
+
     dispatch(TIMELINE_SCALE_CHANGED, {
       payload: { scale: newScale }
     });
 
     Promise.resolve().then(() => {
       timeline?.scrollTo({ scrollLeft: newScrollLeft });
+      (timeline as any)?._presenceOverlays?.redraw();
     });
   };
 
@@ -60,46 +71,54 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       const mod = e.ctrlKey || e.metaKey;
       const { activeIds, playerRef } = useStore.getState();
 
-      // open / close keyboard shortcuts dialog
-      if (mod && e.code === "Slash") {
+      // open / close keyboard shortcuts dialog — no ScenePlayer equivalent, edit-mode only
+      if (!viewOnlyRef.current && mod && e.code === "Slash") {
         e.preventDefault();
         const { isShortcutsModalOpen, setShortcutsModalOpen } = useStore.getState();
         setShortcutsModalOpen(!isShortcutsModalOpen);
       }
 
-      // play / pause
+      // play / pause — mirrors the ScenePlayer play/pause button, always available
       if (e.code === "Space") {
         e.preventDefault()
         playerRef?.current?.isPlaying() ? playerRef?.current.pause() : playerRef?.current.play()
       }
 
       // undo / redo
-      if (mod && e.code === "KeyZ") {
+      if (!viewOnlyRef.current && mod && e.code === "KeyZ") {
         e.preventDefault();
         if (!undoManagerRef.current) return;
         e.shiftKey ? undoManagerRef.current.redo() : undoManagerRef.current.undo();
       }
 
       // delete
-      if (e.code === "Delete") {
+      if (!viewOnlyRef.current && e.code === "Delete") {
         if (!activeIds.length) return;
         dispatch(LAYER_DELETE);
       }
 
       // split
-      if (mod && e.code === "KeyB") {
+      if (!viewOnlyRef.current && mod && e.code === "KeyB") {
         e.preventDefault();
         if (!activeIds.length) return;
         const time = getCurrentTime();
-        activeIds.forEach((id) => {
-          dispatch(LAYER_SELECT, { payload: { trackItemIds: [id] } });
+
+        if (activeIds.length === 1) {
           dispatch(ACTIVE_SPLIT, { payload: {}, options: { time } });
-        });
-        dispatch(LAYER_SELECT, { payload: { trackItemIds: activeIds } });
+          dispatch(LAYER_SELECT, { payload: { trackItemIds: [] } });
+        }
+
+        // group splitting buggy asf
+
+        // activeIds.forEach((id) => {
+        //   dispatch(LAYER_SELECT, { payload: { trackItemIds: [id] } });
+        //   dispatch(ACTIVE_SPLIT, { payload: {}, options: { time } });
+        // });
+        // dispatch(LAYER_SELECT, { payload: { trackItemIds: [] } });
       }
 
       // select all
-      if (mod && e.code === "KeyA") {
+      if (!viewOnlyRef.current && mod && e.code === "KeyA") {
         e.preventDefault();
         const { trackItemsMap, transitionsMap } = useStore.getState();
         const trackIds = Object.keys(trackItemsMap).filter(
@@ -112,121 +131,91 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       }
 
       // copy
-      if (mod && e.code === "KeyC") {
+      if (!viewOnlyRef.current && mod && e.code === "KeyC") {
         e.preventDefault();
         if (!activeIds.length) return;
-        dispatch(LAYER_COPY);
+        const { trackItemsMap, transitionsMap, tracks } = useStore.getState();
+        const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
+        if (snapshot.items.length) setClipboard(snapshot);
       }
 
       // duplicate
-      if (mod && e.code === "KeyD") {
+      if (!viewOnlyRef.current && mod && e.code === "KeyD") {
         e.preventDefault();
         if (!activeIds.length) return;
 
-        const doDuplicate = async () => {
-          const before = useStore.getState().trackItemIds;
-          dispatch(LAYER_CLONE);
-          await Promise.resolve();
+        const { trackItemsMap, transitionsMap, tracks, trackItemIds, transitionIds, duration } = useStore.getState();
+        const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
+        const result = cloneIntoNewTracks(snapshot, null, {
+          trackItemsMap, trackItemIds, transitionsMap, transitionIds, tracks, duration,
+        });
+        if (!result) return;
 
-          const after = useStore.getState();
-          const newIds = after.trackItemIds.filter(id => !before.includes(id));
-          if (!newIds.length) return;
-
-          const updatedMap = { ...after.trackItemsMap };
-          newIds.forEach(id => {
-            const item = updatedMap[id];
-            if (!item) return;
-            updatedMap[id] = {
-              ...item,
-              details: {
-                ...item.details,
-                locked: false,
-              },
-            };
-          });
-
-          stateManager.updateState(
-            { trackItemsMap: updatedMap },
-            { updateHistory: true, kind: "update" }
-          );
-        };
-        doDuplicate().then(r => {});
+        stateManager.updateState(
+          {
+            tracks: result.tracks,
+            trackItemsMap: result.trackItemsMap,
+            trackItemIds: result.trackItemIds,
+            transitionsMap: result.transitionsMap,
+            transitionIds: result.transitionIds,
+            duration: result.duration,
+          },
+          { updateHistory: true, kind: "update" }
+        );
       }
 
       // cut
-      if (mod && e.code === "KeyX") {
+      if (!viewOnlyRef.current && mod && e.code === "KeyX") {
         e.preventDefault();
         if (!activeIds.length) return;
-        dispatch(LAYER_COPY);
+        const { trackItemsMap, transitionsMap, tracks } = useStore.getState();
+        const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
+        if (snapshot.items.length) setClipboard(snapshot);
         dispatch(LAYER_DELETE);
       }
 
       // paste
-      if (mod && e.code === "KeyV") {
+      if (!viewOnlyRef.current && mod && e.code === "KeyV") {
         e.preventDefault();
-        const doPaste = async () => {
-          const before = useStore.getState().trackItemIds;
-          dispatch(ACTIVE_PASTE);
-          await Promise.resolve();
+        const clip = getClipboard();
+        if (!clip) return;
 
-          const after = useStore.getState();
-          const newIds = after.trackItemIds.filter(id => !before.includes(id));
-          if (!newIds.length) return;
+        const { trackItemsMap, transitionsMap, tracks, trackItemIds, transitionIds, duration } = useStore.getState();
+        const time = getCurrentTime();
+        const result = cloneIntoNewTracks(clip, time, {
+          trackItemsMap, trackItemIds, transitionsMap, transitionIds, tracks, duration,
+        }, "top");
+        if (!result) return;
 
-          const { fps: currentFps } = useStore.getState();
-          const currentFrame = useStore.getState().playerRef?.current?.getCurrentFrame() ?? 0;
-          const currentTime = (currentFrame / currentFps) * 1000;
-          const minFrom = Math.min(
-            ...newIds.map(id => after.trackItemsMap[id]?.display.from ?? 0)
-          );
-          const offset = currentTime - minFrom;
-
-          const updatedMap = { ...after.trackItemsMap };
-          newIds.forEach(id => {
-            const item = updatedMap[id];
-            if (!item) return;
-            updatedMap[id] = {
-              ...item,
-              display: {
-                from: item.display.from + offset,
-                to: item.display.to + offset,
-              },
-              details: {
-                ...item.details,
-                locked: false,
-              },
-            };
-          });
-
-          const newDuration = Object.values(updatedMap).reduce(
-            (max, item) => Math.max(max, item.display?.to ?? 0),
-            after.duration
-          );
-
-          stateManager.updateState(
-            { trackItemsMap: updatedMap, duration: newDuration },
-            { updateHistory: true, kind: "update" }
-          );
-        };
-        doPaste().then(r => {});
+        stateManager.updateState(
+          {
+            tracks: result.tracks,
+            trackItemsMap: result.trackItemsMap,
+            trackItemIds: result.trackItemIds,
+            transitionsMap: result.transitionsMap,
+            transitionIds: result.transitionIds,
+            duration: result.duration,
+          },
+          { updateHistory: true, kind: "update" }
+        );
       }
 
       // zoom in
-      if (mod && (e.code === "Equal" || e.code === "NumpadAdd")) {
+      if (!viewOnlyRef.current && mod && (e.code === "Equal" || e.code === "NumpadAdd")) {
         e.preventDefault();
         const { scale } = useStore.getState();
         applyScale(getNextZoomLevel(scale));
       }
 
       // zoom out
-      if (mod && (e.code === "Minus" || e.code === "NumpadSubtract")) {
+      if (!viewOnlyRef.current && mod && (e.code === "Minus" || e.code === "NumpadSubtract")) {
         e.preventDefault();
         const { scale } = useStore.getState();
         applyScale(getPreviousZoomLevel(scale));
       }
 
       // zoom to fit
-      if (!mod && e.shiftKey && e.code === "KeyZ") {
+      if (!viewOnlyRef.current && !mod && e.shiftKey && e.code === "KeyZ") {
         e.preventDefault();
         const { scale, duration, activeIds, trackItemsMap } = useStore.getState();
 
@@ -252,13 +241,13 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       }
 
       // toggle timeline maximize / minimize
-      if (e.code === "Backquote") {
+      if (!viewOnlyRef.current && e.code === "Backquote") {
         e.preventDefault();
         useStore.getState().toggleTimelineFullHeight();
       }
 
       // previous frame / previous second
-      if (mod && e.code === "ArrowLeft") {
+      if (!viewOnlyRef.current && mod && e.code === "ArrowLeft") {
         e.preventDefault();
         const { playerRef, fps } = useStore.getState();
         const current = playerRef?.current?.getCurrentFrame() ?? 0;
@@ -267,7 +256,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       }
 
       // next frame / next second
-      if (mod && e.code === "ArrowRight") {
+      if (!viewOnlyRef.current && mod && e.code === "ArrowRight") {
         e.preventDefault();
         const { playerRef, fps } = useStore.getState();
         const current = playerRef?.current?.getCurrentFrame() ?? 0;
@@ -276,7 +265,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       }
 
       // nudge selected item(s) position
-      if (!mod && (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "ArrowUp" || e.code === "ArrowDown")) {
+      if (!viewOnlyRef.current && !mod && (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "ArrowUp" || e.code === "ArrowDown")) {
         e.preventDefault();
         const { activeIds, trackItemsMap } = useStore.getState();
         if (!activeIds.length) return;
@@ -310,8 +299,8 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         }
       }
 
-      // add / remove marker
-      if (!mod && !e.shiftKey && e.code === "KeyM") {
+      // add / remove marker — no equivalent control in ScenePlayer, edit-mode only
+      if (!viewOnlyRef.current && !mod && !e.shiftKey && e.code === "KeyM") {
         e.preventDefault();
         const { playerRef, fps, markers, addMarker, removeMarker } = useStore.getState();
         const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
@@ -320,7 +309,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         existing ? removeMarker(existing.id) : addMarker(timeMs);
       }
 
-      // previous marker / jump to start
+      // previous marker / jump to start — mirrors ScenePlayer's "jump to prev" button, always available
       if (mod && e.shiftKey && e.code === "KeyM") {
         e.preventDefault();
         const { playerRef, fps, markers } = useStore.getState();
@@ -336,7 +325,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         scrollTimelineToFrame(targetFrame, prevMarker ? "marker" : "start", timelineOffsetXRef.current);
       }
 
-      // next marker / jump to end
+      // next marker / jump to end — mirrors ScenePlayer's "jump to next" button, always available
       if (!mod && e.shiftKey && e.code === "KeyM") {
         e.preventDefault();
         const { playerRef, fps, markers, duration } = useStore.getState();
@@ -353,7 +342,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         scrollTimelineToFrame(targetFrame, nextMarker ? "marker" : "end", timelineOffsetXRef.current);
       }
 
-      // jump to start
+      // jump to start — mirrors ScenePlayer's "jump to prev" button fallback, always available
       if (e.code === "Home") {
         e.preventDefault();
         const { playerRef } = useStore.getState();
@@ -361,7 +350,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         scrollTimelineToFrame(0, "start", timelineOffsetXRef.current);
       }
 
-      // jump to end
+      // jump to end — mirrors ScenePlayer's "jump to next" button fallback, always available
       if (e.code === "End") {
         e.preventDefault();
         const { playerRef, fps, duration } = useStore.getState();
@@ -370,7 +359,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         scrollTimelineToFrame(lastFrame, "end", timelineOffsetXRef.current);
       }
 
-      // fullscreen
+      // fullscreen — mirrors the ScenePlayer fullscreen button, always available
       if (!mod && !e.shiftKey && e.code === "KeyF") {
         e.preventDefault();
         if (!document.fullscreenElement) {
@@ -381,7 +370,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         }
       }
 
-      // mute preview
+      // mute preview — mirrors the ScenePlayer mute button, always available
       if (mod && !e.shiftKey && e.code === "KeyM") {
         e.preventDefault();
         const { playerRef, muted, setMuted } = useStore.getState();

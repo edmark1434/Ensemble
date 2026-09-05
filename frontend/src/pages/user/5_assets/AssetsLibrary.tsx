@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Heart, Image, Loader2, Pencil, Plus, Search, Star, Trash2, Video } from "lucide-react";
+import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Heart, Image, LayoutTemplate, Loader2, Pencil, Plus, Search, Star, Trash2, Video } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
@@ -9,15 +9,19 @@ import AssetEditorModal from "./AssetEditorModal";
 import AssetMedia from "./AssetMedia";
 import type { AssetPagination, AssetRecord, AssetType } from "./assetTypes";
 import { getAssetPostingEligibility } from "./assetPostingEligibility";
+import useGlobalState from "@/lib/global_state";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 
 type FilterType = "all" | AssetType;
 type AssetView = "discover" | "mine" | "purchased" | "saved";
+type MineStatus = "uploaded" | "draft";
 
 const FILTERS: { value: FilterType; label: string; icon: typeof Image }[] = [
   { value: "all", label: "All", icon: Image },
   { value: "image", label: "Images", icon: Image },
   { value: "video", label: "Videos", icon: Video },
   { value: "audio", label: "Audio", icon: AudioLines },
+  { value: "template", label: "Templates", icon: LayoutTemplate },
 ];
 
 function requestError(error: unknown) {
@@ -48,11 +52,15 @@ function AssetSkeleton() {
 export default function AssetsLibrary() {
   const navigate = useNavigate();
   const location = useLocation();
+  const user = useGlobalState((state) => state.user);
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isGuestView = isGuestMode || !user?.account_id;
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [pagination, setPagination] = useState<AssetPagination>({ page: 1, pageSize: 12, total: 0, totalPages: 1 });
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<FilterType>("all");
   const [view, setView] = useState<AssetView>("discover");
+  const [mineStatus, setMineStatus] = useState<MineStatus>("uploaded");
   const [search, setSearch] = useState(location.state?.searchQuery || "");
   const [debouncedSearch, setDebouncedSearch] = useState(location.state?.searchQuery || "");
   const [loading, setLoading] = useState(true);
@@ -63,6 +71,17 @@ export default function AssetsLibrary() {
   const [deletingAsset, setDeletingAsset] = useState<AssetRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [engagementPending, setEngagementPending] = useState<Set<string>>(new Set());
+  const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
+  const availableViews: AssetView[] = isGuestView
+    ? ["discover"]
+    : ["discover", "mine", "purchased", "saved"];
+
+  useEffect(() => {
+    if (isGuestView && view !== "discover") {
+      setPage(1);
+      setView("discover");
+    }
+  }, [isGuestView, view]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -77,7 +96,7 @@ export default function AssetsLibrary() {
     setLoadError("");
     try {
       const response = await api.get<{ assets: AssetRecord[]; pagination: AssetPagination }>("/api/assets", {
-        params: { page, pageSize: 12, search: debouncedSearch, type: filter, view },
+        params: { page, pageSize: 12, search: debouncedSearch, type: filter, view, status: view === "mine" ? (mineStatus === "uploaded" ? "published" : "draft") : undefined },
         signal,
       });
       setAssets(response.data.assets || []);
@@ -88,7 +107,7 @@ export default function AssetsLibrary() {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [debouncedSearch, filter, page, view]);
+  }, [debouncedSearch, filter, mineStatus, page, view]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -97,6 +116,10 @@ export default function AssetsLibrary() {
   }, [loadAssets]);
 
   const openCreate = async () => {
+    if (isGuestView) {
+      setIsGuestLoginOpen(true);
+      return;
+    }
     if (checkingPostEligibility) return;
     setCheckingPostEligibility(true);
     try {
@@ -124,9 +147,15 @@ export default function AssetsLibrary() {
     setEditorOpen(false);
     setEditingAsset(null);
     showSuccessToast(wasEditing ? "Asset updated." : "Asset uploaded.");
-    if (!wasEditing && asset.status === "draft" && view === "discover") {
+    if (!wasEditing && asset.status === "draft") {
       setPage(1);
       setView("mine");
+      setMineStatus("draft");
+      return;
+    }
+    if (!wasEditing && view === "mine" && mineStatus !== "uploaded") {
+      setPage(1);
+      setMineStatus("uploaded");
       return;
     }
     if (page !== 1) setPage(1);
@@ -150,6 +179,10 @@ export default function AssetsLibrary() {
   };
 
   const updateEngagement = async (asset: AssetRecord, kind: "like" | "save") => {
+    if (isGuestView) {
+      setIsGuestLoginOpen(true);
+      return;
+    }
     const key = `${kind}:${asset.market_asset_id}`;
     if (engagementPending.has(key)) return;
     const enabled = kind === "like" ? asset.is_liked : asset.is_saved;
@@ -186,7 +219,7 @@ export default function AssetsLibrary() {
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div>
             <h1 className="text-2xl font-bold">Assets Library</h1>
-            <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">Discover images, videos, and audio shared by the community.</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">Discover images, videos, audio, and templates shared by the community.</p>
           </div>
           <button type="button" onClick={() => void openCreate()} disabled={checkingPostEligibility} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-60">
             {checkingPostEligibility ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -197,7 +230,7 @@ export default function AssetsLibrary() {
         <section className="mt-7 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex rounded-xl bg-gray-100 p-1 dark:bg-white/5" role="tablist" aria-label="Asset views">
-              {(["discover", "mine", "purchased", "saved"] as const).map((tab) => (
+              {availableViews.map((tab) => (
                 <button key={tab} type="button" role="tab" aria-selected={view === tab} onClick={() => { setPage(1); setView(tab); }} className={`flex-1 rounded-lg px-5 py-2 text-sm font-semibold capitalize transition lg:flex-none ${view === tab ? "bg-white text-blue-600 shadow-sm dark:bg-blue-600 dark:text-white" : "text-gray-600 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-white"}`}>
                   {tab === "mine" ? "My Assets" : tab === "purchased" ? "Purchased" : tab === "saved" ? "Saved" : "Discover"}
                 </button>
@@ -209,6 +242,23 @@ export default function AssetsLibrary() {
             </label>
           </div>
 
+          {view === "mine" && (
+            <div className="mt-4 flex items-center gap-1 border-t border-gray-200 pt-4 dark:border-white/10" role="tablist" aria-label="My asset status">
+              {(["uploaded", "draft"] as MineStatus[]).map((statusTab) => (
+                <button
+                  key={statusTab}
+                  type="button"
+                  role="tab"
+                  aria-selected={mineStatus === statusTab}
+                  onClick={() => { setPage(1); setMineStatus(statusTab); }}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${mineStatus === statusTab ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"}`}
+                >
+                  {statusTab === "uploaded" ? "Uploaded" : "Draft"}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-200 pt-4 dark:border-white/10" role="tablist" aria-label="Media types">
             {FILTERS.map(({ value, label, icon: Icon }) => (
               <button key={value} type="button" role="tab" aria-selected={filter === value} onClick={() => { setPage(1); setFilter(value); }} className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-semibold transition ${filter === value ? "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"}`}>
@@ -219,7 +269,7 @@ export default function AssetsLibrary() {
         </section>
 
         <div className="mt-6 flex items-center justify-between">
-          <p className="text-sm font-semibold">{view === "mine" ? "Your uploaded assets" : view === "purchased" ? "Your purchased assets" : view === "saved" ? "Your saved assets" : "Community assets"}</p>
+          <p className="text-sm font-semibold">{view === "mine" ? (mineStatus === "draft" ? "Your draft assets" : "Your uploaded assets") : view === "purchased" ? "Your purchased assets" : view === "saved" ? "Your saved assets" : "Community assets"}</p>
           {!loading && <p className="text-xs text-gray-500 dark:text-zinc-500">{pagination.total.toLocaleString()} {pagination.total === 1 ? "asset" : "assets"}</p>}
         </div>
 
@@ -233,8 +283,8 @@ export default function AssetsLibrary() {
         ) : assets.length === 0 ? (
           <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-16 text-center dark:border-white/10 dark:bg-dark-surface">
             <AudioLines className="mx-auto h-10 w-10 text-gray-400 dark:text-zinc-600" />
-            <h2 className="mt-4 font-semibold">{view === "mine" ? "You haven't uploaded any assets yet." : view === "purchased" ? "You haven't purchased any assets yet." : view === "saved" ? "You haven't saved any assets yet." : "No assets found."}</h2>
-            <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">{search ? "Try a different search or filter." : view === "purchased" ? "Assets you purchase will appear here." : view === "saved" ? "Save assets to find them here later." : "Uploaded media will appear here."}</p>
+            <h2 className="mt-4 font-semibold">{view === "mine" ? (mineStatus === "draft" ? "You don't have any draft assets." : "You haven't uploaded any assets yet.") : view === "purchased" ? "You haven't purchased any assets yet." : view === "saved" ? "You haven't saved any assets yet." : "No assets found."}</h2>
+            <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">{search ? "Try a different search or filter." : view === "mine" && mineStatus === "draft" ? "Assets saved as drafts will appear here." : view === "purchased" ? "Assets you purchase will appear here." : view === "saved" ? "Save assets to find them here later." : "Uploaded media will appear here."}</p>
             {view === "mine" && <button type="button" onClick={() => void openCreate()} disabled={checkingPostEligibility} className="mt-5 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">{checkingPostEligibility ? "Checking..." : "Upload your first asset"}</button>}
           </div>
         ) : (
@@ -278,6 +328,12 @@ export default function AssetsLibrary() {
       </main>
 
       <AssetEditorModal open={editorOpen} asset={editingAsset} onClose={() => !deleting && setEditorOpen(false)} onSaved={onSaved} />
+      <GuestLoginModal
+        isOpen={isGuestLoginOpen}
+        onClose={() => setIsGuestLoginOpen(false)}
+        title="Log in to use Asset Library actions"
+        message="Please log in or create an account to upload, like, or save marketplace assets."
+      />
       <ConfirmationModal isOpen={Boolean(deletingAsset)} title="Delete asset?" message={`Delete “${deletingAsset?.name || "this asset"}”? This removes it from the library.`} confirmText={deleting ? "Deleting..." : "Delete asset"} cancelText="Keep asset" onConfirm={() => void confirmDelete()} onCancel={() => !deleting && setDeletingAsset(null)} />
       {deleting && <span className="sr-only"><Loader2 className="animate-spin" /> Deleting asset</span>}
     </div>

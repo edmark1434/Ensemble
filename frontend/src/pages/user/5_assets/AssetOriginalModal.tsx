@@ -74,13 +74,20 @@ function OpenAssetOriginalModal({ asset, bundleFile, onClose }: Omit<AssetOrigin
           ) : error ? (
             <div className="max-w-md rounded-xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-center text-sm text-red-300">{error}</div>
           ) : preview?.previewUrl && mediaType.startsWith("image/") ? (
-            <img src={preview.previewUrl} alt={`Original ${bundleFile.name}`} draggable={false} className="max-h-[75vh] max-w-full object-contain" />
+            <div className="relative max-h-[75vh] max-w-full overflow-hidden">
+              <img src={preview.previewUrl} alt={`Original ${bundleFile.name}`} draggable={false} onContextMenu={(event) => event.preventDefault()} className="max-h-[75vh] max-w-full object-contain" />
+              <span className="pointer-events-none absolute bottom-3 right-3 rounded-sm bg-black/65 px-3 py-1.5 text-sm font-bold text-white shadow-md" aria-hidden="true">Ensemble Preview</span>
+            </div>
           ) : preview?.previewUrl && mediaType.startsWith("video/") ? (
-            <video src={preview.previewUrl} controls autoPlay playsInline className="max-h-[75vh] max-w-full bg-black" />
+            <div className="relative max-h-[75vh] max-w-full overflow-hidden">
+              <video src={preview.previewUrl} controls autoPlay playsInline onContextMenu={(event) => event.preventDefault()} className="max-h-[75vh] max-w-full bg-black" />
+              <span className="pointer-events-none absolute bottom-12 right-3 rounded-sm bg-black/65 px-3 py-1.5 text-sm font-bold text-white shadow-md" aria-hidden="true">Ensemble Preview</span>
+            </div>
           ) : preview?.previewUrl && mediaType.startsWith("audio/") ? (
-            <div className="flex w-full max-w-xl flex-col items-center gap-6 rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-blue-300">
+            <div className="relative flex w-full max-w-xl flex-col items-center gap-6 rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-blue-300">
               <FileAudio className="h-16 w-16" />
-              <audio src={preview.previewUrl} controls autoPlay className="w-full" />
+              <audio src={preview.previewUrl} controls autoPlay onContextMenu={(event) => event.preventDefault()} className="w-full" />
+              <span className="pointer-events-none absolute bottom-3 right-3 rounded-sm bg-black/65 px-3 py-1.5 text-sm font-bold text-white shadow-md" aria-hidden="true">Ensemble Preview</span>
             </div>
           ) : (
             <p className="text-sm text-zinc-400">Original preview is unavailable.</p>

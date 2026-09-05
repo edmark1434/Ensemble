@@ -42,6 +42,7 @@ const MAX_ATTEMPTS = 3;
 //duration of lockout in milliseconds
 const LOCKOUT_DURATION = 3 * 60 * 1000; //3 minutes in milliseconds
 const STRONG_PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9\s]).{8,}$/;
+const ALLOWED_SUFFIXES = new Set(['Jr.', 'Sr.', 'II', 'III', 'IV', 'V']);
 
 //create a custom error class for servicelevel errors that includes an HTTP status code for better error handling in controllers
 class ServiceError extends Error {
@@ -73,7 +74,9 @@ function isValidEmail(email) {
 function normalizeSignupInput(payload = {}) {
     return {
         firstName: payload.firstName?.trim() || null,
+        middleName: payload.middleName?.trim() || null,
         lastName: payload.lastName?.trim() || null,
+        suffix: payload.suffix?.trim() || null,
         username: payload.username?.trim() || null,
         emailAddress: (payload.emailAddress ?? payload.email)?.trim()?.toLowerCase() || null,
         password: (payload.passwordHash ?? payload.password)?.trim() || null,
@@ -133,7 +136,9 @@ async function registerUser(signupPayload = {}, options = {}) {
     //normalize and validate the signup input
     const {
         firstName,
+        middleName,
         lastName,
+        suffix,
         username,
         emailAddress,
         password,
@@ -142,6 +147,12 @@ async function registerUser(signupPayload = {}, options = {}) {
         firebaseUserUuid,
         firebaseIdToken
     } = normalizeSignupInput(signupPayload);
+    if (middleName && middleName.length > 64) {
+        throw new ServiceError('Middle name must be 64 characters or fewer', 400);
+    }
+    if (suffix && !ALLOWED_SUFFIXES.has(suffix)) {
+        throw new ServiceError('Invalid suffix', 400);
+    }
     if (signUpWithOAuth) {
         const identity = await verifyFirebaseIdentityToken(firebaseIdToken);
         if (identity.email.toLowerCase() !== emailAddress || identity.localId !== firebaseUserUuid) {
@@ -215,7 +226,7 @@ async function registerUser(signupPayload = {}, options = {}) {
     }
     //create account and user in the database, hash the password if provided, and return the created user and account information
     const account = await createAccount({
-        displayName: `${firstName ?? ''} ${lastName ?? ''}`.trim() || null,
+        displayName: [firstName, middleName, lastName, suffix].filter(Boolean).join(' ') || null,
         handle: username ?? `${firstName?.toLowerCase() || 'user'}${lastName ? lastName.toLowerCase() : ''}${Math.floor(1000 + Math.random() * 9000)}`,
         type: type ?? 'User',
         status: 'active',
@@ -227,7 +238,9 @@ async function registerUser(signupPayload = {}, options = {}) {
     const user = await createUser({
         account_id: account.account_id,
         firstName,
+        middleName,
         lastName,
+        suffix,
         emailAddress,
         passwordHash,
         firebaseUserUuid,
@@ -446,7 +459,9 @@ async function signUpSaveSession(credentials) {
         let errorList = {}
         const email = credentials.email?.trim().toLowerCase();
         const firstName = credentials.firstName?.trim();
+        const middleName = credentials.middleName?.trim() || null;
         const lastName = credentials.lastName?.trim();
+        const suffix = credentials.suffix?.trim() || null;
         const username = credentials.username?.trim();
         if(!isValidEmail(email)) {
             errorList.email = "Invalid email format";
@@ -469,6 +484,12 @@ async function signUpSaveSession(credentials) {
         if (!lastName) {
             errorList.lastName = "Last name is required";
         }
+        if (middleName && middleName.length > 64) {
+            errorList.middleName = "Middle name must be 64 characters or fewer";
+        }
+        if (suffix && !ALLOWED_SUFFIXES.has(suffix)) {
+            errorList.suffix = "Select a valid suffix";
+        }
 
         if (!username) {
             errorList.username = "Username is required";
@@ -487,7 +508,9 @@ async function signUpSaveSession(credentials) {
             const pending = {
                 email,
                 firstName,
+                middleName,
                 lastName,
+                suffix,
                 username,
                 passwordHash: await bcrypt.hash(credentials.password, SALT_ROUNDS),
             };
@@ -497,7 +520,7 @@ async function signUpSaveSession(credentials) {
                 const verificationCode = await sendVerificationEmail(email, firstName, lastName);
                 await redisClient.set(`verificationCode:${email}`, verificationCode, { EX: 10 * 60 });
             }
-            return { email, firstName, lastName, username };
+            return { email, firstName, middleName, lastName, suffix, username };
         }
     }catch(err){
         console.error(`Error signing up and saving session:`, err);
@@ -525,7 +548,9 @@ async function checkVerificationCode(email, code) {
         const pending = JSON.parse(credentialsInSession);
         const result = await registerUser({
             firstName: pending.firstName,
+            middleName: pending.middleName,
             lastName: pending.lastName,
+            suffix: pending.suffix,
             username: pending.username,
             email: pending.email,
             type: 'User',

@@ -23,15 +23,6 @@ async function persistCompletedOnboarding(userId, accountId, data) {
             return { alreadyCompleted: true };
         }
 
-        const personal = data.personal_details;
-        await client.query(
-            `UPDATE users SET middle_name = $1, suffix = $2, birth_date = $3,
-                              country = $4, zip_code = $5, address = $6
-             WHERE user_id = $7`,
-            [personal.middleName || null, personal.suffix || null, personal.birthDate,
-             personal.country, personal.zipCode, personal.address, userId]
-        );
-
         const avatar = data.avatar;
         let avatarFileId;
         if (avatar.type === 'preset') {

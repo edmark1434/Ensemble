@@ -3,7 +3,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as Y from "yjs";
 import { db } from "@/lib/db";
-import { resolveProjectId } from "@/utils/resolve-ids";
 
 const COMPACT_AFTER_UPDATE_COUNT = 200;
 
@@ -16,37 +15,40 @@ export async function POST(
     return NextResponse.json({ error: "invalid sessionId" }, { status: 400 });
   }
 
-  const { id } = await params;
-  let projectId: number;
-  try {
-    projectId = await resolveProjectId(id);
-  } catch {
-    return NextResponse.json({ error: "project not found" }, { status: 404 });
-  }
+  const { id: projectId } = await params;
 
   const buf = Buffer.from(await request.arrayBuffer());
   if (buf.length === 0) {
     return NextResponse.json({ error: "empty update body" }, { status: 400 });
   }
 
-  await db.transaction().execute(async (trx) => {
-    const activity = await trx
-      .insertInto("session_activities")
-      .values({ session_id: sessionId, type: "edit" })
-      .returning(["session_activity_id"])
-      .executeTakeFirstOrThrow();
+  try {
+    await db.transaction().execute(async (trx) => {
+      const activity = await trx
+        .insertInto("session_activities")
+        .values({ session_id: sessionId, type: "edit" })
+        .returning(["session_activity_id"])
+        .executeTakeFirstOrThrow();
 
-    const update = await trx
-      .insertInto("yjs_updates")
-      .values({ session_activity_id: activity.session_activity_id, update: buf })
-      .returning(["yjs_update_id"])
-      .executeTakeFirstOrThrow();
+      const update = await trx
+        .insertInto("yjs_updates")
+        .values({ session_activity_id: activity.session_activity_id, update: buf })
+        .returning(["yjs_update_id"])
+        .executeTakeFirstOrThrow();
 
-    await trx
-      .insertInto("project_yjs_updates")
-      .values({ yjs_update_id: update.yjs_update_id, project_id: projectId })
-      .execute();
-  });
+      await trx
+        .insertInto("project_yjs_updates")
+        .values({ yjs_update_id: update.yjs_update_id, project_id: projectId })
+        .execute();
+    });
+  } catch (error) {
+    console.error("[updates POST] failed", error);
+    const isMissingRef = (error as { code?: string })?.code === "23503";
+    return NextResponse.json(
+      { error: isMissingRef ? "project or session not found" : "internal error" },
+      { status: isMissingRef ? 404 : 500 }
+    );
+  }
 
   const { count } = await db
     .selectFrom("project_yjs_updates")
@@ -61,7 +63,7 @@ export async function POST(
   return NextResponse.json({ ok: true });
 }
 
-async function compactProject(projectId: number) {
+async function compactProject(projectId: string) {
   const snapshotRow = await db
     .selectFrom("project_yjs_snapshots")
     .innerJoin("yjs_snapshots", "yjs_snapshots.yjs_snapshot_id", "project_yjs_snapshots.yjs_snapshot_id")
@@ -78,7 +80,7 @@ async function compactProject(projectId: number) {
     .select(["yjs_updates.update", "project_yjs_updates.yjs_update_id"])
     .execute();
 
-  const doc = new Y.Doc();
+  const doc = new Y.Doc({ gc: false });
   if (snapshotRow) Y.applyUpdate(doc, snapshotRow.document);
   for (const row of updateRows) Y.applyUpdate(doc, row.update);
 

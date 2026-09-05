@@ -47,7 +47,7 @@ async function resizeImage(file: File, maxWidth: number, maxHeight: number, qual
   }
 }
 
-export async function createAssetProxy(file: File, type: AssetType): Promise<File> {
+export async function createAssetProxy(file: File, type: Exclude<AssetType, "template">): Promise<File> {
   if (type === "image") {
     return resizeImage(file, 640, 640, 0.36, true, "low-quality-preview", 0.55);
   }
@@ -56,7 +56,15 @@ export async function createAssetProxy(file: File, type: AssetType): Promise<Fil
 }
 
 export async function prepareAssetThumbnail(file: File): Promise<File> {
-  return resizeImage(file, 480, 480, 0.68, true, "thumbnail");
+  return resizeImage(file, 480, 480, 0.68, false, "thumbnail");
+}
+
+export async function prepareTemplateThumbnail(file: File): Promise<File> {
+  return resizeImage(file, 480, 480, 0.78, false, "template-thumbnail");
+}
+
+export async function createAssetDocumentPreview(file: File): Promise<File> {
+  return resizeImage(file, 640, 640, 0.36, true, "low-quality-preview", 0.55);
 }
 
 function createVideoFramePreview(file: File): Promise<File> {
