@@ -223,7 +223,7 @@ export const TosMain: React.FC = () => {
                     )}
                     <button
                       type="submit"
-                      className="flex-1 rounded-xl bg-blue-500 py-2.5 text-xs font-bold text-gray-900 dark:text-white transition hover:bg-blue-600 shadow-lg shadow-blue-500/20"
+                      className="flex-1 rounded-xl bg-blue-500 py-2.5 text-xs font-bold text-white transition hover:bg-blue-600 shadow-lg shadow-blue-500/20"
                       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
                       {editingId ? "Update Template" : "Save TOS Template"}
@@ -261,7 +261,7 @@ export const TosMain: React.FC = () => {
                           onClick={() =>
                             setExpandedId(isExpanded ? null : tos.id)
                           }
-                          className="flex cursor-pointer items-center justify-between p-4 text-left transition hover:bg-white dark:bg-white/5 shadow-sm dark:shadow-none"
+                          className="flex cursor-pointer items-center justify-between p-4 text-left transition hover:bg-gray-50 dark:hover:bg-white/5 shadow-sm dark:shadow-none"
                         >
                           <div className="flex items-center gap-3">
                             <FileText className="h-4 w-4 shrink-0 text-blue-400" />
@@ -273,6 +273,11 @@ export const TosMain: React.FC = () => {
                             >
                               {tos.terms_title}
                             </h3>
+                            {tos.usage_contracts && tos.usage_contracts.length > 0 && (
+                                <span className="rounded bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 text-[10px] font-semibold text-blue-800 dark:text-blue-300">
+                                  Used in {tos.usage_contracts.length} {tos.usage_contracts.length === 1 ? 'Job' : 'Jobs'}
+                                </span>
+                            )}
                           </div>
 
                           <div className="flex items-center gap-2">

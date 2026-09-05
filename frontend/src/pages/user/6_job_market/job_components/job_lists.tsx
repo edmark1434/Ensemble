@@ -249,29 +249,30 @@ const JobList: React.FC<JobListProps> = ({
                     </div>
                   </div>
 
+                  </div>
+
                   {/* Category Pill Tags */}
                   <div className="flex flex-wrap items-center gap-1.5 mb-2">
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
-                        job.status?.toLowerCase() === "open"
-                          ? "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
-                          : "bg-red-100 text-red-700 border-red-300 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
+                      className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
+                        job.status?.toLowerCase() === "open" || !job.status
+                          ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
+                          : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                       }`}
                     >
-                      {job.status}
+                      <span className="relative z-10">{job.status?.toLowerCase() === "open" || !job.status ? "Open" : "Closed"}</span>
+                      {(job.status?.toLowerCase() === "open" || !job.status) && (
+                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                      )}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                      {job.difficulty}
+                      {job.category || "General"}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                      {job.category}
+                      {job.difficulty || "Beginner"}
                     </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-700 dark:text-zinc-300 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 rounded border border-gray-300 dark:border-white/10">
-                      <Users className="h-3 w-3 text-gray-500" />
-                      {job.positionsNeeded || 1} Positions
-                    </div>
-                    </div>
+                    
+                  </div>
 
                   {/* Price & Title */}
                   <div className="text-yellow-500 text-base font-black mb-1 flex items-center gap-1">
@@ -336,22 +337,26 @@ const JobList: React.FC<JobListProps> = ({
                 <div>
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
-                          job.status?.toLowerCase() === "open"
-                            ? "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
-                            : "bg-red-100 text-red-700 border-red-300 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
-                        }`}
-                      >
-                        {job.status}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                        {job.difficulty}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                        {job.category}
-                      </span>
-                    </div>
+                        <span
+                          className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
+                            job.status?.toLowerCase() === "open" || !job.status
+                              ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
+                              : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
+                          }`}
+                        >
+                          <span className="relative z-10">{job.status?.toLowerCase() === "open" || !job.status ? "Open" : "Closed"}</span>
+                          {(job.status?.toLowerCase() === "open" || !job.status) && (
+                            <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                          )}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
+                          {job.category || "General"}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
+                          {job.difficulty || "Beginner"}
+                        </span>
+                        
+                      </div>
 
                     <div className="flex items-center gap-2">
                       {!job.isOwnPost && !isGuestMode && (

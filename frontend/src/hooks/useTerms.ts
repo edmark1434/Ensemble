@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import api from "../lib/axios";
 
 export interface TosTemplate {
+  usage_contracts?: { contract_id: string; type: string }[];
   id: string;
   terms_title: string;
   terms_content: string;

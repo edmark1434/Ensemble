@@ -177,8 +177,13 @@ export const HomeFeaturedGigs: React.FC = () => {
                       {gig.status?.toLowerCase() === "close" ? "Closed" : (gig.status || "Open")}
                     </span>
                     <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
-                      {gig.category}
+                      {gig.category || "General"}
                     </span>
+                    {gig.tiers && gig.tiers.length > 0 && (
+                      <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
+                        {gig.tiers.length} Tiers
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 dark:bg-zinc-800 text-[10px] font-semibold text-gray-600 dark:text-zinc-300 border border-gray-300 dark:border-white/10 shrink-0">
