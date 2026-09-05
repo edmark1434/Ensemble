@@ -596,7 +596,8 @@ async function getModerationOverview(staffSession = null) {
         SELECT COUNT(*)::int AS active_violations
         FROM violations
         WHERE deleted_at IS NULL
-          AND LOWER(COALESCE(status, 'active')) NOT IN ('cleared', 'pardoned', 'resolved')
+          AND LOWER(COALESCE(status, 'active')) NOT IN ('cleared', 'pardoned', 'resolved', 'expired')
+          AND (expires_at IS NULL OR expires_at > NOW())
       `)
       .catch(() => ({ rows: [{ active_violations: 0 }] })),
     getSectionValue('moderation').catch(() => DEFAULT_SETTINGS.moderation),

@@ -1246,11 +1246,15 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   ];
 
   for (const v of violations) {
+    const points = v[4];
     await pool.query(
       `INSERT INTO violations (
         violation_number, account_id, type, reason, points, issued_by_staff_id,
-        status, staff_id
-      ) VALUES ($1,$2,$3,$4,$5,$6,'active',$6)`,
+        status, staff_id, expires_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,'active',$6,
+        NOW() + (GREATEST($5::int, 1) * INTERVAL '30 days')
+      )`,
       v
     );
   }

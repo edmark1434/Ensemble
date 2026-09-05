@@ -435,7 +435,9 @@ async function getSupportOverview(session = null) {
           WHERE t.deleted_at IS NULL
             AND ${EXCLUDE_ADMIN_TICKETS_SQL}) AS total_messages,
         (SELECT COUNT(*)::int FROM violations v
-          WHERE v.deleted_at IS NULL AND LOWER(v.status) = 'active') AS active_violations,
+          WHERE v.deleted_at IS NULL
+            AND LOWER(v.status) = 'active'
+            AND (v.expires_at IS NULL OR v.expires_at > NOW())) AS active_violations,
         (SELECT COUNT(*)::int FROM restrictions r
           WHERE r.ends_at IS NULL OR r.ends_at > NOW()) AS active_restrictions
     `),

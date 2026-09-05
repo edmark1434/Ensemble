@@ -127,6 +127,8 @@ export type Violation = {
   status: string;
   issuedBy: string;
   createdAt: string;
+  expiresAt?: string | null;
+  active?: boolean;
 };
 
 export type RestrictedAccount = {

@@ -801,6 +801,7 @@ async function fetchLiveModuleCounts() {
           COUNT(*) FILTER (
             WHERE deleted_at IS NULL
               AND LOWER(COALESCE(status, 'active')) IN ('active', 'open')
+              AND (expires_at IS NULL OR expires_at > NOW())
           )::int AS active_count
         FROM violations
       `

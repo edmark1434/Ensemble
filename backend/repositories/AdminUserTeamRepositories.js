@@ -1,5 +1,6 @@
 const { pool } = require('../lib/Database');
 const { CREDIT_TRANSACTION_TYPE } = require('../lib/CreditTransactionEnums');
+const { violationExpiryFromPoints, isViolationActive } = require('./ModeratorRepositories');
 
 function normalizeStatus(status) {
   if (!status) return 'Pending';
@@ -151,6 +152,8 @@ async function fetchHistoryForAccounts(accountIds) {
         v.points,
         v.status,
         v.created_at,
+        v.expires_at,
+        v.deleted_at,
         COALESCE(sa.display_name, s.first_name || ' ' || s.last_name, 'Staff') AS issued_by
       FROM violations v
       LEFT JOIN staff s ON s.staff_id = COALESCE(v.issued_by_staff_id, v.staff_id)
@@ -195,6 +198,8 @@ async function fetchHistoryForAccounts(accountIds) {
   for (const row of violationsResult.rows) {
     const bucket = map.get(row.account_id);
     if (!bucket) continue;
+    const active = isViolationActive(row);
+    const pastExpiry = Boolean(row.expires_at && new Date(row.expires_at).getTime() <= Date.now());
     bucket.violations.push({
       id: row.violation_number || row.violation_id,
       type: row.type || 'Violation',
@@ -202,6 +207,9 @@ async function fetchHistoryForAccounts(accountIds) {
       points: Number(row.points || 0),
       by: row.issued_by,
       timeAgo: formatRelativeTime(row.created_at),
+      expiresAt: row.expires_at || null,
+      active,
+      status: !active && pastExpiry ? 'expired' : row.status,
     });
   }
 
@@ -243,7 +251,8 @@ function buildHistory(accountId, historyMap) {
     timeAgo: d.timeAgo,
   }));
   const active = activeDisputes[0] || null;
-  const caution = data.violations.length > 0 || activeDisputes.length > 0;
+  const caution =
+    data.violations.some((v) => v.active !== false) || activeDisputes.length > 0;
 
   return {
     summaryLabel: caution
@@ -1283,7 +1292,7 @@ async function freezeAccountCredits(accountId, freeze = true) {
   };
 }
 
-async function warnAccount(accountId, { type, reason, points } = {}, staffId) {
+async function warnAccount(accountId, { type, reason, points, expiresAt } = {}, staffId) {
   await assertAccountExists(accountId);
   if (!staffId) throw new Error('Staff session required to issue a warning');
 
@@ -1291,15 +1300,19 @@ async function warnAccount(accountId, { type, reason, points } = {}, staffId) {
   const warnType = String(type || 'Account warning').trim() || 'Account warning';
   const warnReason = String(reason || 'Warning issued by administrator').trim();
   const warnPoints = Number(points) || 1;
+  const expiry =
+    expiresAt != null && expiresAt !== ''
+      ? new Date(expiresAt)
+      : violationExpiryFromPoints(warnPoints);
 
   await pool.query(
     `
     INSERT INTO violations (
       violation_number, account_id, type, reason, points,
-      issued_by_staff_id, status, staff_id
-    ) VALUES ($1, $2, $3, $4, $5, $6, 'active', $6)
+      issued_by_staff_id, status, staff_id, expires_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, 'active', $6, $7)
     `,
-    [violationNumber, accountId, warnType, warnReason, warnPoints, staffId]
+    [violationNumber, accountId, warnType, warnReason, warnPoints, staffId, expiry]
   );
 
   return {
@@ -1307,6 +1320,7 @@ async function warnAccount(accountId, { type, reason, points } = {}, staffId) {
     violationNumber,
     type: warnType,
     points: warnPoints,
+    expiresAt: expiry,
   };
 }
 
@@ -1334,6 +1348,7 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
       WHERE account_id = $1
         AND deleted_at IS NULL
         AND LOWER(COALESCE(status, '')) IN ('active', 'open', 'pending')
+        AND (expires_at IS NULL OR expires_at > NOW())
       RETURNING violation_id
       `,
       [accountId]

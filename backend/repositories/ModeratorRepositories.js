@@ -1,6 +1,24 @@
 const { pool } = require('../lib/Database');
 
+/** Strike weight → days until expiry (1pt = 30 days). */
+function violationExpiryFromPoints(points, fromDate = new Date()) {
+  const days = Math.max(1, Number(points) || 1) * 30;
+  const d = new Date(fromDate);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d;
+}
+
+function isViolationActive(row, now = Date.now()) {
+  const status = String(row.status || 'active').toLowerCase();
+  if (['cleared', 'pardoned', 'resolved', 'expired'].includes(status)) return false;
+  if (row.deleted_at) return false;
+  if (row.expires_at && new Date(row.expires_at).getTime() <= now) return false;
+  return true;
+}
+
 function mapViolationRow(row) {
+  const active = isViolationActive(row);
+  const pastExpiry = Boolean(row.expires_at && new Date(row.expires_at).getTime() <= Date.now());
   return {
     id: row.violation_id,
     number: row.violation_number,
@@ -13,9 +31,11 @@ function mapViolationRow(row) {
     type: row.type || 'warning',
     reason: row.reason,
     points: row.points,
-    status: row.status,
+    status: !active && pastExpiry ? 'expired' : row.status,
     issuedBy: row.issued_by_name || 'System',
     createdAt: row.created_at,
+    expiresAt: row.expires_at || null,
+    active,
   };
 }
 
@@ -53,13 +73,29 @@ async function getViolationsAndRestrictions() {
   };
 }
 
-async function issueViolation(accountId, { type, reason, points }, staffSession) {
+async function issueViolation(accountId, { type, reason, points, expiresAt }, staffSession) {
   const violationNumber = `VIO-${Date.now().toString().slice(-8)}`;
   const violationType = String(type || 'warning').trim() || 'warning';
+  const warnPoints = Number(points) || 1;
+  const expiry =
+    expiresAt != null && expiresAt !== ''
+      ? new Date(expiresAt)
+      : violationExpiryFromPoints(warnPoints);
+
   await pool.query(
-    `INSERT INTO violations (violation_number, account_id, type, reason, points, issued_by_staff_id, status, staff_id)
-     VALUES ($1, $2, $3, $4, $5, $6, 'active', $6)`,
-    [violationNumber, accountId, violationType, reason || null, Number(points) || 0, staffSession?.staff_id || null]
+    `INSERT INTO violations (
+       violation_number, account_id, type, reason, points,
+       issued_by_staff_id, status, staff_id, expires_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, 'active', $6, $7)`,
+    [
+      violationNumber,
+      accountId,
+      violationType,
+      reason || null,
+      warnPoints,
+      staffSession?.staff_id || null,
+      expiry,
+    ]
   );
   return getViolationsAndRestrictions();
 }
@@ -74,6 +110,8 @@ async function updateAccountRestriction(accountId, status) {
 }
 
 module.exports = {
+  violationExpiryFromPoints,
+  isViolationActive,
   getViolationsAndRestrictions,
   issueViolation,
   updateAccountRestriction,

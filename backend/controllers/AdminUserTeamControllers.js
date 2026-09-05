@@ -183,6 +183,7 @@ async function postAdminAccountWarn(req, res) {
         type: req.body?.type || req.body?.title,
         reason: req.body?.reason,
         points: req.body?.points,
+        expiresAt: req.body?.expiresAt,
       },
       staffIdFromSession(req.session)
     );

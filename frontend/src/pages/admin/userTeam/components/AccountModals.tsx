@@ -1402,6 +1402,8 @@ export function HistoryModal({
                 <p className="mt-1 text-zinc-500">{v.reason}</p>
                 <p className="mt-2 text-xs text-zinc-600">
                   By: {v.by} · +{v.points} warning points · {v.id} · {v.timeAgo}
+                  {v.expiresAt ? ` · expires ${new Date(v.expiresAt).toLocaleDateString()}` : ''}
+                  {v.active === false ? ' · inactive' : ''}
                 </p>
               </li>
             ))}
@@ -1530,6 +1532,9 @@ export function WarnAccountModal({
             onChange={(e) => setPoints(e.target.value)}
             className="mt-1 w-28 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
           />
+          <span className="mt-1 block text-[11px] text-zinc-600">
+            Expires automatically: {Math.max(1, Number(points) || 1) * 30} days from issue
+          </span>
         </label>
       </div>
     </ModalShell>
