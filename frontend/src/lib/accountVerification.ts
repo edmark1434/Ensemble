@@ -1,5 +1,6 @@
-import toast from 'react-hot-toast';
+﻿import toast from 'react-hot-toast';
 import api from '@/lib/axios';
+import useGlobalState from '@/lib/global_state.ts';
 
 export const ACCOUNT_VERIFICATION_REQUIRED = 'ACCOUNT_VERIFICATION_REQUIRED';
 
@@ -34,13 +35,17 @@ export function getVerificationErrorMessage(error: unknown): string {
   return candidate?.response?.data?.message || candidate?.message || VERIFICATION_REQUIRED_MESSAGE;
 }
 
-export async function continueIfAccountVerified(action: () => void): Promise<boolean> {
+export async function continueIfAccountVerified(action: () => void, skipPopup = false, message?: string): Promise<boolean> {
   try {
     await requireVerifiedAccount();
     action();
     return true;
   } catch (error) {
-    toast.error(getVerificationErrorMessage(error));
+    if (!skipPopup) {
+      useGlobalState.getState().setIsVerificationModalOpen(true, message);
+    } else {
+      toast.error(getVerificationErrorMessage(error));
+    }
     return false;
   }
 }

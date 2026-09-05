@@ -20,6 +20,9 @@ interface GlobalState {
   accessToken:     string | null
   signUpData:      any | null
   theme:           'light' | 'dark'
+  isVerificationModalOpen: boolean
+  verificationModalMessage?: string
+  isVerified: boolean
 
   // Actions
   setIsSidebarCollapsed: (isCollapsed: boolean) => void
@@ -31,6 +34,8 @@ interface GlobalState {
   setAccessToken: (accessToken: string) => void
   setSignUpData: (data: any) => void
   setTheme: (theme: 'light' | 'dark') => void
+  setIsVerificationModalOpen: (isOpen: boolean, message?: string) => void
+  setIsVerified: (isVerified: boolean) => void
 }
 
 // Pass type to create<GlobalState>
@@ -44,6 +49,9 @@ const useGlobalState = create<GlobalState>((set) => ({
   accessToken: null,
   signUpData: null,
   theme: (localStorage.getItem('theme') as 'light' | 'dark') || 'dark',
+  isVerificationModalOpen: false,
+  verificationModalMessage: undefined,
+  isVerified: false,
 
   // Actions
   setIsSidebarCollapsed: (isCollapsed) => set({ isSidebarCollapsed: isCollapsed }),
@@ -78,6 +86,8 @@ const useGlobalState = create<GlobalState>((set) => ({
     }
     set({ theme });
   },
+  setIsVerificationModalOpen: (isOpen, message) => set({ isVerificationModalOpen: isOpen, verificationModalMessage: message }),
+  setIsVerified: (isVerified) => set({ isVerified }),
 }))
 
 const initialTheme = (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';

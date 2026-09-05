@@ -88,6 +88,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const [userCredits, setCredits] = useState(0);
   const [userAvatarState, setUserAvatarState] = useState('');
   const [userSubscriptionPlan, setUserSubscriptionPlan] = useState<"Free" | "Premium" | "Business">("Free");
+  const [isVerified, setIsVerified] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
 
@@ -210,17 +211,20 @@ useEffect(() => {
     }
     const checkRole = async () => {
       try {
-        const [, getWalletResponse, getAvatarResponse, getSubscriptionPlanResponse] = await Promise.all([
+        const [, getWalletResponse, getAvatarResponse, getSubscriptionPlanResponse, getVerificationResponse] = await Promise.all([
           api.get("/api/users/check-user-role"),
           api.get("/api/accounts/wallet", {
             params: { type: 'account_wallets' },
           }),
           api.get(`/api/accounts/profile/current-avatar`),
           api.get(`/api/subscription/plan-details`),
+          api.get('/api/verification/status'),
         ]);
 
         // ✅ Fix: Properly construct avatar URL
         setUserSubscriptionPlan(getSubscriptionPlanResponse.data?.planDetails.plan_name);
+        setIsVerified(getVerificationResponse.data?.data?.is_verified || false);
+          useGlobalState.getState().setIsVerified(getVerificationResponse.data?.data?.is_verified || false);
         let avatarUrl = '';
         if (getAvatarResponse.data?.data?.path) {
           const path = getAvatarResponse.data.data.path;
@@ -530,10 +534,11 @@ useEffect(() => {
                     />
                     <div className="text-left hidden md:block">
                       <p className="text-sm font-medium text-gray-900 dark:text-white">{userInfo?.display_name || userInfo?.displayName || userInfo?.username || "User"}</p>
-                      <p className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500">
-                        <img src={getSubscriptionIcon(userSubscriptionPlan || "Free")} alt={`${userSubscriptionPlan || "Free"} Tier`} className="h-4 w-4 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" />
-                        {userSubscriptionPlan || "Free"}
-                      </p>
+                        <p className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500">
+                          <img src={isVerified ? "/icons/verification/lvl2_verified.png" : "/icons/verification/lvl1_verified.png"} alt={isVerified ? "Verified User" : "Unverified User"} className="w-4 h-4 object-contain" title={isVerified ? "Verified" : "Unverified"} />
+                          <img src={getSubscriptionIcon(userSubscriptionPlan || "Free")} alt={`${userSubscriptionPlan || "Free"} Tier`} className="h-4 w-4 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" />
+                          {userSubscriptionPlan || "Free"}
+                        </p>
                     </div>
                     <ChevronDown className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
                   </button>

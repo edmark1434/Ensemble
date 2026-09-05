@@ -13,7 +13,7 @@ const {
 
 async function createAccountVerificationController(req,res){
     try{
-        const { userId } = req.session;
+        const { account_id } = req.session;
         const session = await createAccountVerificationSession(userId);
         res.status(200).json({ message: "Account verification session created successfully", session });
     }catch(err){
@@ -166,6 +166,7 @@ async function verifyCode(req, res) {
 }
 
 module.exports = {
+    forceVerifyController,
     createAccountVerificationController,
     handleVerificationWebhookStatusUpdated,
     getAccountVerificationStatusController,
@@ -173,3 +174,23 @@ module.exports = {
     verifyCode,
     createBusinessVerificationController
 };
+
+
+async function forceVerifyController(req, res) {
+    try {
+        const { account_id } = req.session;
+        const { is_verified } = req.body;
+        
+        const { updateAccountVerifications } = require('../repositories/AccountVerificationRepositories');
+        
+        await updateAccountVerifications(account_id, {
+            is_verified: is_verified,
+            verified_at: is_verified ? new Date() : null
+        });
+
+        res.status(200).json({ message: "Verification status forced successfully", is_verified });
+    } catch(err) {
+        console.error("Error forcing verification:", err);
+        res.status(500).json({ error: "Failed to force verification" });
+    }
+}

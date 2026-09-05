@@ -4,7 +4,8 @@ const { createAccountVerificationController,
     getAccountVerificationStatusController,
     sendVerificationController,
     verifyCode,
-    createBusinessVerificationController
+    createBusinessVerificationController,
+    forceVerifyController
  } = require('../controllers/AccountVerificationControllers');
 const checkSession = require('../middleware/CheckSession');
 const requireAuth = require('../middleware/RequireAuth');
@@ -16,4 +17,5 @@ router.post('/create-business-verification', [requireAuth, checkSession], create
 router.post('/webhook/status/updated', verifyDiditWebhook, handleVerificationWebhookStatusUpdated);
 router.post('/email', [checkSession, requireAuth], sendVerificationController);
 router.post('/verify-code', [checkSession, requireAuth], verifyCode);
+router.post('/force-verify', [requireAuth, checkSession], forceVerifyController);
 module.exports = router;
