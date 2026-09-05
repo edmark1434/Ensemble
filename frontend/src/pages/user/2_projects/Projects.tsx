@@ -432,7 +432,7 @@ const Projects: React.FC = () => {
     { id: "recent" as TabType, label: "Recent", icon: <Clock className="h-4 w-4" /> },
     { id: "personal" as TabType, label: "Personal", icon: <User className="h-4 w-4" /> },
     { id: "shared" as TabType, label: "Shared", icon: <Share2 className="h-4 w-4" /> },
-    { id: "contract" as TabType, label: "With Contract", icon: <FileCheck className="h-4 w-4" /> },
+    
     { id: "team" as TabType, label: "Team", icon: <Users className="h-4 w-4" /> },
   ];
 
