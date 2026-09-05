@@ -145,7 +145,7 @@ CREATE TABLE IF NOT EXISTS disputes (
     dispute_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     dispute_number VARCHAR(20) UNIQUE,
     title VARCHAR(255),
-    reason TEXT,
+    description TEXT,
     type VARCHAR(50) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'open',
     priority VARCHAR(20) NOT NULL DEFAULT 'High',
