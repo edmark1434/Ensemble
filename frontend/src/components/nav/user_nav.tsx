@@ -50,7 +50,7 @@ let gigsItemsInitial: NavItem[] = [
 ];
 
 let activityRecordsInitial: NavItem[] = [
-    { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
+    { label: "Deliveries", icon: LayoutDashboard, to: "/dashboard" },
     { label: "My Terms", icon: FileText, to: "/terms-of-services" },
     { label: "My Contracts", icon: Shield, to: "/contracts" },
     { label: "Transaction History", icon: Wallet, to: "/transactions" },

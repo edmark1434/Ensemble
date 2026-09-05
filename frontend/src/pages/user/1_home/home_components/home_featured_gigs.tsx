@@ -31,6 +31,8 @@ export const HomeFeaturedGigs: React.FC = () => {
         const response = await api.get("/api/gigs");
         if (response.data && response.data.success) {
           let allGigs = response.data.data;
+            // Filter out closed gigs from Top Services
+            allGigs = allGigs.filter((g: any) => g.status?.toLowerCase() !== "close" && g.status?.toLowerCase() !== "closed");
           allGigs.sort((a: any, b: any) => {
             const aRating = a.clientRating || 0;
             const bRating = b.clientRating || 0;
@@ -167,12 +169,12 @@ export const HomeFeaturedGigs: React.FC = () => {
                   <div className="flex items-center gap-1.5">
                     <span
                       className={`rounded border px-2 py-0.5 text-[10px] font-medium ${
-                        gig.status?.toLowerCase() === "closed"
+                        (gig.status?.toLowerCase() === "closed" || gig.status?.toLowerCase() === "close")
                           ? "border-red-300 bg-red-100 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
                           : "border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
                       }`}
                     >
-                      {gig.status || "Open"}
+                      {gig.status?.toLowerCase() === "close" ? "Closed" : (gig.status || "Open")}
                     </span>
                     <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
                       {gig.category}

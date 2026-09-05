@@ -7,6 +7,8 @@ import {
   ArrowRight,
   Wrench,
   Bookmark,
+  Send,
+  Users,
 } from "lucide-react";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
@@ -181,6 +183,13 @@ export const HomeFeaturedJobs: React.FC = () => {
                   className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
+                
+                <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
+                    <Send className="h-3 w-3" />
+                    <span>{job.applicantsCount || 0} Proposals</span>
+                  </div>
+                </div>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -195,7 +204,8 @@ export const HomeFeaturedJobs: React.FC = () => {
               </div>
 
               {/* Category & Status Pills */}
-              <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              <div className="mb-2 flex items-center justify-between gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                 <span
                   className={`rounded border px-2 py-0.5 text-[10px] font-medium ${
                     job.status === "Open"
@@ -211,6 +221,11 @@ export const HomeFeaturedJobs: React.FC = () => {
                 <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
                   {job.category}
                 </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-700 dark:text-zinc-300 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 rounded border border-gray-300 dark:border-white/10">
+                  <Users className="h-3 w-3 text-gray-500" />
+                  {job.positionsNeeded || 1} Positions
+                </div>
               </div>
 
               {/* Price Range */}

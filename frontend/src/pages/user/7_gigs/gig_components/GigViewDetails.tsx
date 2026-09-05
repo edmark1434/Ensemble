@@ -127,7 +127,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                           : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                       }`}
                     >
-                      <span className="relative z-10">{selectedGig.status || "Open"}</span>
+                      <span className="relative z-10">{selectedGig.status?.toLowerCase() === "close" ? "Closed" : (selectedGig.status || "Open")}</span>
                       {(selectedGig.status?.toLowerCase() === "open" || !selectedGig.status) && (
                         <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
                       )}
