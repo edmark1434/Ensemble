@@ -16,6 +16,7 @@ interface JobViewDetailsProps {
 const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, onReportJob, onToggleSave }) => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isVerified = useGlobalState((state) => state.isVerified);
 
   const handleViewProfile = () => {
     if (!selectedJob) return;
@@ -247,17 +248,17 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   </button>
                 ) : (
                   <button
-                    onClick={() => !isGuestMode && navigate(`/jobs/${selectedJob.id}/make-proposal`)}
-                    disabled={isGuestMode}
-                    className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg ${
-                      isGuestMode 
-                        ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' 
-                        : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]'
-                    }`}
-                  >
-                    <Send className="h-3.5 w-3.5" /> 
-                    {isGuestMode ? "Login to Apply" : "Send Proposal"}
-                  </button>
+                      onClick={() => !isGuestMode && isVerified && navigate(`/jobs/${selectedJob.id}/make-proposal`)}
+                      disabled={isGuestMode || !isVerified}
+                      className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg ${
+                        isGuestMode || !isVerified
+                          ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' 
+                          : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]'
+                      }`}
+                    >
+                      <Send className="h-3.5 w-3.5" /> 
+                      {isGuestMode ? "Login to Apply" : (!isVerified ? "Verify First" : "Send Proposal")}
+                    </button>
                 )
               ) : (
                 <div className="flex gap-2">

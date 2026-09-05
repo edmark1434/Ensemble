@@ -10,6 +10,7 @@ import AssetMedia from "./AssetMedia";
 import type { AssetPagination, AssetRecord, AssetType } from "./assetTypes";
 import { getAssetPostingEligibility } from "./assetPostingEligibility";
 import useGlobalState from "@/lib/global_state";
+import { continueIfAccountVerified } from "@/lib/accountVerification";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 
 type FilterType = "all" | AssetType;
@@ -66,6 +67,14 @@ export default function AssetsLibrary() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
+  
+  useEffect(() => {
+    if (location.state?.action === "upload" && !loading) {
+      openCreate();
+      // Clear the state so it doesn't keep opening on refresh
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, loading]);
   const [checkingPostEligibility, setCheckingPostEligibility] = useState(false);
   const [editingAsset, setEditingAsset] = useState<AssetRecord | null>(null);
   const [deletingAsset, setDeletingAsset] = useState<AssetRecord | null>(null);
@@ -120,6 +129,14 @@ export default function AssetsLibrary() {
       setIsGuestLoginOpen(true);
       return;
     }
+    
+    const canContinue = await continueIfAccountVerified(
+      () => {},
+      false,
+      "Account Verification is required to upload Assets. Please verify your identity to proceed."
+    );
+    if (!canContinue) return;
+
     if (checkingPostEligibility) return;
     setCheckingPostEligibility(true);
     try {

@@ -28,6 +28,10 @@ export const HomeQuickActButtons: React.FC = () => {
   const restrictedLabels = ["Start Project", "Post a Job", "Create Service", "Upload Asset", "Join a Team"];
 
   const handleActionClick = (label: string, path: string) => {
+    if (label === "Upload Asset" && !isGuestMode) {
+      navigate(path, { state: { action: "upload" } });
+      return;
+    }
     if (isGuestMode && restrictedLabels.includes(label)) {
       setIsModalOpen(true);
     } else {
@@ -64,7 +68,7 @@ export const HomeQuickActButtons: React.FC = () => {
     {
       label: "Create Service",
       icon: Wrench,
-      path: "/gigs",
+      path: "/gigs/create",
       color: "rose",
     },
     {

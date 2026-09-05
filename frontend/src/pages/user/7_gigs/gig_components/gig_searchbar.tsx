@@ -13,13 +13,14 @@ interface GigSearchBarProps {
 const GigSearchBar: React.FC<GigSearchBarProps> = ({ searchQuery, setSearchQuery }) => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isVerified = useGlobalState((state) => state.isVerified);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handlePostClick = () => {
     if (isGuestMode) {
       setIsModalOpen(true);
     } else {
-      continueIfAccountVerified(() => navigate("/gigs/create"));
+      continueIfAccountVerified(() => navigate("/gigs/create"), false, "Account Verification is required to access Gig Creation. Please verify your identity to proceed.");
     }
   };
 
@@ -28,6 +29,7 @@ const GigSearchBar: React.FC<GigSearchBarProps> = ({ searchQuery, setSearchQuery
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
         <button
           onClick={handlePostClick}
+          
           className="shrink-0 flex items-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105"
         >
           <Plus className="h-4 w-4" /> <span>Post a Service</span>
