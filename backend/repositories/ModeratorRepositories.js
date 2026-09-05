@@ -49,7 +49,7 @@ async function getViolationsAndRestrictions() {
       COALESCE(sa.display_name, s.first_name || ' ' || s.last_name) AS issued_by_name
     FROM violations v
     LEFT JOIN accounts a ON a.account_id = v.account_id
-    LEFT JOIN staff s ON s.staff_id = v.issued_by_staff_id
+    LEFT JOIN staff s ON s.staff_id = v.staff_id
     LEFT JOIN accounts sa ON sa.account_id = s.account_id
     ORDER BY v.created_at DESC
     LIMIT 50
@@ -85,8 +85,8 @@ async function issueViolation(accountId, { type, reason, points, expiresAt }, st
   await pool.query(
     `INSERT INTO violations (
        violation_number, account_id, type, reason, points,
-       issued_by_staff_id, status, staff_id, expires_at
-     ) VALUES ($1, $2, $3, $4, $5, $6, 'active', $6, $7)`,
+       status, staff_id, expires_at
+     ) VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)`,
     [
       violationNumber,
       accountId,
@@ -95,6 +95,33 @@ async function issueViolation(accountId, { type, reason, points, expiresAt }, st
       warnPoints,
       staffSession?.staff_id || null,
       expiry,
+    ]
+  );
+  return getViolationsAndRestrictions();
+}
+
+async function issueRestriction(
+  accountId,
+  { type, module, startsAt, endsAt, violationId } = {},
+  staffSession
+) {
+  if (!accountId) throw new Error('accountId is required');
+  const restrictionType = String(type || 'account_restriction').trim() || 'account_restriction';
+  const staffId = staffSession?.staff_id || null;
+  if (!staffId) throw new Error('Staff session required to issue a restriction');
+
+  await pool.query(
+    `INSERT INTO restrictions (
+       type, module, starts_at, ends_at, violation_id, account_id, staff_id
+     ) VALUES ($1, $2, COALESCE($3::timestamptz, NOW()), $4, $5, $6, $7)`,
+    [
+      restrictionType,
+      module || null,
+      startsAt || null,
+      endsAt || null,
+      violationId || null,
+      accountId,
+      staffId,
     ]
   );
   return getViolationsAndRestrictions();
@@ -114,5 +141,6 @@ module.exports = {
   isViolationActive,
   getViolationsAndRestrictions,
   issueViolation,
+  issueRestriction,
   updateAccountRestriction,
 };

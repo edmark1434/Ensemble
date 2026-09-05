@@ -156,7 +156,7 @@ async function fetchHistoryForAccounts(accountIds) {
         v.deleted_at,
         COALESCE(sa.display_name, s.first_name || ' ' || s.last_name, 'Staff') AS issued_by
       FROM violations v
-      LEFT JOIN staff s ON s.staff_id = COALESCE(v.issued_by_staff_id, v.staff_id)
+      LEFT JOIN staff s ON s.staff_id = v.staff_id
       LEFT JOIN accounts sa ON sa.account_id = s.account_id
       WHERE v.account_id = ANY($1::uuid[])
         AND v.deleted_at IS NULL
@@ -1309,8 +1309,8 @@ async function warnAccount(accountId, { type, reason, points, expiresAt } = {}, 
     `
     INSERT INTO violations (
       violation_number, account_id, type, reason, points,
-      issued_by_staff_id, status, staff_id, expires_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, 'active', $6, $7)
+      status, staff_id, expires_at
+    ) VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
     `,
     [violationNumber, accountId, warnType, warnReason, warnPoints, staffId, expiry]
   );
@@ -1354,15 +1354,13 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
       [accountId]
     );
 
-    // End any open restrictions linked to this account's violations
+    // End any open restrictions for this account (with or without a violation)
     await client.query(
       `
-      UPDATE restrictions r
+      UPDATE restrictions
       SET ends_at = NOW()
-      FROM violations v
-      WHERE r.violation_id = v.violation_id
-        AND v.account_id = $1
-        AND (r.ends_at IS NULL OR r.ends_at > NOW())
+      WHERE account_id = $1
+        AND (ends_at IS NULL OR ends_at > NOW())
       `,
       [accountId]
     ).catch(() => null);

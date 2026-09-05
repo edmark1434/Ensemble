@@ -1,9 +1,10 @@
-# Current Task — Slim reports columns
+# Current Task — Violation staff_id + restriction account_id
 
-Drop `reports.resolved_at`, `target_label`, and `reason`. Use `updated_at` on status changes; keep `type` + `description` (+ `target_type` / `target_id`).
+1. Violations: drop duplicate `issued_by_staff_id`; keep/use `staff_id` only.
+2. Restrictions: add `account_id` FK; make `violation_id` nullable so restrictions can exist without a violation.
 
 ## Acceptance Criteria
 
-- [x] Migration drops the three columns.
-- [x] Backend seed/repos/controllers stop using them; status patches bump `updated_at`.
-- [x] Frontend types/UI use type/description instead of reason/targetLabel; no resolvedAt.
+- [x] Migration collapses issuer onto `staff_id`; updates seed/repos.
+- [x] Migration adds `restrictions.account_id`; `violation_id` nullable; seed/repos support both.
+- [x] Frontend/API still map issuer correctly via `staff_id`.

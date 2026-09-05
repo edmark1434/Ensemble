@@ -317,7 +317,7 @@ async function fetchRecentModerationActivity() {
         sa.handle AS executed_by_handle
       FROM violations v
       LEFT JOIN accounts a ON a.account_id = v.account_id
-      LEFT JOIN staff s ON s.staff_id = COALESCE(v.issued_by_staff_id, v.staff_id)
+      LEFT JOIN staff s ON s.staff_id = v.staff_id
       LEFT JOIN accounts sa ON sa.account_id = s.account_id
       WHERE v.deleted_at IS NULL
       ORDER BY v.created_at DESC

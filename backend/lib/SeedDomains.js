@@ -893,11 +893,20 @@ async function seedModerationExtras(userAccountIds, staffByRole) {
 
   if (violation) {
     await pool.query(
-      `INSERT INTO restrictions (type, module, starts_at, ends_at, violation_id, staff_id)
+      `INSERT INTO restrictions (type, module, starts_at, ends_at, violation_id, account_id, staff_id)
        VALUES
-         ('posting_mute', 'forums', NOW() - interval '1 day', NOW() + interval '6 days', $1, $2),
-         ('marketplace_hold', 'marketplace', NOW() - interval '2 days', NULL, $1, $3)`,
-      [violation.violation_id, supportStaffId, adminStaffId]
+         ('posting_mute', 'forums', NOW() - interval '1 day', NOW() + interval '6 days', $1, $2, $3),
+         ('marketplace_hold', 'marketplace', NOW() - interval '2 days', NULL, $1, $2, $4)`,
+      [violation.violation_id, violation.account_id, supportStaffId, adminStaffId]
+    );
+  }
+
+  // Restriction without a linked violation (direct account limit)
+  if (userAccountIds[1]) {
+    await pool.query(
+      `INSERT INTO restrictions (type, module, starts_at, ends_at, violation_id, account_id, staff_id)
+       VALUES ('feature_hold', 'jobs', NOW(), NOW() + interval '3 days', NULL, $1, $2)`,
+      [userAccountIds[1], adminStaffId]
     );
   }
 
