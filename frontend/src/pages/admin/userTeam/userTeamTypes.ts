@@ -167,7 +167,7 @@ export type TeamHistory = {
   openDisputes: number;
   activeDispute: ActiveDispute | null;
   activeDisputes: ActiveDispute[];
-  violations: { id: string; title: string; reason: string; points: number; by: string; timeAgo: string }[];
+  violations: { id: string; type: string; reason: string; points: number; by: string; timeAgo: string }[];
   disputes: { id: string; title: string; reason: string; status: string; by: string; timeAgo: string }[];
 };
 

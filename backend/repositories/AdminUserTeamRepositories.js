@@ -146,7 +146,7 @@ async function fetchHistoryForAccounts(accountIds) {
         v.violation_id,
         v.violation_number,
         v.account_id,
-        v.title,
+        v.type,
         v.reason,
         v.points,
         v.status,
@@ -197,7 +197,7 @@ async function fetchHistoryForAccounts(accountIds) {
     if (!bucket) continue;
     bucket.violations.push({
       id: row.violation_number || row.violation_id,
-      title: row.title || 'Violation',
+      type: row.type || 'Violation',
       reason: row.reason || '—',
       points: Number(row.points || 0),
       by: row.issued_by,
@@ -1283,29 +1283,29 @@ async function freezeAccountCredits(accountId, freeze = true) {
   };
 }
 
-async function warnAccount(accountId, { title, reason, points } = {}, staffId) {
+async function warnAccount(accountId, { type, reason, points } = {}, staffId) {
   await assertAccountExists(accountId);
   if (!staffId) throw new Error('Staff session required to issue a warning');
 
   const violationNumber = `VIO-${Date.now().toString().slice(-8)}`;
-  const warnTitle = String(title || 'Account warning').trim();
+  const warnType = String(type || 'Account warning').trim() || 'Account warning';
   const warnReason = String(reason || 'Warning issued by administrator').trim();
   const warnPoints = Number(points) || 1;
 
   await pool.query(
     `
     INSERT INTO violations (
-      violation_number, account_id, title, reason, points,
-      issued_by_staff_id, type, status, staff_id
-    ) VALUES ($1, $2, $3, $4, $5, $6, $3, 'active', $6)
+      violation_number, account_id, type, reason, points,
+      issued_by_staff_id, status, staff_id
+    ) VALUES ($1, $2, $3, $4, $5, $6, 'active', $6)
     `,
-    [violationNumber, accountId, warnTitle, warnReason, warnPoints, staffId]
+    [violationNumber, accountId, warnType, warnReason, warnPoints, staffId]
   );
 
   return {
     accountId,
     violationNumber,
-    title: warnTitle,
+    type: warnType,
     points: warnPoints,
   };
 }

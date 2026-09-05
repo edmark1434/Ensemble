@@ -10,7 +10,7 @@ function mapViolationRow(row) {
       handle: row.handle || '—',
       status: row.account_status,
     },
-    title: row.title,
+    type: row.type || 'warning',
     reason: row.reason,
     points: row.points,
     status: row.status,
@@ -53,12 +53,13 @@ async function getViolationsAndRestrictions() {
   };
 }
 
-async function issueViolation(accountId, { title, reason, points }, staffSession) {
+async function issueViolation(accountId, { type, reason, points }, staffSession) {
   const violationNumber = `VIO-${Date.now().toString().slice(-8)}`;
+  const violationType = String(type || 'warning').trim() || 'warning';
   await pool.query(
-    `INSERT INTO violations (violation_number, account_id, title, reason, points, issued_by_staff_id)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [violationNumber, accountId, title, reason || null, Number(points) || 0, staffSession?.staff_id || null]
+    `INSERT INTO violations (violation_number, account_id, type, reason, points, issued_by_staff_id, status, staff_id)
+     VALUES ($1, $2, $3, $4, $5, $6, 'active', $6)`,
+    [violationNumber, accountId, violationType, reason || null, Number(points) || 0, staffSession?.staff_id || null]
   );
   return getViolationsAndRestrictions();
 }

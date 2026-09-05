@@ -1,9 +1,10 @@
-# Current Task — Drop tickets.channel and related_dispute_id
+# Current Task — Drop violations.title
 
-Remove `channel` and `related_dispute_id` from tickets across DB, backend, and frontend. Keep `message_count`.
+Remove `title` from `violations` (use `type` instead). Map frontend/backend. Explain `points` and check merits.
 
 ## Acceptance Criteria
 
-- [x] Migration drops both columns (+ dispute FK).
-- [x] Backend seed/repos/controllers stop using them.
-- [x] Frontend types, filters, UI remove channel / related dispute.
+- [x] Migration drops `violations.title`.
+- [x] Backend seed/repos stop writing/reading title.
+- [x] Frontend types/UI stop depending on title (use type).
+- [x] Document points + merits findings for user.

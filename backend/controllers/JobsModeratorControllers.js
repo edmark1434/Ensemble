@@ -240,11 +240,12 @@ async function getRestrictions(req, res) {
 
 async function postViolation(req, res) {
   try {
-    const { accountId, title, reason, points } = req.body;
-    if (!accountId || !title) {
-      return res.status(400).json({ success: false, message: 'accountId and title are required' });
+    const { accountId, type, title, reason, points } = req.body;
+    const violationType = type || title;
+    if (!accountId || !violationType) {
+      return res.status(400).json({ success: false, message: 'accountId and type are required' });
     }
-    const data = await issueViolation(accountId, { title, reason, points }, req.session);
+    const data = await issueViolation(accountId, { type: violationType, reason, points }, req.session);
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error issuing violation:', err);

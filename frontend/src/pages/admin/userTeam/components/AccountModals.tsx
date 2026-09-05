@@ -1398,7 +1398,7 @@ export function HistoryModal({
             )}
             {history.violations.map((v) => (
               <li key={v.id} className="rounded-lg bg-white/[0.03] p-3 text-sm">
-                <p className="font-medium text-white">{v.title}</p>
+                <p className="font-medium text-white">{v.type}</p>
                 <p className="mt-1 text-zinc-500">{v.reason}</p>
                 <p className="mt-2 text-xs text-zinc-600">
                   By: {v.by} · +{v.points} warning points · {v.id} · {v.timeAgo}
@@ -1459,7 +1459,7 @@ export function WarnAccountModal({
   onClose: () => void;
   onChanged?: () => void;
 }) {
-  const [title, setTitle] = useState('Account warning');
+  const [type, setType] = useState('Account warning');
   const [reason, setReason] = useState('Warning issued by administrator');
   const [points, setPoints] = useState('1');
   const [saving, setSaving] = useState(false);
@@ -1484,7 +1484,7 @@ export function WarnAccountModal({
               setSaving(true);
               try {
                 await warnAccount(accountId, {
-                  title,
+                  type,
                   reason,
                   points: Number(points) || 1,
                 });
@@ -1505,10 +1505,10 @@ export function WarnAccountModal({
     >
       <div className="space-y-4">
         <label className="block text-xs text-zinc-500">
-          Title
+          Type
           <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            value={type}
+            onChange={(e) => setType(e.target.value)}
             className="mt-1 w-full rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
           />
         </label>

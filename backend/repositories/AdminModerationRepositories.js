@@ -305,7 +305,7 @@ async function fetchRecentModerationActivity() {
       SELECT
         v.violation_id,
         v.violation_number,
-        v.title,
+        v.type,
         v.reason,
         v.status,
         v.created_at,
@@ -393,7 +393,7 @@ async function fetchRecentModerationActivity() {
   for (const v of violations.rows) {
     activities.push({
       id: `vio-${v.violation_id}`,
-      action: v.title ? `Issued violation: ${v.title}` : 'Issued violation',
+      action: v.type ? `Issued violation: ${v.type}` : 'Issued violation',
       category: 'conduct',
       target: v.target_name,
       targetHandle: v.target_handle || v.violation_number,

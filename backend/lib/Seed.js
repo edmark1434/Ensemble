@@ -1248,9 +1248,9 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   for (const v of violations) {
     await pool.query(
       `INSERT INTO violations (
-        violation_number, account_id, title, reason, points, issued_by_staff_id,
-        type, status, staff_id
-      ) VALUES ($1,$2,$3,$4,$5,$6,$3,'active',$6)`,
+        violation_number, account_id, type, reason, points, issued_by_staff_id,
+        status, staff_id
+      ) VALUES ($1,$2,$3,$4,$5,$6,'active',$6)`,
       v
     );
   }

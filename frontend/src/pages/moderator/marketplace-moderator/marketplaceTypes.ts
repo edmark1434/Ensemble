@@ -121,7 +121,7 @@ export type Violation = {
   id: number;
   number: string;
   account: { accountId: number; name: string; handle: string; status: string };
-  title: string;
+  type: string;
   reason: string | null;
   points: number;
   status: string;
