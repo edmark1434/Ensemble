@@ -61,6 +61,7 @@ import BusinessVerification from '@/pages/user/9_verification/BusinessVerificati
 import TransactionHistoryMain from '@/pages/user/11_transactionhistory/main.tsx'
 import TosMain from '@/pages/user/terms_of_service/tos_main.tsx'
 import Contracts from '@/pages/user/contracts/contracts.tsx'
+import { DisputeFormPage } from '@/pages/user/contracts/DisputeFormPage.tsx'
 import UserProfilesList from '@/components/nav/user_profiles_list.tsx'
 import { VerificationStatus } from '@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx'
 
@@ -279,6 +280,7 @@ function App() {
           <Route path='/my-orders' element={<SectionPlaceholder title='MY ORDERS' />} />
           <Route path='/terms-of-services' element={<TosMain />} />
           <Route path='/contracts' element={<Contracts />} />
+          <Route path='/contracts/dispute-form' element={<DisputeFormPage />} />
           <Route path='/contracts/:id' element={<Contracts />} />
           <Route path='/dashboard' element={<DashboardMain />} />
           <Route path='/dashboard/tasks' element={<DashboardMain />} />
