@@ -154,7 +154,7 @@ export type ActiveDispute = {
   title: string;
   handler?: string;
   against?: string;
-  reason: string;
+  description: string;
   status: string;
   by?: string;
   timeAgo?: string;
@@ -178,7 +178,7 @@ export type TeamHistory = {
     active?: boolean;
     status?: string;
   }[];
-  disputes: { id: string; title: string; reason: string; status: string; by: string; timeAgo: string }[];
+  disputes: { id: string; title: string; description: string; status: string; by: string; timeAgo: string }[];
 };
 
 export type TeamManagementData = {

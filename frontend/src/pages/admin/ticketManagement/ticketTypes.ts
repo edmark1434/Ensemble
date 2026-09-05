@@ -90,7 +90,7 @@ export type Dispute = {
   id: number | string;
   number: string;
   title: string;
-  reason: string | null;
+  description: string | null;
   type: string;
   status: string;
   priority: string;

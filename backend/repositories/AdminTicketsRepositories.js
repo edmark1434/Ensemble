@@ -307,7 +307,7 @@ function mapDisputeRow(row) {
     id: row.dispute_id,
     number: row.dispute_number,
     title: row.title,
-    reason: row.reason,
+    description: row.description || row.reason || null,
     type: normalizeDisputeType(row.type),
     // Status stays snake_case; priority is Title Case in DB, lowercased for desk filters.
     status: String(row.status || 'open').toLowerCase(),
@@ -750,7 +750,7 @@ async function fetchRecentActivity() {
     )
     UNION ALL
     (
-      SELECT 'report' AS type, report_number AS ref, COALESCE(reason, type) AS label, status, COALESCE(updated_at, created_at) AS at
+      SELECT 'report' AS type, report_number AS ref, COALESCE(type, report_number) AS label, status, COALESCE(updated_at, created_at) AS at
       FROM reports WHERE deleted_at IS NULL ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 6
     )
     ORDER BY at DESC
@@ -1408,6 +1408,10 @@ function normalizeDisputeStatusPatch(patch) {
   if (next.visibility !== undefined) {
     next.visibility = normalizeDisputeVisibility(next.visibility);
   }
+  if (next.description === undefined && next.reason !== undefined) {
+    next.description = next.reason;
+    delete next.reason;
+  }
   return next;
 }
 
@@ -1621,6 +1625,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     'resolution_notes',
     'sanction_type',
     'visibility',
+    'description',
   ];
   const sets = [];
   const values = [];

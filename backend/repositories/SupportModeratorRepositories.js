@@ -165,7 +165,7 @@ async function getSupportDisputes({ status, search, entityType } = {}) {
     where.push(`(
       LOWER(COALESCE(d.title, '')) LIKE $${params.length}
       OR LOWER(COALESCE(d.dispute_number, '')) LIKE $${params.length}
-      OR LOWER(COALESCE(d.reason, '')) LIKE $${params.length}
+      OR LOWER(COALESCE(d.description, '')) LIKE $${params.length}
       OR LOWER(COALESCE(ia.handle, '')) LIKE $${params.length}
       OR LOWER(COALESCE(ra.handle, '')) LIKE $${params.length}
       OR d.dispute_id::text LIKE $${params.length}

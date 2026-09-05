@@ -1377,7 +1377,7 @@ export function HistoryModal({
                     {d.status}
                   </span>
                 </div>
-                <p className="mt-2 text-sm text-zinc-300">{d.reason}</p>
+                <p className="mt-2 text-sm text-zinc-300">{d.description}</p>
                 <p className="mt-2 text-xs text-zinc-500">
                   Handled by {d.handler || d.by || 'Staff'} · Against {d.against || '—'}
                   {d.id ? ` · ${d.id}` : ''}
@@ -1436,7 +1436,7 @@ export function HistoryModal({
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-zinc-500">{d.reason}</p>
+                  <p className="mt-1 text-zinc-500">{d.description}</p>
                   <p className="mt-2 text-xs text-zinc-600">
                     By: {d.by} · {d.status} · {d.id} · {d.timeAgo}
                   </p>

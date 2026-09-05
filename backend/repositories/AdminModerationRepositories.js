@@ -913,7 +913,9 @@ async function updatePendingCase(caseId, body, session) {
       patch.handled_by_staff_id =
         body.handled_by_staff_id ?? body.assignedStaffId ?? body.assigned_staff_id;
     }
-    if (body.reason !== undefined) patch.reason = body.reason;
+    if (body.description !== undefined || body.reason !== undefined) {
+      patch.description = body.description ?? body.reason;
+    }
     if (body.title !== undefined) patch.title = body.title;
     if (body.resolutionNotes !== undefined || body.resolution_notes !== undefined) {
       patch.resolution_notes = body.resolutionNotes ?? body.resolution_notes;

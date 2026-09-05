@@ -109,7 +109,7 @@ function mapDisputeRow(row) {
     id: row.dispute_id,
     number: row.dispute_number,
     title: row.title,
-    reason: row.reason,
+    description: row.description || row.reason || null,
     type: normalizeDisputeType(row.type),
     // Status stays snake_case; priority is Title Case in DB, lowercased for desk filters.
     status: String(row.status || 'open').toLowerCase(),

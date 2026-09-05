@@ -367,7 +367,7 @@ export default function DisputeDesk({
       const hay = [
         d.number,
         d.title,
-        d.reason,
+        d.description,
         d.initiator?.name,
         d.initiator?.username,
         d.respondent?.name,

@@ -656,7 +656,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   const disputes = [
     {
       number: 'DIS-50001',
-      reason: 'Buyer filed a dispute after the final milestone was marked complete but credits were not released.',
+      description: 'Buyer filed a dispute after the final milestone was marked complete but credits were not released.',
       status: 'pending_review',
       visibility: false,
       priority: 'high',
@@ -673,7 +673,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       number: 'DIS-50002',
-      reason: 'Seller claims buyer abandoned milestone review after delivery.',
+      description: 'Seller claims buyer abandoned milestone review after delivery.',
       status: 'open',
       visibility: true,
       priority: 'high',
@@ -691,7 +691,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       number: 'DIS-50003',
-      reason: 'Disputer says the gig delivery does not match the agreed brief.',
+      description: 'Disputer says the gig delivery does not match the agreed brief.',
       status: 'awaiting_response',
       visibility: true,
       priority: 'medium',
@@ -709,7 +709,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       number: 'DIS-50004',
-      reason: 'Marketplace buyer disputes commercial usage rights on a purchased pack.',
+      description: 'Marketplace buyer disputes commercial usage rights on a purchased pack.',
       status: 'under_review',
       visibility: true,
       priority: 'high',
@@ -728,7 +728,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     {
       // Assigned to Maya — Admin is view-only until Designated handler reassign / Assign myself when free.
       number: 'DIS-50005',
-      reason: 'Buyer asked for revisions after approving the milestone; seller wants escrow released.',
+      description: 'Buyer asked for revisions after approving the milestone; seller wants escrow released.',
       status: 'open',
       visibility: true,
       priority: 'high',
@@ -747,7 +747,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     {
       // Pending but already with Support — Admin is view-only until self-assign / reassign.
       number: 'DIS-50006',
-      reason: 'User claims credits were moved from their wallet without consent after a shared-team dispute.',
+      description: 'User claims credits were moved from their wallet without consent after a shared-team dispute.',
       status: 'pending_review',
       visibility: false,
       priority: 'high',
@@ -764,7 +764,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       number: 'DIS-50007',
-      reason: 'Buyer documented three late milestones on the same seller within 30 days.',
+      description: 'Buyer documented three late milestones on the same seller within 30 days.',
       status: 'closed',
       visibility: true,
       priority: 'high',
@@ -782,7 +782,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       number: 'DIS-50008',
-      reason:
+      description:
         'Freelancer disputes a 1-star contract rating as retaliatory and factually inaccurate after milestone acceptance.',
       status: 'closed',
       visibility: true,
@@ -802,7 +802,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     {
       // Open unfair-feedback dispute on a completed contract — Admin/Maya can handle.
       number: 'DIS-50009',
-      reason:
+      description:
         'Client left unfair written feedback after accepting the final deliverable; freelancer requests review and rating correction.',
       status: 'under_review',
       visibility: true,
@@ -821,7 +821,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       number: 'DIS-50010',
-      reason: 'Buyer requested a refund outside the marketplace refund window.',
+      description: 'Buyer requested a refund outside the marketplace refund window.',
       status: 'closed',
       visibility: true,
       priority: 'low',
@@ -839,7 +839,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     // Legacy-style samples for Jobs / Marketplace queues
     {
       number: 'DIS-50011',
-      reason: 'Members disagree on credit distribution.',
+      description: 'Members disagree on credit distribution.',
       status: 'open',
       visibility: true,
       priority: 'medium',
@@ -892,7 +892,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
 
     const res = await pool.query(
       `INSERT INTO disputes (
-        dispute_number, title, reason, status, priority, visibility,
+        dispute_number, title, description, status, priority, visibility,
         by_account_id, for_account_id, handled_by_staff_id,
         credit_amount_involved, opened_at, resolution_notes,
         sanction_type, type, resolved_at
@@ -905,7 +905,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       [
         d.number,
         title,
-        d.reason,
+        d.description,
         d.status,
         priority,
         d.visibility,

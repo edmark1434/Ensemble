@@ -424,7 +424,7 @@ export default function ModeratorDisputeDetailModal({
                 @{dispute.initiator.username} vs @{dispute.respondent.username} · {dispute.type || "General"} ·{" "}
                 {dispute.creditAmount.toLocaleString()} credits · opened {formatDateTime(dispute.openedAt)}
               </p>
-              {dispute.reason && <p className="mt-2 text-sm text-zinc-400">{dispute.reason}</p>}
+              {dispute.description && <p className="mt-2 text-sm text-zinc-400">{dispute.description}</p>}
               <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                 <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
                   Status: {titleCaseLabel(dispute.status)}
