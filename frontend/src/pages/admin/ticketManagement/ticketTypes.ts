@@ -115,15 +115,13 @@ export type UserReport = {
   reporter: TicketPerson;
   targetType: string;
   targetId: string | null;
-  targetLabel: string | null;
-  reason: string;
+  type: string;
   description: string | null;
   status: string;
   priority: string;
   assignee: { staffId: number | string; name: string } | null;
   createdAt: string;
   updatedAt: string;
-  resolvedAt: string | null;
 };
 
 export type StaffWorkload = {

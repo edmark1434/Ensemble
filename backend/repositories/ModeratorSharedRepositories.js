@@ -88,11 +88,10 @@ function mapReportRow(row) {
       name: row.reporter_name || 'Anonymous',
       username: row.reporter_handle || '—',
     },
+    type: row.type || 'Other',
     // Keep status/priority as DB snake_case for filters/forms; format in UI.
-    targetType: displayLabel(row.target_type || row.type),
+    targetType: displayLabel(row.target_type),
     targetId: row.target_id || row.reference_id,
-    targetLabel: row.target_label,
-    reason: row.reason,
     description: row.description,
     status: String(row.status || 'open').toLowerCase(),
     priority: String(row.priority || 'medium').toLowerCase(),
@@ -101,7 +100,6 @@ function mapReportRow(row) {
       : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
-    resolvedAt: row.resolved_at,
   };
 }
 
@@ -341,12 +339,12 @@ async function createReport({
   targetAccountId,
   targetType,
   targetId,
-  targetLabel,
-  reason,
+  type,
   description,
   referenceTable,
   referencePrefix = 'forum',
 }) {
+  const reportType = String(type || 'Other').trim() || 'Other';
   const result = await pool.query(
     `
     INSERT INTO reports (
@@ -355,8 +353,6 @@ async function createReport({
       for_account_id,
       target_type,
       target_id,
-      target_label,
-      reason,
       description,
       priority,
       type,
@@ -364,9 +360,10 @@ async function createReport({
       reference_prefix,
       reference_id,
       status,
-      is_created_by_bot
+      is_created_by_bot,
+      updated_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'medium', $4, $9, $10, $5, 'open', false)
+    VALUES ($1, $2, $3, $4, $5, $6, 'medium', $7, $8, $9, $5, 'open', false, NOW())
     RETURNING *
     `,
     [
@@ -375,9 +372,8 @@ async function createReport({
       targetAccountId,
       targetType,
       targetId,
-      targetLabel,
-      reason,
-      description,
+      description || null,
+      reportType,
       referenceTable,
       referencePrefix,
     ]

@@ -117,13 +117,14 @@ async function fetchPendingCasesFromDb() {
       SELECT
         r.report_id,
         r.report_number,
-        r.reason,
+        r.type,
         r.description,
         r.status,
         r.priority,
         r.target_type,
-        r.target_label,
+        r.target_id,
         r.created_at,
+        r.updated_at,
         r.assigned_staff_id,
         r.for_account_id,
         COALESCE(fa.display_name, fa.handle, 'Account') AS target_name,
@@ -210,11 +211,11 @@ async function fetchPendingCasesFromDb() {
       source: 'report',
       type: 'Report',
       priority: normalizePriority(r.priority),
-      target: r.target_label || r.target_name,
+      target: r.target_name || r.target_id || 'Account',
       targetHandle: r.target_handle || r.report_number,
       targetType: r.target_type || 'Account',
-      reason: r.reason || r.description || 'User report',
-      description: r.description || r.reason || null,
+      reason: r.type || r.description || 'User report',
+      description: r.description || null,
       referenceNumber: r.report_number || null,
       accountId: r.for_account_id || null,
       assignedRole: r.assigned_role || null,
@@ -346,15 +347,15 @@ async function fetchRecentModerationActivity() {
       SELECT
         r.report_id,
         r.report_number,
-        r.reason,
+        r.type,
         r.description,
         r.target_type,
-        r.target_label,
+        r.target_id,
         r.reference_prefix,
         r.status,
         r.updated_at,
         r.created_at,
-        COALESCE(fa.display_name, fa.handle, r.target_label, 'Target') AS target_name,
+        COALESCE(fa.display_name, fa.handle, r.target_id, 'Target') AS target_name,
         fa.handle AS target_handle,
         COALESCE(ba.display_name, ba.handle, 'Account') AS executed_by,
         INITCAP(COALESCE(ba.type, 'account')) AS executed_by_role,
@@ -433,7 +434,7 @@ async function fetchRecentModerationActivity() {
       targetHandle: r.target_handle || r.report_number,
       targetType:
         String(r.target_type || '').toLowerCase() === 'chat_message'
-          ? r.target_label || 'Chat Inbox'
+          ? 'Chat Inbox'
           : String(r.target_type || 'Report')
               .replace(/[_-]+/g, ' ')
               .replace(/\b\w/g, (character) => character.toUpperCase()),
@@ -442,7 +443,7 @@ async function fetchRecentModerationActivity() {
       executedByHandle: r.executed_by_handle || '—',
       timestamp: r.updated_at || r.created_at,
       status: titleCaseStatus(r.status || 'open'),
-      notes: r.description || r.reason || '',
+      notes: r.description || r.type || '',
     });
   }
 
@@ -878,8 +879,8 @@ async function updatePendingCase(caseId, body, session) {
     if (body.assignedStaffId !== undefined || body.assigned_staff_id !== undefined) {
       patch.assigned_staff_id = body.assignedStaffId ?? body.assigned_staff_id;
     }
-    if (body.reason !== undefined) patch.reason = body.reason;
     if (body.description !== undefined) patch.description = body.description;
+    if (body.type !== undefined) patch.type = body.type;
 
     const sets = [];
     const values = [];
@@ -890,7 +891,6 @@ async function updatePendingCase(caseId, body, session) {
       idx += 1;
     }
     if (!sets.length) throw new Error('No fields to update');
-    if (patch.status === 'resolved') sets.push('resolved_at = NOW()');
     sets.push('updated_at = NOW()');
     values.push(id);
     const result = await pool.query(

@@ -56,8 +56,8 @@ type ReportDetailPayload = {
     number: string | null;
     reporter: { name: string; username: string };
     targetType: string;
-    targetLabel: string | null;
-    reason: string | null;
+    targetId: string | null;
+    type: string;
     description: string | null;
     status: string;
     priority: string;
@@ -246,15 +246,16 @@ export function ReportCaseDetailModal({
         ) : detail && report ? (
           <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
             <div>
-              <h3 className="text-xl font-semibold text-white">
-                {report.targetLabel || report.targetType}
-              </h3>
+              <h3 className="text-xl font-semibold text-white">{titleCaseLabel(report.type)}</h3>
+              <p className="mt-1 text-sm text-zinc-500">
+                Target: {titleCaseLabel(report.targetType)}
+                {report.targetId ? ` · ${report.targetId}` : ''}
+              </p>
               <p className="mt-1 text-sm text-zinc-500">
                 Reported by {report.reporter.name} (@{report.reporter.username}) ·{' '}
                 {formatDateTime(report.createdAt)}
               </p>
-              {report.reason && <p className="mt-2 text-sm text-zinc-300">{report.reason}</p>}
-              {report.description && report.description !== report.reason && (
+              {report.description && (
                 <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-400">{report.description}</p>
               )}
             </div>

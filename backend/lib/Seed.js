@@ -538,39 +538,39 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
 
   // Platform report samples for every staff desk.
   // Specialist queues filter by target_type; Support + Admin see all.
-  // Tuple: [number, reporterIdx, targetType, targetId, targetLabel, reason, description, status, priority, prefix, assigneeRole]
+  // Tuple fields: reporterIdx, targetType, targetId, type, description, status, priority, prefix, assigneeRole
   const reportBlueprints = [
     // ── Forum queue ──────────────────────────────────────────────────────
-    [0, 'member', 'u-forum-01', '@noisy_creator', 'Harassment', 'Repeated hostile messages in a critique thread after feedback.', 'open', 'high', 'forum', null],
-    [2, 'group', 'fg-12', 'Design Critique Hub', 'Spam', 'Group flooded with promotional invite links.', 'in_review', 'medium', 'forum', 'Forum Moderator'],
-    [5, 'discussion', 'd-44', 'Late delivery thread', 'Misinformation', 'Discussion spreads false claims about another editor.', 'open', 'low', 'forum', null],
-    [3, 'member', 'u-forum-02', '@quiet_dev', 'Harassment', 'Threats referenced in forum chat and DMs.', 'open', 'high', 'forum', 'Forum Moderator'],
-    [1, 'comment', 'cmt-901', 'Reply on Showcase #18', 'Hate speech', 'Comment insults another member with slurs.', 'open', 'high', 'forum', null],
-    [4, 'post', 'post-220', 'Weekly reel dump', 'Spam', 'Same promotional post pasted across three groups.', 'dismissed', 'medium', 'forum', 'Admin'],
-    [0, 'thread', 'thr-77', 'Client rate debate', 'Other', 'Off-topic personal attacks derailing the thread.', 'resolved', 'low', 'forum', 'Forum Moderator'],
+    [0, 'member', 'u-forum-01', 'Harassment', 'Repeated hostile messages in a critique thread after feedback.\n@noisy_creator', 'open', 'high', 'forum', null],
+    [2, 'group', 'fg-12', 'Spam', 'Group flooded with promotional invite links.\nDesign Critique Hub', 'in_review', 'medium', 'forum', 'Forum Moderator'],
+    [5, 'discussion', 'd-44', 'Misinformation', 'Discussion spreads false claims about another editor.\nLate delivery thread', 'open', 'low', 'forum', null],
+    [3, 'member', 'u-forum-02', 'Harassment', 'Threats referenced in forum chat and DMs.\n@quiet_dev', 'open', 'high', 'forum', 'Forum Moderator'],
+    [1, 'comment', 'cmt-901', 'Hate speech', 'Comment insults another member with slurs.\nReply on Showcase #18', 'open', 'high', 'forum', null],
+    [4, 'post', 'post-220', 'Spam', 'Same promotional post pasted across three groups.\nWeekly reel dump', 'dismissed', 'medium', 'forum', 'Admin'],
+    [0, 'thread', 'thr-77', 'Other', 'Off-topic personal attacks derailing the thread.\nClient rate debate', 'resolved', 'low', 'forum', 'Forum Moderator'],
 
     // ── Marketplace queue ────────────────────────────────────────────────
-    [1, 'listing', 'LST-204', 'Neon LUT Pack', 'Scam', 'Buyer paid credits but never received the asset files.', 'open', 'high', 'marketplace', null],
-    [4, 'seller', 'u-9', '@asset_booth', 'Copyright', 'Seller reuploads stolen marketplace packs as originals.', 'in_review', 'high', 'marketplace', 'Marketplace Moderator'],
-    [2, 'listing', 'LST-318', 'Cinematic SFX Bundle', 'Misleading', 'Preview audio does not match delivered files.', 'open', 'medium', 'marketplace', null],
-    [5, 'purchase', 'ORD-8821', 'Order #8821', 'Non-delivery', 'Purchase stuck in pending delivery for 9 days.', 'open', 'high', 'marketplace', 'Marketplace Moderator'],
-    [3, 'asset', 'AST-55', 'Grain Overlay Pack v2', 'Quality', 'Corrupt zip and missing license file after download.', 'resolved', 'medium', 'marketplace', 'Admin'],
-    [0, 'marketplace', 'mkt-policy', 'Marketplace policy', 'Other', 'General complaint about fake “verified seller” badges.', 'dismissed', 'low', 'marketplace', 'Support Moderator'],
+    [1, 'listing', 'LST-204', 'Scam', 'Buyer paid credits but never received the asset files.\nNeon LUT Pack', 'open', 'high', 'marketplace', null],
+    [4, 'seller', 'u-9', 'Copyright', 'Seller reuploads stolen marketplace packs as originals.\n@asset_booth', 'in_review', 'high', 'marketplace', 'Marketplace Moderator'],
+    [2, 'listing', 'LST-318', 'Misleading', 'Preview audio does not match delivered files.\nCinematic SFX Bundle', 'open', 'medium', 'marketplace', null],
+    [5, 'purchase', 'ORD-8821', 'Non-delivery', 'Purchase stuck in pending delivery for 9 days.\nOrder #8821', 'open', 'high', 'marketplace', 'Marketplace Moderator'],
+    [3, 'asset', 'AST-55', 'Quality', 'Corrupt zip and missing license file after download.\nGrain Overlay Pack v2', 'resolved', 'medium', 'marketplace', 'Admin'],
+    [0, 'marketplace', 'mkt-policy', 'Other', 'General complaint about fake “verified seller” badges.\nMarketplace policy', 'dismissed', 'low', 'marketplace', 'Support Moderator'],
 
     // ── Jobs & Gigs queue ────────────────────────────────────────────────
-    [0, 'job', 'JOB-118', 'Need motion editor ASAP', 'Inappropriate', 'Job post includes abusive requirements and contact spam.', 'open', 'medium', 'jobs', null],
-    [2, 'gig', 'GIG-55', 'Thumbnail design in 24h', 'Misleading', 'Gig promises impossible delivery and uses fake samples.', 'open', 'high', 'jobs', 'Jobs N Gigs Moderator'],
-    [1, 'contract', 'CTR-440', 'Wedding film contract', 'Harassment', 'Client left hostile comments after milestone rejection.', 'in_review', 'high', 'jobs', null],
-    [4, 'application', 'APP-903', 'Proposal on JOB-90', 'Spam', 'Applicant mass-sent identical proposals with phishing links.', 'open', 'medium', 'jobs', 'Jobs N Gigs Moderator'],
-    [5, 'gig', 'GIG-201', 'Color grade overnight', 'Scam', 'Gig asks for off-platform payment before starting.', 'open', 'high', 'jobs', null],
-    [3, 'feedback', 'FB-66', 'Unfair feedback on CTR-12', 'Other', 'Reported as retaliatory 1-star after a resolved dispute.', 'resolved', 'low', 'jobs', 'Admin'],
+    [0, 'job', 'JOB-118', 'Inappropriate', 'Job post includes abusive requirements and contact spam.\nNeed motion editor ASAP', 'open', 'medium', 'jobs', null],
+    [2, 'gig', 'GIG-55', 'Misleading', 'Gig promises impossible delivery and uses fake samples.\nThumbnail design in 24h', 'open', 'high', 'jobs', 'Jobs N Gigs Moderator'],
+    [1, 'contract', 'CTR-440', 'Harassment', 'Client left hostile comments after milestone rejection.\nWedding film contract', 'in_review', 'high', 'jobs', null],
+    [4, 'application', 'APP-903', 'Spam', 'Applicant mass-sent identical proposals with phishing links.\nProposal on JOB-90', 'open', 'medium', 'jobs', 'Jobs N Gigs Moderator'],
+    [5, 'gig', 'GIG-201', 'Scam', 'Gig asks for off-platform payment before starting.\nColor grade overnight', 'open', 'high', 'jobs', null],
+    [3, 'feedback', 'FB-66', 'Other', 'Reported as retaliatory 1-star after a resolved dispute.\nUnfair feedback on CTR-12', 'resolved', 'low', 'jobs', 'Admin'],
 
     // ── Support / Admin cross-cutting (not in specialist scopes) ─────────
-    [4, 'team', 'team-2', 'Graphitee', 'Impersonation', 'Member posing as official Ensemble support in team chat.', 'open', 'high', 'support', 'Support Moderator'],
-    [1, 'account', 'acc-user-7', '@seller_x', 'Account abuse', 'Multiple ban-evasion accounts linked to the same person.', 'in_review', 'high', 'support', 'Admin'],
-    [2, 'profile', 'prof-18', '@mirror_edit', 'Impersonation', 'Profile photo and bio copy a known creator brand.', 'open', 'medium', 'support', null],
-    [0, 'team', 'team-9', 'Nightshift Collective', 'Harassment', 'Team owner bullying members after leaving a contract.', 'open', 'high', 'support', 'Support Moderator'],
-    [5, 'account', 'acc-user-3', '@alt_spam', 'Spam', 'Account used only to mass-DM promotional links.', 'resolved', 'medium', 'support', 'Admin'],
+    [4, 'team', 'team-2', 'Impersonation', 'Member posing as official Ensemble support in team chat.\nGraphitee', 'open', 'high', 'support', 'Support Moderator'],
+    [1, 'account', 'acc-user-7', 'Account abuse', 'Multiple ban-evasion accounts linked to the same person.\n@seller_x', 'in_review', 'high', 'support', 'Admin'],
+    [2, 'profile', 'prof-18', 'Impersonation', 'Profile photo and bio copy a known creator brand.\n@mirror_edit', 'open', 'medium', 'support', null],
+    [0, 'team', 'team-9', 'Harassment', 'Team owner bullying members after leaving a contract.\nNightshift Collective', 'open', 'high', 'support', 'Support Moderator'],
+    [5, 'account', 'acc-user-3', 'Spam', 'Account used only to mass-DM promotional links.\n@alt_spam', 'resolved', 'medium', 'support', 'Admin'],
   ];
 
   const assigneeByRole = {
@@ -587,8 +587,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       reporterIdx,
       targetType,
       targetId,
-      targetLabel,
-      reason,
+      type,
       description,
       status,
       priority,
@@ -601,8 +600,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       targetAccountId: userAccountIds[(reporterIdx + 2) % userAccountIds.length],
       targetType,
       targetId,
-      targetLabel,
-      reason,
+      type,
       description,
       status,
       priority,
@@ -622,15 +620,14 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     const res = await pool.query(
       `INSERT INTO reports (
         report_number, by_account_id, for_account_id,
-        target_type, target_id, target_label,
-        reason, description, status, priority, assigned_staff_id, created_at,
-        type, reference_table, reference_prefix, reference_id, is_created_by_bot,
-        resolved_at
+        target_type, target_id,
+        description, status, priority, assigned_staff_id, created_at, updated_at,
+        type, reference_table, reference_prefix, reference_id, is_created_by_bot
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-        NOW() - ($12 || ' hours')::interval,
-        $4, $4, $13, $14, false,
-        $15
+        $1, $2, $3, $4, $5, $6, $7, $8, $9,
+        NOW() - ($10 || ' hours')::interval,
+        NOW() - ($10 || ' hours')::interval,
+        $11, $4, $12, $13, false
       )
       RETURNING report_id`,
       [
@@ -639,16 +636,14 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         r.targetAccountId,
         r.targetType,
         r.targetId,
-        r.targetLabel,
-        r.reason,
         r.description,
         r.status,
         r.priority,
         r.assigneeId,
         String(4 + i * 3),
+        r.type,
         r.prefix,
         String(r.targetId).slice(0, 50),
-        r.status === 'resolved' || r.status === 'dismissed' ? new Date() : null,
       ]
     );
     reportIds.push(res.rows[0].report_id);

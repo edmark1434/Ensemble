@@ -364,10 +364,9 @@ function mapReportRow(row) {
       name: row.reporter_name || 'Anonymous',
       username: row.reporter_handle || '—',
     },
-    targetType: displayLabel(row.target_type || row.type),
+    type: row.type || 'Other',
+    targetType: displayLabel(row.target_type),
     targetId: row.target_id || row.reference_id,
-    targetLabel: row.target_label,
-    reason: row.reason,
     description: row.description,
     // Keep status/priority as DB snake_case for filters/forms; format in UI.
     status: String(row.status || 'open').toLowerCase(),
@@ -377,7 +376,6 @@ function mapReportRow(row) {
       : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
-    resolvedAt: row.resolved_at,
   };
 }
 
@@ -1906,7 +1904,6 @@ async function updateReport(reportId, patch, staffSession = null) {
 
   if (!sets.length) return getReportDetail(reportId, staffSession);
 
-  if (patch.status === 'resolved') sets.push(`resolved_at = NOW()`);
   sets.push(`updated_at = NOW()`);
   values.push(reportId);
 
@@ -1944,7 +1941,7 @@ async function getReportDetail(reportId, staffSession = null, options = {}) {
     `
     SELECT
       r.*,
-      COALESCE(fa.display_name, fu.first_name || ' ' || fu.last_name, r.target_label) AS target_name,
+      COALESCE(fa.display_name, fu.first_name || ' ' || fu.last_name, r.target_id) AS target_name,
       fa.handle AS target_handle,
       COALESCE(repa.display_name, repu.first_name || ' ' || repu.last_name) AS reporter_name,
       repa.handle AS reporter_handle,

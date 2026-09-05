@@ -1,11 +1,9 @@
-# Current Task — Violation expiry + report column clarification
+# Current Task — Slim reports columns
 
-1. Add `expires_at` to `violations` (active until expiry / pardon).
-2. Do NOT merge report `by_account_id` with `assigned_staff_id` — they are different roles.
-3. Explain report target_* / reason / resolved_at to user.
+Drop `reports.resolved_at`, `target_label`, and `reason`. Use `updated_at` on status changes; keep `type` + `description` (+ `target_type` / `target_id`).
 
 ## Acceptance Criteria
 
-- [x] Migration adds `violations.expires_at`; seed/create set it; active checks respect it.
-- [x] Kept report assignee separate from reporter (explained to user).
-- [x] Frontend/backend updated for expiry.
+- [x] Migration drops the three columns.
+- [x] Backend seed/repos/controllers stop using them; status patches bump `updated_at`.
+- [x] Frontend types/UI use type/description instead of reason/targetLabel; no resolvedAt.
