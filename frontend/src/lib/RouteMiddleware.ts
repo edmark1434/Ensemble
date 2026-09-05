@@ -71,6 +71,10 @@ export default function RouteMiddleware() {
     const location = useLocation();
     const [resolvedUser, setResolvedUser] = useState(user);
     const [isCheckingSession, setIsCheckingSession] = useState(!user);
+
+    useEffect(() => {
+        useGlobalState.getState().setIsLoading(isCheckingSession);
+    }, [isCheckingSession]);
     const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
     const [onboardingGate, setOnboardingGate] = useState<OnboardingGateState>(() => ({
         accountId: user?.type === 'User' ? String(user.account_id) : null,

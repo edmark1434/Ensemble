@@ -82,7 +82,9 @@ const UserHeader: React.FC<UserHeaderProps> = ({
 
   const userInfo = useGlobalState((state) => state.user);
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
-  const isGuestView = isGuestMode || !userInfo?.account_id;
+  const isGlobalLoading = useGlobalState((state) => state.isLoading);
+  const isSessionLoading = isGlobalLoading || (!userInfo?.account_id && !isGuestMode);
+  const isGuestView = isGuestMode || (!isSessionLoading && !userInfo?.account_id);
   const [showHeader, setShowHeader] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(true);
   const [userCredits, setCredits] = useState(0);
@@ -201,14 +203,19 @@ useEffect(() => {
 
   void fetchNotifications();
   return () => { cancelled = true; };
-}, [isGuestView, userInfo?.account_id]);
+}, [isSessionLoading, isGuestView, userInfo?.account_id]);
 
   useEffect(() => {
+    if (isSessionLoading) {
+      setIsCheckingAccess(true);
+      return;
+    }
     if (isGuestView) {
       setShowHeader(true);
       setIsCheckingAccess(false);
       return;
     }
+    setIsCheckingAccess(true);
     const checkRole = async () => {
       try {
         const [, getWalletResponse, getAvatarResponse, getSubscriptionPlanResponse, getVerificationResponse] = await Promise.all([
@@ -370,18 +377,28 @@ useEffect(() => {
       >
         <div className={`flex items-center justify-between px-5 md:px-5 gap-4 ${isGuestView ? 'py-5' : 'py-4'}`}>
           <div className="flex items-center gap-8 flex-1 min-w-0">
-            <div className="h-7 w-32 bg-gray-200 dark:bg-white/10 rounded animate-pulse shrink-0 hidden sm:block"></div>
-            <div className="w-full max-w-xs h-[30px] bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
+            <h1 className="text-xl font-semibold text-gray-900 dark:text-white shrink-0 hidden sm:block" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+              {pageTitle}
+            </h1>
+            {!isGuestView && (
+              <div className="relative w-full max-w-xs group">
+                <Search className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 dark:text-zinc-600" />
+                <div className="w-full h-[36px] bg-gray-100 dark:bg-white/5 border border-transparent rounded-full flex items-center pl-10">
+                  <div className="h-3 w-24 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-4 shrink-0">
-            <div className="h-[34px] w-24 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
-            <div className="h-9 w-9 bg-gray-200 dark:bg-white/10 rounded-lg animate-pulse"></div>
-            <div className="flex items-center gap-2 h-[44px] p-1 pl-3">
-              <div className="hidden md:block space-y-2">
-                <div className="h-3 w-20 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
-                <div className="h-2 w-16 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
+            <div className="h-[36px] w-20 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse shadow-sm"></div>
+            <div className="h-[36px] w-[36px] bg-gray-200 dark:bg-white/10 rounded-xl animate-pulse"></div>
+            <div className="flex items-center gap-3 h-[44px] pl-3 ml-1">
+              <div className="h-9 w-9 rounded-full bg-gray-200 dark:bg-white/10 animate-pulse ring-2 ring-gray-100 dark:ring-white/5"></div>
+              <div className="hidden md:flex flex-col gap-1.5 w-28">
+                <div className="h-3.5 bg-gray-200 dark:bg-white/10 rounded animate-pulse w-3/4"></div>
+                <div className="h-2.5 bg-gray-200 dark:bg-white/10 rounded animate-pulse w-1/2"></div>
               </div>
-              <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-white/10 animate-pulse"></div>
+              <ChevronDown className="h-4 w-4 text-gray-300 dark:text-zinc-700" />
             </div>
           </div>
         </div>
