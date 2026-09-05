@@ -1,3 +1,5 @@
+import useGlobalState from "@/lib/global_state";
+import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
 // src/pages/user/terms_of_service/tos_main.tsx
 import React, { useState, useEffect } from "react";
 import UserHeader from "@/components/nav/user_header";
@@ -59,7 +61,9 @@ const TosSkeletonLoader: React.FC = () => (
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-export const TosMain: React.FC = () => {
+export const TosMain: React.FC = () => { 
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isVerified = useGlobalState((state) => state.isVerified);
   const { terms: tosList, loading, error, fetchTerms, createTerms, updateTerms, deleteTerms } = useTerms();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -134,15 +138,16 @@ export const TosMain: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white">
+    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white">
       {/* Top Header */}
       <UserHeader pageTitle="Terms of Service" credits={1250} />
+      {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="terms of service" />}
 
       {loading ? (
         <TosSkeletonLoader />
       ) : (
         /* Animated Main Container */
-        <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in">
+        <div className={`mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in`}>
           {/* Banner Title */}
           <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-dark-surface/60 shadow-sm dark:shadow-none p-6 md:p-8 backdrop-blur-xl">
             <div className="relative z-10">

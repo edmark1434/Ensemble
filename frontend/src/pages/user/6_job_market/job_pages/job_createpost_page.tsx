@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -17,6 +17,15 @@ import PopupConfirmReturn from "../job_components/job_popups/popup_confirm_retur
 
 const JobCreatePostPage: React.FC = () => {
   const navigate = useNavigate();
+  const isVerified = useGlobalState((state) => state.isVerified);
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+
+  useEffect(() => {
+    if (!isGuestMode && !isVerified) {
+      useGlobalState.getState().setIsVerificationModalOpen(true, "Account Verification is required to access Job Creation. Please verify your identity to proceed.");
+      navigate("/");
+    }
+  }, [isGuestMode, isVerified, navigate]);
   const theme = useGlobalState((state) => state.theme);
   const [currentSlide, setCurrentSlide] = useState<number>(1);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);

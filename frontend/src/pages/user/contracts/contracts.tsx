@@ -1,3 +1,4 @@
+import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
 // src/pages/user/contracts/contracts.tsx
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -207,7 +208,9 @@ function formatDateTimeWithRelative(dateString: string | undefined): string {
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-export const Contracts: React.FC = () => {
+export const Contracts: React.FC = () => { 
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isVerified = useGlobalState((state) => state.isVerified);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
   const [contracts, setContracts] = useState<DetailedContract[]>([]);
@@ -321,9 +324,10 @@ export const Contracts: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white font-['Plus_Jakarta_Sans']">
+    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white font-['Plus_Jakarta_Sans']">
       {/* Top Header */}
       <UserHeader pageTitle="My Contracts" credits={1250} />
+      {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="contracts" />}
 
       {loading ? (
         <ContractsSkeletonLoader />
