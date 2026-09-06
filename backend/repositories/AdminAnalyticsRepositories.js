@@ -36,17 +36,16 @@ async function fetchPlatformMembers() {
       a.avatar_file_id,
       a.tagline,
       a.created_at,
-      av.status AS verification_status,
+      CASE
+        WHEN COALESCE(v.is_verified, FALSE) THEN 'verified'
+        WHEN avs.verification_status IS NOT NULL THEN avs.verification_status
+        ELSE 'unverified'
+      END AS verification_status,
       COALESCE(w.balance_credits, 0)::int AS balance_credits
     FROM users u
     INNER JOIN accounts a ON a.account_id = u.account_id
-    LEFT JOIN LATERAL (
-      SELECT status
-      FROM account_verification av
-      WHERE av.account_id = a.account_id AND av.deleted_at IS NULL
-      ORDER BY av.created_at DESC
-      LIMIT 1
-    ) av ON TRUE
+    LEFT JOIN verifications v ON v.account_id = a.account_id
+    LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
     LEFT JOIN LATERAL (
       SELECT w.balance_credits
       FROM account_wallets aw
@@ -482,15 +481,12 @@ async function getAnalyticsOverview() {
         .query(
           `
         SELECT COUNT(*)::int AS c
-        FROM (
-          SELECT DISTINCT ON (account_id) status
-          FROM account_verification
-          WHERE deleted_at IS NULL
-          ORDER BY account_id, created_at DESC
-        ) latest
-        WHERE LOWER(COALESCE(status, 'unverified')) IN (
-          'pending', 'pending review', 'reverification_required'
-        )
+        FROM verifications v
+        LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
+        WHERE COALESCE(v.is_verified, FALSE) = FALSE
+          AND LOWER(COALESCE(avs.verification_status, 'unverified')) IN (
+            'pending', 'pending review', 'reverification_required'
+          )
       `
         )
         .catch(() => ({ rows: [{ c: 0 }] })),
