@@ -46,7 +46,7 @@ export type PersistenceStatus = "saved" | "saving" | "error";
 
 export interface PersistenceHandle {
   teardown: () => void;
-  forceFlush: () => void;
+  forceFlush: () => Promise<void>;
 }
 
 export function attachPersistence(
@@ -68,28 +68,25 @@ export function attachPersistence(
     return merged;
   };
 
-  const flush = () => {
+  const flush = (): Promise<void> => {
     flushTimer = null;
     const merged = mergePending();
-    if (!merged) return;
+    if (!merged) return Promise.resolve();
 
     setStatus("saving");
 
-    fetch(`/api/collab/projects/${projectId}/updates?sessionId=${sessionId}`, {
+    return fetch(`/api/collab/projects/${projectId}/updates?sessionId=${sessionId}`, {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
       body: toArrayBuffer(merged),
     })
       .then((res) => {
         if (!res.ok) throw new Error(`persist failed: ${res.status}`);
-        // Only report "saved" if nothing new queued up while this request
-        // was in flight — otherwise an edit made mid-flush would flash
-        // "saved" for a moment and then immediately flip back.
         if (pending.length === 0 && !flushTimer) setStatus("saved");
       })
       .catch((err) => {
         console.error("Failed to persist collab update, requeuing", err);
-        pending.unshift(merged); // put it back so the next flush retries it
+        pending.unshift(merged);
         setStatus("error");
         if (!flushTimer) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS);
       });
@@ -125,12 +122,12 @@ export function attachPersistence(
 
   // Skips the debounce and persists whatever's queued right now. A no-op
   // if there's nothing pending (i.e. already saved).
-  const forceFlush = () => {
+  const forceFlush = (): Promise<void> => {
     if (flushTimer) {
       clearTimeout(flushTimer);
       flushTimer = null;
     }
-    flush();
+    return flush();
   };
 
   const teardown = () => {
@@ -141,4 +138,12 @@ export function attachPersistence(
   };
 
   return { teardown, forceFlush };
+}
+
+export async function requestCompact(projectId: string): Promise<void> {
+  const res = await fetch(`/api/collab/projects/${projectId}/compact`, { method: "POST" });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Failed to compact project (${res.status}): ${body}`);
+  }
 }

@@ -7,13 +7,19 @@ import * as syncProtocol from "y-protocols/sync";
 import * as awarenessProtocol from "y-protocols/awareness";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
-import { loadLatestProjectState } from "@/lib/collab/persistence-store";
 import { db } from "@/lib/db";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { loadLatestProjectState, compactProject } from "@/lib/collab/persistence-store";
+import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
 const HYDRATION_ORIGIN = "hydration";
+// Independent of any client's own flush cadence — this is the backstop
+// that persists the room's canonical merged state on a fixed schedule,
+// so durability doesn't depend on whichever client authored a given edit
+// staying connected long enough to successfully flush it themselves.
+const SNAPSHOT_INTERVAL_MS = 60_000;
 
 interface ClientInfo {
   controlledAwarenessIds: Set<number>;
@@ -24,6 +30,8 @@ interface Room {
   doc: Y.Doc;
   awareness: awarenessProtocol.Awareness;
   clients: Map<WebSocket, ClientInfo>;
+  dirty: boolean;
+  snapshotInterval: ReturnType<typeof setInterval> | null;
 }
 
 const rooms = new Map<string, Promise<Room>>();
@@ -53,7 +61,7 @@ async function getOrCreateRoom(projectId: string): Promise<Room> {
   const roomPromise = (async () => {
     const doc = new Y.Doc({ gc: false });
     const awareness = new awarenessProtocol.Awareness(doc);
-    const room: Room = { doc, awareness, clients: new Map() };
+    const room: Room = { doc, awareness, clients: new Map(), dirty: false, snapshotInterval: null };
 
     const { snapshot, updates } = await loadLatestProjectState(projectId);
     if (snapshot || updates.length > 0) {
@@ -68,6 +76,11 @@ async function getOrCreateRoom(projectId: string): Promise<Room> {
       encoding.writeVarUint(encoder, MESSAGE_SYNC);
       syncProtocol.writeUpdate(encoder, update);
       broadcast(room, encoding.toUint8Array(encoder), origin);
+
+      // Replaying the project's own already-persisted history back into a
+      // freshly-created doc isn't new data — don't let hydration itself
+      // trigger a redundant snapshot of what we just loaded.
+      if ((origin as unknown) !== HYDRATION_ORIGIN) room.dirty = true;
     });
 
     awareness.on("update", (
@@ -85,6 +98,28 @@ async function getOrCreateRoom(projectId: string): Promise<Room> {
       encoding.writeVarUint8Array(encoder, awarenessProtocol.encodeAwarenessUpdate(awareness, changed));
       broadcast(room, encoding.toUint8Array(encoder), origin);
     });
+
+    const snapshotIfDirty = async () => {
+      if (!room.dirty) return;
+      // Clear before the async write, not after — an update that arrives
+      // mid-write re-sets this to true, and correctly gets picked up by
+      // the next tick instead of being lost to the race.
+      room.dirty = false;
+      try {
+        // Serialized against compactProject (updates/route.ts) — see
+        // snapshot-lock.ts for why two independent snapshot writers need
+        // to never race for the same project.
+        await withProjectSnapshotLock(projectId, async () => {
+          const roomState = Y.encodeStateAsUpdate(doc);
+          await compactProject(projectId, roomState);
+        });
+      } catch (err) {
+        console.error(`collab: periodic snapshot failed for project ${projectId}`, err);
+        room.dirty = true; // retry on the next tick
+      }
+    };
+
+    room.snapshotInterval = setInterval(snapshotIfDirty, SNAPSHOT_INTERVAL_MS);
 
     return room;
   })();
@@ -191,6 +226,18 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
       awarenessProtocol.removeAwarenessStates(room.awareness, [...info.controlledAwarenessIds], null);
     }
     if (room.clients.size === 0) {
+      if (room.snapshotInterval) clearInterval(room.snapshotInterval);
+
+      // One last durability check before releasing the in-memory doc.
+      // Same lock, same reasoning as the periodic path above.
+      if (room.dirty) {
+        withProjectSnapshotLock(projectId, () =>
+          compactProject(projectId, Y.encodeStateAsUpdate(room.doc)),
+        ).catch((err) => {
+          console.error(`collab: final snapshot failed for project ${projectId}`, err);
+        });
+      }
+
       room.doc.destroy();
       rooms.delete(projectId);
     }

@@ -623,6 +623,7 @@ const Editor = ({
         undoManager={collab?.undoManager}
         viewOnly={viewOnly}
         saveStatus={collab?.saveStatus}
+        compactStatus={collab?.compactStatus}
         onForceSave={collab?.forceSave}
       />
 

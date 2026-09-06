@@ -46,6 +46,7 @@ export default function Navbar({
   undoManager,
   viewOnly,
   saveStatus,
+  compactStatus,
   onForceSave
 }: {
   user: unknown | null;
@@ -53,6 +54,7 @@ export default function Navbar({
   undoManager?: Y.UndoManager;
   viewOnly?: boolean;
   saveStatus?: "saved" | "saving" | "error";
+  compactStatus?: "idle" | "compacting" | "error";
   onForceSave?: () => void;
 }) {
   const isLargeScreen = useIsLargeScreen();
@@ -120,6 +122,8 @@ export default function Navbar({
   }, [undoManager]);
 
   const status = saveStatus ?? "saved";
+  const compacting = compactStatus === "compacting";
+  const compactError = compactStatus === "error";
 
   return (
     <div
@@ -199,14 +203,14 @@ export default function Navbar({
                 onClick={!viewOnly ? onForceSave : undefined}
                 className={cn(
                   "hover:!bg-accent/30",
-                  (viewOnly || status === "saving") && "cursor-default"
+                  (viewOnly || status === "saving" || compacting) && "cursor-default"
                 )}
                 variant="ghost"
                 size="icon"
               >
-                {status === "saving" ? (
+                {compacting || status === "saving" ? (
                   <Loader2 size={20} className="animate-spin" />
-                ) : status === "error" ? (
+                ) : compactError || status === "error" ? (
                   <CloudOff size={20} className="text-destructive" />
                 ) : (
                   <CloudCheck size={20} />
@@ -214,13 +218,15 @@ export default function Navbar({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" align="center" sideOffset={1}>
-              {status === "saving"
-                ? "Saving…"
-                : status === "error"
-                  ? "Couldn't save — click to retry"
-                  : viewOnly
-                    ? "All changes saved"
-                    : "All changes saved"}
+              {compacting
+                ? "Compacting…"
+                : compactError
+                  ? "Couldn't compact — click to retry"
+                  : status === "saving"
+                    ? "Saving…"
+                    : status === "error"
+                      ? "Couldn't save — click to retry"
+                      : "All changes saved"}
             </TooltipContent>
           </Tooltip>
         </div>

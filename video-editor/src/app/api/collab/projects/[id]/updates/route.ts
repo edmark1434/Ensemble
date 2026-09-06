@@ -1,8 +1,9 @@
 // app/api/collab/projects/[id]/updates/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import * as Y from "yjs";
 import { db } from "@/lib/db";
+import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
+import { compactProject } from "@/lib/collab/persistence-store";
 
 const COMPACT_AFTER_UPDATE_COUNT = 200;
 
@@ -57,52 +58,8 @@ export async function POST(
     .executeTakeFirstOrThrow();
 
   if (Number(count) >= COMPACT_AFTER_UPDATE_COUNT) {
-    await compactProject(projectId);
+    await withProjectSnapshotLock(projectId, () => compactProject(projectId));
   }
 
   return NextResponse.json({ ok: true });
-}
-
-async function compactProject(projectId: string) {
-  const snapshotRow = await db
-    .selectFrom("project_yjs_snapshots")
-    .innerJoin("yjs_snapshots", "yjs_snapshots.yjs_snapshot_id", "project_yjs_snapshots.yjs_snapshot_id")
-    .where("project_yjs_snapshots.project_id", "=", projectId)
-    .orderBy("yjs_snapshots.created_at", "desc")
-    .select(["yjs_snapshots.document"])
-    .executeTakeFirst();
-
-  const updateRows = await db
-    .selectFrom("project_yjs_updates")
-    .innerJoin("yjs_updates", "yjs_updates.yjs_update_id", "project_yjs_updates.yjs_update_id")
-    .where("project_yjs_updates.project_id", "=", projectId)
-    .orderBy("yjs_updates.created_at", "asc")
-    .select(["yjs_updates.update", "project_yjs_updates.yjs_update_id"])
-    .execute();
-
-  const doc = new Y.Doc({ gc: false });
-  if (snapshotRow) Y.applyUpdate(doc, snapshotRow.document);
-  for (const row of updateRows) Y.applyUpdate(doc, row.update);
-
-  const compacted = Buffer.from(Y.encodeStateAsUpdate(doc));
-  doc.destroy();
-
-  await db.transaction().execute(async (trx) => {
-    const newSnapshot = await trx
-      .insertInto("yjs_snapshots")
-      .values({ document: compacted })
-      .returning(["yjs_snapshot_id"])
-      .executeTakeFirstOrThrow();
-
-    await trx
-      .insertInto("project_yjs_snapshots")
-      .values({ yjs_snapshot_id: newSnapshot.yjs_snapshot_id, project_id: projectId })
-      .execute();
-
-    const idsToTrim = updateRows.map((r) => r.yjs_update_id);
-    if (idsToTrim.length) {
-      await trx.deleteFrom("project_yjs_updates").where("yjs_update_id", "in", idsToTrim).execute();
-      await trx.deleteFrom("yjs_updates").where("yjs_update_id", "in", idsToTrim).execute();
-    }
-  });
 }

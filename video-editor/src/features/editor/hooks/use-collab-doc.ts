@@ -15,6 +15,7 @@ import {
   endSession,
   loadSnapshot,
   attachPersistence,
+  requestCompact,
   PersistenceHandle,
   PersistenceStatus,
 } from "../collab/persistence";
@@ -31,6 +32,7 @@ export interface CollabDoc {
   ready: boolean;
   error: Error | null;
   saveStatus: PersistenceStatus;
+  compactStatus: "idle" | "compacting" | "error";
   forceSave: () => void;
 }
 
@@ -75,7 +77,20 @@ export function useCollabDoc(
     // reference even though the handle itself isn't ready until the async
     // setup below completes.
     const forceSave = () => {
-      persistenceHandle?.forceFlush();
+      if (cancelled) return;
+      setCollab((prev) => (prev ? { ...prev, compactStatus: "compacting" } : prev));
+      persistenceHandle
+        ?.forceFlush()
+        .then(() => requestCompact(projectId))
+        .then(() => {
+          if (cancelled) return;
+          setCollab((prev) => (prev ? { ...prev, compactStatus: "idle" } : prev));
+        })
+        .catch((err) => {
+          console.error("useCollabDoc: force save failed", err);
+          if (cancelled) return;
+          setCollab((prev) => (prev ? { ...prev, compactStatus: "error" } : prev));
+        });
     };
 
     setCollab({
@@ -88,6 +103,7 @@ export function useCollabDoc(
       ready: false,
       error: null,
       saveStatus: "saved",
+      compactStatus: "idle",
       forceSave,
     });
 
