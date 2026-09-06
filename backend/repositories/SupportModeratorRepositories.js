@@ -57,7 +57,6 @@ async function getSupportTickets({ status, search, type, category, priority } = 
       LOWER(t.reason) LIKE $${params.length}
       OR LOWER(COALESCE(t.ticket_number, '')) LIKE $${params.length}
       OR LOWER(COALESCE(t.type, '')) LIKE $${params.length}
-      OR LOWER(COALESCE(t.channel, '')) LIKE $${params.length}
       OR LOWER(COALESCE(ra.handle, '')) LIKE $${params.length}
       OR LOWER(COALESCE(ra.display_name, '')) LIKE $${params.length}
       OR LOWER(COALESCE(ru.email_address, '')) LIKE $${params.length}
@@ -159,14 +158,14 @@ async function getSupportDisputes({ status, search, entityType } = {}) {
   }
   if (entityType && entityType !== 'all') {
     params.push(String(entityType).toLowerCase());
-    where.push(`LOWER(COALESCE(d.related_entity_type, '')) = $${params.length}`);
+    where.push(`LOWER(COALESCE(d.type, '')) = $${params.length}`);
   }
   if (search) {
     params.push(`%${String(search).toLowerCase()}%`);
     where.push(`(
       LOWER(COALESCE(d.title, '')) LIKE $${params.length}
       OR LOWER(COALESCE(d.dispute_number, '')) LIKE $${params.length}
-      OR LOWER(COALESCE(d.reason, '')) LIKE $${params.length}
+      OR LOWER(COALESCE(d.description, '')) LIKE $${params.length}
       OR LOWER(COALESCE(ia.handle, '')) LIKE $${params.length}
       OR LOWER(COALESCE(ra.handle, '')) LIKE $${params.length}
       OR d.dispute_id::text LIKE $${params.length}
@@ -187,11 +186,11 @@ async function getSupportDisputes({ status, search, entityType } = {}) {
       ct.amount_credits AS hold_amount,
       ct.type AS hold_type
     FROM disputes d
-    LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
+    LEFT JOIN accounts ia ON ia.account_id = d.by_account_id
     LEFT JOIN users iu ON iu.account_id = ia.account_id
-    LEFT JOIN accounts ra ON ra.account_id = d.respondent_account_id
+    LEFT JOIN accounts ra ON ra.account_id = d.for_account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
+    LEFT JOIN staff st ON st.staff_id = d.handled_by_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = d.related_credit_transaction_id
     WHERE ${where.join(' AND ')}
@@ -280,7 +279,7 @@ async function getSupportStaffWorkload() {
           AND LOWER(r.status) NOT IN ('resolved', 'closed', 'dismissed')
           AND r.deleted_at IS NULL) AS open_reports,
       (SELECT COUNT(*)::int FROM disputes d
-        WHERE d.assigned_staff_id = s.staff_id
+        WHERE d.handled_by_staff_id = s.staff_id
           AND d.deleted_at IS NULL
           AND LOWER(d.status) NOT IN ('resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn')) AS open_disputes
     FROM staff s
@@ -436,7 +435,9 @@ async function getSupportOverview(session = null) {
           WHERE t.deleted_at IS NULL
             AND ${EXCLUDE_ADMIN_TICKETS_SQL}) AS total_messages,
         (SELECT COUNT(*)::int FROM violations v
-          WHERE v.deleted_at IS NULL AND LOWER(v.status) = 'active') AS active_violations,
+          WHERE v.deleted_at IS NULL
+            AND LOWER(v.status) = 'active'
+            AND (v.expires_at IS NULL OR v.expires_at > NOW())) AS active_violations,
         (SELECT COUNT(*)::int FROM restrictions r
           WHERE r.ends_at IS NULL OR r.ends_at > NOW()) AS active_restrictions
     `),

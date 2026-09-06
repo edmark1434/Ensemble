@@ -1,150 +1,82 @@
 const { pool } = require('../lib/Database');
-
-const DEFAULT_SETTINGS = {
-  platform: {
-    siteName: 'Ensemble',
-    tagline: 'Creative collaboration platform',
-    maintenanceMode: false,
-    registrationEnabled: true,
-    defaultUserMerit: 50,
-    supportEmail: 'support@ensemble.app',
-    maxUploadMb: 50,
-    sessionTimeoutMinutes: 60,
-  },
-  moderation: {
-    spamFilterEnabled: true,
-    autoFlagProfanity: true,
-    autoHoldNewAccounts: false,
-    forumLinkScanning: true,
-    marketplaceListingReview: true,
-    disputeAutoAssign: true,
-    maxWarningsBeforeSuspend: 3,
-    autoEscalateHighPriority: true,
-    reportToTicketAutoCreate: true,
-  },
-  economy: {
-    creditPackages: [
-      { id: 'pkg-starter', name: 'Starter Pack', credits: 500, pricePhp: 499, active: true, salesCount: 0 },
-      { id: 'pkg-pro', name: 'Pro Pack', credits: 2500, pricePhp: 1999, active: true, salesCount: 0 },
-      { id: 'pkg-studio', name: 'Studio Pack', credits: 10000, pricePhp: 6999, active: true, salesCount: 0 },
-      { id: 'pkg-enterprise', name: 'Enterprise Pack', credits: 50000, pricePhp: 29999, active: false, salesCount: 0 },
-    ],
-    feeSettings: [
-      { id: 'fee-marketplace', label: 'Marketplace transaction fee', percent: 8, flatFee: 0, appliesTo: 'Asset sales' },
-      { id: 'fee-job', label: 'Jobs & gigs platform fee', percent: 12, flatFee: 50, appliesTo: 'Job contracts' },
-      { id: 'fee-payout', label: 'Payout processing fee', percent: 2.5, flatFee: 25, appliesTo: 'Withdrawals' },
-      { id: 'fee-listing', label: 'Asset listing fee', percent: 0, flatFee: 100, appliesTo: 'New listings' },
-    ],
-    marketplaceSettings: {
-      listingFeeCredits: 100,
-      transactionFeePercent: 8,
-      escrowHoldDays: 7,
-      minPayoutCredits: 500,
-      refundWindowDays: 14,
-    },
-  },
-  notifications: {
-    emailNewSignups: true,
-    emailNewTickets: true,
-    emailDisputeOpened: true,
-    emailHighPriorityReports: true,
-    emailWeeklyDigest: false,
-    slackWebhookEnabled: false,
-    slackWebhookUrl: '',
-    notifyAssigneeOnTicket: true,
-    notifyRequesterOnResolution: true,
-  },
-  security: {
-    requireStaff2fa: false,
-    minPasswordLength: 8,
-    lockoutAfterFailedAttempts: 5,
-    lockoutDurationMinutes: 15,
-    auditLogRetentionDays: 90,
-    ipAllowlistEnabled: false,
-    allowedAdminIps: [],
-    forceHttps: true,
-  },
-};
-
-function isPlainObject(value) {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-/** Deep-merge defaults ← current DB ← patch. Arrays from patch replace entirely. */
-function deepMergeSettings(defaults, current, patch) {
-  const base = isPlainObject(defaults) ? { ...defaults } : {};
-  const fromDb = isPlainObject(current) ? current : {};
-  const fromPatch = isPlainObject(patch) ? patch : {};
-
-  const merged = { ...base, ...fromDb };
-
-  for (const [key, value] of Object.entries(fromPatch)) {
-    if (value === undefined) continue;
-    if (Array.isArray(value)) {
-      merged[key] = value;
-    } else if (isPlainObject(value) && isPlainObject(merged[key])) {
-      merged[key] = deepMergeSettings(base[key] || {}, merged[key], value);
-    } else {
-      merged[key] = value;
-    }
-  }
-
-  return merged;
-}
+const {
+  DEFAULT_SETTINGS,
+  SECTION_KEYS,
+  flattenSection,
+  listDefaultConfigurationRows,
+  assembleSection,
+  deepMergeSettings,
+  configurationKeyPrefixFilter,
+  sectionKeyFromConfigurationKey,
+} = require('../lib/PlatformConfiguration');
 
 function stripMeta(value) {
-  if (!isPlainObject(value)) return value;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
   const clone = { ...value };
   delete clone._meta;
   return clone;
 }
 
 async function ensureDefaultSettings() {
-  for (const key of Object.keys(DEFAULT_SETTINGS)) {
+  const rows = listDefaultConfigurationRows();
+  for (const row of rows) {
     await pool.query(
-      `INSERT INTO platform_settings (setting_key, setting_value)
-       VALUES ($1, $2::jsonb)
-       ON CONFLICT (setting_key) DO NOTHING`,
-      [key, JSON.stringify(DEFAULT_SETTINGS[key])]
+      `INSERT INTO configuration (
+         configuration_key, name, description, current_value_literal, default_value_literal, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+       ON CONFLICT (configuration_key) DO UPDATE SET
+         name = EXCLUDED.name,
+         description = EXCLUDED.description,
+         default_value_literal = EXCLUDED.default_value_literal`,
+      [
+        row.configuration_key,
+        row.name,
+        row.description,
+        row.current_value_literal,
+        row.default_value_literal,
+      ]
     );
   }
 }
 
-async function readSectionRow(key) {
+async function readSectionRows(sectionKey) {
   const result = await pool.query(
-    `SELECT setting_value, updated_at, updated_by_staff_id
-     FROM platform_settings
-     WHERE setting_key = $1`,
-    [key]
+    `SELECT configuration_key, name, description, current_value_literal, default_value_literal, updated_at
+     FROM configuration
+     WHERE configuration_key LIKE $1
+     ORDER BY configuration_key`,
+    [configurationKeyPrefixFilter(sectionKey)]
   );
-  return result.rows[0] || null;
+  return result.rows;
 }
 
 async function getSectionValue(key) {
   const defaults = DEFAULT_SETTINGS[key];
   if (!defaults) return null;
-  const row = await readSectionRow(key);
-  if (!row) return { ...structuredClone(defaults) };
-  return deepMergeSettings(defaults, row.setting_value, {});
+  const rows = await readSectionRows(key);
+  if (!rows.length) return structuredClone(defaults);
+  return assembleSection(key, defaults, rows);
 }
 
 async function getSettingsOverview() {
   await ensureDefaultSettings();
 
-  const sections = Object.keys(DEFAULT_SETTINGS);
   const loaded = await Promise.all(
-    sections.map(async (key) => {
-      const row = await readSectionRow(key);
+    SECTION_KEYS.map(async (key) => {
+      const rows = await readSectionRows(key);
       const defaults = DEFAULT_SETTINGS[key];
-      const value = row
-        ? deepMergeSettings(defaults, row.setting_value, {})
+      const value = rows.length
+        ? assembleSection(key, defaults, rows)
         : structuredClone(defaults);
-      return {
-        key,
-        value,
-        updatedAt: row?.updated_at || null,
-        isDefault: !row,
-      };
+      const updatedAt = rows.reduce((latest, row) => {
+        if (!row.updated_at) return latest;
+        if (!latest) return row.updated_at;
+        return new Date(row.updated_at) > new Date(latest) ? row.updated_at : latest;
+      }, null);
+      const isDefault =
+        !rows.length ||
+        rows.every((row) => row.current_value_literal === row.default_value_literal);
+      return { key, value, updatedAt, isDefault };
     })
   );
 
@@ -158,15 +90,8 @@ async function getSettingsOverview() {
       ORDER BY s.role, name
     `),
     pool.query(`
-      SELECT setting_key, updated_at,
-        COALESCE(
-          NULLIF(TRIM(s.first_name || ' ' || s.last_name), ''),
-          a.display_name,
-          'System'
-        ) AS updated_by
-      FROM platform_settings ps
-      LEFT JOIN staff s ON s.staff_id = ps.updated_by_staff_id
-      LEFT JOIN accounts a ON a.account_id = s.account_id
+      SELECT configuration_key, name, updated_at
+      FROM configuration
       ORDER BY updated_at DESC NULLS LAST
       LIMIT 12
     `),
@@ -185,14 +110,14 @@ async function getSettingsOverview() {
     })),
     changeHistory: historyResult.rows.map((r, i) => ({
       id: `chg-${i}`,
-      section: r.setting_key,
+      section: r.name || sectionKeyFromConfigurationKey(r.configuration_key),
       updatedAt: r.updated_at,
-      updatedBy: r.updated_by,
+      updatedBy: 'System',
     })),
     alerts: buildSettingsAlerts(sectionMap),
     dataSources: {
-      persisted: ['platform_settings'],
-      tables: ['platform_settings'],
+      persisted: ['configuration'],
+      tables: ['configuration'],
     },
   };
 }
@@ -239,33 +164,45 @@ function buildSettingsAlerts(sections) {
   return alerts;
 }
 
-async function updateSettingsSection(sectionKey, values, staffId) {
+async function updateSettingsSection(sectionKey, values) {
   if (!DEFAULT_SETTINGS[sectionKey]) {
     throw new Error(`Unknown settings section: ${sectionKey}`);
   }
 
   await ensureDefaultSettings();
 
-  const row = await readSectionRow(sectionKey);
-  const current = row?.setting_value || {};
+  const current = await getSectionValue(sectionKey);
   const merged = stripMeta(
     deepMergeSettings(DEFAULT_SETTINGS[sectionKey], current, values)
   );
 
-  // Normalize security IP list
   if (sectionKey === 'security' && Array.isArray(merged.allowedAdminIps)) {
     merged.allowedAdminIps = merged.allowedAdminIps
       .map((ip) => String(ip || '').trim())
       .filter(Boolean);
   }
 
-  await pool.query(
-    `INSERT INTO platform_settings (setting_key, setting_value, updated_at, updated_by_staff_id)
-     VALUES ($1, $2::jsonb, NOW(), $3)
-     ON CONFLICT (setting_key)
-     DO UPDATE SET setting_value = $2::jsonb, updated_at = NOW(), updated_by_staff_id = $3`,
-    [sectionKey, JSON.stringify(merged), staffId || null]
-  );
+  const rows = flattenSection(sectionKey, merged, DEFAULT_SETTINGS[sectionKey]);
+  for (const row of rows) {
+    await pool.query(
+      `INSERT INTO configuration (
+         configuration_key, name, description, current_value_literal, default_value_literal, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+       ON CONFLICT (configuration_key) DO UPDATE SET
+         name = EXCLUDED.name,
+         description = EXCLUDED.description,
+         current_value_literal = EXCLUDED.current_value_literal,
+         default_value_literal = EXCLUDED.default_value_literal,
+         updated_at = CURRENT_TIMESTAMP`,
+      [
+        row.configuration_key,
+        row.name,
+        row.description,
+        row.current_value_literal,
+        row.default_value_literal,
+      ]
+    );
+  }
 
   return getSettingsOverview();
 }

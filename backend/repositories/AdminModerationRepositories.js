@@ -1,6 +1,6 @@
 const { pool } = require('../lib/Database');
 const { getMongoClient, connectMongoDB } = require('../lib/MongoDb');
-const { DEFAULT_SETTINGS } = require('./AdminSettingsRepositories');
+const { DEFAULT_SETTINGS, getSectionValue } = require('./AdminSettingsRepositories');
 const { fetchDisputesList, fetchReportsList } = require('./AdminTicketsRepositories');
 
 function normalizeStatus(status) {
@@ -117,13 +117,14 @@ async function fetchPendingCasesFromDb() {
       SELECT
         r.report_id,
         r.report_number,
-        r.reason,
+        r.type,
         r.description,
         r.status,
         r.priority,
         r.target_type,
-        r.target_label,
+        r.target_id,
         r.created_at,
+        r.updated_at,
         r.assigned_staff_id,
         r.for_account_id,
         COALESCE(fa.display_name, fa.handle, 'Account') AS target_name,
@@ -210,11 +211,11 @@ async function fetchPendingCasesFromDb() {
       source: 'report',
       type: 'Report',
       priority: normalizePriority(r.priority),
-      target: r.target_label || r.target_name,
+      target: r.target_name || r.target_id || 'Account',
       targetHandle: r.target_handle || r.report_number,
       targetType: r.target_type || 'Account',
-      reason: r.reason || r.description || 'User report',
-      description: r.description || r.reason || null,
+      reason: r.type || r.description || 'User report',
+      description: r.description || null,
       referenceNumber: r.report_number || null,
       accountId: r.for_account_id || null,
       assignedRole: r.assigned_role || null,
@@ -305,7 +306,7 @@ async function fetchRecentModerationActivity() {
       SELECT
         v.violation_id,
         v.violation_number,
-        v.title,
+        v.type,
         v.reason,
         v.status,
         v.created_at,
@@ -316,7 +317,7 @@ async function fetchRecentModerationActivity() {
         sa.handle AS executed_by_handle
       FROM violations v
       LEFT JOIN accounts a ON a.account_id = v.account_id
-      LEFT JOIN staff s ON s.staff_id = COALESCE(v.issued_by_staff_id, v.staff_id)
+      LEFT JOIN staff s ON s.staff_id = v.staff_id
       LEFT JOIN accounts sa ON sa.account_id = s.account_id
       WHERE v.deleted_at IS NULL
       ORDER BY v.created_at DESC
@@ -346,15 +347,15 @@ async function fetchRecentModerationActivity() {
       SELECT
         r.report_id,
         r.report_number,
-        r.reason,
+        r.type,
         r.description,
         r.target_type,
-        r.target_label,
+        r.target_id,
         r.reference_prefix,
         r.status,
         r.updated_at,
         r.created_at,
-        COALESCE(fa.display_name, fa.handle, r.target_label, 'Target') AS target_name,
+        COALESCE(fa.display_name, fa.handle, r.target_id, 'Target') AS target_name,
         fa.handle AS target_handle,
         COALESCE(ba.display_name, ba.handle, 'Account') AS executed_by,
         INITCAP(COALESCE(ba.type, 'account')) AS executed_by_role,
@@ -380,8 +381,8 @@ async function fetchRecentModerationActivity() {
         st.role AS executed_by_role,
         sa.handle AS executed_by_handle
       FROM disputes d
-      LEFT JOIN accounts ia ON ia.account_id = COALESCE(d.initiator_account_id, d.by_account_id)
-      LEFT JOIN staff st ON st.staff_id = COALESCE(d.assigned_staff_id, d.handled_by_staff_id)
+      LEFT JOIN accounts ia ON ia.account_id = d.by_account_id
+      LEFT JOIN staff st ON st.staff_id = d.handled_by_staff_id
       LEFT JOIN accounts sa ON sa.account_id = st.account_id
       ORDER BY COALESCE(d.updated_at, d.opened_at, d.created_at) DESC
       LIMIT 25
@@ -393,7 +394,7 @@ async function fetchRecentModerationActivity() {
   for (const v of violations.rows) {
     activities.push({
       id: `vio-${v.violation_id}`,
-      action: v.title ? `Issued violation: ${v.title}` : 'Issued violation',
+      action: v.type ? `Issued violation: ${v.type}` : 'Issued violation',
       category: 'conduct',
       target: v.target_name,
       targetHandle: v.target_handle || v.violation_number,
@@ -433,7 +434,7 @@ async function fetchRecentModerationActivity() {
       targetHandle: r.target_handle || r.report_number,
       targetType:
         String(r.target_type || '').toLowerCase() === 'chat_message'
-          ? r.target_label || 'Chat Inbox'
+          ? 'Chat Inbox'
           : String(r.target_type || 'Report')
               .replace(/[_-]+/g, ' ')
               .replace(/\b\w/g, (character) => character.toUpperCase()),
@@ -442,7 +443,7 @@ async function fetchRecentModerationActivity() {
       executedByHandle: r.executed_by_handle || '—',
       timestamp: r.updated_at || r.created_at,
       status: titleCaseStatus(r.status || 'open'),
-      notes: r.description || r.reason || '',
+      notes: r.description || r.type || '',
     });
   }
 
@@ -513,7 +514,7 @@ async function getModerationOverview(staffSession = null) {
     reportStats,
     listingStats,
     violationStats,
-    moderationSettingsRow,
+    moderationSettings,
   ] = await Promise.all([
     pool.query(`
       SELECT
@@ -596,12 +597,11 @@ async function getModerationOverview(staffSession = null) {
         SELECT COUNT(*)::int AS active_violations
         FROM violations
         WHERE deleted_at IS NULL
-          AND LOWER(COALESCE(status, 'active')) NOT IN ('cleared', 'pardoned', 'resolved')
+          AND LOWER(COALESCE(status, 'active')) NOT IN ('cleared', 'pardoned', 'resolved', 'expired')
+          AND (expires_at IS NULL OR expires_at > NOW())
       `)
       .catch(() => ({ rows: [{ active_violations: 0 }] })),
-    pool
-      .query(`SELECT setting_value FROM platform_settings WHERE setting_key = 'moderation'`)
-      .catch(() => ({ rows: [] })),
+    getSectionValue('moderation').catch(() => DEFAULT_SETTINGS.moderation),
   ]);
 
   const users = usersResult.rows;
@@ -643,7 +643,7 @@ async function getModerationOverview(staffSession = null) {
           'disputes',
           'violations',
           'marketplace_listings',
-          'platform_settings',
+          'configuration',
           'account_verification',
         ],
         accountCount: stats.total_accounts,
@@ -657,7 +657,7 @@ async function getModerationOverview(staffSession = null) {
         discussions: forum.discussions,
       },
       notYetInDatabase: [],
-      persisted: ['reports', 'disputes', 'violations', 'marketplace_listings', 'platform_settings'],
+      persisted: ['reports', 'disputes', 'violations', 'marketplace_listings', 'configuration'],
     },
     summary: {
       yourPendingCases: currentStaffId
@@ -703,7 +703,7 @@ async function getModerationOverview(staffSession = null) {
     automatedSettings: (() => {
       const saved = {
         ...DEFAULT_SETTINGS.moderation,
-        ...(moderationSettingsRow.rows[0]?.setting_value || {}),
+        ...(moderationSettings || {}),
       };
       // Link scanning can only run while the forum database is reachable.
       if (!forum.connected) saved.forumLinkScanning = false;
@@ -879,8 +879,8 @@ async function updatePendingCase(caseId, body, session) {
     if (body.assignedStaffId !== undefined || body.assigned_staff_id !== undefined) {
       patch.assigned_staff_id = body.assignedStaffId ?? body.assigned_staff_id;
     }
-    if (body.reason !== undefined) patch.reason = body.reason;
     if (body.description !== undefined) patch.description = body.description;
+    if (body.type !== undefined) patch.type = body.type;
 
     const sets = [];
     const values = [];
@@ -891,7 +891,6 @@ async function updatePendingCase(caseId, body, session) {
       idx += 1;
     }
     if (!sets.length) throw new Error('No fields to update');
-    if (patch.status === 'resolved') sets.push('resolved_at = NOW()');
     sets.push('updated_at = NOW()');
     values.push(id);
     const result = await pool.query(
@@ -906,10 +905,17 @@ async function updatePendingCase(caseId, body, session) {
     const patch = {};
     if (body.status !== undefined) patch.status = normalizeWritableStatus(body.status);
     if (body.priority !== undefined) patch.priority = normalizeWritablePriority(body.priority);
-    if (body.assignedStaffId !== undefined || body.assigned_staff_id !== undefined) {
-      patch.assigned_staff_id = body.assignedStaffId ?? body.assigned_staff_id;
+    if (
+      body.assignedStaffId !== undefined ||
+      body.assigned_staff_id !== undefined ||
+      body.handled_by_staff_id !== undefined
+    ) {
+      patch.handled_by_staff_id =
+        body.handled_by_staff_id ?? body.assignedStaffId ?? body.assigned_staff_id;
     }
-    if (body.reason !== undefined) patch.reason = body.reason;
+    if (body.description !== undefined || body.reason !== undefined) {
+      patch.description = body.description ?? body.reason;
+    }
     if (body.title !== undefined) patch.title = body.title;
     if (body.resolutionNotes !== undefined || body.resolution_notes !== undefined) {
       patch.resolution_notes = body.resolutionNotes ?? body.resolution_notes;
@@ -1040,15 +1046,14 @@ async function assignMyselfToPendingCase(caseId, body, session) {
   if (source === 'dispute') {
     const result = await pool.query(
       `UPDATE disputes
-       SET assigned_staff_id = $1,
-           handled_by_staff_id = COALESCE(handled_by_staff_id, $1),
+       SET handled_by_staff_id = $1,
            status = CASE
-             WHEN LOWER(COALESCE(status, 'open')) IN ('open', 'pending') THEN 'in_progress'
+             WHEN LOWER(COALESCE(status, 'open')) IN ('open', 'pending') THEN 'under_review'
              ELSE status
            END,
            updated_at = NOW()
-       WHERE dispute_id = $2 AND deleted_at IS NULL
-       RETURNING dispute_id, assigned_staff_id, status`,
+       WHERE dispute_id = $2
+       RETURNING dispute_id, handled_by_staff_id, status`,
       [staffId, id]
     );
     if (!result.rows.length) throw new Error('Dispute not found');

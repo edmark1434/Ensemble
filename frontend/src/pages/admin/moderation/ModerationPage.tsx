@@ -56,8 +56,8 @@ function disputeToModerationCase(d: Dispute): ModerationCase {
     target: d.title || d.number,
     targetHandle: d.number,
     targetType: 'Dispute',
-    reason: d.reason || d.title || 'Dispute case',
-    description: d.reason,
+    reason: d.description || d.title || 'Dispute case',
+    description: d.description,
     referenceNumber: d.number,
     assignedRole: d.assignee?.role || null,
     assignedStaffId: d.assignee?.staffId ?? null,
@@ -1315,8 +1315,8 @@ function AutomatedSettingsSection({
       <SidePanel title="Persistence">
         <p className="text-xs leading-relaxed text-zinc-500">
           These values are stored in the{' '}
-          <code className="text-zinc-400">platform_settings</code> row with key{' '}
-          <code className="text-zinc-400">moderation</code>. Changes apply to future automated
+          <code className="text-zinc-400">configuration</code> table under{' '}
+          <code className="text-zinc-400">moderation.*</code> keys. Changes apply to future automated
           actions immediately.
         </p>
       </SidePanel>

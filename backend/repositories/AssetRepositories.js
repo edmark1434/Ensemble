@@ -1,6 +1,6 @@
 const { pool } = require('../lib/Database');
 const {
-  MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT,
+  DEFAULT_MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT,
   calculateAssetTransactionFee,
 } = require('../lib/AssetMarketplaceConstants');
 
@@ -684,7 +684,7 @@ async function getAssetProjectLinkAccessRepository(assetId, projectLinkId, accou
   return rows[0] || null;
 }
 
-async function purchaseAssetRepository(assetId, buyerAccountId) {
+async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -739,7 +739,7 @@ async function purchaseAssetRepository(assetId, buyerAccountId) {
       error.code = 'ASSET_PRICE_INVALID';
       throw error;
     }
-    const transactionFeeCredits = calculateAssetTransactionFee(priceCredits);
+    const transactionFeeCredits = calculateAssetTransactionFee(priceCredits, feePercent);
     const creatorNetCredits = priceCredits - transactionFeeCredits;
 
     const existingPurchase = await client.query(
@@ -874,7 +874,7 @@ async function purchaseAssetRepository(assetId, buyerAccountId) {
       : `You purchased \"${asset.name}\" for ${priceCredits.toLocaleString()} credits.`;
     const creatorMessage = priceCredits === 0
       ? `${asset.buyer_name} claimed \"${asset.name}\".`
-      : `${asset.buyer_name} purchased \"${asset.name}\". You received ${creatorNetCredits.toLocaleString()} credits after the ${MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT}% marketplace fee (${transactionFeeCredits.toLocaleString()} credits).`;
+      : `${asset.buyer_name} purchased \"${asset.name}\". You received ${creatorNetCredits.toLocaleString()} credits after the ${feePercent}% marketplace fee (${transactionFeeCredits.toLocaleString()} credits).`;
     const notificationsResult = await client.query(
       `INSERT INTO notifications
          (message, is_read, reference_table, reference_prefix, reference_path,

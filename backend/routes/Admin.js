@@ -17,6 +17,7 @@ const {
   postAdminAccountCreditFreeze,
   postAdminAccountWarn,
   postAdminAccountPardon,
+  getAdminAccountActivity,
 } = require('../controllers/AdminUserTeamControllers');
 
 /** Admin + Support: full User & Team. Forum/Marketplace: read + limited enforcement. */
@@ -79,6 +80,7 @@ router.post('/accounts/:accountId/credits/adjust', [checkSession, requireUserTea
 router.post('/accounts/:accountId/credits/freeze', [checkSession, requireUserTeamFullWrite], postAdminAccountCreditFreeze);
 router.post('/accounts/:accountId/warn', [checkSession, requireUserTeamAccess], postAdminAccountWarn);
 router.post('/accounts/:accountId/pardon', [checkSession, requireUserTeamFullWrite], postAdminAccountPardon);
+router.get('/accounts/:accountId/activity', [checkSession, requireUserTeamAccess], getAdminAccountActivity);
 router.get('/economy-overview', [checkSession, requireAdmin], getAdminEconomyOverview);
 router.get('/economy/wallets/:walletId', [checkSession, requireAdmin], getAdminWalletDetail);
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);

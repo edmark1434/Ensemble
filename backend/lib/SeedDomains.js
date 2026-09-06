@@ -894,11 +894,20 @@ async function seedModerationExtras(userAccountIds, staffByRole) {
 
   if (violation) {
     await pool.query(
-      `INSERT INTO restrictions (type, module, starts_at, ends_at, violation_id, staff_id)
+      `INSERT INTO restrictions (type, module, starts_at, ends_at, violation_id, account_id, staff_id)
        VALUES
-         ('posting_mute', 'forums', NOW() - interval '1 day', NOW() + interval '6 days', $1, $2),
-         ('marketplace_hold', 'marketplace', NOW() - interval '2 days', NULL, $1, $3)`,
-      [violation.violation_id, supportStaffId, adminStaffId]
+         ('posting_mute', 'forums', NOW() - interval '1 day', NOW() + interval '6 days', $1, $2, $3),
+         ('marketplace_hold', 'marketplace', NOW() - interval '2 days', NULL, $1, $2, $4)`,
+      [violation.violation_id, violation.account_id, supportStaffId, adminStaffId]
+    );
+  }
+
+  // Restriction without a linked violation (direct account limit)
+  if (userAccountIds[1]) {
+    await pool.query(
+      `INSERT INTO restrictions (type, module, starts_at, ends_at, violation_id, account_id, staff_id)
+       VALUES ('feature_hold', 'jobs', NOW(), NOW() + interval '3 days', NULL, $1, $2)`,
+      [userAccountIds[1], adminStaffId]
     );
   }
 
@@ -907,6 +916,67 @@ async function seedModerationExtras(userAccountIds, staffByRole) {
      VALUES ($1, $2)`,
     [userAccountIds[0], adminStaffId]
   );
+
+  // Sample account_activity timeline (mirrors real moderation events)
+  const activitySamples = [
+    [
+      userAccountIds[3],
+      'Violation issued: Spam posting',
+      'VIOLATION_ISSUED',
+      'violations',
+      'VIO',
+      supportStaffId,
+      JSON.stringify({ type: 'Spam posting', points: 2 }),
+    ],
+    [
+      userAccountIds[0],
+      'Warning issued: Harassment warning',
+      'ACCOUNT_WARNED',
+      'violations',
+      'VIO',
+      supportStaffId,
+      JSON.stringify({ type: 'Harassment warning', points: 3 }),
+    ],
+    [
+      userAccountIds[0],
+      'Account pardoned — violations cleared and status restored',
+      'ACCOUNT_PARDONED',
+      'pardons',
+      'PAR',
+      adminStaffId,
+      JSON.stringify({ status: 'Active' }),
+    ],
+    [
+      userAccountIds[1],
+      'Restriction applied: feature_hold',
+      'RESTRICTION_ISSUED',
+      'restrictions',
+      'RST',
+      adminStaffId,
+      JSON.stringify({ type: 'feature_hold', module: 'jobs' }),
+    ],
+    [
+      userAccountIds[3],
+      'Account restriction status set to Suspended',
+      'ACCOUNT_STATUS_CHANGED',
+      'accounts',
+      'ACC',
+      adminStaffId,
+      JSON.stringify({ status: 'Suspended', source: 'seed' }),
+    ],
+  ];
+
+  for (const row of activitySamples) {
+    if (!row[0]) continue;
+    await pool.query(
+      `INSERT INTO account_activity (
+         account_id, action, event_code,
+         reference_table, reference_prefix, reference_id,
+         actor_staff_id, metadata
+       ) VALUES ($1,$2,$3,$4,$5,$1,$6,$7::jsonb)`,
+      row
+    );
+  }
 
   for (let i = 0; i < Math.min(5, userAccountIds.length); i++) {
     await pool.query(
@@ -925,7 +995,7 @@ async function seedModerationExtras(userAccountIds, staffByRole) {
     );
   }
 
-  console.log('✅ Seeded restrictions, pardons, notifications');
+  console.log('✅ Seeded restrictions, pardons, notifications, account activity');
 }
 
 async function seedVerificationDemos(userAccountIds, staffByRole) {
@@ -1027,7 +1097,6 @@ async function seedConfigurationSamples() {
     `INSERT INTO configuration (
        configuration_key, name, description, current_value_literal, default_value_literal
      ) VALUES
-       ('max_upload_mb', 'Max upload size (MB)', 'Maximum file upload size', '250', '100'),
        ('support_sla_hours', 'Support SLA hours', 'Target first-response SLA', '24', '24')
      ON CONFLICT (configuration_key) DO UPDATE
        SET current_value_literal = EXCLUDED.current_value_literal,

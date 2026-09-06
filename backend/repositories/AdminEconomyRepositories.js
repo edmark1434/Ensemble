@@ -1,5 +1,5 @@
 const { pool } = require('../lib/Database');
-const { DEFAULT_SETTINGS } = require('./AdminSettingsRepositories');
+const { DEFAULT_SETTINGS, getSectionValue } = require('./AdminSettingsRepositories');
 
 function formatRelativeTime(dateValue) {
   if (!dateValue) return 'Recently';
@@ -219,11 +219,7 @@ async function getWalletDetail(walletId) {
 
 async function loadEconomySettings() {
   try {
-    const result = await pool.query(
-      `SELECT setting_value FROM platform_settings WHERE setting_key = 'economy'`
-    );
-    if (!result.rows.length) return DEFAULT_SETTINGS.economy;
-    return { ...DEFAULT_SETTINGS.economy, ...result.rows[0].setting_value };
+    return (await getSectionValue('economy')) || DEFAULT_SETTINGS.economy;
   } catch {
     return DEFAULT_SETTINGS.economy;
   }

@@ -31,6 +31,11 @@ const {
   normalizeTicketPriority,
   isClosedStatus,
 } = require('../lib/TicketEnums');
+const {
+  normalizeDisputeType,
+  normalizeDisputePriority,
+  normalizeDisputeVisibility,
+} = require('../lib/DisputeEnums');
 const { mapTicketRow } = require('./ModeratorSharedRepositories');
 const {
   FORUM_REPORT_TYPES,
@@ -144,80 +149,27 @@ async function assertStaffAssignableToQueue(staffId, queueKey) {
   }
 }
 
-/** Prefer DB catalog (migration 109); fall back to ticketEnums.js */
-async function getTicketCatalog() {
-  try {
-    const [types, statuses, priorities] = await Promise.all([
-      pool.query(`
-        SELECT type_label, queue_role, sort_order, description
-        FROM ticket_type_catalog
-        WHERE is_active = TRUE
-        ORDER BY sort_order, type_label
-      `),
-      pool.query(`
-        SELECT status_label, sort_order, is_closed
-        FROM ticket_status_catalog
-        WHERE is_active = TRUE
-        ORDER BY sort_order, status_label
-      `),
-      pool.query(`
-        SELECT priority_label, sort_order
-        FROM ticket_priority_catalog
-        WHERE is_active = TRUE
-        ORDER BY sort_order, priority_label
-      `),
-    ]);
-
-    const typeRows = types.rows;
-    const escalateByRole = {};
-    for (const row of typeRows) {
-      const role = row.queue_role;
-      if (!escalateByRole[role]) escalateByRole[role] = [];
-      escalateByRole[role].push(row.type_label);
-    }
-    // Admin can escalate to any type
-    escalateByRole.Admin = typeRows.map((r) => r.type_label);
-    escalateByRole.Administrator = escalateByRole.Admin;
-
-    return {
-      types: typeRows.map((r) => r.type_label),
-      typeDetails: typeRows.map((r) => ({
-        label: r.type_label,
-        queueRole: r.queue_role,
-        description: r.description || null,
-      })),
-      statuses: statuses.rows.map((r) => r.status_label),
-      priorities: priorities.rows.map((r) => r.priority_label),
-      escalateByRole,
-      escalateRoles: [
+function getTicketCatalog() {
+  return {
+    types: [...TICKET_TYPES],
+    typeDetails: TICKET_TYPES.map((label) => ({
+      label,
+      queueRole:
+        Object.entries(ROLE_TO_TICKET_TYPES).find(([, list]) => list.includes(label))?.[0] ||
         'Support Moderator',
-        'Marketplace Moderator',
-        'Forum Moderator',
-        'Jobs N Gigs Moderator',
-        'Admin',
-      ],
-    };
-  } catch (err) {
-    console.warn('ticket catalog unavailable, using enums:', err.message);
-    return {
-      types: [...TICKET_TYPES],
-      typeDetails: TICKET_TYPES.map((label) => ({
-        label,
-        queueRole: Object.entries(ROLE_TO_TICKET_TYPES).find(([, list]) => list.includes(label))?.[0] || 'Support Moderator',
-        description: null,
-      })),
-      statuses: [...TICKET_STATUSES],
-      priorities: [...TICKET_PRIORITIES],
-      escalateByRole: { ...ROLE_TO_TICKET_TYPES },
-      escalateRoles: [
-        'Support Moderator',
-        'Marketplace Moderator',
-        'Forum Moderator',
-        'Jobs N Gigs Moderator',
-        'Admin',
-      ],
-    };
-  }
+      description: null,
+    })),
+    statuses: [...TICKET_STATUSES],
+    priorities: [...TICKET_PRIORITIES],
+    escalateByRole: { ...ROLE_TO_TICKET_TYPES },
+    escalateRoles: [
+      'Support Moderator',
+      'Marketplace Moderator',
+      'Forum Moderator',
+      'Jobs N Gigs Moderator',
+      'Admin',
+    ],
+  };
 }
 
 function mongoDb() {
@@ -274,6 +226,18 @@ async function nextTicketNumber() {
   return `TKT-${result.rows[0].next_num}`;
 }
 
+async function nextDisputeNumber() {
+  const result = await pool.query(`
+    SELECT COALESCE(
+      MAX(CAST(SUBSTRING(dispute_number FROM 5) AS INTEGER)),
+      50000
+    ) + 1 AS next_num
+    FROM disputes
+    WHERE dispute_number ~ '^DIS-[0-9]+$'
+  `);
+  return `DIS-${result.rows[0].next_num}`;
+}
+
 /**
  * Create a support ticket in Postgres. Optional first message goes to Mongo chat.
  * @returns {Promise<{ticket, messages, chatId, chatAvailable, assignableStaff}>}
@@ -285,7 +249,6 @@ async function createSupportTicket(input, session = null) {
   const type = normalizeTicketType(input?.type || input?.category || 'Other');
   const priority = normalizeTicketPriority(input?.priority || 'Medium');
   const status = normalizeTicketStatus(input?.status || 'Open');
-  const channel = String(input?.channel || 'web').trim().toLowerCase() || 'web';
   const requesterAccountId = input?.requesterAccountId || sessionAccountId(session);
   if (!requesterAccountId) throw new Error('Requester account is required');
 
@@ -297,14 +260,12 @@ async function createSupportTicket(input, session = null) {
   const insert = await pool.query(
     `
     INSERT INTO tickets (
-      ticket_number, reason, type, priority, status, channel,
+      ticket_number, reason, type, priority, status,
       account_id, handled_by_staff_id,
-      related_report_id, related_dispute_id,
       message_count, last_message_at
     ) VALUES (
-      $1, $2, $3, $4, $5, $6,
-      $7, $8,
-      $9, $10,
+      $1, $2, $3, $4, $5,
+      $6, $7,
       0, NULL
     )
     RETURNING ticket_id
@@ -315,11 +276,8 @@ async function createSupportTicket(input, session = null) {
       type,
       priority,
       status,
-      channel,
       requesterAccountId,
       handledBy,
-      input?.relatedReportId || null,
-      input?.relatedDisputeId || null,
     ]
   );
 
@@ -349,32 +307,27 @@ function mapDisputeRow(row) {
     id: row.dispute_id,
     number: row.dispute_number,
     title: row.title,
-    reason: row.reason,
-    // Keep status/priority as DB snake_case for filters/forms; format in UI.
+    description: row.description || row.reason || null,
+    type: normalizeDisputeType(row.type),
+    // Status stays snake_case; priority is Title Case in DB, lowercased for desk filters.
     status: String(row.status || 'open').toLowerCase(),
-    priority: String(row.priority || 'medium').toLowerCase(),
-    visibility: String(row.visibility || 'pending').toLowerCase(),
+    priority: String(normalizeDisputePriority(row.priority || 'Medium')).toLowerCase(),
+    visibility: Boolean(row.visibility),
     initiator: {
-      accountId: row.initiator_account_id,
+      accountId: row.by_account_id,
       name: row.initiator_name || 'Unknown',
       username: row.initiator_handle || '—',
     },
     respondent: {
-      accountId: row.respondent_account_id,
+      accountId: row.for_account_id,
       name: row.respondent_name || 'Unknown',
       username: row.respondent_handle || '—',
     },
-    relatedEntityType: row.related_entity_type ? displayLabel(row.related_entity_type) : null,
-    relatedEntityId: row.related_entity_id,
-    assignee: row.assigned_staff_id
-      ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
+    assignee: row.handled_by_staff_id
+      ? { staffId: row.handled_by_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
       : null,
     creditAmount: Number(row.credit_amount_involved || 0),
-    approvedAt: row.approved_at || null,
-    approvedByStaffId: row.approved_by_staff_id || null,
-    outcome: row.outcome || null,
     sanctionType: row.sanction_type || null,
-    sanctionNotes: row.sanction_notes || null,
     relatedCreditTransactionId: row.related_credit_transaction_id || null,
     creditHold: row.hold_status
       ? {
@@ -411,10 +364,9 @@ function mapReportRow(row) {
       name: row.reporter_name || 'Anonymous',
       username: row.reporter_handle || '—',
     },
-    targetType: displayLabel(row.target_type || row.type),
+    type: row.type || 'Other',
+    targetType: displayLabel(row.target_type),
     targetId: row.target_id || row.reference_id,
-    targetLabel: row.target_label,
-    reason: row.reason,
     description: row.description,
     // Keep status/priority as DB snake_case for filters/forms; format in UI.
     status: String(row.status || 'open').toLowerCase(),
@@ -424,7 +376,6 @@ function mapReportRow(row) {
       : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
-    resolvedAt: row.resolved_at,
   };
 }
 
@@ -474,18 +425,6 @@ async function getTicketsOverview(staffSession = null) {
         COUNT(*) FILTER (WHERE LOWER(status) = 'awaiting_response')::int AS awaiting_response,
         COUNT(*) FILTER (WHERE LOWER(status) = 'under_review')::int AS under_review,
         COUNT(*) FILTER (WHERE LOWER(status) = 'closed')::int AS closed,
-        COUNT(*) FILTER (
-          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, '')) = 'sanctioned'
-        )::int AS sanctioned,
-        COUNT(*) FILTER (
-          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, '')) = 'dismissed'
-        )::int AS dismissed,
-        COUNT(*) FILTER (
-          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, 'resolved')) = 'resolved'
-        )::int AS resolved,
-        COUNT(*) FILTER (
-          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, '')) = 'withdrawn'
-        )::int AS withdrawn,
         COUNT(*) FILTER (
           WHERE LOWER(status) IN ('pending_review', 'open', 'awaiting_response', 'under_review')
         )::int AS open_count,
@@ -597,10 +536,7 @@ async function getTicketsOverview(staffSession = null) {
         { label: 'Open', value: Number(dc.open_only || 0), color: '#f87171' },
         { label: 'Awaiting Response', value: Number(dc.awaiting_response || 0), color: '#f59e0b' },
         { label: 'Under Review', value: Number(dc.under_review), color: '#fbbf24' },
-        { label: 'Closed · Resolved', value: Number(dc.resolved || 0), color: '#34d399' },
-        { label: 'Closed · Sanctioned', value: Number(dc.sanctioned || 0), color: '#a78bfa' },
-        { label: 'Closed · Dismissed', value: Number(dc.dismissed || 0), color: '#94a3b8' },
-        { label: 'Closed · Withdrawn', value: Number(dc.withdrawn || 0), color: '#64748b' },
+        { label: 'Closed', value: Number(dc.closed || 0), color: '#94a3b8' },
       ].filter((x) => x.value > 0),
     },
     types,
@@ -620,9 +556,6 @@ async function getTicketsOverview(staffSession = null) {
       tables: [
         'tickets',
         'ticket_chats',
-        'ticket_type_catalog',
-        'ticket_status_catalog',
-        'ticket_priority_catalog',
         'inbox/messages (mongo)',
         'disputes',
         'reports',
@@ -739,11 +672,11 @@ async function fetchDisputesList() {
       ct.amount_credits AS hold_amount,
       ct.type AS hold_type
     FROM disputes d
-    LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
+    LEFT JOIN accounts ia ON ia.account_id = d.by_account_id
     LEFT JOIN users iu ON iu.account_id = ia.account_id
-    LEFT JOIN accounts ra ON ra.account_id = d.respondent_account_id
+    LEFT JOIN accounts ra ON ra.account_id = d.for_account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
+    LEFT JOIN staff st ON st.staff_id = d.handled_by_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = d.related_credit_transaction_id
     ORDER BY d.opened_at DESC
@@ -783,7 +716,7 @@ async function fetchStaffWorkload() {
           AND t.deleted_at IS NULL
           AND t.status NOT IN ('Resolved', 'Closed')) AS open_tickets,
       (SELECT COUNT(*)::int FROM disputes d
-        WHERE d.assigned_staff_id = s.staff_id
+        WHERE d.handled_by_staff_id = s.staff_id
           AND LOWER(d.status) <> 'closed') AS open_disputes,
       (SELECT COUNT(*)::int FROM reports r
         WHERE r.assigned_staff_id = s.staff_id AND LOWER(r.status) = 'open' AND r.deleted_at IS NULL) AS open_reports
@@ -817,7 +750,7 @@ async function fetchRecentActivity() {
     )
     UNION ALL
     (
-      SELECT 'report' AS type, report_number AS ref, COALESCE(reason, type) AS label, status, COALESCE(updated_at, created_at) AS at
+      SELECT 'report' AS type, report_number AS ref, COALESCE(type, report_number) AS label, status, COALESCE(updated_at, created_at) AS at
       FROM reports WHERE deleted_at IS NULL ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 6
     )
     ORDER BY at DESC
@@ -1450,17 +1383,13 @@ function isQueueHandlerRole(role) {
 }
 
 const DISPUTE_WORKFLOW = ['pending_review', 'open', 'awaiting_response', 'under_review', 'closed'];
-const DISPUTE_OUTCOMES = ['resolved', 'sanctioned', 'dismissed', 'withdrawn'];
 const DISPUTE_LEGACY_CLOSED_STATUS = ['resolved', 'sanctioned', 'dismissed', 'withdrawn'];
 
-function normalizeDisputeStatusAndOutcome(patch) {
+function normalizeDisputeStatusPatch(patch) {
   const next = { ...patch };
   if (next.status != null) {
     let status = String(next.status).toLowerCase().trim();
     if (DISPUTE_LEGACY_CLOSED_STATUS.includes(status)) {
-      if (next.outcome === undefined || next.outcome === null || next.outcome === '') {
-        next.outcome = status;
-      }
       status = 'closed';
     }
     if (!DISPUTE_WORKFLOW.includes(status)) {
@@ -1470,18 +1399,18 @@ function normalizeDisputeStatusAndOutcome(patch) {
     }
     next.status = status;
   }
-  if (next.outcome != null && next.outcome !== '') {
-    const outcome = String(next.outcome).toLowerCase().trim();
-    if (!DISPUTE_OUTCOMES.includes(outcome)) {
-      throw new Error(
-        `Invalid dispute outcome "${next.outcome}". Use: ${DISPUTE_OUTCOMES.join(', ')}.`
-      );
-    }
-    next.outcome = outcome;
-    if (next.status === undefined) next.status = 'closed';
+  if (next.priority != null) {
+    next.priority = normalizeDisputePriority(next.priority);
   }
-  if (next.status === 'closed') {
-    if (!next.outcome) next.outcome = 'resolved';
+  if (next.type != null) {
+    next.type = normalizeDisputeType(next.type);
+  }
+  if (next.visibility !== undefined) {
+    next.visibility = normalizeDisputeVisibility(next.visibility);
+  }
+  if (next.description === undefined && next.reason !== undefined) {
+    next.description = next.reason;
+    delete next.reason;
   }
   return next;
 }
@@ -1501,11 +1430,11 @@ async function loadDisputeRow(disputeId) {
       ct.amount_credits AS hold_amount,
       ct.type AS hold_type
     FROM disputes d
-    LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
+    LEFT JOIN accounts ia ON ia.account_id = d.by_account_id
     LEFT JOIN users iu ON iu.account_id = ia.account_id
-    LEFT JOIN accounts ra ON ra.account_id = d.respondent_account_id
+    LEFT JOIN accounts ra ON ra.account_id = d.for_account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
+    LEFT JOIN staff st ON st.staff_id = d.handled_by_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = d.related_credit_transaction_id
     WHERE d.dispute_id = $1
@@ -1519,7 +1448,7 @@ function buildDisputePermissions(row, staff, session = null) {
   const staffId =
     normalizeStaffId(staff?.staff_id) || normalizeStaffId(sessionStaffId(session));
   const role = staff?.role || session?.role || null;
-  const assigneeId = normalizeStaffId(row?.assigned_staff_id);
+  const assigneeId = normalizeStaffId(row?.handled_by_staff_id);
   const isAssignee = Boolean(staffId && assigneeId && staffId === assigneeId);
   const isAdmin = isAdminRole(role);
   const unassigned = !assigneeId;
@@ -1534,7 +1463,7 @@ function buildDisputePermissions(row, staff, session = null) {
     canView: true,
     /** Any staff may post staff-only replies; only Support/Admin handle the case */
     canReply: hasStaffSession,
-    /** Approve / status / outcome / publish — assignee, or Admin override */
+    /** Approve / status / publish — assignee, or Admin override */
     canAct: Boolean(isAdmin || (isAssignee && designated)),
     /** Admin may pick / reassign Support handlers at any time */
     canAssignOthers: Boolean(isAdmin),
@@ -1555,6 +1484,11 @@ async function updateDispute(disputeId, patch, staffSession) {
   const row = await loadDisputeRow(disputeId);
   if (!row) return null;
 
+  // Accept legacy assigned_staff_id alias from older clients.
+  if (patch.handled_by_staff_id === undefined && patch.assigned_staff_id !== undefined) {
+    patch.handled_by_staff_id = patch.assigned_staff_id;
+  }
+
   const perms = buildDisputePermissions(row, staff, staffSession);
   const action = String(patch.action || '').toLowerCase().trim();
 
@@ -1563,12 +1497,12 @@ async function updateDispute(disputeId, patch, staffSession) {
     if (!perms.canSelfAssign && !perms.canAssignMyself) {
       throw new Error('Only Support Moderators or Admin can claim disputes.');
     }
-    if (row.assigned_staff_id && !perms.isAdmin) {
+    if (row.handled_by_staff_id && !perms.isAdmin) {
       throw new Error('This dispute already has a handler. They must release the case first.');
     }
     await pool.query(
       `UPDATE disputes
-       SET assigned_staff_id = $1,
+       SET handled_by_staff_id = $1,
            updated_at = NOW()
        WHERE dispute_id = $2`,
       [staff.staff_id, disputeId]
@@ -1583,7 +1517,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     if (perms.isAdmin && !perms.isAssignee) {
       await pool.query(
         `UPDATE disputes
-         SET assigned_staff_id = NULL,
+         SET handled_by_staff_id = NULL,
              updated_at = NOW()
          WHERE dispute_id = $1`,
         [disputeId]
@@ -1591,9 +1525,9 @@ async function updateDispute(disputeId, patch, staffSession) {
     } else {
       await pool.query(
         `UPDATE disputes
-         SET assigned_staff_id = NULL,
+         SET handled_by_staff_id = NULL,
              updated_at = NOW()
-         WHERE dispute_id = $1 AND assigned_staff_id = $2`,
+         WHERE dispute_id = $1 AND handled_by_staff_id = $2`,
         [disputeId, staff.staff_id]
       );
     }
@@ -1601,13 +1535,13 @@ async function updateDispute(disputeId, patch, staffSession) {
   }
 
   // Admin may designate / reassign Support handlers (override lock)
-  if (patch.assigned_staff_id !== undefined && !action) {
+  if (patch.handled_by_staff_id !== undefined && !action) {
     const nextAssignee =
-      patch.assigned_staff_id === null || patch.assigned_staff_id === ''
+      patch.handled_by_staff_id === null || patch.handled_by_staff_id === ''
         ? null
-        : patch.assigned_staff_id;
+        : patch.handled_by_staff_id;
     const nextNorm = normalizeStaffId(nextAssignee);
-    const curNorm = normalizeStaffId(row.assigned_staff_id);
+    const curNorm = normalizeStaffId(row.handled_by_staff_id);
 
     if (curNorm && nextNorm !== curNorm && !perms.canAssignOthers) {
       throw new Error(
@@ -1632,7 +1566,7 @@ async function updateDispute(disputeId, patch, staffSession) {
       }
       await pool.query(
         `UPDATE disputes
-         SET assigned_staff_id = $1,
+         SET handled_by_staff_id = $1,
              updated_at = NOW()
          WHERE dispute_id = $2`,
         [nextAssignee, disputeId]
@@ -1640,7 +1574,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     }
 
     const otherKeys = Object.keys(patch).filter(
-      (k) => !['assigned_staff_id', 'action'].includes(k)
+      (k) => !['handled_by_staff_id', 'assigned_staff_id', 'action'].includes(k)
     );
     if (!otherKeys.length) {
       return getDisputeDetail(disputeId, staffSession);
@@ -1656,12 +1590,10 @@ async function updateDispute(disputeId, patch, staffSession) {
     await pool.query(
       `UPDATE disputes
        SET status = 'open',
-           visibility = 'public',
-           approved_at = COALESCE(approved_at, NOW()),
-           approved_by_staff_id = COALESCE(approved_by_staff_id, $1),
+           visibility = TRUE,
            updated_at = NOW()
-       WHERE dispute_id = $2`,
-      [staff.staff_id, disputeId]
+       WHERE dispute_id = $1`,
+      [disputeId]
     );
     return getDisputeDetail(disputeId, staffSession);
   }
@@ -1671,15 +1603,12 @@ async function updateDispute(disputeId, patch, staffSession) {
     await pool.query(
       `UPDATE disputes
        SET status = 'closed',
-           outcome = 'dismissed',
-           visibility = COALESCE(NULLIF(visibility, 'pending'), 'public'),
-           approved_at = COALESCE(approved_at, NOW()),
-           approved_by_staff_id = COALESCE(approved_by_staff_id, $1),
-           resolution_notes = COALESCE($2, resolution_notes),
+           visibility = TRUE,
+           resolution_notes = COALESCE($1, resolution_notes),
            resolved_at = NOW(),
            updated_at = NOW()
-       WHERE dispute_id = $3`,
-      [staff.staff_id, patch.resolution_notes || null, disputeId]
+       WHERE dispute_id = $2`,
+      [patch.resolution_notes || null, disputeId]
     );
     return getDisputeDetail(disputeId, staffSession);
   }
@@ -1689,15 +1618,14 @@ async function updateDispute(disputeId, patch, staffSession) {
     throw new Error('View only — assign yourself to this dispute to make changes.');
   }
 
-  const normalized = normalizeDisputeStatusAndOutcome(patch);
+  const normalized = normalizeDisputeStatusPatch(patch);
   const allowed = [
     'status',
     'priority',
     'resolution_notes',
-    'outcome',
     'sanction_type',
-    'sanction_notes',
     'visibility',
+    'description',
   ];
   const sets = [];
   const values = [];
@@ -1711,24 +1639,18 @@ async function updateDispute(disputeId, patch, staffSession) {
     }
   }
 
-  // Reopening clears outcome / sanctions
+  // Reopening clears sanctions
   if (normalized.status && normalized.status !== 'closed') {
-    if (normalized.outcome === undefined) {
-      sets.push(`outcome = NULL`);
-    }
     if (normalized.sanction_type === undefined) {
       sets.push(`sanction_type = NULL`);
-    }
-    if (normalized.sanction_notes === undefined) {
-      sets.push(`sanction_notes = NULL`);
     }
     sets.push(`resolved_at = NULL`);
   }
 
-  if (normalized.assigned_staff_id !== undefined && (actPerms.canAct || actPerms.canAssignOthers)) {
+  if (normalized.handled_by_staff_id !== undefined && (actPerms.canAct || actPerms.canAssignOthers)) {
     // Non-admin assignment changes while locked go through Release case — ignore here.
-    const nextNorm = normalizeStaffId(normalized.assigned_staff_id);
-    const curNorm = normalizeStaffId(refreshed.assigned_staff_id);
+    const nextNorm = normalizeStaffId(normalized.handled_by_staff_id);
+    const curNorm = normalizeStaffId(refreshed.handled_by_staff_id);
     if (curNorm && nextNorm !== curNorm && !actPerms.canAssignOthers) {
       throw new Error(
         'This dispute already has a handler. They must release the case before it can be reassigned.'
@@ -1738,18 +1660,12 @@ async function updateDispute(disputeId, patch, staffSession) {
 
   if (normalized.status) {
     const status = String(normalized.status).toLowerCase();
-    if (status === 'open' && String(refreshed.visibility || '') === 'pending') {
-      sets.push(`visibility = 'public'`);
-      sets.push(`approved_at = COALESCE(approved_at, NOW())`);
-      sets.push(`approved_by_staff_id = COALESCE(approved_by_staff_id, $${idx})`);
-      values.push(staff.staff_id);
-      idx += 1;
+    if (status === 'open' && !Boolean(refreshed.visibility)) {
+      sets.push(`visibility = TRUE`);
     }
     if (status === 'closed') {
       sets.push(`resolved_at = NOW()`);
     }
-  } else if (normalized.outcome) {
-    sets.push(`resolved_at = NOW()`);
   }
 
   if (!sets.length) {
@@ -1769,7 +1685,7 @@ async function getDisputeDetail(disputeId, staffSession = null) {
   const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
   const permissions = buildDisputePermissions(row, staff, staffSession);
   const assignableStaff = await fetchAssignableStaffForQueue('disputes', {
-    includeStaffId: row.assigned_staff_id || row.handled_by_staff_id,
+    includeStaffId: row.handled_by_staff_id,
   });
 
   let messages = [];
@@ -1993,7 +1909,6 @@ async function updateReport(reportId, patch, staffSession = null) {
 
   if (!sets.length) return getReportDetail(reportId, staffSession);
 
-  if (patch.status === 'resolved') sets.push(`resolved_at = NOW()`);
   sets.push(`updated_at = NOW()`);
   values.push(reportId);
 
@@ -2031,7 +1946,7 @@ async function getReportDetail(reportId, staffSession = null, options = {}) {
     `
     SELECT
       r.*,
-      COALESCE(fa.display_name, fu.first_name || ' ' || fu.last_name, r.target_label) AS target_name,
+      COALESCE(fa.display_name, fu.first_name || ' ' || fu.last_name, r.target_id) AS target_name,
       fa.handle AS target_handle,
       COALESCE(repa.display_name, repu.first_name || ' ' || repu.last_name) AS reporter_name,
       repa.handle AS reporter_handle,
@@ -2075,6 +1990,8 @@ module.exports = {
   getTicketDetail,
   getTicketCatalog,
   createSupportTicket,
+  nextTicketNumber,
+  nextDisputeNumber,
   updateTicket,
   addTicketMessage,
   updateDispute,

@@ -11,7 +11,7 @@ import {
 
 export type TicketQueueFilter = 'all' | 'Support' | 'Forums' | 'Marketplace' | 'Jobs and Gigs' | 'Admin';
 export type TicketAssigneeFilter = 'all' | 'assigned' | 'unassigned';
-export type TicketFlagFilter = 'all' | 'awaiting' | 'escalated' | 'open_only' | 'has_report' | 'has_dispute';
+export type TicketFlagFilter = 'all' | 'awaiting' | 'escalated' | 'open_only';
 export type TicketSortKey = 'priority_desc' | 'priority_asc' | 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc';
 export type TicketDesk = 'admin' | 'support';
 
@@ -27,7 +27,6 @@ export type TicketFilterState = {
   /** Escalated-to role filter, or 'all' */
   escalatedToRole: string;
   flag: TicketFlagFilter;
-  channel: string;
   /** Admin desk only: show only Admin-owned tickets */
   adminTicketsOnly: boolean;
   sort: TicketSortKey;
@@ -43,7 +42,6 @@ export const DEFAULT_TICKET_FILTERS: TicketFilterState = {
   assigneeStaffId: 'all',
   escalatedToRole: 'all',
   flag: 'all',
-  channel: 'all',
   adminTicketsOnly: false,
   sort: 'priority_desc',
 };
@@ -132,7 +130,6 @@ export function ticketMatchesSearch(ticket: SupportTicket, rawQuery: string): bo
     ticketTypeOf(ticket),
     ticket.status,
     ticket.priority,
-    ticket.channel,
     ticket.requester?.name,
     ticket.requester?.username,
     ticket.requester?.email,
@@ -143,8 +140,6 @@ export function ticketMatchesSearch(ticket: SupportTicket, rawQuery: string): bo
     ticket.escalatedBy?.name,
     ticket.escalatedBy?.role,
     ticket.escalatedToRole,
-    ticket.relatedReportId,
-    ticket.relatedDisputeId,
     ticket.messageCount,
     ticket.id,
   ]
@@ -217,15 +212,8 @@ export function filterTickets(tickets: SupportTicket[], filters: TicketFilterSta
 
     if (filters.flag === 'awaiting' && !t.waitingForResponse) return false;
     if (filters.flag === 'escalated' && !t.isEscalated) return false;
-    if (filters.flag === 'has_report' && !t.relatedReportId) return false;
-    if (filters.flag === 'has_dispute' && !t.relatedDisputeId) return false;
     if (filters.flag === 'open_only' && t.status !== 'Open' && t.status !== 'In Progress') {
       return false;
-    }
-
-    if (filters.channel !== 'all') {
-      const ch = String(t.channel || 'web').toLowerCase();
-      if (ch !== filters.channel.toLowerCase()) return false;
     }
 
     if (!ticketMatchesSearch(t, filters.search)) return false;
@@ -246,7 +234,6 @@ export function countActiveTicketFilters(filters: TicketFilterState): number {
   if (filters.assigneeStaffId !== 'all') n += 1;
   if (filters.escalatedToRole !== 'all') n += 1;
   if (filters.flag !== 'all') n += 1;
-  if (filters.channel !== 'all') n += 1;
   // Admin queue already counted; don't double-count the toggle when queue is Admin
   if (filters.adminTicketsOnly && filters.queue !== 'Admin') n += 1;
   if (filters.sort !== DEFAULT_TICKET_FILTERS.sort) n += 1;

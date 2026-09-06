@@ -99,6 +99,7 @@ const ForumTicketManagement = lazyPage(() => import('./pages/moderator/forum-mod
 const ForumReports = lazyPage(() => import('./pages/moderator/forum-moderator/Reports'));
 const ForumUserTeam = lazyPage(() => import('./pages/moderator/forum-moderator/UserTeam'));
 const ForumDisputes = lazyPage(() => import('./pages/moderator/forum-moderator/Disputes'));
+const ForumRestrictions = lazyPage(() => import('./pages/moderator/forum-moderator/Restrictions'));
 const MarketplaceModeratorLayout = lazyPage(() => import('./pages/moderator/marketplace-moderator/Layout'));
 const MarketplaceModeratorDashboard = lazyPage(() => import('./pages/moderator/marketplace-moderator/Dashboard'));
 const MarketplaceControl = lazyPage(() => import('./pages/moderator/marketplace-moderator/MarketplaceControl'));
@@ -106,12 +107,14 @@ const MarketplaceTicketManagement = lazyPage(() => import('./pages/moderator/mar
 const MarketplaceReports = lazyPage(() => import('./pages/moderator/marketplace-moderator/Reports'));
 const MarketplaceUserTeam = lazyPage(() => import('./pages/moderator/marketplace-moderator/UserTeam'));
 const MarketplaceDisputes = lazyPage(() => import('./pages/moderator/marketplace-moderator/Disputes'));
+const MarketplaceRestrictions = lazyPage(() => import('./pages/moderator/marketplace-moderator/Restrictions'));
 const SupportModeratorLayout = lazyPage(() => import('./pages/moderator/support-moderator/Layout'));
 const SupportModeratorDashboard = lazyPage(() => import('./pages/moderator/support-moderator/Dashboard'));
 const SupportTicketManagement = lazyPage(() => import('./pages/moderator/support-moderator/TicketManagement'));
 const SupportDisputes = lazyPage(() => import('./pages/moderator/support-moderator/Disputes'));
 const SupportUserTeam = lazyPage(() => import('./pages/moderator/support-moderator/UserTeam'));
 const SupportReports = lazyPage(() => import('./pages/moderator/support-moderator/Reports'));
+const SupportRestrictions = lazyPage(() => import('./pages/moderator/support-moderator/Restrictions'));
 const JobsModeratorLayout = lazyPage(() => import('./pages/moderator/jobs-moderator/Layout'));
 const JobsModeratorDashboard = lazyPage(() => import('./pages/moderator/jobs-moderator/Dashboard'));
 const JobsGigsControl = lazyPage(() => import('./pages/moderator/jobs-moderator/JobsGigsControl'));
@@ -119,6 +122,7 @@ const JobsTicketManagement = lazyPage(() => import('./pages/moderator/jobs-moder
 const JobsDisputes = lazyPage(() => import('./pages/moderator/jobs-moderator/Disputes'));
 const JobsReports = lazyPage(() => import('./pages/moderator/jobs-moderator/Reports'));
 const JobsUserTeam = lazyPage(() => import('./pages/moderator/jobs-moderator/UserTeam'));
+const JobsRestrictions = lazyPage(() => import('./pages/moderator/jobs-moderator/Restrictions'));
 const PageAboutUs = lazyPage(() => import('@/pages/landing/pages/page_AboutUs.tsx'));
 const PageAskOurChatbot = lazyPage(() => import('./pages/landing/pages/page_AskOurChatbot'));
 const PageFAQ = lazyPage(() => import('./pages/landing/pages/page_FAQ'));
@@ -317,6 +321,7 @@ function App() {
           <Route path='ticket-management' element={<ForumTicketManagement />} />
           <Route path='disputes' element={<ForumDisputes />} />
           <Route path='reports' element={<ForumReports />} />
+          <Route path='restrictions' element={<ForumRestrictions />} />
           <Route path='user-team' element={<ForumUserTeam />} />
         </Route>
 
@@ -326,6 +331,7 @@ function App() {
           <Route path='ticket-management' element={<MarketplaceTicketManagement />} />
           <Route path='disputes' element={<MarketplaceDisputes />} />
           <Route path='reports' element={<MarketplaceReports />} />
+          <Route path='restrictions' element={<MarketplaceRestrictions />} />
           <Route path='user-team' element={<MarketplaceUserTeam />} />
         </Route>
 
@@ -334,6 +340,7 @@ function App() {
           <Route path='ticket-management' element={<SupportTicketManagement />} />
           <Route path='disputes' element={<SupportDisputes />} />
           <Route path='reports' element={<SupportReports />} />
+          <Route path='restrictions' element={<SupportRestrictions />} />
           <Route path='user-team' element={<SupportUserTeam />} />
         </Route>
 
@@ -343,6 +350,7 @@ function App() {
           <Route path='ticket-management' element={<JobsTicketManagement />} />
           <Route path='disputes' element={<JobsDisputes />} />
           <Route path='reports' element={<JobsReports />} />
+          <Route path='restrictions' element={<JobsRestrictions />} />
           <Route path='user-team' element={<JobsUserTeam />} />
         </Route>
       </Route>

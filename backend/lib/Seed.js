@@ -10,6 +10,11 @@ const {
 const { CONVERSATION_TYPE: DISPUTE_CHAT_TYPE } = require('../repositories/DisputeChatRepositories');
 const { seedDomainExamples } = require('./SeedDomains');
 const { CREDIT_TRANSACTION_TYPES, CREDIT_TRANSACTION_TYPE } = require('./CreditTransactionEnums');
+const {
+  normalizeDisputeType,
+  normalizeDisputePriority,
+  buildDefaultDisputeTitle,
+} = require('./DisputeEnums');
 
 function cap(value, max) {
   if (value == null) return value;
@@ -298,11 +303,12 @@ async function resetSeedTables() {
         tickets,
         reports,
         marketplace_listings,
-        platform_settings,
+        configuration,
         disputes,
         violations,
         restrictions,
         pardons,
+        account_activity,
         notifications,
         cashouts,
         topups,
@@ -437,8 +443,8 @@ async function seedDisputeChatThread(disputeId, disputeRow, staffAccountId, mess
     seen.add(String(accountId));
     members.push({ account_id: String(accountId), role, joined_at: new Date() });
   };
-  addMember(disputeRow.initiator_account_id, 'member');
-  addMember(disputeRow.respondent_account_id, 'member');
+  addMember(disputeRow.by_account_id, 'member');
+  addMember(disputeRow.for_account_id, 'member');
   addMember(staffAccountId, 'admin');
 
   const insertResult = await createInboxRepositories({
@@ -533,39 +539,39 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
 
   // Platform report samples for every staff desk.
   // Specialist queues filter by target_type; Support + Admin see all.
-  // Tuple: [number, reporterIdx, targetType, targetId, targetLabel, reason, description, status, priority, prefix, assigneeRole]
+  // Tuple fields: reporterIdx, targetType, targetId, type, description, status, priority, prefix, assigneeRole
   const reportBlueprints = [
     // ── Forum queue ──────────────────────────────────────────────────────
-    [0, 'member', 'u-forum-01', '@noisy_creator', 'Harassment', 'Repeated hostile messages in a critique thread after feedback.', 'open', 'high', 'forum', null],
-    [2, 'group', 'fg-12', 'Design Critique Hub', 'Spam', 'Group flooded with promotional invite links.', 'in_review', 'medium', 'forum', 'Forum Moderator'],
-    [5, 'discussion', 'd-44', 'Late delivery thread', 'Misinformation', 'Discussion spreads false claims about another editor.', 'open', 'low', 'forum', null],
-    [3, 'member', 'u-forum-02', '@quiet_dev', 'Harassment', 'Threats referenced in forum chat and DMs.', 'open', 'high', 'forum', 'Forum Moderator'],
-    [1, 'comment', 'cmt-901', 'Reply on Showcase #18', 'Hate speech', 'Comment insults another member with slurs.', 'open', 'high', 'forum', null],
-    [4, 'post', 'post-220', 'Weekly reel dump', 'Spam', 'Same promotional post pasted across three groups.', 'dismissed', 'medium', 'forum', 'Admin'],
-    [0, 'thread', 'thr-77', 'Client rate debate', 'Other', 'Off-topic personal attacks derailing the thread.', 'resolved', 'low', 'forum', 'Forum Moderator'],
+    [0, 'member', 'u-forum-01', 'Harassment', 'Repeated hostile messages in a critique thread after feedback.\n@noisy_creator', 'open', 'high', 'forum', null],
+    [2, 'group', 'fg-12', 'Spam', 'Group flooded with promotional invite links.\nDesign Critique Hub', 'in_review', 'medium', 'forum', 'Forum Moderator'],
+    [5, 'discussion', 'd-44', 'Misinformation', 'Discussion spreads false claims about another editor.\nLate delivery thread', 'open', 'low', 'forum', null],
+    [3, 'member', 'u-forum-02', 'Harassment', 'Threats referenced in forum chat and DMs.\n@quiet_dev', 'open', 'high', 'forum', 'Forum Moderator'],
+    [1, 'comment', 'cmt-901', 'Hate speech', 'Comment insults another member with slurs.\nReply on Showcase #18', 'open', 'high', 'forum', null],
+    [4, 'post', 'post-220', 'Spam', 'Same promotional post pasted across three groups.\nWeekly reel dump', 'dismissed', 'medium', 'forum', 'Admin'],
+    [0, 'thread', 'thr-77', 'Other', 'Off-topic personal attacks derailing the thread.\nClient rate debate', 'resolved', 'low', 'forum', 'Forum Moderator'],
 
     // ── Marketplace queue ────────────────────────────────────────────────
-    [1, 'listing', 'LST-204', 'Neon LUT Pack', 'Scam', 'Buyer paid credits but never received the asset files.', 'open', 'high', 'marketplace', null],
-    [4, 'seller', 'u-9', '@asset_booth', 'Copyright', 'Seller reuploads stolen marketplace packs as originals.', 'in_review', 'high', 'marketplace', 'Marketplace Moderator'],
-    [2, 'listing', 'LST-318', 'Cinematic SFX Bundle', 'Misleading', 'Preview audio does not match delivered files.', 'open', 'medium', 'marketplace', null],
-    [5, 'purchase', 'ORD-8821', 'Order #8821', 'Non-delivery', 'Purchase stuck in pending delivery for 9 days.', 'open', 'high', 'marketplace', 'Marketplace Moderator'],
-    [3, 'asset', 'AST-55', 'Grain Overlay Pack v2', 'Quality', 'Corrupt zip and missing license file after download.', 'resolved', 'medium', 'marketplace', 'Admin'],
-    [0, 'marketplace', 'mkt-policy', 'Marketplace policy', 'Other', 'General complaint about fake “verified seller” badges.', 'dismissed', 'low', 'marketplace', 'Support Moderator'],
+    [1, 'listing', 'LST-204', 'Scam', 'Buyer paid credits but never received the asset files.\nNeon LUT Pack', 'open', 'high', 'marketplace', null],
+    [4, 'seller', 'u-9', 'Copyright', 'Seller reuploads stolen marketplace packs as originals.\n@asset_booth', 'in_review', 'high', 'marketplace', 'Marketplace Moderator'],
+    [2, 'listing', 'LST-318', 'Misleading', 'Preview audio does not match delivered files.\nCinematic SFX Bundle', 'open', 'medium', 'marketplace', null],
+    [5, 'purchase', 'ORD-8821', 'Non-delivery', 'Purchase stuck in pending delivery for 9 days.\nOrder #8821', 'open', 'high', 'marketplace', 'Marketplace Moderator'],
+    [3, 'asset', 'AST-55', 'Quality', 'Corrupt zip and missing license file after download.\nGrain Overlay Pack v2', 'resolved', 'medium', 'marketplace', 'Admin'],
+    [0, 'marketplace', 'mkt-policy', 'Other', 'General complaint about fake “verified seller” badges.\nMarketplace policy', 'dismissed', 'low', 'marketplace', 'Support Moderator'],
 
     // ── Jobs & Gigs queue ────────────────────────────────────────────────
-    [0, 'job', 'JOB-118', 'Need motion editor ASAP', 'Inappropriate', 'Job post includes abusive requirements and contact spam.', 'open', 'medium', 'jobs', null],
-    [2, 'gig', 'GIG-55', 'Thumbnail design in 24h', 'Misleading', 'Gig promises impossible delivery and uses fake samples.', 'open', 'high', 'jobs', 'Jobs N Gigs Moderator'],
-    [1, 'contract', 'CTR-440', 'Wedding film contract', 'Harassment', 'Client left hostile comments after milestone rejection.', 'in_review', 'high', 'jobs', null],
-    [4, 'application', 'APP-903', 'Proposal on JOB-90', 'Spam', 'Applicant mass-sent identical proposals with phishing links.', 'open', 'medium', 'jobs', 'Jobs N Gigs Moderator'],
-    [5, 'gig', 'GIG-201', 'Color grade overnight', 'Scam', 'Gig asks for off-platform payment before starting.', 'open', 'high', 'jobs', null],
-    [3, 'feedback', 'FB-66', 'Unfair feedback on CTR-12', 'Other', 'Reported as retaliatory 1-star after a resolved dispute.', 'resolved', 'low', 'jobs', 'Admin'],
+    [0, 'job', 'JOB-118', 'Inappropriate', 'Job post includes abusive requirements and contact spam.\nNeed motion editor ASAP', 'open', 'medium', 'jobs', null],
+    [2, 'gig', 'GIG-55', 'Misleading', 'Gig promises impossible delivery and uses fake samples.\nThumbnail design in 24h', 'open', 'high', 'jobs', 'Jobs N Gigs Moderator'],
+    [1, 'contract', 'CTR-440', 'Harassment', 'Client left hostile comments after milestone rejection.\nWedding film contract', 'in_review', 'high', 'jobs', null],
+    [4, 'application', 'APP-903', 'Spam', 'Applicant mass-sent identical proposals with phishing links.\nProposal on JOB-90', 'open', 'medium', 'jobs', 'Jobs N Gigs Moderator'],
+    [5, 'gig', 'GIG-201', 'Scam', 'Gig asks for off-platform payment before starting.\nColor grade overnight', 'open', 'high', 'jobs', null],
+    [3, 'feedback', 'FB-66', 'Other', 'Reported as retaliatory 1-star after a resolved dispute.\nUnfair feedback on CTR-12', 'resolved', 'low', 'jobs', 'Admin'],
 
     // ── Support / Admin cross-cutting (not in specialist scopes) ─────────
-    [4, 'team', 'team-2', 'Graphitee', 'Impersonation', 'Member posing as official Ensemble support in team chat.', 'open', 'high', 'support', 'Support Moderator'],
-    [1, 'account', 'acc-user-7', '@seller_x', 'Account abuse', 'Multiple ban-evasion accounts linked to the same person.', 'in_review', 'high', 'support', 'Admin'],
-    [2, 'profile', 'prof-18', '@mirror_edit', 'Impersonation', 'Profile photo and bio copy a known creator brand.', 'open', 'medium', 'support', null],
-    [0, 'team', 'team-9', 'Nightshift Collective', 'Harassment', 'Team owner bullying members after leaving a contract.', 'open', 'high', 'support', 'Support Moderator'],
-    [5, 'account', 'acc-user-3', '@alt_spam', 'Spam', 'Account used only to mass-DM promotional links.', 'resolved', 'medium', 'support', 'Admin'],
+    [4, 'team', 'team-2', 'Impersonation', 'Member posing as official Ensemble support in team chat.\nGraphitee', 'open', 'high', 'support', 'Support Moderator'],
+    [1, 'account', 'acc-user-7', 'Account abuse', 'Multiple ban-evasion accounts linked to the same person.\n@seller_x', 'in_review', 'high', 'support', 'Admin'],
+    [2, 'profile', 'prof-18', 'Impersonation', 'Profile photo and bio copy a known creator brand.\n@mirror_edit', 'open', 'medium', 'support', null],
+    [0, 'team', 'team-9', 'Harassment', 'Team owner bullying members after leaving a contract.\nNightshift Collective', 'open', 'high', 'support', 'Support Moderator'],
+    [5, 'account', 'acc-user-3', 'Spam', 'Account used only to mass-DM promotional links.\n@alt_spam', 'resolved', 'medium', 'support', 'Admin'],
   ];
 
   const assigneeByRole = {
@@ -582,8 +588,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       reporterIdx,
       targetType,
       targetId,
-      targetLabel,
-      reason,
+      type,
       description,
       status,
       priority,
@@ -596,8 +601,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       targetAccountId: userAccountIds[(reporterIdx + 2) % userAccountIds.length],
       targetType,
       targetId,
-      targetLabel,
-      reason,
+      type,
       description,
       status,
       priority,
@@ -617,15 +621,14 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     const res = await pool.query(
       `INSERT INTO reports (
         report_number, by_account_id, for_account_id,
-        target_type, target_id, target_label,
-        reason, description, status, priority, assigned_staff_id, created_at,
-        type, reference_table, reference_prefix, reference_id, is_created_by_bot,
-        resolved_at
+        target_type, target_id,
+        description, status, priority, assigned_staff_id, created_at, updated_at,
+        type, reference_table, reference_prefix, reference_id, is_created_by_bot
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-        NOW() - ($12 || ' hours')::interval,
-        $4, $4, $13, $14, false,
-        $15
+        $1, $2, $3, $4, $5, $6, $7, $8, $9,
+        NOW() - ($10 || ' hours')::interval,
+        NOW() - ($10 || ' hours')::interval,
+        $11, $4, $12, $13, false
       )
       RETURNING report_id`,
       [
@@ -634,16 +637,14 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         r.targetAccountId,
         r.targetType,
         r.targetId,
-        r.targetLabel,
-        r.reason,
         r.description,
         r.status,
         r.priority,
         r.assigneeId,
         String(4 + i * 3),
+        r.type,
         r.prefix,
         String(r.targetId).slice(0, 50),
-        r.status === 'resolved' || r.status === 'dismissed' ? new Date() : null,
       ]
     );
     reportIds.push(res.rows[0].report_id);
@@ -655,11 +656,10 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
 
   const disputes = [
     {
-      number: 'DIS-PEND01',
-      title: 'Milestone payment withheld',
-      reason: 'Buyer filed a dispute after the final milestone was marked complete but credits were not released.',
+      number: 'DIS-50001',
+      description: 'Buyer filed a dispute after the final milestone was marked complete but credits were not released.',
       status: 'pending_review',
-      visibility: 'pending',
+      visibility: false,
       priority: 'high',
       initiatorIdx: 1,
       respondentIdx: 3,
@@ -668,19 +668,15 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: null,
       credits: 3500,
       hold: true,
-      approved: false,
-      outcome: null,
       sanctionType: null,
-      sanctionNotes: null,
       resolutionNotes: null,
       daysAgo: 1,
     },
     {
-      number: 'DIS-OPEN01',
-      title: 'Payment not released from escrow',
-      reason: 'Seller claims buyer abandoned milestone review after delivery.',
+      number: 'DIS-50002',
+      description: 'Seller claims buyer abandoned milestone review after delivery.',
       status: 'open',
-      visibility: 'public',
+      visibility: true,
       priority: 'high',
       initiatorIdx: 4,
       respondentIdx: 0,
@@ -689,20 +685,16 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 12000,
       hold: true,
-      approved: true,
-      outcome: null,
       sanctionType: null,
-      sanctionNotes: null,
       resolutionNotes: null,
       daysAgo: 5,
       chatKey: 'open',
     },
     {
-      number: 'DIS-WAIT01',
-      title: 'Deliverable quality dispute',
-      reason: 'Disputer says the gig delivery does not match the agreed brief.',
+      number: 'DIS-50003',
+      description: 'Disputer says the gig delivery does not match the agreed brief.',
       status: 'awaiting_response',
-      visibility: 'public',
+      visibility: true,
       priority: 'medium',
       initiatorIdx: 2,
       respondentIdx: 5,
@@ -711,20 +703,16 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 2000,
       hold: true,
-      approved: true,
-      outcome: null,
       sanctionType: null,
-      sanctionNotes: null,
       resolutionNotes: null,
       daysAgo: 4,
       chatKey: 'wait',
     },
     {
-      number: 'DIS-REVW01',
-      title: 'Asset license disagreement',
-      reason: 'Marketplace buyer disputes commercial usage rights on a purchased pack.',
+      number: 'DIS-50004',
+      description: 'Marketplace buyer disputes commercial usage rights on a purchased pack.',
       status: 'under_review',
-      visibility: 'public',
+      visibility: true,
       priority: 'high',
       initiatorIdx: 2,
       respondentIdx: 6,
@@ -733,21 +721,17 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 4500,
       hold: true,
-      approved: true,
-      outcome: null,
       sanctionType: null,
-      sanctionNotes: null,
       resolutionNotes: null,
       daysAgo: 8,
       chatKey: 'review',
     },
     {
       // Assigned to Maya — Admin is view-only until Designated handler reassign / Assign myself when free.
-      number: 'DIS-OPEN02',
-      title: 'Escrow release stalled after revision',
-      reason: 'Buyer asked for revisions after approving the milestone; seller wants escrow released.',
+      number: 'DIS-50005',
+      description: 'Buyer asked for revisions after approving the milestone; seller wants escrow released.',
       status: 'open',
-      visibility: 'public',
+      visibility: true,
       priority: 'high',
       initiatorIdx: 0,
       respondentIdx: 4,
@@ -756,21 +740,17 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 6500,
       hold: true,
-      approved: true,
-      outcome: null,
       sanctionType: null,
-      sanctionNotes: null,
       resolutionNotes: null,
       daysAgo: 3,
       chatKey: 'open2',
     },
     {
       // Pending but already with Support — Admin is view-only until self-assign / reassign.
-      number: 'DIS-PEND02',
-      title: 'Unauthorized account credit transfer',
-      reason: 'User claims credits were moved from their wallet without consent after a shared-team dispute.',
+      number: 'DIS-50006',
+      description: 'User claims credits were moved from their wallet without consent after a shared-team dispute.',
       status: 'pending_review',
-      visibility: 'pending',
+      visibility: false,
       priority: 'high',
       initiatorIdx: 6,
       respondentIdx: 1,
@@ -779,19 +759,15 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 5200,
       hold: true,
-      approved: false,
-      outcome: null,
       sanctionType: null,
-      sanctionNotes: null,
       resolutionNotes: null,
       daysAgo: 2,
     },
     {
-      number: 'DIS-SANC01',
-      title: 'Repeated late delivery pattern',
-      reason: 'Buyer documented three late milestones on the same seller within 30 days.',
+      number: 'DIS-50007',
+      description: 'Buyer documented three late milestones on the same seller within 30 days.',
       status: 'closed',
-      visibility: 'public',
+      visibility: true,
       priority: 'high',
       initiatorIdx: 7,
       respondentIdx: 8,
@@ -800,20 +776,17 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 900,
       hold: false,
-      approved: true,
-      outcome: 'sanctioned',
       sanctionType: 'warn',
-      sanctionNotes: 'Formal warning issued to respondent for repeated SLA breaches.',
-      resolutionNotes: 'Sanction applied after both parties were heard.',
+      resolutionNotes:
+        'Sanction applied after both parties were heard. Formal warning issued to respondent for repeated SLA breaches.',
       daysAgo: 20,
     },
     {
-      number: 'DIS-RSLV01',
-      title: 'Unfair contract feedback after delivery',
-      reason:
+      number: 'DIS-50008',
+      description:
         'Freelancer disputes a 1-star contract rating as retaliatory and factually inaccurate after milestone acceptance.',
       status: 'closed',
-      visibility: 'public',
+      visibility: true,
       priority: 'medium',
       initiatorIdx: 1,
       respondentIdx: 3,
@@ -823,21 +796,17 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       credits: 2500,
       hold: true,
       holdStatus: 'released',
-      approved: true,
-      outcome: 'resolved',
       sanctionType: null,
-      sanctionNotes: null,
       resolutionNotes: 'Rating adjusted after review; partial credit return agreed.',
       daysAgo: 45,
     },
     {
       // Open unfair-feedback dispute on a completed contract — Admin/Maya can handle.
-      number: 'DIS-FEED01',
-      title: 'Retaliatory feedback on closed contract',
-      reason:
+      number: 'DIS-50009',
+      description:
         'Client left unfair written feedback after accepting the final deliverable; freelancer requests review and rating correction.',
       status: 'under_review',
-      visibility: 'public',
+      visibility: true,
       priority: 'high',
       initiatorIdx: 4,
       respondentIdx: 0,
@@ -846,20 +815,16 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 1800,
       hold: false,
-      approved: true,
-      outcome: null,
       sanctionType: null,
-      sanctionNotes: null,
       resolutionNotes: null,
       daysAgo: 4,
       chatKey: 'feedback',
     },
     {
-      number: 'DIS-DSSM01',
-      title: 'Refund window expired',
-      reason: 'Buyer requested a refund outside the marketplace refund window.',
+      number: 'DIS-50010',
+      description: 'Buyer requested a refund outside the marketplace refund window.',
       status: 'closed',
-      visibility: 'public',
+      visibility: true,
       priority: 'low',
       initiatorIdx: 8,
       respondentIdx: 9,
@@ -868,20 +833,16 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: supportStaffId,
       credits: 800,
       hold: false,
-      approved: true,
-      outcome: 'dismissed',
       sanctionType: null,
-      sanctionNotes: null,
       resolutionNotes: 'Dismissed — purchase was outside the refund policy window.',
       daysAgo: 30,
     },
     // Legacy-style samples for Jobs / Marketplace queues
     {
-      number: 'DIS-21126',
-      title: 'Team revenue split',
-      reason: 'Members disagree on credit distribution.',
+      number: 'DIS-50011',
+      description: 'Members disagree on credit distribution.',
       status: 'open',
-      visibility: 'public',
+      visibility: true,
       priority: 'medium',
       initiatorIdx: 5,
       respondentIdx: 7,
@@ -890,10 +851,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       assigneeId: adminStaffId,
       credits: 8000,
       hold: false,
-      approved: true,
-      outcome: null,
       sanctionType: null,
-      sanctionNotes: null,
       resolutionNotes: null,
       daysAgo: 12,
     },
@@ -911,42 +869,55 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   for (const d of disputes) {
     const initiatorId = userAccountIds[d.initiatorIdx % userAccountIds.length];
     const respondentId = userAccountIds[d.respondentIdx % userAccountIds.length];
+    const partyType = normalizeDisputeType(d.entityType || 'General');
+    const priority = normalizeDisputePriority(d.priority || 'High');
+
+    const names = await pool.query(
+      `
+      SELECT
+        COALESCE(NULLIF(TRIM(ia.display_name), ''), NULLIF(TRIM(iu.first_name || ' ' || iu.last_name), ''), ia.handle, 'Disputer') AS disputer_name,
+        COALESCE(NULLIF(TRIM(ra.display_name), ''), NULLIF(TRIM(ru.first_name || ' ' || ru.last_name), ''), ra.handle, 'Disputee') AS disputee_name
+      FROM accounts ia
+      LEFT JOIN users iu ON iu.account_id = ia.account_id
+      CROSS JOIN accounts ra
+      LEFT JOIN users ru ON ru.account_id = ra.account_id
+      WHERE ia.account_id = $1 AND ra.account_id = $2
+      `,
+      [initiatorId, respondentId]
+    );
+    const title = buildDefaultDisputeTitle({
+      disputerName: names.rows[0]?.disputer_name,
+      disputeeName: names.rows[0]?.disputee_name,
+      type: partyType,
+    });
+
     const res = await pool.query(
       `INSERT INTO disputes (
-        dispute_number, title, reason, status, priority, visibility,
-        initiator_account_id, respondent_account_id,
-        related_entity_type, related_entity_id, assigned_staff_id,
+        dispute_number, title, description, status, priority, visibility,
+        by_account_id, for_account_id, handled_by_staff_id,
         credit_amount_involved, opened_at, resolution_notes,
-        approved_at, approved_by_staff_id, outcome, sanction_type, sanction_notes,
-        type, by_account_id, for_account_id, resolved_at
+        sanction_type, type, resolved_at
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
-        NOW() - ($13 || ' days')::interval, $14,
-        $15, $16, $17, $18, $19,
-        $20, $7, $8, $21
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        NOW() - ($11 || ' days')::interval, $12,
+        $13, $14, $15
       )
-      RETURNING dispute_id, dispute_number, initiator_account_id, respondent_account_id`,
+      RETURNING dispute_id, dispute_number, by_account_id, for_account_id`,
       [
         d.number,
-        d.title,
-        d.reason,
+        title,
+        d.description,
         d.status,
-        d.priority,
+        priority,
         d.visibility,
         initiatorId,
         respondentId,
-        d.entityType,
-        d.entityId,
         d.assigneeId,
         d.credits,
         String(d.daysAgo),
         d.resolutionNotes,
-        d.approved ? new Date(Date.now() - (d.daysAgo - 0.5) * 86400000) : null,
-        d.approved ? (d.assigneeId || supportStaffId) : null,
-        d.outcome,
         d.sanctionType,
-        d.sanctionNotes,
-        d.entityType || 'general',
+        partyType,
         ['closed'].includes(d.status)
           ? new Date(Date.now() - (d.daysAgo - 1) * 86400000)
           : null,
@@ -954,7 +925,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     );
     const row = res.rows[0];
     disputeIds.push(row.dispute_id);
-    disputeByNumber[d.number] = { ...row, ...d };
+    disputeByNumber[d.number] = { ...row, ...d, title, entityType: partyType, priority };
 
     if (d.hold) {
       await seedDisputeCreditHold(row.dispute_id, respondentId, d.credits, d.holdStatus || 'held');
@@ -965,10 +936,10 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   try {
     await connectMongoDB();
     if (getMongoClient()) {
-      const open = disputeByNumber['DIS-OPEN01'];
-      const wait = disputeByNumber['DIS-WAIT01'];
-      const review = disputeByNumber['DIS-REVW01'];
-      const open2 = disputeByNumber['DIS-OPEN02'];
+      const open = disputeByNumber['DIS-50002'];
+      const wait = disputeByNumber['DIS-50003'];
+      const review = disputeByNumber['DIS-50004'];
+      const open2 = disputeByNumber['DIS-50005'];
 
       if (open) {
         await seedDisputeChatThread(open.dispute_id, open, supportAccountId, [
@@ -986,7 +957,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
             authorRole: 'disputer',
             authorName: 'Disputer',
             authorType: 'user',
-            senderId: open.initiator_account_id,
+            senderId: open.by_account_id,
           },
         ]);
       }
@@ -1020,7 +991,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
             authorRole: 'disputee',
             authorName: 'Disputee',
             authorType: 'user',
-            senderId: review.respondent_account_id,
+            senderId: review.for_account_id,
           },
           {
             body: 'The product page title said “commercial pack” — I bought it for a client project.',
@@ -1028,7 +999,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
             authorRole: 'disputer',
             authorName: 'Disputer',
             authorType: 'user',
-            senderId: review.initiator_account_id,
+            senderId: review.by_account_id,
           },
           {
             body: 'Internal: listing copy is ambiguous; check screenshot attachments before ruling.',
@@ -1045,7 +1016,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
             authorRole: 'disputee',
             authorName: 'Disputee',
             authorType: 'user',
-            senderId: review.respondent_account_id,
+            senderId: review.for_account_id,
           },
         ]);
       }
@@ -1066,7 +1037,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
             authorRole: 'disputer',
             authorName: 'Disputer',
             authorType: 'user',
-            senderId: open2.initiator_account_id,
+            senderId: open2.by_account_id,
           },
           {
             body: 'Internal: Keep hold in place until both parties agree on the revision scope.',
@@ -1080,7 +1051,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         ]);
       }
 
-      const feedback = disputeByNumber['DIS-FEED01'];
+      const feedback = disputeByNumber['DIS-50009'];
       if (feedback) {
         await seedDisputeChatThread(feedback.dispute_id, feedback, supportAccountId, [
           {
@@ -1097,7 +1068,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
             authorRole: 'disputer',
             authorName: 'Disputer',
             authorType: 'user',
-            senderId: feedback.initiator_account_id,
+            senderId: feedback.by_account_id,
           },
           {
             body: 'Internal: Check contract acceptance timestamps vs rating created_at before deciding.',
@@ -1119,41 +1090,40 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   }
 
   const tickets = [
-    // ticket_number, reason, type, priority, status, channel, account_id, handled_by, related_report, related_dispute, lastAuthor, escalatedTo
-    ['TKT-50001', 'Cannot verify payment method', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[0], supportStaffId, reportIds[0], null, 'user', null],
-    ['TKT-50002', 'Account locked after password reset', 'Account Access', 'High', 'In Progress', 'web', userAccountIds[3], supportStaffId, null, null, 'user', null],
-    ['TKT-50003', 'Credits missing after package purchase', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[4], adminStaffId, null, disputeByNumber['DIS-OPEN01']?.dispute_id || null, 'staff', null],
-    ['TKT-50004', 'Forum group ownership transfer', 'Forums', 'Medium', 'In Progress', 'web', userAccountIds[2], forumStaffId, reportIds[1], null, 'user', null],
-    ['TKT-50005', 'How to invite team members?', 'Other', 'Low', 'Resolved', 'web', userAccountIds[6], supportStaffId, null, null, 'staff', null],
-    ['TKT-50006', 'Marketplace listing rejected', 'Asset Marketplace', 'Medium', 'Open', 'web', userAccountIds[7], marketplaceStaffId, reportIds[7], null, 'user', null],
-    ['TKT-50007', 'Two-factor not receiving codes', 'Account Verification', 'High', 'Open', 'web', userAccountIds[1], null, null, null, 'user', null],
-    ['TKT-50008', 'Dispute escalation request', 'Contracts and Milestones', 'High', 'In Progress', 'web', userAccountIds[5], null, null, disputeByNumber['DIS-21126']?.dispute_id || null, 'user', 'Jobs N Gigs Moderator'],
-    ['TKT-50009', 'Asset purchase never delivered', 'Asset Marketplace', 'High', 'In Progress', 'web', userAccountIds[9], marketplaceStaffId, null, null, 'staff', null],
-    ['TKT-50010', 'Gig milestone stuck in review', 'Jobs and Gigs', 'High', 'Open', 'web', userAccountIds[0], jobsStaffId, null, null, 'user', null],
-    ['TKT-50011', 'Freelancer proposal spam', 'Jobs and Gigs', 'Medium', 'In Progress', 'web', userAccountIds[4], jobsStaffId, null, null, 'staff', null],
-    ['TKT-50012', 'Refund status check', 'Credit Top-ups', 'Medium', 'Open', 'web', userAccountIds[2], supportStaffId, null, null, 'user', null],
-    ['TKT-50013', 'Cannot upload portfolio', 'Account Access', 'Low', 'Open', 'web', userAccountIds[8], supportStaffId, null, null, 'user', null],
-    ['TKT-50014', 'Cancel annual subscription', 'Subscriptions and Plans', 'Medium', 'Open', 'web', userAccountIds[1], supportStaffId, null, null, 'staff', null],
-    ['TKT-50015', 'Payout not arriving', 'Withdrawing Earnings', 'High', 'Open', 'web', userAccountIds[5], null, null, null, 'user', 'Support Moderator'],
-    ['TKT-50016', 'Timeline editor crash on export', 'Video Editor', 'Medium', 'In Progress', 'web', userAccountIds[6], supportStaffId, null, null, 'user', null],
+    // ticket_number, reason, type, priority, status, account_id, handled_by, lastAuthor, escalatedTo
+    ['TKT-50001', 'Cannot verify payment method', 'Credit Top-ups', 'High', 'Open', userAccountIds[0], supportStaffId, 'user', null],
+    ['TKT-50002', 'Account locked after password reset', 'Account Access', 'High', 'In Progress', userAccountIds[3], supportStaffId, 'user', null],
+    ['TKT-50003', 'Credits missing after package purchase', 'Credit Top-ups', 'High', 'Open', userAccountIds[4], adminStaffId, 'staff', null],
+    ['TKT-50004', 'Forum group ownership transfer', 'Forums', 'Medium', 'In Progress', userAccountIds[2], forumStaffId, 'user', null],
+    ['TKT-50005', 'How to invite team members?', 'Other', 'Low', 'Resolved', userAccountIds[6], supportStaffId, 'staff', null],
+    ['TKT-50006', 'Marketplace listing rejected', 'Asset Marketplace', 'Medium', 'Open', userAccountIds[7], marketplaceStaffId, 'user', null],
+    ['TKT-50007', 'Two-factor not receiving codes', 'Account Verification', 'High', 'Open', userAccountIds[1], null, 'user', null],
+    ['TKT-50008', 'Dispute escalation request', 'Contracts and Milestones', 'High', 'In Progress', userAccountIds[5], null, 'user', 'Jobs N Gigs Moderator'],
+    ['TKT-50009', 'Asset purchase never delivered', 'Asset Marketplace', 'High', 'In Progress', userAccountIds[9], marketplaceStaffId, 'staff', null],
+    ['TKT-50010', 'Gig milestone stuck in review', 'Jobs and Gigs', 'High', 'Open', userAccountIds[0], jobsStaffId, 'user', null],
+    ['TKT-50011', 'Freelancer proposal spam', 'Jobs and Gigs', 'Medium', 'In Progress', userAccountIds[4], jobsStaffId, 'staff', null],
+    ['TKT-50012', 'Refund status check', 'Credit Top-ups', 'Medium', 'Open', userAccountIds[2], supportStaffId, 'user', null],
+    ['TKT-50013', 'Cannot upload portfolio', 'Account Access', 'Low', 'Open', userAccountIds[8], supportStaffId, 'user', null],
+    ['TKT-50014', 'Cancel annual subscription', 'Subscriptions and Plans', 'Medium', 'Open', userAccountIds[1], supportStaffId, 'staff', null],
+    ['TKT-50015', 'Payout not arriving', 'Withdrawing Earnings', 'High', 'Open', userAccountIds[5], null, 'user', 'Support Moderator'],
+    ['TKT-50016', 'Timeline editor crash on export', 'Video Editor', 'Medium', 'In Progress', userAccountIds[6], supportStaffId, 'user', null],
   ];
 
   const ticketIds = [];
   for (const t of tickets) {
-    const escalatedTo = t[11];
+    const escalatedTo = t[8];
     const res = await pool.query(
       `INSERT INTO tickets (
-        ticket_number, reason, type, priority, status, channel,
+        ticket_number, reason, type, priority, status,
         account_id, handled_by_staff_id,
-        related_report_id, related_dispute_id,
         last_message_author_type, message_count, last_message_at,
         escalated_to_role, escalated_by_staff_id,
         created_at, resolved_at
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
-        $12, NOW() - ($13 || ' hours')::interval,
-        $14,$15,
-        NOW() - ($16 || ' hours')::interval, $17
+        $1,$2,$3,$4,$5,$6,$7,$8,
+        $9, NOW() - ($10 || ' hours')::interval,
+        $11,$12,
+        NOW() - ($13 || ' hours')::interval, $14
       )
       RETURNING ticket_id`,
       [
@@ -1165,9 +1135,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         t[5],
         t[6],
         t[7],
-        t[8],
-        t[9],
-        t[10],
         faker.number.int({ min: 1, max: 8 }),
         String(faker.number.int({ min: 1, max: 48 })),
         escalatedTo,
@@ -1188,8 +1155,8 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         const ticketId = ticketIds[idx];
         if (!ticketId) continue;
         const ticketMeta = tickets[idx];
-        const requesterAccountId = ticketMeta[6];
-        const handledByStaffId = ticketMeta[7];
+        const requesterAccountId = ticketMeta[5];
+        const handledByStaffId = ticketMeta[6];
         let staffAccountId = supportAccountId;
         if (handledByStaffId) {
           const sa = await pool.query(`SELECT account_id FROM staff WHERE staff_id = $1`, [handledByStaffId]);
@@ -1275,25 +1242,29 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   ];
 
   for (const v of violations) {
+    const points = v[4];
     await pool.query(
       `INSERT INTO violations (
-        violation_number, account_id, title, reason, points, issued_by_staff_id,
-        type, status, staff_id
-      ) VALUES ($1,$2,$3,$4,$5,$6,$3,'active',$6)`,
+        violation_number, account_id, type, reason, points,
+        status, staff_id, expires_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,'active',$6,
+        NOW() + (GREATEST($5::int, 1) * INTERVAL '30 days')
+      )`,
       v
     );
   }
 
   console.log(`✅ Seeded ${tickets.length} tickets, ${disputes.length} disputes, ${reports.length} reports`);
   console.log('   Demo disputes:');
-  console.log('   DIS-PEND01  pending + unassigned     → Admin/Maya: Assign myself, then Approve');
-  console.log('   DIS-PEND02  pending + Maya owns      → Admin: view-only / reassign via Designated handler');
-  console.log('   DIS-OPEN02  public + Maya owns       → Admin: view-only / reassign via Designated handler');
-  console.log('   DIS-OPEN01  public + private reply    → middleman chat sample');
-  console.log('   DIS-WAIT01  awaiting disputee reply  → prompt message sample');
-  console.log('   DIS-REVW01  under review + publish   → private + published party comments');
-  console.log('   DIS-FEED01  unfair feedback (contract) → under review sample');
-  console.log('   DIS-SANC01 / DIS-RSLV01 / DIS-DSSM01 → closed outcome samples');
+  console.log('   DIS-50001  pending + unassigned     → Admin/Maya: Assign myself, then Approve');
+  console.log('   DIS-50006  pending + Maya owns      → Admin: view-only / reassign via Designated handler');
+  console.log('   DIS-50005  public + Maya owns       → Admin: view-only / reassign via Designated handler');
+  console.log('   DIS-50002  public + private reply    → middleman chat sample');
+  console.log('   DIS-50003  awaiting disputee reply  → prompt message sample');
+  console.log('   DIS-50004  under review + publish   → private + published party comments');
+  console.log('   DIS-50009  unfair feedback (contract) → under review sample');
+  console.log('   DIS-50007 / DIS-50008 / DIS-50010 → closed samples');
 }
 
 async function seedTeams(userAccountIds) {

@@ -63,7 +63,6 @@ async function createAdminTicket(req, res) {
       type,
       category,
       priority,
-      channel,
       description,
       requesterAccountId,
       assignedStaffId,
@@ -80,7 +79,6 @@ async function createAdminTicket(req, res) {
         type: type || category,
         category,
         priority,
-        channel,
         description,
         requesterAccountId: requesterAccountId || req.session?.account_id,
         assignedStaffId: handledByStaffId || assignedStaffId,
@@ -253,7 +251,6 @@ async function createPublicTicket(req, res) {
       type,
       category,
       priority,
-      channel,
       description,
       account_id,
     } = req.body;
@@ -283,7 +280,6 @@ async function createPublicTicket(req, res) {
         type: type || category || 'Other',
         category,
         priority: priority || 'Medium',
-        channel: channel || 'web',
         description: description.trim(),
         requesterAccountId,
       },
@@ -312,7 +308,7 @@ async function listMyTickets(req, res) {
     }
     const result = await pool.query(
       `
-      SELECT ticket_id, ticket_number, reason, type, priority, status, channel,
+      SELECT ticket_id, ticket_number, reason, type, priority, status,
              message_count, last_message_at, created_at, updated_at, resolved_at
       FROM tickets
       WHERE account_id = $1 AND deleted_at IS NULL
@@ -331,7 +327,6 @@ async function listMyTickets(req, res) {
         category: r.type,
         priority: r.priority,
         status: r.status,
-        channel: r.channel,
         messageCount: Number(r.message_count || 0),
         lastMessageAt: r.last_message_at,
         createdAt: r.created_at,
@@ -419,8 +414,7 @@ async function createMyTechnicalReport(req, res) {
       targetAccountId: accountId,
       targetType: 'technical_problem',
       targetId: String(accountId),
-      targetLabel: subject,
-      reason: subject,
+      type: subject,
       description,
       referenceTable: 'accounts',
       referencePrefix: 'settings',

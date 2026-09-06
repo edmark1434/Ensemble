@@ -1,5 +1,10 @@
 const { pool } = require('../lib/Database');
 const { CREDIT_TRANSACTION_TYPE } = require('../lib/CreditTransactionEnums');
+const { violationExpiryFromPoints, isViolationActive } = require('./ModeratorRepositories');
+const {
+  recordAccountActivity,
+  fetchActivityForAccounts,
+} = require('./AccountActivityRepositories');
 
 function normalizeStatus(status) {
   if (!status) return 'Pending';
@@ -146,14 +151,16 @@ async function fetchHistoryForAccounts(accountIds) {
         v.violation_id,
         v.violation_number,
         v.account_id,
-        v.title,
+        v.type,
         v.reason,
         v.points,
         v.status,
         v.created_at,
+        v.expires_at,
+        v.deleted_at,
         COALESCE(sa.display_name, s.first_name || ' ' || s.last_name, 'Staff') AS issued_by
       FROM violations v
-      LEFT JOIN staff s ON s.staff_id = COALESCE(v.issued_by_staff_id, v.staff_id)
+      LEFT JOIN staff s ON s.staff_id = v.staff_id
       LEFT JOIN accounts sa ON sa.account_id = s.account_id
       WHERE v.account_id = ANY($1::uuid[])
         AND v.deleted_at IS NULL
@@ -167,20 +174,20 @@ async function fetchHistoryForAccounts(accountIds) {
         d.dispute_id,
         d.dispute_number,
         d.title,
-        d.reason,
+        d.description,
         d.status,
         d.opened_at,
         d.updated_at,
-        d.initiator_account_id,
-        d.respondent_account_id,
+        d.by_account_id,
+        d.for_account_id,
         COALESCE(sa.display_name, st.first_name || ' ' || st.last_name, 'Staff') AS handler_name,
         COALESCE(ra.display_name, ra.handle, 'Counterparty') AS against_name
       FROM disputes d
-      LEFT JOIN staff st ON st.staff_id = COALESCE(d.assigned_staff_id, d.handled_by_staff_id)
+      LEFT JOIN staff st ON st.staff_id = d.handled_by_staff_id
       LEFT JOIN accounts sa ON sa.account_id = st.account_id
-      LEFT JOIN accounts ra ON ra.account_id = d.respondent_account_id
-      WHERE d.initiator_account_id = ANY($1::uuid[])
-         OR d.respondent_account_id = ANY($1::uuid[])
+      LEFT JOIN accounts ra ON ra.account_id = d.for_account_id
+      WHERE d.by_account_id = ANY($1::uuid[])
+         OR d.for_account_id = ANY($1::uuid[])
       ORDER BY COALESCE(d.opened_at, d.created_at) DESC
       `,
       [accountIds]
@@ -195,25 +202,30 @@ async function fetchHistoryForAccounts(accountIds) {
   for (const row of violationsResult.rows) {
     const bucket = map.get(row.account_id);
     if (!bucket) continue;
+    const active = isViolationActive(row);
+    const pastExpiry = Boolean(row.expires_at && new Date(row.expires_at).getTime() <= Date.now());
     bucket.violations.push({
       id: row.violation_number || row.violation_id,
-      title: row.title || 'Violation',
+      type: row.type || 'Violation',
       reason: row.reason || '—',
       points: Number(row.points || 0),
       by: row.issued_by,
       timeAgo: formatRelativeTime(row.created_at),
+      expiresAt: row.expires_at || null,
+      active,
+      status: !active && pastExpiry ? 'expired' : row.status,
     });
   }
 
   for (const row of disputesResult.rows) {
-    const relatedIds = [row.initiator_account_id, row.respondent_account_id].filter(Boolean);
+    const relatedIds = [row.by_account_id, row.for_account_id].filter(Boolean);
     for (const accountId of relatedIds) {
       const bucket = map.get(accountId);
       if (!bucket) continue;
       bucket.disputes.push({
         id: row.dispute_number || row.dispute_id,
         title: row.title || 'Dispute',
-        reason: row.reason || '—',
+        description: row.description || '—',
         status: row.status || 'open',
         by: row.handler_name,
         timeAgo: formatRelativeTime(row.opened_at || row.updated_at),
@@ -226,7 +238,7 @@ async function fetchHistoryForAccounts(accountIds) {
   return map;
 }
 
-function buildHistory(accountId, historyMap) {
+function buildHistory(accountId, historyMap, activityMap = new Map()) {
   const data = historyMap.get(accountId) || { violations: [], disputes: [] };
   const openDisputes = data.disputes.filter((d) => {
     const s = String(d.status).toLowerCase();
@@ -237,13 +249,15 @@ function buildHistory(accountId, historyMap) {
     title: d.title,
     handler: d.handler || d.by || 'Staff',
     against: d.against || '—',
-    reason: d.reason,
+    description: d.description,
     status: d.status,
     by: d.by,
     timeAgo: d.timeAgo,
   }));
   const active = activeDisputes[0] || null;
-  const caution = data.violations.length > 0 || activeDisputes.length > 0;
+  const caution =
+    data.violations.some((v) => v.active !== false) || activeDisputes.length > 0;
+  const activity = activityMap.get(accountId) || [];
 
   return {
     summaryLabel: caution
@@ -257,13 +271,14 @@ function buildHistory(accountId, historyMap) {
           title: active.title,
           handler: active.handler,
           against: active.against,
-          reason: active.reason,
+          description: active.description,
           status: active.status,
         }
       : null,
     activeDisputes,
     violations: data.violations.slice(0, 10),
     disputes: data.disputes.slice(0, 10).map(({ against, handler, ...rest }) => rest),
+    activity,
   };
 }
 
@@ -739,9 +754,10 @@ async function fetchTeamsFromDatabase() {
   }
 
   const accountIds = teamsResult.rows.map((r) => r.account_id);
-  const [creditMap, historyMap, assetStats] = await Promise.all([
+  const [creditMap, historyMap, activityMap, assetStats] = await Promise.all([
     fetchCreditActivityForAccounts(accountIds),
     fetchHistoryForAccounts(accountIds),
+    fetchActivityForAccounts(accountIds),
     pool.query(
       `
       SELECT submitted_by_account_id AS account_id,
@@ -807,7 +823,7 @@ async function fetchTeamsFromDatabase() {
       documents: [],
       creditActivity: creditMap.get(row.account_id) || [],
       verification: buildVerificationDetail(row),
-      history: buildHistory(row.account_id, historyMap),
+      history: buildHistory(row.account_id, historyMap, activityMap),
     };
   });
 }
@@ -880,9 +896,10 @@ async function getUsersManagement() {
   const users = await fetchAllUsers();
   const accountIds = users.map((u) => u.accountId);
   const userIds = users.map((u) => u.id);
-  const [creditMap, historyMap, assetStats, membershipsMap] = await Promise.all([
+  const [creditMap, historyMap, activityMap, assetStats, membershipsMap] = await Promise.all([
     fetchCreditActivityForAccounts(accountIds),
     fetchHistoryForAccounts(accountIds),
+    fetchActivityForAccounts(accountIds),
     accountIds.length
       ? pool.query(
           `
@@ -912,7 +929,7 @@ async function getUsersManagement() {
           created_at: u.joinedAt,
         }
       ),
-      history: buildHistory(u.accountId, historyMap),
+      history: buildHistory(u.accountId, historyMap, activityMap),
       stats: {
         totalAssets: Number(assetsByAccount.get(u.accountId) || 0),
         totalCredits: walletBalance,
@@ -1074,14 +1091,30 @@ async function getAccountWallet(accountId) {
   return result.rows[0] || null;
 }
 
-async function updateAccountStatus(accountId, actionOrStatus) {
-  await assertAccountExists(accountId);
+async function updateAccountStatus(accountId, actionOrStatus, staffId = null) {
+  const account = await assertAccountExists(accountId);
   const key = String(actionOrStatus || '').toLowerCase();
   const status = STATUS_MAP[key] || null;
   if (!status) throw new Error(`Invalid account status action: ${actionOrStatus}`);
 
   await pool.query(`UPDATE accounts SET status = $1 WHERE account_id = $2`, [status, accountId]);
-  return { accountId, status };
+
+  await recordAccountActivity({
+    accountId,
+    action: `Account status set to ${status}`,
+    eventCode: 'ACCOUNT_STATUS_CHANGED',
+    referenceTable: 'accounts',
+    referencePrefix: 'ACC',
+    referenceId: accountId,
+    actorStaffId: staffId,
+    metadata: {
+      previousStatus: account.status,
+      status,
+      action: key,
+    },
+  });
+
+  return { accountId, status, previousStatus: account.status };
 }
 
 async function updateAccountVerification(accountId, action, staffId, options = {}) {
@@ -1283,30 +1316,54 @@ async function freezeAccountCredits(accountId, freeze = true) {
   };
 }
 
-async function warnAccount(accountId, { title, reason, points } = {}, staffId) {
+async function warnAccount(accountId, { type, reason, points, expiresAt } = {}, staffId) {
   await assertAccountExists(accountId);
   if (!staffId) throw new Error('Staff session required to issue a warning');
 
   const violationNumber = `VIO-${Date.now().toString().slice(-8)}`;
-  const warnTitle = String(title || 'Account warning').trim();
+  const warnType = String(type || 'Account warning').trim() || 'Account warning';
   const warnReason = String(reason || 'Warning issued by administrator').trim();
   const warnPoints = Number(points) || 1;
+  const expiry =
+    expiresAt != null && expiresAt !== ''
+      ? new Date(expiresAt)
+      : violationExpiryFromPoints(warnPoints);
 
-  await pool.query(
+  const inserted = await pool.query(
     `
     INSERT INTO violations (
-      violation_number, account_id, title, reason, points,
-      issued_by_staff_id, type, status, staff_id
-    ) VALUES ($1, $2, $3, $4, $5, $6, $3, 'active', $6)
+      violation_number, account_id, type, reason, points,
+      status, staff_id, expires_at
+    ) VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
+    RETURNING violation_id
     `,
-    [violationNumber, accountId, warnTitle, warnReason, warnPoints, staffId]
+    [violationNumber, accountId, warnType, warnReason, warnPoints, staffId, expiry]
   );
+
+  await recordAccountActivity({
+    accountId,
+    action: `Warning issued: ${warnType}`,
+    eventCode: 'ACCOUNT_WARNED',
+    referenceTable: 'violations',
+    referencePrefix: 'VIO',
+    referenceId: inserted.rows[0]?.violation_id || violationNumber,
+    actorStaffId: staffId,
+    metadata: {
+      violationNumber,
+      type: warnType,
+      reason: warnReason,
+      points: warnPoints,
+      expiresAt: expiry,
+    },
+  });
 
   return {
     accountId,
+    violationId: inserted.rows[0]?.violation_id || null,
     violationNumber,
-    title: warnTitle,
+    type: warnType,
     points: warnPoints,
+    expiresAt: expiry,
   };
 }
 
@@ -1334,26 +1391,42 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
       WHERE account_id = $1
         AND deleted_at IS NULL
         AND LOWER(COALESCE(status, '')) IN ('active', 'open', 'pending')
+        AND (expires_at IS NULL OR expires_at > NOW())
       RETURNING violation_id
       `,
       [accountId]
     );
 
-    // End any open restrictions linked to this account's violations
+    // End any open restrictions for this account (with or without a violation)
     await client.query(
       `
-      UPDATE restrictions r
+      UPDATE restrictions
       SET ends_at = NOW()
-      FROM violations v
-      WHERE r.violation_id = v.violation_id
-        AND v.account_id = $1
-        AND (r.ends_at IS NULL OR r.ends_at > NOW())
+      WHERE account_id = $1
+        AND (ends_at IS NULL OR ends_at > NOW())
       `,
       [accountId]
     ).catch(() => null);
 
     const previousStatus = account.status;
     await client.query(`UPDATE accounts SET status = 'Active' WHERE account_id = $1`, [accountId]);
+
+    await recordAccountActivity({
+      accountId,
+      action: 'Account pardoned — violations cleared and status restored',
+      eventCode: 'ACCOUNT_PARDONED',
+      referenceTable: 'pardons',
+      referencePrefix: 'PAR',
+      referenceId: pardonRes.rows[0].pardon_id,
+      actorStaffId: staffId,
+      metadata: {
+        previousStatus,
+        status: 'Active',
+        violationsCleared: clearedViolations.rowCount || 0,
+        note: note || null,
+      },
+      client,
+    });
 
     await client.query('COMMIT');
 

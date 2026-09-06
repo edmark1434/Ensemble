@@ -243,12 +243,6 @@ async function reportMessageServices(messageId, payload, accountId) {
         inbox.conversation_name || `${conversationType} Conversation`
     ).trim();
     const conversationContext = `${conversationType}: ${conversationName} - Chat Inbox`;
-    const description = [
-        details || 'No additional details provided.',
-        `Conversation: ${conversationId}`,
-        `Exact reported message:\n${exactMessage || '[No text content]'}`,
-        attachmentSummary ? `Reported attachments:\n${attachmentSummary}` : null,
-    ].filter(Boolean).join('\n\n');
 
     return createReport({
         reportNumber: `RPT-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`,
@@ -256,9 +250,14 @@ async function reportMessageServices(messageId, payload, accountId) {
         targetAccountId: reportedAccountId,
         targetType: 'chat_message',
         targetId: String(message._id),
-        targetLabel: conversationContext,
-        reason,
-        description,
+        type: reason,
+        description: [
+            conversationContext,
+            details || 'No additional details provided.',
+            `Conversation: ${conversationId}`,
+            `Exact reported message:\n${exactMessage || '[No text content]'}`,
+            attachmentSummary ? `Reported attachments:\n${attachmentSummary}` : null,
+        ].filter(Boolean).join('\n\n'),
         referenceTable: 'messages',
         referencePrefix: 'inbox',
     });

@@ -154,10 +154,28 @@ export type ActiveDispute = {
   title: string;
   handler?: string;
   against?: string;
-  reason: string;
+  description: string;
   status: string;
   by?: string;
   timeAgo?: string;
+};
+
+export type AccountActivityItem = {
+  id: string;
+  accountId: string;
+  accountName?: string | null;
+  accountHandle?: string | null;
+  action: string;
+  eventCode: string;
+  referenceTable?: string | null;
+  referencePrefix?: string | null;
+  referenceId?: string | null;
+  actorStaffId?: string | null;
+  actorAccountId?: string | null;
+  actorName?: string | null;
+  actorRole?: string | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
 };
 
 export type TeamHistory = {
@@ -167,8 +185,19 @@ export type TeamHistory = {
   openDisputes: number;
   activeDispute: ActiveDispute | null;
   activeDisputes: ActiveDispute[];
-  violations: { id: string; title: string; reason: string; points: number; by: string; timeAgo: string }[];
-  disputes: { id: string; title: string; reason: string; status: string; by: string; timeAgo: string }[];
+  violations: {
+    id: string;
+    type: string;
+    reason: string;
+    points: number;
+    by: string;
+    timeAgo: string;
+    expiresAt?: string | null;
+    active?: boolean;
+    status?: string;
+  }[];
+  disputes: { id: string; title: string; description: string; status: string; by: string; timeAgo: string }[];
+  activity?: AccountActivityItem[];
 };
 
 export type TeamManagementData = {

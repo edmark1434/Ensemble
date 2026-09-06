@@ -22,7 +22,6 @@ export type SupportTicket = {
   category?: string;
   priority: string;
   status: string;
-  channel: string;
   requester: TicketPerson;
   assignee: TicketAssignee | null;
   escalatedBy?: TicketAssignee | null;
@@ -31,8 +30,6 @@ export type SupportTicket = {
   isEscalated?: boolean;
   waitingForResponse?: boolean;
   lastMessageAuthorType?: string | null;
-  relatedReportId: number | string | null;
-  relatedDisputeId: number | string | null;
   messageCount: number;
   lastMessageAt: string | null;
   createdAt: string;
@@ -93,21 +90,16 @@ export type Dispute = {
   id: number | string;
   number: string;
   title: string;
-  reason: string | null;
+  description: string | null;
+  type: string;
   status: string;
   priority: string;
-  visibility?: string;
+  visibility?: boolean;
   initiator: TicketPerson;
   respondent: TicketPerson;
-  relatedEntityType: string | null;
-  relatedEntityId: string | null;
   assignee: TicketAssignee | null;
   creditAmount: number;
-  approvedAt?: string | null;
-  approvedByStaffId?: number | string | null;
-  outcome?: string | null;
   sanctionType?: string | null;
-  sanctionNotes?: string | null;
   relatedCreditTransactionId?: number | string | null;
   creditHold?: DisputeCreditHold | null;
   openedAt: string;
@@ -123,15 +115,13 @@ export type UserReport = {
   reporter: TicketPerson;
   targetType: string;
   targetId: string | null;
-  targetLabel: string | null;
-  reason: string;
+  type: string;
   description: string | null;
   status: string;
   priority: string;
   assignee: { staffId: number | string; name: string } | null;
   createdAt: string;
   updatedAt: string;
-  resolvedAt: string | null;
 };
 
 export type StaffWorkload = {
@@ -260,7 +250,7 @@ export type TicketsOverview = {
     openByPriority: { label: string; value: number }[];
     disputeStatusMix: ChartSegment[];
   };
-  /** Distinct ticket types from ticket_type_catalog */
+  /** Distinct ticket types from tickets.type enum values */
   types: string[];
   typeDetails?: { label: string; queueRole: string; description?: string | null }[];
   escalateByRole?: Record<string, string[]>;
