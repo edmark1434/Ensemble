@@ -359,7 +359,7 @@ async function fetchAllUsers() {
       LIMIT 1
     ) p ON TRUE
     LEFT JOIN verifications v ON v.account_id = a.account_id
-    LEFT JOIN account_verification_sessions avs
+    LEFT JOIN verification_sessions avs
       ON avs.verification_session_id = v.verification_session_id
     LEFT JOIN LATERAL (
       SELECT w.balance_credits, w.frozen_balance_credits
@@ -474,7 +474,7 @@ async function getUserVerificationRecord(accountId) {
     FROM verifications v
     JOIN accounts a ON a.account_id = v.account_id
     LEFT JOIN teams t ON t.account_id = a.account_id
-    LEFT JOIN account_verification_sessions avs
+    LEFT JOIN verification_sessions avs
       ON avs.verification_session_id = v.verification_session_id
     LEFT JOIN business_verification_details bvd
       ON bvd.verification_id = v.verification_id
@@ -521,7 +521,7 @@ async function applyTeamVerificationAction(
     if (!result.rows[0]) throw new Error('Team verification was not found');
 
     const sessionResult = await client.query(
-      `UPDATE account_verification_sessions avs
+      `UPDATE verification_sessions avs
        SET verification_status = $2::varchar,
            verified_by_account_id = $3::uuid,
            expires_at = CASE
@@ -563,12 +563,12 @@ async function updateUserVerificationExpiry(accountId, validityDays, verifiedByA
           OR v.verified_at IS NULL
           OR ABS(EXTRACT(EPOCH FROM (avs.expires_at - v.verified_at)) - ($2::int * 86400)) > 60
         ) AS expiry_changed
-      FROM account_verification_sessions avs
+      FROM verification_sessions avs
       JOIN verifications v
         ON avs.verification_session_id = v.verification_session_id
       WHERE v.account_id = $1
     )
-    UPDATE account_verification_sessions avs
+    UPDATE verification_sessions avs
     SET expires_at = CASE
           WHEN cv.expiry_changed THEN NOW() + ($2::int * INTERVAL '1 day')
           ELSE avs.expires_at
@@ -587,7 +587,7 @@ async function updateUserVerificationExpiry(accountId, validityDays, verifiedByA
 async function prepareUserVerificationApprovalExpiry(accountId, validityDays, verifiedByAccountId) {
   const result = await pool.query(
     `
-    UPDATE account_verification_sessions avs
+    UPDATE verification_sessions avs
     SET expires_at = CASE
           WHEN $2::int = 365 THEN NULL
           ELSE NOW() + ($2::int * INTERVAL '1 day')
@@ -607,7 +607,7 @@ async function prepareUserVerificationApprovalExpiry(accountId, validityDays, ve
 async function restoreUserVerificationExpiry(accountId, expiresAt, verifiedByAccountId) {
   await pool.query(
     `
-    UPDATE account_verification_sessions avs
+    UPDATE verification_sessions avs
     SET expires_at = $2,
         verified_by_account_id = $3,
         updated_at = NOW()
@@ -630,7 +630,7 @@ async function markUserVerificationPending(accountId) {
   );
   await pool.query(
     `
-    UPDATE account_verification_sessions avs
+    UPDATE verification_sessions avs
     SET verification_status = 'Pending', updated_at = NOW()
     FROM verifications v
     WHERE v.account_id = $1
@@ -677,7 +677,7 @@ async function fetchTeamsFromDatabase() {
     INNER JOIN accounts a ON a.account_id = t.account_id
     LEFT JOIN files f ON f.file_id = a.avatar_file_id
     LEFT JOIN verifications v ON v.account_id = a.account_id
-    LEFT JOIN account_verification_sessions avs
+    LEFT JOIN verification_sessions avs
       ON avs.verification_session_id = v.verification_session_id
     LEFT JOIN accounts va ON va.account_id = avs.verified_by_account_id
     LEFT JOIN LATERAL (
@@ -1126,7 +1126,7 @@ async function updateAccountVerification(accountId, action, staffId, options = {
     );
     await pool.query(
       `
-      UPDATE account_verification_sessions avs
+      UPDATE verification_sessions avs
       SET verification_status = $2,
           expires_at = CASE
             WHEN $2 = 'verified' THEN NOW() + ($3::int * INTERVAL '1 day')

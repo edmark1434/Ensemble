@@ -307,7 +307,7 @@ async function applyAdminDiditVerificationAction(accountId, action, options = {}
     const notification = await createNotification({
       message: `Your identity verification requires resubmission: ${selectedLabels}. Admin message: ${comment}`,
       is_read: false,
-      reference_table: 'account_verification',
+      reference_table: 'verification',
       reference_prefix: 'IDENTITY_REVERIFICATION',
       reference_path: '/account-verification-status',
       reference_id: record.verification_id,

@@ -10,7 +10,7 @@ exports.up = (pgm) => {
   // ============================================
   // CREATE ACCOUNT VERIFICATION SESSIONS TABLE
   // ============================================
-  pgm.createTable("account_verification_sessions", {
+  pgm.createTable("verification_sessions", {
     verification_session_id: {
       type: "uuid",
       primaryKey: true,
@@ -73,14 +73,14 @@ exports.up = (pgm) => {
   // ============================================
 
   pgm.addConstraint(
-    "account_verification_sessions",
-    "account_verification_sessions_account_id_fkey",
+    "verification_sessions",
+    "verification_sessions_account_id_fkey",
     "FOREIGN KEY (account_id) REFERENCES accounts(account_id) ON DELETE CASCADE"
   );
 
   pgm.addConstraint(
-    "account_verification_sessions",
-    "account_verification_sessions_verified_by_account_id_fkey",
+    "verification_sessions",
+    "verification_sessions_verified_by_account_id_fkey",
     "FOREIGN KEY (verified_by_account_id) REFERENCES accounts(account_id) ON DELETE SET NULL"
   );
 
@@ -88,10 +88,10 @@ exports.up = (pgm) => {
   // INDEXES
   // ============================================
 
-  pgm.createIndex("account_verification_sessions", "account_id");
+  pgm.createIndex("verification_sessions", "account_id");
 
   pgm.createIndex(
-    "account_verification_sessions",
+    "verification_sessions",
     "didit_session_id",
     {
       unique: true,
@@ -99,22 +99,22 @@ exports.up = (pgm) => {
   );
 
   pgm.createIndex(
-    "account_verification_sessions",
+    "verification_sessions",
     "kyc_status"
   );
 
   pgm.createIndex(
-    "account_verification_sessions",
+    "verification_sessions",
     "verification_status"
   );
 
   pgm.createIndex(
-    "account_verification_sessions",
+    "verification_sessions",
     "verified_by_account_id"
   );
 
   pgm.createIndex(
-    "account_verification_sessions",
+    "verification_sessions",
     "expires_at"
   );
 
@@ -123,7 +123,7 @@ exports.up = (pgm) => {
   // ============================================
 
   pgm.createTrigger(
-    "account_verification_sessions",
+    "verification_sessions",
     "update_verification_session_updated_at",
     {
       when: "BEFORE",
@@ -136,17 +136,17 @@ exports.up = (pgm) => {
 
 exports.down = (pgm) => {
   pgm.dropTrigger(
-    "account_verification_sessions",
+    "verification_sessions",
     "update_verification_session_updated_at",
     { ifExists: true }
   );
 
-  pgm.dropIndex("account_verification_sessions", "account_id", {
+  pgm.dropIndex("verification_sessions", "account_id", {
     ifExists: true,
   });
 
   pgm.dropIndex(
-    "account_verification_sessions",
+    "verification_sessions",
     "didit_session_id",
     {
       ifExists: true,
@@ -154,7 +154,7 @@ exports.down = (pgm) => {
   );
 
   pgm.dropIndex(
-    "account_verification_sessions",
+    "verification_sessions",
     "kyc_status",
     {
       ifExists: true,
@@ -162,7 +162,7 @@ exports.down = (pgm) => {
   );
 
   pgm.dropIndex(
-    "account_verification_sessions",
+    "verification_sessions",
     "verification_status",
     {
       ifExists: true,
@@ -170,7 +170,7 @@ exports.down = (pgm) => {
   );
 
   pgm.dropIndex(
-    "account_verification_sessions",
+    "verification_sessions",
     "verified_by_account_id",
     {
       ifExists: true,
@@ -178,14 +178,14 @@ exports.down = (pgm) => {
   );
 
   pgm.dropIndex(
-    "account_verification_sessions",
+    "verification_sessions",
     "expires_at",
     {
       ifExists: true,
     }
   );
 
-  pgm.dropTable("account_verification_sessions", {
+  pgm.dropTable("verification_sessions", {
     ifExists: true,
   });
 };

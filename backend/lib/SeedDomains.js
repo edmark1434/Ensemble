@@ -957,7 +957,7 @@ async function seedVerificationDemos(userAccountIds, staffByRole) {
   }
 
   const sessionRes = await pool.query(
-    `INSERT INTO account_verification_sessions (
+    `INSERT INTO verification_sessions (
        account_id, didit_session_id, verification_url, kyc_status, verification_status,
        verified_by_account_id, expires_at
      ) VALUES
