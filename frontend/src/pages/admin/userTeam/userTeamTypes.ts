@@ -160,6 +160,24 @@ export type ActiveDispute = {
   timeAgo?: string;
 };
 
+export type AccountActivityItem = {
+  id: string;
+  accountId: string;
+  accountName?: string | null;
+  accountHandle?: string | null;
+  action: string;
+  eventCode: string;
+  referenceTable?: string | null;
+  referencePrefix?: string | null;
+  referenceId?: string | null;
+  actorStaffId?: string | null;
+  actorAccountId?: string | null;
+  actorName?: string | null;
+  actorRole?: string | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
+};
+
 export type TeamHistory = {
   summaryLabel: string;
   totalViolations: number;
@@ -179,6 +197,7 @@ export type TeamHistory = {
     status?: string;
   }[];
   disputes: { id: string; title: string; description: string; status: string; by: string; timeAgo: string }[];
+  activity?: AccountActivityItem[];
 };
 
 export type TeamManagementData = {

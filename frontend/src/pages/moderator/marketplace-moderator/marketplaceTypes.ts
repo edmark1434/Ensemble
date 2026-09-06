@@ -132,13 +132,26 @@ export type Violation = {
 };
 
 export type RestrictedAccount = {
-  accountId: number;
+  accountId: string;
   name: string;
   handle: string;
   status: string;
 };
 
+export type AccountActivityItem = {
+  id: string;
+  accountId: string;
+  accountName?: string | null;
+  accountHandle?: string | null;
+  action: string;
+  eventCode: string;
+  actorName?: string | null;
+  actorRole?: string | null;
+  createdAt: string;
+};
+
 export type RestrictionsData = {
   violations: Violation[];
   restrictedAccounts: RestrictedAccount[];
+  recentActivity?: AccountActivityItem[];
 };

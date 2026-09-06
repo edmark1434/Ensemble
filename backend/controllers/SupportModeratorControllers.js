@@ -273,7 +273,7 @@ async function postViolation(req, res) {
 
 async function patchRestriction(req, res) {
   try {
-    const data = await updateAccountRestriction(req.params.id, req.body.status);
+    const data = await updateAccountRestriction(req.params.id, req.body.status, req.session);
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating account restriction:', err);

@@ -1,4 +1,8 @@
 const { pool } = require('../lib/Database');
+const {
+  recordAccountActivity,
+  listRecentAccountActivity,
+} = require('./AccountActivityRepositories');
 
 /** Strike weight → days until expiry (1pt = 30 days). */
 function violationExpiryFromPoints(points, fromDate = new Date()) {
@@ -58,9 +62,11 @@ async function getViolationsAndRestrictions() {
   const restrictedResult = await pool.query(`
     SELECT account_id, display_name, handle, status
     FROM accounts
-    WHERE LOWER(status) IN ('suspended', 'banned')
+    WHERE LOWER(status) IN ('suspended', 'banned', 'locked')
     ORDER BY display_name
   `);
+
+  const recentActivity = await listRecentAccountActivity({ limit: 40 });
 
   return {
     violations: result.rows.map(mapViolationRow),
@@ -70,6 +76,7 @@ async function getViolationsAndRestrictions() {
       handle: r.handle,
       status: r.status,
     })),
+    recentActivity,
   };
 }
 
@@ -81,22 +88,42 @@ async function issueViolation(accountId, { type, reason, points, expiresAt }, st
     expiresAt != null && expiresAt !== ''
       ? new Date(expiresAt)
       : violationExpiryFromPoints(warnPoints);
+  const staffId = staffSession?.staff_id || staffSession?.staffId || null;
 
-  await pool.query(
+  const inserted = await pool.query(
     `INSERT INTO violations (
        violation_number, account_id, type, reason, points,
        status, staff_id, expires_at
-     ) VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)`,
+     ) VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
+     RETURNING violation_id`,
     [
       violationNumber,
       accountId,
       violationType,
       reason || null,
       warnPoints,
-      staffSession?.staff_id || null,
+      staffId,
       expiry,
     ]
   );
+
+  await recordAccountActivity({
+    accountId,
+    action: `Violation issued: ${violationType}`,
+    eventCode: 'VIOLATION_ISSUED',
+    referenceTable: 'violations',
+    referencePrefix: 'VIO',
+    referenceId: inserted.rows[0]?.violation_id || violationNumber,
+    actorStaffId: staffId,
+    metadata: {
+      violationNumber,
+      type: violationType,
+      reason: reason || null,
+      points: warnPoints,
+      expiresAt: expiry,
+    },
+  });
+
   return getViolationsAndRestrictions();
 }
 
@@ -107,13 +134,14 @@ async function issueRestriction(
 ) {
   if (!accountId) throw new Error('accountId is required');
   const restrictionType = String(type || 'account_restriction').trim() || 'account_restriction';
-  const staffId = staffSession?.staff_id || null;
+  const staffId = staffSession?.staff_id || staffSession?.staffId || null;
   if (!staffId) throw new Error('Staff session required to issue a restriction');
 
-  await pool.query(
+  const inserted = await pool.query(
     `INSERT INTO restrictions (
        type, module, starts_at, ends_at, violation_id, account_id, staff_id
-     ) VALUES ($1, $2, COALESCE($3::timestamptz, NOW()), $4, $5, $6, $7)`,
+     ) VALUES ($1, $2, COALESCE($3::timestamptz, NOW()), $4, $5, $6, $7)
+     RETURNING restriction_id`,
     [
       restrictionType,
       module || null,
@@ -124,15 +152,59 @@ async function issueRestriction(
       staffId,
     ]
   );
+
+  await recordAccountActivity({
+    accountId,
+    action: `Restriction applied: ${restrictionType}`,
+    eventCode: 'RESTRICTION_ISSUED',
+    referenceTable: 'restrictions',
+    referencePrefix: 'RST',
+    referenceId: inserted.rows[0]?.restriction_id || null,
+    actorStaffId: staffId,
+    metadata: {
+      type: restrictionType,
+      module: module || null,
+      startsAt: startsAt || null,
+      endsAt: endsAt || null,
+      violationId: violationId || null,
+    },
+  });
+
   return getViolationsAndRestrictions();
 }
 
-async function updateAccountRestriction(accountId, status) {
-  const allowed = ['active', 'suspended', 'banned'];
-  if (!allowed.includes(status)) {
+async function updateAccountRestriction(accountId, status, staffSession = null) {
+  const allowed = ['active', 'suspended', 'banned', 'locked'];
+  const normalized = String(status || '').toLowerCase();
+  if (!allowed.includes(normalized)) {
     throw new Error(`Invalid restriction status: ${status}`);
   }
-  await pool.query(`UPDATE accounts SET status = $1 WHERE account_id = $2`, [status, accountId]);
+
+  const previous = await pool.query(
+    `SELECT status FROM accounts WHERE account_id = $1 AND deleted_at IS NULL`,
+    [accountId]
+  );
+  if (!previous.rows.length) throw new Error('Account not found');
+
+  const nextStatus = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  await pool.query(`UPDATE accounts SET status = $1 WHERE account_id = $2`, [nextStatus, accountId]);
+
+  const staffId = staffSession?.staff_id || staffSession?.staffId || null;
+  await recordAccountActivity({
+    accountId,
+    action: `Account restriction status set to ${nextStatus}`,
+    eventCode: 'ACCOUNT_STATUS_CHANGED',
+    referenceTable: 'accounts',
+    referencePrefix: 'ACC',
+    referenceId: accountId,
+    actorStaffId: staffId,
+    metadata: {
+      previousStatus: previous.rows[0].status,
+      status: nextStatus,
+      source: 'moderator_restrictions',
+    },
+  });
+
   return getViolationsAndRestrictions();
 }
 

@@ -308,6 +308,7 @@ async function resetSeedTables() {
         violations,
         restrictions,
         pardons,
+        account_activity,
         notifications,
         cashouts,
         topups,

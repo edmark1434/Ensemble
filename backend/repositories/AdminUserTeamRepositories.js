@@ -1,6 +1,10 @@
 const { pool } = require('../lib/Database');
 const { CREDIT_TRANSACTION_TYPE } = require('../lib/CreditTransactionEnums');
 const { violationExpiryFromPoints, isViolationActive } = require('./ModeratorRepositories');
+const {
+  recordAccountActivity,
+  fetchActivityForAccounts,
+} = require('./AccountActivityRepositories');
 
 function normalizeStatus(status) {
   if (!status) return 'Pending';
@@ -234,7 +238,7 @@ async function fetchHistoryForAccounts(accountIds) {
   return map;
 }
 
-function buildHistory(accountId, historyMap) {
+function buildHistory(accountId, historyMap, activityMap = new Map()) {
   const data = historyMap.get(accountId) || { violations: [], disputes: [] };
   const openDisputes = data.disputes.filter((d) => {
     const s = String(d.status).toLowerCase();
@@ -253,6 +257,7 @@ function buildHistory(accountId, historyMap) {
   const active = activeDisputes[0] || null;
   const caution =
     data.violations.some((v) => v.active !== false) || activeDisputes.length > 0;
+  const activity = activityMap.get(accountId) || [];
 
   return {
     summaryLabel: caution
@@ -273,6 +278,7 @@ function buildHistory(accountId, historyMap) {
     activeDisputes,
     violations: data.violations.slice(0, 10),
     disputes: data.disputes.slice(0, 10).map(({ against, handler, ...rest }) => rest),
+    activity,
   };
 }
 
@@ -748,9 +754,10 @@ async function fetchTeamsFromDatabase() {
   }
 
   const accountIds = teamsResult.rows.map((r) => r.account_id);
-  const [creditMap, historyMap, assetStats] = await Promise.all([
+  const [creditMap, historyMap, activityMap, assetStats] = await Promise.all([
     fetchCreditActivityForAccounts(accountIds),
     fetchHistoryForAccounts(accountIds),
+    fetchActivityForAccounts(accountIds),
     pool.query(
       `
       SELECT submitted_by_account_id AS account_id,
@@ -816,7 +823,7 @@ async function fetchTeamsFromDatabase() {
       documents: [],
       creditActivity: creditMap.get(row.account_id) || [],
       verification: buildVerificationDetail(row),
-      history: buildHistory(row.account_id, historyMap),
+      history: buildHistory(row.account_id, historyMap, activityMap),
     };
   });
 }
@@ -889,9 +896,10 @@ async function getUsersManagement() {
   const users = await fetchAllUsers();
   const accountIds = users.map((u) => u.accountId);
   const userIds = users.map((u) => u.id);
-  const [creditMap, historyMap, assetStats, membershipsMap] = await Promise.all([
+  const [creditMap, historyMap, activityMap, assetStats, membershipsMap] = await Promise.all([
     fetchCreditActivityForAccounts(accountIds),
     fetchHistoryForAccounts(accountIds),
+    fetchActivityForAccounts(accountIds),
     accountIds.length
       ? pool.query(
           `
@@ -921,7 +929,7 @@ async function getUsersManagement() {
           created_at: u.joinedAt,
         }
       ),
-      history: buildHistory(u.accountId, historyMap),
+      history: buildHistory(u.accountId, historyMap, activityMap),
       stats: {
         totalAssets: Number(assetsByAccount.get(u.accountId) || 0),
         totalCredits: walletBalance,
@@ -1083,14 +1091,30 @@ async function getAccountWallet(accountId) {
   return result.rows[0] || null;
 }
 
-async function updateAccountStatus(accountId, actionOrStatus) {
-  await assertAccountExists(accountId);
+async function updateAccountStatus(accountId, actionOrStatus, staffId = null) {
+  const account = await assertAccountExists(accountId);
   const key = String(actionOrStatus || '').toLowerCase();
   const status = STATUS_MAP[key] || null;
   if (!status) throw new Error(`Invalid account status action: ${actionOrStatus}`);
 
   await pool.query(`UPDATE accounts SET status = $1 WHERE account_id = $2`, [status, accountId]);
-  return { accountId, status };
+
+  await recordAccountActivity({
+    accountId,
+    action: `Account status set to ${status}`,
+    eventCode: 'ACCOUNT_STATUS_CHANGED',
+    referenceTable: 'accounts',
+    referencePrefix: 'ACC',
+    referenceId: accountId,
+    actorStaffId: staffId,
+    metadata: {
+      previousStatus: account.status,
+      status,
+      action: key,
+    },
+  });
+
+  return { accountId, status, previousStatus: account.status };
 }
 
 async function updateAccountVerification(accountId, action, staffId, options = {}) {
@@ -1305,18 +1329,37 @@ async function warnAccount(accountId, { type, reason, points, expiresAt } = {}, 
       ? new Date(expiresAt)
       : violationExpiryFromPoints(warnPoints);
 
-  await pool.query(
+  const inserted = await pool.query(
     `
     INSERT INTO violations (
       violation_number, account_id, type, reason, points,
       status, staff_id, expires_at
     ) VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
+    RETURNING violation_id
     `,
     [violationNumber, accountId, warnType, warnReason, warnPoints, staffId, expiry]
   );
 
+  await recordAccountActivity({
+    accountId,
+    action: `Warning issued: ${warnType}`,
+    eventCode: 'ACCOUNT_WARNED',
+    referenceTable: 'violations',
+    referencePrefix: 'VIO',
+    referenceId: inserted.rows[0]?.violation_id || violationNumber,
+    actorStaffId: staffId,
+    metadata: {
+      violationNumber,
+      type: warnType,
+      reason: warnReason,
+      points: warnPoints,
+      expiresAt: expiry,
+    },
+  });
+
   return {
     accountId,
+    violationId: inserted.rows[0]?.violation_id || null,
     violationNumber,
     type: warnType,
     points: warnPoints,
@@ -1367,6 +1410,23 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
 
     const previousStatus = account.status;
     await client.query(`UPDATE accounts SET status = 'Active' WHERE account_id = $1`, [accountId]);
+
+    await recordAccountActivity({
+      accountId,
+      action: 'Account pardoned — violations cleared and status restored',
+      eventCode: 'ACCOUNT_PARDONED',
+      referenceTable: 'pardons',
+      referencePrefix: 'PAR',
+      referenceId: pardonRes.rows[0].pardon_id,
+      actorStaffId: staffId,
+      metadata: {
+        previousStatus,
+        status: 'Active',
+        violationsCleared: clearedViolations.rowCount || 0,
+        note: note || null,
+      },
+      client,
+    });
 
     await client.query('COMMIT');
 

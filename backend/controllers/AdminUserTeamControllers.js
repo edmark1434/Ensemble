@@ -9,6 +9,7 @@ const {
   warnAccount,
   pardonAccount,
 } = require('../repositories/AdminUserTeamRepositories');
+const { listAccountActivity } = require('../repositories/AccountActivityRepositories');
 const { assertStatusActionAllowed } = require('../lib/UserTeamPermissions');
 const {
   getAdminVerificationDetails,
@@ -67,7 +68,7 @@ async function patchAdminAccountStatus(req, res) {
       return res.status(400).json({ success: false, message: 'accountId and action are required' });
     }
     assertStatusActionAllowed(req.session, action);
-    const data = await updateAccountStatus(accountId, action);
+    const data = await updateAccountStatus(accountId, action, staffIdFromSession(req.session));
     res.status(200).json({ success: true, data, message: `Account set to ${data.status}` });
   } catch (err) {
     console.error('Error updating account status:', err);
@@ -214,11 +215,28 @@ async function postAdminAccountPardon(req, res) {
   }
 }
 
+async function getAdminAccountActivity(req, res) {
+  try {
+    const { accountId } = req.params;
+    if (!accountId) {
+      return res.status(400).json({ success: false, message: 'accountId is required' });
+    }
+    const data = await listAccountActivity(accountId, {
+      limit: req.query.limit,
+    });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching account activity:', err);
+    res.status(500).json({ success: false, message: 'Failed to load account activity' });
+  }
+}
+
 module.exports = {
   getAdminTeamsManagement,
   getAdminUsersManagement,
   getAdminUserVerificationDetails,
   getAdminUserTeamOverview,
+  getAdminAccountActivity,
   patchAdminAccountStatus,
   patchAdminAccountVerification,
   approveAdminAccountVerification,

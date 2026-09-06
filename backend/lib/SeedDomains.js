@@ -916,6 +916,67 @@ async function seedModerationExtras(userAccountIds, staffByRole) {
     [userAccountIds[0], adminStaffId]
   );
 
+  // Sample account_activity timeline (mirrors real moderation events)
+  const activitySamples = [
+    [
+      userAccountIds[3],
+      'Violation issued: Spam posting',
+      'VIOLATION_ISSUED',
+      'violations',
+      'VIO',
+      supportStaffId,
+      JSON.stringify({ type: 'Spam posting', points: 2 }),
+    ],
+    [
+      userAccountIds[0],
+      'Warning issued: Harassment warning',
+      'ACCOUNT_WARNED',
+      'violations',
+      'VIO',
+      supportStaffId,
+      JSON.stringify({ type: 'Harassment warning', points: 3 }),
+    ],
+    [
+      userAccountIds[0],
+      'Account pardoned — violations cleared and status restored',
+      'ACCOUNT_PARDONED',
+      'pardons',
+      'PAR',
+      adminStaffId,
+      JSON.stringify({ status: 'Active' }),
+    ],
+    [
+      userAccountIds[1],
+      'Restriction applied: feature_hold',
+      'RESTRICTION_ISSUED',
+      'restrictions',
+      'RST',
+      adminStaffId,
+      JSON.stringify({ type: 'feature_hold', module: 'jobs' }),
+    ],
+    [
+      userAccountIds[3],
+      'Account restriction status set to Suspended',
+      'ACCOUNT_STATUS_CHANGED',
+      'accounts',
+      'ACC',
+      adminStaffId,
+      JSON.stringify({ status: 'Suspended', source: 'seed' }),
+    ],
+  ];
+
+  for (const row of activitySamples) {
+    if (!row[0]) continue;
+    await pool.query(
+      `INSERT INTO account_activity (
+         account_id, action, event_code,
+         reference_table, reference_prefix, reference_id,
+         actor_staff_id, metadata
+       ) VALUES ($1,$2,$3,$4,$5,$1,$6,$7::jsonb)`,
+      row
+    );
+  }
+
   for (let i = 0; i < Math.min(5, userAccountIds.length); i++) {
     await pool.query(
       `INSERT INTO notifications (
@@ -933,7 +994,7 @@ async function seedModerationExtras(userAccountIds, staffByRole) {
     );
   }
 
-  console.log('✅ Seeded restrictions, pardons, notifications');
+  console.log('✅ Seeded restrictions, pardons, notifications, account activity');
 }
 
 async function seedVerificationDemos(userAccountIds, staffByRole) {

@@ -1,4 +1,4 @@
-import { Flag, LayoutDashboard, Scale, ShoppingBag, Ticket, Users } from 'lucide-react';
+import { Flag, LayoutDashboard, Scale, ShieldBan, ShoppingBag, Ticket, Users } from 'lucide-react';
 import ModeratorNavbar from '../shared/ModeratorNavbar';
 
 const navItems = [
@@ -7,6 +7,7 @@ const navItems = [
   { label: 'Ticket Management', icon: Ticket, to: '/moderator/marketplace/ticket-management' },
   { label: 'Disputes', icon: Scale, to: '/moderator/marketplace/disputes' },
   { label: 'Reports', icon: Flag, to: '/moderator/marketplace/reports' },
+  { label: 'Restrictions', icon: ShieldBan, to: '/moderator/marketplace/restrictions' },
   { label: 'User & Team', icon: Users, to: '/moderator/marketplace/user-team' },
 ];
 
