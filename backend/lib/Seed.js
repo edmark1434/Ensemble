@@ -358,7 +358,7 @@ async function resetSeedTables() {
         user_tags,
         user_platform_purpose,
         user_survey_responses,
-        account_verification_sessions,
+        verification_sessions,
         staff,
         users,
         accounts

@@ -176,8 +176,12 @@ async function fetchPendingCasesFromDb() {
         a.handle,
         a.display_name,
         a.created_at,
-        av.status AS verification_status,
-        av.verified_by_staff_id,
+        CASE
+          WHEN COALESCE(v.is_verified, FALSE) THEN 'verified'
+          WHEN avs.verification_status IS NOT NULL THEN avs.verification_status
+          ELSE 'unverified'
+        END AS verification_status,
+        st.staff_id AS verified_by_staff_id,
         st.role AS assigned_role,
         COALESCE(
           NULLIF(TRIM(COALESCE(sta.display_name, '')), ''),
@@ -186,17 +190,13 @@ async function fetchPendingCasesFromDb() {
         ) AS assigned_staff_name
       FROM users u
       INNER JOIN accounts a ON a.account_id = u.account_id
-      LEFT JOIN LATERAL (
-        SELECT status, verified_by_staff_id
-        FROM account_verification av
-        WHERE av.account_id = a.account_id AND av.deleted_at IS NULL
-        ORDER BY av.created_at DESC
-        LIMIT 1
-      ) av ON TRUE
-      LEFT JOIN staff st ON st.staff_id = av.verified_by_staff_id
-      LEFT JOIN accounts sta ON sta.account_id = st.account_id
+      LEFT JOIN verifications v ON v.account_id = a.account_id
+      LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
+      LEFT JOIN accounts sta ON sta.account_id = avs.verified_by_account_id
+      LEFT JOIN staff st ON st.account_id = sta.account_id
       WHERE a.deleted_at IS NULL
-        AND LOWER(COALESCE(av.status, 'unverified')) IN ('unverified', 'pending', 'pending review')
+        AND (COALESCE(v.is_verified, FALSE) = FALSE)
+        AND LOWER(COALESCE(avs.verification_status, 'unverified')) IN ('unverified', 'pending', 'pending review')
       ORDER BY a.created_at DESC
       LIMIT 40
     `),
@@ -286,15 +286,11 @@ async function countOpenIdentityReviews() {
     SELECT COUNT(*)::int AS count
     FROM users u
     INNER JOIN accounts a ON a.account_id = u.account_id
-    LEFT JOIN LATERAL (
-      SELECT status
-      FROM account_verification av
-      WHERE av.account_id = a.account_id AND av.deleted_at IS NULL
-      ORDER BY av.created_at DESC
-      LIMIT 1
-    ) av ON TRUE
+    LEFT JOIN verifications v ON v.account_id = a.account_id
+    LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
     WHERE a.deleted_at IS NULL
-      AND LOWER(COALESCE(av.status, 'unverified')) IN ('unverified', 'pending', 'pending review')
+      AND (COALESCE(v.is_verified, FALSE) = FALSE)
+      AND LOWER(COALESCE(avs.verification_status, 'unverified')) IN ('unverified', 'pending', 'pending review')
   `);
   return Number(result.rows[0]?.count || 0);
 }
@@ -644,7 +640,7 @@ async function getModerationOverview(staffSession = null) {
           'violations',
           'marketplace_listings',
           'platform_settings',
-          'account_verification',
+          'verifications',
         ],
         accountCount: stats.total_accounts,
         userCount: users.length,
@@ -1079,28 +1075,45 @@ async function assignMyselfToPendingCase(caseId, body, session) {
     if (!userRes.rows.length) throw new Error('User not found for identity case');
     const accountId = userRes.rows[0].account_id;
 
-    const existing = await pool.query(
-      `SELECT account_verification_id, status
-       FROM account_verification
-       WHERE account_id = $1 AND deleted_at IS NULL
-       ORDER BY created_at DESC
-       LIMIT 1`,
+    const staffRes = await pool.query(
+      `SELECT account_id FROM staff WHERE staff_id = $1 LIMIT 1`,
+      [staffId]
+    );
+    const staffAccountId = staffRes.rows[0]?.account_id || null;
+
+    const verificationRes = await pool.query(
+      `INSERT INTO verifications (account_id, is_verified, created_at, updated_at)
+       VALUES ($1, FALSE, NOW(), NOW())
+       ON CONFLICT (account_id) DO UPDATE
+       SET updated_at = NOW()
+       RETURNING verification_id, verification_session_id`,
       [accountId]
     );
 
-    if (existing.rows.length) {
+    const verificationSessionId = verificationRes.rows[0]?.verification_session_id;
+    if (verificationSessionId) {
       await pool.query(
-        `UPDATE account_verification
-         SET verified_by_staff_id = $1,
+        `UPDATE verification_sessions
+         SET verified_by_account_id = $1,
              updated_at = NOW()
-         WHERE account_verification_id = $2`,
-        [staffId, existing.rows[0].account_verification_id]
+         WHERE verification_session_id = $2`,
+        [staffAccountId, verificationSessionId]
       );
     } else {
+      const newSession = await pool.query(
+        `INSERT INTO verification_sessions (
+           account_id, didit_session_id, verification_url, kyc_status, verification_status,
+           verified_by_account_id, created_at, updated_at
+         ) VALUES ($1, $2, '', 'In Progress', 'Pending', $3, NOW(), NOW())
+         RETURNING verification_session_id`,
+        [accountId, `manual_review_${Date.now()}_${String(accountId).slice(0, 8)}`, staffAccountId]
+      );
       await pool.query(
-        `INSERT INTO account_verification (account_id, status, verified_by_staff_id)
-         VALUES ($1, 'pending', $2)`,
-        [accountId, staffId]
+        `UPDATE verifications
+         SET verification_session_id = $1,
+             updated_at = NOW()
+         WHERE account_id = $2`,
+        [newSession.rows[0].verification_session_id, accountId]
       );
     }
     return { id, source, assignedStaffId: staffId, accountId, status: 'Open' };

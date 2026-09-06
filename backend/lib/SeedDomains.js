@@ -934,30 +934,8 @@ async function seedVerificationDemos(userAccountIds, staffByRole) {
   ).rows[0]?.account_id;
   const files = (await pool.query(`SELECT file_id FROM files ORDER BY name LIMIT 3`)).rows;
 
-  const statusPlan = [
-    ['verified', userAccountIds[0]],
-    ['pending', userAccountIds[1]],
-    ['rejected', userAccountIds[2]],
-    ['unverified', userAccountIds[3]],
-  ];
-
-  for (const [status, accountId] of statusPlan) {
-    if (!accountId) continue;
-    await pool.query(
-      `UPDATE account_verification
-       SET status = $2::varchar(50),
-           verified_by_staff_id = CASE
-             WHEN $2::text = 'verified' THEN $3::uuid
-             ELSE NULL
-           END,
-           updated_at = NOW()
-       WHERE account_id = $1`,
-      [accountId, status, staffByRole.Admin]
-    );
-  }
-
   const sessionRes = await pool.query(
-    `INSERT INTO account_verification_sessions (
+    `INSERT INTO verification_sessions (
        account_id, didit_session_id, verification_url, kyc_status, verification_status,
        verified_by_account_id, expires_at
      ) VALUES

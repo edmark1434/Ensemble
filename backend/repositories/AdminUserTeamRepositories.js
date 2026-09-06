@@ -80,12 +80,15 @@ function mapUserRow(row) {
       verification_status: row.verification_status,
       verification_session_id: row.verification_session_id,
       didit_session_id: row.didit_session_id,
+      verification_url: row.verification_url || null,
+      has_verification_url: Boolean(row.verification_url && row.verification_url.trim()),
       session_status: row.session_status,
       kyc_status: row.kyc_status,
       verification_expires_at: row.verification_expires_at,
       verification_updated_at: row.verification_updated_at,
       created_at: row.created_at,
       verified_by_name: row.verified_by_name,
+      is_team: false,
     },
   };
 }
@@ -272,10 +275,15 @@ function buildVerificationDetail(row) {
   const label = hasActivity ? row.session_status || 'Pending' : 'No Verification Activity';
   const expiresAt = row.verification_expires_at || null;
   const isExpired = Boolean(expiresAt && new Date(expiresAt).getTime() <= Date.now());
+  const hasVerificationUrl = Boolean(row.verification_url && row.verification_url.trim());
+  const isTeam = Boolean(row.is_team || row.account_type === 'team');
   return {
     status: label,
     expiresAt,
     isExpired,
+    hasVerificationUrl,
+    verificationUrl: row.verification_url || null,
+    isTeam,
     reverificationDueDays: expiresAt
       ? Math.max(
           0,
@@ -298,13 +306,22 @@ function buildVerificationDetail(row) {
 
 async function markExpiredVerificationsForReverification() {
   await pool.query(`
-    UPDATE account_verification
-    SET status = 'reverification_required',
+    UPDATE verification_sessions
+    SET verification_status = 'reverification_required',
         updated_at = NOW()
-    WHERE LOWER(COALESCE(status, '')) = 'verified'
+    WHERE LOWER(COALESCE(verification_status, '')) IN ('approved', 'verified')
       AND expires_at IS NOT NULL
       AND expires_at <= NOW()
-      AND deleted_at IS NULL
+  `);
+
+  await pool.query(`
+    UPDATE verifications
+    SET is_verified = FALSE,
+        updated_at = NOW()
+    FROM verification_sessions avs
+    WHERE verifications.verification_session_id = avs.verification_session_id
+      AND avs.verification_status = 'reverification_required'
+      AND verifications.is_verified = TRUE
   `);
 }
 
@@ -340,6 +357,7 @@ async function fetchAllUsers() {
       CASE WHEN COALESCE(v.is_verified, FALSE) THEN 'verified' ELSE 'unverified' END AS verification_status,
       v.verification_session_id,
       avs.didit_session_id,
+      avs.verification_url,
       avs.verification_status AS session_status,
       avs.kyc_status,
       avs.expires_at AS verification_expires_at,
@@ -359,7 +377,7 @@ async function fetchAllUsers() {
       LIMIT 1
     ) p ON TRUE
     LEFT JOIN verifications v ON v.account_id = a.account_id
-    LEFT JOIN account_verification_sessions avs
+    LEFT JOIN verification_sessions avs
       ON avs.verification_session_id = v.verification_session_id
     LEFT JOIN LATERAL (
       SELECT w.balance_credits, w.frozen_balance_credits
@@ -437,6 +455,7 @@ async function getUserVerificationRecord(accountId) {
       t.team_id,
       a.display_name AS team_name,
       avs.didit_session_id,
+      avs.verification_url,
       avs.kyc_status,
       avs.verification_status AS internal_status,
       avs.verified_by_account_id,
@@ -474,7 +493,7 @@ async function getUserVerificationRecord(accountId) {
     FROM verifications v
     JOIN accounts a ON a.account_id = v.account_id
     LEFT JOIN teams t ON t.account_id = a.account_id
-    LEFT JOIN account_verification_sessions avs
+    LEFT JOIN verification_sessions avs
       ON avs.verification_session_id = v.verification_session_id
     LEFT JOIN business_verification_details bvd
       ON bvd.verification_id = v.verification_id
@@ -521,7 +540,7 @@ async function applyTeamVerificationAction(
     if (!result.rows[0]) throw new Error('Team verification was not found');
 
     const sessionResult = await client.query(
-      `UPDATE account_verification_sessions avs
+      `UPDATE verification_sessions avs
        SET verification_status = $2::varchar,
            verified_by_account_id = $3::uuid,
            expires_at = CASE
@@ -563,12 +582,12 @@ async function updateUserVerificationExpiry(accountId, validityDays, verifiedByA
           OR v.verified_at IS NULL
           OR ABS(EXTRACT(EPOCH FROM (avs.expires_at - v.verified_at)) - ($2::int * 86400)) > 60
         ) AS expiry_changed
-      FROM account_verification_sessions avs
+      FROM verification_sessions avs
       JOIN verifications v
         ON avs.verification_session_id = v.verification_session_id
       WHERE v.account_id = $1
     )
-    UPDATE account_verification_sessions avs
+    UPDATE verification_sessions avs
     SET expires_at = CASE
           WHEN cv.expiry_changed THEN NOW() + ($2::int * INTERVAL '1 day')
           ELSE avs.expires_at
@@ -587,7 +606,7 @@ async function updateUserVerificationExpiry(accountId, validityDays, verifiedByA
 async function prepareUserVerificationApprovalExpiry(accountId, validityDays, verifiedByAccountId) {
   const result = await pool.query(
     `
-    UPDATE account_verification_sessions avs
+    UPDATE verification_sessions avs
     SET expires_at = CASE
           WHEN $2::int = 365 THEN NULL
           ELSE NOW() + ($2::int * INTERVAL '1 day')
@@ -607,7 +626,7 @@ async function prepareUserVerificationApprovalExpiry(accountId, validityDays, ve
 async function restoreUserVerificationExpiry(accountId, expiresAt, verifiedByAccountId) {
   await pool.query(
     `
-    UPDATE account_verification_sessions avs
+    UPDATE verification_sessions avs
     SET expires_at = $2,
         verified_by_account_id = $3,
         updated_at = NOW()
@@ -630,7 +649,7 @@ async function markUserVerificationPending(accountId) {
   );
   await pool.query(
     `
-    UPDATE account_verification_sessions avs
+    UPDATE verification_sessions avs
     SET verification_status = 'Pending', updated_at = NOW()
     FROM verifications v
     WHERE v.account_id = $1
@@ -677,7 +696,7 @@ async function fetchTeamsFromDatabase() {
     INNER JOIN accounts a ON a.account_id = t.account_id
     LEFT JOIN files f ON f.file_id = a.avatar_file_id
     LEFT JOIN verifications v ON v.account_id = a.account_id
-    LEFT JOIN account_verification_sessions avs
+    LEFT JOIN verification_sessions avs
       ON avs.verification_session_id = v.verification_session_id
     LEFT JOIN accounts va ON va.account_id = avs.verified_by_account_id
     LEFT JOIN LATERAL (
@@ -1106,89 +1125,122 @@ async function updateAccountVerification(accountId, action, staffId, options = {
   if (!Number.isFinite(validityDays) || validityDays <= 0) validityDays = 365;
   validityDays = Math.min(Math.max(Math.floor(validityDays), 1), 3650); // 1 day – 10 years
 
-  const userAccount = await pool.query(
-    `SELECT 1 FROM users WHERE account_id = $1 LIMIT 1`,
+  const isVerified = nextStatus === 'verified';
+  const accountTypeRes = await pool.query(
+    `SELECT type FROM accounts WHERE account_id = $1::uuid LIMIT 1`,
     [accountId]
   );
+  const forTeam = String(accountTypeRes.rows[0]?.type || '').toLowerCase() === 'team';
 
-  if (userAccount.rows.length) {
-    const isVerified = nextStatus === 'verified';
-    await pool.query(
+  let existingSessionRes = null;
+  if (!forTeam && isVerified) {
+    existingSessionRes = await pool.query(
       `
-      INSERT INTO verifications (account_id, is_verified, verified_at, created_at, updated_at)
-      VALUES ($1, $2, CASE WHEN $2 THEN NOW() ELSE NULL END, NOW(), NOW())
-      ON CONFLICT (account_id) DO UPDATE
-      SET is_verified = EXCLUDED.is_verified,
-          verified_at = EXCLUDED.verified_at,
-          updated_at = NOW()
+      SELECT avs.verification_session_id, avs.verification_url
+      FROM verification_sessions avs
+      WHERE (
+        avs.verification_session_id = (
+          SELECT verification_session_id FROM verifications WHERE account_id = $1::uuid
+        ) OR avs.account_id = $1::uuid
+      )
+        AND avs.verification_url IS NOT NULL
+        AND TRIM(avs.verification_url) <> ''
+      ORDER BY avs.created_at DESC
+      LIMIT 1
       `,
-      [accountId, isVerified]
+      [accountId]
     );
-    await pool.query(
-      `
-      UPDATE account_verification_sessions avs
-      SET verification_status = $2,
-          expires_at = CASE
-            WHEN $2 = 'verified' THEN NOW() + ($3::int * INTERVAL '1 day')
-            ELSE expires_at
-          END,
-          updated_at = NOW()
-      FROM verifications v
-      WHERE v.account_id = $1
-        AND avs.verification_session_id = v.verification_session_id
-      `,
-      [accountId, nextStatus, validityDays]
-    );
-    return {
-      accountId,
-      verificationStatus: isVerified ? 'Verified' : 'Unverified',
-      validityDays: isVerified ? validityDays : null,
-    };
+
+    if (!existingSessionRes.rows.length) {
+      throw new Error('Cannot approve verification: no verification URL exists in the verification session');
+    }
   }
 
-  const existing = await pool.query(
+  const verificationRes = await pool.query(
     `
-    SELECT account_verification_id
-    FROM account_verification
-    WHERE account_id = $1 AND deleted_at IS NULL
-    ORDER BY created_at DESC
-    LIMIT 1
+    INSERT INTO verifications (account_id, is_verified, verified_at, created_at, updated_at)
+    VALUES ($1::uuid, $2::boolean, CASE WHEN $2::boolean THEN NOW() ELSE NULL END, NOW(), NOW())
+    ON CONFLICT (account_id) DO UPDATE
+    SET is_verified = EXCLUDED.is_verified,
+        verified_at = EXCLUDED.verified_at,
+        updated_at = NOW()
+    RETURNING verification_id, verification_session_id
     `,
-    [accountId]
+    [accountId, isVerified]
   );
 
-  if (existing.rows.length) {
+  let staffAccountId = null;
+  if (staffId) {
+    const staffRes = await pool.query(
+      `SELECT account_id FROM staff WHERE staff_id::text = $1 OR account_id::text = $1 LIMIT 1`,
+      [String(staffId)]
+    );
+    staffAccountId = staffRes.rows[0]?.account_id || null;
+  }
+
+  let verificationSessionId = verificationRes.rows[0]?.verification_session_id;
+  if (!verificationSessionId && existingSessionRes?.rows?.[0]?.verification_session_id) {
+    verificationSessionId = existingSessionRes.rows[0].verification_session_id;
+    await pool.query(
+      `UPDATE verifications SET verification_session_id = $1::uuid WHERE account_id = $2::uuid`,
+      [verificationSessionId, accountId]
+    );
+  }
+
+  if (verificationSessionId) {
     await pool.query(
       `
-      UPDATE account_verification
-      SET status = $1,
-          updated_at = NOW(),
-          verified_by_staff_id = $2,
+      UPDATE verification_sessions
+      SET verification_status = $2::varchar,
+          verified_by_account_id = COALESCE($3::uuid, verified_by_account_id),
           expires_at = CASE
-            WHEN $1 = 'verified' THEN NOW() + ($4::int * INTERVAL '1 day')
+            WHEN $2::varchar = 'verified'::varchar THEN NOW() + ($4::int * INTERVAL '1 day')
             ELSE NULL
-          END
-      WHERE account_verification_id = $3
+          END,
+          updated_at = NOW()
+      WHERE verification_session_id = $1::uuid
       `,
-      [nextStatus, staffId || null, existing.rows[0].account_verification_id, validityDays]
+      [verificationSessionId, nextStatus, staffAccountId, validityDays]
     );
   } else {
+    const sessionRes = await pool.query(
+      `
+      INSERT INTO verification_sessions (
+        account_id, didit_session_id, verification_url, kyc_status, verification_status,
+        verified_by_account_id, expires_at, created_at, updated_at
+      ) VALUES (
+        $1::uuid, $2::varchar, '', 'Not Started', $3::varchar,
+        $4::uuid,
+        CASE WHEN $3::varchar = 'verified'::varchar THEN NOW() + ($5::int * INTERVAL '1 day') ELSE NULL END,
+        NOW(), NOW()
+      )
+      RETURNING verification_session_id
+      `,
+      [
+        accountId,
+        `manual_admin_${Date.now()}_${String(accountId).slice(0, 8)}`,
+        nextStatus,
+        staffAccountId,
+        validityDays,
+      ]
+    );
     await pool.query(
       `
-      INSERT INTO account_verification (account_id, status, created_at, updated_at, verified_by_staff_id, expires_at)
-      VALUES (
-        $1, $2, NOW(), NOW(), $3,
-        CASE WHEN $2 = 'verified' THEN NOW() + ($4::int * INTERVAL '1 day') ELSE NULL END
-      )
+      UPDATE verifications
+      SET verification_session_id = $1::uuid,
+          updated_at = NOW()
+      WHERE account_id = $2::uuid
       `,
-      [accountId, nextStatus, staffId || null, validityDays]
+      [sessionRes.rows[0].verification_session_id, accountId]
     );
   }
 
   return {
     accountId,
-    verificationStatus: mapVerificationLabel(nextStatus),
-    validityDays: nextStatus === 'verified' ? validityDays : null,
+    verificationStatus: isVerified
+      ? (forTeam ? 'Business Verified' : 'Verified')
+      : mapVerificationLabel(nextStatus, { forTeam }),
+    validityDays: isVerified ? validityDays : null,
   };
 }
 
