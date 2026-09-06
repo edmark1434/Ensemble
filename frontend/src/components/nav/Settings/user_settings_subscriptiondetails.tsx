@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { XCircle, Check, Crown, Loader2, Zap } from "lucide-react";
+import { XCircle, Check, Crown, Loader2, Zap, Flame } from "lucide-react";
 
 interface SubscriptionDetailsProps {
   subscription: {
@@ -29,68 +29,78 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
       name: "Free",
       tagline: "Free membership",
       price: "Free",
+      icon: "/icons/subscription/freemium.png",
+      popular: false,
       current: isFreePlan,
       features: [
+        { label: "Maximum asset posts", val: "1" },
         { label: "Maximum export quality", val: "720p" },
         { label: "Rendering/export speed", val: "Standard" },
-        { label: "Available editing tools", val: "Basic" },
-        { label: "Priority in render queue", val: "Low" },
-        { label: "Watermark on exported files", val: "Enabled" },
-        { label: "Maximum asset posts", val: "1" },
-        { label: "Maximum collaborative projects", val: "3" },
         { label: "Maximum collaborators", val: "3" },
-      ],
-    },
-    {
-      name: "Business",
-      tagline: "Business monthly membership",
-      price: "350,000 /mo",
-      current: subscription.plan_name?.toLowerCase().includes("business"),
-      features: [
-        { label: "Maximum export quality", val: "2K-4K" },
-        { label: "Rendering/export speed", val: "Maximum" },
-        { label: "Available editing tools", val: "Premium + AI" },
-        { label: "Priority in render queue", val: "Top" },
-        { label: "Watermark on exported files", val: "Disabled" },
-        { label: "Displayed membership badge", val: "Business" },
-        { label: "Maximum asset posts", val: "Unlimited" },
-        { label: "Maximum collaborative projects", val: "20" },
-        { label: "Additional profile visibility", val: "90" },
-        { label: "Maximum collaborators", val: "20" },
-      ],
+        { label: "Watermark on exported files", val: "Enabled" },
+        { label: "Maximum collaborative projects", val: "3" },
+        { label: "Available editing tools", val: "Basic" },
+        { label: "Priority in render queue", val: "Low" }
+      ]
     },
     {
       name: "Premium",
       tagline: "Premium monthly membership",
-      price: "59,900 /mo",
+      price: "₱59,900",
+      suffix: "/mo",
+      icon: "/icons/subscription/premium.png",
       popular: true,
       current: subscription.plan_name?.toLowerCase().includes("premium"),
       features: [
+        { label: "Maximum asset posts", val: "20" },
         { label: "Maximum export quality", val: "1080p" },
         { label: "Rendering/export speed", val: "Accelerated" },
-        { label: "Available editing tools", val: "Premium + AI" },
-        { label: "Priority in render queue", val: "Priority" },
-        { label: "Watermark on exported files", val: "Disabled" },
-        { label: "Displayed membership badge", val: "Premium" },
-        { label: "Maximum asset posts", val: "20" },
-        { label: "Maximum collaborative projects", val: "10" },
-        { label: "Additional profile visibility", val: "30" },
         { label: "Maximum collaborators", val: "10" },
-      ],
+        { label: "Watermark on exported files", val: "Disabled" },
+        { label: "Maximum collaborative projects", val: "10" },
+        { label: "Available editing tools", val: "Premium + AI" },
+        { label: "Displayed membership badge", val: "Premium" },
+        { label: "Priority in render queue", val: "Priority" },
+        { label: "Additional profile visibility", val: "30" }
+      ]
     },
+    {
+      name: "Business",
+      tagline: "Business monthly membership",
+      price: "₱350,000",
+      suffix: "/mo",
+      icon: "/icons/subscription/studio.png",
+      popular: false,
+      current: subscription.plan_name?.toLowerCase().includes("business"),
+      features: [
+        { label: "Maximum asset posts", val: "Unlimited" },
+        { label: "Maximum export quality", val: "2K-4K" },
+        { label: "Rendering/export speed", val: "Maximum" },
+        { label: "Maximum collaborators", val: "20" },
+        { label: "Watermark on exported files", val: "Disabled" },
+        { label: "Maximum collaborative projects", val: "20" },
+        { label: "Available editing tools", val: "Premium + AI" },
+        { label: "Displayed membership badge", val: "Business" },
+        { label: "Priority in render queue", val: "Top" },
+        { label: "Additional profile visibility", val: "90" }
+      ]
+    }
   ];
+
+  const activePlanDetails = plans.find(p => p.current) || plans[0];
 
   return (
     <div className="space-y-8 font-['Plus_Jakarta_Sans',sans-serif]">
       {/* Current Subscription Status Header */}
-      <div className="p-6 rounded-2xl border border-gray-200 dark:border-white/10 bg-gradient-to-r from-blue-50/50 via-indigo-50/50 dark:from-blue-900/20 dark:via-indigo-900/10 to-transparent flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="p-6 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#18181b] flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-300 border border-blue-500/30">
+            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/50 shadow-[0_0_10px_rgba(16,185,129,0.3)]">
               {subscription.status || "Active"}
             </span>
           </div>
           <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <img src={activePlanDetails.icon} alt={activePlanDetails.name} className="w-6 h-6 object-contain" />
             {subscription.plan_name || "Free Tier"}
           </h3>
           <p className="text-xs text-gray-600 dark:text-zinc-400">
@@ -104,7 +114,7 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
           <button
             type="button"
             onClick={() => navigate("/credits-subscriptions")}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md"
           >
             <Zap className="h-4 w-4" /> Upgrade / Change Plan
           </button>
@@ -115,7 +125,7 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
               type="button"
               onClick={onCancelSubscription}
               disabled={isCancelling}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} {isCancelling ? "Cancelling..." : "Cancel Subscription"}
             </button>
@@ -126,75 +136,106 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
       {/* Subscription Tier Cards Showcase */}
       <div>
         <h3 className="text-sm font-semibold text-gray-800 dark:text-zinc-300 mb-4">Available Membership Plans</h3>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 w-full">
           {plans.map((plan, idx) => (
             <div
               key={idx}
-              className={`relative rounded-2xl p-6 border flex flex-col justify-between transition-all ${
+              className={`relative rounded-2xl p-8 border transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${
                 plan.current
-                  ? "border-emerald-500/60 bg-emerald-50/30 dark:bg-[#0d131f] shadow-[0_0_20px_rgba(16,185,129,0.1)]"
-                  : "border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] hover:border-gray-300 dark:hover:border-white/20"
+                  ? "border-[#10b981] bg-white dark:bg-[#18181b]"
+                  : "border-gray-200 dark:border-white/10 bg-white dark:bg-[#18181b] hover:border-blue-500/50"
               }`}
             >
               {/* Badges */}
               {plan.current && (
-                <div className="absolute -top-3 left-4 bg-emerald-500 text-white dark:text-[#080a12] text-[10px] font-extrabold tracking-wider uppercase px-2.5 py-0.5 rounded-full shadow-md">
-                  Current Plan
-                </div>
-              )}
-              {plan.popular && !plan.current && (
-                <div className="absolute -top-3 right-4 bg-gray-100/80 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-800 dark:text-white text-[10px] font-medium px-2.5 py-0.5 rounded-full backdrop-blur-md">
-                  Most popular
+                <div className="absolute -top-3 left-4 bg-[#10b981] text-white text-[10px] font-extrabold tracking-wider uppercase px-3 py-1 rounded-full shadow-md z-10">
+                  DEFAULT PLAN
                 </div>
               )}
 
-              <div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  {!isFreePlan && <Crown className="h-4 w-4 text-amber-500 dark:text-amber-400" />}
-                  <h4 className="text-lg font-bold text-gray-900 dark:text-white">{plan.name}</h4>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-zinc-400 mb-4">{plan.tagline}</p>
-                <div className="text-2xl font-extrabold text-gray-900 dark:text-white mb-6">
-                  {plan.price}
+              <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-center">
+                {/* Left Side: Info & Button */}
+                <div className="flex flex-col h-full justify-center">
+                  <div className="flex items-center gap-3 mb-2">
+                    <img src={plan.icon} alt={plan.name} className="w-7 h-7 object-contain" />
+                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">{plan.name}</h4>
+                  </div>
+                  <p className="text-sm text-gray-500 dark:text-zinc-400 mb-6">{plan.tagline}</p>
+                  
+                  <div className="flex items-baseline gap-1 mb-8">
+                    <h2 className="text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+                      {plan.price}
+                    </h2>
+                    {plan.suffix && (
+                      <span className="text-sm font-medium text-gray-500 dark:text-zinc-400">
+                        {plan.suffix}
+                      </span>
+                    )}
+                    {plan.popular && (
+                      <div className="group relative flex items-center w-fit ml-2 self-center">
+                        <Flame className="h-6 w-6 text-amber-500 cursor-pointer drop-shadow-md" />
+                        <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-black text-white text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20 shadow-lg border border-white/10">
+                          Most Popular
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Button */}
+                  {plan.current ? (
+                    <button
+                      disabled
+                      className="w-full py-3.5 rounded-lg border border-gray-200 dark:border-white/10 bg-transparent text-gray-400 dark:text-zinc-500 text-sm font-semibold cursor-not-allowed flex items-center justify-center mt-auto"
+                    >
+                      Your Current Plan
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => navigate("/credits-subscriptions")}
+                      className="w-full py-3.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center bg-[#2563eb] text-white hover:bg-[#1d4ed8] mt-auto"
+                    >
+                      Subscribe Plan
+                    </button>
+                  )}
                 </div>
 
-                {/* Features List */}
-                <ul className="space-y-3 mb-6">
-                  {plan.features.map((feat, fIdx) => (
-                    <li key={fIdx} className="flex items-start gap-2 text-xs">
-                      <Check className="h-4 w-4 text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5" />
-                      <span className="text-gray-700 dark:text-zinc-300">
-                        {feat.label}{" "}
-                        <span className="font-semibold text-gray-900 dark:text-white bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 px-1.5 py-0.5 rounded text-[11px] ml-1 inline-block">
+                {/* Right Side: Features */}
+                <div className="flex flex-col justify-center h-full">
+                  <div className="h-px w-full bg-gray-200 dark:bg-white/10 mb-6 md:hidden" />
+                  
+                  {/* Custom thin scrollbar styles */}
+                  <style>{`
+                    .features-scrollbar::-webkit-scrollbar {
+                      width: 4px;
+                    }
+                    .features-scrollbar::-webkit-scrollbar-track {
+                      background: transparent;
+                    }
+                    .features-scrollbar::-webkit-scrollbar-thumb {
+                      background: rgba(156, 163, 175, 0.3);
+                      border-radius: 10px;
+                    }
+                    .features-scrollbar::-webkit-scrollbar-thumb:hover {
+                      background: rgba(156, 163, 175, 0.5);
+                    }
+                  `}</style>
+                  
+                  <div className="space-y-4 max-h-[220px] overflow-y-auto pr-2 features-scrollbar">
+                    {plan.features.map((feat, fIdx) => (
+                      <div key={fIdx} className="flex items-center justify-between text-[13px]">
+                        <div className="flex items-center gap-2">
+                          <Check className="h-4 w-4 text-[#10b981] shrink-0" strokeWidth={3} />
+                          <span className="text-gray-700 dark:text-zinc-300">{feat.label}</span>
+                        </div>
+                        <span className="font-semibold text-gray-900 dark:text-white bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded text-xs ml-4 text-right">
                           {feat.val}
                         </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-
-              {/* Action Button */}
-              {plan.current ? (
-                <button
-                  disabled
-                  className="w-full py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-400 dark:text-zinc-500 text-xs font-semibold cursor-not-allowed"
-                >
-                  Current Plan
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => navigate("/credits-subscriptions")}
-                  className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-md ${
-                    plan.popular
-                      ? "bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-                      : "bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-white/20"
-                  }`}
-                >
-                  Subscribe / Upgrade
-                </button>
-              )}
             </div>
           ))}
         </div>

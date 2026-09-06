@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, CreditCard, HelpCircle, FileText, ArrowLeft, AlertCircle,  Ticket, Monitor, Wallet } from "lucide-react";
+import { User, CreditCard, HelpCircle, FileText, ArrowLeft, AlertCircle, Monitor, Wallet } from "lucide-react";
 
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -17,9 +17,8 @@ import { UserSettingsSubscriptionDetails } from "./user_settings_subscriptiondet
 import { UserSettingsHelp } from "./user_settings_help";
 import { UserSettingsLegalPolicies } from "./user_settings_legalpolicies";
 import { UserSettingsDisplay } from "./user_settings_display";
-import PageSubmitATicket from '@/pages/landing/pages/page_SubmitATicket';
 import { UserSettingsWallet } from "./user_settings_wallet";
-type TabType = "account" | "wallet" | "subscription" | "help" | "legal" | "ticket" | "display";
+type TabType = "account" | "wallet" | "subscription" | "help" | "legal" | "display";
 
 interface Preset {
   file_id: number;
@@ -277,7 +276,6 @@ export default function UserSettings() {
     { id: "account", label: "Account Details", icon: User },
     { id: "wallet", label: "Wallet", icon: Wallet },
     { id: "subscription", label: "Subscription Details", icon: CreditCard },
-    { id: "ticket", label: "Submit a Ticket", icon: Ticket },
     { id: "help", label: "Help & Support", icon: HelpCircle },
     { id: "legal", label: "Legal & Policies", icon: FileText },
   ] as const;
@@ -390,7 +388,6 @@ export default function UserSettings() {
                 {activeTab === "display" && <UserSettingsDisplay />}
 
                 {activeTab === "legal" && <UserSettingsLegalPolicies />}
-                {activeTab === "ticket" && <PageSubmitATicket />}
               </motion.div>
             </AnimatePresence>
           </main>

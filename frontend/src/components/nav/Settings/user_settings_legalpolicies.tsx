@@ -1,9 +1,7 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
 import { ExternalLink } from "lucide-react";
 
 export const UserSettingsLegalPolicies: React.FC = () => {
-  const navigate = useNavigate();
 
   return (
     <div className="space-y-6">
@@ -14,7 +12,7 @@ export const UserSettingsLegalPolicies: React.FC = () => {
 
       <div className="space-y-3">
         <button
-          onClick={() => navigate("/landing/TermsOfService")}
+          onClick={() => window.open("/landing/TermsOfService", "_blank")}
           className="w-full flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-gray-50 dark:hover:bg-white/10 transition-all text-left"
         >
           <div>
@@ -25,7 +23,7 @@ export const UserSettingsLegalPolicies: React.FC = () => {
         </button>
 
         <button
-          onClick={() => navigate("/landing/PrivacyPolicy")}
+          onClick={() => window.open("/landing/PrivacyPolicy", "_blank")}
           className="w-full flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-gray-50 dark:hover:bg-white/10 transition-all text-left"
         >
           <div>
