@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Download, X } from 'lucide-react';
+import { AlertTriangle, Download, ExternalLink, X } from 'lucide-react';
 import api from '@/lib/axios';
+import { showErrorToast } from '@/components/utility/toast';
 import {
   adjustAccountCredits,
   freezeAccountCredits,
@@ -832,6 +833,25 @@ function DiditVerificationPanel({
             <VerificationStatusBadge status={details.kycStatus} />
           </div>
         </div>
+        {details.verificationUrl ? (
+          <div className="mt-3 flex items-center justify-between rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
+            <span className="text-xs text-zinc-400">Didit verification session</span>
+            <a
+              href={details.verificationUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-blue-300 hover:text-blue-200"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open Session Link
+            </a>
+          </div>
+        ) : (
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+            <span>No verification URL in session. Approval is disabled.</span>
+          </div>
+        )}
         {details.activity === 'details_unavailable' && (
           <p className="mt-2 text-xs text-amber-300">Detailed verification results are temporarily unavailable.</p>
         )}
@@ -847,6 +867,21 @@ function DiditVerificationPanel({
         <div><p className="mb-2 text-xs text-zinc-500">KYC status</p><VerificationStatusBadge status={details.kycStatus} /></div>
         <div><p className="mb-2 text-xs text-zinc-500">Didit decision</p><VerificationStatusBadge status={details.decision.status} /></div>
       </div>
+
+      {details.verificationUrl && (
+        <div className="flex items-center justify-between rounded-xl border border-white/[0.08] bg-black/20 px-4 py-2.5">
+          <span className="text-xs text-zinc-400">Didit verification session link</span>
+          <a
+            href={details.verificationUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-blue-300 hover:text-blue-200"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Open Didit Session
+          </a>
+        </div>
+      )}
 
       <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -1001,7 +1036,20 @@ export function VerificationModal({
   // Only personal-account verification is backed by Didit/KYC nodes. Team
   // verification is a separate business-document workflow and must never ask
   // the administrator to select personal identity evidence.
+  const isTeam = Boolean(diditDetails?.isTeam ?? verification.isTeam);
   const isUserDiditVerification = Boolean(loadDiditDetails && diditDetails && !diditDetails.isTeam);
+  const hasVerificationUrl = Boolean(
+    diditDetails
+      ? (diditDetails.hasVerificationUrl ?? Boolean(diditDetails.verificationUrl))
+      : (verification.hasVerificationUrl ?? Boolean(verification.verificationUrl))
+  );
+  const canApprove = isTeam || hasVerificationUrl;
+  const isPendingSessionLoading = Boolean(loadDiditDetails && diditLoading);
+  const approveDisabled =
+    saving ||
+    isPendingSessionLoading ||
+    !canApprove ||
+    (useCustom && (!customDays || Number(customDays) <= 0));
 
   const focusActionReason = () => {
     window.requestAnimationFrame(() => {
@@ -1011,6 +1059,10 @@ export function VerificationModal({
   };
 
   const apply = async (action: string) => {
+    if (action === 'approve' && !canApprove) {
+      showErrorToast('Cannot approve verification: no verification URL exists in the verification session.');
+      return false;
+    }
     if (requiresActionReason(action) && !actionReason.trim()) {
       setActionReasonError('A reason is required before submitting this action.');
       focusActionReason();
@@ -1061,9 +1113,10 @@ export function VerificationModal({
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={saving || (useCustom && (!customDays || Number(customDays) <= 0))}
+            disabled={approveDisabled}
             onClick={() => void apply('approve')}
-            className="rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            title={!canApprove ? 'Cannot approve: no verification URL exists in the verification session' : undefined}
+            className="rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Approve for {durationLabel}
           </button>
@@ -1095,6 +1148,17 @@ export function VerificationModal({
         </div>
       }
     >
+      {!isTeam && !hasVerificationUrl && !isPendingSessionLoading && (
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-200">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+          <div>
+            <p className="font-semibold text-amber-300">Approval Unavailable</p>
+            <p className="mt-0.5 text-amber-200/90">
+              This user haven't initiated an identity verification session yet. Approval is disabled until a verification session is finished.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="mb-6 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
         <label className="mb-4 block text-xs text-zinc-500">
           Reason for verification action{' '}
@@ -1295,7 +1359,7 @@ export function VerificationModal({
             <p className="font-medium text-white">No uploaded business document</p>
             <p className="mt-1 text-xs text-zinc-500">Application ID: {verification.applicationId}</p>
             <p className="mt-1 text-xs text-zinc-500">
-              Verification is tracked via account_verification. Choose a validity period, then approve.
+              Verification is tracked via verifications. Choose a validity period, then approve.
             </p>
           </div>
         )}
