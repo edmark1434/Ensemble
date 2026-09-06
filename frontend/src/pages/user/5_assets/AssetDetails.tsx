@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, Bookmark, Calendar, CheckCircle2, Clock3, Coins, CornerDownRight, Download, Edit3, Eye, FileAudio, FileImage, FileVideo, Heart, Loader2, MessageSquare, PackageOpen, Pencil, Ruler, Send, ShoppingCart, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, Bookmark, Calendar, CheckCircle2, Clock3, CornerDownRight, Download, Edit3, Eye, FileAudio, FileImage, FileVideo, Heart, Loader2, MessageSquare, PackageOpen, Pencil, Ruler, Send, ShoppingCart, Star, Trash2 } from "lucide-react";
+import { CreditIcon } from "@/components/ui/credit-icon";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
@@ -348,12 +349,12 @@ export default function AssetDetails() {
   const myReview = reviews.find((review) => review.is_owner) || null;
 
   if (loading) {
-    return <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]"><UserHeader pageTitle="Asset Details" /><DetailSkeleton /></div>;
+    return <div className="min-h-screen bg-gray-50 dark:bg-dark-base"><UserHeader pageTitle="Asset Details" /><DetailSkeleton /></div>;
   }
 
   if (notFound || loadError || !asset) {
     return (
-      <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-[#080a12] dark:text-white">
+      <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-dark-base dark:text-white">
         <UserHeader pageTitle="Asset Details" />
         <main className="mx-auto flex min-h-[65vh] max-w-3xl flex-col items-center justify-center p-6 text-center">
           <MessageSquare className="h-12 w-12 text-gray-400 dark:text-zinc-600" />
@@ -369,12 +370,12 @@ export default function AssetDetails() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-[#080a12] dark:text-white">
+    <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-dark-base dark:text-white">
       <UserHeader pageTitle="Asset Details" />
       <main className="mx-auto w-full max-w-6xl p-5 md:p-8">
         <button type="button" onClick={() => navigate("/assets")} className="mb-5 inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"><ArrowLeft className="h-4 w-4" /> Back to Assets</button>
 
-        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#0d0f1a] dark:shadow-none">
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
           <AssetThumbnailCarousel asset={asset} />
           <div className="p-5 md:p-7">
             <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
@@ -386,7 +387,7 @@ export default function AssetDetails() {
               <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <button type="button" onClick={() => void updateEngagement("like")} disabled={Boolean(engagementPending)} className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${asset.is_liked ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300" : "border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`} aria-pressed={asset.is_liked}><Heart className={`h-4 w-4 ${asset.is_liked ? "fill-current" : ""}`} /> {asset.like_count}</button>
                 <button type="button" onClick={() => void updateEngagement("save")} disabled={Boolean(engagementPending)} className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${asset.is_saved ? "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`} aria-pressed={asset.is_saved}><Bookmark className={`h-4 w-4 ${asset.is_saved ? "fill-current" : ""}`} /> {asset.is_saved ? "Saved" : "Save"}</button>
-                <span className="mr-2 inline-flex items-center gap-2 text-lg font-bold text-amber-600 dark:text-amber-300"><Coins className="h-5 w-5" /> {asset.price_credits.toLocaleString()} credits</span>
+                <span className="mr-2 inline-flex items-center gap-1.5 text-lg font-bold text-amber-600 dark:text-amber-300"><CreditIcon className="h-5 w-5" /> {asset.price_credits.toLocaleString()} credits</span>
                 {asset.can_download ? (
                   <button type="button" onClick={() => document.getElementById("asset-deliverables")?.scrollIntoView({ behavior: "smooth", block: "center" })} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
                     <PackageOpen className="h-4 w-4" /> View contents
@@ -413,7 +414,7 @@ export default function AssetDetails() {
             {asset.is_owner && (
               <div className="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
                 <div className="flex items-start gap-3">
-                  <Coins className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
+                  <CreditIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
                   <div className="min-w-0 flex-1">
                     <h2 className="text-sm font-bold text-gray-900 dark:text-white">Earnings per purchase</h2>
                     <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-zinc-400">A {asset.transaction_fee_percent}% marketplace transaction fee is deducted from your sale proceeds.</p>
@@ -462,10 +463,10 @@ export default function AssetDetails() {
         </section>
 
         <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <section className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-[#0d0f1a]">
+          <section className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-dark-surface">
             <div className="flex items-center justify-between"><div><h2 className="text-lg font-bold">Comments</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">Join the conversation about this asset.</p></div><span className="text-xs text-gray-500 dark:text-zinc-500">{comments.length}</span></div>
             <form onSubmit={postComment} className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <textarea value={comment} onChange={(event) => setComment(event.target.value)} onClick={() => isGuestView && setIsGuestLoginOpen(true)} readOnly={isGuestView} maxLength={2000} rows={2} placeholder={isGuestView ? "Log in to write a comment..." : "Write a comment..."} className="min-h-20 flex-1 resize-y rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-[#080a12] dark:text-white" />
+              <textarea value={comment} onChange={(event) => setComment(event.target.value)} onClick={() => isGuestView && setIsGuestLoginOpen(true)} readOnly={isGuestView} maxLength={2000} rows={2} placeholder={isGuestView ? "Log in to write a comment..." : "Write a comment..."} className="min-h-20 flex-1 resize-y rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-dark-base dark:text-white" />
               <button type="submit" disabled={posting || (!isGuestView && !comment.trim())} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">{posting && <Loader2 className="h-4 w-4 animate-spin" />} Post</button>
             </form>
 
@@ -492,7 +493,7 @@ export default function AssetDetails() {
 
                     {editingCommentId === item.asset_comment_id ? (
                       <div className="mt-3">
-                        <textarea value={editingComment} onChange={(event) => setEditingComment(event.target.value)} maxLength={2000} rows={3} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#080a12]" />
+                        <textarea value={editingComment} onChange={(event) => setEditingComment(event.target.value)} maxLength={2000} rows={3} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-white/10 dark:bg-dark-base" />
                         <div className="mt-2 flex gap-2"><button type="button" onClick={() => void saveComment(item)} disabled={savingComment || !editingComment.trim()} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">Save</button><button type="button" onClick={() => setEditingCommentId(null)} disabled={savingComment} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold dark:border-white/10">Cancel</button></div>
                       </div>
                     ) : (
@@ -524,7 +525,7 @@ export default function AssetDetails() {
                               </div>
                               {editingReplyId === reply.asset_reply_id ? (
                                 <div className="mt-2">
-                                  <textarea value={editingReply} onChange={(event) => setEditingReply(event.target.value)} maxLength={2000} rows={2} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#080a12]" />
+                                  <textarea value={editingReply} onChange={(event) => setEditingReply(event.target.value)} maxLength={2000} rows={2} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs outline-none focus:border-blue-500 dark:border-white/10 dark:bg-dark-base" />
                                   <div className="mt-2 flex gap-2"><button type="button" onClick={() => void saveReply(item.asset_comment_id)} disabled={savingReply || !editingReply.trim()} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">Save</button><button type="button" onClick={() => { setEditingReplyId(null); setEditingReply(""); }} disabled={savingReply} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold dark:border-white/10">Cancel</button></div>
                                 </div>
                               ) : (
@@ -538,7 +539,7 @@ export default function AssetDetails() {
 
                     {replyingToCommentId === item.asset_comment_id && (
                       <form onSubmit={(event) => void postReply(event, item.asset_comment_id)} className="mt-3 flex flex-col gap-2 sm:flex-row">
-                        <textarea autoFocus value={replyText} onChange={(event) => setReplyText(event.target.value)} maxLength={2000} rows={2} placeholder={`Reply to ${item.author_name}…`} className="min-h-16 flex-1 resize-y rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-[#080a12]" />
+                        <textarea autoFocus value={replyText} onChange={(event) => setReplyText(event.target.value)} maxLength={2000} rows={2} placeholder={`Reply to ${item.author_name}…`} className="min-h-16 flex-1 resize-y rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-dark-base" />
                         <div className="flex gap-2 sm:flex-col">
                           <button type="submit" disabled={postingReplyCommentId === item.asset_comment_id || !replyText.trim()} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white transition hover:bg-blue-500 disabled:opacity-50">{postingReplyCommentId === item.asset_comment_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Send</button>
                           <button type="button" onClick={() => { setReplyingToCommentId(null); setReplyText(""); }} disabled={postingReplyCommentId === item.asset_comment_id} className="h-9 rounded-lg border border-gray-200 px-3 text-xs font-semibold dark:border-white/10">Cancel</button>
@@ -551,7 +552,7 @@ export default function AssetDetails() {
             </div>
           </section>
 
-          <aside className="h-fit rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-[#0d0f1a]">
+          <aside className="h-fit rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-dark-surface">
             <div className="flex items-start justify-between gap-3">
               <div><h2 className="font-bold">Buyer reviews</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">Verified purchasers only</p></div>
               <div className="text-right"><p className="inline-flex items-center gap-1 text-sm font-bold text-amber-500"><Star className="h-4 w-4 fill-current" /> {asset.average_rating || "—"}</p><p className="mt-1 text-[10px] text-gray-500 dark:text-zinc-500">{asset.review_count} {asset.review_count === 1 ? "review" : "reviews"}</p></div>
@@ -565,7 +566,7 @@ export default function AssetDetails() {
                     <button key={rating} type="button" onClick={() => setReviewRating(rating)} className="rounded-md p-1 transition hover:bg-amber-500/10" aria-label={`${rating} star${rating === 1 ? "" : "s"}`} aria-pressed={reviewRating === rating}><Star className={`h-5 w-5 ${rating <= reviewRating ? "fill-amber-400 text-amber-400" : "text-gray-300 dark:text-zinc-600"}`} /></button>
                   ))}
                 </div>
-                <textarea value={reviewText} onChange={(event) => setReviewText(event.target.value)} maxLength={2000} rows={4} placeholder="Share your experience with this asset…" className="mt-3 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 dark:border-white/10 dark:bg-[#080a12]" />
+                <textarea value={reviewText} onChange={(event) => setReviewText(event.target.value)} maxLength={2000} rows={4} placeholder="Share your experience with this asset…" className="mt-3 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 dark:border-white/10 dark:bg-dark-base" />
                 <div className="mt-3 flex gap-2">
                   <button type="submit" disabled={reviewSaving || !reviewText.trim()} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-blue-500 disabled:opacity-50">{reviewSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {editingReviewId ? "Save review" : "Submit review"}</button>
                   {editingReviewId && <button type="button" onClick={() => { setEditingReviewId(null); setReviewRating(5); setReviewText(""); }} disabled={reviewSaving} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold dark:border-white/10">Cancel</button>}
@@ -639,7 +640,7 @@ function BundleFilePreview({
   const previewUrl = mediaUrl(bundleFile.preview_path);
   const format = bundleFile.mime_type.split("/")[1] || "file";
   return (
-    <article className="group min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/10 dark:bg-[#080a12]">
+    <article className="group min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/10 dark:bg-dark-base">
       <button
         type="button"
         onClick={onOpen}

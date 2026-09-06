@@ -224,10 +224,11 @@ function App() {
             <Route path=':id' element={<SelectedTeam />} />
           </Route>
 
-          <Route path='/assets'>
-            <Route index element={<AssetsLibrary />} />
-            <Route path=':assetId' element={<AssetDetails />} />
-          </Route>
+          <Route path='/assets' element={<AssetsLibrary />} />
+          <Route path='/assets/owned' element={<AssetsLibrary />} />
+          <Route path='/assets/purchased' element={<AssetsLibrary />} />
+          <Route path='/assets/saved' element={<AssetsLibrary />} />
+          <Route path='/assets/:assetId' element={<AssetDetails />} />
 
           {/* Reworked Job Market Sub-Routes */}
           <Route path='/jobs' element={<JobMain />}>

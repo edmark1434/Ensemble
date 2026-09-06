@@ -52,6 +52,7 @@ export interface AssetRecord {
   bundle_file_count: number;
   creator_name: string;
   creator_handle: string | null;
+  creator_avatar_path: string | null;
   is_owner: boolean;
   is_purchased: boolean;
   can_download?: boolean;

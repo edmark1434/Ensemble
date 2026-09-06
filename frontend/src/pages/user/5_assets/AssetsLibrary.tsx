@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Heart, Image, LayoutTemplate, Loader2, Pencil, Plus, Search, Star, Trash2, Video } from "lucide-react";
+import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Compass, Folder, Heart, Image, LayoutTemplate, Loader2, Pencil, Plus, Search, ShoppingBag, Star, Trash2, Video } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { motion } from "framer-motion";
+import { CreditIcon } from "@/components/ui/credit-icon";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
@@ -8,6 +10,7 @@ import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import AssetEditorModal from "./AssetEditorModal";
 import AssetMedia from "./AssetMedia";
 import type { AssetPagination, AssetRecord, AssetType } from "./assetTypes";
+import { mediaUrl } from "./assetTypes";
 import { getAssetPostingEligibility } from "./assetPostingEligibility";
 import useGlobalState from "@/lib/global_state";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
@@ -60,7 +63,21 @@ export default function AssetsLibrary() {
   const [pagination, setPagination] = useState<AssetPagination>({ page: 1, pageSize: 12, total: 0, totalPages: 1 });
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<FilterType>("all");
-  const [view, setView] = useState<AssetView>("discover");
+  const getTabFromPath = (): AssetView => {
+    const path = location.pathname;
+    if (path.includes('/owned')) return 'mine';
+    if (path.includes('/purchased')) return 'purchased';
+    if (path.includes('/saved')) return 'saved';
+    return 'discover';
+  };
+  const view: AssetView = getTabFromPath();
+
+  const handleTabClick = (tab: AssetView) => {
+    setPage(1);
+    if (tab === 'discover') navigate('/assets');
+    else if (tab === 'mine') navigate('/assets/owned');
+    else navigate(`/assets/${tab}`);
+  };
   const [mineStatus, setMineStatus] = useState<MineStatus>("uploaded");
   const [search, setSearch] = useState(location.state?.searchQuery || "");
   const [debouncedSearch, setDebouncedSearch] = useState(location.state?.searchQuery || "");
@@ -88,9 +105,9 @@ export default function AssetsLibrary() {
   useEffect(() => {
     if (isGuestView && view !== "discover") {
       setPage(1);
-      setView("discover");
+      navigate('/assets', { replace: true });
     }
-  }, [isGuestView, view]);
+  }, [isGuestView, view, navigate]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -166,7 +183,7 @@ export default function AssetsLibrary() {
     showSuccessToast(wasEditing ? "Asset updated." : "Asset uploaded.");
     if (!wasEditing && asset.status === "draft") {
       setPage(1);
-      setView("mine");
+      navigate('/assets/owned');
       setMineStatus("draft");
       return;
     }
@@ -233,57 +250,119 @@ export default function AssetsLibrary() {
     <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-dark-base dark:text-white">
       <UserHeader pageTitle="Asset Library" />
       <main className="mx-auto w-full max-w-7xl p-5 md:p-8">
-        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
-          <div>
-            <h1 className="text-2xl font-bold">Assets Library</h1>
-            <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">Discover images, videos, audio, and templates shared by the community.</p>
-          </div>
-          <button type="button" onClick={() => void openCreate()} disabled={checkingPostEligibility} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-60">
-            {checkingPostEligibility ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            {checkingPostEligibility ? "Checking..." : "Upload Asset"}
-          </button>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Assets Library</h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">Discover images, videos, audio, and templates shared by the community.</p>
         </div>
 
-        <section className="mt-7 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex rounded-xl bg-gray-100 p-1 dark:bg-white/5" role="tablist" aria-label="Asset views">
-              {availableViews.map((tab) => (
-                <button key={tab} type="button" role="tab" aria-selected={view === tab} onClick={() => { setPage(1); setView(tab); }} className={`flex-1 rounded-lg px-5 py-2 text-sm font-semibold capitalize transition lg:flex-none ${view === tab ? "bg-white text-blue-600 shadow-sm dark:bg-blue-600 dark:text-white" : "text-gray-600 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-white"}`}>
-                  {tab === "mine" ? "My Assets" : tab === "purchased" ? "Purchased" : tab === "saved" ? "Saved" : "Discover"}
-                </button>
-              ))}
-            </div>
-            <label className="relative block w-full lg:max-w-md">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} maxLength={100} placeholder="Search title, creator, or tag..." className="w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-dark-base dark:text-white" />
-            </label>
-          </div>
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
+          <button
+            onClick={() => void openCreate()}
+            disabled={checkingPostEligibility}
+            className="shrink-0 flex items-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {checkingPostEligibility ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />}
+            <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+              {checkingPostEligibility ? "Checking..." : "Upload Asset"}
+            </span>
+          </button>
 
-          {view === "mine" && (
-            <div className="mt-4 flex items-center gap-1 border-t border-gray-200 pt-4 dark:border-white/10" role="tablist" aria-label="My asset status">
-              {(["uploaded", "draft"] as MineStatus[]).map((statusTab) => (
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-zinc-500" />
+            <input
+              type="text"
+              placeholder="Search title, creator, or tag..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 pl-11 pr-4 py-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+            />
+          </div>
+        </div>
+
+          {/* Tabs & View Toggle */}
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-4 border-b border-gray-200 dark:border-white/10">
+            <div className="flex gap-1 relative flex-1">
+            {availableViews.map((tab) => {
+              const isActive = view === tab;
+              return (
                 <button
-                  key={statusTab}
-                  type="button"
-                  role="tab"
-                  aria-selected={mineStatus === statusTab}
-                  onClick={() => { setPage(1); setMineStatus(statusTab); }}
-                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${mineStatus === statusTab ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"}`}
+                  key={tab}
+                  onClick={() => handleTabClick(tab)}
+                  className={`relative px-4 py-3 text-sm font-semibold transition-colors ${
+                    isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
+                  }`}
                 >
-                  {statusTab === "uploaded" ? "Uploaded" : "Draft"}
-                </button>
-              ))}
-            </div>
-          )}
+                  <span className="relative z-10 flex items-center gap-2 capitalize">
+                    {tab === "discover" && <Compass className="h-4 w-4" />}
+                    {tab === "mine" && <Folder className="h-4 w-4" />}
+                    {tab === "purchased" && <ShoppingBag className="h-4 w-4" />}
+                    {tab === "saved" && <Bookmark className="h-4 w-4" />}
+                    {tab === "mine" ? "My Assets" : tab}
+                  </span>
 
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-200 pt-4 dark:border-white/10" role="tablist" aria-label="Media types">
-            {FILTERS.map(({ value, label, icon: Icon }) => (
-              <button key={value} type="button" role="tab" aria-selected={filter === value} onClick={() => { setPage(1); setFilter(value); }} className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-semibold transition ${filter === value ? "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"}`}>
-                <Icon className="h-3.5 w-3.5" /> {label}
-              </button>
-            ))}
-          </div>
-        </section>
+                  {isActive && (
+                    <>
+                      <motion.div
+                        layoutId="activeAssetTabGlow"
+                        className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                      />
+                      <motion.div
+                        layoutId="activeAssetTabUnderline"
+                        className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                      />
+                    </>
+                  )}
+                </button>
+              );
+            })}
+            </div>
+  
+            <div className="flex flex-wrap items-center justify-end gap-4 pb-2">
+              {/* Mine sub-status */}
+              {view === "mine" && (
+                <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1" role="tablist" aria-label="My asset status">
+                  {(["uploaded", "draft"] as MineStatus[]).map((statusTab) => (
+                    <button
+                      key={statusTab}
+                      type="button"
+                      role="tab"
+                      aria-selected={mineStatus === statusTab}
+                      onClick={() => { setPage(1); setMineStatus(statusTab); }}
+                      className={`rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition ${
+                        mineStatus === statusTab
+                          ? "bg-gray-100 text-gray-900 shadow-sm dark:bg-white/10 dark:text-white"
+                          : "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {statusTab}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Filters */}
+              <div className="flex flex-wrap gap-2" role="tablist" aria-label="Media types">
+                {FILTERS.map(({ value, label, icon: Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    aria-selected={filter === value}
+                    onClick={() => { setPage(1); setFilter(value); }}
+                    className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-semibold transition ${
+                      filter === value
+                        ? "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-300"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" /> {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+        </div>
 
         <div className="mt-6 flex items-center justify-between">
           <p className="text-sm font-semibold">{view === "mine" ? (mineStatus === "draft" ? "Your draft assets" : "Your uploaded assets") : view === "purchased" ? "Your purchased assets" : view === "saved" ? "Your saved assets" : "Community assets"}</p>
@@ -309,11 +388,26 @@ export default function AssetsLibrary() {
             {assets.map((asset) => (
               <article key={asset.market_asset_id} onClick={() => navigate(`/assets/${asset.market_asset_id}`)} className="group cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md dark:border-white/10 dark:bg-dark-surface dark:shadow-none dark:hover:border-blue-500/50">
                 <div className="relative overflow-hidden"><AssetMedia asset={asset} compact /><span className="absolute left-3 top-3 rounded-full bg-black/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">{asset.type}</span>{asset.is_purchased && !asset.is_owner && <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-bold uppercase text-white"><CheckCircle2 className="h-3 w-3" /> Owned</span>}</div>
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0"><h2 className="truncate font-bold text-gray-900 group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-300">{asset.name}</h2><p className="mt-1 truncate text-xs text-gray-500 dark:text-zinc-500">by {asset.creator_name}</p></div>
-                    <span className="shrink-0 text-sm font-bold text-amber-600 dark:text-amber-300">{asset.price_credits.toLocaleString()} cr</span>
-                  </div>
+                  <div className="p-4">
+                    <div className="flex flex-col gap-2.5">
+                      <h2 className="min-w-0 truncate font-bold text-gray-900 group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-300">{asset.name}</h2>
+                      
+                      <div className="flex items-center gap-1.5 w-fit rounded-full bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 border border-amber-200/50 dark:border-amber-500/20">
+                        <CreditIcon className="h-4 w-4" />
+                        <span className="text-xs font-bold text-amber-600 dark:text-amber-400">{asset.price_credits.toLocaleString()}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2 min-w-0">
+                        {asset.creator_avatar_path ? (
+                          <img src={mediaUrl(asset.creator_avatar_path)} alt={asset.creator_name} className="h-5 w-5 shrink-0 rounded-full object-cover" />
+                        ) : (
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[9px] font-bold text-blue-700 dark:bg-blue-500/20 dark:text-blue-300">
+                            {asset.creator_name.slice(0, 2).toUpperCase()}
+                          </span>
+                        )}
+                        <p className="truncate text-xs text-gray-500 dark:text-zinc-400">by {asset.creator_name}</p>
+                      </div>
+                    </div>
                   <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 text-[11px] text-gray-500 dark:border-white/5 dark:text-zinc-500">
                     <span>{formatDate(asset.created_at)}</span>
                     <span className="inline-flex items-center gap-3"><span className="inline-flex items-center gap-1"><Heart className="h-3.5 w-3.5" /> {asset.like_count}</span><span className="inline-flex items-center gap-1"><Star className="h-3.5 w-3.5" /> {asset.average_rating || "—"}</span></span>
