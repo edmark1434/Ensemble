@@ -203,7 +203,10 @@ function App() {
             <Route path='/search/user/:query' element={<UserProfilesList />} />
 
           <Route path='/projects' element={<Projects />} />
-            <Route path='/projects/select' element={<Projects_Selection />} />
+          <Route path='/projects/personal' element={<Projects />} />
+          <Route path='/projects/shared' element={<Projects />} />
+          <Route path='/projects/team' element={<Projects />} />
+          <Route path='/projects/select' element={<Projects_Selection />} />
 
           <Route path='/forums'>
             <Route index element={<Forums />} />
