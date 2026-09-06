@@ -79,7 +79,7 @@ const IconPlayerPauseFilled = ({ size }: { size: number }) => (
     </svg>
 );
 
-const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen }: any) => {
+const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnly }: any) => {
   const { fps, duration, markers, timeline, scale, trackItemIds, muted, setMuted } = useStore();
   const currentFrame = useCurrentPlayerFrame(playerRef);
   const [playing, setPlaying] = useState(false);
@@ -169,7 +169,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen }: any) 
       className="relative flex flex-col w-full h-full bg-card"
       onMouseMove={handleMouseMove}
     >
-      {!isLargeScreen && !isFullscreen && (
+      {!isLargeScreen && !isFullscreen && !viewOnly && (
         <div className=" top-0 left-0 right-0 z-500 bg-primary text-black text-xs font-medium text-center py-1.5 px-2">
           Mobile view is only in preview mode for now
         </div>
@@ -182,7 +182,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen }: any) 
             The project is currently empty, no preview available
           </div>
         ) : (
-          <Scene ref={sceneRef} stateManager={stateManager} />
+          <Scene ref={sceneRef} stateManager={stateManager} viewOnly={viewOnly} />
         )}
       </div>
 
@@ -345,6 +345,7 @@ const Panels = ({
   trackItem,
   loaded,
   isLargeScreen,
+  viewOnly,
 }: any) => {
   const { showMenuItem, setControlsPanelRef } = useLayoutStore();
   const menuPanelRef = useRef<ImperativePanelHandle>(null);
@@ -362,10 +363,18 @@ const Panels = ({
     setControlsPanelRef(controlsPanelRef);
   }, []);
 
-  if (!isLargeScreen) {
+  if (!isLargeScreen || viewOnly) {
     return (
       <div className="relative flex h-full w-full flex-col bg-background">
-        <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} />
+        <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} viewOnly={viewOnly} />
+        <div
+          aria-hidden
+          inert
+          style={{ position: "absolute", top: -99999, left: -99999, width: 1200, height: 300, pointerEvents: "none" }}
+        >
+          <Timeline stateManager={stateManager} />
+          <MenuItem />
+        </div>
       </div>
     );
   }
@@ -403,7 +412,7 @@ const Panels = ({
               maxSize={showMenuItem ? 45 : 75}
               className="relative bg-card min-w-0"
             >
-              <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} isLargeScreen={isLargeScreen} />
+              <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} isLargeScreen={isLargeScreen} viewOnly={viewOnly} />
             </ResizablePanel>
 
             <ResizableHandle className="bg-border/90" />
@@ -460,10 +469,48 @@ const Controls = ({ panelRef }: { panelRef: React.RefObject<HTMLDivElement | nul
   );
 };
 
-const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
-  const { userId, projectId } = useStore();
+const Editor = ({
+  id,
+  userId,
+  userName,
+  width,
+  height,
+  role,
+}: {
+  id?: string;
+  userId?: string;
+  userName?: string;
+  width?: number;
+  height?: number;
+  role?: string;
+}) => {
+  const [storeSynced, setStoreSynced] = useState(false);
+  useEffect(() => {
+    if (userId && id) {
+      useStore.setState({
+        userId,
+        userName,
+        projectId: id,
+        ...(width && height ? { size: { width, height } } : {}),
+      });
+    }
+    setStoreSynced(true);
+  }, [id, userId, userName, width, height]);
 
-  const { scene } = useSceneStore();
+  const { userId: storeUserId, userName: storeUserName, projectId } = useStore();
+
+  // only true once the seeding effect above has run AND the store actually
+  // holds both values (whether they came from props here or were set
+  // elsewhere, e.g. a new-project creation flow)
+  const collabReady = storeSynced && !!storeUserId && !!projectId;
+
+  const collab = useCollabDoc(
+    collabReady ? projectId : undefined,
+    collabReady ? storeUserId : undefined,
+    collabReady ? storeUserName : undefined,
+    stateManager,
+  );
+
   const timelinePanelRef = useRef<ImperativePanelHandle>(null);
   const sceneRef = useRef<SceneRef>(null);
   const { timeline, playerRef } = useStore();
@@ -476,9 +523,9 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     setLabelControlItem,
     setTypeControlItem,
   } = useLayoutStore();
-  const isLargeScreen = useIsLargeScreen();
 
-  const collab = useCollabDoc(projectId, userId, stateManager);
+  const isLargeScreen = useIsLargeScreen();
+  const viewOnly = role === "Viewer";
 
   useTimelineEvents();
 
@@ -539,7 +586,7 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     setTypeControlItem("");
   }, [isLargeScreen]);
 
-  useKeyboardShortcuts(stateManager, collab?.undoManager);
+  useKeyboardShortcuts(stateManager, collab?.undoManager, viewOnly);
 
   useEffect(() => {
     useStore.getState().setStateManager(stateManager);
@@ -559,7 +606,7 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     );
   }
 
-  if (!loaded || !collab?.ready) {
+  if (!storeSynced || !loaded || !collab?.ready) {
     return (
       <div className="fixed top-0 left-0 z-50 flex h-screen w-screen items-center justify-center gap-4 bg-card">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -574,6 +621,10 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
         user={null}
         stateManager={stateManager}
         undoManager={collab?.undoManager}
+        viewOnly={viewOnly}
+        saveStatus={collab?.saveStatus}
+        compactStatus={collab?.compactStatus}
+        onForceSave={collab?.forceSave}
       />
 
       <div className="flex flex-1 h-[calc(100vh-56px)]">
@@ -591,6 +642,7 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
                 trackItem={trackItem}
                 loaded={loaded}
                 isLargeScreen={isLargeScreen}
+                viewOnly={viewOnly}
               />
             </ResizablePanel>
           </ResizablePanelGroup>
@@ -602,6 +654,7 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
             trackItem={trackItem}
             loaded={loaded}
             isLargeScreen={isLargeScreen}
+            viewOnly={viewOnly}
           />
         )}
       </div>

@@ -430,7 +430,7 @@ export default function LoginPage({
         }
         setUser(result.data.credentials ?? result.data.user);
         setIsAuthenticated(true);
-        onSuccess?.();
+        onSuccess ? onSuccess() : navigate('/');
       }else{
         setErrors({ password: result.data.message || "Login failed. Please try again." });
       }

@@ -20,7 +20,7 @@ interface FeaturesProps {
 const ALL_FEATURES = [
   {
     id: "01",
-    title: "A.I. Caption Navigation",
+    title: "A.I. Captioning",
     desc: "Type any word or phrase and our AI will pinpoint the clip. Instantly navigate to exactly where it was spoken in your video.",
     img: "/features/m2.png",
     icon: <Zap size={18} />

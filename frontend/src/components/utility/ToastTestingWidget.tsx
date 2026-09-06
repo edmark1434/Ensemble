@@ -16,9 +16,16 @@ export const ToastTestingWidget: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'toast' | 'profile' | 'membership' | 'rates'>('toast');
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [selectedRatingType, setSelectedRatingType] = useState('Service Rating');
+  const [isVerified, setIsVerified] = useState(false);
 
   useEffect(() => {
-    const checkStatus = () => {
+    const checkStatus = async () => {
+      try {
+        if (user) {
+          const res = await api.get('/api/verification/status');
+          setIsVerified(res.data?.data?.is_verified || false);
+        }
+      } catch (err) {}
       const isDone = localStorage.getItem(`profileSetupCompleted_${user?.account_id}`) === 'true';
       setProfileStatus(isDone ? "Done" : "Pending");
     };
@@ -136,6 +143,23 @@ export const ToastTestingWidget: React.FC = () => {
                   <button onClick={() => window.dispatchEvent(new Event('profileSetupShowCongrats'))} className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-yellow-50 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-100 rounded text-[10px] font-bold transition">
                     <CheckCircle className="w-3 h-3" /> Show Congrats Modal
                   </button>
+                    <button onClick={async () => {
+                      try {
+                        const newStatus = !isVerified;
+                        await api.post('/api/verification/force-verify', { is_verified: newStatus });
+                        showSuccessToast(newStatus ? "Forced Verified!" : "Forced Unverified!");
+                        setIsVerified(newStatus);
+                        setTimeout(() => window.location.reload(), 500);
+                      } catch (err) {
+                        showErrorToast("Failed to toggle verification");
+                      }
+                    }} className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-[10px] font-bold transition ${isVerified ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100'}`}>
+                      {isVerified ? (
+                        <><XCircle className="w-3 h-3" /> Get Unverified</>
+                      ) : (
+                        <><CheckCircle className="w-3 h-3" /> Get Verified</>
+                      )}
+                    </button>
                   <button onClick={() => { window.dispatchEvent(new Event('profileSetupReset')); showSuccessToast("Resetting..."); }} className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-100 rounded text-[10px] font-bold transition">
                     <CheckCircle className="w-3 h-3" /> Reset Setup [{profileStatus}]
                   </button>

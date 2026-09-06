@@ -3,22 +3,12 @@
 // Lists available snapshot checkpoints for a project, newest first.
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { resolveProjectId } from "@/utils/resolve-ids";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  let projectId: number;
-  try {
-    projectId = await resolveProjectId(id);
-  } catch {
-    return NextResponse.json(
-      { error: `project not found for public_id "${id}"` },
-      { status: 404 }
-    );
-  }
+  const { id: projectId } = await params;
 
   try {
     const rows = await db

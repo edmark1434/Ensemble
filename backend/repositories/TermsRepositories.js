@@ -9,7 +9,10 @@ async function getAllTermsRepositories(accountId) {
             ORDER BY is_default DESC, created_at DESC;
         `;
         const res = await pool.query(query, [accountId]);
-        return res.rows;
+        return res.rows.map(row => ({
+            ...row,
+            terms_content: row.terms_content ? row.terms_content.replace(/\\n/g, "\n") : row.terms_content
+        }));
     } catch (err) {
         console.error('Error in getAllTermsRepositories:', err);
         throw err;

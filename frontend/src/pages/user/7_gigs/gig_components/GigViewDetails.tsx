@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Users, Star, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart, Flag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { continueIfAccountVerified } from "@/lib/accountVerification";
 import type { Gig } from "../gig_datasets";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import PopupReportGig from "./PopupReportGig";
@@ -17,6 +18,7 @@ interface GigViewDetailsProps {
 const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, onReportGig, onToggleSave }) => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isVerified = useGlobalState((state) => state.isVerified);
   const [activeTierIdx, setActiveTierIdx] = useState(0);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
@@ -127,7 +129,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                           : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                       }`}
                     >
-                      <span className="relative z-10">{selectedGig.status || "Open"}</span>
+                      <span className="relative z-10">{selectedGig.status?.toLowerCase() === "close" ? "Closed" : (selectedGig.status || "Open")}</span>
                       {(selectedGig.status?.toLowerCase() === "open" || !selectedGig.status) && (
                         <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
                       )}
@@ -438,16 +440,16 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                       View Full
                     </button>
                     <button
-                      onClick={() => !isGuestMode && handleOpenCheckout()}
-                      disabled={isGuestMode}
-                      className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg ${
-                        isGuestMode 
-                          ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' 
-                          : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]'
-                      }`}
-                    >
-                      {isGuestMode ? "Login to Order" : (selectedGig.hasPendingOrder ? "View My Order" : `Order ${activeTier?.tierName || "Package"}`)}
-                    </button>
+                        onClick={() => !isGuestMode && isVerified && handleOpenCheckout()}
+                        disabled={isGuestMode || !isVerified}
+                        className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg ${
+                          isGuestMode || !isVerified
+                            ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' 
+                            : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]'
+                        }`}
+                      >
+                        {isGuestMode ? "Login to Order" : (!isVerified ? "Verify First" : (selectedGig.hasPendingOrder ? "View My Order" : `Order ${activeTier?.tierName || "Package"}`))}
+                      </button>
                   </div>
                 </>
               )}

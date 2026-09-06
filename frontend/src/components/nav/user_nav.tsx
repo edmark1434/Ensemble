@@ -50,7 +50,7 @@ let gigsItemsInitial: NavItem[] = [
 ];
 
 let activityRecordsInitial: NavItem[] = [
-    { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
+    { label: "Deliveries", icon: LayoutDashboard, to: "/dashboard" },
     { label: "My Terms", icon: FileText, to: "/terms-of-services" },
     { label: "My Contracts", icon: Shield, to: "/contracts" },
     { label: "Transaction History", icon: Wallet, to: "/transactions" },
@@ -121,7 +121,7 @@ const UserNav: React.FC<UserNavProps> = () => {
     return (
        <>
           <aside
-             className={`fixed inset-y-0 left-0 z-20 flex flex-col border-r border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base transition-all duration-300 ${
+             className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base transition-all duration-300 ${
                 isCollapsed ? "w-20" : "w-64"
              }`}
           >
@@ -205,8 +205,8 @@ const UserNav: React.FC<UserNavProps> = () => {
 
                                      {/* Floating Title Display */}
                                      <div className="absolute left-full -ml-6 pl-6 hidden group-hover:block z-50 pointer-events-none">
-                                        <div className="rounded-lg border border-white/10 bg-[#0d0f1a] px-3 py-2 shadow-2xl animate-fade-in whitespace-nowrap">
-                                           <span className="text-xs font-medium text-zinc-200">{label}</span>
+                                        <div className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] px-3 py-2 shadow-xl dark:shadow-2xl animate-fade-in whitespace-nowrap">
+                                           <span className="text-xs font-medium text-gray-900 dark:text-zinc-200">{label}</span>
                                         </div>
                                      </div>
                                   </div>
@@ -418,8 +418,8 @@ const UserNav: React.FC<UserNavProps> = () => {
 
                                      {/* Floating Title Display */}
                                      <div className="absolute left-full -ml-6 pl-6 hidden group-hover:block z-50 pointer-events-none">
-                                        <div className="rounded-lg border border-white/10 bg-[#0d0f1a] px-3 py-2 shadow-2xl animate-fade-in whitespace-nowrap">
-                                           <span className="text-xs font-medium text-zinc-200">{label}</span>
+                                        <div className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] px-3 py-2 shadow-xl dark:shadow-2xl animate-fade-in whitespace-nowrap">
+                                           <span className="text-xs font-medium text-gray-900 dark:text-zinc-200">{label}</span>
                                         </div>
                                      </div>
                                   </div>

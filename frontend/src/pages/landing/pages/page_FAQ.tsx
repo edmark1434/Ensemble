@@ -1,5 +1,5 @@
-import useGlobalState from "@/lib/global_state";
-import React, { useState } from "react";
+﻿import useGlobalState from "@/lib/global_state";
+import React, { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, ArrowLeft, HelpCircle } from "lucide-react";
 
@@ -26,7 +26,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Will the AI caption tool train its models using my private footage?",
-    a: "No. Your security is fundamental to our architecture. Ensemble strictly processes your project audio strings locally and dynamically to power timeline scrubbing and clip searching—we never use your video assets for public data model training."
+    a: "No. Your security is fundamental to our architecture. Ensemble strictly processes your project audio strings locally and dynamically to power timeline scrubbing and clip searching — we never use your video assets for public data model training."
   },
   {
     q: "What video formats and resolution export tiers are supported?",
@@ -43,6 +43,36 @@ const PageFAQ: React.FC = () => {
 
   const navigate = useNavigate();
   const [openIdx, setOpenIdx] = useState<number | null>(null);
+
+  const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
+  const softClickAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const initAudio = () => {
+    if (!hoverAudioRef.current) {
+      hoverAudioRef.current = new Audio("/sounds/minimalhover.mp3");
+      hoverAudioRef.current.volume = 0.15;
+    }
+    if (!softClickAudioRef.current) {
+      softClickAudioRef.current = new Audio("/sounds/softclick.mp3");
+      softClickAudioRef.current.volume = 0.4;
+    }
+  };
+
+  const playHover = useCallback(() => {
+    initAudio();
+    if (hoverAudioRef.current) {
+      hoverAudioRef.current.currentTime = 0;
+      hoverAudioRef.current.play().catch(() => {});
+    }
+  }, []);
+
+  const playSoftClick = useCallback(() => {
+    initAudio();
+    if (softClickAudioRef.current) {
+      softClickAudioRef.current.currentTime = 0;
+      softClickAudioRef.current.play().catch(() => {});
+    }
+  }, []);
 
   return (
     <div style={{ background: theme === 'dark' ? "#121214" : "#f9fafb", minHeight: "100vh", color: theme === 'dark' ? '#ffffff' : '#111827', padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
@@ -81,9 +111,9 @@ const PageFAQ: React.FC = () => {
 
         {/* Navigation Action */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => { playSoftClick(); navigate(-1); }}
           style={{ background: "none", border: "none", color: theme === 'dark' ? "#7a8499" : "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 36, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
-          onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827'; }}
+          onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { playHover(); e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827'; }}
           onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = theme === 'dark' ? "#7a8499" : "#6b7280"; }}
         >
           <ArrowLeft size={16} /> Back
@@ -107,7 +137,8 @@ const PageFAQ: React.FC = () => {
             return (
               <div key={idx} className={`faq-card ${isOpen ? "active" : ""}`}>
                 <button
-                  onClick={() => setOpenIdx(isOpen ? null : idx)}
+                  onClick={() => { playSoftClick(); setOpenIdx(isOpen ? null : idx); }}
+                  onMouseEnter={playHover}
                   style={{ width: "100%", background: "none", border: "none", padding: "24px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", textAlign: "left" }}
                 >
                   <span style={{ fontSize: 16, fontWeight: 600, color: isOpen ? theme === 'dark' ? '#ffffff' : '#111827' : theme === 'dark' ? "#cbd5e1" : "#4b5563", transition: "color 0.2s", paddingRight: 16 }}>

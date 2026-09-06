@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '@/lib/axios';
-import useGlobalState from "@/lib/global_state";
+import useGlobalState from "@/lib/global_state"; 
+import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
 import { LayoutDashboard, Clock, Briefcase, FileSearch, ShieldCheck, CheckCircle, ExternalLink, Archive, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 import UserHeader from "@/components/nav/user_header";
@@ -51,7 +52,7 @@ interface DashboardTask {
 }
 
 const DashboardMain = () => {
-    const { user } = useGlobalState();
+    const { user, isGuestMode, isVerified } = useGlobalState();
     const location = useLocation();
     const navigate = useNavigate();
     const [tasks, setTasks] = useState<DashboardTask[]>([]);
@@ -141,12 +142,13 @@ const DashboardMain = () => {
     }, 0);
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
+        <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base">
             {/* Top Header */}
             <UserHeader pageTitle="Dashboard" credits={user?.wallet?.balance_credits || 0} />
+            {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="deliveries and tasks" />}
 
             {/* Main Content */}
-            <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in">
+            <div className={`mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in`}>
                 {/* Banner Title */}
                 <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-dark-surface/60 shadow-sm dark:shadow-none p-6 md:p-8 backdrop-blur-xl">
                     <div className="relative z-10 flex flex-col sm:flex-row justify-between sm:items-center gap-4 w-full">

@@ -1,3 +1,5 @@
+import useGlobalState from "@/lib/global_state";
+import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
 import React, { useState, useEffect, useMemo } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Filter } from "lucide-react";
@@ -52,6 +54,8 @@ const ProposalSidebarSkeleton = () => (
 );
 
 export const ProposalsMain: React.FC = () => {
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isVerified = useGlobalState((state) => state.isVerified);
   const location = useLocation();
 
   // Route check
@@ -147,7 +151,9 @@ export const ProposalsMain: React.FC = () => {
         <UserHeader pageTitle="Job Proposals" credits={1250} />
       </div>
 
-      <div className="mx-auto max-w-7xl p-6 md:p-8 w-full">
+      {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="job proposals" />}
+
+      <div className={`mx-auto max-w-7xl p-6 md:p-8 w-full`}>
         {/* Search Bar */}
         <ProposalsSearchbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
 

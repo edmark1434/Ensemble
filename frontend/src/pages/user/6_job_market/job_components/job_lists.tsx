@@ -1,5 +1,5 @@
-import React from "react";
-import { Star, Clock, Bookmark, Edit2, Flag, Wrench } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Star, Clock, Bookmark, Edit2, Flag, Wrench, Send, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { JobRichText } from "./JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
@@ -114,6 +114,15 @@ const JobList: React.FC<JobListProps> = ({
 }) => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 9;
+
+    useEffect(() => {
+      setCurrentPage(1);
+    }, [jobs.length]);
+
+    const totalPages = Math.ceil(jobs.length / itemsPerPage);
+    const paginatedJobs = jobs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const handleEditClick = (e: React.MouseEvent, jobId: string) => {
     e.stopPropagation();
@@ -156,17 +165,22 @@ const JobList: React.FC<JobListProps> = ({
   }
 
   return (
-    <motion.div
-      layout
-      transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1.0] }}
-      className={
-        viewType === "grid"
-          ? "grid grid-cols-2 xl:grid-cols-3 gap-4"
-          : "space-y-4"
-      }
-    >
+      <div className="flex flex-col flex-1 relative min-h-[calc(100vh-250px)]">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentPage + viewType}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className={`flex-1 ${
+              viewType === "grid"
+                ? "grid grid-cols-2 xl:grid-cols-3 gap-4 content-start"
+                : "flex flex-col gap-4"
+            }`}
+          >
       <AnimatePresence mode="popLayout">
-        {jobs.map((job) => {
+        {paginatedJobs.map((job) => {
           const isActive = activeJobId === job.id;
 
           /* --- GRID VIEW CARD (NO SKILLS DISPLAY) --- */
@@ -194,8 +208,15 @@ const JobList: React.FC<JobListProps> = ({
                       className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
+                      
+                      <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
+                          <Send className="h-3 w-3" />
+                          <span>{job.applicantsCount || 0} Proposals</span>
+                        </div>
+                      </div>
 
-                    <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                    <div className="flex items-center justify-between gap-1.5 mb-2"><div className="flex flex-wrap items-center gap-1.5">
                       {!job.isOwnPost && !isGuestMode && (
                         <button
                           title="Report Post"
@@ -228,23 +249,29 @@ const JobList: React.FC<JobListProps> = ({
                     </div>
                   </div>
 
+                  </div>
+
                   {/* Category Pill Tags */}
                   <div className="flex flex-wrap items-center gap-1.5 mb-2">
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
-                        job.status?.toLowerCase() === "open"
-                          ? "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
-                          : "bg-red-100 text-red-700 border-red-300 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
+                      className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
+                        job.status?.toLowerCase() === "open" || !job.status
+                          ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
+                          : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                       }`}
                     >
-                      {job.status}
+                      <span className="relative z-10">{job.status?.toLowerCase() === "open" || !job.status ? "Open" : "Closed"}</span>
+                      {(job.status?.toLowerCase() === "open" || !job.status) && (
+                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                      )}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                      {job.difficulty}
+                      {job.category || "General"}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                      {job.category}
+                      {job.difficulty || "Beginner"}
                     </span>
+                    
                   </div>
 
                   {/* Price & Title */}
@@ -310,22 +337,26 @@ const JobList: React.FC<JobListProps> = ({
                 <div>
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
-                          job.status?.toLowerCase() === "open"
-                            ? "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
-                            : "bg-red-100 text-red-700 border-red-300 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
-                        }`}
-                      >
-                        {job.status}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                        {job.difficulty}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                        {job.category}
-                      </span>
-                    </div>
+                        <span
+                          className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
+                            job.status?.toLowerCase() === "open" || !job.status
+                              ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
+                              : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
+                          }`}
+                        >
+                          <span className="relative z-10">{job.status?.toLowerCase() === "open" || !job.status ? "Open" : "Closed"}</span>
+                          {(job.status?.toLowerCase() === "open" || !job.status) && (
+                            <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                          )}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
+                          {job.category || "General"}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
+                          {job.difficulty || "Beginner"}
+                        </span>
+                        
+                      </div>
 
                     <div className="flex items-center gap-2">
                       {!job.isOwnPost && !isGuestMode && (
@@ -429,8 +460,45 @@ const JobList: React.FC<JobListProps> = ({
           );
         })}
       </AnimatePresence>
-    </motion.div>
-  );
-};
+          </motion.div>
+        </AnimatePresence>
+        {totalPages > 1 && (
+          <div className="sticky bottom-0 mt-auto py-4 z-10 flex justify-center">
+            <div className="flex items-center gap-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-gray-200 dark:border-white/10 shadow-lg">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                className="px-3 py-1 text-sm font-medium rounded-full text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Prev
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }).map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i + 1)}
+                    className={`h-8 w-8 rounded-full text-sm font-bold flex items-center justify-center transition-colors ${
+                      currentPage === i + 1
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                        : "text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10"
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                className="px-3 py-1 text-sm font-medium rounded-full text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
-export default JobList;
+  export default JobList;

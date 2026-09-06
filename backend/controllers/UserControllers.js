@@ -269,7 +269,9 @@ async function refreshToken(req, res) {
         delete credentials.email_address;
         credentials.username = credentials.handle;
         delete credentials.handle;
-        delete credentials.password_hash; 
+        credentials.userId = credentials.user_id;
+        delete credentials.user_id;
+        delete credentials.password_hash;
 
         // Generate and set fresh access token
         const accessToken = await AccessTokens(credentials);

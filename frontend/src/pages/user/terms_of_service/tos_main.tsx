@@ -1,3 +1,5 @@
+import useGlobalState from "@/lib/global_state";
+import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
 // src/pages/user/terms_of_service/tos_main.tsx
 import React, { useState, useEffect } from "react";
 import UserHeader from "@/components/nav/user_header";
@@ -59,7 +61,9 @@ const TosSkeletonLoader: React.FC = () => (
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-export const TosMain: React.FC = () => {
+export const TosMain: React.FC = () => { 
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isVerified = useGlobalState((state) => state.isVerified);
   const { terms: tosList, loading, error, fetchTerms, createTerms, updateTerms, deleteTerms } = useTerms();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -134,15 +138,16 @@ export const TosMain: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white">
+    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white">
       {/* Top Header */}
       <UserHeader pageTitle="Terms of Service" credits={1250} />
+      {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="terms of service" />}
 
       {loading ? (
         <TosSkeletonLoader />
       ) : (
         /* Animated Main Container */
-        <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in">
+        <div className={`mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in`}>
           {/* Banner Title */}
           <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-dark-surface/60 shadow-sm dark:shadow-none p-6 md:p-8 backdrop-blur-xl">
             <div className="relative z-10">
@@ -218,7 +223,7 @@ export const TosMain: React.FC = () => {
                     )}
                     <button
                       type="submit"
-                      className="flex-1 rounded-xl bg-blue-500 py-2.5 text-xs font-bold text-gray-900 dark:text-white transition hover:bg-blue-600 shadow-lg shadow-blue-500/20"
+                      className="flex-1 rounded-xl bg-blue-500 py-2.5 text-xs font-bold text-white transition hover:bg-blue-600 shadow-lg shadow-blue-500/20"
                       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
                       {editingId ? "Update Template" : "Save TOS Template"}
@@ -256,7 +261,7 @@ export const TosMain: React.FC = () => {
                           onClick={() =>
                             setExpandedId(isExpanded ? null : tos.id)
                           }
-                          className="flex cursor-pointer items-center justify-between p-4 text-left transition hover:bg-white dark:bg-white/5 shadow-sm dark:shadow-none"
+                          className="flex cursor-pointer items-center justify-between p-4 text-left transition hover:bg-gray-50 dark:hover:bg-white/5 shadow-sm dark:shadow-none"
                         >
                           <div className="flex items-center gap-3">
                             <FileText className="h-4 w-4 shrink-0 text-blue-400" />
@@ -268,6 +273,11 @@ export const TosMain: React.FC = () => {
                             >
                               {tos.terms_title}
                             </h3>
+                            {tos.usage_contracts && tos.usage_contracts.length > 0 && (
+                                <span className="rounded bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 text-[10px] font-semibold text-blue-800 dark:text-blue-300">
+                                  Used in {tos.usage_contracts.length} {tos.usage_contracts.length === 1 ? 'Job' : 'Jobs'}
+                                </span>
+                            )}
                           </div>
 
                           <div className="flex items-center gap-2">

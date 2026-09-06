@@ -1,3 +1,4 @@
+import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
 // src/pages/user/contracts/contracts.tsx
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -207,7 +208,9 @@ function formatDateTimeWithRelative(dateString: string | undefined): string {
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-export const Contracts: React.FC = () => {
+export const Contracts: React.FC = () => { 
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isVerified = useGlobalState((state) => state.isVerified);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
   const [contracts, setContracts] = useState<DetailedContract[]>([]);
@@ -321,9 +324,10 @@ export const Contracts: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white font-['Plus_Jakarta_Sans']">
+    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white font-['Plus_Jakarta_Sans']">
       {/* Top Header */}
       <UserHeader pageTitle="My Contracts" credits={1250} />
+      {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="contracts" />}
 
       {loading ? (
         <ContractsSkeletonLoader />
@@ -352,65 +356,75 @@ export const Contracts: React.FC = () => {
           </div>
 
           {/* Smooth Framer Motion Underline Tab Navigation */}
-          <div className="border-b border-gray-200 dark:border-white/10 flex gap-1 relative">
-            <button
-              onClick={() => setActiveTab("active")}
-              className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
-                activeTab === "active" ? "text-blue-400 font-bold" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
-              }`}
-              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-            >
-              <span className="relative z-10 flex items-center gap-2">
-                <Shield className="h-4 w-4" /> Active Contracts
-                <span className="rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.2 text-[10px] text-gray-600 dark:text-zinc-300">
-                  {contracts.filter((c) => !c.isArchived).length}
+          <div className="border-b border-gray-200 dark:border-white/10 flex justify-between items-end relative">
+            <div className="flex gap-1 relative">
+              <button
+                onClick={() => setActiveTab("active")}
+                className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+                  activeTab === "active" ? "text-blue-400 font-bold" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
+                }`}
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                <span className="relative z-10 flex items-center gap-2">
+                  <Shield className="h-4 w-4" /> Active Contracts
+                  <span className="rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.2 text-[10px] text-gray-600 dark:text-zinc-300">
+                    {contracts.filter((c) => !c.isArchived).length}
+                  </span>
                 </span>
-              </span>
 
-              {activeTab === "active" && (
-                <>
-                  <motion.div
-                    layoutId="activeContractTabGlow"
-                    className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                  />
-                  <motion.div
-                    layoutId="activeContractTabUnderline"
-                    className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                  />
-                </>
-              )}
-            </button>
+                {activeTab === "active" && (
+                  <>
+                    <motion.div
+                      layoutId="activeContractTabGlow"
+                      className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                    />
+                    <motion.div
+                      layoutId="activeContractTabUnderline"
+                      className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                    />
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveTab("archived")}
+                className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+                  activeTab === "archived" ? "text-blue-400 font-bold" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
+                }`}
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                <span className="relative z-10 flex items-center gap-2">
+                  <Archive className="h-4 w-4" /> Archived Contracts
+                  <span className="rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.2 text-[10px] text-gray-600 dark:text-zinc-300">
+                    {contracts.filter((c) => c.isArchived).length}
+                  </span>
+                </span>
+
+                {activeTab === "archived" && (
+                  <>
+                    <motion.div
+                      layoutId="activeContractTabGlow"
+                      className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                    />
+                    <motion.div
+                      layoutId="activeContractTabUnderline"
+                      className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                    />
+                  </>
+                )}
+              </button>
+            </div>
 
             <button
-              onClick={() => setActiveTab("archived")}
-              className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
-                activeTab === "archived" ? "text-blue-400 font-bold" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
-              }`}
-              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              onClick={() => navigate('/contracts/dispute-form')}
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors mb-2 mr-2 md:mr-0"
             >
-              <span className="relative z-10 flex items-center gap-2">
-                <Archive className="h-4 w-4" /> Archived Contracts
-                <span className="rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.2 text-[10px] text-gray-600 dark:text-zinc-300">
-                  {contracts.filter((c) => c.isArchived).length}
-                </span>
-              </span>
-
-              {activeTab === "archived" && (
-                <>
-                  <motion.div
-                    layoutId="activeContractTabGlow"
-                    className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                  />
-                  <motion.div
-                    layoutId="activeContractTabUnderline"
-                    className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                  />
-                </>
-              )}
+              <AlertCircle className="h-3.5 w-3.5" />
+              Report a Dispute
             </button>
           </div>
 

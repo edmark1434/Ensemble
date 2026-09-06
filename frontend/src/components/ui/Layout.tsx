@@ -5,6 +5,7 @@ import UtilScrollTop from "@/components/utility/util_scroll_top.tsx";
 import useGlobalState from "@/lib/global_state.ts";
 import { ChatMain } from "./chat_bubble/chat_main";
 import { CallOverlay } from "./chat_bubble/chat_bubble_components/CallOverlay";
+import VerificationRequiredModal from "@/components/ui/VerificationRequiredModal";
 import useChatState, {
   type ChatTarget,
 } from "./chat_bubble/chat_state";
@@ -134,6 +135,7 @@ const Layout = () => {
       <CallOverlay />
 
       <UtilScrollTop />
+      <VerificationRequiredModal />
     </div>
   );
 };

@@ -39,19 +39,19 @@ body {
 }
 /* For dark theme selects */
 .dark select {
-  background-color: #1a1d2e !important;
-  color: white !important;
+  background-color: #1a1d2e;
+  color: white;
 }
 
 .dark select option {
-  background-color: #1a1d2e !important;
-  color: white !important;
+  background-color: #1a1d2e;
+  color: white;
 }
 
 .dark select option:hover,
 .dark select option:focus,
 .dark select option:active {
-  background-color: #3b82f6 !important;
+  background-color: #3b82f6;
 }
 
 /* Thin Scrollbar Utility */
@@ -188,30 +188,4 @@ body {
 }
 .animate-badge-shine {
   animation: badge-shine 3s infinite;
-}
-/* Platform-wide interactive control fallback */
-button:not(:disabled),
-input[type="button"]:not(:disabled),
-input[type="submit"]:not(:disabled),
-input[type="reset"]:not(:disabled),
-[role="button"]:not([aria-disabled="true"]) {
-  cursor: pointer !important;
-}
-
-button:disabled,
-input[type="button"]:disabled,
-input[type="submit"]:disabled,
-input[type="reset"]:disabled,
-[role="button"][aria-disabled="true"] {
-  cursor: not-allowed !important;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  button:not(:disabled):hover,
-  input[type="button"]:not(:disabled):hover,
-  input[type="submit"]:not(:disabled):hover,
-  input[type="reset"]:not(:disabled):hover,
-  [role="button"]:not([aria-disabled="true"]):hover {
-    filter: brightness(1.1);
-  }
 }

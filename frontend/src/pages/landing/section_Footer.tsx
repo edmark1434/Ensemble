@@ -50,8 +50,19 @@ const SectionFooter: FC<FooterProps> = ({ isMuted = false }) => {
   };
 
   const handleLinkClick = (link: string) => {
-    if (link === "Pricing") {
-      navigate("/page_Pricing");
+    const routeMap: Record<string, string> = {
+      "Pricing": "/landing/Pricing",
+      "About Us": "/landing/AboutUs",
+      "How To Hire": "/landing/HowToHire",
+      "How to Work": "/landing/HowToWork",
+      "Support Us": "/landing/SupportUs",
+      "Privacy": "/landing/PrivacyPolicy",
+      "Terms": "/landing/TermsOfService",
+      "Community": "/forums"
+    };
+
+    if (routeMap[link]) {
+      navigate(routeMap[link]);
     } else if (link === "Features") {
       document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
     }

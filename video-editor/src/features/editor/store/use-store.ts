@@ -69,6 +69,7 @@ interface ITimelineStore {
   setProjectName: (name: string) => void;
 
   userId: string;
+  userName: string;
   projectId: string;
 
   stateManager: StateManager | null;
@@ -208,8 +209,11 @@ const useStore = create<ITimelineStore>((set, get) => ({
   projectName: "My Project",
   setProjectName: (name: string) => set({ projectName: name }),
 
-  userId: "dev-user-id",
-  projectId: "dev-project-id",
+  // userId: "dev-user-id",
+  // projectId: "dev-project-id",
+  userId: "",
+  userName: "",
+  projectId: "",
 
   stateManager: null,
   setStateManager: (stateManager) => set({ stateManager }),

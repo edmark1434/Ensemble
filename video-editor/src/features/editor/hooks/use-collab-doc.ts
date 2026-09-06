@@ -10,7 +10,15 @@ import {
 } from "../collab/ydoc-schema";
 import { setupMirrorIn } from "../collab/mirror-in";
 import { createSyncGuard, SyncGuard } from "../collab/sync-guard";
-import { createSession, endSession, loadSnapshot, attachPersistence } from "../collab/persistence";
+import {
+  createSession,
+  endSession,
+  loadSnapshot,
+  attachPersistence,
+  requestCompact,
+  PersistenceHandle,
+  PersistenceStatus,
+} from "../collab/persistence";
 import { setupMirrorOutFromStateManager, setupMirrorOutFromStore } from "../collab/mirror-out";
 import { attachWsProvider } from "../collab/ws-provider";
 
@@ -23,6 +31,9 @@ export interface CollabDoc {
   sessionId: number | null;
   ready: boolean;
   error: Error | null;
+  saveStatus: PersistenceStatus;
+  compactStatus: "idle" | "compacting" | "error";
+  forceSave: () => void;
 }
 
 // projectId here is the internal integer project_id sessions/snapshots key
@@ -30,13 +41,14 @@ export interface CollabDoc {
 // See flagged note in chat re: resolving that before this hook is wired in.
 export function useCollabDoc(
   projectId: string | undefined,
-  userId: string,
+  userId: string | undefined,
+  userName: string | undefined,
   stateManager: StateManager,
 ): CollabDoc | null {
   const [collab, setCollab] = useState<CollabDoc | null>(null);
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || !userId) return;
 
     let cancelled = false;
     let teardownMirrorIn: (() => void) | null = null;
@@ -47,6 +59,7 @@ export function useCollabDoc(
     let teardownTimelineWatch: (() => void) | null = null;
     let activeSessionId: number | null = null;
     let timelineResyncInterval: ReturnType<typeof setInterval> | null = null;
+    let persistenceHandle: PersistenceHandle | null = null;
 
     const doc = new Y.Doc({ gc: false });
     const schema = createCollabSchema(doc);
@@ -58,7 +71,41 @@ export function useCollabDoc(
       { trackedOrigins: new Set([localOrigin]), captureTimeout: 300 },
     );
 
-    setCollab({ doc, schema, undoManager, syncGuard, localOrigin, sessionId: null, ready: false, error: null });
+    // Skips the debounce and persists whatever's queued right now — wired
+    // up to the navbar's save-status button. Reads persistenceHandle at
+    // call time (not creation time), so this stays a stable function
+    // reference even though the handle itself isn't ready until the async
+    // setup below completes.
+    const forceSave = () => {
+      if (cancelled) return;
+      setCollab((prev) => (prev ? { ...prev, compactStatus: "compacting" } : prev));
+      persistenceHandle
+        ?.forceFlush()
+        .then(() => requestCompact(projectId))
+        .then(() => {
+          if (cancelled) return;
+          setCollab((prev) => (prev ? { ...prev, compactStatus: "idle" } : prev));
+        })
+        .catch((err) => {
+          console.error("useCollabDoc: force save failed", err);
+          if (cancelled) return;
+          setCollab((prev) => (prev ? { ...prev, compactStatus: "error" } : prev));
+        });
+    };
+
+    setCollab({
+      doc,
+      schema,
+      undoManager,
+      syncGuard,
+      localOrigin,
+      sessionId: null,
+      ready: false,
+      error: null,
+      saveStatus: "saved",
+      compactStatus: "idle",
+      forceSave,
+    });
 
     (async () => {
       try {
@@ -76,20 +123,57 @@ export function useCollabDoc(
         teardownMirrorIn = setupMirrorIn(schema, stateManager, localOrigin, syncGuard);
         teardownMirrorOutStateManager = setupMirrorOutFromStateManager(schema, stateManager, localOrigin, syncGuard);
         teardownMirrorOutStore = setupMirrorOutFromStore(schema, localOrigin, syncGuard);
-        teardownPersistence = attachPersistence(schema, projectId, sessionId, localOrigin);
-        teardownWsProvider = attachWsProvider(schema, projectId, userId);
+        persistenceHandle = attachPersistence(schema, projectId, sessionId, localOrigin, (status) => {
+          setCollab((prev) => (prev ? { ...prev, saveStatus: status } : prev));
+        });
+        teardownPersistence = persistenceHandle.teardown;
+        teardownWsProvider = attachWsProvider(schema, projectId, userId, userName);
         teardownTimelineWatch = useStore.subscribe((state, prevState) => {
-          if (state.timeline && !prevState.timeline) {
-            const resyncTransitions = () => {
+          // Compare identity, not just nullity — every remount produces a
+          // genuinely new CanvasTimeline instance, and each one needs this
+          // resync, not just the very first canvas of the session.
+          if (state.timeline && state.timeline !== prevState.timeline) {
+            // A previous canvas's resync loop is now pointed at a dead
+            // canvas — stop it before starting a new one, or the two
+            // loops share `timelineResyncInterval` and can end up
+            // clearing each other's interval id instead of their own.
+            if (timelineResyncInterval) {
+              clearInterval(timelineResyncInterval);
+              timelineResyncInterval = null;
+            }
+
+            const resyncCanvas = () => {
               const canvas = useStore.getState().timeline as any;
               if (!canvas) return;
               const current = stateManager.getState();
+
+              const onCanvas = new Set(canvas.getTrackItems().map((item: any) => item.id));
+              const inState: string[] = current.trackItemIds ?? [];
+              const missingIds = inState.filter((id) => !onCanvas.has(id));
+              const staleIds = [...onCanvas].filter((id) => !inState.includes(id as string));
+
+              if (missingIds.length > 0 || staleIds.length > 0) {
+                try {
+                  if (staleIds.length > 0) canvas.deleteTrackItemById(staleIds);
+                  canvas.tracks = current.tracks;
+                  canvas.trackItemsMap = current.trackItemsMap;
+                  missingIds.forEach((id) => canvas.addTrackItem({ ...current.trackItemsMap[id] }));
+                  canvas.trackItemIds = current.trackItemIds;
+                  canvas.renderTracks();
+                  canvas.alignItemsToTrack();
+                  canvas.updateTrackItemCoords();
+                  canvas.calcBounding();
+                  canvas.refreshTrackLayout();
+                } catch (err) {
+                  console.error("useCollabDoc: track item resync failed on canvas mount", err);
+                }
+              }
+
+              // existing transitions logic stays as-is, just rename resyncTransitions -> resyncCanvas
               canvas.transitionsMap = current.transitionsMap ?? {};
               canvas.transitionIds = Object.keys(current.transitionsMap ?? {});
               if (Object.keys(current.transitionsMap ?? {}).length > 0) {
-                try {
-                  canvas.renderTransitions();
-                } catch (err) {
+                try { canvas.renderTransitions(); } catch (err) {
                   console.error("useCollabDoc: renderTransitions failed on canvas mount", err);
                 }
               }
@@ -100,10 +184,10 @@ export function useCollabDoc(
             // up in the store and clobber transitionsMap once it does — a single
             // sync here can lose that race. Keep re-asserting for a few seconds
             // so whichever runs last is always the correct data, then stop.
-            resyncTransitions();
+            resyncCanvas();
             let ticks = 0;
             timelineResyncInterval = setInterval(() => {
-              resyncTransitions();
+              resyncCanvas();
               ticks += 1;
               if (ticks >= 10) {
                 clearInterval(timelineResyncInterval!);
@@ -167,6 +251,8 @@ export function useCollabDoc(
                 transitionsMap: snapshot.transitionsMap,
                 transitionIds: snapshot.transitionIds,
                 tracks: snapshot.tracks,
+                ...(snapshot.size ? { size: snapshot.size } : {}),
+                ...(snapshot.fps !== undefined ? { fps: snapshot.fps } : {}),
                 ...(snapshot.duration !== undefined ? { duration: snapshot.duration } : {}),
               },
               { updateHistory: false },
@@ -223,7 +309,7 @@ export function useCollabDoc(
       doc.destroy();
       setCollab(null);
     };
-  }, [projectId, userId, stateManager]);
+  }, [projectId, userId, userName, stateManager]);
 
   return collab;
 }

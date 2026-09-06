@@ -79,18 +79,21 @@ router.put('/profile/badges/curate', [checkSession, requireAuth], curateBadgesCo
 
 router.post('/dev/add-credits', [checkSession, requireAuth], async (req, res) => {
     try {
+        const { pool } = require('../lib/Database');
         const accountId = req.user.account_id;
         const { amount } = req.body;
         
         await pool.query(`
-            UPDATE accounts 
-            SET credits = credits + $1 
-            WHERE account_id = $2
+            UPDATE wallets 
+            SET balance_credits = balance_credits + $1 
+            WHERE type = 'account wallets'
+            AND wallet_id IN (SELECT wallet_id FROM account_wallets WHERE account_id = $2)
         `, [amount, accountId]);
         
         res.json({ success: true, message: `Successfully added ${amount} credits` });
     } catch (err) {
-        res.status(500).json({ error: "Failed to add credits" });
+        console.error("DEV ADD CREDITS ERR:", err);
+        res.status(500).json({ error: "Failed to add credits", details: err.message });
     }
 });
 

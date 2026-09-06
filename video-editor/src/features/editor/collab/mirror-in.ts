@@ -74,6 +74,11 @@ export function setupMirrorIn(
 
         useStore.setState({
           markers: snapshot.markers,
+          trackItemsMap: snapshot.trackItemsMap,
+          trackItemIds: snapshot.trackItemIds,
+          transitionsMap: snapshot.transitionsMap,
+          transitionIds: snapshot.transitionIds,
+          tracks: snapshot.tracks,
           ...(snapshot.projectName !== undefined ? { projectName: snapshot.projectName } : {}),
           ...(snapshot.size ? { size: snapshot.size } : {}),
           ...(snapshot.fps !== undefined ? { fps: snapshot.fps } : {}),
@@ -91,9 +96,7 @@ export function setupMirrorIn(
           canvas.requestRenderAll();
         }
       } finally {
-        Promise.resolve().then(() => {
-          syncGuard.isApplyingRemote = false;
-        });
+        syncGuard.isApplyingRemote = false;
       }
     } catch (err) {
       console.error("mirror-in: failed to apply transaction", err);

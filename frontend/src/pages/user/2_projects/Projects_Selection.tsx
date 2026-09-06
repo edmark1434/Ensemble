@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, Check, Monitor, Smartphone, Layout, ChevronRight, Square, Settings, Info } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import { useNavigate } from "react-router-dom";
+import api from "@/lib/axios.ts";
 
 interface FormatOption {
   id: string;
@@ -84,6 +85,20 @@ const calculateAspectRatio = (width: number, height: number): string => {
   return `${ratioW}:${ratioH}`;
 };
 
+// Given a ratio like "16:9", returns dimensions with 1080 applied to the shorter side
+const calculateDimensionsFromRatio = (aspectRatio: string): { width: number; height: number } => {
+  const [wRatio, hRatio] = aspectRatio.split(":").map(Number);
+  if (wRatio <= hRatio) {
+    const width = 1080;
+    const height = Math.round((1080 * hRatio) / wRatio);
+    return { width, height };
+  } else {
+    const height = 1080;
+    const width = Math.round((1080 * wRatio) / hRatio);
+    return { width, height };
+  }
+};
+
 const ProjectsSelection: React.FC = () => {
   const navigate = useNavigate();
   const [selectedFormat, setSelectedFormat] = useState<string | null>(null);
@@ -96,13 +111,18 @@ const ProjectsSelection: React.FC = () => {
   const handleSelect = (formatId: string) => {
     setSelectedFormat(formatId);
     const format = formatOptions.find(f => f.id === formatId);
-    if (format && format.defaultWidth && format.defaultHeight) {
-      setAdjustedWidth(format.defaultWidth);
-      setAdjustedHeight(format.defaultHeight);
-      if (formatId === "custom") {
-        setCustomWidth(format.defaultWidth);
-        setCustomHeight(format.defaultHeight);
-      }
+
+    if (formatId === "custom") {
+      const width = format?.defaultWidth ?? 1920;
+      const height = format?.defaultHeight ?? 1080;
+      setAdjustedWidth(width);
+      setAdjustedHeight(height);
+      setCustomWidth(width);
+      setCustomHeight(height);
+    } else if (format?.aspectRatio) {
+      const { width, height } = calculateDimensionsFromRatio(format.aspectRatio);
+      setAdjustedWidth(width);
+      setAdjustedHeight(height);
     }
   };
 
@@ -126,16 +146,25 @@ const ProjectsSelection: React.FC = () => {
     }
   };
 
-  const handleContinue = () => {
-    if (selectedFormat) {
-      navigate(`/projects/create`, {
-        state: {
-          format: selectedFormat,
-          width: adjustedWidth,
-          height: adjustedHeight,
-          aspectRatio: formatOptions.find(f => f.id === selectedFormat)?.aspectRatio
-        }
+  const EDITOR_URL = import.meta.env.VITE_EDITOR_URL || 'http://localhost:3000';
+
+  const handleContinue = async () => {
+    if (!selectedFormat) return;
+
+    try {
+      const { data } = await api.get('/api/editor/handoff-token');
+      const handoffToken = data.handoffToken;
+
+      const params = new URLSearchParams({
+        width: String(adjustedWidth),
+        height: String(adjustedHeight),
+        token: handoffToken,
       });
+
+      window.location.href = `${EDITOR_URL}/editor/new?${params.toString()}`;
+    } catch (err) {
+      console.error('Failed to get editor handoff token:', err);
+      // not logged in / session expired — bail or redirect to login
     }
   };
 

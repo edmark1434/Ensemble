@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Star, Clock, Bookmark, Users, Flag, Edit2, Wrench, ShoppingCart, Heart, Send } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -76,6 +76,15 @@ export const GigList: React.FC<GigListProps> = ({
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const [reportingGig, setReportingGig] = useState<Gig | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 9;
+
+    useEffect(() => {
+      setCurrentPage(1);
+    }, [gigs.length]);
+
+    const totalPages = Math.ceil(gigs.length / itemsPerPage);
+    const paginatedGigs = gigs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const formatTimeAgo = (dateStr: string | undefined) => {
     if (!dateStr) return "Just now";
@@ -119,18 +128,22 @@ export const GigList: React.FC<GigListProps> = ({
   }
 
   return (
-    <>
-      <motion.div
-        layout
-        transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1.0] }}
-        className={
-          viewType === "grid"
-            ? "grid grid-cols-2 xl:grid-cols-3 gap-4"
-            : "space-y-4"
-        }
-      >
+      <div className="flex flex-col flex-1 relative min-h-[calc(100vh-250px)]">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentPage + viewType}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className={`flex-1 ${
+              viewType === "grid"
+                ? "grid grid-cols-2 xl:grid-cols-3 gap-4 content-start"
+                : "flex flex-col gap-4"
+            }`}
+          >
         <AnimatePresence mode="popLayout">
-          {gigs.map((gig) => {
+          {paginatedGigs.map((gig) => {
             const isActive = activeGigId === gig.id;
             const isOpen = gig.status?.toLowerCase() === "open" || !gig.status;
             const hasServiceRating = gig.ratingCount > 0;
@@ -158,7 +171,7 @@ export const GigList: React.FC<GigListProps> = ({
                         alt={gig.title}
                         className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/80 via-transparent to-transparent pointer-events-none" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
 
                       {/* Orders and Service Rating Badges grouped at top-left */}
                       <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
@@ -316,7 +329,7 @@ export const GigList: React.FC<GigListProps> = ({
                     alt={gig.title}
                     className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105 absolute inset-0"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/80 via-transparent to-transparent pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
 
                   {/* Orders and Service Rating badges grouped */}
                   <div className="absolute bottom-2 left-2 flex items-center gap-2 z-10">
@@ -487,7 +500,44 @@ export const GigList: React.FC<GigListProps> = ({
             );
           })}
         </AnimatePresence>
-      </motion.div>
+          </motion.div>
+        </AnimatePresence>
+        
+        {totalPages > 1 && (
+          <div className="sticky bottom-0 mt-auto py-4 z-10 flex justify-center">
+            <div className="flex items-center gap-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-gray-200 dark:border-white/10 shadow-lg">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                className="px-3 py-1 text-sm font-medium rounded-full text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Prev
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }).map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i + 1)}
+                    className={`h-8 w-8 rounded-full text-sm font-bold flex items-center justify-center transition-colors ${
+                      currentPage === i + 1
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                        : "text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10"
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                className="px-3 py-1 text-sm font-medium rounded-full text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
 
       {/* Pop-up Report Modal in-place */}
       <PopupReportGig
@@ -498,7 +548,7 @@ export const GigList: React.FC<GigListProps> = ({
           console.log("Report submitted for gig:", reportingGig?.id, reason, details);
         }}
       />
-    </>
+    </div>
   );
 };
 

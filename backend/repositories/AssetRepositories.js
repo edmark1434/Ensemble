@@ -20,6 +20,49 @@ function mediaTypeFromMime(mimeType) {
   if (['application/zip', 'application/x-zip-compressed'].includes(mimeType)) return 'archive';
   return null;
 }
+
+async function createSecondaryMediaAssets(
+  client,
+  { marketAssetId, primaryMediaAssetId, originalFileIds, previewFileIds }
+) {
+  if (originalFileIds.length <= 1) return;
+
+  await client.query(
+    `WITH input AS MATERIALIZED (
+       SELECT gen_random_uuid() AS media_asset_id,
+              original.file_id AS original_file_id,
+              preview.file_id AS preview_file_id,
+              original.ordinality::integer AS position
+       FROM unnest($2::uuid[]) WITH ORDINALITY AS original(file_id, ordinality)
+       JOIN unnest($3::uuid[]) WITH ORDINALITY AS preview(file_id, ordinality)
+         ON preview.ordinality = original.ordinality
+     ), inserted_media AS (
+       INSERT INTO media_assets
+         (media_asset_id, name, type, width, height, duration_seconds, is_marketed,
+          owner_user_id, original_file_id, proxy_file_id, thumbnail_file_id, project_id)
+       SELECT input.media_asset_id, primary_media.name, primary_media.type,
+              primary_media.width, primary_media.height, primary_media.duration_seconds,
+              TRUE, primary_media.owner_user_id, input.original_file_id,
+              input.preview_file_id, primary_media.thumbnail_file_id,
+              primary_media.project_id
+       FROM media_assets primary_media
+       CROSS JOIN input
+       WHERE primary_media.media_asset_id = $1
+       RETURNING media_asset_id
+     ), inserted_bundle AS (
+       INSERT INTO media_asset_bundle_files
+         (media_asset_id, file_id, preview_file_id, position)
+       SELECT input.media_asset_id, input.original_file_id,
+              input.preview_file_id, input.position
+       FROM input
+       JOIN inserted_media USING (media_asset_id)
+       RETURNING media_asset_id
+     )
+     INSERT INTO market_media_assets (market_asset_id, media_asset_id)
+     SELECT $4, media_asset_id FROM inserted_bundle`,
+    [primaryMediaAssetId, originalFileIds.slice(1), previewFileIds.slice(1), marketAssetId]
+  );
+}
 function normalizeAssetPostingEligibility(row) {
   const used = Number(row?.posted_count || 0);
   const rawValue = typeof row?.feature_value === 'string' ? row.feature_value.trim() : '';
@@ -177,16 +220,20 @@ const ASSET_SELECT = `
                'path', thumbnail_file.path,
                'position', asset_thumbnail.position
              ) ORDER BY asset_thumbnail.position, asset_thumbnail.media_asset_thumbnail_id)
-             FROM media_asset_thumbnails asset_thumbnail
+             FROM market_media_assets thumbnail_media
+             JOIN media_asset_thumbnails asset_thumbnail
+               ON asset_thumbnail.media_asset_id = thumbnail_media.media_asset_id
              JOIN files thumbnail_file ON thumbnail_file.file_id = asset_thumbnail.file_id
-             WHERE asset_thumbnail.media_asset_id = m.media_asset_id
+             WHERE thumbnail_media.market_asset_id = ma.market_asset_id
                AND asset_thumbnail.deleted_at IS NULL
                AND thumbnail_file.deleted_at IS NULL
            ), '[]'::json) AS thumbnails,
            (SELECT COUNT(*)::int
-            FROM media_asset_thumbnails thumbnail_count
+            FROM market_media_assets thumbnail_count_media
+            JOIN media_asset_thumbnails thumbnail_count
+              ON thumbnail_count.media_asset_id = thumbnail_count_media.media_asset_id
             JOIN files counted_thumbnail ON counted_thumbnail.file_id = thumbnail_count.file_id
-            WHERE thumbnail_count.media_asset_id = m.media_asset_id
+            WHERE thumbnail_count_media.market_asset_id = ma.market_asset_id
               AND thumbnail_count.deleted_at IS NULL
               AND counted_thumbnail.deleted_at IS NULL) AS thumbnail_count,
            COALESCE((
@@ -199,19 +246,23 @@ const ASSET_SELECT = `
                'preview_mime_type', bundle_preview.mime_type,
                'position', bundle.position
              ) ORDER BY bundle.position, bundle.media_asset_bundle_file_id)
-             FROM media_asset_bundle_files bundle
+             FROM market_media_assets bundle_media
+             JOIN media_asset_bundle_files bundle
+               ON bundle.media_asset_id = bundle_media.media_asset_id
              JOIN files bundle_file ON bundle_file.file_id = bundle.file_id
              JOIN files bundle_preview ON bundle_preview.file_id = bundle.preview_file_id
-             WHERE bundle.media_asset_id = m.media_asset_id
+             WHERE bundle_media.market_asset_id = ma.market_asset_id
                AND bundle.deleted_at IS NULL
                AND bundle_file.deleted_at IS NULL
                AND bundle_preview.deleted_at IS NULL
            ), '[]'::json) AS bundle_files,
            (SELECT COUNT(*)::int
-            FROM media_asset_bundle_files bundle_count
+            FROM market_media_assets bundle_count_media
+            JOIN media_asset_bundle_files bundle_count
+              ON bundle_count.media_asset_id = bundle_count_media.media_asset_id
             JOIN files counted_file ON counted_file.file_id = bundle_count.file_id
             JOIN files counted_preview ON counted_preview.file_id = bundle_count.preview_file_id
-            WHERE bundle_count.media_asset_id = m.media_asset_id
+            WHERE bundle_count_media.market_asset_id = ma.market_asset_id
               AND bundle_count.deleted_at IS NULL
               AND counted_file.deleted_at IS NULL
               AND counted_preview.deleted_at IS NULL) AS bundle_file_count,
@@ -222,13 +273,17 @@ const ASSET_SELECT = `
                'provider', project_link.provider,
                'position', project_link.position
              ) ORDER BY project_link.position, project_link.media_asset_project_link_id)
-             FROM media_asset_project_links project_link
-             WHERE project_link.media_asset_id = m.media_asset_id
+             FROM market_media_assets project_link_media
+             JOIN media_asset_project_links project_link
+               ON project_link.media_asset_id = project_link_media.media_asset_id
+             WHERE project_link_media.market_asset_id = ma.market_asset_id
                AND project_link.deleted_at IS NULL
            ), '[]'::json) AS project_links,
            (SELECT COUNT(*)::int
-            FROM media_asset_project_links project_link_count
-            WHERE project_link_count.media_asset_id = m.media_asset_id
+            FROM market_media_assets project_link_count_media
+            JOIN media_asset_project_links project_link_count
+              ON project_link_count.media_asset_id = project_link_count_media.media_asset_id
+            WHERE project_link_count_media.market_asset_id = ma.market_asset_id
               AND project_link_count.deleted_at IS NULL) AS project_link_count,
            m.owner_user_id
     FROM market_media_assets mma
@@ -249,7 +304,18 @@ const ASSET_SELECT = `
     WHERE mma.market_asset_id = ma.market_asset_id
       AND m.deleted_at IS NULL
       AND thumbnail.deleted_at IS NULL
-    ORDER BY m.created_at, m.media_asset_id
+    ORDER BY
+      CASE WHEN EXISTS (
+        SELECT 1 FROM media_asset_bundle_files primary_bundle_marker
+        WHERE primary_bundle_marker.media_asset_id = m.media_asset_id
+          AND primary_bundle_marker.deleted_at IS NULL
+      ) THEN 0 ELSE 1 END,
+      CASE WHEN EXISTS (
+        SELECT 1 FROM media_asset_thumbnails primary_thumbnail_marker
+        WHERE primary_thumbnail_marker.media_asset_id = m.media_asset_id
+          AND primary_thumbnail_marker.deleted_at IS NULL
+      ) THEN 0 ELSE 1 END,
+      m.created_at, m.media_asset_id
     LIMIT 1
   ) media ON TRUE
   JOIN users owner_user ON owner_user.user_id = media.owner_user_id
@@ -480,26 +546,24 @@ async function createAssetRepository(accountId, data) {
     }
 
     const primaryThumbnail = thumbnails[0];
+    const primaryOriginalFileId = data.originalFileIds[0] || data.thumbnailFileId;
     const media = await client.query(
       `INSERT INTO media_assets
          (name, type, width, height, duration_seconds, is_marketed, owner_user_id,
-          proxy_file_id, thumbnail_file_id)
-       VALUES ($1, $2, $3, $4, $5, TRUE, $6, $7, $8)
+          proxy_file_id, thumbnail_file_id, original_file_id)
+       VALUES ($1, $2, $3, $4, $5, TRUE, $6, $7, $8, $9)
        RETURNING media_asset_id`,
       [data.name, data.type, data.width, data.height, data.durationSeconds,
         primaryThumbnail.user_id, data.previewFileIds[0] || data.thumbnailFileId,
-        data.thumbnailFileId]
+        data.thumbnailFileId, primaryOriginalFileId]
     );
 
     if (data.originalFileIds.length > 0) {
       await client.query(
         `INSERT INTO media_asset_bundle_files
            (media_asset_id, file_id, preview_file_id, position)
-         SELECT $1, original.file_id, preview.file_id, original.ordinality - 1
-         FROM unnest($2::uuid[]) WITH ORDINALITY AS original(file_id, ordinality)
-         JOIN unnest($3::uuid[]) WITH ORDINALITY AS preview(file_id, ordinality)
-           ON preview.ordinality = original.ordinality`,
-        [media.rows[0].media_asset_id, data.originalFileIds, data.previewFileIds]
+         VALUES ($1, $2, $3, 0)`,
+        [media.rows[0].media_asset_id, data.originalFileIds[0], data.previewFileIds[0]]
       );
     }
 
@@ -538,6 +602,12 @@ async function createAssetRepository(accountId, data) {
        VALUES ($1, $2)`,
       [market.rows[0].market_asset_id, media.rows[0].media_asset_id]
     );
+    await createSecondaryMediaAssets(client, {
+      marketAssetId: market.rows[0].market_asset_id,
+      primaryMediaAssetId: media.rows[0].media_asset_id,
+      originalFileIds: data.originalFileIds,
+      previewFileIds: data.previewFileIds,
+    });
     await syncAssetTags(client, market.rows[0].market_asset_id, data.tags);
     await client.query('COMMIT');
     return market.rows[0].market_asset_id;
@@ -963,12 +1033,15 @@ async function replaceAssetContent(client, assetId, accountId, ownedAsset, conte
   let retainedBundles = [];
   if (content.replaceBundleFiles && content.retainedBundleFileIds.length > 0) {
     const retained = await client.query(
-      `SELECT media_asset_bundle_file_id, file_id, preview_file_id
-       FROM media_asset_bundle_files
-       WHERE media_asset_id = $1 AND deleted_at IS NULL
-         AND media_asset_bundle_file_id = ANY($2::uuid[])
-       FOR UPDATE`,
-      [ownedAsset.media_asset_id, content.retainedBundleFileIds]
+      `SELECT bundle.media_asset_bundle_file_id, bundle.file_id, bundle.preview_file_id
+       FROM media_asset_bundle_files bundle
+       JOIN market_media_assets bundle_media
+         ON bundle_media.media_asset_id = bundle.media_asset_id
+       WHERE bundle_media.market_asset_id = $1
+         AND bundle.deleted_at IS NULL
+         AND bundle.media_asset_bundle_file_id = ANY($2::uuid[])
+       FOR UPDATE OF bundle`,
+      [assetId, content.retainedBundleFileIds]
     );
     const byId = new Map(retained.rows.map((item) => [String(item.media_asset_bundle_file_id), item]));
     retainedBundles = content.retainedBundleFileIds.map((itemId) => byId.get(itemId));
@@ -981,12 +1054,15 @@ async function replaceAssetContent(client, assetId, accountId, ownedAsset, conte
   let retainedThumbnails = [];
   if (content.replaceThumbnails && content.retainedThumbnailIds.length > 0) {
     const retained = await client.query(
-      `SELECT media_asset_thumbnail_id, file_id
-       FROM media_asset_thumbnails
-       WHERE media_asset_id = $1 AND deleted_at IS NULL
-         AND media_asset_thumbnail_id = ANY($2::uuid[])
-       FOR UPDATE`,
-      [ownedAsset.media_asset_id, content.retainedThumbnailIds]
+      `SELECT thumbnail.media_asset_thumbnail_id, thumbnail.file_id
+       FROM media_asset_thumbnails thumbnail
+       JOIN market_media_assets thumbnail_media
+         ON thumbnail_media.media_asset_id = thumbnail.media_asset_id
+       WHERE thumbnail_media.market_asset_id = $1
+         AND thumbnail.deleted_at IS NULL
+         AND thumbnail.media_asset_thumbnail_id = ANY($2::uuid[])
+       FOR UPDATE OF thumbnail`,
+      [assetId, content.retainedThumbnailIds]
     );
     const byId = new Map(retained.rows.map((item) => [String(item.media_asset_thumbnail_id), item]));
     retainedThumbnails = content.retainedThumbnailIds.map((itemId) => byId.get(itemId));
@@ -1050,13 +1126,22 @@ async function replaceAssetContent(client, assetId, accountId, ownedAsset, conte
   }
   const counts = await client.query(
     `SELECT
-       (SELECT COUNT(*)::int FROM media_asset_bundle_files
-        WHERE media_asset_id = $1 AND deleted_at IS NULL) AS bundle_count,
-       (SELECT COUNT(*)::int FROM media_asset_thumbnails
-        WHERE media_asset_id = $1 AND deleted_at IS NULL) AS thumbnail_count,
-       (SELECT COUNT(*)::int FROM media_asset_project_links
-        WHERE media_asset_id = $1 AND deleted_at IS NULL) AS project_link_count`,
-    [ownedAsset.media_asset_id]
+       (SELECT COUNT(*)::int
+        FROM market_media_assets bundle_media
+        JOIN media_asset_bundle_files bundle
+          ON bundle.media_asset_id = bundle_media.media_asset_id
+        WHERE bundle_media.market_asset_id = $1 AND bundle.deleted_at IS NULL) AS bundle_count,
+       (SELECT COUNT(*)::int
+        FROM market_media_assets thumbnail_media
+        JOIN media_asset_thumbnails thumbnail
+          ON thumbnail.media_asset_id = thumbnail_media.media_asset_id
+        WHERE thumbnail_media.market_asset_id = $1 AND thumbnail.deleted_at IS NULL) AS thumbnail_count,
+       (SELECT COUNT(*)::int
+        FROM market_media_assets project_link_media
+        JOIN media_asset_project_links project_link
+          ON project_link.media_asset_id = project_link_media.media_asset_id
+        WHERE project_link_media.market_asset_id = $1 AND project_link.deleted_at IS NULL) AS project_link_count`,
+    [assetId]
   );
   const finalBundleCount = content.replaceBundleFiles
     ? finalOriginalFileIds.length
@@ -1077,21 +1162,30 @@ async function replaceAssetContent(client, assetId, accountId, ownedAsset, conte
   }
 
   if (content.replaceBundleFiles) {
-    await client.query('DELETE FROM media_asset_bundle_files WHERE media_asset_id = $1', [ownedAsset.media_asset_id]);
+    await client.query(
+      `DELETE FROM media_asset_bundle_files
+       WHERE media_asset_id IN (
+         SELECT media_asset_id FROM market_media_assets WHERE market_asset_id = $1
+       )`,
+      [assetId]
+    );
     if (finalOriginalFileIds.length > 0) {
       await client.query(
         `INSERT INTO media_asset_bundle_files
            (media_asset_id, file_id, preview_file_id, position)
-         SELECT $1, original.file_id, preview.file_id, original.ordinality - 1
-         FROM unnest($2::uuid[]) WITH ORDINALITY AS original(file_id, ordinality)
-         JOIN unnest($3::uuid[]) WITH ORDINALITY AS preview(file_id, ordinality)
-           ON preview.ordinality = original.ordinality`,
-        [ownedAsset.media_asset_id, finalOriginalFileIds, finalPreviewFileIds]
+         VALUES ($1, $2, $3, 0)`,
+        [ownedAsset.media_asset_id, finalOriginalFileIds[0], finalPreviewFileIds[0]]
       );
     }
   }
   if (content.replaceThumbnails) {
-    await client.query('DELETE FROM media_asset_thumbnails WHERE media_asset_id = $1', [ownedAsset.media_asset_id]);
+    await client.query(
+      `DELETE FROM media_asset_thumbnails
+       WHERE media_asset_id IN (
+         SELECT media_asset_id FROM market_media_assets WHERE market_asset_id = $1
+       )`,
+      [assetId]
+    );
     await client.query(
       `INSERT INTO media_asset_thumbnails (media_asset_id, file_id, position)
        SELECT $1, thumbnail.file_id, thumbnail.ordinality - 1
@@ -1100,7 +1194,13 @@ async function replaceAssetContent(client, assetId, accountId, ownedAsset, conte
     );
   }
   if (content.replaceProjectLinks) {
-    await client.query('DELETE FROM media_asset_project_links WHERE media_asset_id = $1', [ownedAsset.media_asset_id]);
+    await client.query(
+      `DELETE FROM media_asset_project_links
+       WHERE media_asset_id IN (
+         SELECT media_asset_id FROM market_media_assets WHERE market_asset_id = $1
+       )`,
+      [assetId]
+    );
     if (content.projectLinks.length > 0) {
       await client.query(
         `INSERT INTO media_asset_project_links
@@ -1121,6 +1221,9 @@ async function replaceAssetContent(client, assetId, accountId, ownedAsset, conte
        (SELECT file_id FROM media_asset_thumbnails
         WHERE media_asset_id = $1 AND deleted_at IS NULL
         ORDER BY position, media_asset_thumbnail_id LIMIT 1) AS thumbnail_file_id,
+       (SELECT file_id FROM media_asset_bundle_files
+        WHERE media_asset_id = $1 AND deleted_at IS NULL
+        ORDER BY position, media_asset_bundle_file_id LIMIT 1) AS original_file_id,
        (SELECT preview_file_id FROM media_asset_bundle_files
         WHERE media_asset_id = $1 AND deleted_at IS NULL
         ORDER BY position, media_asset_bundle_file_id LIMIT 1) AS preview_file_id`,
@@ -1130,17 +1233,54 @@ async function replaceAssetContent(client, assetId, accountId, ownedAsset, conte
     `UPDATE media_assets
      SET thumbnail_file_id = $2::uuid,
          proxy_file_id = COALESCE($3::uuid, $2::uuid),
-         width = CASE WHEN $4::boolean THEN $5::integer ELSE width END,
-         height = CASE WHEN $4::boolean THEN $6::integer ELSE height END,
-         duration_seconds = CASE WHEN $4::boolean THEN $7::integer ELSE duration_seconds END
+         original_file_id = COALESCE($4::uuid, $2::uuid),
+         width = CASE WHEN $5::boolean THEN $6::integer ELSE width END,
+         height = CASE WHEN $5::boolean THEN $7::integer ELSE height END,
+         duration_seconds = CASE WHEN $5::boolean THEN $8::integer ELSE duration_seconds END
      WHERE media_asset_id = $1::uuid`,
     [ownedAsset.media_asset_id,
       primaryFiles.rows[0].thumbnail_file_id,
       primaryFiles.rows[0].preview_file_id,
+      primaryFiles.rows[0].original_file_id,
       content.replaceBundleFiles,
       content.width,
       content.height,
       content.durationSeconds]
+  );
+
+  if (content.replaceBundleFiles) {
+    const removedSecondary = await client.query(
+      `DELETE FROM market_media_assets
+       WHERE market_asset_id = $1::uuid AND media_asset_id <> $2::uuid
+       RETURNING media_asset_id`,
+      [assetId, ownedAsset.media_asset_id]
+    );
+    const removedIds = removedSecondary.rows.map((row) => row.media_asset_id);
+    if (removedIds.length > 0) {
+      await client.query(
+        `UPDATE media_assets
+         SET is_marketed = FALSE, deleted_at = CURRENT_TIMESTAMP
+         WHERE media_asset_id = ANY($1::uuid[])`,
+        [removedIds]
+      );
+    }
+    await createSecondaryMediaAssets(client, {
+      marketAssetId: assetId,
+      primaryMediaAssetId: ownedAsset.media_asset_id,
+      originalFileIds: finalOriginalFileIds,
+      previewFileIds: finalPreviewFileIds,
+    });
+  }
+
+  await client.query(
+    `UPDATE media_assets
+     SET thumbnail_file_id = $2::uuid
+     WHERE media_asset_id IN (
+       SELECT media_asset_id FROM market_media_assets WHERE market_asset_id = $3::uuid
+     )
+       AND media_asset_id <> $1::uuid
+       AND deleted_at IS NULL`,
+    [ownedAsset.media_asset_id, primaryFiles.rows[0].thumbnail_file_id, assetId]
   );
 }
 async function updateAssetRepository(assetId, accountId, data) {
@@ -1155,6 +1295,19 @@ async function updateAssetRepository(assetId, accountId, data) {
        JOIN users u ON u.user_id = m.owner_user_id
        WHERE ma.market_asset_id = $1 AND u.account_id = $2
          AND ma.deleted_at IS NULL AND m.deleted_at IS NULL
+       ORDER BY
+         CASE WHEN EXISTS (
+           SELECT 1 FROM media_asset_bundle_files primary_bundle_marker
+           WHERE primary_bundle_marker.media_asset_id = m.media_asset_id
+             AND primary_bundle_marker.deleted_at IS NULL
+         ) THEN 0 ELSE 1 END,
+         CASE WHEN EXISTS (
+           SELECT 1 FROM media_asset_thumbnails primary_thumbnail_marker
+           WHERE primary_thumbnail_marker.media_asset_id = m.media_asset_id
+             AND primary_thumbnail_marker.deleted_at IS NULL
+         ) THEN 0 ELSE 1 END,
+         m.created_at, m.media_asset_id
+       LIMIT 1
        FOR UPDATE OF ma`,
       [assetId, accountId]
     );

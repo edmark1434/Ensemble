@@ -1,3 +1,5 @@
+import useGlobalState from "@/lib/global_state";
+import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
 import React, { useState, useEffect, useMemo } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import UserHeader from "@/components/nav/user_header";
@@ -46,6 +48,8 @@ export interface OrdersMainContext {
 }
 
 export const OrdersMain: React.FC = () => {
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isVerified = useGlobalState((state) => state.isVerified);
   const location = useLocation();
 
   // Route check
@@ -113,7 +117,9 @@ export const OrdersMain: React.FC = () => {
         <UserHeader pageTitle="Gig Orders" credits={1250} />
       </div>
 
-      <div className="mx-auto max-w-7xl p-6 md:p-8 w-full">
+      {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="gig orders" />}
+
+      <div className={`mx-auto max-w-7xl p-6 md:p-8 w-full`}>
         <OrdersSearchbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
 
         <div className="mb-8 flex flex-wrap items-center justify-between border-b border-gray-200 dark:border-white/10 gap-4 pb-2">

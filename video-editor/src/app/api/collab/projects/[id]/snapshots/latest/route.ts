@@ -5,7 +5,6 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import * as Y from "yjs";
 import { db } from "@/lib/db";
-import { resolveProjectId } from "@/utils/resolve-ids";
 import { loadLatestProjectState } from "@/lib/collab/persistence-store";
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -14,7 +13,7 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return ab;
 }
 
-async function createBlankSnapshot(projectId: number): Promise<Buffer> {
+async function createBlankSnapshot(projectId: string): Promise<Buffer> {
   const doc = new Y.Doc({ gc: false });
   const bytes = Buffer.from(Y.encodeStateAsUpdate(doc));
   doc.destroy();
@@ -37,27 +36,15 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  let projectId: number;
-  try {
-    projectId = await resolveProjectId(id);
-  } catch (error) {
-    return NextResponse.json(
-      { error: `project not found for public_id "${id}"` },
-      { status: 404 }
-    );
-  }
+  const { id: projectId } = await params;
 
   try {
     const { snapshot, updates } = await loadLatestProjectState(projectId);
 
     let documentBytes: Buffer;
     if (!snapshot && updates.length === 0) {
-      // brand new project — same "always create a canonical blank snapshot"
-      // behavior as before
       documentBytes = await createBlankSnapshot(projectId);
     } else if (updates.length === 0) {
-      // snapshot alone is already current, nothing trailing to merge
       documentBytes = snapshot!;
     } else {
       const doc = new Y.Doc({ gc: false });

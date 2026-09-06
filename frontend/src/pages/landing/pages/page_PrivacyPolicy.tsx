@@ -1,12 +1,41 @@
-import useGlobalState from "@/lib/global_state";
-import React from "react";
+﻿import useGlobalState from "@/lib/global_state";
+import React, { useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Shield, Eye, Lock, Database, Globe, UserCheck } from "lucide-react";
 
 const PagePrivacyPolicy: React.FC = () => {
   const theme = useGlobalState((state) => state.theme);
-
   const navigate = useNavigate();
+
+  const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
+  const softClickAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const initAudio = () => {
+    if (!hoverAudioRef.current) {
+      hoverAudioRef.current = new Audio("/sounds/minimalhover.mp3");
+      hoverAudioRef.current.volume = 0.15;
+    }
+    if (!softClickAudioRef.current) {
+      softClickAudioRef.current = new Audio("/sounds/softclick.mp3");
+      softClickAudioRef.current.volume = 0.4;
+    }
+  };
+
+  const playHover = useCallback(() => {
+    initAudio();
+    if (hoverAudioRef.current) {
+      hoverAudioRef.current.currentTime = 0;
+      hoverAudioRef.current.play().catch(() => {});
+    }
+  }, []);
+
+  const playSoftClick = useCallback(() => {
+    initAudio();
+    if (softClickAudioRef.current) {
+      softClickAudioRef.current.currentTime = 0;
+      softClickAudioRef.current.play().catch(() => {});
+    }
+  }, []);
 
   const sections = [
     { id: "collection", title: "1. Information Collection" },
@@ -44,101 +73,123 @@ const PagePrivacyPolicy: React.FC = () => {
         {/* Header Area */}
         <div style={{ marginBottom: 64 }}>
           <button
-            onClick={() => navigate(-1)}
-            style={{ background: "none", border: "none", color: theme === 'dark' ? "#7a8499" : "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 32, fontSize: 14, fontWeight: 600 }}
-            onMouseEnter={(e: any) => e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827'}
+            onClick={() => { playSoftClick(); navigate(-1); }}
+            style={{ background: "none", border: "none", color: theme === 'dark' ? "#7a8499" : "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 32, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
+            onMouseEnter={(e: any) => { playHover(); e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827'; }}
             onMouseLeave={(e: any) => e.currentTarget.style.color = theme === 'dark' ? "#7a8499" : "#6b7280"}
           >
             <ArrowLeft size={16} /> Back
           </button>
 
           <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-            <div style={{ background: "rgba(45, 212, 191, 0.1)", padding: 14, borderRadius: 20 }}>
+            <div style={{ background: "rgba(45, 212, 191, 0.1)", padding: 16, borderRadius: 20 }}>
               <Shield size={44} color="#2dd4bf" />
             </div>
             <div>
-              <h1 style={{ fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>Privacy Policy</h1>
-              <p style={{ color: "#475569", margin: "8px 0 0 0", fontSize: 14, fontWeight: 600 }}>Effectivity Date: June 2026 • Secure Ecosystem Standard</p>
+              <h1 style={{ fontSize: "clamp(36px, 5vw, 56px)", fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>Privacy Policy</h1>
+              <p style={{ color: "#475569", margin: "12px 0 0 0", fontSize: 15, fontWeight: 600 }}>Last Updated: March 15, 2024</p>
             </div>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 60 }}>
+        <div style={{ display: "flex", gap: 64 }}>
 
-          {/* Side Navigation */}
-          <aside className="side-nav" style={{ width: 240, position: "sticky", top: 100, height: "fit-content" }}>
-            <h4 style={{ fontSize: 11, color: "#2dd4bf", textTransform: "uppercase", letterSpacing: 2, marginBottom: 20 }}>Privacy Index</h4>
-            {sections.map(s => (
-              <a key={s.id} onClick={() => scrollToSection(s.id)} className="nav-link">{s.title}</a>
-            ))}
+          {/* Quick Nav Sidebar */}
+          <aside className="side-nav" style={{ width: 260, position: "sticky", top: 100, height: "fit-content" }}>
+            <h4 style={{ fontSize: 12, color: "#2dd4bf", textTransform: "uppercase", letterSpacing: 2, marginBottom: 20 }}>Contents</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {sections.map(s => (
+                <a 
+                  key={s.id} 
+                  onClick={() => { playSoftClick(); scrollToSection(s.id); }} 
+                  onMouseEnter={playHover}
+                  className="nav-link"
+                >
+                  {s.title}
+                </a>
+              ))}
+            </div>
           </aside>
 
-          {/* Main Policy Content */}
-          <div className="content-area" style={{ flex: 1, maxWidth: 740 }}>
+          {/* Policy Content */}
+          <div className="content-area" style={{ flex: 1, maxWidth: 720 }}>
 
             <section id="collection" className="policy-section">
-              <h2><Database size={20} color="#2dd4bf" /> 1. Information Collection</h2>
-              <p>We collect information that identifies, relates to, or could reasonably be linked to you. This is essential for maintaining your collaborative video pipeline.</p>
+              <h2><Eye size={24} color="#2dd4bf" /> 1. Information Collection</h2>
+              <p>We collect information you provide directly to us when you create an account, update your profile, use our collaborative features, or communicate with us. This includes your name, email address, profile picture, and any content you upload.</p>
+              <p>We also automatically collect certain information when you access our Platform, including device information, log data, and usage statistics to improve our services.</p>
+              
               <div className="data-grid">
                 <div className="data-card">
-                  <h4>Identity</h4>
-                  <p>Name, email, and account credentials used for access.</p>
+                  <h4>Account Data</h4>
+                  <p>Name, email, password (hashed), avatar, role.</p>
                 </div>
                 <div className="data-card">
-                  <h4>Assets</h4>
-                  <p>Video files, metadata, and project timelines uploaded.</p>
+                  <h4>Project Data</h4>
+                  <p>Video files, timelines, comments, metadata.</p>
                 </div>
                 <div className="data-card">
-                  <h4>Billing</h4>
-                  <p>Transaction history and encrypted payment tokens.</p>
+                  <h4>Technical Data</h4>
+                  <p>IP address, browser type, operating system.</p>
                 </div>
               </div>
             </section>
 
             <section id="usage" className="policy-section">
-              <h2><Eye size={20} color="#2dd4bf" /> 2. Use of Information</h2>
-              <p>Ensemble utilizes your data to power the core collaboration experience. We process data to facilitate real-time team editing, project rendering, and AI-assisted caption navigation.</p>
-              <p>We strictly do not use your private video project data to train public AI models without your explicit, separate consent.</p>
+              <h2><Database size={24} color="#2dd4bf" /> 2. Use of Information</h2>
+              <p>We use the information we collect to provide, maintain, and improve our services, including:</p>
+              <ul style={{ color: "#94a3b8", lineHeight: 1.8, fontSize: 15 }}>
+                <li>Facilitating real-time collaboration and video rendering.</li>
+                <li>Processing transactions and managing your credits.</li>
+                <li>Sending technical notices, updates, and security alerts.</li>
+                <li>Responding to your comments, questions, and customer service requests.</li>
+                <li>Analyzing usage trends to optimize platform performance.</li>
+              </ul>
             </section>
 
             <section id="sharing" className="policy-section">
-              <h2><Globe size={20} color="#2dd4bf" /> 3. Information Sharing</h2>
-              <p>We do not sell your personal information. Sharing only occurs with service providers necessary for our operations (e.g., AWS for cloud storage or Stripe for payments) or when required by law.</p>
+              <h2><Globe size={24} color="#2dd4bf" /> 3. Information Sharing</h2>
+              <p>We do not sell your personal information to third parties. We may share your information only in the following circumstances:</p>
+              <ul style={{ color: "#94a3b8", lineHeight: 1.8, fontSize: 15 }}>
+                <li>With other users on projects you explicitly collaborate on.</li>
+                <li>With vendors and service providers who need access to such information to carry out work on our behalf (e.g., cloud storage, payment processing).</li>
+                <li>In response to a request for information if we believe disclosure is in accordance with any applicable law or legal process.</li>
+              </ul>
             </section>
 
             <section id="security" className="policy-section">
-              <div style={{ background: "rgba(45, 212, 191, 0.05)", border: "1px solid rgba(45, 212, 191, 0.1)", padding: 28, borderRadius: 20 }}>
-                <h2><Lock size={20} color="#2dd4bf" /> 4. Data Security</h2>
-                <p style={{ margin: 0 }}>Security is paramount. We employ AES-256 encryption at rest and TLS 1.3 for data in transit. Your project assets are isolated within secure cloud containers to prevent unauthorized cross-tenant access.</p>
-              </div>
+              <h2><Lock size={24} color="#2dd4bf" /> 4. Data Security</h2>
+              <p>We implement industry-standard security measures designed to protect your personal information from unauthorized access, use, or disclosure. This includes encryption of data in transit and at rest, regular security audits, and strict access controls.</p>
+              <p>However, no method of transmission over the Internet or electronic storage is 100% secure, and we cannot guarantee its absolute security.</p>
             </section>
 
-            <section id="rights" className="policy-section" style={{ marginTop: 56 }}>
-              <h2><UserCheck size={20} color="#2dd4bf" /> 5. Your Privacy Rights</h2>
-              <p>Depending on your location, you have the right to access, correct, or delete your personal data. You can manage most of these settings directly via your Ensemble Account Dashboard.</p>
+            <section id="rights" className="policy-section">
+              <h2><UserCheck size={24} color="#2dd4bf" /> 5. Your Privacy Rights</h2>
+              <p>Depending on your location, you may have certain rights regarding your personal information, including:</p>
+              <ul style={{ color: "#94a3b8", lineHeight: 1.8, fontSize: 15 }}>
+                <li>The right to access the personal information we hold about you.</li>
+                <li>The right to request correction of inaccurate data.</li>
+                <li>The right to request deletion of your personal data (Right to be Forgotten).</li>
+                <li>The right to opt-out of marketing communications.</li>
+              </ul>
             </section>
 
             <section id="cookies" className="policy-section">
               <h2>6. Cookies and Tracking</h2>
-              <p>We use essential cookies to maintain your login session and functional cookies to remember your workspace preferences (like dark mode and timeline zoom levels).</p>
+              <p>We use cookies and similar tracking technologies to track activity on our Platform and hold certain information. You can instruct your browser to refuse all cookies or to indicate when a cookie is being sent.</p>
             </section>
 
             <section id="retention" className="policy-section">
               <h2>7. Data Retention</h2>
-              <p>We retain your project data as long as your account is active. Upon account deletion, we initiate a process to permanently scrub your assets from our active servers within 30 days.</p>
+              <p>We retain your personal information for as long as necessary to fulfill the purposes outlined in this Privacy Policy, unless a longer retention period is required or permitted by law. Once an account is deleted, we securely purge associated user data within 30 days.</p>
             </section>
 
             <section id="contact" className="policy-section">
               <h2>8. Contact Us</h2>
-              <p>For privacy-related inquiries or to exercise your data rights, please contact our Data Privacy Officer at:</p>
-              <div style={{ background: theme === 'dark' ? "#18181b" : theme === 'dark' ? "#ffffff" : "#111827", padding: "20px 24px", borderRadius: 12, border: "1px solid #1e2130", display: "inline-block" }}>
-                <span style={{ color: theme === 'dark' ? '#ffffff' : '#111827', fontWeight: 700 }}>privacy@ensemble.dev</span>
-              </div>
+              <p>If you have any questions about this Privacy Policy or our data practices, please contact our Data Protection Officer at:</p>
+              <p style={{ color: "#2dd4bf", fontWeight: 600 }}>privacy@ensemble.app</p>
             </section>
 
-            <div style={{ padding: "40px 0", borderTop: "1px solid #1e2130", color: "#475569", fontSize: 13, textAlign: "center" }}>
-              © 2026 Ensemble Project • Privacy & Security Standards
-            </div>
           </div>
         </div>
       </div>

@@ -2,7 +2,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { resolveProjectId, resolveUserIdByAccountPublicId } from "@/utils/resolve-ids";
 
 export async function POST(request: NextRequest) {
   const { projectId, userId, socketId } = await request.json();
@@ -12,14 +11,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const [resolvedProjectId, resolvedUserId] = await Promise.all([
-      resolveProjectId(projectId),
-      resolveUserIdByAccountPublicId(userId),
-    ]);
-
     const session = await db
       .insertInto("sessions")
-      .values({ project_id: resolvedProjectId, user_id: resolvedUserId, socket_id: socketId ?? null })
+      .values({ project_id: projectId, user_id: userId, socket_id: socketId ?? null })
       .returning(["session_id"])
       .executeTakeFirstOrThrow();
 

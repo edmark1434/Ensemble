@@ -33,6 +33,7 @@ const { issueCsrfToken } = require('../middleware/CsrfProtection');
 const { getAllCountriesController,
     getAllPlacesController
 } = require('../controllers/SystemControllers')
+const editorRoutes = require('./Editor');
 
 router.get('/csrf-token', checkSession, issueCsrfToken);
 router.use('/chat', chatRoutes);
@@ -63,6 +64,7 @@ router.use('/dashboard', dashboardRoutes);
 router.use('/cashouts', cashoutRoutes);
 router.use('/assets', assetRoutes);
 router.use('/gigs', gigRoutes);
+router.use('/editor', editorRoutes);
 
 router.get('/countries', getAllCountriesController);
 router.get('/places', getAllPlacesController);

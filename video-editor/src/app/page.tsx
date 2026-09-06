@@ -1,12 +1,9 @@
-"use client";
-import Editor from "@/features/editor";
-import { InvitationModal } from "@/components/invitation-modal";
+// app/page.tsx
+
+import { redirect } from "next/navigation";
+
+const MAIN_APP_URL = process.env.MAIN_APP_URL || "http://localhost:5173";
 
 export default function Home() {
-  return (
-    <>
-      <Editor />
-      {/*<InvitationModal />*/}
-    </>
-  );
+  redirect(MAIN_APP_URL);
 }
