@@ -194,41 +194,41 @@ export default function Navbar({
                   </KbdGroup>
                 </TooltipContent>
               </Tooltip>
+
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={!viewOnly ? onForceSave : undefined}
+                    className={cn(
+                      "hover:!bg-accent/30",
+                      (viewOnly || status === "saving" || compacting) && "cursor-default"
+                    )}
+                    variant="ghost"
+                    size="icon"
+                  >
+                    {compacting || status === "saving" ? (
+                      <Loader2 size={20} className="animate-spin" />
+                    ) : compactError || status === "error" ? (
+                      <CloudOff size={20} className="text-destructive" />
+                    ) : (
+                      <CloudCheck size={20} />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" align="center" sideOffset={1}>
+                  {compacting
+                    ? "Compacting…"
+                    : compactError
+                      ? "Couldn't compact — click to retry"
+                      : status === "saving"
+                        ? "Saving…"
+                        : status === "error"
+                          ? "Couldn't save — click to retry"
+                          : "All changes saved"}
+                </TooltipContent>
+              </Tooltip>
             </>
           )}
-
-          <Tooltip delayDuration={10}>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={!viewOnly ? onForceSave : undefined}
-                className={cn(
-                  "hover:!bg-accent/30",
-                  (viewOnly || status === "saving" || compacting) && "cursor-default"
-                )}
-                variant="ghost"
-                size="icon"
-              >
-                {compacting || status === "saving" ? (
-                  <Loader2 size={20} className="animate-spin" />
-                ) : compactError || status === "error" ? (
-                  <CloudOff size={20} className="text-destructive" />
-                ) : (
-                  <CloudCheck size={20} />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="center" sideOffset={1}>
-              {compacting
-                ? "Compacting…"
-                : compactError
-                  ? "Couldn't compact — click to retry"
-                  : status === "saving"
-                    ? "Saving…"
-                    : status === "error"
-                      ? "Couldn't save — click to retry"
-                      : "All changes saved"}
-            </TooltipContent>
-          </Tooltip>
         </div>
       </div>
 
