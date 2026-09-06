@@ -10,7 +10,14 @@ import {
 } from "../collab/ydoc-schema";
 import { setupMirrorIn } from "../collab/mirror-in";
 import { createSyncGuard, SyncGuard } from "../collab/sync-guard";
-import { createSession, endSession, loadSnapshot, attachPersistence } from "../collab/persistence";
+import {
+  createSession,
+  endSession,
+  loadSnapshot,
+  attachPersistence,
+  PersistenceHandle,
+  PersistenceStatus,
+} from "../collab/persistence";
 import { setupMirrorOutFromStateManager, setupMirrorOutFromStore } from "../collab/mirror-out";
 import { attachWsProvider } from "../collab/ws-provider";
 
@@ -23,6 +30,8 @@ export interface CollabDoc {
   sessionId: number | null;
   ready: boolean;
   error: Error | null;
+  saveStatus: PersistenceStatus;
+  forceSave: () => void;
 }
 
 // projectId here is the internal integer project_id sessions/snapshots key
@@ -48,6 +57,7 @@ export function useCollabDoc(
     let teardownTimelineWatch: (() => void) | null = null;
     let activeSessionId: number | null = null;
     let timelineResyncInterval: ReturnType<typeof setInterval> | null = null;
+    let persistenceHandle: PersistenceHandle | null = null;
 
     const doc = new Y.Doc({ gc: false });
     const schema = createCollabSchema(doc);
@@ -59,7 +69,27 @@ export function useCollabDoc(
       { trackedOrigins: new Set([localOrigin]), captureTimeout: 300 },
     );
 
-    setCollab({ doc, schema, undoManager, syncGuard, localOrigin, sessionId: null, ready: false, error: null });
+    // Skips the debounce and persists whatever's queued right now — wired
+    // up to the navbar's save-status button. Reads persistenceHandle at
+    // call time (not creation time), so this stays a stable function
+    // reference even though the handle itself isn't ready until the async
+    // setup below completes.
+    const forceSave = () => {
+      persistenceHandle?.forceFlush();
+    };
+
+    setCollab({
+      doc,
+      schema,
+      undoManager,
+      syncGuard,
+      localOrigin,
+      sessionId: null,
+      ready: false,
+      error: null,
+      saveStatus: "saved",
+      forceSave,
+    });
 
     (async () => {
       try {
@@ -77,7 +107,10 @@ export function useCollabDoc(
         teardownMirrorIn = setupMirrorIn(schema, stateManager, localOrigin, syncGuard);
         teardownMirrorOutStateManager = setupMirrorOutFromStateManager(schema, stateManager, localOrigin, syncGuard);
         teardownMirrorOutStore = setupMirrorOutFromStore(schema, localOrigin, syncGuard);
-        teardownPersistence = attachPersistence(schema, projectId, sessionId, localOrigin);
+        persistenceHandle = attachPersistence(schema, projectId, sessionId, localOrigin, (status) => {
+          setCollab((prev) => (prev ? { ...prev, saveStatus: status } : prev));
+        });
+        teardownPersistence = persistenceHandle.teardown;
         teardownWsProvider = attachWsProvider(schema, projectId, userId, userName);
         teardownTimelineWatch = useStore.subscribe((state, prevState) => {
           // Compare identity, not just nullity — every remount produces a

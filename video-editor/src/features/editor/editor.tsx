@@ -622,6 +622,8 @@ const Editor = ({
         stateManager={stateManager}
         undoManager={collab?.undoManager}
         viewOnly={viewOnly}
+        saveStatus={collab?.saveStatus}
+        onForceSave={collab?.forceSave}
       />
 
       <div className="flex flex-1 h-[calc(100vh-56px)]">

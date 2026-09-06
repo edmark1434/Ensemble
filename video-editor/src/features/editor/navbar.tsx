@@ -13,7 +13,10 @@ import {
   Keyboard,
   ProportionsIcon,
   Send,
-  ShareIcon
+  ShareIcon,
+  CloudCheck,
+  CloudOff,
+  Loader2
 } from "lucide-react";
 
 import type StateManager from "@designcombo/state";
@@ -26,9 +29,6 @@ import {
   useIsMediumScreen,
   useIsSmallScreen
 } from "@/hooks/use-media-query";
-import {
-  CloudCheck
-} from "lucide-react";
 import { LogoIcons } from "@/components/shared/logos";
 import Link from "next/link";
 import { ShortcutsModal } from "./shortcuts-modal";
@@ -37,18 +37,23 @@ import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
 import {Input} from "@/components/ui/input";
 import useStore from "./store/use-store";
 import {Kbd, KbdGroup} from "@/components/ui/kbd";
+import {cn} from "@/lib/utils";
 import type * as Y from "yjs";
 
 export default function Navbar({
   user,
   stateManager,
   undoManager,
-  viewOnly
+  viewOnly,
+  saveStatus,
+  onForceSave
 }: {
   user: unknown | null;
   stateManager: StateManager;
   undoManager?: Y.UndoManager;
   viewOnly?: boolean;
+  saveStatus?: "saved" | "saving" | "error";
+  onForceSave?: () => void;
 }) {
   const isLargeScreen = useIsLargeScreen();
   const isMediumScreen = useIsMediumScreen();
@@ -113,6 +118,8 @@ export default function Navbar({
       undoManager.off("stack-cleared", updateFlags);
     };
   }, [undoManager]);
+
+  const status = saveStatus ?? "saved";
 
   return (
     <div
@@ -189,15 +196,31 @@ export default function Navbar({
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
               <Button
-                className="hover:!bg-accent/30 cursor-default"
+                onClick={!viewOnly ? onForceSave : undefined}
+                className={cn(
+                  "hover:!bg-accent/30",
+                  (viewOnly || status === "saving") && "cursor-default"
+                )}
                 variant="ghost"
                 size="icon"
               >
-                <CloudCheck size={20} />
+                {status === "saving" ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : status === "error" ? (
+                  <CloudOff size={20} className="text-destructive" />
+                ) : (
+                  <CloudCheck size={20} />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" align="center" sideOffset={1}>
-              All changes saved
+              {status === "saving"
+                ? "Saving…"
+                : status === "error"
+                  ? "Couldn't save — click to retry"
+                  : viewOnly
+                    ? "All changes saved"
+                    : "All changes saved"}
             </TooltipContent>
           </Tooltip>
         </div>

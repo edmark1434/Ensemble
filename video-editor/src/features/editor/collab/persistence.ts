@@ -42,14 +42,24 @@ export async function loadSnapshot(projectId: string): Promise<Uint8Array> {
   return new Uint8Array(await res.arrayBuffer());
 }
 
+export type PersistenceStatus = "saved" | "saving" | "error";
+
+export interface PersistenceHandle {
+  teardown: () => void;
+  forceFlush: () => void;
+}
+
 export function attachPersistence(
   schema: CollabSchema,
   projectId: string,
   sessionId: number,
-  localOrigin: unknown
-): () => void {
+  localOrigin: unknown,
+  onStatusChange?: (status: PersistenceStatus) => void,
+): PersistenceHandle {
   let pending: Uint8Array[] = [];
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const setStatus = (status: PersistenceStatus) => onStatusChange?.(status);
 
   const mergePending = (): Uint8Array | null => {
     if (pending.length === 0) return null;
@@ -63,6 +73,8 @@ export function attachPersistence(
     const merged = mergePending();
     if (!merged) return;
 
+    setStatus("saving");
+
     fetch(`/api/collab/projects/${projectId}/updates?sessionId=${sessionId}`, {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
@@ -70,10 +82,15 @@ export function attachPersistence(
     })
       .then((res) => {
         if (!res.ok) throw new Error(`persist failed: ${res.status}`);
+        // Only report "saved" if nothing new queued up while this request
+        // was in flight — otherwise an edit made mid-flush would flash
+        // "saved" for a moment and then immediately flip back.
+        if (pending.length === 0 && !flushTimer) setStatus("saved");
       })
       .catch((err) => {
         console.error("Failed to persist collab update, requeuing", err);
         pending.unshift(merged); // put it back so the next flush retries it
+        setStatus("error");
         if (!flushTimer) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS);
       });
   };
@@ -99,16 +116,29 @@ export function attachPersistence(
   ) => {
     if (!transaction.local) return; // skips remote sync + initial hydration only
     pending.push(update);
+    setStatus("saving");
     if (!flushTimer) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS);
   };
 
   schema.doc.on("update", handleUpdate);
   window.addEventListener("pagehide", flushOnUnload);
 
-  return () => {
+  // Skips the debounce and persists whatever's queued right now. A no-op
+  // if there's nothing pending (i.e. already saved).
+  const forceFlush = () => {
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    flush();
+  };
+
+  const teardown = () => {
     schema.doc.off("update", handleUpdate);
     window.removeEventListener("pagehide", flushOnUnload);
     if (flushTimer) clearTimeout(flushTimer);
     flush();
   };
+
+  return { teardown, forceFlush };
 }

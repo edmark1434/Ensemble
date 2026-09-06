@@ -473,7 +473,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       const { collabSchema } = useStore.getState();
       if (collabSchema) clearSelection(collabSchema.awareness);
     });
-
+    
     return () => {
       unsubscribeTransitionZOrder();
       canvas.purge();
