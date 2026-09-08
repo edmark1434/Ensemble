@@ -2,6 +2,7 @@ const { pool } = require('../lib/Database');
 const { randomUUID } = require('crypto');
 const { ObjectId } = require('mongodb');
 const { getMongoClient } = require('../lib/MongoDb');
+const { recordAccountActivity } = require('./AccountActivityRepositories');
 const {
   createInboxRepositories,
   createMessageRepositories,
@@ -46,11 +47,11 @@ const {
 
 /** Staff roles that may appear in assignee pickers, keyed by desk / queue. */
 const ASSIGNABLE_ROLES_BY_QUEUE = Object.freeze({
-  jobs: ['Jobs N Gigs Moderator', 'Jobs Moderator', 'Jobs & Gigs Moderator'],
-  marketplace: ['Marketplace Moderator'],
-  forum: ['Forum Moderator', 'Forums Moderator'],
-  forums: ['Forum Moderator', 'Forums Moderator'],
-  support: ['Support Moderator'],
+  jobs: ['Jobs N Gigs Moderator', 'Jobs Moderator', 'Jobs & Gigs Moderator', 'Admin', 'Administrator'],
+  marketplace: ['Marketplace Moderator', 'Admin', 'Administrator'],
+  forum: ['Forum Moderator', 'Forums Moderator', 'Admin', 'Administrator'],
+  forums: ['Forum Moderator', 'Forums Moderator', 'Admin', 'Administrator'],
+  support: ['Support Moderator', 'Admin', 'Administrator'],
   disputes: ['Support Moderator', 'Admin', 'Administrator'],
   admin: [
     'Admin',
@@ -101,6 +102,7 @@ function inferReportAssignableQueue(targetType) {
 }
 
 function roleAllowedForQueue(role, queueKey) {
+  if (isAdminRole(role)) return true;
   const allowed = assignableRolesForQueue(queueKey).map((r) => r.toLowerCase());
   return allowed.includes(String(role || '').toLowerCase());
 }
@@ -1595,6 +1597,16 @@ async function updateDispute(disputeId, patch, staffSession) {
        WHERE dispute_id = $1`,
       [disputeId]
     );
+    await recordAccountActivity({
+      accountId: refreshed.by_account_id || refreshed.for_account_id,
+      action: `Dispute ${refreshed.dispute_number || disputeId} approved / made visible`,
+      eventCode: 'DISPUTE_APPROVED',
+      referenceTable: 'disputes',
+      referencePrefix: 'DIS',
+      referenceId: disputeId,
+      actorStaffId: staff.staff_id,
+      metadata: { status: 'open', visibility: true },
+    });
     return getDisputeDetail(disputeId, staffSession);
   }
 
@@ -1610,6 +1622,16 @@ async function updateDispute(disputeId, patch, staffSession) {
        WHERE dispute_id = $2`,
       [patch.resolution_notes || null, disputeId]
     );
+    await recordAccountActivity({
+      accountId: refreshed.by_account_id || refreshed.for_account_id,
+      action: `Dispute ${refreshed.dispute_number || disputeId} dismissed`,
+      eventCode: 'DISPUTE_DISMISSED',
+      referenceTable: 'disputes',
+      referencePrefix: 'DIS',
+      referenceId: disputeId,
+      actorStaffId: staff.staff_id,
+      metadata: { status: 'closed' },
+    });
     return getDisputeDetail(disputeId, staffSession);
   }
 
@@ -1675,6 +1697,21 @@ async function updateDispute(disputeId, patch, staffSession) {
   sets.push(`updated_at = NOW()`);
   values.push(disputeId);
   await pool.query(`UPDATE disputes SET ${sets.join(', ')} WHERE dispute_id = $${idx}`, values);
+  if (normalized.status !== undefined || normalized.visibility !== undefined) {
+    await recordAccountActivity({
+      accountId: refreshed.by_account_id || refreshed.for_account_id,
+      action: `Dispute ${refreshed.dispute_number || disputeId} updated`,
+      eventCode: 'DISPUTE_UPDATED',
+      referenceTable: 'disputes',
+      referencePrefix: 'DIS',
+      referenceId: disputeId,
+      actorStaffId: staff.staff_id,
+      metadata: {
+        status: normalized.status || refreshed.status,
+        visibility: normalized.visibility,
+      },
+    });
+  }
   return getDisputeDetail(disputeId, staffSession);
 }
 
@@ -1801,7 +1838,8 @@ async function updateReport(reportId, patch, staffSession = null) {
     if (!staff) throw new Error('Could not match your login to a staff profile.');
 
     const fresh = await pool.query(
-      `SELECT assigned_staff_id FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
+      `SELECT assigned_staff_id, for_account_id, by_account_id, report_number, type, status
+       FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
       [reportId]
     );
     if (!fresh.rows.length) return null;
@@ -1809,8 +1847,9 @@ async function updateReport(reportId, patch, staffSession = null) {
     if (!perms.canAssignMyself && !perms.canSelfAssign) {
       throw new Error('You cannot assign this report to yourself.');
     }
-    if (fresh.rows[0].assigned_staff_id && !perms.isAdmin) {
-      throw new Error('This report already has a handler. They must release the case first.');
+    // Reports are not release-locked like disputes — Admin may take over anytime.
+    if (fresh.rows[0].assigned_staff_id && !perms.isAdmin && !perms.isAssignee) {
+      throw new Error('This report already has a handler. Ask Admin to reassign it.');
     }
 
     await pool.query(
@@ -1819,43 +1858,58 @@ async function updateReport(reportId, patch, staffSession = null) {
        WHERE report_id = $2 AND deleted_at IS NULL`,
       [staff.staff_id, reportId]
     );
+    const row = fresh.rows[0];
+    await recordAccountActivity({
+      accountId: row.for_account_id || row.by_account_id,
+      action: `Report ${row.report_number || reportId} assigned`,
+      eventCode: 'REPORT_ASSIGNED',
+      referenceTable: 'reports',
+      referencePrefix: 'RPT',
+      referenceId: reportId,
+      actorStaffId: staff.staff_id,
+      metadata: { type: row.type, status: row.status },
+    });
     return getReportDetail(reportId, staffSession);
   }
 
+  // Release is dispute-only — keep API for old clients but treat as clear-assignee for reports.
   if (action === 'release' || action === 'self_unassign') {
     const staff = await resolveDisputeStaffId(staffSession);
     if (!staff) throw new Error('Could not match your login to a staff profile.');
 
     const fresh = await pool.query(
-      `SELECT assigned_staff_id FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
+      `SELECT assigned_staff_id, for_account_id, by_account_id, report_number
+       FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
       [reportId]
     );
     if (!fresh.rows.length) return null;
     const perms = buildReportPermissions(fresh.rows[0], staff, staffSession);
-    if (!perms.canRelease && !perms.isAssignee) {
-      throw new Error('Only the current handler can release this case.');
+    if (!perms.isAssignee && !perms.isAdmin) {
+      throw new Error('Only the current handler or Admin can unassign this report.');
     }
 
-    if (perms.isAdmin && !perms.isAssignee) {
-      await pool.query(
-        `UPDATE reports
-         SET assigned_staff_id = NULL, updated_at = NOW()
-         WHERE report_id = $1 AND deleted_at IS NULL`,
-        [reportId]
-      );
-    } else {
-      await pool.query(
-        `UPDATE reports
-         SET assigned_staff_id = NULL, updated_at = NOW()
-         WHERE report_id = $1 AND deleted_at IS NULL AND assigned_staff_id = $2`,
-        [reportId, staff.staff_id]
-      );
-    }
+    await pool.query(
+      `UPDATE reports
+       SET assigned_staff_id = NULL, updated_at = NOW()
+       WHERE report_id = $1 AND deleted_at IS NULL`,
+      [reportId]
+    );
+    const row = fresh.rows[0];
+    await recordAccountActivity({
+      accountId: row.for_account_id || row.by_account_id,
+      action: `Report ${row.report_number || reportId} unassigned`,
+      eventCode: 'REPORT_UNASSIGNED',
+      referenceTable: 'reports',
+      referencePrefix: 'RPT',
+      referenceId: reportId,
+      actorStaffId: staff.staff_id,
+    });
     return getReportDetail(reportId, staffSession);
   }
 
   const fresh = await pool.query(
-    `SELECT assigned_staff_id FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
+    `SELECT assigned_staff_id, for_account_id, by_account_id, report_number, type, status
+     FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
     [reportId]
   );
   if (!fresh.rows.length) return null;
@@ -1870,12 +1924,10 @@ async function updateReport(reportId, patch, staffSession = null) {
         : patch.assigned_staff_id
     );
     const curNorm = normalizeStaffId(currentAssignee);
-    if (curNorm && nextNorm !== curNorm && !reportPerms.canAssignOthers) {
-      throw new Error(
-        'This report already has a handler. They must release the case before it can be reassigned.'
-      );
+    if (curNorm && nextNorm !== curNorm && !reportPerms.canAssignOthers && !reportPerms.isAssignee) {
+      throw new Error('This report already has a handler. Ask Admin to reassign it.');
     }
-    if (nextNorm && (!curNorm || reportPerms.canAssignOthers)) {
+    if (nextNorm && (!curNorm || reportPerms.canAssignOthers || reportPerms.isAssignee)) {
       const typeRow = await pool.query(
         `SELECT target_type FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
         [reportId]
@@ -1889,10 +1941,10 @@ async function updateReport(reportId, patch, staffSession = null) {
   const sets = [];
   const values = [];
   let idx = 1;
+  const before = fresh.rows[0];
 
   for (const key of allowed) {
     if (patch[key] !== undefined) {
-      // Skip no-op assignee writes when locked
       if (key === 'assigned_staff_id' && currentAssignee) {
         const nextNorm = normalizeStaffId(
           patch.assigned_staff_id === null || patch.assigned_staff_id === ''
@@ -1913,6 +1965,28 @@ async function updateReport(reportId, patch, staffSession = null) {
   values.push(reportId);
 
   await pool.query(`UPDATE reports SET ${sets.join(', ')} WHERE report_id = $${idx}`, values);
+
+  const staffId = staffForAssign?.staff_id || sessionStaffId(staffSession);
+  const statusChanged = patch.status !== undefined && String(patch.status) !== String(before.status);
+  const assigneeChanged = patch.assigned_staff_id !== undefined;
+  if (statusChanged || assigneeChanged) {
+    await recordAccountActivity({
+      accountId: before.for_account_id || before.by_account_id,
+      action: statusChanged
+        ? `Report ${before.report_number || reportId} set to ${patch.status}`
+        : `Report ${before.report_number || reportId} assignment updated`,
+      eventCode: statusChanged ? 'REPORT_STATUS_CHANGED' : 'REPORT_ASSIGNED',
+      referenceTable: 'reports',
+      referencePrefix: 'RPT',
+      referenceId: reportId,
+      actorStaffId: staffId,
+      metadata: {
+        type: before.type,
+        previousStatus: before.status,
+        status: patch.status || before.status,
+      },
+    });
+  }
 
   return getReportDetail(reportId, staffSession);
 }
@@ -1937,7 +2011,8 @@ function buildReportPermissions(row, staff, session = null) {
     canAssignOthers: Boolean(isAdmin),
     canSelfAssign: Boolean(staffId && designated && !isAssignee && (unassigned || isAdmin)),
     canAssignMyself: Boolean(staffId && designated && !isAssignee && (unassigned || isAdmin)),
-    canRelease: Boolean(isAssignee || (isAdmin && Boolean(assigneeId))),
+    /** Release case is disputes-only; reports never expose it. */
+    canRelease: false,
   };
 }
 

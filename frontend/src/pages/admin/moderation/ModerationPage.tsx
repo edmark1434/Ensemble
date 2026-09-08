@@ -373,7 +373,14 @@ export default function ModerationPage() {
       </div>
 
       {selectedActivity && (
-        <ActivityDetailModal activity={selectedActivity} onClose={() => setSelectedActivity(null)} />
+        <ActivityDetailModal
+          activity={selectedActivity}
+          onClose={() => setSelectedActivity(null)}
+          onReversed={(entries) => {
+            setData((prev) => (prev ? { ...prev, recentActivity: entries } : prev));
+            setSelectedActivity(null);
+          }}
+        />
       )}
     </main>
   );
@@ -2304,10 +2311,35 @@ function ForumSection({
 function ActivityDetailModal({
   activity,
   onClose,
+  onReversed,
 }: {
   activity: ModerationActivity;
   onClose: () => void;
+  onReversed?: (entries: ModerationActivity[]) => void;
 }) {
+  const [reversing, setReversing] = useState(false);
+  const canReverse = Boolean(activity.reversible) && activity.status !== 'Reversed';
+
+  const reverseAction = async () => {
+    if (!canReverse || reversing) return;
+    setReversing(true);
+    try {
+      const res = await api.post(`/api/admin/moderation/activity/${activity.id}/reverse`);
+      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to reverse action');
+      showSuccessToast(res.data.message || 'Action reversed');
+      const entries = Array.isArray(res.data?.data) ? res.data.data : null;
+      if (entries) onReversed?.(entries);
+      else onClose();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (err instanceof Error ? err.message : 'Failed to reverse action');
+      showErrorToast(msg);
+    } finally {
+      setReversing(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[260px]">
       <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
@@ -2348,13 +2380,21 @@ function ActivityDetailModal({
             </dd>
           </div>
         </dl>
-        {activity.status === 'Completed' && (
+        {canReverse && (
           <button
             type="button"
-            className="mt-6 w-full rounded-xl border border-violet-500/30 bg-violet-500/10 py-2.5 text-sm text-violet-200"
+            disabled={reversing}
+            onClick={() => void reverseAction()}
+            className="mt-6 w-full rounded-xl border border-violet-500/30 bg-violet-500/10 py-2.5 text-sm text-violet-200 disabled:opacity-50"
           >
-            Reverse this action
+            {reversing ? 'Reversing…' : 'Reverse this action'}
           </button>
+        )}
+        {!canReverse && activity.status === 'Reversed' && (
+          <p className="mt-6 text-center text-xs text-zinc-500">This action has already been reversed.</p>
+        )}
+        {!canReverse && activity.status !== 'Reversed' && (
+          <p className="mt-6 text-center text-xs text-zinc-500">This activity cannot be reversed.</p>
         )}
       </div>
     </div>

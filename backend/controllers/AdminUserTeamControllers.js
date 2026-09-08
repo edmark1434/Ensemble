@@ -160,7 +160,7 @@ async function postAdminAccountCreditFreeze(req, res) {
     if (!accountId) {
       return res.status(400).json({ success: false, message: 'accountId is required' });
     }
-    const data = await freezeAccountCredits(accountId, freeze);
+    const data = await freezeAccountCredits(accountId, freeze, staffIdFromSession(req.session));
     res.status(200).json({
       success: true,
       data,

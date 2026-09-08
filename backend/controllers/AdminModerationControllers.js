@@ -3,6 +3,7 @@ const {
   updatePendingCase,
   deletePendingCase,
   assignMyselfToPendingCase,
+  reverseModerationActivity,
 } = require('../repositories/AdminModerationRepositories');
 
 async function getAdminModerationOverview(req, res) {
@@ -45,9 +46,21 @@ async function postAdminModerationCaseAssignMyself(req, res) {
   }
 }
 
+async function postAdminModerationActivityReverse(req, res) {
+  try {
+    const data = await reverseModerationActivity(req.params.id, req.session);
+    res.status(200).json({ success: true, data, message: 'Action reversed' });
+  } catch (err) {
+    console.error('Error reversing moderation activity:', err);
+    const code = err.statusCode === 404 ? 404 : 400;
+    res.status(code).json({ success: false, message: err.message || 'Failed to reverse action' });
+  }
+}
+
 module.exports = {
   getAdminModerationOverview,
   patchAdminModerationCase,
   deleteAdminModerationCase,
   postAdminModerationCaseAssignMyself,
+  postAdminModerationActivityReverse,
 };

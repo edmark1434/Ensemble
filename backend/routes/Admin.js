@@ -39,6 +39,7 @@ const {
   patchAdminModerationCase,
   deleteAdminModerationCase,
   postAdminModerationCaseAssignMyself,
+  postAdminModerationActivityReverse,
 } = require('../controllers/AdminModerationControllers');
 const { getAdminAnalyticsOverview } = require('../controllers/AdminAnalyticsControllers');
 const {
@@ -87,6 +88,7 @@ router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerat
 router.patch('/moderation/cases/:id', [checkSession, requireAdmin], patchAdminModerationCase);
 router.delete('/moderation/cases/:id', [checkSession, requireAdmin], deleteAdminModerationCase);
 router.post('/moderation/cases/:id/assign-myself', [checkSession, requireAdmin], postAdminModerationCaseAssignMyself);
+router.post('/moderation/activity/:id/reverse', [checkSession, requireAdmin], postAdminModerationActivityReverse);
 router.get('/analytics-overview', [checkSession, requireAdmin], getAdminAnalyticsOverview);
 router.get('/tickets-overview', [checkSession, requireAdmin], getAdminTicketsOverview);
 router.post('/tickets', [checkSession, requireAdmin], createAdminTicket);

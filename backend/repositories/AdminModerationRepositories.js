@@ -2,6 +2,41 @@ const { pool } = require('../lib/Database');
 const { getMongoClient, connectMongoDB } = require('../lib/MongoDb');
 const { DEFAULT_SETTINGS, getSectionValue } = require('./AdminSettingsRepositories');
 const { fetchDisputesList, fetchReportsList } = require('./AdminTicketsRepositories');
+const {
+  listRecentAccountActivity,
+  getAccountActivityById,
+  markAccountActivityReversed,
+  recordAccountActivity,
+} = require('./AccountActivityRepositories');
+
+const REVERSIBLE_EVENT_CODES = new Set([
+  'ACCOUNT_STATUS_CHANGED',
+  'ACCOUNT_WARNED',
+  'VIOLATION_ISSUED',
+  'RESTRICTION_ISSUED',
+  'CREDITS_FROZEN',
+]);
+
+function categoryFromEventCode(eventCode) {
+  const code = String(eventCode || '').toUpperCase();
+  if (code.includes('REPORT')) return 'report';
+  if (code.includes('DISPUTE')) return 'dispute';
+  if (code.includes('LISTING') || code.includes('MARKET')) return 'marketplace';
+  if (code.includes('CREDIT') || code.includes('WALLET')) return 'economy';
+  if (code.includes('VIOLATION') || code.includes('WARN') || code.includes('PARDON') || code.includes('RESTRICTION')) {
+    return 'conduct';
+  }
+  if (code.includes('STATUS')) return 'account';
+  return 'moderation';
+}
+
+function targetTypeFromEventCode(eventCode) {
+  const code = String(eventCode || '').toUpperCase();
+  if (code.includes('LISTING')) return 'Marketplace listing';
+  if (code.includes('REPORT')) return 'Report';
+  if (code.includes('DISPUTE')) return 'Dispute';
+  return 'Account';
+}
 
 function normalizeStatus(status) {
   if (!status) return 'Unknown';
@@ -301,173 +336,157 @@ async function countOpenIdentityReviews() {
 }
 
 async function fetchRecentModerationActivity() {
-  const [violations, listings, reports, disputes] = await Promise.all([
-    pool.query(`
-      SELECT
-        v.violation_id,
-        v.violation_number,
-        v.type,
-        v.reason,
-        v.status,
-        v.created_at,
-        a.handle AS target_handle,
-        COALESCE(a.display_name, a.handle, 'Account') AS target_name,
-        COALESCE(sa.display_name, s.first_name || ' ' || s.last_name, 'Staff') AS executed_by,
-        s.role AS executed_by_role,
-        sa.handle AS executed_by_handle
-      FROM violations v
-      LEFT JOIN accounts a ON a.account_id = v.account_id
-      LEFT JOIN staff s ON s.staff_id = v.staff_id
-      LEFT JOIN accounts sa ON sa.account_id = s.account_id
-      WHERE v.deleted_at IS NULL
-      ORDER BY v.created_at DESC
-      LIMIT 25
-    `),
-    pool.query(`
-      SELECT
-        l.listing_id,
-        l.listing_number,
-        l.title,
-        l.status,
-        l.reviewed_at,
-        l.created_at,
-        a.handle AS target_handle,
-        COALESCE(ra.display_name, rs.first_name || ' ' || rs.last_name, 'Staff') AS executed_by,
-        rs.role AS executed_by_role,
-        ra.handle AS executed_by_handle
-      FROM marketplace_listings l
-      LEFT JOIN accounts a ON a.account_id = l.submitted_by_account_id
-      LEFT JOIN staff rs ON rs.staff_id = l.reviewed_by_staff_id
-      LEFT JOIN accounts ra ON ra.account_id = rs.account_id
-      WHERE l.reviewed_at IS NOT NULL
-      ORDER BY l.reviewed_at DESC
-      LIMIT 25
-    `),
-    pool.query(`
-      SELECT
-        r.report_id,
-        r.report_number,
-        r.type,
-        r.description,
-        r.target_type,
-        r.target_id,
-        r.reference_prefix,
-        r.status,
-        r.updated_at,
-        r.created_at,
-        COALESCE(fa.display_name, fa.handle, r.target_id, 'Target') AS target_name,
-        fa.handle AS target_handle,
-        COALESCE(ba.display_name, ba.handle, 'Account') AS executed_by,
-        INITCAP(COALESCE(ba.type, 'account')) AS executed_by_role,
-        ba.handle AS executed_by_handle
-      FROM reports r
-      LEFT JOIN accounts fa ON fa.account_id = r.for_account_id
-      LEFT JOIN accounts ba ON ba.account_id = r.by_account_id
-      WHERE r.deleted_at IS NULL
-      ORDER BY COALESCE(r.updated_at, r.created_at) DESC
-      LIMIT 25
-    `),
-    pool.query(`
-      SELECT
-        d.dispute_id,
-        d.dispute_number,
-        d.title,
-        d.status,
-        d.updated_at,
-        d.opened_at,
-        COALESCE(ia.display_name, ia.handle, 'Initiator') AS target_name,
-        ia.handle AS target_handle,
-        COALESCE(sa.display_name, st.first_name || ' ' || st.last_name, 'Staff') AS executed_by,
-        st.role AS executed_by_role,
-        sa.handle AS executed_by_handle
-      FROM disputes d
-      LEFT JOIN accounts ia ON ia.account_id = d.by_account_id
-      LEFT JOIN staff st ON st.staff_id = d.handled_by_staff_id
-      LEFT JOIN accounts sa ON sa.account_id = st.account_id
-      ORDER BY COALESCE(d.updated_at, d.opened_at, d.created_at) DESC
-      LIMIT 25
-    `),
-  ]);
+  const rows = await listRecentAccountActivity({ limit: 40 });
+  return rows.map((row) => {
+    const meta = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+    const reversed = Boolean(meta.reversed);
+    const reversible = !reversed && REVERSIBLE_EVENT_CODES.has(String(row.eventCode || '').toUpperCase());
+    return {
+      id: row.id,
+      action: row.action,
+      category: categoryFromEventCode(row.eventCode),
+      target: row.accountName || row.accountHandle || 'Account',
+      targetHandle: row.accountHandle || '—',
+      targetType: targetTypeFromEventCode(row.eventCode),
+      executedBy: row.actorName || 'Staff',
+      executedByRole: row.actorRole || 'Staff',
+      executedByHandle: row.actorName ? '—' : '—',
+      timestamp: row.createdAt,
+      status: reversed ? 'Reversed' : 'Completed',
+      notes:
+        (meta.reason || meta.note || meta.type || row.eventCode || '') +
+        (row.referencePrefix && row.referenceId
+          ? ` · ${row.referencePrefix}-${String(row.referenceId).slice(0, 8)}`
+          : ''),
+      eventCode: row.eventCode,
+      accountId: row.accountId,
+      referenceTable: row.referenceTable,
+      referenceId: row.referenceId,
+      reversible,
+      metadata: meta,
+    };
+  });
+}
 
-  const activities = [];
-
-  for (const v of violations.rows) {
-    activities.push({
-      id: `vio-${v.violation_id}`,
-      action: v.type ? `Issued violation: ${v.type}` : 'Issued violation',
-      category: 'conduct',
-      target: v.target_name,
-      targetHandle: v.target_handle || v.violation_number,
-      targetType: 'Account',
-      executedBy: v.executed_by,
-      executedByRole: v.executed_by_role || 'Staff',
-      executedByHandle: v.executed_by_handle || '—',
-      timestamp: v.created_at,
-      status: titleCaseStatus(v.status || 'completed'),
-      notes: v.reason || v.violation_number || '',
-    });
+async function reverseModerationActivity(activityId, staffSession = null) {
+  const activity = await getAccountActivityById(activityId);
+  if (!activity) {
+    const err = new Error('Activity not found');
+    err.statusCode = 404;
+    throw err;
   }
 
-  for (const l of listings.rows) {
-    activities.push({
-      id: `lst-${l.listing_id}`,
-      action: `Listing ${String(l.status || 'reviewed').replace(/_/g, ' ').toLowerCase()}`,
-      category: 'marketplace',
-      target: l.title,
-      targetHandle: l.target_handle || l.listing_number,
-      targetType: 'Marketplace listing',
-      executedBy: l.executed_by,
-      executedByRole: l.executed_by_role || 'Marketplace Moderator',
-      executedByHandle: l.executed_by_handle || '—',
-      timestamp: l.reviewed_at || l.created_at,
-      status: 'Completed',
-      notes: l.listing_number || '',
-    });
+  const meta = activity.metadata && typeof activity.metadata === 'object' ? activity.metadata : {};
+  if (meta.reversed) {
+    throw new Error('This action was already reversed');
   }
 
-  for (const r of reports.rows) {
-    activities.push({
-      id: `rep-${r.report_id}`,
-      action: `Report ${String(r.status || 'updated').replace(/_/g, ' ').toLowerCase()}`,
-      category: 'report',
-      target: r.target_name,
-      targetHandle: r.target_handle || r.report_number,
-      targetType:
-        String(r.target_type || '').toLowerCase() === 'chat_message'
-          ? 'Chat Inbox'
-          : String(r.target_type || 'Report')
-              .replace(/[_-]+/g, ' ')
-              .replace(/\b\w/g, (character) => character.toUpperCase()),
-      executedBy: r.executed_by,
-      executedByRole: r.executed_by_role || 'Account',
-      executedByHandle: r.executed_by_handle || '—',
-      timestamp: r.updated_at || r.created_at,
-      status: titleCaseStatus(r.status || 'open'),
-      notes: r.description || r.type || '',
-    });
+  const code = String(activity.eventCode || '').toUpperCase();
+  if (!REVERSIBLE_EVENT_CODES.has(code)) {
+    throw new Error('This activity cannot be reversed');
   }
 
-  for (const d of disputes.rows) {
-    activities.push({
-      id: `dis-${d.dispute_id}`,
-      action: `Dispute ${String(d.status || 'updated').replace(/_/g, ' ').toLowerCase()}`,
-      category: 'dispute',
-      target: d.title || d.target_name,
-      targetHandle: d.target_handle || d.dispute_number,
-      targetType: 'Dispute',
-      executedBy: d.executed_by,
-      executedByRole: d.executed_by_role || 'Support Moderator',
-      executedByHandle: d.executed_by_handle || '—',
-      timestamp: d.updated_at || d.opened_at,
-      status: titleCaseStatus(d.status || 'open'),
-      notes: d.dispute_number || '',
-    });
+  const staffId = staffSession?.staffId || staffSession?.staff_id || null;
+  const accountId = activity.accountId;
+
+  if (code === 'ACCOUNT_STATUS_CHANGED') {
+    const restoreTo = meta.previousStatus || 'Active';
+    await pool.query(`UPDATE accounts SET status = $1 WHERE account_id = $2`, [restoreTo, accountId]);
+  } else if (code === 'ACCOUNT_WARNED' || code === 'VIOLATION_ISSUED') {
+    const violationId = activity.referenceId;
+    if (violationId) {
+      const updated = await pool.query(
+        `
+        UPDATE violations
+        SET status = 'reversed', deleted_at = COALESCE(deleted_at, NOW())
+        WHERE violation_id::text = $1 OR violation_number = $1
+        RETURNING violation_id
+        `,
+        [String(violationId)]
+      );
+      if (!updated.rows.length) {
+        await pool.query(
+          `
+          UPDATE violations
+          SET status = 'reversed', deleted_at = COALESCE(deleted_at, NOW())
+          WHERE violation_id = (
+            SELECT violation_id FROM violations
+            WHERE account_id = $1
+              AND deleted_at IS NULL
+              AND LOWER(COALESCE(status, '')) IN ('active', 'open', 'pending')
+            ORDER BY created_at DESC
+            LIMIT 1
+          )
+          `,
+          [accountId]
+        );
+      }
+    }
+  } else if (code === 'RESTRICTION_ISSUED') {
+    const restrictionId = activity.referenceId;
+    if (restrictionId) {
+      await pool.query(
+        `UPDATE restrictions SET ends_at = NOW() WHERE restriction_id = $1::uuid`,
+        [restrictionId]
+      );
+    } else {
+      await pool.query(
+        `
+        UPDATE restrictions
+        SET ends_at = NOW()
+        WHERE account_id = $1
+          AND (ends_at IS NULL OR ends_at > NOW())
+        `,
+        [accountId]
+      );
+    }
+  } else if (code === 'CREDITS_FROZEN') {
+    const wallet = await pool.query(
+      `
+      SELECT w.wallet_id, w.balance_credits, w.frozen_balance_credits
+      FROM wallets w
+      INNER JOIN account_wallets aw ON aw.wallet_id = w.wallet_id
+      WHERE aw.account_id = $1 AND w.type = 'account wallets'
+      ORDER BY w.created_at DESC
+      LIMIT 1
+      `,
+      [accountId]
+    );
+    const row = wallet.rows[0];
+    if (!row) throw new Error('No account wallet found to unfreeze');
+    const frozen = Number(row.frozen_balance_credits || 0);
+    if (frozen <= 0) throw new Error('No frozen credits to restore');
+    await pool.query(
+      `
+      UPDATE wallets
+      SET balance_credits = balance_credits + $1,
+          frozen_balance_credits = 0
+      WHERE wallet_id = $2
+      `,
+      [frozen, row.wallet_id]
+    );
   }
 
-  return activities
-    .filter((a) => a.timestamp)
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-    .slice(0, 25);
+  await markAccountActivityReversed(activityId, {
+    reversedByStaffId: staffId,
+    note: 'Reversed from Admin Moderation',
+  });
+
+  await recordAccountActivity({
+    accountId,
+    action: `Reversed: ${activity.action}`,
+    eventCode: 'ACCOUNT_ACTION_REVERSED',
+    referenceTable: 'account_activity',
+    referencePrefix: 'ACT',
+    referenceId: activityId,
+    actorStaffId: staffId,
+    metadata: {
+      originalEventCode: code,
+      originalAction: activity.action,
+    },
+  });
+
+  return fetchRecentModerationActivity();
 }
 
 function computeModeratorPerformance(staff, activities) {
@@ -1119,4 +1138,5 @@ module.exports = {
   updatePendingCase,
   deletePendingCase,
   assignMyselfToPendingCase,
+  reverseModerationActivity,
 };

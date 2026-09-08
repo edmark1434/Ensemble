@@ -147,9 +147,53 @@ async function fetchActivityForAccounts(accountIds, { perAccount = 12 } = {}) {
   return map;
 }
 
+async function getAccountActivityById(activityId) {
+  if (!activityId) return null;
+  const result = await pool.query(
+    `
+    SELECT
+      aa.*,
+      a.display_name AS account_name,
+      a.handle AS account_handle,
+      COALESCE(sa.display_name, s.first_name || ' ' || s.last_name, ba.display_name) AS actor_name,
+      s.role AS actor_role
+    FROM account_activity aa
+    LEFT JOIN accounts a ON a.account_id = aa.account_id
+    LEFT JOIN staff s ON s.staff_id = aa.actor_staff_id
+    LEFT JOIN accounts sa ON sa.account_id = s.account_id
+    LEFT JOIN accounts ba ON ba.account_id = aa.actor_account_id
+    WHERE aa.account_activity_id = $1
+    LIMIT 1
+    `,
+    [activityId]
+  );
+  return result.rows[0] ? mapActivityRow(result.rows[0]) : null;
+}
+
+async function markAccountActivityReversed(activityId, { reversedByStaffId = null, note = null } = {}) {
+  if (!activityId) return null;
+  const result = await pool.query(
+    `
+    UPDATE account_activity
+    SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
+      'reversed', true,
+      'reversedAt', NOW(),
+      'reversedByStaffId', $2::text,
+      'reverseNote', $3::text
+    )
+    WHERE account_activity_id = $1
+    RETURNING account_activity_id
+    `,
+    [activityId, reversedByStaffId, note]
+  );
+  return result.rows[0] || null;
+}
+
 module.exports = {
   recordAccountActivity,
   listAccountActivity,
   listRecentAccountActivity,
   fetchActivityForAccounts,
+  getAccountActivityById,
+  markAccountActivityReversed,
 };

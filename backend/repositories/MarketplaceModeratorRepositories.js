@@ -1,6 +1,7 @@
 const { pool } = require('../lib/Database');
 const { QUEUE_SCOPES } = require('../lib/TicketEnums');
 const { MARKETPLACE_REPORT_TYPES } = require('../lib/ReportEnums');
+const { recordAccountActivity } = require('./AccountActivityRepositories');
 const {
   fetchScopedTickets,
   scopedTicketCounts,
@@ -185,12 +186,32 @@ async function reviewMarketplaceListing(listingId, { status, rejectionReason }, 
     throw new Error(`Invalid listing status: ${status}`);
   }
 
+  const staffId = staffSession?.staff_id || staffSession?.staffId || null;
+  const before = await pool.query(
+    `SELECT listing_id, listing_number, title, submitted_by_account_id
+     FROM marketplace_listings WHERE listing_id = $1`,
+    [listingId]
+  );
+  if (!before.rows.length) throw new Error('Listing not found');
+
   await pool.query(
     `UPDATE marketplace_listings
      SET status = $1, rejection_reason = $2, reviewed_by_staff_id = $3, reviewed_at = NOW(), updated_at = NOW()
      WHERE listing_id = $4`,
-    [status, status === 'rejected' ? rejectionReason || null : null, staffSession?.staff_id || null, listingId]
+    [status, status === 'rejected' ? rejectionReason || null : null, staffId, listingId]
   );
+
+  const row = before.rows[0];
+  await recordAccountActivity({
+    accountId: row.submitted_by_account_id,
+    action: `Listing ${row.listing_number || row.title || listingId} ${status}`,
+    eventCode: 'LISTING_REVIEWED',
+    referenceTable: 'marketplace_listings',
+    referencePrefix: 'LST',
+    referenceId: listingId,
+    actorStaffId: staffId,
+    metadata: { status, title: row.title, rejectionReason: rejectionReason || null },
+  });
 
   return getMarketplaceListingDetail(listingId);
 }

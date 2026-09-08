@@ -187,24 +187,6 @@ export function ReportCaseDetailModal({
     }
   };
 
-  const releaseCase = async () => {
-    setSaving(true);
-    try {
-      const res = await api.patch(`${endpointBase}/${reportId}`, { action: 'release' });
-      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to release case');
-      showSuccessToast('Case released — another moderator can claim it');
-      await load();
-      onUpdated();
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (err instanceof Error ? err.message : 'Failed to release case');
-      showErrorToast(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const report = detail?.report;
   const perms = detail?.permissions;
   const myStaffId = perms?.staffId != null ? String(perms.staffId) : '';
@@ -217,9 +199,8 @@ export function ReportCaseDetailModal({
     !alreadyAssignedToMe &&
       (perms?.canAssignMyself || perms?.canSelfAssign || Boolean(myStaffId && !report?.assignee))
   );
-  const canRelease = Boolean(alreadyAssignedToMe || perms?.canRelease || perms?.isAssignee);
-  const assigneeLocked =
-    Boolean(reportAssigneeId) && !Boolean(perms?.canAssignOthers || perms?.isAdmin);
+  // Reports are not release-locked like disputes — Admin can always reassign.
+  const assigneeLocked = false;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[288px]">
@@ -323,13 +304,12 @@ export function ReportCaseDetailModal({
                 </select>
                 {assigneeLocked && (
                   <span className="text-[11px] text-zinc-500">
-                    Handler is locked. The assigned moderator must release the case before someone
-                    else can claim it.
+                    Handler is locked. Ask Admin to reassign this report.
                   </span>
                 )}
                 {!assigneeLocked && reportAssigneeId && (perms?.canAssignOthers || perms?.isAdmin) && (
                   <span className="text-[11px] text-violet-300/80">
-                    Admin override: you can reassign this report without a release.
+                    Admin can reassign this report freely (no release step).
                   </span>
                 )}
               </label>
@@ -344,16 +324,6 @@ export function ReportCaseDetailModal({
               >
                 <Hand className="h-4 w-4" />
                 Assign myself
-              </button>
-            )}
-            {canRelease && (
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void releaseCase()}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-100 hover:bg-amber-500/20 disabled:opacity-50"
-              >
-                Release case
               </button>
             )}
 

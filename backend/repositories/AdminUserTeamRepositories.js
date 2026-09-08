@@ -1259,7 +1259,7 @@ async function adjustAccountCredits(accountId, amount, _note, staffId) {
   };
 }
 
-async function freezeAccountCredits(accountId, freeze = true) {
+async function freezeAccountCredits(accountId, freeze = true, staffId = null) {
   await assertAccountExists(accountId);
   const wallet = await getAccountWallet(accountId);
   if (!wallet) throw new Error('No account wallet found for this account');
@@ -1283,6 +1283,16 @@ async function freezeAccountCredits(accountId, freeze = true) {
       `,
       [CREDIT_TRANSACTION_TYPE.ESCROW_HOLD, balance, wallet.wallet_id]
     );
+    await recordAccountActivity({
+      accountId,
+      action: `Credits frozen (${balance.toLocaleString()} credits)`,
+      eventCode: 'CREDITS_FROZEN',
+      referenceTable: 'wallets',
+      referencePrefix: 'WAL',
+      referenceId: wallet.wallet_id,
+      actorStaffId: staffId,
+      metadata: { amount: balance, frozen: true },
+    });
     return {
       accountId,
       walletId: wallet.wallet_id,
@@ -1307,6 +1317,16 @@ async function freezeAccountCredits(accountId, freeze = true) {
     `,
     [CREDIT_TRANSACTION_TYPE.ESCROW_RELEASE, frozen, wallet.wallet_id]
   );
+  await recordAccountActivity({
+    accountId,
+    action: `Credits unfrozen (${frozen.toLocaleString()} credits)`,
+    eventCode: 'CREDITS_UNFROZEN',
+    referenceTable: 'wallets',
+    referencePrefix: 'WAL',
+    referenceId: wallet.wallet_id,
+    actorStaffId: staffId,
+    metadata: { amount: frozen, frozen: false },
+  });
   return {
     accountId,
     walletId: wallet.wallet_id,
