@@ -30,13 +30,16 @@ export async function compactProject(projectId: string, extraUpdate?: Uint8Array
   const doc = new Y.Doc({ gc: false });
   if (snapshotRow) Y.applyUpdate(doc, snapshotRow.document);
   for (const row of updateRows) Y.applyUpdate(doc, row.update);
-  // Folding this in (rather than trusting room.doc alone when called from
-  // the websocket path) is what makes it safe to delete the DB rows below
-  // even if room.doc, via some race, is missing one of them: applying an
-  // update twice is a no-op, applying one room.doc lacks just adds it.
   if (extraUpdate) Y.applyUpdate(doc, extraUpdate);
 
   const compacted = Buffer.from(Y.encodeStateAsUpdate(doc));
+
+  // meta.duration is written in ms (see mirror-out.ts / ydoc-schema.ts);
+  // projects.duration_seconds wants seconds.
+  const durationMs = doc.getMap("meta").get("duration") as number | undefined;
+  const durationSeconds =
+    typeof durationMs === "number" ? Math.floor(durationMs / 1000) : undefined;
+
   doc.destroy();
 
   await db.transaction().execute(async (trx) => {
@@ -50,6 +53,14 @@ export async function compactProject(projectId: string, extraUpdate?: Uint8Array
       .insertInto("project_yjs_snapshots")
       .values({ yjs_snapshot_id: newSnapshot.yjs_snapshot_id, project_id: projectId })
       .execute();
+
+    if (durationSeconds !== undefined) {
+      await trx
+        .updateTable("projects")
+        .set({ duration_seconds: durationSeconds, updated_at: new Date() })
+        .where("project_id", "=", projectId)
+        .execute();
+    }
 
     const idsToTrim = updateRows.map((r) => r.yjs_update_id);
     if (idsToTrim.length) {
@@ -95,25 +106,4 @@ export async function loadLatestProjectState(projectId: string): Promise<Persist
     snapshot: snapshotRow?.document ?? null,
     updates: updateRows.map((r) => r.update),
   };
-}
-
-// Inserts a new snapshot without touching yjs_updates. Safe by construction:
-// Yjs updates are idempotent, so any row in yjs_updates that predates this
-// snapshot just gets harmlessly replayed again on top of it by
-// loadLatestProjectState. Left for compactProject (updates/route.ts) to
-// eventually reconcile away — see note in websocket/collab.ts about not
-// duplicating that compaction logic here without seeing it first.
-export async function persistProjectSnapshot(projectId: string, document: Buffer): Promise<void> {
-  await db.transaction().execute(async (trx) => {
-    const snapshot = await trx
-      .insertInto("yjs_snapshots")
-      .values({ document })
-      .returning("yjs_snapshot_id")
-      .executeTakeFirstOrThrow();
-
-    await trx
-      .insertInto("project_yjs_snapshots")
-      .values({ yjs_snapshot_id: snapshot.yjs_snapshot_id, project_id: projectId })
-      .execute();
-  });
 }

@@ -33,6 +33,7 @@ interface ProjectsTable {
   name: string;
   width: number;
   height: number;
+  duration_seconds: number;
   status: string;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
