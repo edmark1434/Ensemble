@@ -58,7 +58,8 @@ const SHORTCUTS: ShortcutCategory[] = [
       { label: "Last frame", keys: ["Ctrl", "🡠"] },
       { label: "Next frame", keys: ["Ctrl", "🡢"] },
 
-      { label: "Jump by 1s", keys: ["Ctrl", "Shift", "🡠 or 🡢"] },
+      { label: "Jump 1s back", keys: ["Ctrl", "Shift", "🡠"] },
+      { label: "Skip 1s ahead", keys: ["Ctrl", "Shift", "🡢"] },
 
       { label: "Jump to start", keys: ["Home"] },
       { label: "Jump to end", keys: ["End"] },
@@ -67,6 +68,8 @@ const SHORTCUTS: ShortcutCategory[] = [
   {
     title: "Timeline",
     items: [
+      { label: "Add scene", keys: ["S"] },
+
       { label: "Add or remove markers", keys: ["M"] },
       { label: "Jump to last marker", keys: ["Ctrl", "Shift", "M"] },
       { label: "Jump to next marker", keys: ["Shift", "M"] },

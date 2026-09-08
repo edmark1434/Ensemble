@@ -17,6 +17,13 @@ import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
 import {TIMELINE_OFFSET_CANVAS_LEFT} from "@/features/editor/constants/constants";
 import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
 import type * as Y from "yjs";
+import {
+  makeSceneTrackItem,
+  makeSceneTrack,
+  isSceneItem,
+  SCENE_TYPE,
+  ISceneTrackItem,
+} from "../types/ensemble-scene";
 
 export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y.UndoManager, viewOnly?: boolean) {
   const viewOnlyRef = useRef(viewOnly);
@@ -71,14 +78,14 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       const mod = e.ctrlKey || e.metaKey;
       const { activeIds, playerRef } = useStore.getState();
 
-      // open / close keyboard shortcuts dialog — no ScenePlayer equivalent, edit-mode only
+      // open / close keyboard shortcuts dialog
       if (!viewOnlyRef.current && mod && e.code === "Slash") {
         e.preventDefault();
         const { isShortcutsModalOpen, setShortcutsModalOpen } = useStore.getState();
         setShortcutsModalOpen(!isShortcutsModalOpen);
       }
 
-      // play / pause — mirrors the ScenePlayer play/pause button, always available
+      // play / pause
       if (e.code === "Space") {
         e.preventDefault()
         playerRef?.current?.isPlaying() ? playerRef?.current.pause() : playerRef?.current.play()
@@ -299,7 +306,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         }
       }
 
-      // add / remove marker — no equivalent control in ScenePlayer, edit-mode only
+      // add / remove marker
       if (!viewOnlyRef.current && !mod && !e.shiftKey && e.code === "KeyM") {
         e.preventDefault();
         const { playerRef, fps, markers, addMarker, removeMarker } = useStore.getState();
@@ -309,7 +316,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         existing ? removeMarker(existing.id) : addMarker(timeMs);
       }
 
-      // previous marker / jump to start — mirrors ScenePlayer's "jump to prev" button, always available
+      // previous marker / jump to start
       if (mod && e.shiftKey && e.code === "KeyM") {
         e.preventDefault();
         const { playerRef, fps, markers } = useStore.getState();
@@ -325,7 +332,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         scrollTimelineToFrame(targetFrame, prevMarker ? "marker" : "start", timelineOffsetXRef.current);
       }
 
-      // next marker / jump to end — mirrors ScenePlayer's "jump to next" button, always available
+      // next marker / jump to end
       if (!mod && e.shiftKey && e.code === "KeyM") {
         e.preventDefault();
         const { playerRef, fps, markers, duration } = useStore.getState();
@@ -342,7 +349,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         scrollTimelineToFrame(targetFrame, nextMarker ? "marker" : "end", timelineOffsetXRef.current);
       }
 
-      // jump to start — mirrors ScenePlayer's "jump to prev" button fallback, always available
+      // jump to start
       if (e.code === "Home") {
         e.preventDefault();
         const { playerRef } = useStore.getState();
@@ -350,7 +357,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         scrollTimelineToFrame(0, "start", timelineOffsetXRef.current);
       }
 
-      // jump to end — mirrors ScenePlayer's "jump to next" button fallback, always available
+      // jump to end
       if (e.code === "End") {
         e.preventDefault();
         const { playerRef, fps, duration } = useStore.getState();
@@ -359,7 +366,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         scrollTimelineToFrame(lastFrame, "end", timelineOffsetXRef.current);
       }
 
-      // fullscreen — mirrors the ScenePlayer fullscreen button, always available
+      // fullscreen
       if (!mod && !e.shiftKey && e.code === "KeyF") {
         e.preventDefault();
         if (!document.fullscreenElement) {
@@ -370,13 +377,81 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         }
       }
 
-      // mute preview — mirrors the ScenePlayer mute button, always available
+      // mute preview
       if (mod && !e.shiftKey && e.code === "KeyM") {
         e.preventDefault();
         const { playerRef, muted, setMuted } = useStore.getState();
         const newMuted = !muted;
         playerRef?.current?.setVolume(newMuted ? 0 : 1);
         setMuted(newMuted);
+      }
+
+      // add scene
+      if (!viewOnlyRef.current && !mod && !e.shiftKey && e.code === "KeyS") {
+        e.preventDefault();
+        const { activeIds, trackItemsMap, trackItemIds, tracks, duration } = useStore.getState();
+        const activeItems = activeIds.map((id) => trackItemsMap[id]).filter(Boolean);
+        if (activeItems.some((item) => isSceneItem(item.type))) return;
+
+        const time = getCurrentTime();
+        const SCENE_DEFAULT_DURATION_MS = 5000;
+        const id = crypto.randomUUID();
+
+        const sceneItem: ISceneTrackItem = {
+          id,
+          type: SCENE_TYPE,
+          name: "Scene",
+          display: { from: time, to: time + SCENE_DEFAULT_DURATION_MS },
+          metadata: {},
+          details: {
+            blockId: crypto.randomUUID(),
+            name: "Scene",
+          },
+        };
+
+        let targetTrack = tracks.find(
+          (t) =>
+            isSceneItem(t.type) &&
+            !t.static &&
+            !t.items.some((itemId) => {
+              const other = trackItemsMap[itemId];
+              return (
+                !!other &&
+                other.display.from < sceneItem.display.to &&
+                other.display.to > sceneItem.display.from
+              );
+            }),
+        );
+
+        let nextTracks = tracks;
+        if (!targetTrack) {
+          targetTrack = makeSceneTrack({
+            id: crypto.randomUUID(),
+            type: SCENE_TYPE,
+            items: [],
+            metadata: {},
+            accepts: [SCENE_TYPE],
+            index: 0,
+            magnetic: false,
+            static: false,
+          });
+          nextTracks = [targetTrack, ...tracks.map((t) => ({ ...t, index: (t.index ?? 0) + 1 }))];
+        }
+
+        const targetTrackId = targetTrack.id;
+        nextTracks = nextTracks.map((t) =>
+          t.id === targetTrackId ? { ...t, items: [...t.items, id] } : t,
+        );
+
+        stateManager.updateState(
+          {
+            trackItemsMap: { ...trackItemsMap, [id]: makeSceneTrackItem(sceneItem) },
+            trackItemIds: [...trackItemIds, id],
+            tracks: nextTracks,
+            duration: Math.max(duration, sceneItem.display.to),
+          },
+          { updateHistory: true, kind: "update" },
+        );
       }
     };
 

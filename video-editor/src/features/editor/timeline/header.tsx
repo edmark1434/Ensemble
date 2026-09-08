@@ -286,12 +286,12 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
     const sceneItem: ISceneTrackItem = {
       id,
       type: SCENE_TYPE,
-      name: "New scene",
+      name: "Scene",
       display: { from: time, to: time + SCENE_DEFAULT_DURATION_MS },
       metadata: {},
       details: {
         blockId: crypto.randomUUID(),
-        name: "New scene",
+        name: "Scene",
       },
     };
 
@@ -606,8 +606,11 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                     <Component size={16} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                  Add scene
+                <TooltipContent
+                  side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  Add scene <Kbd>S</Kbd>
                 </TooltipContent>
               </Tooltip>
             )}
