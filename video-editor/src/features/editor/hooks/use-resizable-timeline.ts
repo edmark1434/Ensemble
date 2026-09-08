@@ -76,8 +76,9 @@ export const useResizbleTimeline = () => {
 
   React.useEffect(() => {
     if (!timelineContainerRef.current) return;
+    if (timelineHeight) return;
     setTimelineHeight(timelineContainerRef.current.clientHeight);
-  }, [timelineContainerRef.current]);
+  }, []);
 
   return {
     timelineContainerRef,

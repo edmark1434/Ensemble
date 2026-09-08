@@ -19,7 +19,7 @@ import {
   Trash,
   ZoomIn,
   ZoomOut, EyeOff, LockOpen, Eye, VolumeOff, Volume2, Home, Scissors, ClipboardPaste,
-  Component
+  Component, ArrowLeft
 } from "lucide-react";
 import {
   getFitZoomLevel,
@@ -44,6 +44,14 @@ import {
   SCENE_TYPE,
   ISceneTrackItem,
 } from "../types/ensemble-scene";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 
 const IconAddMarker = ({ size }: { size: number }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 2.5 24 24" fill="none" stroke="currentColor"
@@ -83,7 +91,10 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
     trackItemsMap,
     markers,
     addMarker,
-    removeMarker
+    removeMarker,
+    activeSceneBlockId,
+    currentBlockName,
+    closeScene,
   } = useStore();
   const isLargeScreen = useIsLargeScreen();
   useUpdateAnsestors({playing, playerRef});
@@ -338,6 +349,29 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
       },
       { updateHistory: true, kind: "update" },
     );
+
+    // Fire-and-forget: the scene is already usable locally; if this hasn't
+    // landed by the time someone double-clicks in, there's just nothing to
+    // load yet, same as any other race between a write and a fast re-read.
+    const { projectId, size } = useStore.getState();
+    fetch("/api/blocks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        blockId: sceneItem.details.blockId,
+        projectId,
+        name: sceneItem.details.name,
+        width: size.width,
+        height: size.height,
+      }),
+    }).catch((err) => {
+      console.error("doAddScene: failed to create block record", err);
+    });
+  };
+
+  const goHome = () => {
+    stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+    closeScene();
   };
 
   return (
@@ -370,15 +404,20 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
           }}
         >
           <div className="flex px-2 pr-4 gap-1 items-center">
-            {!(activeIds.length > 0) && (
-              <Button
-                onClick={doActiveDelete}
-                variant={"secondary"}
-                size={"sm"}
-                className="disabled:opacity-0 disabled:pointer-events-none mr-1"
-              >
-                Home
-              </Button>
+            {activeSceneBlockId && (
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button onClick={goHome} variant={"ghost"} size={"icon"}>
+                    <ArrowLeft size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  Go back <Kbd>H</Kbd>
+                </TooltipContent>
+              </Tooltip>
             )}
 
             {activeIds.length > 0 && !isTransitionSelected && (
@@ -636,7 +675,34 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
           </div>
 
           <div className="flex items-center justify-center gap-1">
-            {/*transferred to scene container*/}
+            {!(activeIds.length > 0) && (
+              <Breadcrumb>
+                <BreadcrumbList className="flex-nowrap">
+                  <BreadcrumbItem>
+                    {activeSceneBlockId ? (
+                      <BreadcrumbLink asChild>
+                        <button onClick={goHome} className="text-sm hover:text-primary">
+                          Home
+                        </button>
+                      </BreadcrumbLink>
+                    ) : (
+                      <BreadcrumbPage className="text-sm font-semibold"></BreadcrumbPage>
+                    )}
+                  </BreadcrumbItem>
+
+                  {activeSceneBlockId && (
+                    <>
+                      <BreadcrumbSeparator />
+                      <BreadcrumbItem>
+                        <BreadcrumbPage className="text-sm font-semibold">
+                          {currentBlockName || "Scene"}
+                        </BreadcrumbPage>
+                      </BreadcrumbItem>
+                    </>
+                  )}
+                </BreadcrumbList>
+              </Breadcrumb>
+            )}
           </div>
 
           <div className="flex items-center justify-end px-2 pl-4 gap-1">

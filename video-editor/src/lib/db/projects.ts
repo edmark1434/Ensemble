@@ -1,4 +1,5 @@
 // lib/db/projects.ts
+
 import { db } from "@/lib/db";
 
 const CURSOR_COLORS = ["#F97316", "#3B82F6", "#22C55E", "#EAB308", "#EC4899", "#8B5CF6"];
@@ -22,6 +23,7 @@ export async function createProject({
         status: "active",
         width,
         height,
+        duration_seconds: 0
       })
       .returning(["project_id"])
       .executeTakeFirstOrThrow();

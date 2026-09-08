@@ -28,6 +28,16 @@ interface MediaAssetsTable {
   deleted_at: Date | null;
 }
 
+interface AccountsTable {
+  account_id: Generated<string>;
+}
+
+interface UsersTable {
+  user_id: Generated<string>;
+  account_id: string;
+  first_name: string;
+}
+
 interface ProjectsTable {
   project_id: Generated<string>;
   name: string;
@@ -49,14 +59,23 @@ interface ProjectMembersTable {
   deleted_at: Date | null;
 }
 
-interface AccountsTable {
-  account_id: Generated<string>;
+interface BlocksTable {
+  block_id: Generated<string>;
+  name: string;
+  resolution_width: number;
+  resolution_height: number;
+  color_space: string;
+  frame_rate: number;
+  project_id: string;
 }
 
-interface UsersTable {
-  user_id: Generated<string>;
-  account_id: string;
-  first_name: string;
+interface BlockMembersTable {
+  block_id: string;
+  user_id: string;
+  role: "Owner" | "Editor" | "Viewer";
+  cursor_color: string;
+  joined_at: Generated<Date>;
+  deleted_at: Date | null;
 }
 
 interface SessionsTable {
@@ -82,11 +101,6 @@ interface YjsUpdatesTable {
   created_at: Generated<Date>;
 }
 
-interface ProjectYjsUpdatesTable {
-  yjs_update_id: number;
-  project_id: string;
-}
-
 interface YjsSnapshotsTable {
   yjs_snapshot_id: Generated<number>;
   document: Buffer;
@@ -95,6 +109,11 @@ interface YjsSnapshotsTable {
 
 interface ProjectYjsSnapshotsTable {
   yjs_snapshot_id: number;
+  project_id: string;
+}
+
+interface ProjectYjsUpdatesTable {
+  yjs_update_id: number;
   project_id: string;
 }
 
@@ -111,12 +130,13 @@ interface BlockYjsUpdatesTable {
 interface Database {
   files: FilesTable;
   media_assets: MediaAssetsTable;
+  accounts: AccountsTable;
+  users: UsersTable;
 
   projects: ProjectsTable;
   project_members: ProjectMembersTable;
-
-  accounts: AccountsTable;
-  users: UsersTable;
+  blocks: BlocksTable;
+  block_members: BlockMembersTable;
 
   sessions: SessionsTable;
   session_activities: SessionActivitiesTable;

@@ -23,6 +23,7 @@ export function setupMirrorIn(
   stateManager: StateManager,
   localOrigin: string,
   syncGuard: SyncGuard,
+  isProjectTarget: boolean,
 ): () => void {
   const applyDocToLocal = () => {
     if (syncGuard.isApplyingRemote) return;
@@ -79,7 +80,10 @@ export function setupMirrorIn(
           transitionsMap: snapshot.transitionsMap,
           transitionIds: snapshot.transitionIds,
           tracks: snapshot.tracks,
-          ...(snapshot.projectName !== undefined ? { projectName: snapshot.projectName } : {}),
+          // A block's own doc never owns the project's name — only mirror
+          // this in from a project-kind doc, or a block's snapshot would
+          // clobber the title the navbar shows.
+          ...(isProjectTarget && snapshot.projectName !== undefined ? { projectName: snapshot.projectName } : {}),
           ...(snapshot.size ? { size: snapshot.size } : {}),
           ...(snapshot.fps !== undefined ? { fps: snapshot.fps } : {}),
           ...(snapshot.background ? { background: snapshot.background } : {}),

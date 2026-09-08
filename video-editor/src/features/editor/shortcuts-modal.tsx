@@ -55,8 +55,8 @@ const SHORTCUTS: ShortcutCategory[] = [
       { label: "Zoom out", keys: ["Ctrl", "-"] },
       { label: "Zoom to fit", keys: ["Shift", "Z"] },
 
-      { label: "Last frame", keys: ["Ctrl", "🡠"] },
-      { label: "Next frame", keys: ["Ctrl", "🡢"] },
+      { label: "Jump to last frame", keys: ["Ctrl", "🡠"] },
+      { label: "Jump to next frame", keys: ["Ctrl", "🡢"] },
 
       { label: "Jump 1s back", keys: ["Ctrl", "Shift", "🡠"] },
       { label: "Skip 1s ahead", keys: ["Ctrl", "Shift", "🡢"] },
@@ -69,10 +69,11 @@ const SHORTCUTS: ShortcutCategory[] = [
     title: "Timeline",
     items: [
       { label: "Add scene", keys: ["S"] },
+      { label: "Go back from scene", keys: ["H"] },
 
       { label: "Add or remove markers", keys: ["M"] },
-      { label: "Jump to last marker", keys: ["Ctrl", "Shift", "M"] },
-      { label: "Jump to next marker", keys: ["Shift", "M"] },
+      { label: "Jump to last marker", keys: ["M", "🡠"] },
+      { label: "Jump to next marker", keys: ["M", "🡢"] },
 
       { label: "Split", keys: ["Ctrl", "B"] },
       { label: "Delete left", keys: ["Q"], disabled: true },
@@ -85,7 +86,7 @@ const SHORTCUTS: ShortcutCategory[] = [
   {
     title: "Canvas",
     items: [
-      { label: "Full screen", keys: ["F"], disabled: true },
+      { label: "Toggle fullscreen", keys: ["F"], disabled: true },
       { label: "Mute preview", keys: ["Ctrl", "M"], disabled: true },
 
       { label: "Move up 1 px", keys: ["🡡"] },

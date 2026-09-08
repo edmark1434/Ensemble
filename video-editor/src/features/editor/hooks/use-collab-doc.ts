@@ -21,6 +21,7 @@ import {
 } from "../collab/persistence";
 import { setupMirrorOutFromStateManager, setupMirrorOutFromStore } from "../collab/mirror-out";
 import { attachWsProvider } from "../collab/ws-provider";
+import {CollabTarget} from "@/features/editor/collab/collab-target";
 
 export interface CollabDoc {
   doc: Y.Doc;
@@ -40,7 +41,8 @@ export interface CollabDoc {
 // on — not the public_id string Editor currently receives as id/tempId.
 // See flagged note in chat re: resolving that before this hook is wired in.
 export function useCollabDoc(
-  projectId: string | undefined,
+  target: CollabTarget | undefined,
+  rootProjectId: string | undefined,
   userId: string | undefined,
   userName: string | undefined,
   stateManager: StateManager,
@@ -48,7 +50,7 @@ export function useCollabDoc(
   const [collab, setCollab] = useState<CollabDoc | null>(null);
 
   useEffect(() => {
-    if (!projectId || !userId) return;
+    if (!target || !rootProjectId || !userId) return;
 
     let cancelled = false;
     let teardownMirrorIn: (() => void) | null = null;
@@ -81,7 +83,7 @@ export function useCollabDoc(
       setCollab((prev) => (prev ? { ...prev, compactStatus: "compacting" } : prev));
       persistenceHandle
         ?.forceFlush()
-        .then(() => requestCompact(projectId))
+        .then(() => requestCompact(target))
         .then(() => {
           if (cancelled) return;
           setCollab((prev) => (prev ? { ...prev, compactStatus: "idle" } : prev));
@@ -110,8 +112,8 @@ export function useCollabDoc(
     (async () => {
       try {
         const [sessionId, persistedUpdate] = await Promise.all([
-          createSession(projectId, userId),
-          loadSnapshot(projectId),
+          createSession(rootProjectId, userId),
+          loadSnapshot(target),
         ]);
         if (cancelled) return;
         activeSessionId = sessionId;
@@ -120,14 +122,20 @@ export function useCollabDoc(
 
         // listeners must exist before any further reads/writes below, or a
         // blank-project seed write here would never reach Postgres
-        teardownMirrorIn = setupMirrorIn(schema, stateManager, localOrigin, syncGuard);
+        const isProjectTarget = target.kind === "project";
+        teardownMirrorIn = setupMirrorIn(schema, stateManager, localOrigin, syncGuard, isProjectTarget);
         teardownMirrorOutStateManager = setupMirrorOutFromStateManager(schema, stateManager, localOrigin, syncGuard);
-        teardownMirrorOutStore = setupMirrorOutFromStore(schema, localOrigin, syncGuard);
-        persistenceHandle = attachPersistence(schema, projectId, sessionId, localOrigin, (status) => {
+        teardownMirrorOutStore = setupMirrorOutFromStore(schema, localOrigin, syncGuard, isProjectTarget);
+        persistenceHandle = attachPersistence(schema, target, sessionId, localOrigin, (status) => {
           setCollab((prev) => (prev ? { ...prev, saveStatus: status } : prev));
         });
         teardownPersistence = persistenceHandle.teardown;
-        teardownWsProvider = attachWsProvider(schema, projectId, userId, userName);
+        // Scenes don't have a live-collab room yet — autosave/reload above
+        // still works via the REST persistence layer either way. Add this
+        // back for blocks once concurrent multi-user scene editing matters.
+        teardownWsProvider = target.kind === "project"
+          ? attachWsProvider(schema, target.id, userId, userName)
+          : null;
         teardownTimelineWatch = useStore.subscribe((state, prevState) => {
           // Compare identity, not just nullity — every remount produces a
           // genuinely new CanvasTimeline instance, and each one needs this
@@ -199,7 +207,12 @@ export function useCollabDoc(
 
         const isBlank = schema.trackItemIds.length === 0 && schema.tracks.length === 0;
 
-        if (isBlank) {
+        // Only a brand-new *project* doc gets seeded from whatever the
+        // editor's currently showing — a block always already has its own
+        // (possibly empty) snapshot from createBlock, so it must always
+        // load from the doc, never from whatever project was open before.
+        if (target.kind === "project" && isBlank) {
+
           // brand new project — server gave us an empty doc. Seed it from
           // whatever stateManager/zustand hold as their just-initialized
           // defaults; attachPersistence (wired above) picks up this write
@@ -259,7 +272,7 @@ export function useCollabDoc(
             );
             useStore.setState({
               markers: snapshot.markers,
-              ...(snapshot.projectName !== undefined ? { projectName: snapshot.projectName } : {}),
+              ...(isProjectTarget && snapshot.projectName !== undefined ? { projectName: snapshot.projectName } : {}),
               ...(snapshot.size ? { size: snapshot.size } : {}),
               ...(snapshot.fps !== undefined ? { fps: snapshot.fps } : {}),
               ...(snapshot.background ? { background: snapshot.background } : {}),
@@ -309,7 +322,7 @@ export function useCollabDoc(
       doc.destroy();
       setCollab(null);
     };
-  }, [projectId, userId, userName, stateManager]);
+  }, [target?.kind, target?.id, rootProjectId, userId, userName, stateManager]);
 
   return collab;
 }

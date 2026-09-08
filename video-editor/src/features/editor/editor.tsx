@@ -46,6 +46,7 @@ import {Kbd, KbdGroup} from "@/components/ui/kbd";
 import {seedDefaultFont} from "@/features/editor/utils/seed-default-font";
 import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
 import {useCollabDoc} from "@/features/editor/hooks/use-collab-doc";
+import {CollabTarget} from "@/features/editor/collab/collab-target";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -225,11 +226,9 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
                 <>
                   Jump to last marker
                   <KbdGroup>
-                    <Kbd>Ctrl</Kbd>
-                    <span>+</span>
-                    <Kbd>Shift</Kbd>
-                    <span>+</span>
                     <Kbd>M</Kbd>
+                    <span>+</span>
+                    <Kbd>🡠</Kbd>
                   </KbdGroup>
                 </>
               ) : (
@@ -277,9 +276,9 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
                 <>
                   Jump to next marker
                   <KbdGroup>
-                    <Kbd>Shift</Kbd>
-                    <span>+</span>
                     <Kbd>M</Kbd>
+                    <span>+</span>
+                    <Kbd>🡢</Kbd>
                   </KbdGroup>
                 </>
               ) : (
@@ -346,10 +345,17 @@ const Panels = ({
   loaded,
   isLargeScreen,
   viewOnly,
+  timelineLoading,
 }: any) => {
   const { showMenuItem, setControlsPanelRef } = useLayoutStore();
+  const { activeSceneBlockId } = useStore();
   const menuPanelRef = useRef<ImperativePanelHandle>(null);
   const controlsPanelRef = useRef<HTMLDivElement>(null);
+
+  // Forces Timeline to unmount/remount on scene switch so its store `timeline`
+  // ref goes null -> non-null again, which is what the resync watcher in
+  // useCollabDoc needs to see to repopulate the canvas for the new doc.
+  const timelineKey = activeSceneBlockId ?? "root";
 
   useEffect(() => {
     if (showMenuItem) {
@@ -367,12 +373,8 @@ const Panels = ({
     return (
       <div className="relative flex h-full w-full flex-col bg-background">
         <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} viewOnly={viewOnly} />
-        <div
-          aria-hidden
-          inert
-          style={{ position: "absolute", top: -99999, left: -99999, width: 1200, height: 300, pointerEvents: "none" }}
-        >
-          <Timeline stateManager={stateManager} />
+        <div aria-hidden inert style={{ position: "absolute", top: -99999, left: -99999, width: 1200, height: 300, pointerEvents: "none" }}>
+          <Timeline key={timelineKey} stateManager={stateManager} />
           <MenuItem />
         </div>
       </div>
@@ -430,8 +432,16 @@ const Panels = ({
         </div>
       </div>
 
-      <div className="w-full border-t border-border/80 bg-card">
-        {playerRef && <Timeline stateManager={stateManager} />}
+      <div className="relative w-full border-t border-border/80 bg-card">
+        <div className={cn(timelineLoading && "pointer-events-none opacity-60 transition-opacity")}>
+          {playerRef && <Timeline key={timelineKey} stateManager={stateManager} />}
+        </div>
+        {timelineLoading && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center gap-2">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <span className="text-sm text-muted-foreground">Loading…</span>
+          </div>
+        )}
       </div>
 
       {!isLargeScreen && !trackItem && loaded && <MenuListHorizontal />}
@@ -497,19 +507,34 @@ const Editor = ({
     setStoreSynced(true);
   }, [id, userId, userName, width, height]);
 
-  const { userId: storeUserId, userName: storeUserName, projectId } = useStore();
+  const { userId: storeUserId, userName: storeUserName, projectId, activeSceneBlockId } = useStore();
 
   // only true once the seeding effect above has run AND the store actually
   // holds both values (whether they came from props here or were set
   // elsewhere, e.g. a new-project creation flow)
   const collabReady = storeSynced && !!storeUserId && !!projectId;
 
+  const target: CollabTarget | undefined = !projectId
+    ? undefined
+    : activeSceneBlockId
+      ? { kind: "block", id: activeSceneBlockId }
+      : { kind: "project", id: projectId };
+
   const collab = useCollabDoc(
+    target,
     collabReady ? projectId : undefined,
     collabReady ? storeUserId : undefined,
     collabReady ? storeUserName : undefined,
     stateManager,
   );
+
+  // Only the very first sync should block the whole editor. Once we've
+  // shown it once, later resyncs (opening/closing a scene swaps `target`)
+  // should only show a scoped loading state on the timeline.
+  const hasSyncedOnceRef = useRef(false);
+  useEffect(() => {
+    if (collab?.ready) hasSyncedOnceRef.current = true;
+  }, [collab?.ready]);
 
   const timelinePanelRef = useRef<ImperativePanelHandle>(null);
   const sceneRef = useRef<SceneRef>(null);
@@ -606,7 +631,7 @@ const Editor = ({
     );
   }
 
-  if (!storeSynced || !loaded || !collab?.ready) {
+  if (!storeSynced || !loaded || (!collab?.ready && !hasSyncedOnceRef.current)) {
     return (
       <div className="fixed top-0 left-0 z-50 flex h-screen w-screen items-center justify-center gap-4 bg-card">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -614,6 +639,8 @@ const Editor = ({
       </div>
     );
   }
+
+  const timelineLoading = !collab?.ready; // true only on later scene switches now
 
   return (
     <div className="flex h-screen w-screen flex-col bg-background">
@@ -630,11 +657,7 @@ const Editor = ({
       <div className="flex flex-1 h-[calc(100vh-56px)]">
         {isLargeScreen ? (
           <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-            <ResizablePanel
-              defaultSize={100}
-              minSize={40}
-              className="min-w-0 min-h-0"
-            >
+            <ResizablePanel defaultSize={100} minSize={40} className="min-w-0 min-h-0">
               <Panels
                 sceneRef={sceneRef}
                 playerRef={playerRef}
@@ -643,6 +666,7 @@ const Editor = ({
                 loaded={loaded}
                 isLargeScreen={isLargeScreen}
                 viewOnly={viewOnly}
+                timelineLoading={timelineLoading}
               />
             </ResizablePanel>
           </ResizablePanelGroup>
@@ -655,6 +679,7 @@ const Editor = ({
             loaded={loaded}
             isLargeScreen={isLargeScreen}
             viewOnly={viewOnly}
+            timelineLoading={timelineLoading}
           />
         )}
       </div>

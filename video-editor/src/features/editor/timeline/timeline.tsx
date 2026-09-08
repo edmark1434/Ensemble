@@ -436,10 +436,14 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       if (!target || target.type !== "scene") return;
 
       const { trackItemsMap } = useStore.getState();
-      const blockId = trackItemsMap[target.id]?.details?.blockId;
+      const sceneItem = trackItemsMap[target.id];
+      const blockId = sceneItem?.details?.blockId;
       if (!blockId) return;
 
-      useStore.getState().openScene?.(blockId, target.id);
+      // Old selection references ids that won't exist in the scene's own
+      // content — clear before swapping, same as any other selection reset.
+      stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+      useStore.getState().openScene?.(blockId, target.id, sceneItem?.details?.name);
     });
 
     const timelineGestureIds = new Set<string>();
