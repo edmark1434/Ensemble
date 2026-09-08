@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Download, X } from 'lucide-react';
 import api from '@/lib/axios';
 import {
-  adjustAccountCredits,
   freezeAccountCredits,
   handleAccountActionError,
   pardonAccount,
@@ -516,8 +515,6 @@ export function CreditActivityModal({
   onClose: () => void;
   onChanged?: () => void;
 }) {
-  const [amount, setAmount] = useState('100');
-  const [note, setNote] = useState('Admin credit adjustment');
   const [saving, setSaving] = useState(false);
   const isFrozen = frozenBalance > 0;
 
@@ -538,68 +535,27 @@ export function CreditActivityModal({
       title={`${title} — Credits`}
       onClose={onClose}
       footer={
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="text-xs text-zinc-500">
-              Amount
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="mt-1 block w-28 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
-              />
-            </label>
-            <label className="text-xs text-zinc-500">
-              Note
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className="mt-1 block w-56 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
-              />
-            </label>
+        <div className="flex flex-wrap justify-end gap-2">
+          {!isFrozen && (
             <button
               type="button"
               disabled={saving}
-              onClick={() =>
-                void run(() => adjustAccountCredits(accountId, Math.abs(Number(amount) || 0), note))
-              }
-              className="rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              onClick={() => void run(() => freezeAccountCredits(accountId, true))}
+              className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200 disabled:opacity-50"
             >
-              Credit +
+              Freeze credits
             </button>
+          )}
+          {isFrozen && (
             <button
               type="button"
               disabled={saving}
-              onClick={() =>
-                void run(() => adjustAccountCredits(accountId, -Math.abs(Number(amount) || 0), note))
-              }
-              className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-200 disabled:opacity-50"
+              onClick={() => void run(() => freezeAccountCredits(accountId, false))}
+              className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white disabled:opacity-50"
             >
-              Deduct −
+              Unfreeze
             </button>
-          </div>
-          <div className="flex gap-2">
-            {!isFrozen && (
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void run(() => freezeAccountCredits(accountId, true))}
-                className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200 disabled:opacity-50"
-              >
-                Freeze credits
-              </button>
-            )}
-            {isFrozen && (
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void run(() => freezeAccountCredits(accountId, false))}
-                className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white disabled:opacity-50"
-              >
-                Unfreeze
-              </button>
-            )}
-          </div>
+          )}
         </div>
       }
     >
