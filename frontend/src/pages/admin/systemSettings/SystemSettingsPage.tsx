@@ -13,7 +13,7 @@ import {
   Shield,
   ShieldAlert,
 } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
@@ -451,6 +451,25 @@ export default function SystemSettingsPage() {
         )}
 
         {tab === 'moderation' && (
+          <div className="space-y-4">
+            <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
+              Canonical editor for automod rules. Ops status lives in{' '}
+              <Link
+                to="/admin/moderation?tab=management&section=automated"
+                className="font-medium text-rose-400 hover:underline"
+              >
+                Moderation → Management → Automod
+              </Link>
+              . Password and lockout rules stay under{' '}
+              <button
+                type="button"
+                onClick={() => switchTab('security')}
+                className="font-medium text-rose-400 hover:underline"
+              >
+                Security
+              </button>
+              .
+            </p>
           <SectionCard
             title="Automated moderation rules"
             description="Platform-wide auto-mod behavior and dispute routing."
@@ -476,18 +495,33 @@ export default function SystemSettingsPage() {
               max={10}
             />
           </SectionCard>
+          </div>
         )}
 
         {tab === 'economy' && (
           <div className="space-y-6">
+            <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
+              Canonical editor for packages, fees, and marketplace rules. Live status is in{' '}
+              <Link
+                to="/admin/credit-economy?tab=management&section=packages"
+                className="font-medium text-rose-400 hover:underline"
+              >
+                Credits & Economy → Management
+              </Link>
+              .
+            </p>
             <SectionCard
               title="Credit packages"
               description="Top-up packages shown to users. Sales counts are stored with each package."
+              dirty={dirty.economy}
+              saving={saving}
               updatedAt={data.sections.economy.updatedAt}
+              onSave={() => void saveSection('economy', economy)}
+              onDiscard={() => discardSection('economy')}
             >
               <div className="space-y-3">
                 {economy.creditPackages.map((p, i) => (
-                  <div key={p.id} className="grid gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 sm:grid-cols-2 lg:grid-cols-5">
+                  <div key={p.id} className="grid gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 sm:grid-cols-2 lg:grid-cols-6">
                     <TextField
                       label="Name"
                       value={p.name}
@@ -530,12 +564,56 @@ export default function SystemSettingsPage() {
                         setEconomy({ ...economy, creditPackages: pkgs });
                       }}
                     />
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEconomy({
+                            ...economy,
+                            creditPackages: economy.creditPackages.filter((x) => x.id !== p.id),
+                          });
+                        }}
+                        className="w-full rounded-lg border border-red-500/30 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEconomy({
+                      ...economy,
+                      creditPackages: [
+                        ...economy.creditPackages,
+                        {
+                          id: `pkg-${Date.now()}`,
+                          name: 'New package',
+                          credits: 1000,
+                          pricePhp: 999,
+                          active: true,
+                          salesCount: 0,
+                        },
+                      ],
+                    })
+                  }
+                  className="w-full rounded-xl border border-dashed border-white/15 px-4 py-3 text-sm text-zinc-500 hover:border-white/25 hover:text-zinc-300"
+                >
+                  + Add package
+                </button>
               </div>
             </SectionCard>
 
-            <SectionCard title="Fee management" description="Platform fee schedule by product area.">
+            <SectionCard
+              title="Fee management"
+              description="Platform fee schedule by product area."
+              dirty={dirty.economy}
+              saving={saving}
+              updatedAt={data.sections.economy.updatedAt}
+              onSave={() => void saveSection('economy', economy)}
+              onDiscard={() => discardSection('economy')}
+            >
               <div className="space-y-3">
                 {economy.feeSettings.map((f, i) => (
                   <div key={f.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
@@ -667,6 +745,18 @@ export default function SystemSettingsPage() {
         )}
 
         {tab === 'security' && (
+          <div className="space-y-4">
+            <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
+              Auth and access controls — separate from Automod. Community auto-rules live under{' '}
+              <button
+                type="button"
+                onClick={() => switchTab('moderation')}
+                className="font-medium text-rose-400 hover:underline"
+              >
+                Moderation
+              </button>
+              .
+            </p>
           <SectionCard
             title="Security & compliance"
             description="Staff auth, lockouts, HTTPS, and admin IP allowlist."
@@ -742,6 +832,7 @@ export default function SystemSettingsPage() {
               </ul>
             </div>
           </SectionCard>
+          </div>
         )}
 
         <div className="grid gap-6 lg:grid-cols-2">

@@ -339,6 +339,8 @@ async function LoginUserOrEmail(loginIdentifier, password, context = {}) {
     const attemptsKey = `attempts:${lockoutIdentifier}`;
     const lockoutKey = `lockout:${lockoutIdentifier}`;
     const lockoutMetaKey = `lockout_meta:${lockoutIdentifier}`;
+    const { maxAttempts: MAX_ATTEMPTS, lockoutDurationMs: LOCKOUT_DURATION } =
+        await getLoginLockoutPolicy();
 
     // Get credentials if the login identifier is an email, fetch by email, otherwise fetch by username. This allows users to log in using either their email address or their account handle (username). The repository functions will return the email and password hash for the provided identifier, which will be used for credential verification. If no credentials are found, it will be handled in the subsequent logic to throw an invalid credentials error.
     const credentials = await getCredentials(lockoutIdentifier);

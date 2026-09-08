@@ -1,10 +1,16 @@
-# Current Task — Connect Moderation Automod ↔ Settings
+# Current Task — Single-editor Settings pattern
 
-Align Moderation → Management → Automod with System Settings → Moderation (shared `configuration.moderation.*` keys). Wire settings into real enforcement where feasible. Explain how Automod vs Security relate.
+Settings tabs own editing; operational Admin pages show status + links.
+
+## Scope
+
+1. **Moderation:** Settings → Moderation = editor; Moderation → Automod = status only. Security stays separate.
+2. **Economy:** Settings → Economy = editor; Credits & Economy → Management (packages / fees / marketplace) = status only.
 
 ## Acceptance Criteria
 
-- [ ] Automod UI shows the full moderation settings set (same store as Settings → Moderation).
-- [ ] Saving either UI updates the same `configuration` rows.
-- [ ] Key flags actually affect backend behavior (not display-only).
-- [ ] Clear in-UI link between Automod and Settings Moderation/Security.
+- [x] Automod is read-only status with CTA to Settings → Moderation (+ Security link).
+- [x] Credit Economy Management sections are read-only status with CTA to Settings → Economy.
+- [x] Settings Moderation / Economy / Security cards link across related surfaces.
+- [x] Settings → Economy can add/remove packages (moved from Credit Economy editor).
+- [x] No duplicate save forms for the same `configuration` keys.
