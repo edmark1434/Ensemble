@@ -399,8 +399,21 @@ async function getAssetServices(assetId, accountId) {
 async function createAssetServices(accountId, payload) {
   const data = validateAssetPayload(payload, { creating: true });
   try {
+    const { resolveMarketplacePublishStatus } = require('../lib/ModerationPolicy');
+    const publish = await resolveMarketplacePublishStatus({
+      accountId,
+      title: data.name,
+      description: data.description,
+      priceCredits: data.priceCredits,
+      requestedStatus: data.status,
+    });
+    data.status = publish.status;
     const assetId = await createAssetRepository(accountId, data);
-    return getAssetServices(assetId, accountId);
+    const asset = await getAssetServices(assetId, accountId);
+    if (publish.queued) {
+      return { ...asset, reviewQueued: true, reviewMessage: publish.message };
+    }
+    return asset;
   } catch (error) {
     if (['ASSET_VERIFICATION_REQUIRED', 'ASSET_POST_LIMIT_REACHED', 'ASSET_POSTING_UNAVAILABLE'].includes(error.code)) {
       throw assetPostingError(error.code, error.eligibility);
@@ -541,9 +554,22 @@ async function updateAssetServices(assetId, accountId, payload) {
   requireUuid(assetId);
   const data = validateAssetPayload(payload);
   try {
+    const { resolveMarketplacePublishStatus } = require('../lib/ModerationPolicy');
+    const publish = await resolveMarketplacePublishStatus({
+      accountId,
+      title: data.name,
+      description: data.description,
+      priceCredits: data.priceCredits,
+      requestedStatus: data.status,
+    });
+    data.status = publish.status;
     const updated = await updateAssetRepository(assetId, accountId, data);
     if (!updated) throw new AssetError('Asset not found or you cannot edit it.', 404, 'ASSET_NOT_FOUND');
-    return getAssetServices(assetId, accountId);
+    const asset = await getAssetServices(assetId, accountId);
+    if (publish.queued) {
+      return { ...asset, reviewQueued: true, reviewMessage: publish.message };
+    }
+    return asset;
   } catch (error) {
     if (['ASSET_VERIFICATION_REQUIRED', 'ASSET_POST_LIMIT_REACHED', 'ASSET_POSTING_UNAVAILABLE'].includes(error.code)) {
       throw assetPostingError(error.code, error.eligibility);

@@ -1377,6 +1377,9 @@ async function warnAccount(accountId, { type, reason, points, expiresAt } = {}, 
     },
   });
 
+  const { maybeAutoSuspendAfterWarning } = require('../lib/ModerationPolicy');
+  const autoSuspend = await maybeAutoSuspendAfterWarning(accountId, staffId);
+
   return {
     accountId,
     violationId: inserted.rows[0]?.violation_id || null,
@@ -1384,6 +1387,8 @@ async function warnAccount(accountId, { type, reason, points, expiresAt } = {}, 
     type: warnType,
     points: warnPoints,
     expiresAt: expiry,
+    autoSuspended: Boolean(autoSuspend?.suspended),
+    activeWarnings: autoSuspend?.activeCount ?? null,
   };
 }
 

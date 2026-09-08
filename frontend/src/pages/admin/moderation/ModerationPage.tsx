@@ -26,7 +26,7 @@ import {
   X,
   Hand,
 } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
@@ -1172,7 +1172,11 @@ function ManagementTab({
       </div>
 
       {section === 'automated' && (
-        <AutomatedSettingsSection settings={data.automatedSettings} onSaved={onSaved} />
+        <AutomatedSettingsSection
+          settings={data.automatedSettings}
+          forumMongoConnected={data.forumMongoConnected !== false}
+          onSaved={onSaved}
+        />
       )}
       {section === 'moderators' && (
         <ModeratorsSection
@@ -1195,9 +1199,11 @@ function ManagementTab({
 
 function AutomatedSettingsSection({
   settings,
+  forumMongoConnected = true,
   onSaved,
 }: {
   settings: ModerationOverview['automatedSettings'];
+  forumMongoConnected?: boolean;
   onSaved?: () => void;
 }) {
   const [local, setLocal] = useState(settings);
@@ -1215,19 +1221,34 @@ function AutomatedSettingsSection({
     {
       key: 'autoHoldNewAccounts',
       label: 'Hold new accounts for review',
-      hint: 'Delay full access until a quick check',
+      hint: 'New signups start Locked until staff unlocks them',
     },
-    { key: 'forumLinkScanning', label: 'Forum link scanning', hint: 'Scan outbound links in discussions' },
+    {
+      key: 'forumLinkScanning',
+      label: 'Forum link scanning',
+      hint: forumMongoConnected
+        ? 'Scan outbound links in discussions'
+        : 'Requires MongoDB (forum) — setting is saved but inactive while Mongo is down',
+    },
     {
       key: 'marketplaceListingReview',
       label: 'Marketplace listing review',
-      hint: 'Queue new listings for staff review',
+      hint: 'Queue new listings for staff review before publish',
     },
     { key: 'disputeAutoAssign', label: 'Auto-assign disputes', hint: 'Round-robin assign open disputes' },
+    {
+      key: 'autoEscalateHighPriority',
+      label: 'Auto-escalate high priority',
+      hint: 'Raise priority on serious report types (harassment, scam, etc.)',
+    },
+    {
+      key: 'reportToTicketAutoCreate',
+      label: 'Auto-create ticket from report',
+      hint: 'Open a support ticket when a user files a report',
+    },
   ];
 
-  const dirty =
-    JSON.stringify(local) !== JSON.stringify(settings);
+  const dirty = JSON.stringify(local) !== JSON.stringify(settings);
 
   const save = async () => {
     setSaving(true);
@@ -1237,7 +1258,7 @@ function AutomatedSettingsSection({
         values: local,
       });
       if (!res.data?.success) throw new Error(res.data?.message || 'Save failed');
-      showSuccessToast('Moderation settings saved');
+      showSuccessToast('Moderation settings saved — synced with System Settings');
       onSaved?.();
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to save settings');
@@ -1266,7 +1287,7 @@ function AutomatedSettingsSection({
               <button
                 type="button"
                 role="switch"
-                aria-checked={local[key]}
+                aria-checked={Boolean(local[key])}
                 onClick={() => setLocal((s) => ({ ...s, [key]: !s[key] }))}
                 className={`relative h-6 w-11 shrink-0 rounded-full transition ${
                   local[key] ? 'bg-rose-500' : 'bg-zinc-700'
@@ -1319,14 +1340,37 @@ function AutomatedSettingsSection({
         </div>
       </section>
 
-      <SidePanel title="Persistence">
-        <p className="text-xs leading-relaxed text-zinc-500">
-          These values are stored in the{' '}
-          <code className="text-zinc-400">configuration</code> table under{' '}
-          <code className="text-zinc-400">moderation.*</code> keys. Changes apply to future automated
-          actions immediately.
-        </p>
-      </SidePanel>
+      <div className="space-y-4">
+        <SidePanel title="Shared with Settings">
+          <p className="text-xs leading-relaxed text-zinc-500">
+            Automod reads and writes the same{' '}
+            <code className="text-zinc-400">configuration</code> keys as{' '}
+            <strong className="font-medium text-zinc-400">System Settings → Moderation</strong>{' '}
+            (<code className="text-zinc-400">moderation.*</code>). Change either screen — both stay in
+            sync after refresh.
+          </p>
+          <Link
+            to="/admin/system-settings?tab=moderation"
+            className="mt-3 inline-flex text-xs font-medium text-rose-400 hover:underline"
+          >
+            Open Settings → Moderation
+          </Link>
+        </SidePanel>
+        <SidePanel title="Security (related)">
+          <p className="text-xs leading-relaxed text-zinc-500">
+            Password length, lockouts, 2FA, IP allowlist, and audit retention live under{' '}
+            <strong className="font-medium text-zinc-400">System Settings → Security</strong>. They
+            are not duplicated here, but signup password checks use{' '}
+            <code className="text-zinc-400">security.minPasswordLength</code>.
+          </p>
+          <Link
+            to="/admin/system-settings?tab=security"
+            className="mt-3 inline-flex text-xs font-medium text-rose-400 hover:underline"
+          >
+            Open Settings → Security
+          </Link>
+        </SidePanel>
+      </div>
     </div>
   );
 }

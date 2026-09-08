@@ -37,12 +37,27 @@ const crypto = require('crypto');
 
 //constants for password hashing 
 const SALT_ROUNDS = 10;
-//number of allowed failed login attempts before lockout  duration of lockout in milliseconds
-const MAX_ATTEMPTS = 3;
-//duration of lockout in milliseconds
-const LOCKOUT_DURATION = 3 * 60 * 1000; //3 minutes in milliseconds
+// Fallback defaults when security settings cannot be loaded
+const DEFAULT_MAX_ATTEMPTS = 5;
+const DEFAULT_LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 const STRONG_PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9\s]).{8,}$/;
 const ALLOWED_SUFFIXES = new Set(['Jr.', 'Sr.', 'II', 'III', 'IV', 'V']);
+
+async function getLoginLockoutPolicy() {
+    try {
+        const { getSecuritySettings } = require('../lib/ModerationPolicy');
+        const security = await getSecuritySettings();
+        return {
+            maxAttempts: Math.max(3, Number(security.lockoutAfterFailedAttempts) || DEFAULT_MAX_ATTEMPTS),
+            lockoutDurationMs: Math.max(5, Number(security.lockoutDurationMinutes) || 15) * 60 * 1000,
+        };
+    } catch {
+        return {
+            maxAttempts: DEFAULT_MAX_ATTEMPTS,
+            lockoutDurationMs: DEFAULT_LOCKOUT_DURATION_MS,
+        };
+    }
+}
 
 //create a custom error class for servicelevel errors that includes an HTTP status code for better error handling in controllers
 class ServiceError extends Error {
@@ -171,8 +186,16 @@ async function registerUser(signupPayload = {}, options = {}) {
         if (!emailAddress || (!password && !options.passwordHash)) {
             throw new ServiceError('Email and password are required', 400);
         }
-        if (!options.passwordHash && !STRONG_PASSWORD_PATTERN.test(password)) {
-            throw new ServiceError('Password must be at least 8 characters and include one uppercase letter, one lowercase letter, and one special character.', 400);
+        if (!options.passwordHash) {
+            const { getSecuritySettings } = require('../lib/ModerationPolicy');
+            const security = await getSecuritySettings();
+            const minLen = Math.max(6, Number(security.minPasswordLength) || 8);
+            if (!password || String(password).length < minLen) {
+                throw new ServiceError(`Password must be at least ${minLen} characters.`, 400);
+            }
+            if (!STRONG_PASSWORD_PATTERN.test(password)) {
+                throw new ServiceError('Password must include one uppercase letter, one lowercase letter, and one special character.', 400);
+            }
         }
 
         if (!username) {
@@ -225,11 +248,14 @@ async function registerUser(signupPayload = {}, options = {}) {
         };
     }
     //create account and user in the database, hash the password if provided, and return the created user and account information
+    const { getModerationSettings } = require('../lib/ModerationPolicy');
+    const moderation = await getModerationSettings();
+    const accountStatus = moderation.autoHoldNewAccounts ? 'Locked' : 'active';
     const account = await createAccount({
         displayName: [firstName, middleName, lastName, suffix].filter(Boolean).join(' ') || null,
         handle: username ?? `${firstName?.toLowerCase() || 'user'}${lastName ? lastName.toLowerCase() : ''}${Math.floor(1000 + Math.random() * 9000)}`,
         type: type ?? 'User',
-        status: 'active',
+        status: accountStatus,
     });
     //hash the password if provided, otherwise set to null for OAuth users
     const passwordHash = options.passwordHash || (password ? await bcrypt.hash(password, SALT_ROUNDS) : null);

@@ -124,6 +124,9 @@ async function issueViolation(accountId, { type, reason, points, expiresAt }, st
     },
   });
 
+  const { maybeAutoSuspendAfterWarning } = require('../lib/ModerationPolicy');
+  await maybeAutoSuspendAfterWarning(accountId, staffId);
+
   return getViolationsAndRestrictions();
 }
 

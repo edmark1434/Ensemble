@@ -378,7 +378,10 @@ async function createReport({
       referencePrefix,
     ]
   );
-  return mapReportRow(result.rows[0]);
+  const row = result.rows[0];
+  const { applyReportAutomations } = require('../lib/ModerationPolicy');
+  const enriched = await applyReportAutomations(row);
+  return mapReportRow({ ...row, priority: enriched.priority || row.priority });
 }
 
 // Scoped disputes list. Filter by dispute type and status.

@@ -119,10 +119,13 @@ export type ModerationOverview = {
     spamFilterEnabled: boolean;
     autoFlagProfanity: boolean;
     autoHoldNewAccounts: boolean;
-    maxWarningsBeforeSuspend: number;
     forumLinkScanning: boolean;
     marketplaceListingReview: boolean;
     disputeAutoAssign: boolean;
+    maxWarningsBeforeSuspend: number;
+    autoEscalateHighPriority: boolean;
+    reportToTicketAutoCreate: boolean;
   };
+  forumMongoConnected?: boolean;
   alerts: ModerationAlert[];
 };

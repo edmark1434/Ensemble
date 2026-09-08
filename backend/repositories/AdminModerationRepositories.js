@@ -736,14 +736,14 @@ async function getModerationOverview(staffSession = null) {
     forumReviewQueue: forum.groups.slice(0, 12),
     contentSnapshots: forum.flaggedDiscussions.slice(0, 8),
     automatedSettings: (() => {
-      const saved = {
+      // Always return the persisted configuration values (same store as Settings → Moderation).
+      // Do not mutate stored flags based on Mongo connectivity — that caused false saves.
+      return {
         ...DEFAULT_SETTINGS.moderation,
         ...(moderationSettings || {}),
       };
-      // Link scanning can only run while the forum database is reachable.
-      if (!forum.connected) saved.forumLinkScanning = false;
-      return saved;
     })(),
+    forumMongoConnected: Boolean(forum.connected),
     alerts: buildModerationAlerts(
       pendingCases,
       forum,
