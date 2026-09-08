@@ -210,7 +210,7 @@ async function patchAdminReport(req, res) {
   } catch (err) {
     console.error('Error updating report:', err);
     const msg = err.message || 'Failed to update report';
-    const isClient = /assign|already assigned|staff profile|not found/i.test(msg);
+    const isClient = /assign|already assigned|staff profile|not found|queue for this case/i.test(msg);
     res.status(isClient ? 400 : 500).json({ success: false, message: msg });
   }
 }

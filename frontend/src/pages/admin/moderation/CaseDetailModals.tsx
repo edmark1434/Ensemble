@@ -30,7 +30,7 @@ function statusButtonClass(label: string, active: boolean) {
   return 'border-white/25 bg-white/10 text-white';
 }
 
-const REPORT_STATUS_OPTIONS = ['open', 'in_progress', 'resolved', 'dismissed', 'closed'] as const;
+const REPORT_STATUS_OPTIONS = ['open', 'in_progress', 'closed'] as const;
 
 function toApiToken(value: string) {
   return String(value || '')
@@ -148,7 +148,8 @@ export function ReportCaseDetailModal({
         status: overrideStatus || status,
         priority,
       };
-      if (!assigneeLocked || perms?.canAssignOthers || perms?.isAdmin) {
+      // Resolve/Dismiss should not re-validate assignee assignment.
+      if (!overrideStatus && (!assigneeLocked || perms?.canAssignOthers || perms?.isAdmin)) {
         payload.assigned_staff_id = assigneeId || null;
       }
       const res = await api.patch(`${endpointBase}/${reportId}`, payload);
@@ -162,8 +163,11 @@ export function ReportCaseDetailModal({
       );
       await load();
       onUpdated();
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to update report');
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (err instanceof Error ? err.message : 'Failed to update report');
+      showErrorToast(msg);
     } finally {
       setSaving(false);
     }
@@ -260,6 +264,11 @@ export function ReportCaseDetailModal({
                     );
                   })}
                 </div>
+                {['resolved', 'dismissed'].includes(toApiToken(status)) && (
+                  <p className="text-[11px] text-zinc-500">
+                    Current status: {titleCaseLabel(status)}
+                  </p>
+                )}
               </div>
               <label className="flex flex-col gap-1 text-xs text-zinc-500">
                 Priority

@@ -339,7 +339,7 @@ async function fetchRecentModerationActivity() {
   const rows = await listRecentAccountActivity({ limit: 40 });
   return rows.map((row) => {
     const meta = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
-    const reversed = Boolean(meta.reversed);
+    const reversed = meta.reversed === true || meta.reversed === 'true';
     const reversible = !reversed && REVERSIBLE_EVENT_CODES.has(String(row.eventCode || '').toUpperCase());
     return {
       id: row.id,
@@ -376,7 +376,16 @@ async function reverseModerationActivity(activityId, staffSession = null) {
     throw err;
   }
 
-  const meta = activity.metadata && typeof activity.metadata === 'object' ? activity.metadata : {};
+  let meta = activity.metadata;
+  if (typeof meta === 'string') {
+    try {
+      meta = JSON.parse(meta);
+    } catch {
+      meta = {};
+    }
+  }
+  if (!meta || typeof meta !== 'object') meta = {};
+
   if (meta.reversed) {
     throw new Error('This action was already reversed');
   }
@@ -388,6 +397,9 @@ async function reverseModerationActivity(activityId, staffSession = null) {
 
   const staffId = staffSession?.staffId || staffSession?.staff_id || null;
   const accountId = activity.accountId;
+  if (!accountId) {
+    throw new Error('Activity has no target account to reverse');
+  }
 
   if (code === 'ACCOUNT_STATUS_CHANGED') {
     const restoreTo = meta.previousStatus || 'Active';
@@ -424,11 +436,15 @@ async function reverseModerationActivity(activityId, staffSession = null) {
     }
   } else if (code === 'RESTRICTION_ISSUED') {
     const restrictionId = activity.referenceId;
-    if (restrictionId) {
-      await pool.query(
-        `UPDATE restrictions SET ends_at = NOW() WHERE restriction_id = $1::uuid`,
-        [restrictionId]
+    const uuidLike =
+      restrictionId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        String(restrictionId)
       );
+    if (uuidLike) {
+      await pool.query(`UPDATE restrictions SET ends_at = NOW() WHERE restriction_id = $1::uuid`, [
+        restrictionId,
+      ]);
     } else {
       await pool.query(
         `

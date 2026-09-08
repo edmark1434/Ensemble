@@ -66,6 +66,11 @@ const ASSIGNABLE_ROLES_BY_QUEUE = Object.freeze({
   ],
 });
 
+function isAdminRole(role) {
+  const r = String(role || '').toLowerCase().trim();
+  return r === 'admin' || r === 'administrator';
+}
+
 function normalizeQueueKey(queueKey) {
   const q = String(queueKey || '')
     .trim()
@@ -143,7 +148,10 @@ async function assertStaffAssignableToQueue(staffId, queueKey) {
   if (!result.rows.length) {
     throw new Error('Staff member not found.');
   }
-  if (!roleAllowedForQueue(result.rows[0].role, queueKey)) {
+  const role = result.rows[0].role;
+  // Admins can handle any report/ticket queue.
+  if (isAdminRole(role)) return;
+  if (!roleAllowedForQueue(role, queueKey)) {
     const label = normalizeQueueKey(queueKey);
     throw new Error(
       `That staff member is not part of the ${label} moderator queue for this case.`
@@ -1359,11 +1367,6 @@ async function resolveDisputeStaffId(session) {
   return null;
 }
 
-function isAdminRole(role) {
-  const r = String(role || '').toLowerCase();
-  return r === 'admin' || r === 'administrator';
-}
-
 function isSupportRole(role) {
   return String(role || '').toLowerCase() === 'support moderator';
 }
@@ -1927,7 +1930,7 @@ async function updateReport(reportId, patch, staffSession = null) {
     if (curNorm && nextNorm !== curNorm && !reportPerms.canAssignOthers && !reportPerms.isAssignee) {
       throw new Error('This report already has a handler. Ask Admin to reassign it.');
     }
-    if (nextNorm && (!curNorm || reportPerms.canAssignOthers || reportPerms.isAssignee)) {
+    if (nextNorm && nextNorm !== curNorm && (!curNorm || reportPerms.canAssignOthers || reportPerms.isAssignee || reportPerms.isAdmin)) {
       const typeRow = await pool.query(
         `SELECT target_type FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
         [reportId]

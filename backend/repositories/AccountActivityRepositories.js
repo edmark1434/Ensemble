@@ -162,7 +162,7 @@ async function getAccountActivityById(activityId) {
     LEFT JOIN staff s ON s.staff_id = aa.actor_staff_id
     LEFT JOIN accounts sa ON sa.account_id = s.account_id
     LEFT JOIN accounts ba ON ba.account_id = aa.actor_account_id
-    WHERE aa.account_activity_id = $1
+    WHERE aa.account_activity_id = $1::uuid
     LIMIT 1
     `,
     [activityId]
@@ -177,14 +177,14 @@ async function markAccountActivityReversed(activityId, { reversedByStaffId = nul
     UPDATE account_activity
     SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
       'reversed', true,
-      'reversedAt', NOW(),
-      'reversedByStaffId', $2::text,
-      'reverseNote', $3::text
+      'reversedAt', to_jsonb(NOW()::text),
+      'reversedByStaffId', to_jsonb($2::text),
+      'reverseNote', to_jsonb($3::text)
     )
-    WHERE account_activity_id = $1
+    WHERE account_activity_id = $1::uuid
     RETURNING account_activity_id
     `,
-    [activityId, reversedByStaffId, note]
+    [activityId, reversedByStaffId != null ? String(reversedByStaffId) : null, note]
   );
   return result.rows[0] || null;
 }
