@@ -8,7 +8,7 @@ import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-se
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get(EDITOR_SESSION_COOKIE)?.value;
@@ -18,9 +18,11 @@ export async function PATCH(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { id } = await params;
+
   const membership = await db
     .selectFrom("project_members")
-    .where("project_id", "=", params.projectId)
+    .where("project_id", "=", id)
     .where("user_id", "=", decoded.userId)
     .where("deleted_at", "is", null)
     .select(["role"])
@@ -42,6 +44,6 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid height" }, { status: 400 });
   }
 
-  await updateProject({ projectId: params.projectId, name, width, height });
+  await updateProject({ projectId: id, name, width, height });
   return NextResponse.json({ ok: true });
 }

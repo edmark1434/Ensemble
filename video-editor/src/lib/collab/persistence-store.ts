@@ -35,10 +35,16 @@ export async function compactProject(projectId: string, extraUpdate?: Uint8Array
   const compacted = Buffer.from(Y.encodeStateAsUpdate(doc));
 
   // meta.duration is written in ms (see mirror-out.ts / ydoc-schema.ts);
-  // projects.duration_seconds wants seconds.
-  const durationMs = doc.getMap("meta").get("duration") as number | undefined;
+  // projects.duration_seconds wants seconds. projectName maps to
+  // projects.name; width/height come out of meta.size, not separate keys.
+  const meta = doc.getMap("meta");
+  const durationMs = meta.get("duration") as number | undefined;
   const durationSeconds =
     typeof durationMs === "number" ? Math.floor(durationMs / 1000) : undefined;
+  const name = meta.get("projectName") as string | undefined;
+  const size = meta.get("size") as { width?: number; height?: number } | undefined;
+  const width = size?.width;
+  const height = size?.height;
 
   doc.destroy();
 
@@ -54,10 +60,24 @@ export async function compactProject(projectId: string, extraUpdate?: Uint8Array
       .values({ yjs_snapshot_id: newSnapshot.yjs_snapshot_id, project_id: projectId })
       .execute();
 
-    if (durationSeconds !== undefined) {
+    type ProjectSync = Partial<{
+      name: string;
+      width: number;
+      height: number;
+      duration_seconds: number;
+      updated_at: Date;
+    }>;
+
+    const projectUpdate: ProjectSync = {};
+    if (typeof name === "string") projectUpdate.name = name;
+    if (typeof width === "number") projectUpdate.width = width;
+    if (typeof height === "number") projectUpdate.height = height;
+    if (durationSeconds !== undefined) projectUpdate.duration_seconds = durationSeconds;
+
+    if (Object.keys(projectUpdate).length > 0) {
       await trx
         .updateTable("projects")
-        .set({ duration_seconds: durationSeconds, updated_at: new Date() })
+        .set({ ...projectUpdate, updated_at: new Date() })
         .where("project_id", "=", projectId)
         .execute();
     }
