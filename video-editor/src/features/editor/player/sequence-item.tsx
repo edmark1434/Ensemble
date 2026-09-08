@@ -25,11 +25,13 @@ import {
   ProgressBar,
   ProgressFrame,
   RadialAudioBars,
+  Scene,
   Shape,
   Text,
   Video,
   WaveAudioBars
 } from "./items";
+import { ISceneTrackItem } from "../types/ensemble-scene";
 import { SequenceItemOptions } from "./base-sequence";
 
 export const SequenceItem: Record<
@@ -55,5 +57,7 @@ export const SequenceItem: Record<
   progressFrame: (item, options) =>
     ProgressFrame({ item: item as IProgressFrame, options }),
   radialAudioBars: (item, options) =>
-    RadialAudioBars({ item: item as IRadialAudioBars, options })
+    RadialAudioBars({ item: item as IRadialAudioBars, options }),
+  scene: (item, options) =>
+    Scene({ item: item as unknown as ISceneTrackItem, options })
 };

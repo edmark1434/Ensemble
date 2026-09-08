@@ -18,7 +18,8 @@ import {
   SquareSplitHorizontal,
   Trash,
   ZoomIn,
-  ZoomOut, EyeOff, LockOpen, Eye, VolumeOff, Volume2, Home, Scissors, ClipboardPaste
+  ZoomOut, EyeOff, LockOpen, Eye, VolumeOff, Volume2, Home, Scissors, ClipboardPaste,
+  Component
 } from "lucide-react";
 import {
   getFitZoomLevel,
@@ -30,12 +31,19 @@ import { useCurrentPlayerFrame } from "../hooks/use-current-frame";
 import { Slider } from "@/components/ui/slider";
 import { useEffect, useState } from "react";
 import useUpdateAnsestors from "../hooks/use-update-ansestors";
-import { ITimelineScaleState } from "@designcombo/types";
+import {ITimelineScaleState, ITrackItem} from "@designcombo/types";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
 import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
 import {timeMsToUnits} from "@designcombo/timeline";
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
 import {Kbd, KbdGroup} from "@/components/ui/kbd";
+import {
+  makeSceneTrackItem,
+  makeSceneTrack,
+  isSceneItem,
+  SCENE_TYPE,
+  ISceneTrackItem,
+} from "../types/ensemble-scene";
 
 const IconAddMarker = ({ size }: { size: number }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 2.5 24 24" fill="none" stroke="currentColor"
@@ -89,6 +97,8 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
 
   const doActiveSplit = () => {
     if (activeIds.length !== 1) return;
+    if (activeItems.some(item => isSceneItem(item.type))) return;
+
     const time = getCurrentTime();
     dispatch(ACTIVE_SPLIT, { payload: {}, options: { time } });
     dispatch(LAYER_SELECT, { payload: { trackItemIds: [] } });
@@ -212,13 +222,13 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
       : null;
 
   const isHidden = activeItems.length > 0 && activeItems
-      .filter(item => item.type !== "audio")
-      .every(item => item.details?.hidden === true);
+    .filter(item => item.type !== "audio")
+    .every(item => item.details?.hidden === true);
   const isMuted = activeItems.length > 0 && activeItems
-      .filter(item => item.type === "audio" || item.type === "video")
-      .every(item => item.details?.volume === 0);
+    .filter(item => item.type === "audio" || item.type === "video" || isSceneItem(item.type))
+    .every(item => item.details?.volume === 0);
   const isLocked = activeItems.length > 0 && activeItems
-      .every(item => item.details?.locked === true);
+    .every(item => item.details?.locked === true);
 
   const toggleItemHide = () => {
     const newHidden = !isHidden;
@@ -235,7 +245,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
     const newVolume = isMuted ? 100 : 0;
     const payload = activeIds.reduce((acc, id) => {
       const type = trackItemsMap[id]?.type;
-      if (type !== "audio" && type !== "video") return acc;
+      if (type !== "audio" && type !== "video" && !isSceneItem(type ?? "")) return acc;
       acc[id] = { details: { volume: newVolume } };
       return acc;
     }, {} as Record<string, any>);
@@ -266,6 +276,69 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
   };
 
   const isTransitionSelected = activeIds.length > 0 && activeItems.length === 0;
+
+  const doAddScene = () => {
+    const { trackItemsMap, trackItemIds, tracks, duration } = useStore.getState();
+    const time = getCurrentTime();
+    const SCENE_DEFAULT_DURATION_MS = 5000;
+    const id = crypto.randomUUID();
+
+    const sceneItem: ISceneTrackItem = {
+      id,
+      type: SCENE_TYPE,
+      name: "New scene",
+      display: { from: time, to: time + SCENE_DEFAULT_DURATION_MS },
+      metadata: {},
+      details: {
+        blockId: crypto.randomUUID(),
+        name: "New scene",
+      },
+    };
+
+    let targetTrack = tracks.find(
+      (t) =>
+        isSceneItem(t.type) &&
+        !t.static &&
+        !t.items.some((itemId) => {
+          const other = trackItemsMap[itemId];
+          return (
+            !!other &&
+            other.display.from < sceneItem.display.to &&
+            other.display.to > sceneItem.display.from
+          );
+        }),
+    );
+
+    let nextTracks = tracks;
+    if (!targetTrack) {
+      targetTrack = makeSceneTrack({
+        id: crypto.randomUUID(),
+        type: SCENE_TYPE,
+        items: [],
+        metadata: {},
+        accepts: [SCENE_TYPE],
+        index: 0,
+        magnetic: false,
+        static: false,
+      });
+      nextTracks = [targetTrack, ...tracks.map((t) => ({ ...t, index: (t.index ?? 0) + 1 }))];
+    }
+
+    const targetTrackId = targetTrack.id;
+    nextTracks = nextTracks.map((t) =>
+      t.id === targetTrackId ? { ...t, items: [...t.items, id] } : t,
+    );
+
+    stateManager.updateState(
+      {
+        trackItemsMap: { ...trackItemsMap, [id]: makeSceneTrackItem(sceneItem) },
+        trackItemIds: [...trackItemIds, id],
+        tracks: nextTracks,
+        duration: Math.max(duration, sceneItem.display.to),
+      },
+      { updateHistory: true, kind: "update" },
+    );
+  };
 
   return (
     <div
@@ -346,7 +419,11 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
               </Tooltip>
             )}
 
-            {activeItems.some(item => item.type === "audio" || item.type === "video") && !isLocked && (
+            {activeItems.some(item =>
+              item.type === "audio" ||
+              item.type === "video" ||
+              isSceneItem(item.type))
+              && !isLocked && (
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button
@@ -365,7 +442,10 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
               </Tooltip>
             )}
 
-            {activeIds.length === 1 && !isLocked && !isTransitionSelected && (
+            {activeIds.length === 1 && !isLocked
+              && !isTransitionSelected
+              && !activeItems.some(item => isSceneItem(item.type))
+              && (
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button
@@ -515,6 +595,19 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                   className={"flex gap-2 items-center"}
                 >
                   Delete <Kbd>Del</Kbd>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {!activeItems.some(item => isSceneItem(item.type)) && (
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button onClick={doAddScene} variant={"ghost"} size={"icon"}>
+                    <Component size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                  Add scene
                 </TooltipContent>
               </Tooltip>
             )}

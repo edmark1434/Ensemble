@@ -78,6 +78,11 @@ interface ITimelineStore {
   collabSchema: CollabSchema | null;
   collabOrigin: string | null;
   setCollabSchema: (schema: CollabSchema | null, origin: string | null) => void;
+
+  activeSceneBlockId: string | null;
+  activeSceneItemId: string | null;
+  openScene: (blockId: string, itemId: string) => void;
+  closeScene: () => void;
 }
 
 export interface IMarker {
@@ -221,6 +226,11 @@ const useStore = create<ITimelineStore>((set, get) => ({
   collabSchema: null,
   collabOrigin: null,
   setCollabSchema: (collabSchema, collabOrigin) => set({ collabSchema, collabOrigin }),
+
+  activeSceneBlockId: null,
+  activeSceneItemId: null,
+  openScene: (blockId, itemId) => set({ activeSceneBlockId: blockId, activeSceneItemId: itemId }),
+  closeScene: () => set({ activeSceneBlockId: null, activeSceneItemId: null }),
 }));
 
 export default useStore;

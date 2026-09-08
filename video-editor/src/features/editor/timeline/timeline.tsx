@@ -18,7 +18,7 @@ import {
   Text,
   Track,
   Video,
-  WaveAudioBars
+  WaveAudioBars,
 } from "./items";
 import StateManager from "@designcombo/state";
 import {TIMELINE_OFFSET_CANVAS_LEFT, TIMELINE_OFFSET_CANVAS_RIGHT} from "../constants/constants";
@@ -43,6 +43,7 @@ import {
   LiveTransformState
 } from "../collab/live-transform";
 import {FabricText, Path, Rect} from "fabric";
+import Scene from "./items/ensemble-scene";
 
 CanvasTimeline.registerItems({
   Text,
@@ -56,7 +57,8 @@ CanvasTimeline.registerItems({
   LinealAudioBars,
   RadialAudioBars,
   WaveAudioBars,
-  HillAudioBars
+  HillAudioBars,
+  Scene
 });
 
 const EMPTY_SIZE = { width: 0, height: 0 };
@@ -88,6 +90,33 @@ function roundedRectPathD(
 const getUIFont = () =>
   getComputedStyle(document.body).getPropertyValue("--font-plus-jakarta-sans").trim() ||
   "sans-serif";
+
+function applyItemDetails(canvas: CanvasTimeline, itemsMap: Record<string, any>) {
+  canvas.getTrackItems().forEach((item: any) => {
+    const details = itemsMap[item.id]?.details;
+
+    if (details?.hidden !== undefined && item.hidden !== details.hidden) {
+      item.hidden = details.hidden;
+      item.opacity = details.hidden ? 0.5 : 1;
+      item.dirty = true;
+    }
+    if (details?.volume !== undefined && item.volume !== details.volume) {
+      item.volume = details.volume;
+      if (item.type == "audio") item.opacity = details.volume === 0 ? 0.5 : 1;
+      item.dirty = true;
+    }
+    if (details?.locked !== undefined && item.locked !== details.locked) {
+      const locked = details.locked;
+      item.lockMovementX = locked;
+      item.lockMovementY = locked;
+      item.lockScalingX = locked;
+      item.lockScalingY = locked;
+      item.selectable = !locked;
+      item.hasControls = !locked;
+      item.dirty = true;
+    }
+  });
+}
 
 const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
   // prevent duplicate scroll events
@@ -225,7 +254,8 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
         linealAudioBars: 40,
         radialAudioBars: 40,
         waveAudioBars: 40,
-        hillAudioBars: 40
+        hillAudioBars: 40,
+        scene: 42,
       },
       itemTypes: [
         "text",
@@ -242,22 +272,24 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
         "progressFrame",
         "progressBar",
         "waveAudioBars",
-        "hillAudioBars"
+        "hillAudioBars",
+        "scene"
       ],
       acceptsMap: {
         text: ["text", "caption"],
-        image: ["image", "video"],
-        video: ["video", "image"],
+        image: ["image", "video", "scene"],
+        video: ["video", "image", "scene"],
         audio: ["audio"],
         caption: ["caption", "text"],
         template: ["template"],
         customTrack: ["video", "image"],
         customTrack2: ["video", "image"],
-        main: ["video", "image"],
+        main: ["video", "image", "scene"],
         linealAudioBars: ["audio", "linealAudioBars"],
         radialAudioBars: ["audio", "radialAudioBars"],
         waveAudioBars: ["audio", "waveAudioBars"],
-        hillAudioBars: ["audio", "hillAudioBars"]
+        hillAudioBars: ["audio", "hillAudioBars"],
+        scene: ["scene", "image", "video"],
       },
       guideLineColor: "#ffffff"
     });
@@ -292,30 +324,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
 
     // watch for state changes on canvas items
     canvas.state.subscribeToUpdateItemDetails(({ trackItemsMap }) => {
-      canvas.getTrackItems().forEach((item: any) => {
-        const details = trackItemsMap[item.id]?.details;
-
-        if (details?.hidden !== undefined && item.hidden !== details.hidden) {
-          item.hidden = details.hidden;
-          item.opacity = details.hidden ? 0.5 : 1;
-          item.dirty = true;
-        }
-        if (details?.volume !== undefined && item.volume !== details.volume) {
-          item.volume = details.volume;
-          if (item.type == "audio") item.opacity = details.volume === 0 ? 0.5 : 1;
-          item.dirty = true;
-        }
-        if (details?.locked !== undefined && item.locked !== details.locked) {
-          const locked = details.locked;
-          item.lockMovementX = locked;
-          item.lockMovementY = locked;
-          item.lockScalingX = locked;
-          item.lockScalingY = locked;
-          item.selectable = !locked;    // blocks marquee/group select (we manually add click select)
-          item.hasControls = !locked;
-          item.dirty = true;
-        }
-      });
+      applyItemDetails(canvas, trackItemsMap);
       canvas.requestRenderAll();
     });
 
@@ -420,6 +429,17 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       seekToItemStartIfNeeded(target);
 
       activeIdsBeforeClick = [itemId];
+    });
+
+    canvas.on("mouse:dblclick", (e: any) => {
+      const target = e.target;
+      if (!target || target.type !== "scene") return;
+
+      const { trackItemsMap } = useStore.getState();
+      const blockId = trackItemsMap[target.id]?.details?.blockId;
+      if (!blockId) return;
+
+      useStore.getState().openScene?.(blockId, target.id);
     });
 
     const timelineGestureIds = new Set<string>();
@@ -862,6 +882,13 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     if (!collabSchema) return;
     broadcastSelection(collabSchema.awareness, activeIds);
   }, [collabSchema, activeIds]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    applyItemDetails(canvas, trackItemsMap);
+    canvas.requestRenderAll();
+  }, [trackItemsMap]);
 
   return (
     <div
