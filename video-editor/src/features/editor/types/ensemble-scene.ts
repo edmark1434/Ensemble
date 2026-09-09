@@ -10,6 +10,11 @@ export interface ISceneDetails {
   volume?: number;
 }
 
+// A brand-new empty scene has no content yet, so this is what it displays
+// at until something's added. Not a floor — if the block's actual content
+// is shorter than this, the scene reflects that real (smaller) duration.
+export const DEFAULT_SCENE_DURATION_MS = 5000;
+
 // Our real shape. Not assignable to ITrackItem — that's expected, see
 // note below. Everywhere in our own code, work with this type directly;
 // only cross into the library's types via the two functions below.

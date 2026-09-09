@@ -47,6 +47,7 @@ import {seedDefaultFont} from "@/features/editor/utils/seed-default-font";
 import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
 import {useCollabDoc} from "@/features/editor/hooks/use-collab-doc";
 import {CollabTarget} from "@/features/editor/collab/collab-target";
+import {useSceneDurationBroadcast} from "@/features/editor/hooks/use-scene-duration-broadcast";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -507,7 +508,7 @@ const Editor = ({
     setStoreSynced(true);
   }, [id, userId, userName, width, height]);
 
-  const { userId: storeUserId, userName: storeUserName, projectId, activeSceneBlockId } = useStore();
+  const { userId: storeUserId, userName: storeUserName, projectId, activeSceneBlockId, activeSceneItemId } = useStore();
 
   // only true once the seeding effect above has run AND the store actually
   // holds both values (whether they came from props here or were set
@@ -526,6 +527,13 @@ const Editor = ({
     collabReady ? storeUserId : undefined,
     collabReady ? storeUserName : undefined,
     stateManager,
+  );
+
+  useSceneDurationBroadcast(
+    stateManager,
+    activeSceneBlockId ? projectId : undefined,
+    activeSceneBlockId ? storeUserId : undefined,
+    activeSceneBlockId ? activeSceneItemId ?? undefined : undefined,
   );
 
   // Only the very first sync should block the whole editor. Once we've

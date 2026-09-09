@@ -1,4 +1,5 @@
 import { Resizable, ResizableProps, Control, timeMsToUnits } from "@designcombo/timeline";
+import {DEFAULT_SCENE_DURATION_MS} from "@/features/editor/types/ensemble-scene";
 
 interface SceneProps extends ResizableProps {
   hidden: boolean;
@@ -10,11 +11,6 @@ interface SceneProps extends ResizableProps {
 const getUIFont = () =>
   getComputedStyle(document.body).getPropertyValue("--font-plus-jakarta-sans").trim() ||
   "sans-serif";
-
-// Scene has no user-facing resize/trim: its extent is derived entirely from
-// the nested block's own content, so a lone `1000ms` here is a display floor
-// for a brand-new empty scene, not a default someone can drag smaller.
-const MIN_SCENE_DURATION_MS = 1000;
 
 class Scene extends Resizable {
   static type = "Scene";
@@ -66,7 +62,7 @@ class Scene extends Resizable {
   // doc, the same way a real resize gesture would — see note below.
   public setContentDuration(durationMs: number) {
     this.contentDurationMs = durationMs;
-    const effectiveMs = Math.max(durationMs, MIN_SCENE_DURATION_MS);
+    const effectiveMs = durationMs > 0 ? durationMs : DEFAULT_SCENE_DURATION_MS;
     this.width = timeMsToUnits(effectiveMs, this.tScale);
     this.setCoords();
     this.dirty = true;
