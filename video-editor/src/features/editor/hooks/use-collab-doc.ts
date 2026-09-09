@@ -265,8 +265,8 @@ export function useCollabDoc(
                 transitionIds: snapshot.transitionIds,
                 tracks: snapshot.tracks,
                 ...(snapshot.size ? { size: snapshot.size } : {}),
-                ...(snapshot.fps !== undefined ? { fps: snapshot.fps } : {}),
-                ...(snapshot.duration !== undefined ? { duration: snapshot.duration } : {}),
+                fps: snapshot.fps ?? 30,
+                duration: snapshot.duration ?? 0,
               },
               { updateHistory: false },
             );

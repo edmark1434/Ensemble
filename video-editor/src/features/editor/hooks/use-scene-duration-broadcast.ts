@@ -23,55 +23,84 @@ export function useSceneDurationBroadcast(
     if (!projectId || !userId || !sceneItemId) return;
 
     let cancelled = false;
-    let synced = false;
-    let skippedInitialReplay = false;
+    // Two independent async things have to finish before a push is safe:
+    // the WS connection to the project room (wsSynced) and the block's
+    // own content landing in stateManager (blockHydrated). Either can
+    // finish first — push() only actually writes once both are true, and
+    // we call push() from both completion points so whichever one
+    // finishes second is what triggers the write.
+    let wsSynced = false;
+    let blockHydrated = false;
     let prevDuration: number | null = null;
-    let lastPush = 0;
-    let pending: ReturnType<typeof setTimeout> | null = null;
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    let pendingPush = false;
 
     const doc = new Y.Doc({ gc: false });
     const schema = createCollabSchema(doc);
     const localOrigin = `${userId}:scene-duration`;
 
     const push = () => {
-      if (pending) { clearTimeout(pending); pending = null; }
-      if (cancelled || !synced) return;
-      lastPush = Date.now();
+      if (cancelled || !wsSynced || !blockHydrated) return;
       applySceneContentDurationToDoc(schema, sceneItemId, stateManager.getState().duration, localOrigin);
     };
 
-    const pushThrottled = () => {
-      const elapsed = Date.now() - lastPush;
-      if (elapsed >= DURATION_SYNC_INTERVAL_MS) push();
-      else if (!pending) pending = setTimeout(push, DURATION_SYNC_INTERVAL_MS - elapsed);
+    // Coalesces a burst of duration changes (every frame of a resize drag
+    // fires stateManager.subscribe) into at most one push per
+    // DURATION_SYNC_INTERVAL_MS. Same throttle-then-flush shape as
+    // persistence.ts's flush timer: the first change in a burst schedules
+    // the timer, later changes in that window just update what's pending,
+    // and the timer fires once to push whatever the latest duration is
+    // by then — not one transact+broadcast per frame.
+    const schedulePush = () => {
+      pendingPush = true;
+      if (!flushTimer) {
+        flushTimer = setTimeout(() => {
+          flushTimer = null;
+          if (!pendingPush) return;
+          pendingPush = false;
+          push();
+        }, DURATION_SYNC_INTERVAL_MS);
+      }
     };
 
-    // First afterTransaction firing is the inbound syncStep2 landing —
-    // our signal this doc now holds real room content, safe to write into.
     const handleFirstSync = () => {
       schema.doc.off("afterTransaction", handleFirstSync);
-      synced = true;
-      pushThrottled();
+      wsSynced = true;
+      push();
     };
     schema.doc.on("afterTransaction", handleFirstSync);
 
     const teardownWs = attachWsProvider(schema, projectId, userId, undefined, { announcePresence: false });
 
     const subscription = stateManager.subscribe(() => {
-      if (!skippedInitialReplay) {
-        skippedInitialReplay = true;
+      if (!blockHydrated) {
+        // First notification after mount is the block's own hydration
+        // landing in stateManager, not a real content edit — record it
+        // as the baseline duration and flip blockHydrated, so a WS sync
+        // that already finished can now safely push. Not throttled: this
+        // is a one-time catch-up, not a burst.
+        blockHydrated = true;
         prevDuration = stateManager.getState().duration;
+        push();
         return;
       }
       const duration = stateManager.getState().duration;
       if (duration === prevDuration) return;
       prevDuration = duration;
-      pushThrottled();
+      schedulePush();
     });
 
     return () => {
+      if (flushTimer) clearTimeout(flushTimer);
+      // Flush a pending change rather than dropping it on teardown (e.g.
+      // the user resizes and immediately exits the scene). Must run
+      // before `cancelled` is set (push() checks it) and before the WS
+      // connection closes below.
+      if (pendingPush) {
+        pendingPush = false;
+        push();
+      }
       cancelled = true;
-      if (pending) clearTimeout(pending);
       subscription.unsubscribe();
       schema.doc.off("afterTransaction", handleFirstSync);
       teardownWs();
