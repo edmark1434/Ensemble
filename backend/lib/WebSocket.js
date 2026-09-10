@@ -459,6 +459,11 @@ async function initSocket(httpServer) {
           accountId
         );
         io.to(seen.conversation_id).emit('messagesSeen', seen);
+        if (Array.isArray(seen.member_account_ids)) {
+          seen.member_account_ids.forEach((memberId) => {
+            io.to(String(memberId)).emit('messagesSeen', seen);
+          });
+        }
         acknowledge(callback, seen);
       } catch (error) {
         rejectEvent(socket, 'conversationRead', callback, error, {

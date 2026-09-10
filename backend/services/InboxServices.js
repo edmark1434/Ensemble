@@ -1101,9 +1101,13 @@ async function getConversationByConvoIdServices(conversationId, accountId) {
     const [normalizedInbox] = await normalizeLinkedConversations([
         conversation.Inbox,
     ]);
+    const [enrichedInbox] = await enrichInboxesWithMemberProfiles(
+        [normalizedInbox],
+        [viewerAccountId]
+    );
     return {
         ...conversation,
-        Inbox: attachViewerAccountId(normalizedInbox, [viewerAccountId]),
+        Inbox: attachViewerAccountId(enrichedInbox || normalizedInbox, [viewerAccountId]),
     };
 }
 
@@ -1157,6 +1161,7 @@ async function markConversationReadServices(conversationId, accountId) {
         account_id: actorAccountId,
         read_at: readAt,
         modified_count: result.modifiedCount,
+        member_account_ids: (inbox.members || []).map((m) => String(m.account_id)),
     };
 }
 
@@ -1512,13 +1517,100 @@ async function getActiveGroupCallServices(conversationId, accountId) {
     };
 }
 
+async function enrichInboxesWithMemberProfiles(inboxes, actorIds = []) {
+    if (!Array.isArray(inboxes) || !inboxes.length) return inboxes;
+    const actorIdSet = new Set((actorIds || []).map(String));
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const memberAccountIds = [
+        ...new Set(
+            inboxes
+                .flatMap((inbox) => inbox?.members || [])
+                .map((member) => String(member?.account_id || ''))
+                .filter((id) => uuidRegex.test(id))
+        ),
+    ];
+    if (!memberAccountIds.length) return inboxes;
+
+    const accountResult = await pool.query(
+        `SELECT 
+            a.account_id, 
+            COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), a.display_name, a.handle) AS display_name,
+            a.handle, 
+            COALESCE(
+                f.path,
+                (
+                    SELECT f2.path 
+                    FROM account_profile_files apf 
+                    JOIN files f2 ON apf.file_id = f2.file_id 
+                    WHERE apf.account_id = a.account_id 
+                    ORDER BY f2.created_at DESC 
+                    LIMIT 1
+                )
+            ) AS avatar_preset_url
+         FROM accounts a
+         LEFT JOIN users u ON a.account_id = u.account_id
+         LEFT JOIN files f ON a.avatar_file_id = f.file_id
+         WHERE a.account_id = ANY($1::uuid[])`,
+        [memberAccountIds]
+    );
+    const accountsById = new Map(
+        accountResult.rows.map((acc) => [String(acc.account_id), acc])
+    );
+
+    return inboxes.map((inbox) => {
+        let members = inbox.members;
+        if (Array.isArray(members)) {
+            members = members.map((member) => {
+                const acc = accountsById.get(String(member.account_id));
+                if (!acc) return member;
+                return {
+                    ...member,
+                    name: acc.display_name || acc.handle,
+                    username: acc.handle,
+                    avatar_preset_url: acc.avatar_preset_url || null,
+                };
+            });
+        }
+
+        let conversationName = inbox.conversation_name;
+        let profileImage = inbox.conversation_image_key || inbox.profile_image;
+
+        const isDirectOrMarketplace = ['direct', 'engagement', 'marketplace_job', 'marketplace_gig', 'revision'].includes(inbox.conversation_type);
+        if (isDirectOrMarketplace) {
+            const other = (members || []).find(
+                (m) => !actorIdSet.has(String(m.account_id))
+            );
+            if (other) {
+                if (!conversationName) {
+                    conversationName = other.name || other.username || 'User';
+                }
+                if (!profileImage) {
+                    profileImage = other.avatar_preset_url || null;
+                }
+            }
+        }
+
+        return {
+            ...inbox,
+            members,
+            conversation_name: conversationName,
+            profile_image: profileImage,
+        };
+    });
+}
+
 async function getInboxByAccountIdServices(accountId, conversationType) {
     const personalAccountId = await requireAccount(accountId);
     validateConversationType(conversationType);
     const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
     const inboxes = await getInboxByAccountId(actorIds, conversationType);
     const normalizedInboxes = await normalizeLinkedConversations(inboxes);
-    return normalizedInboxes.map((inbox) =>
+    const enrichedInboxes = await enrichInboxesWithMemberProfiles(
+        normalizedInboxes,
+        actorIds
+    );
+    return enrichedInboxes.map((inbox) =>
         attachViewerAccountId(inbox, actorIds)
     );
 }
@@ -1532,7 +1624,11 @@ async function getAllInboxesByAccountIdServices(accountId) {
     const normalizedConversations = await normalizeLinkedConversations(
         conversations.flat()
     );
-    return normalizedConversations
+    const enrichedConversations = await enrichInboxesWithMemberProfiles(
+        normalizedConversations,
+        actorIds
+    );
+    return enrichedConversations
         .map((inbox) => attachViewerAccountId(inbox, actorIds))
         .sort((left, right) => {
             const leftTime = new Date(left.last_message_time || left.updated_at || 0);

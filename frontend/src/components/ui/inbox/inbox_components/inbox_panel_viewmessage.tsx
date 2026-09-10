@@ -37,8 +37,25 @@ export const InboxPanelViewMessage: React.FC<InboxPanelViewMessageProps> = ({
       className="flex-1 overflow-y-auto px-4 py-4 inbox-scroll-thin flex flex-col"
     >
       {messageLoading ? (
-        <div className="flex flex-1 items-center justify-center text-gray-500 dark:text-zinc-500 text-sm">
-          Loading messages...
+        <div className="flex flex-1 flex-col justify-end p-4 space-y-4 animate-pulse">
+          <div className="flex items-start gap-2.5 max-w-[70%]">
+            <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-zinc-800 shrink-0" />
+            <div className="space-y-1.5">
+              <div className="h-9 w-48 rounded-2xl rounded-tl-sm bg-gray-200 dark:bg-zinc-800" />
+            </div>
+          </div>
+          <div className="flex items-end justify-end">
+            <div className="h-12 w-64 rounded-2xl rounded-tr-sm bg-blue-500/20 dark:bg-blue-500/10" />
+          </div>
+          <div className="flex items-start gap-2.5 max-w-[70%]">
+            <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-zinc-800 shrink-0" />
+            <div className="space-y-1.5">
+              <div className="h-16 w-56 rounded-2xl rounded-tl-sm bg-gray-200 dark:bg-zinc-800" />
+            </div>
+          </div>
+          <div className="flex items-end justify-end">
+            <div className="h-9 w-36 rounded-2xl rounded-tr-sm bg-blue-500/20 dark:bg-blue-500/10" />
+          </div>
         </div>
       ) : error ? (
         <div className="flex flex-1 flex-col items-center justify-center text-center">
