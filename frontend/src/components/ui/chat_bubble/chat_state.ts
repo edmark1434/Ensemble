@@ -117,6 +117,7 @@ interface ChatState {
   unreadCounts: Record<string, number>;
   typingByConversation: Record<string, string[]>;
   onlineAccounts: Record<string, boolean>;
+  hasLoadedConversations: boolean;
   loadingConversations: boolean;
   loadingMessages: Record<string, boolean>;
   activeCall: ChatCall | null;
@@ -1024,6 +1025,12 @@ function bindSocketListeners() {
           String(account_id) === authenticatedAccountId
             ? { ...state.unreadCounts, [conversation_id]: 0 }
             : state.unreadCounts,
+        conversations: state.conversations.map((conv) =>
+          String(conv._id) === String(conversation_id) &&
+          String(account_id) === authenticatedAccountId
+            ? { ...conv, unread_count: 0 }
+            : conv
+        ),
         messagesByConversation: {
           ...state.messagesByConversation,
           [conversation_id]: (
@@ -1405,7 +1412,22 @@ function bindSocketListeners() {
 const initialFloatingState = (() => {
   try {
     const data = localStorage.getItem("chat_floating_state");
-    if (data) return JSON.parse(data);
+    if (data) {
+      const parsed = JSON.parse(data);
+      const validFloatingWindows = Array.isArray(parsed?.floatingWindows)
+        ? parsed.floatingWindows.filter((item: any) =>
+            item &&
+            typeof item.id === "string" &&
+            !item.id.startsWith("dummy") &&
+            !item.name?.toLowerCase().includes("dummy")
+          )
+        : [];
+      return {
+        floatingWindows: validFloatingWindows,
+        activeFloatingId: parsed.activeFloatingId || null,
+        isFloatingOpen: Boolean(parsed.isFloatingOpen),
+      };
+    }
   } catch (e) {}
   return { floatingWindows: [], activeFloatingId: null, isFloatingOpen: false };
 })();
@@ -1420,6 +1442,7 @@ const useChatState = create<ChatState>((set, get) => ({
   unreadCounts: {},
   typingByConversation: {},
   onlineAccounts: {},
+  hasLoadedConversations: false,
   loadingConversations: false,
   loadingMessages: {},
   activeCall: null,
@@ -1444,6 +1467,8 @@ const useChatState = create<ChatState>((set, get) => ({
         unreadCounts: {},
         typingByConversation: {},
         onlineAccounts: {},
+        hasLoadedConversations: false,
+        loadingConversations: true,
         activeCall: null,
         googleMeetingsByConversation: {},
         groupCallsByConversation: {},
@@ -1480,6 +1505,7 @@ const useChatState = create<ChatState>((set, get) => ({
       unreadCounts: {},
       typingByConversation: {},
       onlineAccounts: {},
+      hasLoadedConversations: false,
       loadingConversations: false,
       loadingMessages: {},
       activeCall: null,
@@ -1566,6 +1592,7 @@ const useChatState = create<ChatState>((set, get) => ({
               ),
             },
             floatingWindows: newFloatingWindows,
+            hasLoadedConversations: true,
           };
         });
         conversations
@@ -1586,7 +1613,7 @@ const useChatState = create<ChatState>((set, get) => ({
               .catch(() => undefined);
           });
       } finally {
-        set({ loadingConversations: false });
+        set({ loadingConversations: false, hasLoadedConversations: true });
         conversationsRequest = null;
       }
     })();

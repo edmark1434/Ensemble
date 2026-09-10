@@ -673,25 +673,38 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       )
                         .slice(0, 5)
                         .map((accountId) => {
-                          const avatarKey = conversation?.avatarPayload?.[accountId];
+                          const member = conversation?.members?.find(
+                            (m) => String(m.account_id) === accountId
+                          );
+                          const memberAvatar =
+                            (member as any)?.avatar_preset_url ||
+                            (member as any)?.avatar_url ||
+                            activeUser?.avatarUrl ||
+                            conversation?.profile_image ||
+                            conversation?.conversation_image_key;
                           const memberName =
-                            conversation?.members?.find(
-                              (member) => String(member.account_id) === accountId
-                            )?.display_name || `User ${accountId.slice(0, 8)}`;
+                            (member as any)?.name ||
+                            (member as any)?.display_name ||
+                            activeUser?.name ||
+                            `User ${accountId.slice(0, 8)}`;
                           return (
                             <img
                               key={accountId}
                               src={
-                                avatarKey
-                                  ? chatAttachmentUrl(avatarKey)
-                                  : conversation?.conversation_type === "direct" && activeUser?.avatarUrl
-                                  ? chatAttachmentUrl(activeUser.avatarUrl)
+                                memberAvatar
+                                  ? chatAttachmentUrl(memberAvatar)
                                   : `https://ui-avatars.com/api/?name=${encodeURIComponent(
                                       memberName
                                     )}&background=6366f1&color=fff`
                               }
                               alt={`Seen by ${memberName}`}
                               className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-blue-400"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                  memberName
+                                )}&background=6366f1&color=fff`;
+                              }}
                             />
                           );
                         })}

@@ -66,6 +66,10 @@ export const InboxTimeOfMessage: React.FC<InboxTimeOfMessageProps> = ({
                       src={avatar}
                       alt="Seen"
                       className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-blue-500"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = "https://ui-avatars.com/api/?name=User&background=6366f1&color=fff";
+                      }}
                     />
                   ))}
               </span>

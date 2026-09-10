@@ -38,9 +38,35 @@ export const InboxList: React.FC<InboxListProps> = ({
   const onlineAccounts = useChatState((state) => state.onlineAccounts);
 
   if (loading) {
+    if (isCollapsed) {
+      return (
+        <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-surface p-3 space-y-4 animate-pulse">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="flex justify-center">
+              <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-zinc-800" />
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500" />
+      <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-surface p-2 space-y-1 animate-pulse">
+        {[...Array(6)].map((_, i) => (
+          <div
+            key={i}
+            className="w-full flex items-center gap-3 p-3 rounded-lg"
+          >
+            <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-zinc-800 shrink-0" />
+            <div className="flex-1 min-w-0 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="h-3.5 w-28 bg-gray-200 dark:bg-zinc-800 rounded" />
+                <div className="h-2.5 w-10 bg-gray-200 dark:bg-zinc-800 rounded" />
+              </div>
+              <div className="h-2.5 w-40 bg-gray-200/70 dark:bg-zinc-800/60 rounded" />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
