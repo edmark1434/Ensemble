@@ -1,4 +1,5 @@
-// src/features/editor/types/ensemble-scene.ts
+// features/editor/types/ensemble-scene.ts
+
 import type { ITrack, ITrackItem, ITrackItemBase } from "@designcombo/types";
 
 export interface ISceneDetails {

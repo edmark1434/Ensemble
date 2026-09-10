@@ -59,5 +59,5 @@ export const SequenceItem: Record<
   radialAudioBars: (item, options) =>
     RadialAudioBars({ item: item as IRadialAudioBars, options }),
   scene: (item, options) =>
-    Scene({ item: item as unknown as ISceneTrackItem, options })
+    <Scene key={item.id} item={item as unknown as ISceneTrackItem} options={options} />,
 };
