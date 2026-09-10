@@ -8,6 +8,7 @@ import { calculateTextHeight } from "../utils/text";
 import { getBackgroundFillStyle } from "./styles";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import useStore from "../store/use-store";
+import {renderVisibleItems} from "@/features/editor/player/render-visible-items";
 
 const Composition = () => {
   const [editableTextId, setEditableTextId] = useState<string | null>(null);
@@ -217,57 +218,17 @@ const Composition = () => {
   return (
     <>
       <AbsoluteFill style={getBackgroundFillStyle(background.value)} />
-        {visibleGroupedItems.map((group, index) => {
-          if (group.length === 1) {
-            const item = trackItemsMap[group[0].id];
-            return SequenceItem[item.type](item, {
-              fps,
-              handleTextChange,
-              onTextBlur,
-              editableTextId,
-              frame,
-              size,
-              isTransition: false
-            });
-          }
-          const firstItem = trackItemsMap[group[0].id];
-          const rawFrom = (firstItem.display.from / 1000) * fps;
-          const from = Number.isFinite(rawFrom) ? rawFrom : 0;
-          return (
-            <TransitionSeries from={from} key={index}>
-              {group.map((item) => {
-                if (item.type === "transition") {
-                  const rawDuration = (item.duration / 1000) * fps;
-                  const isBad = !Number.isFinite(rawDuration) || rawDuration <= 0;
-                  if (isBad) {
-                    console.warn("[transition-nan-guard] bad transition duration, clamped", {
-                      transitionId: item.id,
-                      rawDuration: item.duration,
-                      fromId: (item as any).fromId,
-                      toId: (item as any).toId
-                    });
-                  }
-                  const durationInFrames = isBad ? 1 : Math.round(rawDuration);
-                  return Transitions[item.kind]({
-                    durationInFrames,
-                    ...size,
-                    id: item.id,
-                    direction: item.direction
-                  });
-                }
-                return SequenceItem[item.type](trackItemsMap[item.id], {
-                  fps,
-                  handleTextChange,
-                  editableTextId,
-                  isTransition: true,
-                  size,
-                  frame
-                });
-              })}
-            </TransitionSeries>
-          );
-        }
-      )}
+      {renderVisibleItems({
+        trackItemIds,
+        trackItemsMap,
+        transitionsMap,
+        fps,
+        size,
+        frame,
+        handleTextChange,
+        onTextBlur,
+        editableTextId,
+      })}
     </>
   );
 };
