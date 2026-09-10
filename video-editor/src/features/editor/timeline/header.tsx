@@ -640,7 +640,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
               </Tooltip>
             )}
 
-            {!activeItems.some(item => isSceneItem(item.type)) && (
+            {!activeSceneBlockId && !activeItems.some(item => isSceneItem(item.type)) && (
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button onClick={doAddScene} variant={"ghost"} size={"icon"}>
@@ -696,7 +696,8 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                     <>
                       <BreadcrumbSeparator />
                       <BreadcrumbItem>
-                        <BreadcrumbPage className="text-sm font-semibold">
+                        <BreadcrumbPage className="text-sm font-semibold flex items-center gap-1.5">
+                          <Component size={14} />
                           {currentBlockName || "Scene"}
                         </BreadcrumbPage>
                       </BreadcrumbItem>
