@@ -11,6 +11,8 @@ import { db } from "@/lib/db";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { loadLatestProjectState, compactProject } from "@/lib/collab/persistence-store";
 import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
+import {CollabTarget} from "@/features/editor/collab/collab-target";
+import {compactBlock, loadLatestBlockState, withBlockSnapshotLock} from "@/lib/collab/block-persistence-store";
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
@@ -68,13 +70,16 @@ function getCookie(header: string | undefined, name: string): string | undefined
   return undefined;
 }
 
-async function getOrCreateRoom(projectId: string): Promise<Room> {
-  const existing = rooms.get(projectId);
+function roomKey(target: CollabTarget): string {
+  return `${target.kind}:${target.id}`;
+}
+
+async function getOrCreateRoom(target: CollabTarget): Promise<Room> {
+  const key = roomKey(target);
+  const existing = rooms.get(key);
   if (existing) {
     const room = await existing;
     if (room.emptyTimeout) {
-      // Reconnect landed inside the grace window — the doc never went
-      // away, so just resume it instead of tearing down.
       clearTimeout(room.emptyTimeout);
       room.emptyTimeout = null;
       if (!room.snapshotInterval) {
@@ -93,7 +98,11 @@ async function getOrCreateRoom(projectId: string): Promise<Room> {
       snapshotIfDirty: async () => {},
     };
 
-    const { snapshot, updates } = await loadLatestProjectState(projectId);
+    const { snapshot, updates } =
+      target.kind === "project"
+        ? await loadLatestProjectState(target.id)
+        : await loadLatestBlockState(target.id);
+
     if (snapshot || updates.length > 0) {
       doc.transact(() => {
         if (snapshot) Y.applyUpdate(doc, snapshot, HYDRATION_ORIGIN);
@@ -106,10 +115,6 @@ async function getOrCreateRoom(projectId: string): Promise<Room> {
       encoding.writeVarUint(encoder, MESSAGE_SYNC);
       syncProtocol.writeUpdate(encoder, update);
       broadcast(room, encoding.toUint8Array(encoder), origin);
-
-      // Replaying the project's own already-persisted history back into a
-      // freshly-created doc isn't new data — don't let hydration itself
-      // trigger a redundant snapshot of what we just loaded.
       if ((origin as unknown) !== HYDRATION_ORIGIN) room.dirty = true;
     });
 
@@ -131,40 +136,36 @@ async function getOrCreateRoom(projectId: string): Promise<Room> {
 
     room.snapshotIfDirty = async () => {
       if (!room.dirty) return;
-      // Clear before the async write, not after — an update that arrives
-      // mid-write re-sets this to true, and correctly gets picked up by
-      // the next tick instead of being lost to the race.
       room.dirty = false;
       try {
-        // Serialized against compactProject (updates/route.ts) — see
-        // snapshot-lock.ts for why two independent snapshot writers need
-        // to never race for the same project.
-        await withProjectSnapshotLock(projectId, async () => {
-          const roomState = Y.encodeStateAsUpdate(doc);
-          await compactProject(projectId, roomState);
-        });
+        const roomState = Y.encodeStateAsUpdate(doc);
+        if (target.kind === "project") {
+          await withProjectSnapshotLock(target.id, () => compactProject(target.id, roomState));
+        } else {
+          await withBlockSnapshotLock(target.id, () => compactBlock(target.id, Buffer.from(roomState)));
+        }
       } catch (err) {
-        console.error(`collab: periodic snapshot failed for project ${projectId}`, err);
-        room.dirty = true; // retry on the next tick
+        console.error(`collab: periodic snapshot failed for ${key}`, err);
+        room.dirty = true;
       }
     };
 
     room.snapshotInterval = setInterval(room.snapshotIfDirty, SNAPSHOT_INTERVAL_MS);
-
     return room;
   })();
 
-  rooms.set(projectId, roomPromise);
-  roomPromise.catch(() => rooms.delete(projectId));
+  rooms.set(key, roomPromise);
+  roomPromise.catch(() => rooms.delete(key));
   return roomPromise;
 }
 
 export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage): Promise<void> {
   const url = new URL(req.url ?? "", "http://collab");
   const projectId = url.searchParams.get("projectId");
+  const blockId = url.searchParams.get("blockId");
 
-  if (!projectId) {
-    ws.close(4000, "projectId is required");
+  if (!projectId && !blockId) {
+    ws.close(4000, "projectId or blockId is required");
     return;
   }
 
@@ -176,9 +177,32 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
     return;
   }
 
+  let target: CollabTarget;
+  let membershipProjectId: string;
+
+  if (projectId) {
+    target = { kind: "project", id: projectId };
+    membershipProjectId = projectId;
+  } else {
+    // ASSUMPTION: a `blocks` table with a `project_id` column — rename
+    // below if yours differs, I don't have that schema in front of me.
+    const block = await db
+      .selectFrom("blocks")
+      .where("block_id", "=", blockId!)
+      .select(["project_id"])
+      .executeTakeFirst();
+
+    if (!block) {
+      ws.close(4004, "block not found");
+      return;
+    }
+    target = { kind: "block", id: blockId! };
+    membershipProjectId = block.project_id;
+  }
+
   const membership = await db
     .selectFrom("project_members")
-    .where("project_id", "=", projectId)
+    .where("project_id", "=", membershipProjectId)
     .where("user_id", "=", decoded.userId)
     .where("deleted_at", "is", null)
     .select(["role"])
@@ -191,8 +215,8 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
 
   const canWrite = membership.role === "Owner" || membership.role === "Editor";
 
-  const room = await getOrCreateRoom(projectId);
-  if (ws.readyState !== WebSocket.OPEN) return; // client left mid-hydration
+  const room = await getOrCreateRoom(target);
+  if (ws.readyState !== WebSocket.OPEN) return;
 
   room.clients.set(ws, { controlledAwarenessIds: new Set(), canWrite });
 
@@ -214,7 +238,7 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
 
   ws.on("message", (data: Buffer) => {
     const info = room.clients.get(ws);
-    if (!info) return; // message arrived after close raced in
+    if (!info) return;
 
     const decoder = decoding.createDecoder(new Uint8Array(data));
     const messageType = decoding.readVarUint(decoder);
@@ -225,23 +249,14 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
       encoding.writeVarUint(encoder, MESSAGE_SYNC);
 
       if (innerType === syncProtocol.messageYjsSyncStep1) {
-        // A state-vector request. Answering it only reads room.doc, never
-        // mutates it — safe for a read-only (Viewer) connection, and it's
-        // exactly what lets them keep receiving "current live state."
         syncProtocol.readSyncStep1(decoder, encoder, room.doc);
       } else if (info.canWrite) {
-        // syncStep2 and Update both end up calling Y.applyUpdate on
-        // room.doc — the two message shapes that actually mutate project
-        // data. Gate both behind write access.
         if (innerType === syncProtocol.messageYjsSyncStep2) {
           syncProtocol.readSyncStep2(decoder, room.doc, ws);
         } else if (innerType === syncProtocol.messageYjsUpdate) {
           syncProtocol.readUpdate(decoder, room.doc, ws);
         }
       }
-      // A Viewer sending step2/Update falls through here and is dropped —
-      // their client shouldn't be producing local edits at all, and this
-      // is the server-side backstop for that assumption.
 
       if (encoding.length(encoder) > 1) ws.send(encoding.toUint8Array(encoder));
     } else if (messageType === MESSAGE_AWARENESS) {
@@ -262,21 +277,26 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
       }
 
       room.emptyTimeout = setTimeout(() => {
-        if (room.clients.size !== 0) return; // someone reconnected inside the grace window
+        if (room.clients.size !== 0) return;
         room.emptyTimeout = null;
 
-        (room.dirty
-            ? withProjectSnapshotLock(projectId, () =>
-              compactProject(projectId, Y.encodeStateAsUpdate(room.doc)),
+        const finalSnapshot: Promise<void> = !room.dirty
+          ? Promise.resolve()
+          : target.kind === "project"
+            ? withProjectSnapshotLock(target.id, () =>
+              compactProject(target.id, Y.encodeStateAsUpdate(room.doc)),
             )
-            : Promise.resolve()
-        )
+            : withBlockSnapshotLock(target.id, () =>
+              compactBlock(target.id, Buffer.from(Y.encodeStateAsUpdate(room.doc))),
+            );
+
+        finalSnapshot
           .catch((err) => {
-            console.error(`collab: final snapshot failed for project ${projectId}`, err);
+            console.error(`collab: final snapshot failed for ${roomKey(target)}`, err);
           })
           .finally(() => {
             room.doc.destroy();
-            rooms.delete(projectId);
+            rooms.delete(roomKey(target));
           });
       }, ROOM_EMPTY_GRACE_MS);
     }

@@ -7,11 +7,13 @@ import { attachWsProvider } from "../collab/ws-provider";
 import { createSession, endSession, attachPersistence } from "../collab/persistence";
 import { applySceneContentToDoc, DURATION_SYNC_INTERVAL_MS } from "../collab/scene-content-sync";
 import { SceneRenderContent } from "../types/ensemble-scene";
+import {broadcastWorkingInsideScene, clearWorkingInsideScene} from "@/features/editor/collab/live-transform";
 
 export function useSceneContentBroadcast(
   stateManager: StateManager,
   projectId: string | undefined,
   userId: string | undefined,
+  userName: string | undefined,
   sceneItemId: string | undefined,
 ) {
   useEffect(() => {
@@ -97,7 +99,8 @@ export function useSceneContentBroadcast(
     };
     schema.doc.on("afterTransaction", handleFirstSync);
 
-    const teardownWs = attachWsProvider(schema, projectId, userId, undefined, { announcePresence: false });
+    const teardownWs = attachWsProvider(schema, target, userId, undefined, { announcePresence: false });
+    broadcastWorkingInsideScene(schema.awareness, sceneItemId, userId, userName);
 
     // Own persistence, independent of the room's 60s internal timer or
     // the (now-delayed) empty-room flush — writes made here should be
@@ -167,6 +170,7 @@ export function useSceneContentBroadcast(
             console.error("useSceneContentBroadcast: force flush on exit failed", err);
           })
           .finally(() => {
+            clearWorkingInsideScene(schema.awareness);
             teardownWs();
             schema.awareness.destroy();
             doc.destroy();
@@ -174,5 +178,5 @@ export function useSceneContentBroadcast(
           });
       });
     };
-  }, [stateManager, projectId, userId, sceneItemId]);
+  }, [stateManager, projectId, userId, userName, sceneItemId]);
 }

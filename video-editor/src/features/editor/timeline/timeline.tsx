@@ -40,7 +40,7 @@ import {
   subscribeToRemoteSelections,
   getRemoteSelectionOwners,
   RemoteActiveEditor,
-  LiveTransformState
+  LiveTransformState, subscribeToRemoteWorkingInside
 } from "../collab/live-transform";
 import {FabricText, Path, Rect} from "fabric";
 import Scene from "./items/ensemble-scene";
@@ -569,6 +569,11 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     let selectionOwners = new Map<string, RemoteActiveEditor>();
     let livePatchedIds = new Set<string>();
 
+    const workingInsideBordersById = new Map<string, any>();
+    const workingInsideLabelsById = new Map<string, any>();
+    const workingInsideLabelBgsById = new Map<string, any>();
+    let workingInsideByItemId = new Map<string, RemoteActiveEditor>();
+
     const findItem = (id: string) => {
       const trackItem = canvas.getTrackItems().find((o: any) => o.id === id);
       if (trackItem) return trackItem;
@@ -825,6 +830,109 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
         canvas.bringObjectToFront(itemOverlay);
       });
 
+      // "Working inside" overlays: a remote client has this scene item's block
+// open for editing. Own pass, independent of selection/live-transform —
+// can coexist with (and outlast) whatever selection state the item has.
+      workingInsideBordersById.forEach((path, id) => {
+        if (!workingInsideByItemId.has(id)) {
+          canvas.remove(path);
+          workingInsideBordersById.delete(id);
+        }
+      });
+      workingInsideLabelsById.forEach((label, id) => {
+        if (!workingInsideByItemId.has(id)) {
+          canvas.remove(label);
+          workingInsideLabelsById.delete(id);
+        }
+      });
+      workingInsideLabelBgsById.forEach((bg, id) => {
+        if (!workingInsideByItemId.has(id)) {
+          canvas.remove(bg);
+          workingInsideLabelBgsById.delete(id);
+        }
+      });
+
+      workingInsideByItemId.forEach((editor, id) => {
+        const item = findItem(id);
+        if (!item) return;
+
+        const strokeWidth = 2;
+        const inset = strokeWidth / 2;
+        const d = roundedRectPathD(
+          item.left + inset,
+          item.top + inset,
+          item.width - strokeWidth,
+          item.height - strokeWidth,
+          { tl: 0, tr: 4, br: 4, bl: 4 }
+        );
+
+        let border = workingInsideBordersById.get(id);
+        if (border) canvas.remove(border);
+        border = new Path(d, {
+          selectable: false,
+          evented: false,
+          excludeFromExport: true,
+          fill: "transparent",
+          strokeWidth,
+          stroke: editor.color,
+          originX: "left",
+          originY: "top"
+        });
+        canvas.add(border);
+        workingInsideBordersById.set(id, border);
+        canvas.bringObjectToFront(border);
+
+        const labelText = editor.userName ? `${editor.userName} is inside` : "Working inside";
+        const LABEL_PAD_X = 4;
+        const LABEL_PAD_TOP = 4;
+        const LABEL_PAD_BOTTOM = 2;
+
+        let label = workingInsideLabelsById.get(id);
+        if (!label) {
+          label = new FabricText(labelText, {
+            selectable: false,
+            evented: false,
+            excludeFromExport: true,
+            fontSize: 11,
+            fontFamily: getUIFont(),
+            fontWeight: "400",
+            fill: "#ffffff",
+            originX: "left",
+            originY: "top"
+          });
+          canvas.add(label);
+          workingInsideLabelsById.set(id, label);
+        }
+        if (label.text !== labelText) label.set({ text: labelText });
+
+        let labelBg = workingInsideLabelBgsById.get(id);
+        if (!labelBg) {
+          labelBg = new Rect({
+            selectable: false,
+            evented: false,
+            excludeFromExport: true,
+            originX: "left",
+            originY: "top"
+          });
+          canvas.add(labelBg);
+          workingInsideLabelBgsById.set(id, labelBg);
+        }
+
+        const bgWidth = label.width + LABEL_PAD_X * 2;
+        const bgHeight = label.height + LABEL_PAD_TOP + LABEL_PAD_BOTTOM;
+        const outside = item.height <= LABEL_OUTSIDE_THRESHOLD;
+        const bgTop = outside ? item.top - bgHeight : item.top;
+
+        labelBg.set({ left: item.left, top: bgTop, width: bgWidth, height: bgHeight, fill: editor.color });
+        labelBg.setCoords();
+
+        label.set({ left: item.left + LABEL_PAD_X, top: bgTop + LABEL_PAD_TOP });
+        label.setCoords();
+
+        canvas.bringObjectToFront(labelBg);
+        canvas.bringObjectToFront(label);
+      });
+
       canvas.requestRenderAll();
     };
     drawOverlaysRef.current = drawOverlays;
@@ -838,6 +946,12 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       labelBgsByClient.clear();
       itemOverlaysById.forEach((path) => canvas.remove(path));
       itemOverlaysById.clear();
+      workingInsideBordersById.forEach((path) => canvas.remove(path));
+      workingInsideBordersById.clear();
+      workingInsideLabelsById.forEach((label) => canvas.remove(label));
+      workingInsideLabelsById.clear();
+      workingInsideLabelBgsById.forEach((bg) => canvas.remove(bg));
+      workingInsideLabelBgsById.clear();
       canvas.requestRenderAll();
     };
     (canvas as any)._presenceOverlays = { clear: clearOverlays, redraw: drawOverlays };
@@ -868,13 +982,22 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       drawOverlays();
     });
 
+    const unsubWorkingInside = subscribeToRemoteWorkingInside(collabSchema.awareness, (byItemId) => {
+      workingInsideByItemId = byItemId;
+      drawOverlays();
+    });
+
     return () => {
       unsubTransforms();
       unsubSelections();
+      unsubWorkingInside();
       resetTimers.forEach(clearTimeout);
       overlaysByClient.forEach((rect) => canvas.remove(rect));
       labelsByClient.forEach((label) => canvas.remove(label));
       itemOverlaysById.forEach((rect) => canvas.remove(rect));
+      workingInsideBordersById.forEach((path) => canvas.remove(path));
+      workingInsideLabelsById.forEach((label) => canvas.remove(label));
+      workingInsideLabelBgsById.forEach((bg) => canvas.remove(bg));
     };
   }, [collabSchema]);
 

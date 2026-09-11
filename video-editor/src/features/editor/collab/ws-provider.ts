@@ -1,10 +1,9 @@
-// video-editor/src/features/editor/collab/ws-provider.ts
-
 import * as syncProtocol from "y-protocols/sync";
 import * as awarenessProtocol from "y-protocols/awareness";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import { CollabSchema } from "./ydoc-schema";
+import { CollabTarget } from "./collab-target";
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
@@ -12,14 +11,17 @@ const remoteOrigin = "ws-remote";
 
 export function attachWsProvider(
   schema: CollabSchema,
-  projectId: string,
+  target: CollabTarget,
   userId: string,
   userName?: string,
   options?: { announcePresence?: boolean },
 ): () => void {
   const announcePresence = options?.announcePresence ?? true;
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${proto}//${window.location.host}/collab?projectId=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
+  const targetParam = target.kind === "project"
+    ? `projectId=${encodeURIComponent(target.id)}`
+    : `blockId=${encodeURIComponent(target.id)}`;
+  const wsUrl = `${proto}//${window.location.host}/collab?${targetParam}&userId=${encodeURIComponent(userId)}`;
 
   const ws = new WebSocket(wsUrl);
   ws.binaryType = "arraybuffer";
@@ -30,8 +32,6 @@ export function attachWsProvider(
     awareness.setLocalStateField("user", { id: userId, name: userName });
   }
 
-  // Updates that fire before the socket is OPEN (e.g. hydrateDocFromState
-  // on mount) get buffered here instead of dropped, then flushed on open.
   let outbox: Uint8Array[] = [];
 
   const send = (message: Uint8Array) => {
@@ -43,15 +43,11 @@ export function attachWsProvider(
   };
 
   ws.onopen = () => {
-    // Request the server's state: this is the half of the handshake that
-    // was missing. Server responds with syncStep2 containing whatever the
-    // room doc has that our state vector says we're missing.
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MESSAGE_SYNC);
     syncProtocol.writeSyncStep1(encoder, schema.doc);
     ws.send(encoding.toUint8Array(encoder));
 
-    // Announce local awareness state if any is already set.
     const localState = awareness.getLocalState();
     if (localState !== null) {
       const awarenessEncoder = encoding.createEncoder();

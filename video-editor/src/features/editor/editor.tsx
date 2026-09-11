@@ -533,6 +533,7 @@ const Editor = ({
     stateManager,
     activeSceneBlockId ? projectId : undefined,
     activeSceneBlockId ? storeUserId : undefined,
+    activeSceneBlockId ? storeUserName : undefined,
     activeSceneBlockId ? activeSceneItemId ?? undefined : undefined,
   );
 

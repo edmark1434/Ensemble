@@ -130,12 +130,7 @@ export function useCollabDoc(
           setCollab((prev) => (prev ? { ...prev, saveStatus: status } : prev));
         });
         teardownPersistence = persistenceHandle.teardown;
-        // Scenes don't have a live-collab room yet — autosave/reload above
-        // still works via the REST persistence layer either way. Add this
-        // back for blocks once concurrent multi-user scene editing matters.
-        teardownWsProvider = target.kind === "project"
-          ? attachWsProvider(schema, target.id, userId, userName)
-          : null;
+        teardownWsProvider = attachWsProvider(schema, target, userId, userName);
         teardownTimelineWatch = useStore.subscribe((state, prevState) => {
           // Compare identity, not just nullity — every remount produces a
           // genuinely new CanvasTimeline instance, and each one needs this
