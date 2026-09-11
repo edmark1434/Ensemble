@@ -1,6 +1,14 @@
 // features/editor/types/ensemble-scene.ts
 
-import type { ITrack, ITrackItem, ITrackItemBase } from "@designcombo/types";
+import type { ITrack, ITrackItem, ITrackItemBase, ITransition, ISize, State } from "@designcombo/types";
+
+export interface SceneRenderContent {
+  trackItemsMap: Record<string, ITrackItem>;
+  trackItemIds: string[];
+  transitionsMap: Record<string, ITransition>;
+  size?: ISize;
+  background?: State["background"];
+}
 
 export interface ISceneDetails {
   blockId: string;
@@ -9,6 +17,12 @@ export interface ISceneDetails {
   hidden?: boolean;
   locked?: boolean;
   volume?: number;
+  // Live-pushed by useSceneContentBroadcast on every relevant edit while
+  // this scene's block is open (see scene-content-sync.ts's
+  // applySceneContentToDoc). Delivered to every viewer through the same
+  // project-doc live sync that already delivers display/duration — never
+  // fetched separately.
+  content?: SceneRenderContent;
 }
 
 // A brand-new empty scene has no content yet, so this is what it displays
@@ -30,13 +44,6 @@ export function isSceneItem(type: string | undefined | null): boolean {
   return type === SCENE_TYPE;
 }
 
-// @designcombo/types' ItemType/ITrackType/ITrackItem are closed string-
-// literal unions with no "scene" member. They're `type` aliases, not
-// `interface`s, so declaration merging can't widen them the way it could
-// for an interface. The library treats `type`/`details` as opaque at
-// runtime (stateManager, Yjs schema, canvas registerItems all just read
-// strings), so this is a compile-time-only gap — these two casts are the
-// only place we paper over it.
 export function makeSceneTrackItem(item: ISceneTrackItem): ITrackItem {
   return item as unknown as ITrackItem;
 }

@@ -47,7 +47,7 @@ import {seedDefaultFont} from "@/features/editor/utils/seed-default-font";
 import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
 import {useCollabDoc} from "@/features/editor/hooks/use-collab-doc";
 import {CollabTarget} from "@/features/editor/collab/collab-target";
-import {useSceneDurationBroadcast} from "@/features/editor/hooks/use-scene-duration-broadcast";
+import {useSceneContentBroadcast} from "@/features/editor/hooks/use-scene-content-broadcast";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -529,7 +529,7 @@ const Editor = ({
     stateManager,
   );
 
-  useSceneDurationBroadcast(
+  useSceneContentBroadcast(
     stateManager,
     activeSceneBlockId ? projectId : undefined,
     activeSceneBlockId ? storeUserId : undefined,

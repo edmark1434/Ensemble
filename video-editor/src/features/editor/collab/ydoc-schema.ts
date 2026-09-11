@@ -40,7 +40,7 @@ export function createCollabSchema(doc: Y.Doc): CollabSchema {
 // durable reference is `src` once the S3 upload completes.
 const NON_SERIALIZABLE_DETAIL_KEYS = ["stream", "blob"];
 
-function sanitizeDetails(details: any): any {
+export function sanitizeDetails(details: any): any {
   if (!details || typeof details !== "object") return details;
   const clean: any = {};
   for (const [key, value] of Object.entries(details)) {

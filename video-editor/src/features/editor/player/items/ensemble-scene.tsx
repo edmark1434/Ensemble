@@ -1,13 +1,11 @@
 // features/editor/player/items/ensemble-scene.tsx
 
 import { AbsoluteFill, Sequence, useCurrentFrame } from "remotion";
-import { ISceneTrackItem } from "../../types/ensemble-scene";
+import { ISceneTrackItem, SceneRenderContent } from "../../types/ensemble-scene";
 import { calculateFrames } from "../../utils/frames";
 import { SequenceItemOptions } from "../base-sequence";
 import { renderVisibleItems } from "../render-visible-items";
 import { getBackgroundFillStyle } from "../styles";
-import { useSceneContent } from "../../store/use-scene-content-store";
-import {DocSnapshot} from "@/features/editor/collab/ydoc-schema";
 
 const Scene = ({ item, options }: { item: ISceneTrackItem; options: SequenceItemOptions }) => {
   const { fps } = options;
@@ -15,7 +13,7 @@ const Scene = ({ item, options }: { item: ISceneTrackItem; options: SequenceItem
     { from: item.display.from, to: item.display.to },
     fps,
   );
-  const content = useSceneContent(item.details.blockId);
+  const content = item.details.content;
 
   return (
     <Sequence key={item.id} from={from} durationInFrames={durationInFrames || 1 / fps} style={{ pointerEvents: "none" }}>
@@ -28,7 +26,7 @@ const Scene = ({ item, options }: { item: ISceneTrackItem; options: SequenceItem
   );
 };
 
-const SceneContentLayer = ({ content, fps, muted }: { content: DocSnapshot; fps: number; muted: boolean }) => {
+const SceneContentLayer = ({ content, fps, muted }: { content: SceneRenderContent; fps: number; muted: boolean }) => {
   // Remotion's frame is relative to the nearest ancestor <Sequence> — we're
   // already nested inside the scene's own Sequence above, so this is the
   // scene-local frame, which is exactly what the nested items need.
@@ -50,9 +48,7 @@ const SceneContentLayer = ({ content, fps, muted }: { content: DocSnapshot; fps:
         trackItemsMap,
         transitionsMap: content.transitionsMap,
         // Always the OUTER/project fps here, never the block's own stored
-        // fps — Remotion needs one consistent fps for the whole player, so
-        // the nested item timings (in ms) get re-derived against that, not
-        // whatever fps the block would use if it were played standalone.
+        // fps — Remotion needs one consistent fps for the whole player.
         fps,
         size: content.size!,
         frame,

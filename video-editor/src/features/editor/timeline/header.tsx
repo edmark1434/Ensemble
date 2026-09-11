@@ -52,7 +52,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import {useSceneContentStore} from "@/features/editor/store/use-scene-content-store";
 
 const IconAddMarker = ({ size }: { size: number }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 2.5 24 24" fill="none" stroke="currentColor"
@@ -372,7 +371,6 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
 
   const goHome = () => {
     stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
-    if (activeSceneBlockId) useSceneContentStore.getState().invalidate(activeSceneBlockId);
     closeScene();
   };
 
