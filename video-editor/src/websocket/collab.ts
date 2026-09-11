@@ -15,11 +15,23 @@ import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
 const HYDRATION_ORIGIN = "hydration";
+
 // Independent of any client's own flush cadence — this is the backstop
 // that persists the room's canonical merged state on a fixed schedule,
 // so durability doesn't depend on whichever client authored a given edit
 // staying connected long enough to successfully flush it themselves.
 const SNAPSHOT_INTERVAL_MS = 60_000;
+
+// A project<->scene transition on a single client closes its one WS
+// connection and opens a new one within the same tick or two (see
+// use-scene-duration-broadcast.ts / use-collab-doc.ts). Destroying the
+// room the instant clients.size hits 0 forces that reconnect to rebuild
+// from Postgres, racing the async snapshot-on-disconnect flush below —
+// losing that race is why scene edits were vanishing for a single
+// client. Give a genuinely-empty room a short grace period before real
+// teardown so a same-session reconnect resumes the still-live doc
+// instead, letting Yjs's own sync handshake resolve it, not a REST race.
+const ROOM_EMPTY_GRACE_MS = 5_000;
 
 interface ClientInfo {
   controlledAwarenessIds: Set<number>;
@@ -32,6 +44,8 @@ interface Room {
   clients: Map<WebSocket, ClientInfo>;
   dirty: boolean;
   snapshotInterval: ReturnType<typeof setInterval> | null;
+  emptyTimeout: ReturnType<typeof setTimeout> | null;
+  snapshotIfDirty: () => Promise<void>;
 }
 
 const rooms = new Map<string, Promise<Room>>();
@@ -56,12 +70,28 @@ function getCookie(header: string | undefined, name: string): string | undefined
 
 async function getOrCreateRoom(projectId: string): Promise<Room> {
   const existing = rooms.get(projectId);
-  if (existing) return existing;
+  if (existing) {
+    const room = await existing;
+    if (room.emptyTimeout) {
+      // Reconnect landed inside the grace window — the doc never went
+      // away, so just resume it instead of tearing down.
+      clearTimeout(room.emptyTimeout);
+      room.emptyTimeout = null;
+      if (!room.snapshotInterval) {
+        room.snapshotInterval = setInterval(room.snapshotIfDirty, SNAPSHOT_INTERVAL_MS);
+      }
+    }
+    return existing;
+  }
 
   const roomPromise = (async () => {
     const doc = new Y.Doc({ gc: false });
     const awareness = new awarenessProtocol.Awareness(doc);
-    const room: Room = { doc, awareness, clients: new Map(), dirty: false, snapshotInterval: null };
+    const room: Room = {
+      doc, awareness, clients: new Map(), dirty: false,
+      snapshotInterval: null, emptyTimeout: null,
+      snapshotIfDirty: async () => {},
+    };
 
     const { snapshot, updates } = await loadLatestProjectState(projectId);
     if (snapshot || updates.length > 0) {
@@ -99,7 +129,7 @@ async function getOrCreateRoom(projectId: string): Promise<Room> {
       broadcast(room, encoding.toUint8Array(encoder), origin);
     });
 
-    const snapshotIfDirty = async () => {
+    room.snapshotIfDirty = async () => {
       if (!room.dirty) return;
       // Clear before the async write, not after — an update that arrives
       // mid-write re-sets this to true, and correctly gets picked up by
@@ -119,7 +149,7 @@ async function getOrCreateRoom(projectId: string): Promise<Room> {
       }
     };
 
-    room.snapshotInterval = setInterval(snapshotIfDirty, SNAPSHOT_INTERVAL_MS);
+    room.snapshotInterval = setInterval(room.snapshotIfDirty, SNAPSHOT_INTERVAL_MS);
 
     return room;
   })();
@@ -226,20 +256,29 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
       awarenessProtocol.removeAwarenessStates(room.awareness, [...info.controlledAwarenessIds], null);
     }
     if (room.clients.size === 0) {
-      if (room.snapshotInterval) clearInterval(room.snapshotInterval);
-
-      // One last durability check before releasing the in-memory doc.
-      // Same lock, same reasoning as the periodic path above.
-      if (room.dirty) {
-        withProjectSnapshotLock(projectId, () =>
-          compactProject(projectId, Y.encodeStateAsUpdate(room.doc)),
-        ).catch((err) => {
-          console.error(`collab: final snapshot failed for project ${projectId}`, err);
-        });
+      if (room.snapshotInterval) {
+        clearInterval(room.snapshotInterval);
+        room.snapshotInterval = null;
       }
 
-      room.doc.destroy();
-      rooms.delete(projectId);
+      room.emptyTimeout = setTimeout(() => {
+        if (room.clients.size !== 0) return; // someone reconnected inside the grace window
+        room.emptyTimeout = null;
+
+        (room.dirty
+            ? withProjectSnapshotLock(projectId, () =>
+              compactProject(projectId, Y.encodeStateAsUpdate(room.doc)),
+            )
+            : Promise.resolve()
+        )
+          .catch((err) => {
+            console.error(`collab: final snapshot failed for project ${projectId}`, err);
+          })
+          .finally(() => {
+            room.doc.destroy();
+            rooms.delete(projectId);
+          });
+      }, ROOM_EMPTY_GRACE_MS);
     }
   });
 }

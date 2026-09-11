@@ -468,8 +468,9 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       // go back from scene (back to home)
       if (!viewOnlyRef.current && !mod && !e.shiftKey && e.code === "KeyH") {
         e.preventDefault();
-        const { activeSceneBlockId, closeScene } = useStore.getState();
+        const { activeSceneBlockId, closeScene, saveStatus, compactStatus } = useStore.getState();
         if (!activeSceneBlockId) return;
+        if (saveStatus === "saving" || compactStatus === "compacting") return;
         stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
         closeScene();
       }

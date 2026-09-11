@@ -58,27 +58,27 @@ const stateManager = new StateManager({
 });
 
 const IconPlayerPlayFilled = ({ size }: { size: number }) => (
-    <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width={size}
-        viewBox="0 0 24 24"
-        fill="currentColor"
-    >
-      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-      <path d="M6 4v16a1 1 0 0 0 1.524 .852l13 -8a1 1 0 0 0 0 -1.704l-13 -8a1 1 0 0 0 -1.524 .852z" />
-    </svg>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+  >
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M6 4v16a1 1 0 0 0 1.524 .852l13 -8a1 1 0 0 0 0 -1.704l-13 -8a1 1 0 0 0 -1.524 .852z" />
+  </svg>
 );
 const IconPlayerPauseFilled = ({ size }: { size: number }) => (
-    <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width={size}
-        viewBox="0 0 24 24"
-        fill="currentColor"
-    >
-      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-      <path d="M9 4h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h2a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2z" />
-      <path d="M17 4h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h2a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2z" />
-    </svg>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+  >
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M9 4h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h2a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2z" />
+    <path d="M17 4h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h2a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2z" />
+  </svg>
 );
 
 const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnly }: any) => {
@@ -543,6 +543,16 @@ const Editor = ({
   useEffect(() => {
     if (collab?.ready) hasSyncedOnceRef.current = true;
   }, [collab?.ready]);
+
+  // Mirror into the shared store so components outside this tree (Header,
+  // keyboard shortcuts) can tell whether it's safe to leave the scene,
+  // without threading saveStatus/compactStatus through as props.
+  useEffect(() => {
+    useStore.setState({
+      saveStatus: collab?.saveStatus,
+      compactStatus: collab?.compactStatus,
+    });
+  }, [collab?.saveStatus, collab?.compactStatus]);
 
   const timelinePanelRef = useRef<ImperativePanelHandle>(null);
   const sceneRef = useRef<SceneRef>(null);

@@ -84,6 +84,9 @@ interface ITimelineStore {
   currentBlockName: string | null;
   openScene: (blockId: string, itemId: string, name?: string) => void;
   closeScene: () => void;
+
+  saveStatus?: "saved"|"saving"|"error";
+  compactStatus?: "idle"|"compacting"|"error";
 }
 
 export interface IMarker {
