@@ -118,6 +118,27 @@ function applyItemDetails(canvas: CanvasTimeline, itemsMap: Record<string, any>)
   });
 }
 
+function formatInsideSentence(editors: RemoteActiveEditor[]): string {
+  const names = editors.map((e) => e.userName || "Someone");
+  if (names.length === 1) return `${names[0]} is working inside`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are working inside`;
+  return `${names[0]} and ${names.length - 1} others are inside`;
+}
+
+// Scene items get one combined label instead of the plain "[name]" every
+// other item type gets, since they can be occupied two different ways at
+// once: selected/dragged in this project timeline ("on"), and open for
+// editing in someone's own block editor ("inside").
+function formatScenePresenceLabel(
+  onEditor: RemoteActiveEditor | undefined,
+  insideEditors: RemoteActiveEditor[],
+): string {
+  const insideSentence = insideEditors.length > 0 ? formatInsideSentence(insideEditors) : null;
+  if (onEditor && insideSentence) return `${onEditor.userName || "Someone"} is selecting, ${insideSentence}`;
+  if (onEditor) return onEditor.userName || "Someone";
+  return insideSentence ?? "";
+}
+
 const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
   // prevent duplicate scroll events
   const canScrollRef = useRef(false);
@@ -569,10 +590,10 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     let selectionOwners = new Map<string, RemoteActiveEditor>();
     let livePatchedIds = new Set<string>();
 
-    const workingInsideBordersById = new Map<string, any>();
-    const workingInsideLabelsById = new Map<string, any>();
-    const workingInsideLabelBgsById = new Map<string, any>();
-    let workingInsideByItemId = new Map<string, RemoteActiveEditor>();
+    const scenePresenceBordersById = new Map<string, any>();
+    const scenePresenceLabelsById = new Map<string, any>();
+    const scenePresenceLabelBgsById = new Map<string, any>();
+    let workingInsideByItemId = new Map<string, RemoteActiveEditor[]>();
 
     const findItem = (id: string) => {
       const trackItem = canvas.getTrackItems().find((o: any) => o.id === id);
@@ -595,7 +616,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       const target = findItem(id);
       const canonical = useStore.getState().trackItemsMap[id];
       if (!target || !canonical) return;
-      const { from, to } = canonical.display ?? {}; // adjust if your ITrackItem stores timing elsewhere
+      const { from, to } = canonical.display ?? {};
       if (from === undefined || to === undefined) return;
       const zoom = useStore.getState().scale.zoom;
       target.left = timeMsToUnits(from, zoom);
@@ -609,7 +630,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       if (existing) clearTimeout(existing);
       resetTimers.set(id, setTimeout(() => {
         resetTimers.delete(id);
-        resetToCanonicalPosition(id); // NEW — actually fixes the position
+        resetToCanonicalPosition(id);
         canvas.requestRenderAll();
       }, 400));
     };
@@ -619,10 +640,6 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     const drawOverlays = () => {
       const rawOccupied = new Map([...selectionOwners, ...activeEditors]);
 
-      // Group first so we know, per client, whether a transition is riding
-      // along in a multi-item selection (drop it — group boxes/individual
-      // borders skip transitions) or is the client's only selected item
-      // (keep it — single-transition selects still get a border).
       const idsByClient = new Map<number, string[]>();
       rawOccupied.forEach((editor, id) => {
         const ids = idsByClient.get(editor.clientId);
@@ -663,12 +680,18 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
         }
       });
 
-      // Single-item selections square off the border's top-left corner (where
-      // the label tucks in); multi-item (group) selections stay rounded on all
-      // four corners.
       const singleSelectionClientIds = new Set<number>();
       grouped.forEach((entry, clientId) => {
         if (entry.ids.length === 1) singleSelectionClientIds.add(clientId);
+      });
+
+      // Solo-selected scene items get their label from the unified
+      // scene-presence pass below instead of the generic per-client one, so
+      // it can fold in "inside" info too.
+      const sceneOnEditorByItemId = new Map<string, RemoteActiveEditor>();
+      occupied.forEach((editor, id) => {
+        if (!singleSelectionClientIds.has(editor.clientId)) return;
+        if (findItem(id)?.type === "scene") sceneOnEditorByItemId.set(id, editor);
       });
 
       grouped.forEach(({ color, userName, ids }, clientId) => {
@@ -680,10 +703,8 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
         const bottom = Math.max(...items.map((i) => i.top + i.height));
         const boxHeight = bottom - top;
         const isGroup = items.length > 1;
+        const isSceneSoloSelection = !isGroup && items[0]?.type === "scene";
 
-        // Group presence border only for multi-item selections. A single item's
-        // own 1px rounded border (drawn below in the per-item pass) IS its
-        // presence border — drawing the group box on top of it would double up.
         if (isGroup) {
           let overlay = overlaysByClient.get(clientId);
           if (!overlay) {
@@ -699,9 +720,6 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
             canvas.add(overlay);
             overlaysByClient.set(clientId, overlay);
           }
-          // Inset by half the stroke width so it renders fully inside the nominal
-          // box instead of straddling the edge — keeps it from bleeding past the
-          // coordinate the per-item borders are drawn from.
           const groupStrokeWidth = 2;
           overlay.set({
             left: left - groupStrokeWidth / 2,
@@ -719,6 +737,22 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
             canvas.remove(overlay);
             overlaysByClient.delete(clientId);
           }
+        }
+
+        if (isSceneSoloSelection) {
+          // This item's label is drawn by the scene-presence pass instead —
+          // clear any stale per-client label so it doesn't linger.
+          const staleLabel = labelsByClient.get(clientId);
+          if (staleLabel) {
+            canvas.remove(staleLabel);
+            labelsByClient.delete(clientId);
+          }
+          const staleBg = labelBgsByClient.get(clientId);
+          if (staleBg) {
+            canvas.remove(staleBg);
+            labelBgsByClient.delete(clientId);
+          }
+          return;
         }
 
         if (userName) {
@@ -757,14 +791,8 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
             labelBgsByClient.set(clientId, labelBg);
           }
 
-          // Background sized to the text's own measured box plus padding —
-          // matches Scene's DOM label's `padding: 1px 4px`.
           const bgWidth = label.width + LABEL_PAD_X * 2;
           const bgHeight = label.height + LABEL_PAD_TOP + LABEL_PAD_BOTTOM;
-
-          // Small clips can't fit the label inside without covering the
-          // clip itself, so it sits above; taller boxes tuck it in the
-          // top-left corner instead — same threshold as Scene's version.
           const outside = boxHeight <= LABEL_OUTSIDE_THRESHOLD;
           const bgTop = outside ? top - bgHeight : top;
 
@@ -779,9 +807,6 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
         }
       });
 
-      // Per-item borders: one per occupied item, independent of the group's
-      // bbox. Timeline items don't rotate, so unlike Scene's version this is
-      // just a straight left/top/width/height rect, no decomposition needed.
       itemOverlaysById.forEach((path, id) => {
         if (!occupied.has(id)) {
           canvas.remove(path);
@@ -793,11 +818,20 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
         const item = findItem(id);
         if (!item) return;
 
+        if (item.type === "scene") {
+          // Scene items always get their border from the unified
+          // scene-presence pass below, never this generic one.
+          const stale = itemOverlaysById.get(id);
+          if (stale) {
+            canvas.remove(stale);
+            itemOverlaysById.delete(id);
+          }
+          return;
+        }
+
         const radius = item.type === "transition" ? 8 : 4;
         const isSingle = singleSelectionClientIds.has(editor.clientId);
         const itemStrokeWidth = isSingle ? 2 : 1;
-// Same inset as the group box above, by this border's own stroke width —
-// keeps its outer edge pinned to the item's actual bounds.
         const inset = itemStrokeWidth / 2;
         const d = roundedRectPathD(
           item.left + inset,
@@ -830,31 +864,37 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
         canvas.bringObjectToFront(itemOverlay);
       });
 
-      // "Working inside" overlays: a remote client has this scene item's block
-// open for editing. Own pass, independent of selection/live-transform —
-// can coexist with (and outlast) whatever selection state the item has.
-      workingInsideBordersById.forEach((path, id) => {
-        if (!workingInsideByItemId.has(id)) {
+      // Unified scene presence: one border + label per scene item, covering
+      // "on" (selected/dragged here), "inside" (block open elsewhere), or
+      // both — see formatScenePresenceLabel for the exact text rules.
+      const scenePresenceIds = new Set([...sceneOnEditorByItemId.keys(), ...workingInsideByItemId.keys()]);
+
+      scenePresenceBordersById.forEach((path, id) => {
+        if (!scenePresenceIds.has(id)) {
           canvas.remove(path);
-          workingInsideBordersById.delete(id);
+          scenePresenceBordersById.delete(id);
         }
       });
-      workingInsideLabelsById.forEach((label, id) => {
-        if (!workingInsideByItemId.has(id)) {
+      scenePresenceLabelsById.forEach((label, id) => {
+        if (!scenePresenceIds.has(id)) {
           canvas.remove(label);
-          workingInsideLabelsById.delete(id);
+          scenePresenceLabelsById.delete(id);
         }
       });
-      workingInsideLabelBgsById.forEach((bg, id) => {
-        if (!workingInsideByItemId.has(id)) {
+      scenePresenceLabelBgsById.forEach((bg, id) => {
+        if (!scenePresenceIds.has(id)) {
           canvas.remove(bg);
-          workingInsideLabelBgsById.delete(id);
+          scenePresenceLabelBgsById.delete(id);
         }
       });
 
-      workingInsideByItemId.forEach((editor, id) => {
+      scenePresenceIds.forEach((id) => {
         const item = findItem(id);
         if (!item) return;
+
+        const onEditor = sceneOnEditorByItemId.get(id);
+        const insideEditors = workingInsideByItemId.get(id) ?? [];
+        const color = onEditor?.color ?? insideEditors[0]?.color ?? "#6366F1";
 
         const strokeWidth = 2;
         const inset = strokeWidth / 2;
@@ -866,7 +906,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
           { tl: 0, tr: 4, br: 4, bl: 4 }
         );
 
-        let border = workingInsideBordersById.get(id);
+        let border = scenePresenceBordersById.get(id);
         if (border) canvas.remove(border);
         border = new Path(d, {
           selectable: false,
@@ -874,20 +914,20 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
           excludeFromExport: true,
           fill: "transparent",
           strokeWidth,
-          stroke: editor.color,
+          stroke: color,
           originX: "left",
           originY: "top"
         });
         canvas.add(border);
-        workingInsideBordersById.set(id, border);
+        scenePresenceBordersById.set(id, border);
         canvas.bringObjectToFront(border);
 
-        const labelText = editor.userName ? `${editor.userName} is inside` : "Working inside";
+        const labelText = formatScenePresenceLabel(onEditor, insideEditors);
         const LABEL_PAD_X = 4;
         const LABEL_PAD_TOP = 4;
         const LABEL_PAD_BOTTOM = 2;
 
-        let label = workingInsideLabelsById.get(id);
+        let label = scenePresenceLabelsById.get(id);
         if (!label) {
           label = new FabricText(labelText, {
             selectable: false,
@@ -901,11 +941,11 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
             originY: "top"
           });
           canvas.add(label);
-          workingInsideLabelsById.set(id, label);
+          scenePresenceLabelsById.set(id, label);
         }
         if (label.text !== labelText) label.set({ text: labelText });
 
-        let labelBg = workingInsideLabelBgsById.get(id);
+        let labelBg = scenePresenceLabelBgsById.get(id);
         if (!labelBg) {
           labelBg = new Rect({
             selectable: false,
@@ -915,7 +955,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
             originY: "top"
           });
           canvas.add(labelBg);
-          workingInsideLabelBgsById.set(id, labelBg);
+          scenePresenceLabelBgsById.set(id, labelBg);
         }
 
         const bgWidth = label.width + LABEL_PAD_X * 2;
@@ -923,7 +963,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
         const outside = item.height <= LABEL_OUTSIDE_THRESHOLD;
         const bgTop = outside ? item.top - bgHeight : item.top;
 
-        labelBg.set({ left: item.left, top: bgTop, width: bgWidth, height: bgHeight, fill: editor.color });
+        labelBg.set({ left: item.left, top: bgTop, width: bgWidth, height: bgHeight, fill: color });
         labelBg.setCoords();
 
         label.set({ left: item.left + LABEL_PAD_X, top: bgTop + LABEL_PAD_TOP });
@@ -946,12 +986,12 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       labelBgsByClient.clear();
       itemOverlaysById.forEach((path) => canvas.remove(path));
       itemOverlaysById.clear();
-      workingInsideBordersById.forEach((path) => canvas.remove(path));
-      workingInsideBordersById.clear();
-      workingInsideLabelsById.forEach((label) => canvas.remove(label));
-      workingInsideLabelsById.clear();
-      workingInsideLabelBgsById.forEach((bg) => canvas.remove(bg));
-      workingInsideLabelBgsById.clear();
+      scenePresenceBordersById.forEach((path) => canvas.remove(path));
+      scenePresenceBordersById.clear();
+      scenePresenceLabelsById.forEach((label) => canvas.remove(label));
+      scenePresenceLabelsById.clear();
+      scenePresenceLabelBgsById.forEach((bg) => canvas.remove(bg));
+      scenePresenceLabelBgsById.clear();
       canvas.requestRenderAll();
     };
     (canvas as any)._presenceOverlays = { clear: clearOverlays, redraw: drawOverlays };
@@ -997,9 +1037,9 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       overlaysByClient.forEach((rect) => canvas.remove(rect));
       labelsByClient.forEach((label) => canvas.remove(label));
       itemOverlaysById.forEach((rect) => canvas.remove(rect));
-      workingInsideBordersById.forEach((path) => canvas.remove(path));
-      workingInsideLabelsById.forEach((label) => canvas.remove(label));
-      workingInsideLabelBgsById.forEach((bg) => canvas.remove(bg));
+      scenePresenceBordersById.forEach((path) => canvas.remove(path));
+      scenePresenceLabelsById.forEach((label) => canvas.remove(label));
+      scenePresenceLabelBgsById.forEach((bg) => canvas.remove(bg));
     };
   }, [collabSchema]);
 

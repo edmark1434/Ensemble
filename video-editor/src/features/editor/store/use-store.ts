@@ -89,8 +89,8 @@ interface ITimelineStore {
   saveStatus?: "saved"|"saving"|"error";
   compactStatus?: "idle"|"compacting"|"error";
 
-  workingInsideByItemId: Map<string, RemoteActiveEditor>;
-  setWorkingInsideByItemId: (map: Map<string, RemoteActiveEditor>) => void;
+  workingInsideByItemId: Map<string, RemoteActiveEditor[]>;
+  setWorkingInsideByItemId: (map: Map<string, RemoteActiveEditor[]>) => void;
 }
 
 export interface IMarker {

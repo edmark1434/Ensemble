@@ -230,24 +230,28 @@ export function clearWorkingInsideScene(awareness: awarenessProtocol.Awareness) 
   awareness.setLocalStateField(WORKING_INSIDE_FIELD, null);
 }
 
-// Fires with a per-scene-item map of which remote client (if any) currently
-// has that item's block open for editing.
+// Fires with a per-scene-item list of every remote client currently inside
+// that item's block editor — plural, since more than one person can be in
+// the same scene at once and the presence label needs an accurate count.
 export function subscribeToRemoteWorkingInside(
   awareness: awarenessProtocol.Awareness,
-  onChange: (byItemId: Map<string, RemoteActiveEditor>) => void,
+  onChange: (byItemId: Map<string, RemoteActiveEditor[]>) => void,
 ): () => void {
   const handleChange = () => {
-    const result = new Map<string, RemoteActiveEditor>();
+    const result = new Map<string, RemoteActiveEditor[]>();
     awareness.getStates().forEach((state, clientId) => {
       if (clientId === awareness.clientID) return;
       const working = state?.[WORKING_INSIDE_FIELD] as WorkingInsideState | null | undefined;
       if (!working?.sceneItemId) return;
-      result.set(working.sceneItemId, {
+      const editor: RemoteActiveEditor = {
         clientId,
         color: getColorForIdentity(working.userId, clientId),
         userId: working.userId,
         userName: working.userName,
-      });
+      };
+      const list = result.get(working.sceneItemId);
+      if (list) list.push(editor);
+      else result.set(working.sceneItemId, [editor]);
     });
     onChange(result);
   };
