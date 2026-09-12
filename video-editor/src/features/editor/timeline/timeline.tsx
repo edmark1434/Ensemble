@@ -984,6 +984,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
 
     const unsubWorkingInside = subscribeToRemoteWorkingInside(collabSchema.awareness, (byItemId) => {
       workingInsideByItemId = byItemId;
+      useStore.getState().setWorkingInsideByItemId(byItemId);
       drawOverlays();
     });
 
@@ -991,6 +992,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       unsubTransforms();
       unsubSelections();
       unsubWorkingInside();
+      useStore.getState().setWorkingInsideByItemId(new Map());
       resetTimers.forEach(clearTimeout);
       overlaysByClient.forEach((rect) => canvas.remove(rect));
       labelsByClient.forEach((label) => canvas.remove(label));

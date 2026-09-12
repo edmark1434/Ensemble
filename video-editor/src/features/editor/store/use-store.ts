@@ -17,6 +17,7 @@ import {nanoid} from "nanoid";
 import StateManager from "@designcombo/state";
 import * as Y from "yjs";
 import { CollabSchema, markerToY } from "../collab/ydoc-schema";
+import {RemoteActiveEditor} from "@/features/editor/collab/live-transform";
 
 interface ITimelineStore {
   duration: number;
@@ -87,6 +88,9 @@ interface ITimelineStore {
 
   saveStatus?: "saved"|"saving"|"error";
   compactStatus?: "idle"|"compacting"|"error";
+
+  workingInsideByItemId: Map<string, RemoteActiveEditor>;
+  setWorkingInsideByItemId: (map: Map<string, RemoteActiveEditor>) => void;
 }
 
 export interface IMarker {
@@ -237,6 +241,9 @@ const useStore = create<ITimelineStore>((set, get) => ({
   openScene: (blockId, itemId, name) =>
     set({ activeSceneBlockId: blockId, activeSceneItemId: itemId, currentBlockName: name ?? null }),
   closeScene: () => set({ activeSceneBlockId: null, activeSceneItemId: null, currentBlockName: null }),
+
+  workingInsideByItemId: new Map(),
+  setWorkingInsideByItemId: (workingInsideByItemId) => set({ workingInsideByItemId }),
 }));
 
 export default useStore;

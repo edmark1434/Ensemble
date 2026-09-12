@@ -98,6 +98,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
     closeScene,
     saveStatus,
     compactStatus,
+    workingInsideByItemId,
   } = useStore();
   const isSaving = saveStatus === "saving" || compactStatus === "compacting";
   const isLargeScreen = useIsLargeScreen();
@@ -235,6 +236,9 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
     ? Math.max(...activeIds.map(id => trackItemsMap[id]?.display.to ?? 0)) -
     Math.min(...activeIds.map(id => trackItemsMap[id]?.display.from ?? 0))
     : null;
+  const hasProtectedSceneItem = activeItems.some(
+    (item) => isSceneItem(item.type) && workingInsideByItemId.has(item.id)
+  );
 
   const isHidden = activeItems.length > 0 && activeItems
     .filter(item => item.type !== "audio")
@@ -631,10 +635,13 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                 <TooltipTrigger asChild>
                   <Button
                     disabled={!activeIds.length || isLocked}
-                    onClick={doActiveDelete}
+                    onClick={!hasProtectedSceneItem ? doActiveDelete : undefined}
                     variant={"ghost"}
                     size={"icon"}
-                    className="disabled:opacity-0 disabled:pointer-events-none"
+                    className={cn(
+                      "disabled:opacity-0 disabled:pointer-events-none",
+                      hasProtectedSceneItem && "opacity-50 cursor-default"
+                    )}
                   >
                     <Trash size={16} />
                   </Button>
@@ -643,7 +650,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                   side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
                   className={"flex gap-2 items-center"}
                 >
-                  Delete <Kbd>Del</Kbd>
+                  {hasProtectedSceneItem ? "Someone's working inside" : (<>Delete <Kbd>Del</Kbd></>)}
                 </TooltipContent>
               </Tooltip>
             )}
