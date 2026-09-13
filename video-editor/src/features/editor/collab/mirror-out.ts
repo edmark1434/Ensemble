@@ -171,6 +171,7 @@ export function setupMirrorOutFromStore(
   schema: CollabSchema,
   localOrigin: string,
   syncGuard: SyncGuard,
+  isProjectTarget: boolean,
 ): () => void {
   return useStore.subscribe((state, prevState) => {
     if (syncGuard.isApplyingRemote) return;
@@ -178,7 +179,10 @@ export function setupMirrorOutFromStore(
     const fpsChanged = state.fps !== prevState.fps;
     const sizeChanged = state.size !== prevState.size;
     const backgroundChanged = state.background !== prevState.background;
-    const nameChanged = state.projectName !== prevState.projectName;
+    // A block/scene doc never owns the project's name — writing it here
+    // while inside a block would persist the project's title onto the
+    // block, which mirror-in would then read back as the block's own name.
+    const nameChanged = isProjectTarget && state.projectName !== prevState.projectName;
 
     if (!fpsChanged && !sizeChanged && !backgroundChanged && !nameChanged) return;
 

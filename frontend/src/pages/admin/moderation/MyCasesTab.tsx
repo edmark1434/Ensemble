@@ -370,6 +370,7 @@ export default function MyCasesTab({
           entityName={identityUser.name}
           accountId={identityUser.accountId}
           verification={identityUser.verification}
+          loadDiditDetails
           onClose={closeDetail}
           onChanged={() => {
             closeDetail();

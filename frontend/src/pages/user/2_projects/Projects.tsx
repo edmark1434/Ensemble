@@ -1,4 +1,5 @@
-import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
     FolderKanban,
     Plus,
@@ -350,23 +351,27 @@ const teamProjects: TeamProject[] = [
     id: 17,
     name: "Documentary Project",
     sharedBy: "Marcus Thompson",
-    lastUpdated: "3 hours ago",
+    type: "video",
     size: "4.5GB",
+    duration: "45:00",
+    lastUpdated: "1 week ago",
     thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Documentary",
-    videoCount: 8
   },
   {
     id: 18,
     name: "Music Video - Indie Band",
     sharedBy: "Emma Watson",
-    lastUpdated: "Yesterday",
-    size: "1.8GB",
+    type: "video",
+    size: "2.3GB",
+    duration: "04:15",
+    lastUpdated: "5 days ago",
     thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Music+Video",
-    videoCount: 5
   },
 ];
 
-type TabType = "recent" | "personal" | "shared" | "contract" | "team";
+
+
+type TabType = "recent" | "personal" | "shared" | "team";
 type ViewType = "grid" | "compact";
 
 // Skeleton Components
@@ -398,17 +403,32 @@ const ProjectCardSkeleton = ({ view = "grid" }: { view?: ViewType }) => (
 
 const Projects: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [hoveredProject, setHoveredProject] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabType>("recent");
   const [viewMode, setViewMode] = useState<ViewType>("grid");
+  const [sortMethod, setSortMethod] = useState<"none" | "az" | "size">("none");
+  const [openTeamFolderId, setOpenTeamFolderId] = useState<number | null>(null);
+
+  let activeTab: TabType = "recent";
+  if (location.pathname.includes("/projects/personal")) {
+    activeTab = "personal";
+  } else if (location.pathname.includes("/projects/shared")) {
+    activeTab = "shared";
+  } else if (location.pathname.includes("/projects/team")) {
+    activeTab = "team";
+  }
 
   // Simulate loading
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 800);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    setOpenTeamFolderId(null);
+  }, [location.pathname]);
 
   const getTypeIcon = (type: Project["type"]) => {
     switch (type) {
@@ -432,16 +452,22 @@ const Projects: React.FC = () => {
     { id: "recent" as TabType, label: "Recent", icon: <Clock className="h-4 w-4" /> },
     { id: "personal" as TabType, label: "Personal", icon: <User className="h-4 w-4" /> },
     { id: "shared" as TabType, label: "Shared", icon: <Share2 className="h-4 w-4" /> },
-    
     { id: "team" as TabType, label: "Team", icon: <Users className="h-4 w-4" /> },
   ];
+
+  const handleTabClick = (tabId: TabType) => {
+    setOpenTeamFolderId(null);
+    if (tabId === "recent") navigate("/projects");
+    else if (tabId === "personal") navigate("/projects/personal");
+    else if (tabId === "shared") navigate("/projects/shared");
+    else if (tabId === "team") navigate("/projects/team");
+  };
 
   const getContent = () => {
     switch (activeTab) {
       case "recent": return recentProjects;
       case "personal": return personalProjects;
       case "shared": return sharedProjects;
-      case "contract": return contractProjects;
       case "team": return teamProjects;
       default: return [];
     }
@@ -485,13 +511,6 @@ const Projects: React.FC = () => {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 dark:from-dark-base via-transparent to-transparent" />
 
-        <div className="absolute left-3 top-3">
-          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${getTypeColor(project.type)}`}>
-            {getTypeIcon(project.type)}
-            <span className="capitalize">{project.type}</span>
-          </span>
-        </div>
-
         {project.duration && (
           <div className="absolute bottom-3 right-3">
             <span className="inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-zinc-300 backdrop-blur-sm">
@@ -505,7 +524,7 @@ const Projects: React.FC = () => {
           <div className="absolute bottom-3 left-3">
             <span className="inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-zinc-300 backdrop-blur-sm">
               <Users className="h-3 w-3" />
-              {project.sharedBy.split(" ")[0]}
+              Shared by {project.sharedBy.split(" ")[0]}
             </span>
           </div>
         )}
@@ -596,7 +615,7 @@ const Projects: React.FC = () => {
           </div>
           <div>{project.size}</div>
           {project.sharedBy && (
-            <span className="text-gray-400 dark:text-zinc-400">by {project.sharedBy.split(" ")[0]}</span>
+            <span className="text-gray-400 dark:text-zinc-400">Shared by {project.sharedBy.split(" ")[0]}</span>
           )}
         </div>
 
@@ -634,29 +653,30 @@ const Projects: React.FC = () => {
       className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-dark-surface/80 hover:scale-[1.02] cursor-pointer shadow-sm hover:shadow-md dark:shadow-none"
       onMouseEnter={() => setHoveredProject(project.id + 200)}
       onMouseLeave={() => setHoveredProject(null)}
-      onClick={() => navigate(`/projects/team/${project.id}`)}
+      onClick={() => setOpenTeamFolderId(project.id)}
     >
-      <div className="relative h-36 w-full overflow-hidden bg-blue-50 dark:bg-gradient-to-br dark:from-blue-500/20 dark:to-purple-500/20">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Folder className="h-20 w-20 text-blue-500/20 dark:text-blue-400/30" />
+      <div className="relative h-36 w-full p-2 bg-white dark:bg-white/5 border-b border-gray-200 dark:border-white/10">
+        <div className="h-full w-full grid grid-cols-2 grid-rows-2 gap-1.5">
+          <div className="bg-gray-300 dark:bg-gray-600 rounded flex items-center justify-center transition-transform group-hover:scale-[1.05]">
+            <div className="w-0 h-0 border-t-[4px] border-t-transparent border-l-[6px] border-l-black/70 dark:border-l-white/70 border-b-[4px] border-b-transparent ml-0.5" />
+          </div>
+          <div className="bg-amber-700/60 dark:bg-amber-700/50 rounded flex items-center justify-center transition-transform group-hover:scale-[1.05]">
+            <div className="w-0 h-0 border-t-[4px] border-t-transparent border-l-[6px] border-l-black/70 dark:border-l-white/70 border-b-[4px] border-b-transparent ml-0.5" />
+          </div>
+          <div className="bg-green-500/80 dark:bg-green-500/60 rounded flex items-center justify-center transition-transform group-hover:scale-[1.05]">
+            <div className="w-0 h-0 border-t-[4px] border-t-transparent border-l-[6px] border-l-black/70 dark:border-l-white/70 border-b-[4px] border-b-transparent ml-0.5" />
+          </div>
+          <div className="bg-orange-500/80 dark:bg-orange-500/60 rounded flex items-center justify-center transition-transform group-hover:scale-[1.05]">
+            <div className="w-0 h-0 border-t-[4px] border-t-transparent border-l-[6px] border-l-black/70 dark:border-l-white/70 border-b-[4px] border-b-transparent ml-0.5" />
+          </div>
         </div>
 
-        <div className="absolute bottom-2 right-2 flex -space-x-2">
-          <div className="h-8 w-8 rounded-md bg-white/80 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center border border-gray-200 dark:border-none">
-            <FileVideo className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          </div>
-          <div className="h-8 w-8 rounded-md bg-white/80 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center border border-gray-200 dark:border-none">
-            <FileVideo className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          </div>
-          <div className="h-8 w-8 rounded-md bg-white/80 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center border border-gray-200 dark:border-none">
-            <span className="text-[10px] text-gray-700 dark:text-white">+{project.videoCount}</span>
-          </div>
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
         <div className="absolute left-3 top-3">
-          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 dark:bg-blue-500/20 px-2 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-none">
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/90 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium text-white shadow-sm">
             <Users className="h-3 w-3" />
-            Team Project
+            Team Folder
           </span>
         </div>
 
@@ -684,7 +704,10 @@ const Projects: React.FC = () => {
         </div>
 
         <div className="mt-3 flex items-center gap-2 border-t border-gray-100 dark:border-white/10 pt-3">
-          <button className="flex items-center gap-1 rounded-lg bg-purple-50 dark:bg-purple-500/20 px-2.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 transition hover:bg-purple-100 dark:hover:bg-purple-500/30 border border-purple-200 dark:border-none">
+          <button 
+            onClick={(e) => { e.stopPropagation(); setOpenTeamFolderId(project.id); }}
+            className="flex items-center gap-1 rounded-lg bg-purple-50 dark:bg-purple-500/20 px-2.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 transition hover:bg-purple-100 dark:hover:bg-purple-500/30 border border-purple-200 dark:border-none"
+          >
             <FolderKanban className="h-3 w-3" />
             Open Folder
           </button>
@@ -708,10 +731,23 @@ const Projects: React.FC = () => {
     <div
       key={project.id}
       className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-3 transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-dark-surface/80 cursor-pointer shadow-sm hover:shadow-md dark:shadow-none"
-      onClick={() => navigate(`/projects/team/${project.id}`)}
+      onClick={() => setOpenTeamFolderId(project.id)}
     >
-      <div className="relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-blue-50 dark:bg-gradient-to-br dark:from-blue-500/20 dark:to-purple-500/20 flex items-center justify-center border border-blue-100 dark:border-none">
-        <Folder className="h-8 w-8 text-blue-500/50 dark:text-blue-400/50" />
+      <div className="relative h-16 w-24 flex-shrink-0 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg p-1">
+        <div className="h-full w-full grid grid-cols-2 grid-rows-2 gap-0.5">
+          <div className="bg-gray-300 dark:bg-gray-600 rounded-sm flex items-center justify-center">
+            <div className="w-0 h-0 border-t-[2px] border-t-transparent border-l-[3px] border-l-black/70 dark:border-l-white/70 border-b-[2px] border-b-transparent ml-px" />
+          </div>
+          <div className="bg-amber-700/60 dark:bg-amber-700/50 rounded-sm flex items-center justify-center">
+            <div className="w-0 h-0 border-t-[2px] border-t-transparent border-l-[3px] border-l-black/70 dark:border-l-white/70 border-b-[2px] border-b-transparent ml-px" />
+          </div>
+          <div className="bg-green-500/80 dark:bg-green-500/60 rounded-sm flex items-center justify-center">
+            <div className="w-0 h-0 border-t-[2px] border-t-transparent border-l-[3px] border-l-black/70 dark:border-l-white/70 border-b-[2px] border-b-transparent ml-px" />
+          </div>
+          <div className="bg-orange-500/80 dark:bg-orange-500/60 rounded-sm flex items-center justify-center">
+            <div className="w-0 h-0 border-t-[2px] border-t-transparent border-l-[3px] border-l-black/70 dark:border-l-white/70 border-b-[2px] border-b-transparent ml-px" />
+          </div>
+        </div>
       </div>
 
       <div className="flex-1 min-w-0">
@@ -730,7 +766,10 @@ const Projects: React.FC = () => {
         </div>
       </div>
 
-      <button className="flex items-center gap-1 rounded-lg bg-purple-50 dark:bg-purple-500/20 px-3 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 transition hover:bg-purple-100 dark:hover:bg-purple-500/30 border border-purple-200 dark:border-none">
+      <button 
+        onClick={(e) => { e.stopPropagation(); setOpenTeamFolderId(project.id); }}
+        className="flex items-center gap-1 rounded-lg bg-purple-50 dark:bg-purple-500/20 px-3 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 transition hover:bg-purple-100 dark:hover:bg-purple-500/30 border border-purple-200 dark:border-none"
+      >
         <FolderKanban className="h-3 w-3" />
         Open
       </button>
@@ -738,19 +777,65 @@ const Projects: React.FC = () => {
   );
 
   const renderContent = () => {
-    const content = getContent();
+    let content = getContent();
+
+    const parseSize = (sizeStr: string) => {
+      let multiplier = 1;
+      if (sizeStr.includes("GB")) multiplier = 1024;
+      return parseFloat(sizeStr) * multiplier;
+    };
+
+    content = [...content].sort((a: any, b: any) => {
+      if (sortMethod === "az") {
+        return (a.name || "").localeCompare(b.name || "");
+      } else if (sortMethod === "size") {
+        return parseSize(b.size || "0") - parseSize(a.size || "0");
+      }
+      return 0; // none
+    });
 
     if (activeTab === "team") {
+      if (openTeamFolderId) {
+        // Mocking videos inside the folder using some existing projects
+        const folderVideos = personalProjects.slice(0, 4);
+        
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 pb-2 border-b border-gray-200 dark:border-white/10 mb-4">
+              <button 
+                onClick={() => setOpenTeamFolderId(null)}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition-colors bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg hover:bg-gray-50 dark:hover:bg-white/10 shadow-sm"
+              >
+                ← Back to Folders
+              </button>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                {teamProjects.find(p => p.id === openTeamFolderId)?.name || "Team Folder"}
+              </h3>
+            </div>
+            
+            {viewMode === "compact" ? (
+              <div className="space-y-3">
+                {folderVideos.map(renderCompactProjectCard)}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                {folderVideos.map(renderProjectCard)}
+              </div>
+            )}
+          </div>
+        );
+      }
+
       if (viewMode === "compact") {
         return (
           <div className="space-y-3">
-            {(teamProjects as TeamProject[]).map(renderCompactTeamFolderCard)}
+            {(content as TeamProject[]).map(renderCompactTeamFolderCard)}
           </div>
         );
       }
       return (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {(teamProjects as TeamProject[]).map(renderTeamFolderCard)}
+          {(content as TeamProject[]).map(renderTeamFolderCard)}
         </div>
       );
     }
@@ -771,43 +856,7 @@ const Projects: React.FC = () => {
     );
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-        <UserHeader pageTitle="Projects" credits={1250} />
-        <div className="mx-auto max-w-7xl p-6 md:p-8">
-          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="h-10 w-40 animate-pulse rounded-full bg-gray-200 dark:bg-white/10" />
-            <div className="flex gap-3">
-              <div className="h-10 w-64 animate-pulse rounded-full bg-gray-100 dark:bg-white/5" />
-              <div className="h-10 w-24 animate-pulse rounded-full bg-gray-100 dark:bg-white/5" />
-            </div>
-          </div>
-          <div className="mb-6 flex flex-wrap gap-2 border-b border-gray-200 dark:border-white/10 pb-2">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-10 w-24 animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
-            ))}
-          </div>
-          <div className="flex justify-end mb-4">
-            <div className="h-10 w-20 animate-pulse rounded-full bg-gray-200 dark:bg-white/10" />
-          </div>
-          {viewMode === "compact" ? (
-            <div className="space-y-3">
-              {[1, 2, 3, 4].map((i) => (
-                <ProjectCardSkeleton key={i} view="compact" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <ProjectCardSkeleton key={i} view="grid" />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
@@ -816,100 +865,171 @@ const Projects: React.FC = () => {
       <div className="mx-auto max-w-7xl p-6 md:p-8">
 
         {/* Action Bar */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
           <button
             onClick={() => navigate("/projects/select")}
-            className="group flex items-center gap-2 rounded-full bg-gray-900 dark:bg-white px-5 py-2.5 text-sm font-medium text-white dark:text-black shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl active:scale-95 active:bg-gradient-to-r active:from-cyan-500 active:via-yellow-500 active:to-purple-600 active:text-white"
+            className="shrink-0 flex items-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group"
           >
             <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
             <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Create a Project</span>
           </button>
 
-          <div className="flex gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-zinc-500" />
-              <input
-                type="text"
-                placeholder="Search projects..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="rounded-full border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 pl-9 pr-4 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-              />
-            </div>
-            <button className="flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 px-4 py-2 text-sm text-gray-600 dark:text-zinc-400 transition hover:border-gray-300 dark:hover:border-white/30 hover:text-gray-900 dark:hover:text-white">
-              <Filter className="h-4 w-4" />
-              Filter
-              <ChevronDown className="h-3.5 w-3.5" />
-            </button>
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-zinc-500" />
+            <input
+              type="text"
+              placeholder="Search projects by title or keyword..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 pl-11 pr-4 py-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+            />
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="mb-6 flex flex-wrap gap-1 border-b border-gray-200 dark:border-white/10">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all duration-200 rounded-t-lg ${
-                activeTab === tab.id
-                  ? "text-blue-600 dark:text-blue-400 border-b-2 border-blue-500 bg-blue-50 dark:bg-blue-500/5"
-                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        {/* Tabs & View Toggle */}
+        <div className="mb-8 flex flex-wrap items-center justify-between border-b border-gray-200 dark:border-white/10 gap-4">
+          <div className="flex gap-1 relative">
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabClick(tab.id)}
+                  className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+                    isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
+                  }`}
+                >
+                  <span className="relative z-10 flex items-center gap-2">
+                    {tab.icon} {tab.label}
+                  </span>
 
-        {/* View Toggle and Header */}
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{getTabTitle()}</h2>
-            <p className="text-xs text-gray-500 dark:text-zinc-500">{getTabDescription()}</p>
+                  {isActive && (
+                    <>
+                      <motion.div
+                        layoutId="activeTabGlow"
+                        className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                      />
+                      <motion.div
+                        layoutId="activeTabUnderline"
+                        className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                      />
+                    </>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`rounded-md p-1.5 transition-all duration-200 ${
-                viewMode === "grid"
-                  ? "bg-blue-500 text-white"
-                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10"
-              }`}
-              title="Grid View"
-            >
-              <Grid3x3 className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setViewMode("compact")}
-              className={`rounded-md p-1.5 transition-all duration-200 ${
-                viewMode === "compact"
-                  ? "bg-blue-500 text-white"
-                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10"
-              }`}
-              title="Compact View"
-            >
-              <List className="h-4 w-4" />
-            </button>
+          <div className="py-2 flex items-center gap-4">
+            {/* Sort Toggle */}
+            <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1 mr-2">
+              <span className="text-xs font-medium text-gray-400 dark:text-zinc-500 px-2">Sort by:</span>
+              <button
+                onClick={() => setSortMethod("none")}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                  sortMethod === "none"
+                    ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
+                }`}
+              >
+                Default
+              </button>
+              <button
+                onClick={() => setSortMethod("az")}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                  sortMethod === "az"
+                    ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
+                }`}
+              >
+                A-Z
+              </button>
+              <button
+                onClick={() => setSortMethod("size")}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                  sortMethod === "size"
+                    ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
+                }`}
+              >
+                Size
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1">
+              <button
+                onClick={() => setViewMode("compact")}
+                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                  viewMode === "compact"
+                    ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
+                }`}
+              >
+                <List className="h-4 w-4" />
+                List View
+              </button>
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                  viewMode === "grid"
+                    ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
+                }`}
+              >
+                <Grid3x3 className="h-4 w-4" />
+                Grid View
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Content - Vertical Scrollable */}
-        <div className="max-h-[calc(100vh-300px)] overflow-y-auto pr-2 custom-scrollbar">
-          {renderContent()}
+        {/* Header */}
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{getTabTitle()}</h2>
+          <p className="text-xs text-gray-500 dark:text-zinc-500">{getTabDescription()}</p>
+        </div>
+
+        {/* Content */}
+        <div className="pb-10">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              {loading ? (
+                viewMode === "compact" ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4].map((i) => (
+                      <ProjectCardSkeleton key={i} view="compact" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                      <ProjectCardSkeleton key={i} view="grid" />
+                    ))}
+                  </div>
+                )
+              ) : (
+                renderContent()
+              )}
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         {/* Empty State */}
-        {getContent().length === 0 && (
+        {!loading && getContent().length === 0 && (
           <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-12 text-center">
             <FolderKanban className="mb-3 h-12 w-12 text-gray-400 dark:text-zinc-500" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No projects found</h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">
-              {activeTab === "contract"
-                ? "No active contracts yet. Start collaborating to create contracts."
-                : "Create your first project to get started"}
+              Create your first project to get started
             </p>
             <button
               onClick={() => navigate("/projects/select")}
@@ -921,22 +1041,7 @@ const Projects: React.FC = () => {
         )}
       </div>
 
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.15);
-          border-radius: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.25);
-        }
-      `}</style>
+
     </div>
   );
 };

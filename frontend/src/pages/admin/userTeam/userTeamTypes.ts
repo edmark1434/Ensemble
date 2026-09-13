@@ -62,6 +62,9 @@ export type CreditActivityItem = {
 
 export type VerificationDetail = {
   status: string;
+  hasVerificationUrl?: boolean;
+  verificationUrl?: string | null;
+  isTeam?: boolean;
   reverificationDueDays: number | null;
   expiresAt: string | null;
   isExpired: boolean;
@@ -118,6 +121,8 @@ export type AdminVerificationDetails = {
   accountType?: string | null;
   isTeam?: boolean;
   isVerified: boolean;
+  hasVerificationUrl?: boolean;
+  verificationUrl?: string | null;
   verificationStatus: string;
   kycStatus: string | null;
   verificationSessionId?: string;

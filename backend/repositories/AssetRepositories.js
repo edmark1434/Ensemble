@@ -152,7 +152,7 @@ const ASSET_SELECT = `
          media.thumbnails, media.thumbnail_count,
          media.bundle_files, media.bundle_file_count,
          media.project_links, media.project_link_count,
-         owner.display_name AS creator_name, owner.handle AS creator_handle,
+         owner.display_name AS creator_name, owner.handle AS creator_handle, owner_avatar.path AS creator_avatar_path,
          owner.account_id AS owner_account_id,
          (owner.account_id = $1) AS is_owner,
          purchase_access.is_purchased,
@@ -320,6 +320,7 @@ const ASSET_SELECT = `
   ) media ON TRUE
   JOIN users owner_user ON owner_user.user_id = media.owner_user_id
   JOIN accounts owner ON owner.account_id = owner_user.account_id
+    LEFT JOIN files owner_avatar ON owner_avatar.file_id = owner.avatar_file_id
   LEFT JOIN LATERAL (
     SELECT EXISTS (
       SELECT 1

@@ -17,6 +17,13 @@ import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
 import {TIMELINE_OFFSET_CANVAS_LEFT} from "@/features/editor/constants/constants";
 import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
 import type * as Y from "yjs";
+import {
+  makeSceneTrackItem,
+  makeSceneTrack,
+  isSceneItem,
+  SCENE_TYPE,
+  ISceneTrackItem,
+} from "../types/ensemble-scene";
 
 export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y.UndoManager, viewOnly?: boolean) {
   const viewOnlyRef = useRef(viewOnly);
@@ -28,6 +35,9 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
 
   const undoManagerRef = useRef(undoManager);
   undoManagerRef.current = undoManager;
+
+  const mKeyDownRef = useRef(false);
+  const mComboUsedRef = useRef(false);
 
   const applyScale = (newScale: ITimelineScaleState) => {
     const { fps, scale, timeline, playerRef } = useStore.getState();
@@ -60,7 +70,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
   };
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
+    const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (
         target instanceof HTMLInputElement ||
@@ -71,14 +81,14 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       const mod = e.ctrlKey || e.metaKey;
       const { activeIds, playerRef } = useStore.getState();
 
-      // open / close keyboard shortcuts dialog — no ScenePlayer equivalent, edit-mode only
+      // open / close keyboard shortcuts dialog
       if (!viewOnlyRef.current && mod && e.code === "Slash") {
         e.preventDefault();
         const { isShortcutsModalOpen, setShortcutsModalOpen } = useStore.getState();
         setShortcutsModalOpen(!isShortcutsModalOpen);
       }
 
-      // play / pause — mirrors the ScenePlayer play/pause button, always available
+      // play / pause
       if (e.code === "Space") {
         e.preventDefault()
         playerRef?.current?.isPlaying() ? playerRef?.current.pause() : playerRef?.current.play()
@@ -95,6 +105,39 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       if (!viewOnlyRef.current && e.code === "Delete") {
         if (!activeIds.length) return;
         dispatch(LAYER_DELETE);
+      }
+
+      // track M key hold state; if released without combining with an arrow,
+      // this fires as an add/remove marker toggle (see keyup effect below)
+      if (!e.repeat && !mod && !e.shiftKey && e.code === "KeyM") {
+        mKeyDownRef.current = true;
+        mComboUsedRef.current = false;
+      }
+
+      // jump to previous / next marker (hold M + left / right)
+      if (mKeyDownRef.current && (e.code === "ArrowLeft" || e.code === "ArrowRight")) {
+        e.preventDefault();
+        mComboUsedRef.current = true;
+        const { playerRef, fps, markers, duration } = useStore.getState();
+        const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
+
+        const sortedMarkers = [...markers]
+          .map((m) => ({ ...m, frame: Math.round((m.timeMs / 1000) * fps) }))
+          .sort((a, b) => a.frame - b.frame);
+
+        if (e.code === "ArrowLeft") {
+          const prevMarker = [...sortedMarkers].reverse().find((m) => m.frame < currentFrame);
+          const targetFrame = prevMarker ? prevMarker.frame : 0;
+          playerRef?.current?.seekTo(targetFrame);
+          scrollTimelineToFrame(targetFrame, prevMarker ? "marker" : "start", timelineOffsetXRef.current);
+        } else {
+          const lastFrame = Math.round((duration / 1000) * fps);
+          const nextMarker = sortedMarkers.find((m) => m.frame > currentFrame);
+          const targetFrame = nextMarker ? nextMarker.frame : lastFrame;
+          playerRef?.current?.seekTo(targetFrame);
+          scrollTimelineToFrame(targetFrame, nextMarker ? "marker" : "end", timelineOffsetXRef.current);
+        }
+        return;
       }
 
       // split
@@ -299,50 +342,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         }
       }
 
-      // add / remove marker — no equivalent control in ScenePlayer, edit-mode only
-      if (!viewOnlyRef.current && !mod && !e.shiftKey && e.code === "KeyM") {
-        e.preventDefault();
-        const { playerRef, fps, markers, addMarker, removeMarker } = useStore.getState();
-        const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
-        const timeMs = (currentFrame / fps) * 1000;
-        const existing = markers.find(m => Math.abs(m.timeMs - timeMs) < (1000 / fps - 1));
-        existing ? removeMarker(existing.id) : addMarker(timeMs);
-      }
-
-      // previous marker / jump to start — mirrors ScenePlayer's "jump to prev" button, always available
-      if (mod && e.shiftKey && e.code === "KeyM") {
-        e.preventDefault();
-        const { playerRef, fps, markers } = useStore.getState();
-        const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
-
-        const sortedMarkers = [...markers]
-          .map((m) => ({ ...m, frame: Math.round((m.timeMs / 1000) * fps) }))
-          .sort((a, b) => a.frame - b.frame);
-        const prevMarker = [...sortedMarkers].reverse().find((m) => m.frame < currentFrame);
-
-        const targetFrame = prevMarker ? prevMarker.frame : 0;
-        playerRef?.current?.seekTo(targetFrame);
-        scrollTimelineToFrame(targetFrame, prevMarker ? "marker" : "start", timelineOffsetXRef.current);
-      }
-
-      // next marker / jump to end — mirrors ScenePlayer's "jump to next" button, always available
-      if (!mod && e.shiftKey && e.code === "KeyM") {
-        e.preventDefault();
-        const { playerRef, fps, markers, duration } = useStore.getState();
-        const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
-        const lastFrame = Math.round((duration / 1000) * fps);
-
-        const sortedMarkers = [...markers]
-          .map((m) => ({ ...m, frame: Math.round((m.timeMs / 1000) * fps) }))
-          .sort((a, b) => a.frame - b.frame);
-        const nextMarker = sortedMarkers.find((m) => m.frame > currentFrame);
-
-        const targetFrame = nextMarker ? nextMarker.frame : lastFrame;
-        playerRef?.current?.seekTo(targetFrame);
-        scrollTimelineToFrame(targetFrame, nextMarker ? "marker" : "end", timelineOffsetXRef.current);
-      }
-
-      // jump to start — mirrors ScenePlayer's "jump to prev" button fallback, always available
+      // jump to start
       if (e.code === "Home") {
         e.preventDefault();
         const { playerRef } = useStore.getState();
@@ -350,7 +350,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         scrollTimelineToFrame(0, "start", timelineOffsetXRef.current);
       }
 
-      // jump to end — mirrors ScenePlayer's "jump to next" button fallback, always available
+      // jump to end
       if (e.code === "End") {
         e.preventDefault();
         const { playerRef, fps, duration } = useStore.getState();
@@ -359,7 +359,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         scrollTimelineToFrame(lastFrame, "end", timelineOffsetXRef.current);
       }
 
-      // fullscreen — mirrors the ScenePlayer fullscreen button, always available
+      // fullscreen
       if (!mod && !e.shiftKey && e.code === "KeyF") {
         e.preventDefault();
         if (!document.fullscreenElement) {
@@ -370,7 +370,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         }
       }
 
-      // mute preview — mirrors the ScenePlayer mute button, always available
+      // mute preview
       if (mod && !e.shiftKey && e.code === "KeyM") {
         e.preventDefault();
         const { playerRef, muted, setMuted } = useStore.getState();
@@ -378,9 +378,125 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         playerRef?.current?.setVolume(newMuted ? 0 : 1);
         setMuted(newMuted);
       }
+
+      // add scene
+      if (!viewOnlyRef.current && !mod && !e.shiftKey && e.code === "KeyS") {
+        e.preventDefault();
+        const { activeIds, trackItemsMap, trackItemIds, tracks, duration } = useStore.getState();
+        const activeItems = activeIds.map((id) => trackItemsMap[id]).filter(Boolean);
+        if (activeItems.some((item) => isSceneItem(item.type))) return;
+
+        const time = getCurrentTime();
+        const SCENE_DEFAULT_DURATION_MS = 5000;
+        const id = crypto.randomUUID();
+
+        const sceneItem: ISceneTrackItem = {
+          id,
+          type: SCENE_TYPE,
+          name: "Scene",
+          display: { from: time, to: time + SCENE_DEFAULT_DURATION_MS },
+          metadata: {},
+          details: {
+            blockId: crypto.randomUUID(),
+            name: "Scene",
+          },
+        };
+
+        let targetTrack = tracks.find(
+          (t) =>
+            isSceneItem(t.type) &&
+            !t.static &&
+            !t.items.some((itemId) => {
+              const other = trackItemsMap[itemId];
+              return (
+                !!other &&
+                other.display.from < sceneItem.display.to &&
+                other.display.to > sceneItem.display.from
+              );
+            }),
+        );
+
+        let nextTracks = tracks;
+        if (!targetTrack) {
+          targetTrack = makeSceneTrack({
+            id: crypto.randomUUID(),
+            type: SCENE_TYPE,
+            items: [],
+            metadata: {},
+            accepts: [SCENE_TYPE],
+            index: 0,
+            magnetic: false,
+            static: false,
+          });
+          nextTracks = [targetTrack, ...tracks.map((t) => ({ ...t, index: (t.index ?? 0) + 1 }))];
+        }
+
+        const targetTrackId = targetTrack.id;
+        nextTracks = nextTracks.map((t) =>
+          t.id === targetTrackId ? { ...t, items: [...t.items, id] } : t,
+        );
+
+        stateManager.updateState(
+          {
+            trackItemsMap: { ...trackItemsMap, [id]: makeSceneTrackItem(sceneItem) },
+            trackItemIds: [...trackItemIds, id],
+            tracks: nextTracks,
+            duration: Math.max(duration, sceneItem.display.to),
+          },
+          { updateHistory: true, kind: "update" },
+        );
+
+        // Fire-and-forget: the scene is already usable locally; if this hasn't
+        // landed by the time someone double-clicks in, there's just nothing to
+        // load yet, same as any other race between a write and a fast re-read.
+        const { projectId, size } = useStore.getState();
+        fetch("/api/blocks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            blockId: sceneItem.details.blockId,
+            projectId,
+            name: sceneItem.details.name,
+            width: size.width,
+            height: size.height,
+          }),
+        }).catch((err) => {
+          console.error("doAddScene: failed to create block record", err);
+        });
+      }
+
+      // go back from scene (back to home)
+      if (!viewOnlyRef.current && !mod && !e.shiftKey && e.code === "KeyH") {
+        e.preventDefault();
+        const { activeSceneBlockId, closeScene, saveStatus, compactStatus } = useStore.getState();
+        if (!activeSceneBlockId) return;
+        if (saveStatus === "saving" || compactStatus === "compacting") return;
+        stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+        closeScene();
+      }
     };
 
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== "KeyM") return;
+
+      if (mKeyDownRef.current && !mComboUsedRef.current && !viewOnlyRef.current) {
+        const { playerRef, fps, markers, addMarker, removeMarker } = useStore.getState();
+        const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
+        const timeMs = (currentFrame / fps) * 1000;
+        const existing = markers.find((m) => Math.abs(m.timeMs - timeMs) < (1000 / fps - 1));
+        existing ? removeMarker(existing.id) : addMarker(timeMs);
+      }
+
+      mKeyDownRef.current = false;
+      mComboUsedRef.current = false;
+    };
+
+    window.addEventListener("keyup", onKeyUp);
+    return () => window.removeEventListener("keyup", onKeyUp);
   }, []);
 }

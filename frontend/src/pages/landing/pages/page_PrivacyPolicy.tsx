@@ -1,4 +1,4 @@
-﻿import useGlobalState from "@/lib/global_state";
+import useGlobalState from "@/lib/global_state";
 import React, { useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Shield, Eye, Lock, Database, Globe, UserCheck } from "lucide-react";
@@ -73,7 +73,7 @@ const PagePrivacyPolicy: React.FC = () => {
         {/* Header Area */}
         <div style={{ marginBottom: 64 }}>
           <button
-            onClick={() => { playSoftClick(); navigate(-1); }}
+            onClick={() => { playSoftClick(); navigate('/'); }}
             style={{ background: "none", border: "none", color: theme === 'dark' ? "#7a8499" : "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 32, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
             onMouseEnter={(e: any) => { playHover(); e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827'; }}
             onMouseLeave={(e: any) => e.currentTarget.style.color = theme === 'dark' ? "#7a8499" : "#6b7280"}

@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { dispatch } from "@designcombo/events";
 import StateManager, {
   ACTIVE_SPLIT,
@@ -18,7 +19,8 @@ import {
   SquareSplitHorizontal,
   Trash,
   ZoomIn,
-  ZoomOut, EyeOff, LockOpen, Eye, VolumeOff, Volume2, Home, Scissors, ClipboardPaste
+  ZoomOut, EyeOff, LockOpen, Eye, VolumeOff, Volume2, Home, Scissors, ClipboardPaste,
+  Component, ArrowLeft
 } from "lucide-react";
 import {
   getFitZoomLevel,
@@ -30,12 +32,27 @@ import { useCurrentPlayerFrame } from "../hooks/use-current-frame";
 import { Slider } from "@/components/ui/slider";
 import { useEffect, useState } from "react";
 import useUpdateAnsestors from "../hooks/use-update-ansestors";
-import { ITimelineScaleState } from "@designcombo/types";
+import {ITimelineScaleState, ITrackItem} from "@designcombo/types";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
 import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
 import {timeMsToUnits} from "@designcombo/timeline";
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
 import {Kbd, KbdGroup} from "@/components/ui/kbd";
+import {
+  makeSceneTrackItem,
+  makeSceneTrack,
+  isSceneItem,
+  SCENE_TYPE,
+  ISceneTrackItem,
+} from "../types/ensemble-scene";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 
 const IconAddMarker = ({ size }: { size: number }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 2.5 24 24" fill="none" stroke="currentColor"
@@ -75,8 +92,15 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
     trackItemsMap,
     markers,
     addMarker,
-    removeMarker
+    removeMarker,
+    activeSceneBlockId,
+    currentBlockName,
+    closeScene,
+    saveStatus,
+    compactStatus,
+    workingInsideByItemId,
   } = useStore();
+  const isSaving = saveStatus === "saving" || compactStatus === "compacting";
   const isLargeScreen = useIsLargeScreen();
   useUpdateAnsestors({playing, playerRef});
 
@@ -89,6 +113,8 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
 
   const doActiveSplit = () => {
     if (activeIds.length !== 1) return;
+    if (activeItems.some(item => isSceneItem(item.type))) return;
+
     const time = getCurrentTime();
     dispatch(ACTIVE_SPLIT, { payload: {}, options: { time } });
     dispatch(LAYER_SELECT, { payload: { trackItemIds: [] } });
@@ -204,21 +230,24 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
   const isFull = timelineHeight >= window.innerHeight;
   const activeItems = activeIds.map(id => trackItemsMap[id]).filter(Boolean);
   const selectionStart = activeIds.length > 0
-      ? Math.min(...activeIds.map(id => trackItemsMap[id]?.display.from ?? 0))
-      : null;
+    ? Math.min(...activeIds.map(id => trackItemsMap[id]?.display.from ?? 0))
+    : null;
   const selectionDuration = activeIds.length > 0
-      ? Math.max(...activeIds.map(id => trackItemsMap[id]?.display.to ?? 0)) -
-      Math.min(...activeIds.map(id => trackItemsMap[id]?.display.from ?? 0))
-      : null;
+    ? Math.max(...activeIds.map(id => trackItemsMap[id]?.display.to ?? 0)) -
+    Math.min(...activeIds.map(id => trackItemsMap[id]?.display.from ?? 0))
+    : null;
+  const hasProtectedSceneItem = activeItems.some(
+    (item) => isSceneItem(item.type) && workingInsideByItemId.has(item.id)
+  );
 
   const isHidden = activeItems.length > 0 && activeItems
-      .filter(item => item.type !== "audio")
-      .every(item => item.details?.hidden === true);
+    .filter(item => item.type !== "audio")
+    .every(item => item.details?.hidden === true);
   const isMuted = activeItems.length > 0 && activeItems
-      .filter(item => item.type === "audio" || item.type === "video")
-      .every(item => item.details?.volume === 0);
+    .filter(item => item.type === "audio" || item.type === "video" || isSceneItem(item.type))
+    .every(item => item.details?.volume === 0);
   const isLocked = activeItems.length > 0 && activeItems
-      .every(item => item.details?.locked === true);
+    .every(item => item.details?.locked === true);
 
   const toggleItemHide = () => {
     const newHidden = !isHidden;
@@ -235,7 +264,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
     const newVolume = isMuted ? 100 : 0;
     const payload = activeIds.reduce((acc, id) => {
       const type = trackItemsMap[id]?.type;
-      if (type !== "audio" && type !== "video") return acc;
+      if (type !== "audio" && type !== "video" && !isSceneItem(type ?? "")) return acc;
       acc[id] = { details: { volume: newVolume } };
       return acc;
     }, {} as Record<string, any>);
@@ -267,6 +296,93 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
 
   const isTransitionSelected = activeIds.length > 0 && activeItems.length === 0;
 
+  const doAddScene = () => {
+    const { trackItemsMap, trackItemIds, tracks, duration } = useStore.getState();
+    const time = getCurrentTime();
+    const SCENE_DEFAULT_DURATION_MS = 5000;
+    const id = crypto.randomUUID();
+
+    const sceneItem: ISceneTrackItem = {
+      id,
+      type: SCENE_TYPE,
+      name: "Scene",
+      display: { from: time, to: time + SCENE_DEFAULT_DURATION_MS },
+      metadata: {},
+      details: {
+        blockId: crypto.randomUUID(),
+        name: "Scene",
+      },
+    };
+
+    let targetTrack = tracks.find(
+      (t) =>
+        isSceneItem(t.type) &&
+        !t.static &&
+        !t.items.some((itemId) => {
+          const other = trackItemsMap[itemId];
+          return (
+            !!other &&
+            other.display.from < sceneItem.display.to &&
+            other.display.to > sceneItem.display.from
+          );
+        }),
+    );
+
+    let nextTracks = tracks;
+    if (!targetTrack) {
+      targetTrack = makeSceneTrack({
+        id: crypto.randomUUID(),
+        type: SCENE_TYPE,
+        items: [],
+        metadata: {},
+        accepts: [SCENE_TYPE],
+        index: 0,
+        magnetic: false,
+        static: false,
+      });
+      nextTracks = [targetTrack, ...tracks.map((t) => ({ ...t, index: (t.index ?? 0) + 1 }))];
+    }
+
+    const targetTrackId = targetTrack.id;
+    nextTracks = nextTracks.map((t) =>
+      t.id === targetTrackId ? { ...t, items: [...t.items, id] } : t,
+    );
+
+    stateManager.updateState(
+      {
+        trackItemsMap: { ...trackItemsMap, [id]: makeSceneTrackItem(sceneItem) },
+        trackItemIds: [...trackItemIds, id],
+        tracks: nextTracks,
+        duration: Math.max(duration, sceneItem.display.to),
+      },
+      { updateHistory: true, kind: "update" },
+    );
+
+    // Fire-and-forget: the scene is already usable locally; if this hasn't
+    // landed by the time someone double-clicks in, there's just nothing to
+    // load yet, same as any other race between a write and a fast re-read.
+    const { projectId, size } = useStore.getState();
+    fetch("/api/blocks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        blockId: sceneItem.details.blockId,
+        projectId,
+        name: sceneItem.details.name,
+        width: size.width,
+        height: size.height,
+      }),
+    }).catch((err) => {
+      console.error("doAddScene: failed to create block record", err);
+    });
+  };
+
+  const goHome = () => {
+    if (isSaving) return;
+    stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+    closeScene();
+  };
+
   return (
     <div
       id="timeline-header"
@@ -297,15 +413,25 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
           }}
         >
           <div className="flex px-2 pr-4 gap-1 items-center">
-            {!(activeIds.length > 0) && (
-              <Button
-                onClick={doActiveDelete}
-                variant={"secondary"}
-                size={"sm"}
-                className="disabled:opacity-0 disabled:pointer-events-none mr-1"
-              >
-                Home
-              </Button>
+            {activeSceneBlockId && (
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={!isSaving ? goHome : undefined}
+                    variant={"ghost"}
+                    size={"icon"}
+                    className={isSaving ? "opacity-50 cursor-default" : undefined}
+                  >
+                    <ArrowLeft size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  {isSaving ? "Saving…" : (<>Go back <Kbd>H</Kbd></>)}
+                </TooltipContent>
+              </Tooltip>
             )}
 
             {activeIds.length > 0 && !isTransitionSelected && (
@@ -331,11 +457,11 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button
-                      disabled={!activeIds.length || isLocked}
-                      onClick={toggleItemHide}
-                      variant={isHidden ? "secondary" : "ghost"}
-                      size={"icon"}
-                      className={`disabled:opacity-0 disabled:pointer-events-none ${isHidden ? "text-primary hover:text-primary" : ""}`}
+                    disabled={!activeIds.length || isLocked}
+                    onClick={toggleItemHide}
+                    variant={isHidden ? "secondary" : "ghost"}
+                    size={"icon"}
+                    className={`disabled:opacity-0 disabled:pointer-events-none ${isHidden ? "text-primary hover:text-primary" : ""}`}
                   >
                     {isHidden ? <EyeOff size={16} /> : <Eye size={16} />}
                   </Button>
@@ -346,51 +472,58 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
               </Tooltip>
             )}
 
-            {activeItems.some(item => item.type === "audio" || item.type === "video") && !isLocked && (
-              <Tooltip delayDuration={10}>
-                <TooltipTrigger asChild>
-                  <Button
+            {activeItems.some(item =>
+                item.type === "audio" ||
+                item.type === "video" ||
+                isSceneItem(item.type))
+              && !isLocked && (
+                <Tooltip delayDuration={10}>
+                  <TooltipTrigger asChild>
+                    <Button
                       disabled={!activeIds.length || isLocked}
                       onClick={toggleItemMute}
                       variant={isMuted ? "secondary" : "ghost"}
                       size={"icon"}
                       className={`disabled:opacity-0 disabled:pointer-events-none ${isMuted ? "text-primary hover:text-primary" : ""}`}
-                  >
-                    {isMuted ? <VolumeOff size={16} /> : <Volume2 size={16} />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                  {isMuted ? "Unmute" : "Mute"}
-                </TooltipContent>
-              </Tooltip>
-            )}
+                    >
+                      {isMuted ? <VolumeOff size={16} /> : <Volume2 size={16} />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                    {isMuted ? "Unmute" : "Mute"}
+                  </TooltipContent>
+                </Tooltip>
+              )}
 
-            {activeIds.length === 1 && !isLocked && !isTransitionSelected && (
-              <Tooltip delayDuration={10}>
-                <TooltipTrigger asChild>
-                  <Button
-                    disabled={!activeIds.length || isLocked}
-                    onClick={doActiveSplit}
-                    variant={"ghost"}
-                    size={"icon"}
-                    className="disabled:opacity-0 disabled:pointer-events-none"
+            {activeIds.length === 1 && !isLocked
+              && !isTransitionSelected
+              && !activeItems.some(item => isSceneItem(item.type))
+              && (
+                <Tooltip delayDuration={10}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      disabled={!activeIds.length || isLocked}
+                      onClick={doActiveSplit}
+                      variant={"ghost"}
+                      size={"icon"}
+                      className="disabled:opacity-0 disabled:pointer-events-none"
+                    >
+                      <SquareSplitHorizontal size={16} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                    className={"flex gap-2 items-center"}
                   >
-                    <SquareSplitHorizontal size={16} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
-                  className={"flex gap-2 items-center"}
-                >
-                  Split
-                  <KbdGroup>
-                    <Kbd>Ctrl</Kbd>
-                    <span>+</span>
-                    <Kbd>B</Kbd>
-                  </KbdGroup>
-                </TooltipContent>
-              </Tooltip>
-            )}
+                    Split
+                    <KbdGroup>
+                      <Kbd>Ctrl</Kbd>
+                      <span>+</span>
+                      <Kbd>B</Kbd>
+                    </KbdGroup>
+                  </TooltipContent>
+                </Tooltip>
+              )}
 
             {activeIds.length > 0 && !isTransitionSelected && (
               <Tooltip delayDuration={10}>
@@ -502,10 +635,13 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                 <TooltipTrigger asChild>
                   <Button
                     disabled={!activeIds.length || isLocked}
-                    onClick={doActiveDelete}
+                    onClick={!hasProtectedSceneItem ? doActiveDelete : undefined}
                     variant={"ghost"}
                     size={"icon"}
-                    className="disabled:opacity-0 disabled:pointer-events-none"
+                    className={cn(
+                      "disabled:opacity-0 disabled:pointer-events-none",
+                      hasProtectedSceneItem && "opacity-50 cursor-default"
+                    )}
                   >
                     <Trash size={16} />
                   </Button>
@@ -514,7 +650,23 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                   side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
                   className={"flex gap-2 items-center"}
                 >
-                  Delete <Kbd>Del</Kbd>
+                  {hasProtectedSceneItem ? "Someone's working inside" : (<>Delete <Kbd>Del</Kbd></>)}
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {!activeSceneBlockId && !activeItems.some(item => isSceneItem(item.type)) && (
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button onClick={doAddScene} variant={"ghost"} size={"icon"}>
+                    <Component size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  Add scene <Kbd>S</Kbd>
                 </TooltipContent>
               </Tooltip>
             )}
@@ -540,17 +692,58 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
           </div>
 
           <div className="flex items-center justify-center gap-1">
-            {/*transferred to scene container*/}
+            {!(activeIds.length > 0) && (
+              <Breadcrumb>
+                <BreadcrumbList className="flex-nowrap">
+                  <BreadcrumbItem>
+                    {activeSceneBlockId ? (
+                      <Tooltip delayDuration={10}>
+                        <TooltipTrigger asChild>
+                          <BreadcrumbLink asChild>
+                            <button
+                              onClick={!isSaving ? goHome : undefined}
+                              className={cn(
+                                "text-sm hover:text-primary",
+                                isSaving && "opacity-50 cursor-default hover:text-inherit"
+                              )}
+                            >
+                              Home
+                            </button>
+                          </BreadcrumbLink>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" align="center" sideOffset={1} className={"flex gap-2 items-center"}>
+                          {isSaving ? "Saving…" : (<>Go home <Kbd>H</Kbd></>)}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <BreadcrumbPage className="text-sm font-semibold"></BreadcrumbPage>
+                    )}
+                  </BreadcrumbItem>
+
+                  {activeSceneBlockId && (
+                    <>
+                      <BreadcrumbSeparator />
+                      <BreadcrumbItem>
+                        <BreadcrumbPage className="text-sm font-semibold flex items-center gap-1.5">
+                          <Component size={14} />
+                          {currentBlockName || "Scene"}
+                        </BreadcrumbPage>
+                      </BreadcrumbItem>
+                    </>
+                  )}
+                </BreadcrumbList>
+              </Breadcrumb>
+            )}
           </div>
 
           <div className="flex items-center justify-end px-2 pl-4 gap-1">
             <ZoomControl
-                scale={scale}
-                onChangeTimelineScale={changeScale}
-                duration={duration}
-                isFull={isFull}
-                selectionStart={selectionStart}
-                selectionDuration={selectionDuration}
+              scale={scale}
+              onChangeTimelineScale={changeScale}
+              duration={duration}
+              isFull={isFull}
+              selectionStart={selectionStart}
+              selectionDuration={selectionDuration}
             />
 
             <Tooltip delayDuration={10}>
@@ -613,8 +806,8 @@ const ZoomControl = ({
     Promise.resolve().then(() => {
       const { timeline } = useStore.getState();
       const scrollLeft = selectionStart !== null
-          ? timeMsToUnits(selectionStart, fitZoom.zoom)
-          : 0;
+        ? timeMsToUnits(selectionStart, fitZoom.zoom)
+        : 0;
       timeline?.scrollTo({ scrollLeft: Math.max(0, scrollLeft) });
     });
   };

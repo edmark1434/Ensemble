@@ -258,8 +258,8 @@ export default function RouteMiddleware() {
     }, [isCheckingSession, isLocalSignOutTransition, resolvedUser, onboardingPath]);
 
     const shouldAutoRedirect = useMemo(() => {
-        return isPublicRoute;
-    }, [isPublicRoute]);
+        return basePublicRoutes.includes(location.pathname);
+    }, [location.pathname]);
 
     useEffect(() => {
         if (!redirectPath || !shouldAutoRedirect) {

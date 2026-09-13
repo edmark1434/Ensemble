@@ -1,5 +1,6 @@
 import * as Y from "yjs";
 import { CollabSchema } from "./ydoc-schema";
+import {collabApiBase, CollabTarget} from "@/features/editor/collab/collab-target";
 
 const FLUSH_INTERVAL_MS = 3000;
 
@@ -33,8 +34,8 @@ export function endSession(sessionId: number): void {
 // first access if none exists yet. Surfaces the real status + body on
 // failure instead of a generic message, so genuine errors (project not
 // found, DB failure) are visible instead of hidden.
-export async function loadSnapshot(projectId: string): Promise<Uint8Array> {
-  const res = await fetch(`/api/collab/projects/${projectId}/snapshots/latest`);
+export async function loadSnapshot(target: CollabTarget): Promise<Uint8Array> {
+  const res = await fetch(`${collabApiBase(target)}/snapshots/latest`);
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`Failed to load project snapshot (${res.status}): ${body}`);
@@ -51,7 +52,7 @@ export interface PersistenceHandle {
 
 export function attachPersistence(
   schema: CollabSchema,
-  projectId: string,
+  target: CollabTarget,
   sessionId: number,
   localOrigin: unknown,
   onStatusChange?: (status: PersistenceStatus) => void,
@@ -75,7 +76,7 @@ export function attachPersistence(
 
     setStatus("saving");
 
-    return fetch(`/api/collab/projects/${projectId}/updates?sessionId=${sessionId}`, {
+    return fetch(`${collabApiBase(target)}/updates?sessionId=${sessionId}`, {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
       body: toArrayBuffer(merged),
@@ -99,7 +100,7 @@ export function attachPersistence(
     const merged = mergePending();
     if (!merged) return;
     const blob = new Blob([toArrayBuffer(merged)], { type: "application/octet-stream" });
-    const sent = navigator.sendBeacon(`/api/collab/projects/${projectId}/updates?sessionId=${sessionId}`, blob);
+    const sent = navigator.sendBeacon(`${collabApiBase(target)}/updates?sessionId=${sessionId}`, blob);
     if (!sent) {
       console.warn("sendBeacon dropped collab update on unload, payload too large", merged.byteLength);
     }
@@ -140,8 +141,8 @@ export function attachPersistence(
   return { teardown, forceFlush };
 }
 
-export async function requestCompact(projectId: string): Promise<void> {
-  const res = await fetch(`/api/collab/projects/${projectId}/compact`, { method: "POST" });
+export async function requestCompact(target: CollabTarget): Promise<void> {
+  const res = await fetch(`${collabApiBase(target)}/compact`, { method: "POST" });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`Failed to compact project (${res.status}): ${body}`);

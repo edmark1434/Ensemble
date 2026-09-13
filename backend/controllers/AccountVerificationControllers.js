@@ -13,7 +13,7 @@ const {
 
 async function createAccountVerificationController(req,res){
     try{
-        const { account_id } = req.session;
+        const { userId } = req.session;
         const session = await createAccountVerificationSession(userId);
         res.status(200).json({ message: "Account verification session created successfully", session });
     }catch(err){

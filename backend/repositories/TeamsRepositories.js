@@ -32,7 +32,7 @@ async function getTeamOwnerVerificationEligibility(teamAccountId, requesterAccou
     JOIN users u ON u.account_id=$2
     JOIN team_members tm ON tm.team_id=t.team_id AND tm.user_id=u.user_id
     LEFT JOIN verifications v ON v.account_id=u.account_id
-    LEFT JOIN account_verification_sessions avs
+    LEFT JOIN verification_sessions avs
       ON avs.verification_session_id=v.verification_session_id
     WHERE t.account_id=$1 AND t.deleted_at IS NULL
       AND tm.role='Owner' AND tm.status='Active'
@@ -59,10 +59,10 @@ async function getTeam(teamId, accountId) {
     o.display_name owner_name,o.handle owner_handle
     FROM teams t JOIN accounts a ON a.account_id=t.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id
     LEFT JOIN verifications v ON v.account_id=t.account_id
-    LEFT JOIN account_verification_sessions avs ON avs.verification_session_id=v.verification_session_id
+    LEFT JOIN verification_sessions avs ON avs.verification_session_id=v.verification_session_id
     LEFT JOIN users cu ON cu.account_id=$2
     LEFT JOIN verifications cv ON cv.account_id=cu.account_id
-    LEFT JOIN account_verification_sessions cvs ON cvs.verification_session_id=cv.verification_session_id
+    LEFT JOIN verification_sessions cvs ON cvs.verification_session_id=cv.verification_session_id
     LEFT JOIN team_members tm ON tm.team_id=t.team_id AND tm.user_id=cu.user_id
     LEFT JOIN (SELECT team_id,count(*) member_count FROM team_members WHERE status='Active' GROUP BY team_id) mc ON mc.team_id=t.team_id
     LEFT JOIN team_members om ON om.team_id=t.team_id AND om.role='Owner' AND om.status='Active' LEFT JOIN users ou ON ou.user_id=om.user_id LEFT JOIN accounts o ON o.account_id=ou.account_id

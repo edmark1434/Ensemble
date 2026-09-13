@@ -11,3 +11,4 @@ export { default as ProgressFrame } from "./progress-frame";
 export { default as RadialAudioBars } from "./radial-audio-bars";
 export { default as HillAudioBars } from "./hill-audio-bars";
 export { default as WaveAudioBars } from "./wave-audio-bars";
+export { default as Scene } from "./ensemble-scene";

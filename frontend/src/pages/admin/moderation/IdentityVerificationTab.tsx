@@ -322,6 +322,7 @@ export default function IdentityVerificationTab({
           entityName={identityUser.name}
           accountId={identityUser.accountId}
           verification={identityUser.verification}
+          loadDiditDetails
           onClose={() => setIdentityUser(null)}
           onChanged={() => {
             setIdentityUser(null);

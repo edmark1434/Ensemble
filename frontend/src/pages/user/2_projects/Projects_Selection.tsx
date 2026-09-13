@@ -12,6 +12,8 @@ interface FormatOption {
   icon: React.ReactNode;
   description: string;
   color: string;
+  borderColor: string;
+  selectedBgColor: string;
   defaultWidth?: number;
   defaultHeight?: number;
 }
@@ -25,6 +27,8 @@ const formatOptions: FormatOption[] = [
     icon: <Monitor className="h-5 w-5" />,
     description: "Standard YouTube, TV, and cinematic format",
     color: "from-cyan-500/20 to-blue-500/100",
+    borderColor: "border-cyan-500/50 dark:border-cyan-500/20",
+    selectedBgColor: "bg-cyan-50 dark:bg-cyan-500/10",
     defaultWidth: 1920,
     defaultHeight: 1080
   },
@@ -36,6 +40,8 @@ const formatOptions: FormatOption[] = [
     icon: <Smartphone className="h-5 w-5" />,
     description: "Perfect for TikTok, Instagram Reels, YouTube Shorts",
     color: "from-green-500/20 to-emerald-500/100",
+    borderColor: "border-green-500/50 dark:border-green-500/20",
+    selectedBgColor: "bg-green-50 dark:bg-green-500/10",
     defaultWidth: 1080,
     defaultHeight: 1920
   },
@@ -47,6 +53,8 @@ const formatOptions: FormatOption[] = [
     icon: <Layout className="h-5 w-5" />,
     description: "Ideal for Instagram feed posts and Facebook",
     color: "from-pink-500/20 to-rose-500/100",
+    borderColor: "border-pink-500/50 dark:border-pink-500/20",
+    selectedBgColor: "bg-pink-50 dark:bg-pink-500/10",
     defaultWidth: 1080,
     defaultHeight: 1350
   },
@@ -58,6 +66,8 @@ const formatOptions: FormatOption[] = [
     icon: <Square className="h-5 w-5" />,
     description: "Perfect for profile pictures and square format content",
     color: "from-orange-500/20 to-red-500/100",
+    borderColor: "border-orange-500/50 dark:border-orange-500/20",
+    selectedBgColor: "bg-orange-50 dark:bg-orange-500/10",
     defaultWidth: 1080,
     defaultHeight: 1080
   },
@@ -69,6 +79,8 @@ const formatOptions: FormatOption[] = [
     icon: <Layout className="h-5 w-5" />,
     description: "Set your own aspect ratio and resolution",
     color: "from-purple-500/20 to-pink-500/100",
+    borderColor: "border-purple-500/50 dark:border-purple-500/20",
+    selectedBgColor: "bg-purple-50 dark:bg-purple-500/10",
     defaultWidth: 1920,
     defaultHeight: 1080
   }
@@ -183,7 +195,7 @@ const ProjectsSelection: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-dark-base relative overflow-hidden">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base relative overflow-hidden">
 
       {/* Enhanced Color Blur Backgrounds */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
@@ -203,7 +215,7 @@ const ProjectsSelection: React.FC = () => {
         {/* Return Button - Top Left */}
         <button
           onClick={handleReturn}
-          className="group mb-6 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-zinc-400 transition-all duration-300 hover:border-white/20 hover:bg-white/10 hover:text-white"
+          className="group mb-6 flex items-center gap-2 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-sm font-medium text-gray-500 dark:text-zinc-400 transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
         >
           <ArrowLeft className="h-4 w-4 transition-transform duration-300 group-hover:-translate-x-1" />
@@ -212,10 +224,10 @@ const ProjectsSelection: React.FC = () => {
 
         {/* Header Section */}
         <div className="mb-8 text-center animate-fade-up">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 dark:from-white to-gray-600 dark:to-white/70 bg-clip-text text-transparent" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             Select Format
           </h1>
-          <p className="mt-2 text-sm text-zinc-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+          <p className="mt-2 text-sm text-gray-500 dark:text-zinc-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             Choose the aspect ratio for your project
           </p>
         </div>
@@ -242,14 +254,14 @@ const ProjectsSelection: React.FC = () => {
 
                 <div className={`relative flex items-center justify-between rounded-xl border p-3 transition-all duration-300 backdrop-blur-sm ${
                   selectedFormat === option.id
-                    ? `border-${option.id === "custom" ? "purple" : option.id === "landscape" ? "cyan" : option.id === "mobile" ? "green" : option.id === "feed" ? "pink" : "orange"}-500/20 bg-gradient-to-r ${option.color}/5`
-                    : "border-white/10 bg-white/5 hover:border-white/15 hover:bg-white/8"
+                    ? `${option.borderColor} ${option.selectedBgColor}`
+                    : "border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 hover:border-gray-300 dark:hover:border-white/15 hover:bg-gray-100 dark:hover:bg-white/10"
                 }`}>
                   <div className="flex items-center gap-3">
                     <div className={`relative rounded-lg p-2 transition-all duration-300 ${
                       selectedFormat === option.id
-                        ? `bg-gradient-to-br ${option.color} text-white shadow-sm`
-                        : "bg-white/10 text-zinc-400 group-hover:bg-white/15 group-hover:text-white"
+                        ? `bg-gradient-to-br ${option.color} text-gray-900 dark:text-white shadow-sm`
+                        : "bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 group-hover:bg-gray-200 dark:group-hover:bg-white/15 group-hover:text-gray-900 dark:group-hover:text-white"
                     }`}>
                       {option.icon}
                       {selectedFormat === option.id && (
@@ -260,26 +272,26 @@ const ProjectsSelection: React.FC = () => {
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className={`text-sm font-semibold transition-colors duration-300 ${
-                          selectedFormat === option.id ? "text-white" : "text-zinc-300"
+                          selectedFormat === option.id ? "text-gray-900 dark:text-white" : "text-gray-700 dark:text-zinc-300"
                         }`} style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                           {option.title}
                         </h3>
                         {selectedFormat === option.id && (
-                          <div className="rounded-full bg-green-500/15 px-1.5 py-0.5">
-                            <span className="text-[9px] font-medium text-green-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Selected</span>
+                          <div className="rounded-full bg-green-100 dark:bg-green-500/15 px-1.5 py-0.5">
+                            <span className="text-[9px] font-medium text-green-700 dark:text-green-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Selected</span>
                           </div>
                         )}
                       </div>
-                      <p className="text-xs text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{option.subtitle}</p>
+                      <p className="text-xs text-gray-400 dark:text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{option.subtitle}</p>
                     </div>
                   </div>
 
                   {selectedFormat === option.id ? (
                     <div className="rounded-full bg-green-500 p-1 shadow-sm shadow-green-500/15 animate-scale-in">
-                      <Check className="h-3 w-3 text-white" />
+                      <Check className="h-3 w-3 text-gray-900 dark:text-white" />
                     </div>
                   ) : (
-                    <ChevronRight className="h-3.5 w-3.5 text-zinc-500 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-white" />
+                    <ChevronRight className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-gray-900 dark:group-hover:text-white" />
                   )}
                 </div>
               </button>
@@ -289,25 +301,25 @@ const ProjectsSelection: React.FC = () => {
           {/* Right Column - Resolution Settings */}
           <div className="animate-fade-up-delayed">
             {selectedFormat ? (
-              <div className="sticky top-24 rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-5 backdrop-blur-sm">
-                <h3 className="mb-3 text-base font-semibold text-white flex items-center gap-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                  <Settings className="h-4 w-4 text-zinc-400" />
+              <div className="sticky top-24 rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white dark:from-white/5 to-transparent p-5 backdrop-blur-sm">
+                <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                  <Settings className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
                   Resolution Settings
                 </h3>
 
                 <div className="space-y-3">
                   {/* Selected Format Info */}
-                  <div className="rounded-lg bg-white/5 p-3">
-                    <p className="text-xs text-zinc-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Selected Format</p>
-                    <p className="text-base font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{selectedOption?.title}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{selectedOption?.description}</p>
+                  <div className="rounded-lg bg-white dark:bg-white/5 p-3">
+                    <p className="text-xs text-gray-500 dark:text-zinc-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Selected Format</p>
+                    <p className="text-base font-semibold text-gray-900 dark:text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{selectedOption?.title}</p>
+                    <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{selectedOption?.description}</p>
                   </div>
 
                   {/* Width & Height in one row */}
                   {selectedFormat === "custom" ? (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="mb-1 block text-xs font-medium text-zinc-300" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                        <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-zinc-300" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                           Width (px)
                         </label>
                         <input
@@ -318,13 +330,13 @@ const ProjectsSelection: React.FC = () => {
                             setCustomWidth(value);
                             setAdjustedWidth(value);
                           }}
-                          className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                          className="w-full rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                           placeholder="Width"
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs font-medium text-zinc-300" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                        <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-zinc-300" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                           Height (px)
                         </label>
                         <input
@@ -335,7 +347,7 @@ const ProjectsSelection: React.FC = () => {
                             setCustomHeight(value);
                             setAdjustedHeight(value);
                           }}
-                          className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                          className="w-full rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                           placeholder="Height"
                         />
@@ -344,27 +356,27 @@ const ProjectsSelection: React.FC = () => {
                   ) : (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="mb-1 block text-xs font-medium text-zinc-300" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                        <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-zinc-300" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                           Width (px)
                         </label>
                         <input
                           type="number"
                           value={adjustedWidth}
                           onChange={(e) => handleWidthChange(parseInt(e.target.value) || 0)}
-                          className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                          className="w-full rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs font-medium text-zinc-300" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                        <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-zinc-300" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                           Height (px)
-                          <span className="ml-1 text-[10px] text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>(auto)</span>
+                          <span className="ml-1 text-[10px] text-gray-400 dark:text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>(auto)</span>
                         </label>
                         <input
                           type="number"
                           value={adjustedHeight}
                           onChange={(e) => handleHeightChange(parseInt(e.target.value) || 0)}
-                          className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                          className="w-full rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                         />
                       </div>
@@ -372,16 +384,16 @@ const ProjectsSelection: React.FC = () => {
                   )}
 
                   {/* Aspect Ratio Display */}
-                  <div className="rounded-lg bg-white/5 p-2 text-center">
-                    <p className="text-xs text-zinc-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Aspect Ratio</p>
-                    <p className="text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                  <div className="rounded-lg bg-white dark:bg-white/5 p-2 text-center">
+                    <p className="text-xs text-gray-500 dark:text-zinc-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Aspect Ratio</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                       {getAspectRatioDisplay() || "—"}
                     </p>
                   </div>
 
                   {/* Fixed Size Preview Box */}
-                  <div className="mt-3 rounded-lg bg-white/5 p-3">
-                    <p className="mb-2 text-xs text-zinc-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Preview</p>
+                  <div className="mt-3 rounded-lg bg-white dark:bg-white/5 p-3">
+                    <p className="mb-2 text-xs text-gray-500 dark:text-zinc-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Preview</p>
                     <div className="flex justify-center">
                       <div
                         className="overflow-hidden rounded-lg bg-gradient-to-br from-blue-500/15 to-purple-500/15 transition-all duration-300"
@@ -403,7 +415,7 @@ const ProjectsSelection: React.FC = () => {
                             border: "1px solid rgba(59, 130, 246, 0.2)"
                           }}
                         >
-                          <span className="text-[10px] text-white/50 text-center px-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                          <span className="text-[10px] text-gray-500 dark:text-white/50 text-center px-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                             {adjustedWidth} x {adjustedHeight}
                           </span>
                         </div>
@@ -414,18 +426,18 @@ const ProjectsSelection: React.FC = () => {
               </div>
             ) : (
               // Placeholder when no format is selected
-              <div className="sticky top-24 rounded-xl border border-dashed border-white/15 bg-gradient-to-br from-white/3 to-transparent p-8 backdrop-blur-sm text-center">
+              <div className="sticky top-24 rounded-xl border border-dashed border-gray-300 dark:border-white/15 bg-gradient-to-br from-white dark:from-white/3 to-transparent p-8 backdrop-blur-sm text-center">
                 <div className="flex flex-col items-center justify-center gap-3">
-                  <div className="rounded-full bg-white/5 p-4">
-                    <Info className="h-8 w-8 text-zinc-500" />
+                  <div className="rounded-full bg-white dark:bg-white/5 p-4">
+                    <Info className="h-8 w-8 text-gray-400 dark:text-zinc-500" />
                   </div>
-                  <h3 className="text-base font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>No Format Selected</h3>
-                  <p className="text-sm text-zinc-400 max-w-xs" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>No Format Selected</h3>
+                  <p className="text-sm text-gray-500 dark:text-zinc-400 max-w-xs" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                     Click on any format from the left panel to see resolution settings and preview
                   </p>
                   <div className="mt-2 flex gap-2">
                     {formatOptions.slice(0, 3).map((opt) => (
-                      <div key={opt.id} className="text-xs text-zinc-500 bg-white/5 px-2 py-1 rounded-full" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                      <div key={opt.id} className="text-xs text-gray-400 dark:text-zinc-500 bg-white dark:bg-white/5 px-2 py-1 rounded-full" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                         {opt.title}
                       </div>
                     ))}
@@ -441,7 +453,7 @@ const ProjectsSelection: React.FC = () => {
           <div className="mt-8 animate-slide-up">
             <button
               onClick={handleContinue}
-              className="group relative w-full overflow-hidden rounded-xl bg-white px-6 py-3 text-black transition-all duration-300 hover:scale-[1.01] hover:shadow-lg active:scale-95"
+              className="group relative w-full overflow-hidden rounded-xl bg-gray-900 dark:bg-white px-6 py-3 text-white dark:text-black transition-all duration-300 hover:scale-[1.01] hover:shadow-lg active:scale-95"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-gray-100/0 via-gray-200/50 to-gray-100/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
               <div className="relative flex items-center justify-center gap-2">
@@ -450,7 +462,7 @@ const ProjectsSelection: React.FC = () => {
                 </span>
               </div>
             </button>
-            <p className="mt-2 text-center text-xs text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+            <p className="mt-2 text-center text-xs text-gray-400 dark:text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               You can change these settings later in project settings
             </p>
           </div>

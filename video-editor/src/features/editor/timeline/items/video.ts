@@ -427,10 +427,6 @@ class Video extends Trimmable {
     ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
     ctx.restore();
 
-    if (this.isLoading || this.hidden || this.volume === 0) {
-      this.drawStatusIcons(ctx);
-    }
-
     const iconCount =
       (this.isLoading ? 1 : 0) + (this.hidden ? 1 : 0) + (this.volume === 0 ? 1 : 0);
     const textX = 12 + iconCount * 24;
@@ -440,6 +436,10 @@ class Video extends Trimmable {
     ctx.beginPath();
     ctx.rect(0, 0, this.width, this.height);
     ctx.clip();
+
+    if (this.isLoading || this.hidden || this.volume === 0) {
+      this.drawStatusIcons(ctx);
+    }
 
     ctx.font = `400 12px ${getUIFont()}`;
     ctx.textAlign = "left";
@@ -463,11 +463,11 @@ class Video extends Trimmable {
     if (this.hidden || this.isLoading) {
       ctx.save();
       ctx.fillStyle = overlayColor;
-      ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+      ctx.fillRect(0, 0, this.width, this.height);
       ctx.restore();
     }
 
-    let iconX = -this.width / 2 + 12;
+    let iconX = 12;
 
     if (this.isLoading) {
       ctx.save();
@@ -480,7 +480,7 @@ class Video extends Trimmable {
     if (this.hidden) {
       const eyeOffPath = new Path2D("M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22");
       ctx.save();
-      ctx.translate(iconX, -this.height / 2 + 10);
+      ctx.translate(iconX, 10);
       ctx.strokeStyle = iconColor;
       ctx.lineWidth = 2;
       ctx.shadowColor = "rgba(0,0,0,0.8)";
@@ -494,7 +494,7 @@ class Video extends Trimmable {
     if (this.volume === 0) {
       const volumeOffPath = new Path2D("M16 9a5 5 0 0 1 .95 2.293M19.364 5.636a9 9 0 0 1 1.889 9.96M2 2l20 20M7 7l-.587.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298V11M9.828 4.172A.686.686 0 0 1 11 4.657v.686");
       ctx.save();
-      ctx.translate(iconX, -this.height / 2 + 10);
+      ctx.translate(iconX, 10);
       ctx.strokeStyle = iconColor;
       ctx.lineWidth = 2;
       ctx.shadowColor = "rgba(0,0,0,0.8)";
@@ -712,7 +712,7 @@ class Video extends Trimmable {
     }
 
     ctx.save();
-    ctx.translate(iconX, -this.height / 2 + 10);
+    ctx.translate(iconX, 10);
     ctx.scale(0.67, 0.67);
     ctx.translate(12, 12);
     ctx.rotate((this.loadingRotation * Math.PI) / 180);

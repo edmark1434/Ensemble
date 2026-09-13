@@ -37,28 +37,49 @@ export const ChatMain: React.FC<ChatMainProps> = ({
   const loadingMessages = useChatState((state) => state.loadingMessages);
   const unreadCounts = useChatState((state) => state.unreadCounts);
 
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     if (!activeUser) return;
+    const targetKey = String(activeUser.inbox_id || activeUser.id);
+    setDismissedIds((current) => {
+      if (!current.has(targetKey)) return current;
+      const next = new Set(current);
+      next.delete(targetKey);
+      return next;
+    });
     const timer = window.setTimeout(() => {
       setOpenIds((current) => {
         if (current.has(String(activeUser.id))) return current;
         const next = new Set(current);
         next.add(String(activeUser.id));
+        if (activeUser.inbox_id) next.add(String(activeUser.inbox_id));
         return next;
       });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [activeUser?.id]);
+  }, [activeUser?.id, activeUser?.inbox_id]);
 
   const openWindows = useMemo(
     () =>
-      recentChats.filter((chat) => openIds.has(String(chat.id))),
+      recentChats.filter(
+        (chat) =>
+          openIds.has(String(chat.id)) ||
+          (chat.inbox_id && openIds.has(String(chat.inbox_id)))
+      ),
     [openIds, recentChats]
   );
   const minimizedWindows = useMemo(
     () =>
-      recentChats.filter((chat) => !openIds.has(String(chat.id)) && (!chat.inbox_id || !openIds.has(String(chat.inbox_id)))),
-    [openIds, recentChats]
+      recentChats
+        .filter(
+          (chat) =>
+            !dismissedIds.has(String(chat.inbox_id || chat.id)) &&
+            !openIds.has(String(chat.id)) &&
+            (!chat.inbox_id || !openIds.has(String(chat.inbox_id)))
+        )
+        .slice(0, 6),
+    [dismissedIds, openIds, recentChats]
   );
 
   const minimizeWindow = (chat: ChatTarget) => {
@@ -71,15 +92,25 @@ export const ChatMain: React.FC<ChatMainProps> = ({
   };
 
   const restoreWindow = (chat: ChatTarget) => {
+    const key = String(chat.inbox_id || chat.id);
+    setDismissedIds((current) => {
+      if (!current.has(key)) return current;
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
     setOpenIds((current) => {
       const next = new Set(current);
       next.add(String(chat.id));
+      if (chat.inbox_id) next.add(String(chat.inbox_id));
       return next;
     });
     onSelectChat(chat);
   };
 
   const closeWindow = (chat: ChatTarget) => {
+    const key = String(chat.inbox_id || chat.id);
+    setDismissedIds((current) => new Set(current).add(key));
     setOpenIds((current) => {
       const next = new Set(current);
       next.delete(String(chat.id));
@@ -128,12 +159,14 @@ export const ChatMain: React.FC<ChatMainProps> = ({
         <AnimatePresence>
           {isStackExpanded &&
             minimizedWindows.map((chat, index) => {
-              const initials = chat.name
-                .split(" ")
-                .map((name) => name[0])
-                .join("")
-                .slice(0, 2)
-                .toUpperCase();
+              const initials =
+                (chat.name || "User")
+                  .trim()
+                  .split(/\s+/)
+                  .map((name) => name[0])
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase() || "U";
 
               return (
                 <motion.div
@@ -156,6 +189,12 @@ export const ChatMain: React.FC<ChatMainProps> = ({
                             src={chatAttachmentUrl(chat.avatarUrl)}
                             alt={chat.name}
                             className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                chat.name || "User"
+                              )}&background=6366f1&color=fff&bold=true`;
+                            }}
                           />
                         ) : (
                           initials
@@ -173,7 +212,7 @@ export const ChatMain: React.FC<ChatMainProps> = ({
                   <button
                     onClick={(event) => {
                       event.stopPropagation();
-                      closeWindow(chat.id);
+                      closeWindow(chat);
                     }}
                     className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 border-2 border-[#080a12] shadow-lg z-10"
                     title="Close chat"

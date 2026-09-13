@@ -59,8 +59,11 @@ async function getDashboardOverview() {
         (SELECT COUNT(*)::int FROM accounts WHERE LOWER(COALESCE(status, '')) != 'active' OR status IS NULL) AS pending_review,
         (SELECT COALESCE(SUM(merit_score), 0)::int FROM accounts WHERE type = 'User') AS total_user_merit,
         (SELECT COALESCE(AVG(merit_score), 0)::numeric(10,1) FROM accounts WHERE type = 'User') AS avg_user_merit,
-        (SELECT COUNT(*)::int FROM account_verification
-          WHERE deleted_at IS NULL AND LOWER(COALESCE(status, 'unverified')) IN ('unverified', 'pending', 'pending review')) AS pending_verifications
+        (SELECT COUNT(*)::int
+         FROM verifications v
+         LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
+         WHERE COALESCE(v.is_verified, FALSE) = FALSE
+           AND LOWER(COALESCE(avs.verification_status, 'unverified')) IN ('unverified', 'pending', 'pending review')) AS pending_verifications
     `),
     pool.query(`
       SELECT
@@ -106,23 +109,28 @@ async function getDashboardOverview() {
         COALESCE(a.display_name, u.first_name || ' ' || u.last_name) AS full_name,
         u.email_address,
         a.handle,
-        COALESCE(av.status, a.status) AS status,
+        COALESCE(
+          CASE
+            WHEN COALESCE(v.is_verified, FALSE) THEN 'verified'
+            WHEN avs.verification_status IS NOT NULL THEN avs.verification_status
+            ELSE 'unverified'
+          END,
+          a.status
+        ) AS status,
         a.merit_score,
         a.created_at,
         a.type
       FROM accounts a
       LEFT JOIN users u ON u.account_id = a.account_id
-      LEFT JOIN LATERAL (
-        SELECT status
-        FROM account_verification av
-        WHERE av.account_id = a.account_id AND av.deleted_at IS NULL
-        ORDER BY av.created_at DESC
-        LIMIT 1
-      ) av ON TRUE
+      LEFT JOIN verifications v ON v.account_id = a.account_id
+      LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
       WHERE a.deleted_at IS NULL
         AND (
           LOWER(COALESCE(a.status, '')) != 'active'
-          OR LOWER(COALESCE(av.status, 'unverified')) IN ('unverified', 'pending', 'pending review')
+          OR (
+            COALESCE(v.is_verified, FALSE) = FALSE
+            AND LOWER(COALESCE(avs.verification_status, 'unverified')) IN ('unverified', 'pending', 'pending review')
+          )
         )
       ORDER BY a.created_at DESC NULLS LAST
       LIMIT 50

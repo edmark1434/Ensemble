@@ -78,6 +78,8 @@ async function getAdminVerificationDetails(accountId) {
       accountType: 'Team',
       isTeam: true,
       isVerified: Boolean(record?.is_verified),
+      hasVerificationUrl: false,
+      verificationUrl: null,
       verificationStatus: record?.internal_status || 'Pending',
       kycStatus: null,
       verifiedAt: record?.verified_at || null,
@@ -104,6 +106,8 @@ async function getAdminVerificationDetails(accountId) {
       accountType: record?.account_type || null,
       isTeam: false,
       isVerified: Boolean(record?.is_verified),
+      hasVerificationUrl: false,
+      verificationUrl: null,
       verificationStatus: 'No Verification Activity',
       kycStatus: 'No Verification Activity',
       verifiedAt: record?.verified_at || null,
@@ -114,11 +118,14 @@ async function getAdminVerificationDetails(accountId) {
 
   const verificationStatus = record.internal_status || 'Pending';
   const kycStatus = record.kyc_status || 'Not Started';
+  const hasVerificationUrl = Boolean(record.verification_url && record.verification_url.trim());
   const base = {
     activity: 'status_only',
     accountType: record.account_type || 'User',
     isTeam: false,
     isVerified: Boolean(record.is_verified),
+    hasVerificationUrl,
+    verificationUrl: record.verification_url || null,
     verificationStatus,
     kycStatus,
     verificationSessionId: record.verification_session_id,
@@ -244,6 +251,11 @@ async function applyAdminDiditVerificationAction(accountId, action, options = {}
   }
 
   if (normalizedAction === 'approve') {
+    const hasVerificationUrl = Boolean(record?.verification_url && record.verification_url.trim());
+    if (!hasVerificationUrl) {
+      throw actionError('Cannot approve verification: no verification URL exists in the verification session');
+    }
+
     const alreadyApproved = kycStatus === 'approved'
       && ['approved', 'verified'].includes(verificationStatus)
       && Boolean(record.is_verified);
@@ -307,7 +319,7 @@ async function applyAdminDiditVerificationAction(accountId, action, options = {}
     const notification = await createNotification({
       message: `Your identity verification requires resubmission: ${selectedLabels}. Admin message: ${comment}`,
       is_read: false,
-      reference_table: 'account_verification',
+      reference_table: 'verification',
       reference_prefix: 'IDENTITY_REVERIFICATION',
       reference_path: '/account-verification-status',
       reference_id: record.verification_id,

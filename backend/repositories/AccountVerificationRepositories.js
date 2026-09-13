@@ -4,7 +4,7 @@ async function getReusableAccountVerificationSessionByAccountId(accountId) {
     try {
         const query = `
             SELECT *
-            FROM account_verification_sessions
+            FROM verification_sessions
             WHERE account_id = $1
             AND kyc_status IN (
                 'Not Started',
@@ -37,7 +37,7 @@ async function createAccountVerificationSessionRepository({
 }) {
     try {
         const query = `
-            INSERT INTO account_verification_sessions (
+            INSERT INTO verification_sessions (
                 account_id,
                 didit_session_id,
                 verification_url,
@@ -86,7 +86,7 @@ async function updateAccountVerificationSessionStatus(sessionId, payload) {
         values.push(sessionId);
 
         const query = `
-            UPDATE account_verification_sessions
+            UPDATE verification_sessions
             SET
                 ${fields.join(", ")},
                 updated_at = CURRENT_TIMESTAMP
@@ -121,7 +121,7 @@ async function updateAccountVerificationSessionById(verificationSessionId, paylo
 
         values.push(verificationSessionId);
         const query = `
-            UPDATE account_verification_sessions
+            UPDATE verification_sessions
             SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP
             WHERE verification_session_id = $${index}
             RETURNING *;
@@ -222,7 +222,7 @@ async function getAccountVerificationStatusByAccountId(accountId) {
                 v.is_verified,
                 avs.expires_at
             FROM verifications AS v
-            LEFT JOIN account_verification_sessions AS avs
+            LEFT JOIN verification_sessions AS avs
                 ON v.verification_session_id = avs.verification_session_id
             WHERE v.account_id = $1
             LIMIT 1
@@ -241,7 +241,7 @@ async function getAccountVerificationSessionsByAccountId(accountId) {
     try {
         const result = await pool.query(
             `SELECT *
-             FROM account_verification_sessions
+             FROM verification_sessions
              WHERE account_id = $1
              ORDER BY created_at DESC
              LIMIT 1`,
@@ -259,7 +259,7 @@ async function getAccountVerificationSessionBySessionId(sessionId) {
     try {
         const result = await pool.query(
             `SELECT *
-             FROM account_verification_sessions
+             FROM verification_sessions
              WHERE didit_session_id = $1`,
             [sessionId]
         );
@@ -274,7 +274,7 @@ async function getPendingDiditVerificationSessions(limit = 50) {
     const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
     const result = await pool.query(
         `SELECT *
-         FROM account_verification_sessions
+         FROM verification_sessions
          WHERE verification_status IN ('Pending', 'In Review')
            AND didit_session_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
          ORDER BY updated_at ASC NULLS FIRST, created_at ASC
@@ -329,7 +329,7 @@ async function createBusinessVerificationSubmissionRepository(
         const verification = verificationResult.rows[0];
 
         const sessionResult = await client.query(
-            `INSERT INTO account_verification_sessions (
+            `INSERT INTO verification_sessions (
                 account_id,
                 didit_session_id,
                 verification_url,

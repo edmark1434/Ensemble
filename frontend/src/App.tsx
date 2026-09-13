@@ -207,7 +207,10 @@ function App() {
             <Route path='/search/user/:query' element={<UserProfilesList />} />
 
           <Route path='/projects' element={<Projects />} />
-            <Route path='/projects/select' element={<Projects_Selection />} />
+          <Route path='/projects/personal' element={<Projects />} />
+          <Route path='/projects/shared' element={<Projects />} />
+          <Route path='/projects/team' element={<Projects />} />
+          <Route path='/projects/select' element={<Projects_Selection />} />
 
           <Route path='/forums'>
             <Route index element={<Forums />} />
@@ -225,10 +228,11 @@ function App() {
             <Route path=':id' element={<SelectedTeam />} />
           </Route>
 
-          <Route path='/assets'>
-            <Route index element={<AssetsLibrary />} />
-            <Route path=':assetId' element={<AssetDetails />} />
-          </Route>
+          <Route path='/assets' element={<AssetsLibrary />} />
+          <Route path='/assets/owned' element={<AssetsLibrary />} />
+          <Route path='/assets/purchased' element={<AssetsLibrary />} />
+          <Route path='/assets/saved' element={<AssetsLibrary />} />
+          <Route path='/assets/:assetId' element={<AssetDetails />} />
 
           {/* Reworked Job Market Sub-Routes */}
           <Route path='/jobs' element={<JobMain />}>

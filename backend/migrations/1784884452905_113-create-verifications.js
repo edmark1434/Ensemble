@@ -64,7 +64,7 @@ exports.up = (pgm) => {
   pgm.addConstraint(
     "verifications",
     "verifications_verification_session_id_fkey",
-    "FOREIGN KEY (verification_session_id) REFERENCES account_verification_sessions(verification_session_id) ON DELETE CASCADE"
+    "FOREIGN KEY (verification_session_id) REFERENCES verification_sessions(verification_session_id) ON DELETE CASCADE"
   );
 
   // ============================================

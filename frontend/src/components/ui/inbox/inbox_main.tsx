@@ -88,7 +88,12 @@ const InboxMain = () => {
       ? state.messagesByConversation[activeConversationId] || EMPTY_MESSAGES
       : EMPTY_MESSAGES
   );
-  const loading = useChatState((state) => state.loadingConversations);
+  const hasLoadedConversations = useChatState(
+    (state) => state.hasLoadedConversations
+  );
+  const loading =
+    useChatState((state) => state.loadingConversations) ||
+    !hasLoadedConversations;
   const messageLoading = useChatState((state) =>
     activeConversationId
       ? Boolean(state.loadingMessages[activeConversationId])
@@ -239,23 +244,22 @@ const InboxMain = () => {
       if (inbox.conversation_image_key) {
         return chatAttachmentUrl(inbox.conversation_image_key);
       }
-      if (inbox.conversation_type === "direct") {
-        const other = inbox.members?.find(
-          (member) => String(member.account_id) !== currentUserId
-        );
-        const avatar = other
-          ? profiles[String(other.account_id)]?.avatar_preset_url
-          : profiles[currentUserId]?.avatar_preset_url ||
-            user?.avatar_preset_url ||
-            user?.avatar_url;
-        if (avatar) {
-          if (/^https?:\/\//i.test(avatar)) return avatar;
-          const base = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(
-            /\/$/,
-            ""
-          );
-          return base ? `${base}/${avatar.replace(/^\/+/, "")}` : avatar;
-        }
+      if (inbox.profile_image) {
+        return chatAttachmentUrl(inbox.profile_image);
+      }
+      const other = inbox.members?.find(
+        (member) => String(member.account_id) !== currentUserId
+      );
+      const otherMemberAvatar =
+        (other as any)?.avatar_preset_url || (other as any)?.avatar_url;
+      const avatar =
+        otherMemberAvatar ||
+        (other ? profiles[String(other.account_id)]?.avatar_preset_url : undefined) ||
+        profiles[currentUserId]?.avatar_preset_url ||
+        user?.avatar_preset_url ||
+        user?.avatar_url;
+      if (avatar) {
+        return chatAttachmentUrl(avatar);
       }
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(
         getConversationName(inbox)
@@ -294,15 +298,89 @@ const InboxMain = () => {
   const profileAccountIds = useMemo(
     () =>
       Array.from(
-        new Set(
-          inboxList.flatMap((inbox) =>
+        new Set([
+          ...inboxList.flatMap((inbox) =>
             (inbox.members || [])
               .map((member) => String(member.account_id))
               .filter(Boolean)
-          )
-        )
+          ),
+          ...messages.flatMap((m) =>
+            (m.read_by || []).map((r) => String(r.account_id)).filter(Boolean)
+          ),
+        ])
       ),
-    [inboxList]
+    [inboxList, messages]
+  );
+
+  useEffect(() => {
+    const memberProfiles: Record<string, ProfileIdentity> = {};
+    const allMembers = [
+      ...(selectedConversation?.members || []),
+      ...inboxList.flatMap((i) => i.members || []),
+    ];
+    for (const m of allMembers) {
+      const id = String(m.account_id || "");
+      if (!id) continue;
+      const avatarUrl = (m as any).avatar_preset_url || (m as any).avatar_url;
+      const name = (m as any).name || (m as any).display_name;
+      const username = (m as any).username || (m as any).handle;
+      if (avatarUrl || name || username) {
+        memberProfiles[id] = {
+          name: name || undefined,
+          username: username || undefined,
+          avatar_preset_url: avatarUrl || undefined,
+        };
+      }
+    }
+    if (Object.keys(memberProfiles).length > 0) {
+      setProfiles((current) => ({
+        ...memberProfiles,
+        ...current,
+      }));
+    }
+  }, [inboxList, selectedConversation]);
+
+  const getAccountAvatar = useCallback(
+    (accountId: string): string => {
+      const member = selectedConversation?.members?.find(
+        (m) => String(m.account_id) === String(accountId)
+      );
+      const profile = profiles[String(accountId)];
+      const raw =
+        (member as any)?.avatar_preset_url ||
+        (member as any)?.avatar_url ||
+        profile?.avatar_preset_url ||
+        (String(accountId) === currentUserId
+          ? user?.avatar_preset_url || user?.avatar_url
+          : undefined);
+
+      if (raw) {
+        return chatAttachmentUrl(raw);
+      }
+
+      if (
+        selectedConversation &&
+        !["group", "ticket", "dispute"].includes(selectedConversation.conversation_type)
+      ) {
+        if (selectedConversation.profile_image) {
+          return chatAttachmentUrl(selectedConversation.profile_image);
+        }
+        if (selectedConversation.conversation_image_key) {
+          return chatAttachmentUrl(selectedConversation.conversation_image_key);
+        }
+      }
+
+      const name =
+        (member as any)?.name ||
+        (member as any)?.display_name ||
+        profile?.name ||
+        `User ${String(accountId).slice(0, 8)}`;
+
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+        name
+      )}&background=6366f1&color=fff`;
+    },
+    [currentUserId, profiles, selectedConversation, user]
   );
   const profileAccountIdSignature = profileAccountIds.join(",");
   const suggestedAccounts = useMemo(
@@ -423,6 +501,23 @@ const InboxMain = () => {
     );
     return () => clearTimeout(timeout);
   }, [activeConversationId, messages.length]);
+
+  useEffect(() => {
+    if (!activeConversationId) return;
+    const hasUnread = messages.some(
+      (m) =>
+        String(m.sender_id) !== currentActorId &&
+        String(m.sender_id) !== currentUserId &&
+        !(m.read_by || []).some(
+          (r) =>
+            String(r.account_id) === currentActorId ||
+            String(r.account_id) === currentUserId
+        )
+    );
+    if (hasUnread && typeof document !== "undefined" && document.visibilityState === "visible") {
+      useChatState.getState().markConversationRead(activeConversationId);
+    }
+  }, [activeConversationId, currentActorId, currentUserId, messages]);
 
   const filteredConversations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -675,37 +770,33 @@ const InboxMain = () => {
     );
 
     const isSeen = (message.read_by || []).some(
-      (reader) => String(reader.account_id) !== currentActorId
+      (reader) =>
+        String(reader.account_id) !== currentActorId &&
+        String(reader.account_id) !== currentUserId
     );
     const messageStatus: "sent" | "seen" = isSeen ? "seen" : "sent";
-    const recipientAvatar = selectedConversation
-      ? getAvatar(selectedConversation)
-      : undefined;
+
+    const seenReaderIds = Array.from(
+      new Set(
+        (message.read_by || [])
+          .map((reader) => String(reader.account_id))
+          .filter(
+            (accountId) =>
+              accountId &&
+              accountId !== currentActorId &&
+              accountId !== currentUserId
+          )
+      )
+    );
+    const seenAvatars = seenReaderIds.map(getAccountAvatar).filter(Boolean);
+    const isLatestSeenOwnMessage =
+      isSender && String(message._id) === String(latestSeenOwnMessageId) && isSeen;
+
     const isGroupMessage = ["group", "ticket", "dispute"].includes(
       selectedConversation?.conversation_type || ""
     );
     const isTicketMessage =
       selectedConversation?.conversation_type === "ticket";
-    const groupSeenAvatars = isGroupMessage
-      ? Array.from(
-          new Set(
-            (message.read_by || [])
-              .map((reader) => String(reader.account_id))
-              .filter((accountId) => accountId !== currentActorId)
-          )
-        ).map((accountId) => {
-          const profile = profiles[accountId];
-          const avatar = profile?.avatar_preset_url;
-          if (avatar && /^https?:\/\//i.test(avatar)) return avatar;
-          if (avatar) {
-            const base = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/$/, "");
-            if (base) return `${base}/${avatar.replace(/^\/+/, "")}`;
-          }
-          return `https://ui-avatars.com/api/?name=${encodeURIComponent(
-            profile?.name || `User ${accountId.slice(0, 8)}`
-          )}&background=6366f1&color=fff`;
-        })
-      : [];
     const senderProfile = profiles[String(message.sender_id)];
     const senderMembership = selectedConversation?.members?.find(
       (member) => String(member.account_id) === String(message.sender_id)
@@ -925,19 +1016,13 @@ const InboxMain = () => {
                     isSender={isSender}
                     status={isSender ? messageStatus : undefined}
                     recipientAvatar={
-                      isSender &&
-                      selectedConversation?.conversation_type === "direct" &&
-                      String(message._id) === String(latestSeenOwnMessageId) &&
-                      isSeen
-                        ? recipientAvatar
+                      isLatestSeenOwnMessage && seenAvatars.length <= 1
+                        ? (seenAvatars[0] || (selectedConversation ? getAvatar(selectedConversation) : undefined))
                         : undefined
                     }
                     recipientAvatars={
-                      isSender &&
-                      isGroupMessage &&
-                      String(message._id) === String(latestSeenOwnMessageId) &&
-                      isSeen
-                        ? groupSeenAvatars
+                      isLatestSeenOwnMessage && seenAvatars.length > 1
+                        ? seenAvatars
                         : undefined
                     }
                   />

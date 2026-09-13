@@ -68,6 +68,7 @@
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"cmdk": "^0.2.1",
+		"cn": "^0.2.6",
 		"dotenv": "^17.0.0",
 		"fabric": "^7.4.0",
 		"ffprobe-static": "^3.1.0",

@@ -1,5 +1,5 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import UserNav from "@/components/nav/user_nav.tsx";
 import UtilScrollTop from "@/components/utility/util_scroll_top.tsx";
 import useGlobalState from "@/lib/global_state.ts";
@@ -41,19 +41,85 @@ const Layout = () => {
   const removeFloatingWindow = useChatState(
     (state) => state.removeFloatingWindow
   );
+  const conversations = useChatState((state) => state.conversations);
   const floatingWindows = useChatState((state) => state.floatingWindows);
   const activeFloatingId = useChatState((state) => state.activeFloatingId);
   const unreadCounts = useChatState((state) => state.unreadCounts);
 
   const isInboxPage = location.pathname.startsWith("/inbox");
+  const currentUserId = String(user?.account_id || "");
+
+  const recentChats = useMemo(() => {
+    const conversationTargets: ChatTarget[] = conversations.map((conv) => {
+      const convId = String(conv._id);
+      let targetName = conv.conversation_name || "";
+      let targetAvatar: string | undefined = conv.conversation_image_key || undefined;
+      let targetId = convId;
+      let targetAccountId: string | undefined = undefined;
+
+      if (conv.conversation_type === "direct") {
+        const other = (conv.members || []).find(
+          (m: any) => String(m.account_id) !== currentUserId
+        );
+        if (other) {
+          targetName = other.name || other.username || targetName || "User";
+          targetAvatar = other.avatar_preset_url || targetAvatar;
+          targetId = String(other.account_id);
+          targetAccountId = String(other.account_id);
+        } else if (
+          (conv.members || []).length === 1 &&
+          String((conv.members || [])[0]?.account_id) === currentUserId
+        ) {
+          targetName = user?.name || user?.display_name || "Note to self";
+          targetAvatar = user?.avatar_preset_url || user?.avatar_url;
+          targetId = currentUserId;
+          targetAccountId = currentUserId;
+        }
+      }
+
+      if (!targetName) {
+        targetName =
+          conv.listing_title ||
+          (conv.conversation_type === "group" ? "Group Chat" : "Conversation");
+      }
+
+      return {
+        id: targetId,
+        inbox_id: convId,
+        account_id: targetAccountId,
+        name: targetName,
+        avatarUrl: targetAvatar,
+        unreadCount: unreadCounts[convId] || conv.unread_count || 0,
+        conversationType: conv.conversation_type,
+        listingType: conv.listing_type,
+        listingTitle: conv.listing_title,
+      };
+    });
+
+    const existingIds = new Set(
+      conversationTargets.map((c) => String(c.inbox_id || c.id))
+    );
+    const additionalFloating = floatingWindows
+      .filter((fw) => !existingIds.has(String(fw.inbox_id || fw.id)))
+      .map((fw) => ({
+        ...fw,
+        unreadCount:
+          unreadCounts[String(fw.inbox_id || fw.id)] || fw.unreadCount || 0,
+      }));
+
+    return [...additionalFloating, ...conversationTargets];
+  }, [conversations, currentUserId, floatingWindows, unreadCounts, user]);
+
   const activeChatUser =
+    recentChats.find(
+      (chat) =>
+        String(chat.id) === String(activeFloatingId) ||
+        String(chat.inbox_id) === String(activeFloatingId)
+    ) ||
     floatingWindows.find(
       (chat) => String(chat.id) === String(activeFloatingId)
-    ) || null;
-  const recentChats = floatingWindows.map((chat) => ({
-    ...chat,
-    unreadCount: unreadCounts[String(chat.id)] || 0,
-  }));
+    ) ||
+    null;
 
   // Dynamic margin left based on sidebar state
   const marginLeft = isSidebarCollapsed ? "5rem" : "16rem";

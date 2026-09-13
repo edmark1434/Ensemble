@@ -185,8 +185,6 @@ exports.up = (pgm) => {
     },
     `
     BEGIN
-        INSERT INTO account_verification(account_id, status, created_at)
-        VALUES (NEW.account_id, 'unverified', NOW());
         RETURN NEW;
     END;
     `

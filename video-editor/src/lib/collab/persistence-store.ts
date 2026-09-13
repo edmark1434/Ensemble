@@ -30,13 +30,22 @@ export async function compactProject(projectId: string, extraUpdate?: Uint8Array
   const doc = new Y.Doc({ gc: false });
   if (snapshotRow) Y.applyUpdate(doc, snapshotRow.document);
   for (const row of updateRows) Y.applyUpdate(doc, row.update);
-  // Folding this in (rather than trusting room.doc alone when called from
-  // the websocket path) is what makes it safe to delete the DB rows below
-  // even if room.doc, via some race, is missing one of them: applying an
-  // update twice is a no-op, applying one room.doc lacks just adds it.
   if (extraUpdate) Y.applyUpdate(doc, extraUpdate);
 
   const compacted = Buffer.from(Y.encodeStateAsUpdate(doc));
+
+  // meta.duration is written in ms (see mirror-out.ts / ydoc-schema.ts);
+  // projects.duration_seconds wants seconds. projectName maps to
+  // projects.name; width/height come out of meta.size, not separate keys.
+  const meta = doc.getMap("meta");
+  const durationMs = meta.get("duration") as number | undefined;
+  const durationSeconds =
+    typeof durationMs === "number" ? Math.floor(durationMs / 1000) : undefined;
+  const name = meta.get("projectName") as string | undefined;
+  const size = meta.get("size") as { width?: number; height?: number } | undefined;
+  const width = size?.width;
+  const height = size?.height;
+
   doc.destroy();
 
   await db.transaction().execute(async (trx) => {
@@ -50,6 +59,28 @@ export async function compactProject(projectId: string, extraUpdate?: Uint8Array
       .insertInto("project_yjs_snapshots")
       .values({ yjs_snapshot_id: newSnapshot.yjs_snapshot_id, project_id: projectId })
       .execute();
+
+    type ProjectSync = Partial<{
+      name: string;
+      width: number;
+      height: number;
+      duration_seconds: number;
+      updated_at: Date;
+    }>;
+
+    const projectUpdate: ProjectSync = {};
+    if (typeof name === "string") projectUpdate.name = name;
+    if (typeof width === "number") projectUpdate.width = width;
+    if (typeof height === "number") projectUpdate.height = height;
+    if (durationSeconds !== undefined) projectUpdate.duration_seconds = durationSeconds;
+
+    if (Object.keys(projectUpdate).length > 0) {
+      await trx
+        .updateTable("projects")
+        .set({ ...projectUpdate, updated_at: new Date() })
+        .where("project_id", "=", projectId)
+        .execute();
+    }
 
     const idsToTrim = updateRows.map((r) => r.yjs_update_id);
     if (idsToTrim.length) {
@@ -95,25 +126,4 @@ export async function loadLatestProjectState(projectId: string): Promise<Persist
     snapshot: snapshotRow?.document ?? null,
     updates: updateRows.map((r) => r.update),
   };
-}
-
-// Inserts a new snapshot without touching yjs_updates. Safe by construction:
-// Yjs updates are idempotent, so any row in yjs_updates that predates this
-// snapshot just gets harmlessly replayed again on top of it by
-// loadLatestProjectState. Left for compactProject (updates/route.ts) to
-// eventually reconcile away — see note in websocket/collab.ts about not
-// duplicating that compaction logic here without seeing it first.
-export async function persistProjectSnapshot(projectId: string, document: Buffer): Promise<void> {
-  await db.transaction().execute(async (trx) => {
-    const snapshot = await trx
-      .insertInto("yjs_snapshots")
-      .values({ document })
-      .returning("yjs_snapshot_id")
-      .executeTakeFirstOrThrow();
-
-    await trx
-      .insertInto("project_yjs_snapshots")
-      .values({ yjs_snapshot_id: snapshot.yjs_snapshot_id, project_id: projectId })
-      .execute();
-  });
 }
