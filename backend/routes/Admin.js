@@ -17,6 +17,7 @@ const {
   postAdminAccountCreditFreeze,
   postAdminAccountWarn,
   postAdminAccountPardon,
+  getAdminAccountActivity,
 } = require('../controllers/AdminUserTeamControllers');
 
 /** Admin + Support: full User & Team. Forum/Marketplace: read + limited enforcement. */
@@ -38,6 +39,7 @@ const {
   patchAdminModerationCase,
   deleteAdminModerationCase,
   postAdminModerationCaseAssignMyself,
+  postAdminModerationActivityReverse,
 } = require('../controllers/AdminModerationControllers');
 const { getAdminAnalyticsOverview } = require('../controllers/AdminAnalyticsControllers');
 const {
@@ -79,12 +81,14 @@ router.post('/accounts/:accountId/credits/adjust', [checkSession, requireUserTea
 router.post('/accounts/:accountId/credits/freeze', [checkSession, requireUserTeamFullWrite], postAdminAccountCreditFreeze);
 router.post('/accounts/:accountId/warn', [checkSession, requireUserTeamAccess], postAdminAccountWarn);
 router.post('/accounts/:accountId/pardon', [checkSession, requireUserTeamFullWrite], postAdminAccountPardon);
+router.get('/accounts/:accountId/activity', [checkSession, requireUserTeamAccess], getAdminAccountActivity);
 router.get('/economy-overview', [checkSession, requireAdmin], getAdminEconomyOverview);
 router.get('/economy/wallets/:walletId', [checkSession, requireAdmin], getAdminWalletDetail);
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);
 router.patch('/moderation/cases/:id', [checkSession, requireAdmin], patchAdminModerationCase);
 router.delete('/moderation/cases/:id', [checkSession, requireAdmin], deleteAdminModerationCase);
 router.post('/moderation/cases/:id/assign-myself', [checkSession, requireAdmin], postAdminModerationCaseAssignMyself);
+router.post('/moderation/activity/:id/reverse', [checkSession, requireAdmin], postAdminModerationActivityReverse);
 router.get('/analytics-overview', [checkSession, requireAdmin], getAdminAnalyticsOverview);
 router.get('/tickets-overview', [checkSession, requireAdmin], getAdminTicketsOverview);
 router.post('/tickets', [checkSession, requireAdmin], createAdminTicket);

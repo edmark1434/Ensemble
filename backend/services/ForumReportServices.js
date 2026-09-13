@@ -10,18 +10,18 @@ function reportError(message, statusCode = 400) {
   return error;
 }
 
-function validateReportDetails(reason, description) {
-  const cleanReason = String(reason || '').trim();
+function validateReportDetails(typeOrReason, description) {
+  const cleanType = String(typeOrReason || '').trim();
   const cleanDescription = String(description || '').trim();
 
-  if (!cleanReason || cleanReason.length > 100) {
-    throw reportError('A valid report reason is required');
+  if (!cleanType || cleanType.length > 100) {
+    throw reportError('A valid report type is required');
   }
   if (cleanDescription.length < 20) {
     throw reportError('Report details must contain at least 20 characters');
   }
 
-  return { reason: cleanReason, description: cleanDescription };
+  return { type: cleanType, description: cleanDescription };
 }
 
 async function requireUser(userId, message) {
@@ -49,16 +49,17 @@ async function submitGroupReport(groupId, payload, session) {
     throw reportError('You cannot report your own forum group', 403);
   }
 
-  const details = validateReportDetails(payload.reason, payload.description);
+  const details = validateReportDetails(payload.type || payload.reason, payload.description);
+  const label = group.group_name || 'Forum group';
   return createReport({
     reportNumber: createReportNumber(),
     reporterAccountId: reporter.account_id,
     targetAccountId: target.account_id,
     targetType: 'group',
     targetId: String(group._id),
-    targetLabel: group.group_name || 'Forum group',
     referenceTable: 'forum_groups',
-    ...details,
+    type: details.type,
+    description: `${label}\n${details.description}`,
   });
 }
 
@@ -79,38 +80,42 @@ async function submitMemberReport(groupId, memberId, payload, session) {
     throw reportError('You cannot report yourself', 403);
   }
 
-  const details = validateReportDetails(payload.reason, payload.description);
-  const targetName = [target.first_name, target.last_name].filter(Boolean).join(' ');
+  const details = validateReportDetails(payload.type || payload.reason, payload.description);
+  const targetName = [target.first_name, target.last_name].filter(Boolean).join(' ') || target.handle;
   return createReport({
     reportNumber: createReportNumber(),
     reporterAccountId: reporter.account_id,
     targetAccountId: target.account_id,
     targetType: 'member',
     targetId: String(target.user_id),
-    targetLabel: targetName || 'Forum member',
-    referenceTable: 'users',
-    ...details,
+    referenceTable: 'forum_members',
+    type: details.type,
+    description: `${targetName || 'Forum member'}\n${details.description}`,
   });
 }
 
 async function submitDiscussionReport(discussionId, payload, session) {
   const reporter = await requireUser(session?.userId, 'Reporter account not found');
   const discussion = await getForumDiscussionById(discussionId);
-  if (!discussion) throw reportError('Forum discussion not found', 404);
-  const target = await requireUser(discussion.user_id, 'Discussion author not found');
-  if (String(reporter.user_id) === String(target.user_id)) {
+  if (!discussion) {
+    throw reportError('Forum discussion not found', 404);
+  }
+
+  const author = await requireUser(discussion.author_id || discussion.userId, 'Discussion author not found');
+  if (String(reporter.user_id) === String(author.user_id)) {
     throw reportError('You cannot report your own discussion', 403);
   }
-  const details = validateReportDetails(payload.reason, payload.description);
+
+  const details = validateReportDetails(payload.type || payload.reason, payload.description);
   return createReport({
     reportNumber: createReportNumber(),
     reporterAccountId: reporter.account_id,
-    targetAccountId: target.account_id,
+    targetAccountId: author.account_id,
     targetType: 'discussion',
     targetId: String(discussion._id),
-    targetLabel: discussion.title || 'Forum discussion',
     referenceTable: 'forum_discussions',
-    ...details,
+    type: details.type,
+    description: `${discussion.title || 'Forum discussion'}\n${details.description}`,
   });
 }
 

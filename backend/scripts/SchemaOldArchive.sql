@@ -13,11 +13,11 @@
 -- wallets(wallet_id, type, status, balance_credits, frozen_balance_credits)
 -- account_wallets(wallet_id, account_id)
 -- credit_transactions(credit_transaction_id, type, amount_credits, status, source_wallet_id, destination_wallet_id)
--- platform_settings(setting_key PK, setting_value jsonb, updated_at, updated_by_staff_id)
+-- configuration(configuration_key PK, name, description, current_value_literal, default_value_literal, updated_at)
 
 -- Moderation / support
 -- reports, disputes, violations, marketplace_listings
--- tickets, ticket_chats, ticket_type_catalog, ticket_status_catalog, ticket_priority_catalog
+-- tickets (type/status/priority enums), ticket_chats (ticket_id + chat_id)
 
 CREATE TABLE IF NOT EXISTS accounts (
     account_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -108,11 +108,13 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
     related_dispute_id UUID
 );
 
-CREATE TABLE IF NOT EXISTS platform_settings (
-    setting_key VARCHAR(100) PRIMARY KEY,
-    setting_value JSONB NOT NULL DEFAULT '{}',
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_by_staff_id UUID REFERENCES staff(staff_id)
+CREATE TABLE IF NOT EXISTS configuration (
+    configuration_key VARCHAR(100) PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    current_value_literal TEXT NOT NULL,
+    default_value_literal TEXT NOT NULL,
+    updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS reports (
@@ -143,26 +145,24 @@ CREATE TABLE IF NOT EXISTS disputes (
     dispute_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     dispute_number VARCHAR(20) UNIQUE,
     title VARCHAR(255),
-    reason TEXT,
+    description TEXT,
+    type VARCHAR(50) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'open',
-    priority VARCHAR(20) NOT NULL DEFAULT 'high',
-    visibility VARCHAR(20) NOT NULL DEFAULT 'pending',
-    initiator_account_id UUID REFERENCES accounts(account_id),
-    respondent_account_id UUID REFERENCES accounts(account_id),
-    related_entity_type VARCHAR(50),
-    related_entity_id VARCHAR(100),
-    assigned_staff_id UUID REFERENCES staff(staff_id),
-    approved_at TIMESTAMPTZ,
-    approved_by_staff_id UUID REFERENCES staff(staff_id),
-    outcome VARCHAR(50),
+    priority VARCHAR(20) NOT NULL DEFAULT 'High',
+    visibility BOOLEAN NOT NULL DEFAULT FALSE,
+    by_account_id UUID NOT NULL REFERENCES accounts(account_id),
+    for_account_id UUID NOT NULL REFERENCES accounts(account_id),
+    handled_by_staff_id UUID REFERENCES staff(staff_id),
+    escalated_by_staff_id UUID REFERENCES staff(staff_id),
     sanction_type VARCHAR(50),
-    sanction_notes TEXT,
     related_credit_transaction_id UUID REFERENCES credit_transactions(credit_transaction_id),
     credit_amount_involved INTEGER NOT NULL DEFAULT 0,
     opened_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     resolved_at TIMESTAMPTZ,
-    resolution_notes TEXT
+    resolution_notes TEXT,
+    deleted_at TIMESTAMP WITHOUT TIME ZONE
 );
 
 -- Live DBs also add: credit_transactions.related_dispute_id → disputes(dispute_id)

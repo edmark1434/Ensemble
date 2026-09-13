@@ -103,7 +103,7 @@ type AdvancedFilters = {
   priority: PriorityFilter;
   assignee: AssigneeFilter;
   targetType: string;
-  reason: string;
+  type: string;
   sort: SortKey;
 };
 
@@ -111,7 +111,7 @@ const DEFAULT_ADVANCED: AdvancedFilters = {
   priority: 'all',
   assignee: 'all',
   targetType: 'all',
-  reason: 'all',
+  type: 'all',
   sort: 'filed_desc',
 };
 
@@ -185,10 +185,10 @@ export default function ReportDesk({
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [reports]);
 
-  const reasons = useMemo(() => {
+  const reportTypes = useMemo(() => {
     const set = new Map<string, string>();
     for (const r of reports) {
-      const raw = String(r.reason || '').trim();
+      const raw = String(r.type || '').trim();
       if (!raw) continue;
       const key = normalizeToken(raw);
       if (!set.has(key)) set.set(key, raw);
@@ -231,7 +231,7 @@ export default function ReportDesk({
     if (advanced.priority !== 'all') n += 1;
     if (advanced.assignee !== 'all') n += 1;
     if (advanced.targetType !== 'all') n += 1;
-    if (advanced.reason !== 'all') n += 1;
+    if (advanced.type !== 'all') n += 1;
     if (advanced.sort !== 'filed_desc') n += 1;
     return n;
   }, [advanced]);
@@ -272,18 +272,17 @@ export default function ReportDesk({
       ) {
         return false;
       }
-      if (advanced.reason !== 'all' && normalizeToken(r.reason) !== advanced.reason) {
+      if (advanced.type !== 'all' && normalizeToken(r.type) !== advanced.type) {
         return false;
       }
 
       if (!q) return true;
       const hay = [
         r.number,
-        r.reason,
+        r.type,
         r.description,
         r.reporter?.name,
         r.reporter?.username,
-        r.targetLabel,
         r.targetType,
         r.targetId,
         r.assignee?.name,
@@ -370,7 +369,7 @@ export default function ReportDesk({
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search number, reporter, target, reason…"
+                placeholder="Search number, reporter, target, type…"
                 className={`w-full rounded-xl border border-white/[0.08] bg-[#14151c] py-2.5 pl-9 pr-3 text-sm text-white outline-none placeholder:text-zinc-600 ${theme.focus}`}
               />
             </div>
@@ -448,16 +447,16 @@ export default function ReportDesk({
                 </select>
               </FilterField>
 
-              <FilterField label="Reason">
+              <FilterField label="Type">
                 <select
-                  value={advanced.reason}
-                  onChange={(e) => setAdvanced((p) => ({ ...p, reason: e.target.value }))}
+                  value={advanced.type}
+                  onChange={(e) => setAdvanced((p) => ({ ...p, type: e.target.value }))}
                   className={selectClass}
                 >
-                  <option value="all">All reasons</option>
-                  {reasons.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
+                  <option value="all">All types</option>
+                  {reportTypes.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
                     </option>
                   ))}
                 </select>
@@ -551,9 +550,8 @@ export default function ReportDesk({
               <thead>
                 <tr className="border-b border-white/[0.06] text-[11px] uppercase tracking-wide text-zinc-500">
                   <th className="px-5 py-3 font-medium">Report</th>
-                  <th className="px-4 py-3 font-medium">Reason</th>
-                  <th className="px-4 py-3 font-medium">Target</th>
                   <th className="px-4 py-3 font-medium">Type</th>
+                  <th className="px-4 py-3 font-medium">Target</th>
                   <th className="px-4 py-3 font-medium">Reporter</th>
                   <th className="px-4 py-3 font-medium">Priority</th>
                   <th className="px-4 py-3 font-medium">Status</th>
@@ -576,20 +574,15 @@ export default function ReportDesk({
                       )}
                     </td>
                     <td className="px-4 py-3.5">
-                      <p className="line-clamp-2 max-w-[180px] text-zinc-200">{r.reason || '—'}</p>
+                      <p className="line-clamp-2 max-w-[180px] text-zinc-200">{r.type || '—'}</p>
                     </td>
                     <td className="px-4 py-3.5">
                       <p className="max-w-[160px] truncate text-zinc-200">
-                        {r.targetLabel || r.targetId || '—'}
+                        {titleCase(r.targetType) || '—'}
                       </p>
-                      {r.targetId && r.targetLabel && (
+                      {r.targetId && (
                         <p className="truncate text-[11px] text-zinc-600">{r.targetId}</p>
                       )}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className="inline-flex rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] text-zinc-300">
-                        {titleCase(r.targetType) || '—'}
-                      </span>
                     </td>
                     <td className="px-4 py-3.5">
                       <p className="text-zinc-200">{r.reporter?.name || '—'}</p>
@@ -623,13 +616,13 @@ export default function ReportDesk({
                       {formatDateTime(r.createdAt)}
                     </td>
                     <td className="px-5 py-3.5 text-xs text-zinc-500">
-                      {formatDateTime(r.updatedAt || r.resolvedAt || r.createdAt)}
+                      {formatDateTime(r.updatedAt || r.createdAt)}
                     </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-5 py-16 text-center text-sm text-zinc-500">
+                    <td colSpan={9} className="px-5 py-16 text-center text-sm text-zinc-500">
                       No reports match this filter.
                     </td>
                   </tr>

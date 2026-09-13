@@ -61,7 +61,7 @@ export async function freezeAccountCredits(
 
 export async function warnAccount(
   accountId: string,
-  payload: { title?: string; reason?: string; points?: number },
+  payload: { type?: string; reason?: string; points?: number; expiresAt?: string },
   options?: ActionOptions
 ) {
   const res = await api.post(`/api/admin/accounts/${accountId}/warn`, payload);

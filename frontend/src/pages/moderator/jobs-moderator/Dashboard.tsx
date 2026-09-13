@@ -513,9 +513,10 @@ export default function JobsModeratorDashboard() {
                       <p className="text-xs font-medium text-emerald-200">{r.number}</p>
                       <span className="text-[10px] text-zinc-500">{titleCaseWords(r.status)}</span>
                     </div>
-                    <p className="line-clamp-1 text-sm text-white">{r.reason}</p>
+                    <p className="line-clamp-1 text-sm text-white">{r.type}</p>
                     <p className="text-[11px] text-zinc-500">
-                      {r.targetLabel || r.targetId} · {r.targetType}
+                      {r.targetType}
+                      {r.targetId ? ` · ${r.targetId}` : ''}
                       {r.assignee ? ` · ${r.assignee.name}` : ' · Unassigned'}
                     </p>
                   </button>
@@ -556,7 +557,7 @@ export default function JobsModeratorDashboard() {
                       <p className="truncate text-sm font-medium text-white">{d.title}</p>
                       <p className="text-[11px] text-zinc-500">
                         {d.number} · {d.creditAmount.toLocaleString()} credits ·{' '}
-                        {d.relatedEntityType || '—'}
+                        {d.type || '—'}
                       </p>
                     </div>
                     <StatusBadge status={d.status} />

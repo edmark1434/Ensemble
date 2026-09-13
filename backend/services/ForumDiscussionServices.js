@@ -469,6 +469,14 @@ async function createForumDiscussionServices(discussionPayload, session = {}) {
         throw new Error(`Invalid discussion payload: ${validationResult.errors.join(', ')}`);
     }
 
+    const { evaluateUserContent } = require('../lib/ModerationPolicy');
+    const scan = await evaluateUserContent(
+        `${normalizedPayload.title || ''} ${normalizedPayload.content || ''}`
+    );
+    if (scan.blocked) {
+        throw new Error(scan.reasons.join('. ') || 'Content blocked by automod');
+    }
+
     const createdDiscussion = {
         ...normalizedPayload,
         created_at: new Date(),
@@ -479,6 +487,8 @@ async function createForumDiscussionServices(discussionPayload, session = {}) {
         likes: [],
         saves: [],
         comments: [],
+        flagged_for_review: Boolean(scan.flags.suspiciousLinks),
+        automod_flags: scan.flags,
     };
     const insertedId = await createForumDiscussionRepositories(createdDiscussion);
     const discussion = { ...createdDiscussion, _id: insertedId };
@@ -1104,6 +1114,12 @@ async function addForumDiscussionCommentServices(discussionId, payload = {}, ses
         throw new Error('comment or attachment is required');
     }
 
+    const { evaluateUserContent } = require('../lib/ModerationPolicy');
+    const scan = await evaluateUserContent(payload.comment);
+    if (scan.blocked) {
+        throw new Error(scan.reasons.join('. ') || 'Content blocked by automod');
+    }
+
     const parentCommentId = payload.comment_reference_id ?? null;
     if (parentCommentId) {
         const parentComment = discussion.comments?.find(
@@ -1124,6 +1140,8 @@ async function addForumDiscussionCommentServices(discussionId, payload = {}, ses
         deleted_at: null,
         attachments,
         likes: [],
+        flagged_for_review: Boolean(scan.flags.suspiciousLinks),
+        automod_flags: scan.flags,
     };
 
     const created = await addForumDiscussionCommentRepository(discussionId, commentPayload);

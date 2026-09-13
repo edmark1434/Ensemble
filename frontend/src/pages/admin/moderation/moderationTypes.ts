@@ -34,6 +34,11 @@ export type ModerationActivity = {
   timestamp: string | null;
   status: string;
   notes: string;
+  eventCode?: string;
+  accountId?: string | null;
+  referenceTable?: string | null;
+  referenceId?: string | null;
+  reversible?: boolean;
 };
 
 export type ModeratorProfile = {
@@ -114,10 +119,13 @@ export type ModerationOverview = {
     spamFilterEnabled: boolean;
     autoFlagProfanity: boolean;
     autoHoldNewAccounts: boolean;
-    maxWarningsBeforeSuspend: number;
     forumLinkScanning: boolean;
     marketplaceListingReview: boolean;
     disputeAutoAssign: boolean;
+    maxWarningsBeforeSuspend: number;
+    autoEscalateHighPriority: boolean;
+    reportToTicketAutoCreate: boolean;
   };
+  forumMongoConnected?: boolean;
   alerts: ModerationAlert[];
 };

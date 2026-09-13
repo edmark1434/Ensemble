@@ -1,4 +1,4 @@
-import { Briefcase, Flag, LayoutDashboard, Scale, Ticket, Users } from 'lucide-react';
+import { Briefcase, Flag, LayoutDashboard, Scale, ShieldBan, Ticket, Users } from 'lucide-react';
 import ModeratorNavbar from '../shared/ModeratorNavbar';
 
 const navItems = [
@@ -7,6 +7,7 @@ const navItems = [
   { label: 'Ticket Management', icon: Ticket, to: '/moderator/jobs/ticket-management' },
   { label: 'Disputes', icon: Scale, to: '/moderator/jobs/disputes' },
   { label: 'Reports', icon: Flag, to: '/moderator/jobs/reports' },
+  { label: 'Restrictions', icon: ShieldBan, to: '/moderator/jobs/restrictions' },
   { label: 'User & Team', icon: Users, to: '/moderator/jobs/user-team' },
 ];
 

@@ -26,7 +26,7 @@ import {
   X,
   Hand,
 } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
@@ -56,8 +56,8 @@ function disputeToModerationCase(d: Dispute): ModerationCase {
     target: d.title || d.number,
     targetHandle: d.number,
     targetType: 'Dispute',
-    reason: d.reason || d.title || 'Dispute case',
-    description: d.reason,
+    reason: d.description || d.title || 'Dispute case',
+    description: d.description,
     referenceNumber: d.number,
     assignedRole: d.assignee?.role || null,
     assignedStaffId: d.assignee?.staffId ?? null,
@@ -373,7 +373,14 @@ export default function ModerationPage() {
       </div>
 
       {selectedActivity && (
-        <ActivityDetailModal activity={selectedActivity} onClose={() => setSelectedActivity(null)} />
+        <ActivityDetailModal
+          activity={selectedActivity}
+          onClose={() => setSelectedActivity(null)}
+          onReversed={(entries) => {
+            setData((prev) => (prev ? { ...prev, recentActivity: entries } : prev));
+            setSelectedActivity(null);
+          }}
+        />
       )}
     </main>
   );
@@ -1122,8 +1129,9 @@ function ManagementTab({
 }) {
   const meta: Record<ManagementSection, { title: string; description: string }> = {
     automated: {
-      title: 'Automated moderation settings',
-      description: 'Rules that run without manual intervention. Saved to platform settings.',
+      title: 'Automod status',
+      description:
+        'Live snapshot of automated rules. Edit them in System Settings → Moderation.',
     },
     moderators: {
       title: 'Moderator management',
@@ -1165,7 +1173,10 @@ function ManagementTab({
       </div>
 
       {section === 'automated' && (
-        <AutomatedSettingsSection settings={data.automatedSettings} onSaved={onSaved} />
+        <AutomatedSettingsSection
+          settings={data.automatedSettings}
+          forumMongoConnected={data.forumMongoConnected !== false}
+        />
       )}
       {section === 'moderators' && (
         <ModeratorsSection
@@ -1188,138 +1199,116 @@ function ManagementTab({
 
 function AutomatedSettingsSection({
   settings,
-  onSaved,
+  forumMongoConnected = true,
 }: {
   settings: ModerationOverview['automatedSettings'];
-  onSaved?: () => void;
+  forumMongoConnected?: boolean;
 }) {
-  const [local, setLocal] = useState(settings);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => setLocal(settings), [settings]);
-
-  const toggles: {
-    key: keyof Omit<ModerationOverview['automatedSettings'], 'maxWarningsBeforeSuspend'>;
-    label: string;
-    hint: string;
-  }[] = [
-    { key: 'spamFilterEnabled', label: 'Spam filter', hint: 'Block repetitive and bulk spam patterns' },
-    { key: 'autoFlagProfanity', label: 'Auto-flag profanity', hint: 'Flag posts containing blocked language' },
+  const rules: { label: string; on: boolean; hint: string }[] = [
+    { label: 'Spam filter', on: settings.spamFilterEnabled, hint: 'Blocks repetitive spam in forum posts' },
+    { label: 'Auto-flag profanity', on: settings.autoFlagProfanity, hint: 'Blocks blocked language in forum posts' },
     {
-      key: 'autoHoldNewAccounts',
-      label: 'Hold new accounts for review',
-      hint: 'Delay full access until a quick check',
+      label: 'Hold new accounts',
+      on: settings.autoHoldNewAccounts,
+      hint: 'New signups start Locked until staff unlocks them',
     },
-    { key: 'forumLinkScanning', label: 'Forum link scanning', hint: 'Scan outbound links in discussions' },
     {
-      key: 'marketplaceListingReview',
+      label: 'Forum link scanning',
+      on: settings.forumLinkScanning,
+      hint: forumMongoConnected
+        ? 'Flags outbound links for review'
+        : 'Saved on, but inactive while MongoDB is down',
+    },
+    {
       label: 'Marketplace listing review',
-      hint: 'Queue new listings for staff review',
+      on: settings.marketplaceListingReview,
+      hint: 'Publish attempts queue a pending listing and stay draft',
     },
-    { key: 'disputeAutoAssign', label: 'Auto-assign disputes', hint: 'Round-robin assign open disputes' },
+    { label: 'Auto-assign disputes', on: settings.disputeAutoAssign, hint: 'Round-robin assign unassigned disputes' },
+    {
+      label: 'Auto-escalate high priority',
+      on: settings.autoEscalateHighPriority,
+      hint: 'Raises priority on serious report types',
+    },
+    {
+      label: 'Auto-create ticket from report',
+      on: settings.reportToTicketAutoCreate,
+      hint: 'Opens a support ticket when a report is filed',
+    },
   ];
 
-  const dirty =
-    JSON.stringify(local) !== JSON.stringify(settings);
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const res = await api.patch('/api/admin/settings', {
-        section: 'moderation',
-        values: local,
-      });
-      if (!res.data?.success) throw new Error(res.data?.message || 'Save failed');
-      showSuccessToast('Moderation settings saved');
-      onSaved?.();
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to save settings');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const enabledCount = rules.filter((r) => r.on).length;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+    <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
       <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <Gavel className="h-5 w-5 text-rose-400" />
-          <h3 className="font-semibold text-white">Rule toggles</h3>
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Bot className="h-5 w-5 text-rose-400" />
+            <h3 className="font-semibold text-white">Active rules</h3>
+          </div>
+          <Link
+            to="/admin/system-settings?tab=moderation"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500"
+          >
+            <Settings2 className="h-4 w-4" />
+            Edit in Settings
+          </Link>
         </div>
+        <p className="mb-4 text-xs text-zinc-500">
+          {enabledCount} of {rules.length} rules on · max warnings before suspend:{' '}
+          <span className="text-zinc-300">{settings.maxWarningsBeforeSuspend}</span>
+        </p>
         <ul className="space-y-2">
-          {toggles.map(({ key, label, hint }) => (
+          {rules.map(({ label, on, hint }) => (
             <li
-              key={key}
+              key={label}
               className="flex items-center justify-between gap-4 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3"
             >
               <div className="min-w-0">
                 <p className="text-sm text-zinc-200">{label}</p>
                 <p className="text-xs text-zinc-600">{hint}</p>
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={local[key]}
-                onClick={() => setLocal((s) => ({ ...s, [key]: !s[key] }))}
-                className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-                  local[key] ? 'bg-rose-500' : 'bg-zinc-700'
+              <span
+                className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                  on ? 'bg-emerald-500/15 text-emerald-400' : 'bg-zinc-700/50 text-zinc-500'
                 }`}
               >
-                <span
-                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition ${
-                    local[key] ? 'translate-x-5' : ''
-                  }`}
-                />
-              </button>
+                {on ? 'On' : 'Off'}
+              </span>
             </li>
           ))}
         </ul>
-
-        <label className="mt-5 block text-xs text-zinc-500">
-          Max warnings before suspend
-          <input
-            type="number"
-            min={1}
-            max={20}
-            value={local.maxWarningsBeforeSuspend}
-            onChange={(e) =>
-              setLocal((s) => ({
-                ...s,
-                maxWarningsBeforeSuspend: Math.max(1, Number(e.target.value) || 1),
-              }))
-            }
-            className="mt-1 w-28 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/20"
-          />
-        </label>
-
-        <div className="mt-5 flex justify-end gap-2 border-t border-white/[0.06] pt-4">
-          <button
-            type="button"
-            disabled={!dirty || saving}
-            onClick={() => setLocal(settings)}
-            className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-zinc-300 disabled:opacity-40"
-          >
-            Reset
-          </button>
-          <button
-            type="button"
-            disabled={!dirty || saving}
-            onClick={() => void save()}
-            className="rounded-xl bg-rose-500/90 px-5 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-40"
-          >
-            {saving ? 'Saving…' : 'Save settings'}
-          </button>
-        </div>
       </section>
 
-      <SidePanel title="Persistence">
-        <p className="text-xs leading-relaxed text-zinc-500">
-          These values are stored in the{' '}
-          <code className="text-zinc-400">platform_settings</code> row with key{' '}
-          <code className="text-zinc-400">moderation</code>. Changes apply to future automated
-          actions immediately.
-        </p>
-      </SidePanel>
+      <div className="space-y-4">
+        <SidePanel title="Single editor">
+          <p className="text-xs leading-relaxed text-zinc-500">
+            This page is a status view only. Change toggles in{' '}
+            <strong className="font-medium text-zinc-400">System Settings → Moderation</strong>{' '}
+            (<code className="text-zinc-400">moderation.*</code>). Refresh here to see updates.
+          </p>
+          <Link
+            to="/admin/system-settings?tab=moderation"
+            className="mt-3 inline-flex text-xs font-medium text-rose-400 hover:underline"
+          >
+            Open Settings → Moderation
+          </Link>
+        </SidePanel>
+        <SidePanel title="Security (separate)">
+          <p className="text-xs leading-relaxed text-zinc-500">
+            Password length, login lockouts, 2FA, IP allowlist, and audit retention stay under{' '}
+            <strong className="font-medium text-zinc-400">System Settings → Security</strong> — not
+            part of Automod.
+          </p>
+          <Link
+            to="/admin/system-settings?tab=security"
+            className="mt-3 inline-flex text-xs font-medium text-rose-400 hover:underline"
+          >
+            Open Settings → Security
+          </Link>
+        </SidePanel>
+      </div>
     </div>
   );
 }
@@ -2304,10 +2293,35 @@ function ForumSection({
 function ActivityDetailModal({
   activity,
   onClose,
+  onReversed,
 }: {
   activity: ModerationActivity;
   onClose: () => void;
+  onReversed?: (entries: ModerationActivity[]) => void;
 }) {
+  const [reversing, setReversing] = useState(false);
+  const canReverse = Boolean(activity.reversible) && activity.status !== 'Reversed';
+
+  const reverseAction = async () => {
+    if (!canReverse || reversing) return;
+    setReversing(true);
+    try {
+      const res = await api.post(`/api/admin/moderation/activity/${activity.id}/reverse`);
+      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to reverse action');
+      showSuccessToast(res.data.message || 'Action reversed');
+      const entries = Array.isArray(res.data?.data) ? res.data.data : null;
+      if (entries) onReversed?.(entries);
+      else onClose();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (err instanceof Error ? err.message : 'Failed to reverse action');
+      showErrorToast(msg);
+    } finally {
+      setReversing(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[260px]">
       <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
@@ -2348,13 +2362,21 @@ function ActivityDetailModal({
             </dd>
           </div>
         </dl>
-        {activity.status === 'Completed' && (
+        {canReverse && (
           <button
             type="button"
-            className="mt-6 w-full rounded-xl border border-violet-500/30 bg-violet-500/10 py-2.5 text-sm text-violet-200"
+            disabled={reversing}
+            onClick={() => void reverseAction()}
+            className="mt-6 w-full rounded-xl border border-violet-500/30 bg-violet-500/10 py-2.5 text-sm text-violet-200 disabled:opacity-50"
           >
-            Reverse this action
+            {reversing ? 'Reversing…' : 'Reverse this action'}
           </button>
+        )}
+        {!canReverse && activity.status === 'Reversed' && (
+          <p className="mt-6 text-center text-xs text-zinc-500">This action has already been reversed.</p>
+        )}
+        {!canReverse && activity.status !== 'Reversed' && (
+          <p className="mt-6 text-center text-xs text-zinc-500">This activity cannot be reversed.</p>
         )}
       </div>
     </div>

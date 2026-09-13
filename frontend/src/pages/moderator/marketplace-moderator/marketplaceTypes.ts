@@ -30,7 +30,6 @@ export type MarketplaceTicket = {
   category: string;
   priority: string;
   status: string;
-  channel: string;
   requester: { accountId: number; name: string; username: string; email: string | null };
   assignee: { staffId: number; name: string; role: string } | null;
   messageCount: number;
@@ -122,22 +121,37 @@ export type Violation = {
   id: number;
   number: string;
   account: { accountId: number; name: string; handle: string; status: string };
-  title: string;
+  type: string;
   reason: string | null;
   points: number;
   status: string;
   issuedBy: string;
   createdAt: string;
+  expiresAt?: string | null;
+  active?: boolean;
 };
 
 export type RestrictedAccount = {
-  accountId: number;
+  accountId: string;
   name: string;
   handle: string;
   status: string;
 };
 
+export type AccountActivityItem = {
+  id: string;
+  accountId: string;
+  accountName?: string | null;
+  accountHandle?: string | null;
+  action: string;
+  eventCode: string;
+  actorName?: string | null;
+  actorRole?: string | null;
+  createdAt: string;
+};
+
 export type RestrictionsData = {
   violations: Violation[];
   restrictedAccounts: RestrictedAccount[];
+  recentActivity?: AccountActivityItem[];
 };

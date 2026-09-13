@@ -90,7 +90,6 @@ const PageSubmitATicket: React.FC = () => {
         subject: subject.trim(),
         type: ticketType,
         priority: "Medium",
-        channel: "web",
         description: description.trim(),
       });
       if (!response.data?.success) {

@@ -406,7 +406,7 @@ export default function SupportModeratorDashboard() {
                   <div className="min-w-0">
                     <p className="truncate text-zinc-200">{d.title}</p>
                     <p className="text-[11px] text-zinc-500">
-                      {d.number} · {d.relatedEntityType || "—"} ·{" "}
+                      {d.number} · {d.type || "—"} ·{" "}
                       <span className="text-amber-300/80">{d.creditAmount.toLocaleString()} credits</span>
                     </p>
                   </div>
@@ -439,9 +439,10 @@ export default function SupportModeratorDashboard() {
                   className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition hover:bg-white/[0.03]"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-zinc-200">{r.reason}</p>
+                    <p className="truncate text-zinc-200">{r.type}</p>
                     <p className="text-[11px] text-zinc-500">
-                      {r.number} · {r.targetType} · @{r.reporter.username}
+                      {r.number} · {r.targetType}
+                      {r.targetId ? ` · ${r.targetId}` : ''} · @{r.reporter.username}
                     </p>
                   </div>
                   <StatusBadge status={r.status} />
