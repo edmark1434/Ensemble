@@ -67,6 +67,7 @@ interface BlocksTable {
   color_space: string;
   frame_rate: number;
   project_id: string;
+  deleted_at: Date | null;
 }
 
 interface BlockMembersTable {

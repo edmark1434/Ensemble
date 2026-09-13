@@ -22,6 +22,7 @@ import {
 import { setupMirrorOutFromStateManager, setupMirrorOutFromStore } from "../collab/mirror-out";
 import { attachWsProvider } from "../collab/ws-provider";
 import {CollabTarget} from "@/features/editor/collab/collab-target";
+import {patchBlock} from "@/features/editor/control-item/common/composition-controls";
 
 export interface CollabDoc {
   doc: Y.Doc;
@@ -35,6 +36,29 @@ export interface CollabDoc {
   saveStatus: PersistenceStatus;
   compactStatus: "idle" | "compacting" | "error";
   forceSave: () => void;
+}
+
+// "Last resort" correction for drift between the durable Yjs doc (source of
+// truth for rendering) and the blocks table's own name/width/height
+// columns (source of truth for patchBlock's PATCH route, listings, etc.) —
+// e.g. a PATCH already landed in Postgres, then a local undo reverted the
+// same field in the doc, leaving Postgres pointing at a value the doc no
+// longer holds. Always reconciled FROM the doc, never the other direction,
+// at the two points a block's doc is guaranteed settled: right after it
+// finishes loading, and right before it's torn down.
+function reconcileBlockToDb(target: CollabTarget, schema: CollabSchema) {
+  if (target.kind !== "block") return;
+  const snapshot = readStateFromDoc(schema);
+  const updates: { name?: string; width?: number; height?: number } = {};
+  if (snapshot.projectName !== undefined) updates.name = snapshot.projectName;
+  if (snapshot.size) {
+    updates.width = snapshot.size.width;
+    updates.height = snapshot.size.height;
+  }
+  if (Object.keys(updates).length === 0) return;
+  patchBlock(target.id, updates).catch((err) => {
+    console.error("useCollabDoc: failed to reconcile block metadata to db", err);
+  });
 }
 
 // projectId here is the internal integer project_id sessions/snapshots key
@@ -318,6 +342,7 @@ export function useCollabDoc(
             useStore.setState({
               markers: snapshot.markers,
               ...(isProjectTarget && snapshot.projectName !== undefined ? { projectName: snapshot.projectName } : {}),
+              ...(!isProjectTarget && snapshot.projectName !== undefined ? { currentBlockName: snapshot.projectName } : {}),
               ...(snapshot.size ? { size: snapshot.size } : {}),
               ...(snapshot.fps !== undefined ? { fps: snapshot.fps } : {}),
               ...(snapshot.background ? { background: snapshot.background } : {}),
@@ -337,6 +362,8 @@ export function useCollabDoc(
             syncGuard.isApplyingRemote = false;
           }
         }
+
+        reconcileBlockToDb(target, schema);
 
         undoManager.clear();
         if (cancelled) return;
@@ -361,6 +388,7 @@ export function useCollabDoc(
       teardownTimelineWatch?.();
       if (timelineResyncInterval) clearInterval(timelineResyncInterval);
       if (activeSessionId !== null) endSession(activeSessionId);
+      reconcileBlockToDb(target, schema);
       useStore.getState().setCollabSchema(null, null);
       undoManager.destroy();
       schema.awareness.destroy();

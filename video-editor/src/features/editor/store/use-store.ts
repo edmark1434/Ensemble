@@ -83,6 +83,8 @@ interface ITimelineStore {
   activeSceneBlockId: string | null;
   activeSceneItemId: string | null;
   currentBlockName: string | null;
+  setCurrentBlockName: (name: string) => void;
+
   openScene: (blockId: string, itemId: string, name?: string) => void;
   closeScene: () => void;
 
@@ -238,6 +240,8 @@ const useStore = create<ITimelineStore>((set, get) => ({
   activeSceneBlockId: null,
   activeSceneItemId: null,
   currentBlockName: null,
+  setCurrentBlockName: (name: string) => set({ currentBlockName: name }),
+
   openScene: (blockId, itemId, name) =>
     set({ activeSceneBlockId: blockId, activeSceneItemId: itemId, currentBlockName: name ?? null }),
   closeScene: () => set({ activeSceneBlockId: null, activeSceneItemId: null, currentBlockName: null }),

@@ -73,6 +73,32 @@ export async function createBlock({
   });
 }
 
+export async function updateBlock({
+                                    blockId,
+                                    name,
+                                    width,
+                                    height,
+                                  }: {
+  blockId: string;
+  name?: string;
+  width?: number;
+  height?: number;
+}): Promise<void> {
+  const updates: Record<string, unknown> = {};
+  if (name !== undefined) updates.name = name;
+  if (width !== undefined) updates.resolution_width = width;
+  if (height !== undefined) updates.resolution_height = height;
+
+  if (Object.keys(updates).length === 0) return;
+
+  await db
+    .updateTable("blocks")
+    .set(updates)
+    .where("block_id", "=", blockId)
+    .where("deleted_at", "is", null)
+    .execute();
+}
+
 export async function getBlockProjectId(blockId: string): Promise<string | null> {
   const row = await db
     .selectFrom("blocks")

@@ -71,6 +71,16 @@ class Scene extends Resizable {
     this.canvas?.requestRenderAll();
   }
 
+  // The constructor only sets `this.name` once at creation time. Call this
+  // whenever the underlying trackItem's name changes so a rename actually
+  // shows up without requiring the object to be torn down and recreated.
+  public updateName(name: string) {
+    if (this.name === name) return;
+    this.name = name;
+    this.dirty = true;
+    this.canvas?.requestRenderAll();
+  }
+
   public _render(ctx: CanvasRenderingContext2D) {
     super._render(ctx);
     this.drawStripes(ctx);

@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Popover,
   PopoverContent,
@@ -9,7 +8,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Check, ChevronDown, Link, Unlink } from "lucide-react";
 import { useEffect, useState } from "react";
-import useStore from "../../store/use-store";
 import { ColorPickerField } from "./color-picker-field";
 
 const FRAME_RATE_OPTIONS = [3, 15, 24, 30, 60];
@@ -27,59 +25,25 @@ export async function patchProject(
   return res.json();
 }
 
-export const CompositionControls = () => {
-  const { projectId, projectName, setProjectName, size, fps, background, setState } = useStore();
+export async function patchBlock(
+  blockId: string,
+  updates: { name?: string; width?: number; height?: number }
+) {
+  const res = await fetch(`/api/blocks/${blockId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) throw new Error("Failed to update block");
+  return res.json();
+}
 
-  const handleNameCommit = async (name: string) => {
-    const previous = projectName;
-    setProjectName(name);
-    try {
-      await patchProject(projectId, { name });
-    } catch (err) {
-      console.error("Failed to save project name", err);
-      setProjectName(previous);
-    }
-  };
-
-  const handleSizeCommit = async (width: number, height: number) => {
-    const previous = size;
-    setState({ size: { width, height } });
-    try {
-      await patchProject(projectId, { width, height });
-    } catch (err) {
-      console.error("Failed to save project size", err);
-      setState({ size: previous });
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <Label className="font-sans text-sm font-semibold">Project</Label>
-        <div className="flex flex-col gap-3">
-          <ProjectName value={projectName} onCommit={handleNameCommit} />
-          <SizeFields width={size.width} height={size.height} onCommit={handleSizeCommit} />
-          <div className="flex flex-col gap-2 flex-1">
-            <div className="flex flex-1 items-center text-xs text-muted-foreground">Background</div>
-            <ColorPickerField
-              value={background.value}
-              onChange={(v) => setState({ background: { type: "color", value: v } })}
-              gradient={true}
-              mobileControlType="compositionBackground"
-              mobileControlLabel="Background"
-              disabled={false}
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ProjectName = ({
-  value,
-  onCommit
-}: {
+export const NameField = ({
+                            label = "Name",
+                            value,
+                            onCommit
+                          }: {
+  label?: string;
   value: string;
   onCommit: (v: string) => void;
 }) => {
@@ -107,7 +71,7 @@ const ProjectName = ({
   return (
     <div className="flex flex-col gap-2 flex-1">
       <div className="flex flex-1 items-center text-xs text-muted-foreground">
-        Name
+        {label}
       </div>
       <Input
         value={localValue}
@@ -119,11 +83,31 @@ const ProjectName = ({
   );
 };
 
-const SizeFields = ({
-  width,
-  height,
-  onCommit
-}: {
+export const BackgroundField = ({
+                                  value,
+                                  onChange
+                                }: {
+  value: string;
+  onChange: (v: string) => void;
+}) => (
+  <div className="flex flex-col gap-2 flex-1">
+    <div className="flex flex-1 items-center text-xs text-muted-foreground">Background</div>
+    <ColorPickerField
+      value={value}
+      onChange={onChange}
+      gradient={true}
+      mobileControlType="compositionBackground"
+      mobileControlLabel="Background"
+      disabled={false}
+    />
+  </div>
+);
+
+export const SizeFields = ({
+                             width,
+                             height,
+                             onCommit
+                           }: {
   width: number;
   height: number;
   onCommit: (width: number, height: number) => void;
@@ -195,12 +179,12 @@ const SizeFields = ({
 };
 
 const SizeDimension = ({
-  field,
-  label,
-  value,
-  isLinked,
-  onCommit
-}: {
+                         field,
+                         label,
+                         value,
+                         isLinked,
+                         onCommit
+                       }: {
   field: "width" | "height";
   label: string;
   value: number;
@@ -264,9 +248,9 @@ const SizeDimension = ({
 };
 
 const FrameRate = ({
-  value,
-  onChange
-}: {
+                     value,
+                     onChange
+                   }: {
   value: number;
   onChange: (v: number) => void;
 }) => {

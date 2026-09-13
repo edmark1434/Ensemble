@@ -19,6 +19,9 @@ import BasicTransition from "./basic-transition";
 import BasicGroup from "./basic-group";
 import useStore from "../store/use-store";
 import useLayoutStore from "../store/use-layout-store";
+import BasicScene from "@/features/editor/control-item/basic-scene";
+import BasicSceneItem from "@/features/editor/control-item/basic-scene-item";
+import {ISceneDetails, isSceneItem} from "@/features/editor/types/ensemble-scene";
 
 type Selection =
   | { type: "none" }
@@ -26,10 +29,16 @@ type Selection =
   | { type: "transition"; transition: any }
   | { type: "trackItem"; item: ITrackItem };
 
-const ActiveControlItem = ({ selection }: { selection: Selection }) => {
+const ActiveControlItem = ({
+                             selection,
+                             insideScene
+                           }: {
+  selection: Selection;
+  insideScene: boolean;
+}) => {
   switch (selection.type) {
     case "none":
-      return <BasicProject />;
+      return insideScene ? <BasicScene /> : <BasicProject />;
     case "group":
       return <BasicGroup />;
     case "transition":
@@ -40,6 +49,15 @@ const ActiveControlItem = ({ selection }: { selection: Selection }) => {
       );
     case "trackItem": {
       const trackItem = selection.item as ITrackItemAndDetails;
+
+      if (isSceneItem(trackItem.type)) {
+        return (
+          <BasicSceneItem
+            trackItem={trackItem as unknown as ITrackItem & { details: ISceneDetails }}
+          />
+        );
+      }
+
       switch (trackItem.type) {
         case "text":
           return <BasicText trackItem={trackItem as ITrackItem & IText} />;
@@ -61,7 +79,7 @@ const ActiveControlItem = ({ selection }: { selection: Selection }) => {
 };
 
 export const ControlItem = () => {
-  const { activeIds, trackItemsMap, transitionsMap } = useStore();
+  const { activeIds, trackItemsMap, transitionsMap, activeSceneBlockId } = useStore();
   const [selection, setSelection] = useState<Selection>({ type: "none" });
   const { setTrackItem: setLayoutTrackItem, setFloatingControl } = useLayoutStore();
 
@@ -101,7 +119,7 @@ export const ControlItem = () => {
 
   return (
     <div className="w-full flex-none bg-card hidden lg:block">
-      <ActiveControlItem selection={selection} />
+      <ActiveControlItem selection={selection} insideScene={!!activeSceneBlockId} />
     </div>
   );
 };

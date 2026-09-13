@@ -6,6 +6,7 @@ import { dispatch } from "@designcombo/events";
 import useStore from "../store/use-store";
 import { CollabSchema, readStateFromDoc } from "./ydoc-schema";
 import { SyncGuard } from "./sync-guard";
+import {isSceneItem} from "@/features/editor/types/ensemble-scene";
 
 // Pulls doc changes into stateManager (+ useStore for markers/projectName,
 // which aren't part of designcombo's State type).
@@ -61,6 +62,15 @@ export function setupMirrorIn(
 
         stateManager.updateState(statePatch, { updateHistory: false });
 
+        if (canvas && isProjectTarget) {
+          canvas.getTrackItems().forEach((item: any) => {
+            if (!isSceneItem(item.type)) return;
+            const data = snapshot.trackItemsMap[item.id];
+            const name = data?.details?.name || (data as any)?.metadata?.name || "Scene";
+            item.updateName?.(name);
+          });
+        }
+
         const { activeIds } = stateManager.getState();
         if (activeIds.length) {
           const survivingIds = activeIds.filter(
@@ -82,8 +92,13 @@ export function setupMirrorIn(
           tracks: snapshot.tracks,
           // A block's own doc never owns the project's name — only mirror
           // this in from a project-kind doc, or a block's snapshot would
-          // clobber the title the navbar shows.
+          // clobber the title the navbar shows. A block doc's own
+          // "projectName" field (see hydrateDocFromState) is really the
+          // block/scene's own name, so route it to currentBlockName instead —
+          // that's what basic-scene displays, and it keeps renames live
+          // across collaborators the same way everything else does.
           ...(isProjectTarget && snapshot.projectName !== undefined ? { projectName: snapshot.projectName } : {}),
+          ...(!isProjectTarget && snapshot.projectName !== undefined ? { currentBlockName: snapshot.projectName } : {}),
           ...(snapshot.size ? { size: snapshot.size } : {}),
           ...(snapshot.fps !== undefined ? { fps: snapshot.fps } : {}),
           ...(snapshot.background ? { background: snapshot.background } : {}),

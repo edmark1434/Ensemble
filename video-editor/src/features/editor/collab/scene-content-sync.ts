@@ -1,5 +1,5 @@
 import { CollabSchema, readStateFromDoc } from "./ydoc-schema";
-import { isSceneItem, DEFAULT_SCENE_DURATION_MS, SceneRenderContent } from "../types/ensemble-scene";
+import {isSceneItem, DEFAULT_SCENE_DURATION_MS, SceneRenderContent, ISceneDetails} from "../types/ensemble-scene";
 
 export const DURATION_SYNC_INTERVAL_MS = 400;
 
@@ -61,6 +61,29 @@ export function applySceneContentToDoc(
         projectSchema.meta.set("duration", newDuration);
       }
     }
+  }, origin);
+
+  return true;
+}
+
+// Generic patch into a scene trackItem's `details` map for editable
+// metadata that isn't part of the live-pushed render content (see
+// applySceneContentToDoc above) — e.g. the display name shown on the
+// scene item itself, edited from basic-scene-item while browsing the
+// project from outside the scene. Shallow-merges into whatever
+// `details` already holds, same as applySceneContentToDoc's `content`
+// merge.
+export function applySceneDetailsPatch(
+  projectSchema: CollabSchema,
+  sceneItemId: string,
+  patch: Partial<ISceneDetails>,
+  origin: unknown,
+): boolean {
+  const yItem = projectSchema.trackItems.get(sceneItemId);
+  if (!yItem || !isSceneItem(yItem.get("type"))) return false;
+
+  projectSchema.doc.transact(() => {
+    yItem.set("details", { ...yItem.get("details"), ...patch });
   }, origin);
 
   return true;
