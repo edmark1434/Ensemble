@@ -104,6 +104,14 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       // delete
       if (!viewOnlyRef.current && e.code === "Delete") {
         if (!activeIds.length) return;
+        const { trackItemsMap, workingInsideByItemId } = useStore.getState();
+        const activeItems = activeIds.map((id) => trackItemsMap[id]).filter(Boolean);
+        const allLocked = activeItems.length > 0 && activeItems.every((item) => item.details?.locked === true);
+        if (allLocked) return;
+        const hasProtectedSceneItem = activeItems.some(
+          (item) => isSceneItem(item.type) && workingInsideByItemId.has(item.id)
+        );
+        if (hasProtectedSceneItem) return;
         dispatch(LAYER_DELETE);
       }
 
@@ -144,6 +152,13 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       if (!viewOnlyRef.current && mod && e.code === "KeyB") {
         e.preventDefault();
         if (!activeIds.length) return;
+        const { trackItemsMap } = useStore.getState();
+        const activeItems = activeIds.map((id) => trackItemsMap[id]).filter(Boolean);
+        const allLocked = activeItems.length > 0 && activeItems.every((item) => item.details?.locked === true);
+        if (allLocked) return;
+        const isTransitionSelected = activeItems.length === 0;
+        if (isTransitionSelected) return;
+        if (activeItems.some((item) => isSceneItem(item.type))) return;
         const time = getCurrentTime();
 
         if (activeIds.length === 1) {
@@ -178,6 +193,8 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         e.preventDefault();
         if (!activeIds.length) return;
         const { trackItemsMap, transitionsMap, tracks } = useStore.getState();
+        const activeItems = activeIds.map((id) => trackItemsMap[id]).filter(Boolean);
+        if (activeItems.length === 0) return; // transition-only selection
         const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
         if (snapshot.items.length) setClipboard(snapshot);
       }
@@ -188,6 +205,8 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         if (!activeIds.length) return;
 
         const { trackItemsMap, transitionsMap, tracks, trackItemIds, transitionIds, duration } = useStore.getState();
+        const activeItems = activeIds.map((id) => trackItemsMap[id]).filter(Boolean);
+        if (activeItems.length === 0) return; // transition-only selection
         const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
         const result = cloneIntoNewTracks(snapshot, null, {
           trackItemsMap, trackItemIds, transitionsMap, transitionIds, tracks, duration,
@@ -212,6 +231,11 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         e.preventDefault();
         if (!activeIds.length) return;
         const { trackItemsMap, transitionsMap, tracks } = useStore.getState();
+        const activeItems = activeIds.map((id) => trackItemsMap[id]).filter(Boolean);
+        const allLocked = activeItems.length > 0 && activeItems.every((item) => item.details?.locked === true);
+        if (allLocked) return;
+        const isTransitionSelected = activeItems.length === 0;
+        if (isTransitionSelected) return;
         const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
         if (snapshot.items.length) setClipboard(snapshot);
         dispatch(LAYER_DELETE);
@@ -382,7 +406,8 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       // add scene
       if (!viewOnlyRef.current && !mod && !e.shiftKey && e.code === "KeyS") {
         e.preventDefault();
-        const { activeIds, trackItemsMap, trackItemIds, tracks, duration } = useStore.getState();
+        const { activeIds, trackItemsMap, trackItemIds, tracks, duration, activeSceneBlockId } = useStore.getState();
+        if (activeSceneBlockId) return;
         const activeItems = activeIds.map((id) => trackItemsMap[id]).filter(Boolean);
         if (activeItems.some((item) => isSceneItem(item.type))) return;
 
