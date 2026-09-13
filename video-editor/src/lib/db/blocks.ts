@@ -37,7 +37,7 @@ export async function createBlock({
       size: { width, height },
       fps: BLOCK_FRAME_RATE,
       duration: 0,
-      background: { type: "color", value: "#000000" },
+      background: { type: "color", value: "" }, // sets to transparent
     },
     [],
     name,
