@@ -9,6 +9,9 @@ const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
 const remoteOrigin = "ws-remote";
 
+const BASE_RECONNECT_DELAY_MS = 500;
+const MAX_RECONNECT_DELAY_MS = 15_000;
+
 export function attachWsProvider(
   schema: CollabSchema,
   target: CollabTarget,
@@ -23,59 +26,104 @@ export function attachWsProvider(
     : `blockId=${encodeURIComponent(target.id)}`;
   const wsUrl = `${proto}//${window.location.host}/collab?${targetParam}&userId=${encodeURIComponent(userId)}`;
 
-  const ws = new WebSocket(wsUrl);
-  ws.binaryType = "arraybuffer";
-
   const { awareness } = schema;
 
   if (announcePresence) {
     awareness.setLocalStateField("user", { id: userId, name: userName });
   }
 
+  let ws: WebSocket | null = null;
   let outbox: Uint8Array[] = [];
+  let destroyed = false;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let reconnectAttempt = 0;
 
   const send = (message: Uint8Array) => {
-    if (ws.readyState === WebSocket.OPEN) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(message);
     } else {
       outbox.push(message);
     }
   };
 
-  ws.onopen = () => {
-    const encoder = encoding.createEncoder();
-    encoding.writeVarUint(encoder, MESSAGE_SYNC);
-    syncProtocol.writeSyncStep1(encoder, schema.doc);
-    ws.send(encoding.toUint8Array(encoder));
-
-    const localState = awareness.getLocalState();
-    if (localState !== null) {
-      const awarenessEncoder = encoding.createEncoder();
-      encoding.writeVarUint(awarenessEncoder, MESSAGE_AWARENESS);
-      encoding.writeVarUint8Array(
-        awarenessEncoder,
-        awarenessProtocol.encodeAwarenessUpdate(awareness, [schema.doc.clientID]),
-      );
-      ws.send(encoding.toUint8Array(awarenessEncoder));
-    }
-
-    outbox.forEach((message) => ws.send(message));
-    outbox = [];
+  const scheduleReconnect = () => {
+    if (destroyed || reconnectTimer) return;
+    // Full jitter: multiple clients reconnecting after the same server
+    // restart/blip shouldn't all retry in lockstep.
+    const delay = Math.random() * Math.min(BASE_RECONNECT_DELAY_MS * 2 ** reconnectAttempt, MAX_RECONNECT_DELAY_MS);
+    reconnectAttempt += 1;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, delay);
   };
 
-  ws.onmessage = (event) => {
-    const decoder = decoding.createDecoder(new Uint8Array(event.data as ArrayBuffer));
-    const messageType = decoding.readVarUint(decoder);
+  const connect = () => {
+    if (destroyed) return;
 
-    if (messageType === MESSAGE_SYNC) {
+    const socket = new WebSocket(wsUrl);
+    socket.binaryType = "arraybuffer";
+    ws = socket;
+
+    socket.onopen = () => {
+      reconnectAttempt = 0;
+
       const encoder = encoding.createEncoder();
       encoding.writeVarUint(encoder, MESSAGE_SYNC);
-      syncProtocol.readSyncMessage(decoder, encoder, schema.doc, remoteOrigin);
-      if (encoding.length(encoder) > 1) send(encoding.toUint8Array(encoder));
-    } else if (messageType === MESSAGE_AWARENESS) {
-      awarenessProtocol.applyAwarenessUpdate(awareness, decoding.readVarUint8Array(decoder), remoteOrigin);
-    }
+      syncProtocol.writeSyncStep1(encoder, schema.doc);
+      socket.send(encoding.toUint8Array(encoder));
+
+      // Re-announce presence/awareness — the server clears this client's
+      // awareness states on disconnect (see collab.ts's ws close handler),
+      // so a reconnect needs to resend them, not just rely on the doc sync.
+      const localState = awareness.getLocalState();
+      if (localState !== null) {
+        const awarenessEncoder = encoding.createEncoder();
+        encoding.writeVarUint(awarenessEncoder, MESSAGE_AWARENESS);
+        encoding.writeVarUint8Array(
+          awarenessEncoder,
+          awarenessProtocol.encodeAwarenessUpdate(awareness, [schema.doc.clientID]),
+        );
+        socket.send(encoding.toUint8Array(awarenessEncoder));
+      }
+
+      const queued = outbox;
+      outbox = [];
+      queued.forEach((message) => socket.send(message));
+    };
+
+    socket.onmessage = (event) => {
+      const decoder = decoding.createDecoder(new Uint8Array(event.data as ArrayBuffer));
+      const messageType = decoding.readVarUint(decoder);
+
+      if (messageType === MESSAGE_SYNC) {
+        const encoder = encoding.createEncoder();
+        encoding.writeVarUint(encoder, MESSAGE_SYNC);
+        const beforeIds = target.kind === "project" ? [...schema.trackItems.keys()] : [];
+        syncProtocol.readSyncMessage(decoder, encoder, schema.doc, remoteOrigin);
+        if (target.kind === "project") {
+          console.debug("[ws-provider] project sync applied", { before: beforeIds.length, after: schema.trackItems.size });
+        }
+        if (encoding.length(encoder) > 1) send(encoding.toUint8Array(encoder));
+      } else if (messageType === MESSAGE_AWARENESS) {
+        awarenessProtocol.applyAwarenessUpdate(awareness, decoding.readVarUint8Array(decoder), remoteOrigin);
+      }
+    };
+
+    socket.onclose = () => {
+      if (ws === socket) ws = null;
+      if (destroyed) return;
+      scheduleReconnect();
+    };
+
+    // Most browsers fire close right after error, but force it so a
+    // connection stuck half-open doesn't stall reconnection.
+    socket.onerror = () => {
+      socket.close();
+    };
   };
+
+  connect();
 
   const sendUpdate = (update: Uint8Array, origin: unknown) => {
     if (origin === remoteOrigin) return;
@@ -97,9 +145,14 @@ export function attachWsProvider(
   awareness.on("update", sendAwarenessUpdate);
 
   return () => {
+    destroyed = true;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
     schema.doc.off("update", sendUpdate);
     awareness.off("update", sendAwarenessUpdate);
     awarenessProtocol.removeAwarenessStates(awareness, [schema.doc.clientID], "window-unload");
-    ws.close();
+    ws?.close();
   };
 }

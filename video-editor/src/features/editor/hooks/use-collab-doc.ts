@@ -234,6 +234,23 @@ export function useCollabDoc(
         } else {
           const snapshot = readStateFromDoc(schema);
 
+          // Guards against the same class of problem readStateFromDoc already
+          // guards for dangling ids: an item that's present in trackItemsMap
+          // but missing `display` (seen when this fires right as a concurrent
+          // scene-content push is mid-flight) will crash designcombo's
+          // addTrackItem outright. Drop it here rather than let one bad item
+          // take down the whole scene-entry/exit swap.
+          for (const [id, item] of Object.entries(snapshot.trackItemsMap)) {
+            if (!(item as any)?.display || typeof (item as any).display.from !== "number") {
+              console.error("useCollabDoc: dropping malformed item on load", id, item);
+              delete snapshot.trackItemsMap[id];
+            }
+          }
+          snapshot.trackItemIds = snapshot.trackItemIds.filter((id) => id in snapshot.trackItemsMap);
+          for (const track of snapshot.tracks) {
+            track.items = track.items.filter((id) => id in snapshot.trackItemsMap);
+          }
+
           syncGuard.isApplyingRemote = true;
           try {
             const canvas = useStore.getState().timeline as any;
@@ -252,19 +269,25 @@ export function useCollabDoc(
               });
             }
 
-            stateManager.updateState(
-              {
-                trackItemsMap: snapshot.trackItemsMap,
-                trackItemIds: snapshot.trackItemIds,
-                transitionsMap: snapshot.transitionsMap,
-                transitionIds: snapshot.transitionIds,
-                tracks: snapshot.tracks,
-                ...(snapshot.size ? { size: snapshot.size } : {}),
-                fps: snapshot.fps ?? 30,
-                duration: snapshot.duration ?? 0,
-              },
-              { updateHistory: false },
-            );
+            try {
+              stateManager.updateState(
+                {
+                  trackItemsMap: snapshot.trackItemsMap,
+                  trackItemIds: snapshot.trackItemIds,
+                  transitionsMap: snapshot.transitionsMap,
+                  transitionIds: snapshot.transitionIds,
+                  tracks: snapshot.tracks,
+                  ...(snapshot.size ? { size: snapshot.size } : {}),
+                  fps: snapshot.fps ?? 30,
+                  duration: snapshot.duration ?? 0,
+                },
+                { updateHistory: false },
+              );
+            } catch (updateErr) {
+              console.error("useCollabDoc: stateManager.updateState failed on load", updateErr, snapshot);
+              return;
+            }
+
             useStore.setState({
               markers: snapshot.markers,
               ...(isProjectTarget && snapshot.projectName !== undefined ? { projectName: snapshot.projectName } : {}),

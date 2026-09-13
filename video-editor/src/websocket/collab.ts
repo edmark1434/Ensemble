@@ -102,6 +102,7 @@ async function getOrCreateRoom(target: CollabTarget): Promise<Room> {
       target.kind === "project"
         ? await loadLatestProjectState(target.id)
         : await loadLatestBlockState(target.id);
+    console.log("[collab] hydrating new room", { key, hasSnapshot: !!snapshot, updateCount: updates.length });
 
     if (snapshot || updates.length > 0) {
       doc.transact(() => {
@@ -169,10 +170,29 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
     return;
   }
 
+  // ws-provider.ts sends its initial syncStep1 the instant the socket's
+  // onopen fires, which can (and does, especially under concurrent
+  // connections) beat the auth/room-loading work below. `ws` emits
+  // 'message' synchronously and does not buffer for a listener attached
+  // later, so without this, that first request — and the room's real
+  // content, which only it triggers — gets silently dropped, leaving the
+  // client's doc permanently missing baseline state.
+  const pendingMessages: Buffer[] = [];
+  let setupDone = false;
+  let closedDuringSetup = false;
+  const bufferDuringSetup = (data: Buffer) => pendingMessages.push(data);
+  const markClosedDuringSetup = () => {
+    if (!setupDone) closedDuringSetup = true;
+  };
+  ws.on("message", bufferDuringSetup);
+  ws.on("close", markClosedDuringSetup);
+
   const sessionCookie = getCookie(req.headers.cookie, EDITOR_SESSION_COOKIE);
   const decoded = sessionCookie ? await verifyEditorSession(sessionCookie) : null;
 
   if (!decoded) {
+    ws.off("message", bufferDuringSetup);
+    ws.off("close", markClosedDuringSetup);
     ws.close(4001, "unauthorized");
     return;
   }
@@ -184,8 +204,6 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
     target = { kind: "project", id: projectId };
     membershipProjectId = projectId;
   } else {
-    // ASSUMPTION: a `blocks` table with a `project_id` column — rename
-    // below if yours differs, I don't have that schema in front of me.
     const block = await db
       .selectFrom("blocks")
       .where("block_id", "=", blockId!)
@@ -193,6 +211,8 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
       .executeTakeFirst();
 
     if (!block) {
+      ws.off("message", bufferDuringSetup);
+      ws.off("close", markClosedDuringSetup);
       ws.close(4004, "block not found");
       return;
     }
@@ -209,6 +229,8 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
     .executeTakeFirst();
 
   if (!membership) {
+    ws.off("message", bufferDuringSetup);
+    ws.off("close", markClosedDuringSetup);
     ws.close(4003, "forbidden");
     return;
   }
@@ -216,7 +238,12 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
   const canWrite = membership.role === "Owner" || membership.role === "Editor";
 
   const room = await getOrCreateRoom(target);
-  if (ws.readyState !== WebSocket.OPEN) return;
+
+  ws.off("message", bufferDuringSetup);
+  ws.off("close", markClosedDuringSetup);
+  setupDone = true;
+
+  if (closedDuringSetup || ws.readyState !== WebSocket.OPEN) return;
 
   room.clients.set(ws, { controlledAwarenessIds: new Set(), canWrite });
 
@@ -236,7 +263,7 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
     ws.send(encoding.toUint8Array(awarenessEncoder));
   }
 
-  ws.on("message", (data: Buffer) => {
+  const handleMessage = (data: Buffer) => {
     const info = room.clients.get(ws);
     if (!info) return;
 
@@ -262,7 +289,12 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
     } else if (messageType === MESSAGE_AWARENESS) {
       awarenessProtocol.applyAwarenessUpdate(room.awareness, decoding.readVarUint8Array(decoder), ws);
     }
-  });
+  };
+
+  // Replay whatever arrived while we were still verifying auth / loading
+  // the room, in order, before listening for anything new.
+  for (const data of pendingMessages) handleMessage(data);
+  ws.on("message", handleMessage);
 
   ws.on("close", () => {
     const info = room.clients.get(ws);

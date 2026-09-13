@@ -50,32 +50,47 @@ export function useSceneContentBroadcast(
       };
     };
 
-    let retryCount = 0;
     const MAX_PUSH_RETRIES = 5;
     let currentPush: Promise<boolean> | null = null;
+    let pushQueued = false;
 
-    const attemptPush = (): Promise<boolean> => {
+    const attemptPush = (attempt: number): Promise<boolean> => {
       if (!wsSynced || !blockHydrated) return Promise.resolve(false);
       const applied = applySceneContentToDoc(schema, sceneItemId, buildContent(), stateManager.getState().duration, localOrigin);
+      if (!applied) {
+        console.debug("[scene-broadcast] miss", {
+          sceneItemId,
+          attempt,
+          idsInDoc: schema.trackItemIds.toArray(),
+          hasItem: schema.trackItems.has(sceneItemId),
+          itemType: schema.trackItems.get(sceneItemId)?.get("type"),
+        });
+      }
       if (applied) {
-        retryCount = 0;
         return Promise.resolve(true);
       }
-      if (retryCount >= MAX_PUSH_RETRIES) {
+      if (attempt >= MAX_PUSH_RETRIES) {
         console.error("useSceneContentBroadcast: scene item never appeared in project doc", sceneItemId);
-        retryCount = 0;
         return Promise.resolve(false);
       }
-      retryCount += 1;
-      return new Promise((resolve) => setTimeout(() => resolve(attemptPush()), 300));
+      return new Promise((resolve) => setTimeout(() => resolve(attemptPush(attempt + 1)), 300));
     };
 
-    // cancelled is no longer checked inside the push chain itself — a push
-    // that's already running when the scene closes needs to be allowed to
-    // finish (see cleanup below), not silently abandoned mid-retry.
+    // Only one retry chain runs at a time. A push requested while one is
+    // already in flight just marks that another pass is needed once the
+    // current one settles, instead of starting a second chain that would
+    // share (and prematurely exhaust) the retry budget.
     const push = (): Promise<boolean> => {
-      currentPush = attemptPush().finally(() => {
+      if (currentPush) {
+        pushQueued = true;
+        return currentPush;
+      }
+      currentPush = attemptPush(0).finally(() => {
         currentPush = null;
+        if (pushQueued) {
+          pushQueued = false;
+          push();
+        }
       });
       return currentPush;
     };
@@ -95,6 +110,7 @@ export function useSceneContentBroadcast(
     const handleFirstSync = () => {
       schema.doc.off("afterTransaction", handleFirstSync);
       wsSynced = true;
+      console.debug("[scene-broadcast] wsSynced", { sceneItemId, idsInDoc: schema.trackItemIds.toArray() });
       push();
     };
     schema.doc.on("afterTransaction", handleFirstSync);
