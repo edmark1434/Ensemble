@@ -7,6 +7,7 @@ import { CollabTarget } from "./collab-target";
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
+const MESSAGE_SYNC_DONE = 2;
 const remoteOrigin = "ws-remote";
 
 const BASE_RECONNECT_DELAY_MS = 500;
@@ -17,7 +18,7 @@ export function attachWsProvider(
   target: CollabTarget,
   userId: string,
   userName?: string,
-  options?: { announcePresence?: boolean },
+  options?: { announcePresence?: boolean; onFirstSync?: () => void },
 ): () => void {
   const announcePresence = options?.announcePresence ?? true;
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -107,6 +108,8 @@ export function attachWsProvider(
         if (encoding.length(encoder) > 1) send(encoding.toUint8Array(encoder));
       } else if (messageType === MESSAGE_AWARENESS) {
         awarenessProtocol.applyAwarenessUpdate(awareness, decoding.readVarUint8Array(decoder), remoteOrigin);
+      } else if (messageType === MESSAGE_SYNC_DONE) {
+        options?.onFirstSync?.();
       }
     };
 

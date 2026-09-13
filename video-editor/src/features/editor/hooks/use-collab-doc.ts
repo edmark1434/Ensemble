@@ -130,7 +130,25 @@ export function useCollabDoc(
           setCollab((prev) => (prev ? { ...prev, saveStatus: status } : prev));
         });
         teardownPersistence = persistenceHandle.teardown;
-        teardownWsProvider = attachWsProvider(schema, target, userId, userName);
+
+        let resolveFirstSync: (() => void) | null = null;
+        const firstSyncPromise = new Promise<void>((resolve) => { resolveFirstSync = resolve; });
+        teardownWsProvider = attachWsProvider(schema, target, userId, userName, {
+          onFirstSync: () => resolveFirstSync?.(),
+        });
+
+        // The REST snapshot we just applied is only as fresh as the last
+        // flush/compaction — it can be genuinely mid-write for an item
+        // another client is actively editing (a scene-content push).
+        // Read/commit AFTER the live room has filled in whatever the
+        // snapshot was missing, not before. Bounded so a slow/unreachable
+        // socket doesn't hang the load.
+        await Promise.race([
+          firstSyncPromise,
+          new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+        ]);
+        if (cancelled) return;
+
         teardownTimelineWatch = useStore.subscribe((state, prevState) => {
           // Compare identity, not just nullity — every remount produces a
           // genuinely new CanvasTimeline instance, and each one needs this
@@ -232,19 +250,28 @@ export function useCollabDoc(
             localOrigin,
           );
         } else {
-          const snapshot = readStateFromDoc(schema);
+          let snapshot = readStateFromDoc(schema);
+          let malformedIds = Object.entries(snapshot.trackItemsMap)
+            .filter(([, item]) => !(item as any)?.display || typeof (item as any).display.from !== "number")
+            .map(([id]) => id);
 
-          // Guards against the same class of problem readStateFromDoc already
-          // guards for dangling ids: an item that's present in trackItemsMap
-          // but missing `display` (seen when this fires right as a concurrent
-          // scene-content push is mid-flight) will crash designcombo's
-          // addTrackItem outright. Drop it here rather than let one bad item
-          // take down the whole scene-entry/exit swap.
-          for (const [id, item] of Object.entries(snapshot.trackItemsMap)) {
-            if (!(item as any)?.display || typeof (item as any).display.from !== "number") {
-              console.error("useCollabDoc: dropping malformed item on load", id, item);
-              delete snapshot.trackItemsMap[id];
-            }
+          // A track item's create and populate can still land as separate
+          // transactions a beat apart even after first-sync. Recheck once
+          // before giving up — dropping feeds this snapshot into
+          // stateManager, and the next local edit's mirror-out reconcile
+          // would delete the "missing" item from the shared doc for real.
+          if (malformedIds.length > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 600));
+            if (cancelled) return;
+            snapshot = readStateFromDoc(schema);
+            malformedIds = Object.entries(snapshot.trackItemsMap)
+              .filter(([, item]) => !(item as any)?.display || typeof (item as any).display.from !== "number")
+              .map(([id]) => id);
+          }
+
+          for (const id of malformedIds) {
+            console.error("useCollabDoc: dropping malformed item on load", id, snapshot.trackItemsMap[id]);
+            delete snapshot.trackItemsMap[id];
           }
           snapshot.trackItemIds = snapshot.trackItemIds.filter((id) => id in snapshot.trackItemsMap);
           for (const track of snapshot.tracks) {

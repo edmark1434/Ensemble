@@ -16,6 +16,7 @@ import {compactBlock, loadLatestBlockState, withBlockSnapshotLock} from "@/lib/c
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
+const MESSAGE_SYNC_DONE = 2;
 const HYDRATION_ORIGIN = "hydration";
 
 // Independent of any client's own flush cadence — this is the backstop
@@ -277,15 +278,22 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
 
       if (innerType === syncProtocol.messageYjsSyncStep1) {
         syncProtocol.readSyncStep1(decoder, encoder, room.doc);
+        if (encoding.length(encoder) > 1) ws.send(encoding.toUint8Array(encoder));
+
+        // Sent unconditionally, even when the step2 reply above was empty —
+        // gives the client a definitive "caught up with the live room" signal
+        // instead of guessing from whether any bytes came back.
+        const doneEncoder = encoding.createEncoder();
+        encoding.writeVarUint(doneEncoder, MESSAGE_SYNC_DONE);
+        ws.send(encoding.toUint8Array(doneEncoder));
       } else if (info.canWrite) {
         if (innerType === syncProtocol.messageYjsSyncStep2) {
           syncProtocol.readSyncStep2(decoder, room.doc, ws);
         } else if (innerType === syncProtocol.messageYjsUpdate) {
           syncProtocol.readUpdate(decoder, room.doc, ws);
         }
+        if (encoding.length(encoder) > 1) ws.send(encoding.toUint8Array(encoder));
       }
-
-      if (encoding.length(encoder) > 1) ws.send(encoding.toUint8Array(encoder));
     } else if (messageType === MESSAGE_AWARENESS) {
       awarenessProtocol.applyAwarenessUpdate(room.awareness, decoding.readVarUint8Array(decoder), ws);
     }
