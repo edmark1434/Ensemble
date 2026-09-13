@@ -75,7 +75,6 @@ export default function TicketFiltersPanel({
   filters,
   onChange,
   ticketTypes,
-  channels,
   moderators = [],
   accent = 'rose',
   desk = 'admin',
@@ -92,7 +91,6 @@ export default function TicketFiltersPanel({
   filters: TicketFilterState;
   onChange: (next: TicketFilterState) => void;
   ticketTypes?: string[];
-  channels?: string[];
   moderators?: ModeratorOption[];
   accent?: Accent;
   /** Which desk is using filters — drives Admin vs Support option sets */
@@ -127,8 +125,6 @@ export default function TicketFiltersPanel({
         ? ticketTypes
         : [...TICKET_TYPE_GROUPS.flatMap((g) => g.types)]
       : [...typesForQueue(filters.queue)];
-
-  const channelChoices = channels?.length ? channels : ['web', 'email', 'in_app'];
 
   const filteredMods = useMemo(() => {
     const q = moderatorSearch.trim().toLowerCase();
@@ -408,19 +404,6 @@ export default function TicketFiltersPanel({
           <option value="awaiting">Awaiting Reply</option>
           <option value="escalated">Escalated</option>
           <option value="open_only">Open / In Progress</option>
-          <option value="has_report">Has Related Report</option>
-          <option value="has_dispute">Has Related Dispute</option>
-        </select>
-      </Field>
-
-      <Field label="Channel">
-        <select value={filters.channel} onChange={(e) => patch({ channel: e.target.value })} className={selectCls}>
-          <option value="all">All Channels</option>
-          {channelChoices.map((c) => (
-            <option key={c} value={c}>
-              {c === 'in_app' ? 'In App' : c.charAt(0).toUpperCase() + c.slice(1)}
-            </option>
-          ))}
         </select>
       </Field>
     </div>

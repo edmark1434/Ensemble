@@ -12,6 +12,11 @@ const {
 } = require('../repositories/CashoutRepositories');
 const { createCashoutNotificationOnce } = require('../repositories/NotificationRepositories');
 const { getIo } = require('../lib/WebSocket');
+const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
+const {
+  calculateCashoutFeePhpCents,
+  getFeeSettingById,
+} = require('../lib/PlatformFeeSettings');
 
 const CHANNELS = {
     GCASH: { label: 'GCash', routingType: 'WALLET', routingValue: 'PH_GCASH' },
@@ -82,11 +87,27 @@ function mapXenditStatus(status) {
     return 'PROCESSING';
 }
 
-function getCashoutConfig() {
+async function getCashoutConfig(amountCredits = 0) {
+    const php_cents_per_credit = positiveInteger(process.env.CASHOUT_PHP_CENTS_PER_CREDIT || 100, 'conversion_rate');
+    const economy = await getSectionValue('economy');
+    const minimum_credits = Math.max(
+        1,
+        Number(economy?.marketplaceSettings?.minPayoutCredits)
+            || Number.parseInt(process.env.CASHOUT_MIN_CREDITS || '1', 10)
+            || 1
+    );
+    const cashoutFee = await getFeeSettingById('fee-cashout');
+    const fee_percent = Number(cashoutFee?.percent) || 0;
+    const normalizedAmount = Number(amountCredits) || 0;
+    const fee_php_cents = normalizedAmount > 0
+        ? await calculateCashoutFeePhpCents(normalizedAmount, php_cents_per_credit)
+        : Math.max(0, Number.parseInt(process.env.CASHOUT_FEE_PHP_CENTS || '0', 10) || 0);
+
     return {
-        php_cents_per_credit: positiveInteger(process.env.CASHOUT_PHP_CENTS_PER_CREDIT || 100, 'conversion_rate'),
-        fee_php_cents: Math.max(0, Number.parseInt(process.env.CASHOUT_FEE_PHP_CENTS || '0', 10) || 0),
-        minimum_credits: Math.max(1, Number.parseInt(process.env.CASHOUT_MIN_CREDITS || '1', 10) || 1),
+        php_cents_per_credit,
+        fee_php_cents,
+        fee_percent,
+        minimum_credits,
     };
 }
 
@@ -218,7 +239,7 @@ async function getWalletOverviewServices(userId, query = {}) {
         cashouts: cashoutResult.rows,
         cashout_pagination: { total: cashoutResult.total, page: cashoutResult.page, page_size: cashoutResult.page_size, total_pages: cashoutResult.total_pages },
         channels: Object.entries(CHANNELS).map(([code, item]) => ({ code, label: item.label })),
-        cashout_config: getCashoutConfig(),
+        cashout_config: await getCashoutConfig(),
     };
 }
 
@@ -241,9 +262,9 @@ async function createCashoutRecordsServices(data) {
         return { success: true, message: 'Cashout request already received.', data: existing, duplicate: true };
     }
 
-    const config = getCashoutConfig();
+    const config = await getCashoutConfig(validated.amountCredits);
     const centsPerCredit = config.php_cents_per_credit;
-    const feeCents = config.fee_php_cents;
+    const feeCents = await calculateCashoutFeePhpCents(validated.amountCredits, centsPerCredit);
     const grossCents = validated.amountCredits * centsPerCredit;
     const netCents = grossCents - feeCents;
     if (netCents <= 0) throw new CashoutError('Cashout amount must be greater than the payout fee.', 422, 'AMOUNT_BELOW_FEE');

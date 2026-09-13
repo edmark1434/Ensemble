@@ -28,9 +28,10 @@ const {
 } = require('./FileServices');
 const { getIo } = require('../lib/WebSocket');
 const {
-  MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT,
+  DEFAULT_MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT,
   calculateAssetTransactionFee,
 } = require('../lib/AssetMarketplaceConstants');
+const { getMarketplaceTransactionFeePercent } = require('../lib/PlatformFeeSettings');
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ASSET_TYPES = new Set(['image', 'video', 'audio', 'template']);
@@ -304,18 +305,18 @@ function validateReviewPayload(payload) {
   };
 }
 
-function publicAsset(asset) {
+function publicAsset(asset, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT) {
   if (!asset) return asset;
   const { owner_account_id: _ownerAccountId, total_count: _totalCount, ...safeAsset } = asset;
   const priceCredits = Number(safeAsset.price_credits);
-  const transactionFeeCredits = calculateAssetTransactionFee(priceCredits);
+  const transactionFeeCredits = calculateAssetTransactionFee(priceCredits, feePercent);
   return {
     ...safeAsset,
     like_count: Number(safeAsset.like_count || 0),
     save_count: Number(safeAsset.save_count || 0),
     review_count: Number(safeAsset.review_count || 0),
     average_rating: Number(safeAsset.average_rating || 0),
-    transaction_fee_percent: MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT,
+    transaction_fee_percent: feePercent,
     transaction_fee_credits: transactionFeeCredits,
     owner_net_credits: priceCredits - transactionFeeCredits,
   };
@@ -398,8 +399,21 @@ async function getAssetServices(assetId, accountId) {
 async function createAssetServices(accountId, payload) {
   const data = validateAssetPayload(payload, { creating: true });
   try {
+    const { resolveMarketplacePublishStatus } = require('../lib/ModerationPolicy');
+    const publish = await resolveMarketplacePublishStatus({
+      accountId,
+      title: data.name,
+      description: data.description,
+      priceCredits: data.priceCredits,
+      requestedStatus: data.status,
+    });
+    data.status = publish.status;
     const assetId = await createAssetRepository(accountId, data);
-    return getAssetServices(assetId, accountId);
+    const asset = await getAssetServices(assetId, accountId);
+    if (publish.queued) {
+      return { ...asset, reviewQueued: true, reviewMessage: publish.message };
+    }
+    return asset;
   } catch (error) {
     if (['ASSET_VERIFICATION_REQUIRED', 'ASSET_POST_LIMIT_REACHED', 'ASSET_POSTING_UNAVAILABLE'].includes(error.code)) {
       throw assetPostingError(error.code, error.eligibility);
@@ -497,7 +511,8 @@ function emitPurchaseEvents(result) {
 async function purchaseAssetServices(assetId, accountId) {
   requireUuid(assetId);
   try {
-    const result = await purchaseAssetRepository(assetId, accountId);
+    const feePercent = await getMarketplaceTransactionFeePercent();
+    const result = await purchaseAssetRepository(assetId, accountId, feePercent);
     const asset = await getAssetServices(assetId, accountId);
     emitPurchaseEvents(result);
     return {
@@ -539,9 +554,22 @@ async function updateAssetServices(assetId, accountId, payload) {
   requireUuid(assetId);
   const data = validateAssetPayload(payload);
   try {
+    const { resolveMarketplacePublishStatus } = require('../lib/ModerationPolicy');
+    const publish = await resolveMarketplacePublishStatus({
+      accountId,
+      title: data.name,
+      description: data.description,
+      priceCredits: data.priceCredits,
+      requestedStatus: data.status,
+    });
+    data.status = publish.status;
     const updated = await updateAssetRepository(assetId, accountId, data);
     if (!updated) throw new AssetError('Asset not found or you cannot edit it.', 404, 'ASSET_NOT_FOUND');
-    return getAssetServices(assetId, accountId);
+    const asset = await getAssetServices(assetId, accountId);
+    if (publish.queued) {
+      return { ...asset, reviewQueued: true, reviewMessage: publish.message };
+    }
+    return asset;
   } catch (error) {
     if (['ASSET_VERIFICATION_REQUIRED', 'ASSET_POST_LIMIT_REACHED', 'ASSET_POSTING_UNAVAILABLE'].includes(error.code)) {
       throw assetPostingError(error.code, error.eligibility);

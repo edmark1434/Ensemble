@@ -63,14 +63,6 @@ function statusClass(status: string) {
   return 'bg-zinc-500/15 text-zinc-300 border-white/10';
 }
 
-function outcomeClass(outcome: string) {
-  const o = outcome.toLowerCase();
-  if (o === 'sanctioned') return 'bg-violet-500/15 text-violet-200 border-violet-500/25';
-  if (o === 'dismissed' || o === 'withdrawn') return 'bg-zinc-500/15 text-zinc-300 border-white/10';
-  if (o === 'resolved') return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25';
-  return 'bg-zinc-500/15 text-zinc-300 border-white/10';
-}
-
 function priorityClass(priority: string) {
   const p = priority.toLowerCase();
   if (p === 'high') return 'bg-red-500/15 text-red-300 border-red-500/25';
@@ -78,10 +70,10 @@ function priorityClass(priority: string) {
   return 'bg-sky-500/15 text-sky-300 border-sky-500/25';
 }
 
-function visibilityClass(visibility: string) {
-  const v = visibility.toLowerCase();
-  if (v === 'public') return 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20';
-  return 'bg-zinc-500/10 text-zinc-400 border-white/10';
+function visibilityClass(visibility: boolean) {
+  return visibility
+    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+    : 'bg-zinc-500/10 text-zinc-400 border-white/10';
 }
 
 type StatusFilter =
@@ -101,9 +93,8 @@ type WorkflowStatusFilter =
   | 'under_review'
   | 'closed';
 
-type OutcomeFilter = 'all' | 'resolved' | 'sanctioned' | 'dismissed' | 'withdrawn';
 type PriorityFilter = 'all' | 'high' | 'medium' | 'low';
-type VisibilityFilter = 'all' | 'pending' | 'parties' | 'public';
+type VisibilityFilter = 'all' | 'visible' | 'hidden';
 type AssigneeFilter = 'all' | 'unassigned' | 'assigned' | string; // string = staffId
 
 type FlagFilter = 'all' | 'credit_hold';
@@ -116,7 +107,6 @@ type SortKey =
 
 type AdvancedFilters = {
   status: WorkflowStatusFilter;
-  outcome: OutcomeFilter;
   priority: PriorityFilter;
   visibility: VisibilityFilter;
   assignee: AssigneeFilter;
@@ -127,7 +117,6 @@ type AdvancedFilters = {
 
 const DEFAULT_ADVANCED: AdvancedFilters = {
   status: 'all',
-  outcome: 'all',
   priority: 'all',
   visibility: 'all',
   assignee: 'all',
@@ -144,8 +133,6 @@ const WORKFLOW_STATUSES = [
   'closed',
 ] as const;
 
-const OUTCOME_OPTIONS = ['resolved', 'sanctioned', 'dismissed', 'withdrawn'] as const;
-
 const KNOWN_ENTITY_TYPES = [
   'Contract',
   'Feedback',
@@ -153,6 +140,9 @@ const KNOWN_ENTITY_TYPES = [
   'Gig',
   'Marketplace',
   'Team',
+  'Forum',
+  'Transaction',
+  'General',
 ] as const;
 
 const HANDLER_ROLES = new Set([
@@ -190,7 +180,6 @@ function isClosedStatus(status: string) {
 function countActiveAdvanced(filters: AdvancedFilters) {
   let n = 0;
   if (filters.status !== 'all') n += 1;
-  if (filters.outcome !== 'all') n += 1;
   if (filters.priority !== 'all') n += 1;
   if (filters.visibility !== 'all') n += 1;
   if (filters.assignee !== 'all') n += 1;
@@ -215,7 +204,7 @@ export default function DisputeDesk({
   onUpdated: () => void;
   accent?: Accent;
   endpointBase?: string;
-  /** Enables assign / outcome / view-only gating (admin & support desks). */
+  /** Enables assign / view-only gating (admin & support desks). */
   deskMode?: boolean;
   deskLabel?: string;
   loading?: boolean;
@@ -303,21 +292,6 @@ export default function DisputeDesk({
     const credits = disputes
       .filter((d) => !isClosedStatus(d.status))
       .reduce((sum, d) => sum + Number(d.creditAmount || 0), 0);
-    const outcomes = {
-      resolved: disputes.filter(
-        (d) =>
-          isClosedStatus(d.status) && String(d.outcome || 'resolved').toLowerCase() === 'resolved'
-      ).length,
-      sanctioned: disputes.filter(
-        (d) => isClosedStatus(d.status) && String(d.outcome || '').toLowerCase() === 'sanctioned'
-      ).length,
-      dismissed: disputes.filter(
-        (d) => isClosedStatus(d.status) && String(d.outcome || '').toLowerCase() === 'dismissed'
-      ).length,
-      withdrawn: disputes.filter(
-        (d) => isClosedStatus(d.status) && String(d.outcome || '').toLowerCase() === 'withdrawn'
-      ).length,
-    };
     return {
       openQueue,
       pending,
@@ -327,7 +301,6 @@ export default function DisputeDesk({
       closed,
       unassigned,
       credits,
-      outcomes,
       total: disputes.length,
     };
   }, [disputes]);
@@ -335,7 +308,7 @@ export default function DisputeDesk({
   const entityTypes = useMemo(() => {
     const set = new Set<string>(KNOWN_ENTITY_TYPES);
     for (const d of disputes) {
-      const t = String(d.relatedEntityType || '').trim();
+      const t = String(d.type || '').trim();
       if (t) set.add(t);
     }
     return [...set].sort((a, b) => a.localeCompare(b));
@@ -347,7 +320,6 @@ export default function DisputeDesk({
     const q = search.trim().toLowerCase();
     const list = disputes.filter((d) => {
       const status = String(d.status).toLowerCase();
-      const outcome = String(d.outcome || '').toLowerCase();
 
       // Quick status chips (workflow)
       if (statusFilter === 'open_queue' && isClosedStatus(status)) return false;
@@ -364,22 +336,11 @@ export default function DisputeDesk({
       // Advanced: workflow status (refines further when chip is All / Open queue / Closed)
       if (advanced.status !== 'all' && status !== advanced.status) return false;
 
-      // Advanced: outcome (closed decisions only)
-      if (advanced.outcome !== 'all') {
-        if (!isClosedStatus(status)) return false;
-        const effectiveOutcome = outcome || 'resolved';
-        if (effectiveOutcome !== advanced.outcome) return false;
-      }
-
       if (advanced.priority !== 'all' && String(d.priority).toLowerCase() !== advanced.priority) {
         return false;
       }
-      if (
-        advanced.visibility !== 'all' &&
-        String(d.visibility || 'pending').toLowerCase() !== advanced.visibility
-      ) {
-        return false;
-      }
+      if (advanced.visibility === 'visible' && !d.visibility) return false;
+      if (advanced.visibility === 'hidden' && d.visibility) return false;
       if (advanced.assignee === 'unassigned' && d.assignee) return false;
       if (advanced.assignee === 'assigned' && !d.assignee) return false;
       if (
@@ -396,7 +357,7 @@ export default function DisputeDesk({
       }
       if (
         advanced.entityType !== 'all' &&
-        String(d.relatedEntityType || '').toLowerCase() !== advanced.entityType.toLowerCase()
+        String(d.type || '').toLowerCase() !== advanced.entityType.toLowerCase()
       ) {
         return false;
       }
@@ -406,17 +367,15 @@ export default function DisputeDesk({
       const hay = [
         d.number,
         d.title,
-        d.reason,
+        d.description,
         d.initiator?.name,
         d.initiator?.username,
         d.respondent?.name,
         d.respondent?.username,
         d.assignee?.name,
         d.status,
-        d.outcome,
+        d.type,
         d.visibility,
-        d.relatedEntityType,
-        d.relatedEntityId,
       ]
         .filter(Boolean)
         .join(' ')
@@ -457,20 +416,9 @@ export default function DisputeDesk({
   ];
 
   const patchAdvanced = (partial: Partial<AdvancedFilters>) => {
-    setAdvanced((prev) => {
-      const next = { ...prev, ...partial };
-      if (partial.outcome && partial.outcome !== 'all') {
-        next.status = 'closed';
-      }
-      if (partial.status && partial.status !== 'all' && partial.status !== 'closed') {
-        next.outcome = 'all';
-      }
-      return next;
-    });
+    setAdvanced((prev) => ({ ...prev, ...partial }));
 
-    if (partial.outcome && partial.outcome !== 'all') {
-      setStatusFilter('closed');
-    } else if (partial.status === 'closed') {
+    if (partial.status === 'closed') {
       setStatusFilter('closed');
     } else if (
       partial.status === 'pending_review' ||
@@ -491,14 +439,13 @@ export default function DisputeDesk({
     setStatusFilter(id);
     // Keep advanced status in sync when picking a specific workflow chip
     if (id === 'pending_review' || id === 'open' || id === 'awaiting_response' || id === 'under_review') {
-      setAdvanced((prev) => ({ ...prev, status: id, outcome: 'all' }));
+      setAdvanced((prev) => ({ ...prev, status: id }));
     } else if (id === 'closed') {
       setAdvanced((prev) => ({ ...prev, status: 'closed' }));
     } else if (id === 'open_queue' || id === 'all') {
       setAdvanced((prev) => ({
         ...prev,
         status: 'all',
-        ...(id === 'open_queue' ? { outcome: 'all' } : {}),
       }));
     }
   };
@@ -513,11 +460,7 @@ export default function DisputeDesk({
           sub="Across open cases"
         />
         <SummaryCard label="Unassigned" value={counts.unassigned} sub="Need a designated handler" />
-        <SummaryCard
-          label="Closed"
-          value={counts.closed}
-          sub={`${counts.outcomes.resolved} resolved · ${counts.outcomes.sanctioned} sanctioned`}
-        />
+        <SummaryCard label="Closed" value={counts.closed} sub="Resolved cases" />
       </div>
 
       <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0f1016]">
@@ -528,8 +471,7 @@ export default function DisputeDesk({
               <h2 className="text-sm font-semibold text-white">Dispute desk</h2>
             </div>
             <p className="mt-1 text-xs text-zinc-500">
-              Workflow status for the queue; set an outcome only when closing. Assign yourself before
-              handling.
+              Workflow status for the queue. Assign yourself before handling.
             </p>
           </div>
           <div className="relative w-full max-w-sm">
@@ -537,7 +479,7 @@ export default function DisputeDesk({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search number, party, title, outcome…"
+              placeholder="Search number, party, title…"
               className={`w-full rounded-xl border border-white/[0.08] bg-[#14151c] py-2.5 pl-9 pr-3 text-sm text-white outline-none placeholder:text-zinc-600 ${theme.focus}`}
             />
           </div>
@@ -624,31 +566,6 @@ export default function DisputeDesk({
                   </select>
                 </FilterField>
 
-                <FilterField label="Outcome">
-                  <select
-                    value={advanced.outcome}
-                    onChange={(e) => patchAdvanced({ outcome: e.target.value as OutcomeFilter })}
-                    className={selectCls}
-                    disabled={advanced.status !== 'all' && advanced.status !== 'closed'}
-                  >
-                    <option value="all">All outcomes</option>
-                    {OUTCOME_OPTIONS.map((o) => (
-                      <option key={o} value={o}>
-                        {titleCase(o)}
-                        {o === 'resolved' ? ` (${counts.outcomes.resolved})` : ''}
-                        {o === 'sanctioned' ? ` (${counts.outcomes.sanctioned})` : ''}
-                        {o === 'dismissed' ? ` (${counts.outcomes.dismissed})` : ''}
-                        {o === 'withdrawn' ? ` (${counts.outcomes.withdrawn})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {advanced.status !== 'all' && advanced.status !== 'closed' && (
-                    <span className="text-[10px] text-zinc-600">
-                      Outcome applies to closed disputes only.
-                    </span>
-                  )}
-                </FilterField>
-
                 <FilterField label="Priority">
                   <select
                     value={advanced.priority}
@@ -671,9 +588,8 @@ export default function DisputeDesk({
                     className={selectCls}
                   >
                     <option value="all">All visibility</option>
-                    <option value="pending">Pending</option>
-                    <option value="parties">Parties</option>
-                    <option value="public">Public</option>
+                    <option value="visible">Visible</option>
+                    <option value="hidden">Hidden</option>
                   </select>
                 </FilterField>
 
@@ -705,13 +621,13 @@ export default function DisputeDesk({
                   </div>
                 </FilterField>
 
-                <FilterField label="Entity type">
+                <FilterField label="Type">
                   <select
                     value={advanced.entityType}
                     onChange={(e) => patchAdvanced({ entityType: e.target.value })}
                     className={selectCls}
                   >
-                    <option value="all">All entities</option>
+                    <option value="all">All types</option>
                     {entityTypes.map((t) => (
                       <option key={t} value={t}>
                         {titleCase(t)}
@@ -762,7 +678,6 @@ export default function DisputeDesk({
                 <th className="px-4 py-3 font-medium">Parties</th>
                 <th className="px-4 py-3 font-medium">Credits</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Outcome</th>
                 <th className="px-4 py-3 font-medium">Visibility</th>
                 <th className="px-4 py-3 font-medium">Handler</th>
                 <th className="px-5 py-3 font-medium">Opened</th>
@@ -770,8 +685,6 @@ export default function DisputeDesk({
             </thead>
             <tbody>
               {filtered.map((d) => {
-                const closed = isClosedStatus(d.status);
-                const outcome = closed ? String(d.outcome || 'resolved').toLowerCase() : '';
                 return (
                   <tr
                     key={String(d.id)}
@@ -781,11 +694,18 @@ export default function DisputeDesk({
                     <td className="px-5 py-3.5">
                       <p className="font-medium text-white">{d.number}</p>
                       <p className="mt-0.5 line-clamp-1 text-xs text-zinc-500">{d.title}</p>
-                      <span
-                        className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] ${priorityClass(d.priority)}`}
-                      >
-                        {titleCase(d.priority)}
-                      </span>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <span
+                          className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] ${priorityClass(d.priority)}`}
+                        >
+                          {titleCase(d.priority)}
+                        </span>
+                        {d.type && (
+                          <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-zinc-300">
+                            {d.type}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5">
                       <p className="text-zinc-200">@{d.initiator.username}</p>
@@ -807,21 +727,10 @@ export default function DisputeDesk({
                       </span>
                     </td>
                     <td className="px-4 py-3.5">
-                      {closed && outcome ? (
-                        <span
-                          className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${outcomeClass(outcome)}`}
-                        >
-                          {titleCase(outcome)}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-zinc-600">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5">
                       <span
-                        className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${visibilityClass(d.visibility || 'pending')}`}
+                        className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${visibilityClass(Boolean(d.visibility))}`}
                       >
-                        {titleCase(d.visibility || 'pending')}
+                        {d.visibility ? 'Visible' : 'Hidden'}
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-zinc-300">
@@ -843,7 +752,7 @@ export default function DisputeDesk({
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center text-sm text-zinc-500">
+                  <td colSpan={7} className="px-5 py-16 text-center text-sm text-zinc-500">
                     No disputes match this filter.
                   </td>
                 </tr>

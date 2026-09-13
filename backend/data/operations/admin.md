@@ -44,6 +44,6 @@ Administrators can view cross-queue tickets, apply filters, inspect messages and
 
 ## System settings
 
-The settings portal stores platform, moderation, economy, notification, and security configuration in `platform_settings`. A setting affects production behavior only when the relevant backend service consumes and validates it.
+The settings portal stores platform, moderation, economy, notification, and security configuration in `configuration`. A setting affects production behavior only when the relevant backend service consumes and validates it.
 
 Internal admin routes and operational metrics should not be returned as suggested customer navigation links.

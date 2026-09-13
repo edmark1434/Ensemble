@@ -26,7 +26,7 @@ type CashoutRecord = {
 };
 
 type Channel = { code: string; label: string };
-type CashoutConfig = { php_cents_per_credit: number; fee_php_cents: number; minimum_credits: number };
+type CashoutConfig = { php_cents_per_credit: number; fee_php_cents: number; fee_percent?: number; minimum_credits: number };
 type CashoutPagination = { total: number; page: number; page_size: number; total_pages: number };
 type AddressSuggestion = { id: string; label: string; street_line_1: string; city: string; province_state: string; postal_code: string };
 type AddressErrors = Partial<Record<"street_line_1" | "city" | "province_state" | "postal_code", string>>;
@@ -71,7 +71,7 @@ export function UserSettingsWallet() {
   const [wallets, setWallets] = useState<WalletRecord[]>([]);
   const [cashouts, setCashouts] = useState<CashoutRecord[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
-  const [cashoutConfig, setCashoutConfig] = useState<CashoutConfig>({ php_cents_per_credit: 100, fee_php_cents: 0, minimum_credits: 1 });
+  const [cashoutConfig, setCashoutConfig] = useState<CashoutConfig>({ php_cents_per_credit: 100, fee_php_cents: 0, fee_percent: 0, minimum_credits: 1 });
   const [cashoutPagination, setCashoutPagination] = useState<CashoutPagination>({ total: 0, page: 1, page_size: 10, total_pages: 1 });
   const [cashoutPage, setCashoutPage] = useState(1);
   const [cashoutSearch, setCashoutSearch] = useState("");
@@ -151,7 +151,10 @@ export function UserSettingsWallet() {
   const available = Number(accountWallet?.balance_credits || 0);
   const requestedCredits = Number(form.amount_credits) || 0;
   const grossPayoutCents = requestedCredits * cashoutConfig.php_cents_per_credit;
-  const netPayoutCents = Math.max(0, grossPayoutCents - cashoutConfig.fee_php_cents);
+  const cashoutFeeCents = cashoutConfig.fee_percent && cashoutConfig.fee_percent > 0
+    ? Math.ceil(grossPayoutCents * cashoutConfig.fee_percent / 100)
+    : cashoutConfig.fee_php_cents;
+  const netPayoutCents = Math.max(0, grossPayoutCents - cashoutFeeCents);
   const remainingCredits = Math.max(0, available - requestedCredits);
 
   const submitCashout = async (event: React.FormEvent) => {
@@ -305,7 +308,7 @@ export function UserSettingsWallet() {
                 {form.receipt_email && <div className="flex justify-between gap-4"><span className="text-zinc-500">Receipt email</span><span className="max-w-[65%] truncate font-medium text-zinc-200">{form.receipt_email}</span></div>}
                 <div className="flex justify-between gap-4"><span className="text-zinc-500">Credits requested</span><span className="font-medium text-zinc-200">{credits(requestedCredits)}</span></div>
                 <div className="flex justify-between gap-4"><span className="text-zinc-500">Gross payout</span><span className="font-medium text-zinc-200">{pesos(grossPayoutCents)}</span></div>
-                <div className="flex justify-between gap-4"><span className="text-zinc-500">Cashout fee</span><span className="font-medium text-zinc-200">{pesos(cashoutConfig.fee_php_cents)}</span></div>
+                <div className="flex justify-between gap-4"><span className="text-zinc-500">Cashout fee{cashoutConfig.fee_percent ? ` (${cashoutConfig.fee_percent}%)` : ""}</span><span className="font-medium text-zinc-200">{pesos(cashoutFeeCents)}</span></div>
                 <div className="border-t border-white/10 pt-2.5 flex justify-between gap-4"><span className="font-semibold text-zinc-300">You receive</span><span className="font-bold text-emerald-400">{pesos(netPayoutCents)}</span></div>
                 <div className="flex justify-between gap-4"><span className="text-zinc-500">Balance after cashout</span><span className={`font-medium ${requestedCredits > available ? "text-red-400" : "text-zinc-200"}`}>{credits(remainingCredits)} credits</span></div>
               </div>

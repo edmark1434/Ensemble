@@ -12,6 +12,7 @@ module.exports = {
   getReportDetail: tickets.getReportDetail,
   getViolationsAndRestrictions: restrictions.getViolationsAndRestrictions,
   issueViolation: restrictions.issueViolation,
+  issueRestriction: restrictions.issueRestriction,
   updateAccountRestriction: restrictions.updateAccountRestriction,
   setForumGroupMemberBan: setForumGroupMemberBanServices,
 };

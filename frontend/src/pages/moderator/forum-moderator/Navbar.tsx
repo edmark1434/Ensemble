@@ -3,6 +3,7 @@ import {
   Flag,
   MessagesSquare,
   Scale,
+  ShieldBan,
   Ticket,
   Users,
 } from 'lucide-react';
@@ -14,6 +15,7 @@ const navItems = [
   { label: 'Ticket Management', icon: Ticket, to: '/moderator/forum/ticket-management' },
   { label: 'Disputes', icon: Scale, to: '/moderator/forum/disputes' },
   { label: 'Reports', icon: Flag, to: '/moderator/forum/reports' },
+  { label: 'Restrictions', icon: ShieldBan, to: '/moderator/forum/restrictions' },
   { label: 'User & Team', icon: Users, to: '/moderator/forum/user-team' },
 ];
 

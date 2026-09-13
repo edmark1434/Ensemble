@@ -80,6 +80,8 @@ export type FeeSetting = {
   percent: number;
   flatFee: number;
   appliesTo: string;
+  paidBy?: string;
+  reason?: string;
 };
 
 export type EconomyAlert = {

@@ -232,14 +232,6 @@ export default function TicketManagementPage() {
     return [...TICKET_TYPE_OPTIONS];
   }, [data]);
 
-  const ticketChannels = useMemo(() => {
-    if (!data) return ['web', 'chat', 'email', 'in_app'];
-    const fromData = [
-      ...new Set(allTickets.map((t) => String(t.channel || 'web').toLowerCase()).filter(Boolean)),
-    ];
-    return fromData.length ? fromData.sort() : ['web', 'chat', 'email', 'in_app'];
-  }, [data, allTickets]);
-
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center md:pl-[260px]">
@@ -365,7 +357,6 @@ export default function TicketManagementPage() {
             totalCount={allTickets.length}
             summary={summary}
             ticketTypes={ticketTypes}
-            channels={ticketChannels}
             moderators={data.staffWorkload.map((s) => ({
               staffId: s.staffId,
               name: s.name,
@@ -389,7 +380,6 @@ export default function TicketManagementPage() {
             totalCount={myTickets.length}
             summary={mySummary}
             ticketTypes={ticketTypes}
-            channels={ticketChannels}
             moderators={data.staffWorkload.map((s) => ({
               staffId: s.staffId,
               name: s.name,
@@ -559,7 +549,6 @@ function TicketsTab({
   totalCount,
   summary,
   ticketTypes,
-  channels,
   moderators,
   filters,
   onFiltersChange,
@@ -578,7 +567,6 @@ function TicketsTab({
   totalCount: number;
   summary: TicketsOverview['summary'];
   ticketTypes: string[];
-  channels: string[];
   moderators: { staffId: number | string; name: string; role: string }[];
   filters: TicketFilterState;
   onFiltersChange: (next: TicketFilterState) => void;
@@ -649,7 +637,6 @@ function TicketsTab({
           filters={filters}
           onChange={onFiltersChange}
           ticketTypes={ticketTypes}
-          channels={channels}
           moderators={moderators}
           accent="rose"
           desk={desk}

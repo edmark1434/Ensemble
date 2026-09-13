@@ -111,7 +111,6 @@ const STATUS_OPTIONS = [
   "closed",
 ];
 
-const OUTCOME_OPTIONS = ["resolved", "sanctioned", "dismissed", "withdrawn"];
 const SANCTION_OPTIONS = ["warn", "mute", "suspend", "ban", "credit_adjustment", "listing_removal"];
 const CLOSED_STATUS = "closed";
 
@@ -167,9 +166,7 @@ export default function ModeratorDisputeDetailModal({
   const [priority, setPriority] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [resolutionNotes, setResolutionNotes] = useState("");
-  const [outcome, setOutcome] = useState("");
   const [sanctionType, setSanctionType] = useState("");
-  const [sanctionNotes, setSanctionNotes] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -182,9 +179,7 @@ export default function ModeratorDisputeDetailModal({
         setPriority(toApiToken(d.dispute.priority));
         setAssigneeId(d.dispute.assignee?.staffId?.toString() || "");
         setResolutionNotes(d.dispute.resolutionNotes || "");
-        setOutcome(d.dispute.outcome || "");
         setSanctionType(d.dispute.sanctionType || "");
-        setSanctionNotes(d.dispute.sanctionNotes || "");
       }
     } catch {
       showErrorToast("Failed to load dispute");
@@ -278,7 +273,7 @@ export default function ModeratorDisputeDetailModal({
     // Admin may designate or reassign a handler anytime
     if (canAssignOthers) {
       await runAction(
-        { assigned_staff_id: next ? next : null },
+        { handled_by_staff_id: next ? next : null },
         next ? "Handler assigned" : "Handler cleared"
       );
     }
@@ -298,7 +293,7 @@ export default function ModeratorDisputeDetailModal({
     }
     if (adminMode && viewOnly && canAssignOthers && !assigneeLocked) {
       await runAction(
-        { assigned_staff_id: assigneeId ? assigneeId : null },
+        { handled_by_staff_id: assigneeId ? assigneeId : null },
         "Assignment updated"
       );
       return;
@@ -311,33 +306,21 @@ export default function ModeratorDisputeDetailModal({
     };
     if (adminMode) {
       if (isDisputeClosed(nextStatus)) {
-        payload.outcome = outcome || "resolved";
         if (sanctionType) payload.sanction_type = sanctionType;
-        payload.sanction_notes = sanctionNotes || null;
       } else {
-        payload.outcome = null;
         payload.sanction_type = null;
-        payload.sanction_notes = null;
       }
       // Admin may change handler anytime; others use Release / Assign myself while locked.
       if (!assigneeLocked && (canAssignOthers || canAssignMyself)) {
-        payload.assigned_staff_id = assigneeId ? assigneeId : null;
+        payload.handled_by_staff_id = assigneeId ? assigneeId : null;
       } else if (canAssignOthers) {
-        payload.assigned_staff_id = assigneeId ? assigneeId : null;
-      }
-    } else {
-      if (isDisputeClosed(nextStatus) && !outcome) {
-        payload.outcome = "resolved";
-      } else if (outcome) {
-        payload.outcome = outcome;
+        payload.handled_by_staff_id = assigneeId ? assigneeId : null;
       }
     }
     const closing = isDisputeClosed(nextStatus);
     await runAction(
       payload,
-      closing
-        ? `Dispute closed (${titleCaseLabel(String(payload.outcome || "resolved"))})`
-        : "Dispute updated"
+      closing ? "Dispute closed" : "Dispute updated"
     );
   };
 
@@ -438,22 +421,17 @@ export default function ModeratorDisputeDetailModal({
             <div>
               <h3 className="text-xl font-semibold text-white">{dispute.title}</h3>
               <p className="mt-1 text-sm text-zinc-500">
-                @{dispute.initiator.username} vs @{dispute.respondent.username} · {dispute.relatedEntityType || "general"} ·{" "}
+                @{dispute.initiator.username} vs @{dispute.respondent.username} · {dispute.type || "General"} ·{" "}
                 {dispute.creditAmount.toLocaleString()} credits · opened {formatDateTime(dispute.openedAt)}
               </p>
-              {dispute.reason && <p className="mt-2 text-sm text-zinc-400">{dispute.reason}</p>}
+              {dispute.description && <p className="mt-2 text-sm text-zinc-400">{dispute.description}</p>}
               <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                 <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
                   Status: {titleCaseLabel(dispute.status)}
                 </span>
                 <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
-                  Visibility: {titleCaseLabel(dispute.visibility || "pending")}
+                  Visibility: {dispute.visibility ? "Visible" : "Hidden"}
                 </span>
-                {dispute.outcome && (
-                  <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-violet-200">
-                    Outcome: {titleCaseLabel(dispute.outcome)}
-                  </span>
-                )}
                 {dispute.creditHold && (
                   <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-200">
                     Hold: {dispute.creditHold.amount.toLocaleString()} ({dispute.creditHold.status})
@@ -513,10 +491,10 @@ export default function ModeratorDisputeDetailModal({
                     <button
                       type="button"
                       disabled={saving}
-                      onClick={() => void runAction({ action: "approve" }, "Dispute approved (now public)")}
+                      onClick={() => void runAction({ action: "approve" }, "Dispute approved (now visible)")}
                       className={`rounded-xl px-3 py-2 text-sm font-medium text-white disabled:opacity-50 ${ACCENT_BTN[accent]}`}
                     >
-                      Approve (make public)
+                      Approve (make visible)
                     </button>
                     <button
                       type="button"
@@ -546,10 +524,7 @@ export default function ModeratorDisputeDetailModal({
                         aria-pressed={active}
                         onClick={() => {
                           setStatus(s);
-                          if (isDisputeClosed(s)) {
-                            setOutcome((prev) => prev || "resolved");
-                          } else {
-                            setOutcome("");
+                          if (!isDisputeClosed(s)) {
                             setSanctionType("");
                             setSanctionNotes("");
                           }
@@ -615,32 +590,6 @@ export default function ModeratorDisputeDetailModal({
                     Admin override: you can reassign this dispute without a release.
                   </span>
                 )}
-                {canAssignMyself && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void runAction({ action: "self_assign" }, "You are now assigned")}
-                    className={`mt-2 inline-flex w-fit items-center gap-1.5 ${HANDLER_ACTION_BTN} ${HANDLER_TONES.claim}`}
-                  >
-                    <Hand className={HANDLER_ACTION_ICON} />
-                    Assign myself
-                  </button>
-                )}
-                {canRelease && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() =>
-                      void runAction(
-                        { action: "release" },
-                        "Case released — another Support Moderator can claim it"
-                      )
-                    }
-                    className={`mt-2 inline-flex w-fit items-center gap-1.5 ${HANDLER_ACTION_BTN} ${HANDLER_TONES.release}`}
-                  >
-                    Release case
-                  </button>
-                )}
                 {!canEditHandler && !assigneeLocked && (
                   <span className="text-[11px] text-amber-200/80">
                     {!perms?.staffId
@@ -650,7 +599,7 @@ export default function ModeratorDisputeDetailModal({
                 )}
                 {canAssignMyself && !canAct && (
                   <span className="text-[11px] text-sky-200/70">
-                    Click Assign myself to become the handler — no need to hunt yourself in the list.
+                    Click Assign myself above to become the handler — no need to hunt yourself in the list.
                   </span>
                 )}
               </label>
@@ -659,42 +608,11 @@ export default function ModeratorDisputeDetailModal({
             {adminMode && (
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="flex flex-col gap-1 text-xs text-zinc-500">
-                  Outcome
-                  <select
-                    value={outcome}
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      setOutcome(next);
-                      if (next) {
-                        setStatus(CLOSED_STATUS);
-                      }
-                      if (next !== "sanctioned") {
-                        setSanctionType("");
-                        setSanctionNotes("");
-                      }
-                    }}
-                    disabled={viewOnly || !isDisputeClosed(status)}
-                    className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:opacity-50"
-                  >
-                    <option value="">—</option>
-                    {OUTCOME_OPTIONS.map((o) => (
-                      <option key={o} value={o}>
-                        {titleCaseLabel(o)}
-                      </option>
-                    ))}
-                  </select>
-                  {!isDisputeClosed(status) && (
-                    <span className="text-[11px] text-zinc-600">
-                      Set status to Closed to choose an outcome.
-                    </span>
-                  )}
-                </label>
-                <label className="flex flex-col gap-1 text-xs text-zinc-500">
                   Sanction type
                   <select
                     value={sanctionType}
                     onChange={(e) => setSanctionType(e.target.value)}
-                    disabled={viewOnly || outcome !== "sanctioned"}
+                    disabled={viewOnly || !isDisputeClosed(status)}
                     className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:opacity-50"
                   >
                     <option value="">—</option>
@@ -704,35 +622,39 @@ export default function ModeratorDisputeDetailModal({
                       </option>
                     ))}
                   </select>
+                  {!isDisputeClosed(status) && (
+                    <span className="text-[11px] text-zinc-600">
+                      Set status to Closed to apply a sanction.
+                    </span>
+                  )}
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-zinc-500">
+                  Resolution notes
+                  <textarea
+                    value={resolutionNotes}
+                    onChange={(e) => setResolutionNotes(e.target.value)}
+                    rows={2}
+                    disabled={viewOnly}
+                    placeholder="How was (or will) this dispute be settled?"
+                    className="resize-none rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
+                  />
                 </label>
               </div>
             )}
 
-            {adminMode && (
+            {!adminMode && (
               <label className="flex flex-col gap-1 text-xs text-zinc-500">
-                Sanction notes
+                Resolution notes
                 <textarea
-                  value={sanctionNotes}
-                  onChange={(e) => setSanctionNotes(e.target.value)}
+                  value={resolutionNotes}
+                  onChange={(e) => setResolutionNotes(e.target.value)}
                   rows={2}
-                  disabled={viewOnly || outcome !== "sanctioned"}
-                  placeholder="Details of the sanction…"
+                  disabled={viewOnly}
+                  placeholder="How was (or will) this dispute be settled?"
                   className="resize-none rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
                 />
               </label>
             )}
-
-            <label className="flex flex-col gap-1 text-xs text-zinc-500">
-              Resolution notes
-              <textarea
-                value={resolutionNotes}
-                onChange={(e) => setResolutionNotes(e.target.value)}
-                rows={2}
-                disabled={viewOnly}
-                placeholder="How was (or will) this dispute be settled?"
-                className="resize-none rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
-              />
-            </label>
 
             <div className="flex flex-wrap gap-2">
               {(canAct ||
@@ -869,7 +791,7 @@ export default function ModeratorDisputeDetailModal({
               {viewOnly && canReply && (
                 <p className="mb-3 rounded-lg border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-xs text-sky-200">
                   View &amp; reply mode — you can post staff-only replies. Only Support Moderators
-                  or Admin can claim, change status/outcome, or publish messages to parties / public.
+                  or Admin can claim, change status, or publish messages to parties / public.
                 </p>
               )}
               <textarea
