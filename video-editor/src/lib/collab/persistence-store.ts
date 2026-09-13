@@ -7,6 +7,8 @@
 
 import { db } from "@/lib/db";
 import * as Y from "yjs";
+import {withProjectSnapshotLock} from "@/lib/collab/snapshot-lock";
+import {compactBlockFromStorage, withBlockSnapshotLock} from "@/lib/collab/block-persistence-store";
 
 export async function compactProject(projectId: string, extraUpdate?: Uint8Array): Promise<void> {
   const snapshotRow = await db
@@ -126,4 +128,18 @@ export async function loadLatestProjectState(projectId: string): Promise<Persist
     snapshot: snapshotRow?.document ?? null,
     updates: updateRows.map((r) => r.update),
   };
+}
+
+export async function compactProjectAndScenes(projectId: string): Promise<void> {
+  await withProjectSnapshotLock(projectId, () => compactProject(projectId));
+
+  const blocks = await db
+    .selectFrom("blocks")
+    .where("project_id", "=", projectId)
+    .select(["block_id"])
+    .execute();
+
+  await Promise.all(
+    blocks.map((b) => withBlockSnapshotLock(b.block_id, () => compactBlockFromStorage(b.block_id))),
+  );
 }

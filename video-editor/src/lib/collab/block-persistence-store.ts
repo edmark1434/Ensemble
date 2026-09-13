@@ -1,6 +1,7 @@
 // lib/collab/block-persistence-store.ts
 
 import { db } from "@/lib/db";
+import * as Y from "yjs";
 
 export async function loadLatestBlockState(blockId: string): Promise<{
   snapshot: Buffer | null;
@@ -62,4 +63,59 @@ export function withBlockSnapshotLock<T>(blockId: string, fn: () => Promise<T>):
   const next = prior.then(fn, fn);
   locks.set(key, next.catch(() => {}));
   return next;
+}
+
+// Mirrors compactProject's merge-then-trim shape, but reads purely from
+// Postgres — used by the project-level force-save cascade, which has no
+// access to another client's live in-memory room doc for a block that
+// isn't currently open by anyone. Also fixes the fact that compactBlock
+// itself never trims block_yjs_updates, so those rows never got flushed
+// unless someone force-saved while that specific block's room was open.
+export async function compactBlockFromStorage(blockId: string): Promise<void> {
+  const snapshotRow = await db
+    .selectFrom("block_yjs_snapshots")
+    .innerJoin("yjs_snapshots", "yjs_snapshots.yjs_snapshot_id", "block_yjs_snapshots.yjs_snapshot_id")
+    .where("block_yjs_snapshots.block_id", "=", blockId)
+    .orderBy("yjs_snapshots.created_at", "desc")
+    .select(["yjs_snapshots.document", "yjs_snapshots.created_at"])
+    .executeTakeFirst();
+
+  let updatesQuery = db
+    .selectFrom("block_yjs_updates")
+    .innerJoin("yjs_updates", "yjs_updates.yjs_update_id", "block_yjs_updates.yjs_update_id")
+    .where("block_yjs_updates.block_id", "=", blockId)
+    .orderBy("yjs_updates.created_at", "asc")
+    .select(["yjs_updates.update", "yjs_updates.yjs_update_id"]);
+
+  if (snapshotRow) {
+    updatesQuery = updatesQuery.where("yjs_updates.created_at", ">", snapshotRow.created_at);
+  }
+
+  const updateRows = await updatesQuery.execute();
+  if (!snapshotRow && updateRows.length === 0) return;
+
+  const doc = new Y.Doc({ gc: false });
+  if (snapshotRow) Y.applyUpdate(doc, snapshotRow.document);
+  for (const row of updateRows) Y.applyUpdate(doc, row.update);
+  const compacted = Buffer.from(Y.encodeStateAsUpdate(doc));
+  doc.destroy();
+
+  await db.transaction().execute(async (trx) => {
+    const newSnapshot = await trx
+      .insertInto("yjs_snapshots")
+      .values({ document: compacted })
+      .returning(["yjs_snapshot_id"])
+      .executeTakeFirstOrThrow();
+
+    await trx
+      .insertInto("block_yjs_snapshots")
+      .values({ yjs_snapshot_id: newSnapshot.yjs_snapshot_id, block_id: blockId })
+      .execute();
+
+    const idsToTrim = updateRows.map((r) => r.yjs_update_id);
+    if (idsToTrim.length) {
+      await trx.deleteFrom("block_yjs_updates").where("yjs_update_id", "in", idsToTrim).execute();
+      await trx.deleteFrom("yjs_updates").where("yjs_update_id", "in", idsToTrim).execute();
+    }
+  });
 }
