@@ -58,10 +58,10 @@ const BasicSceneItem = ({ trackItem }: BasicSceneItemProps) => {
           <SceneControls
             name={name ?? ""}
             onNameCommit={handleNameCommit}
-            size={content?.size}
-            onSizeCommit={handleSizeCommit}
-            background={content?.background?.value}
-            onBackgroundChange={handleBackgroundChange}
+            // size={content?.size}
+            // onSizeCommit={handleSizeCommit}
+            // background={content?.background?.value}
+            // onBackgroundChange={handleBackgroundChange}
           />
         </fieldset>
       </ScrollArea>
