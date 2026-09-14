@@ -36,6 +36,9 @@ interface Project {
   thumbnail: string;
   progress?: number;
   contractAmount?: string;
+  width?: number;
+  height?: number;
+  duration_seconds?: number;
 }
 
 interface TeamProject {
@@ -57,7 +60,10 @@ const personalProjects: Project[] = [
     size: "140MB",
     duration: "02:34",
     lastUpdated: "8 mins ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Untitled.mp4"
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Untitled.mp4",
+    width: 1920,
+    height: 1080,
+    duration_seconds: 154
   },
   {
     id: 2,
@@ -66,7 +72,10 @@ const personalProjects: Project[] = [
     size: "450MB",
     duration: "05:23",
     lastUpdated: "2 hours ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Summer+Vacation"
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Summer+Vacation",
+    width: 3840,
+    height: 2160,
+    duration_seconds: 323
   },
   {
     id: 3,
@@ -116,7 +125,10 @@ const sharedProjects: Project[] = [
     duration: "22:15",
     lastUpdated: "2 mins ago",
     sharedBy: "Edmark Talingting",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Minecraft"
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Minecraft",
+    width: 1920,
+    height: 1080,
+    duration_seconds: 1335
   },
   {
     id: 8,
@@ -126,7 +138,10 @@ const sharedProjects: Project[] = [
     duration: "00:45",
     lastUpdated: "8 mins ago",
     sharedBy: "Jadei Pacibe",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Untitled(2).mp4"
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Untitled(2).mp4",
+    width: 1280,
+    height: 720,
+    duration_seconds: 45
   },
   {
     id: 9,
@@ -136,7 +151,10 @@ const sharedProjects: Project[] = [
     duration: "01:58",
     lastUpdated: "8 mins ago",
     sharedBy: "Jadei Pacibe",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=01:58"
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=01:58",
+    width: 1920,
+    height: 1080,
+    duration_seconds: 118
   },
   {
     id: 10,
@@ -146,7 +164,10 @@ const sharedProjects: Project[] = [
     duration: "45:20",
     lastUpdated: "1 hour ago",
     sharedBy: "Sarah Chen",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Team+Alpha"
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Team+Alpha",
+    width: 3840,
+    height: 2160,
+    duration_seconds: 2720
   },
   {
     id: 11,
@@ -156,7 +177,10 @@ const sharedProjects: Project[] = [
     duration: "01:23:45",
     lastUpdated: "3 hours ago",
     sharedBy: "Marcus Thompson",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Documentary"
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Documentary",
+    width: 1920,
+    height: 1080,
+    duration_seconds: 5025
   },
 ];
 
@@ -222,7 +246,10 @@ const recentProjects: Project[] = [
     duration: "22:15",
     lastUpdated: "2 mins ago",
     sharedBy: "Edmark Talingting",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Minecraft"
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Minecraft",
+    width: 1920,
+    height: 1080,
+    duration_seconds: 1335
   },
   {
     id: 2,
@@ -231,7 +258,10 @@ const recentProjects: Project[] = [
     size: "450MB",
     duration: "05:23",
     lastUpdated: "2 hours ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Summer+Vacation"
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Summer+Vacation",
+    width: 3840,
+    height: 2160,
+    duration_seconds: 323
   },
   {
     id: 3,
@@ -371,7 +401,7 @@ const teamProjects: TeamProject[] = [
 
 
 
-type TabType = "recent" | "personal" | "shared" | "team";
+type TabType = "recent" | "personal" | "shared";
 type ViewType = "grid" | "compact";
 
 // Skeleton Components
@@ -416,8 +446,6 @@ const Projects: React.FC = () => {
     activeTab = "personal";
   } else if (location.pathname.includes("/projects/shared")) {
     activeTab = "shared";
-  } else if (location.pathname.includes("/projects/team")) {
-    activeTab = "team";
   }
 
   // Simulate loading
@@ -452,7 +480,6 @@ const Projects: React.FC = () => {
     { id: "recent" as TabType, label: "Recent", icon: <Clock className="h-4 w-4" /> },
     { id: "personal" as TabType, label: "Personal", icon: <User className="h-4 w-4" /> },
     { id: "shared" as TabType, label: "Shared", icon: <Share2 className="h-4 w-4" /> },
-    { id: "team" as TabType, label: "Team", icon: <Users className="h-4 w-4" /> },
   ];
 
   const handleTabClick = (tabId: TabType) => {
@@ -460,7 +487,6 @@ const Projects: React.FC = () => {
     if (tabId === "recent") navigate("/projects");
     else if (tabId === "personal") navigate("/projects/personal");
     else if (tabId === "shared") navigate("/projects/shared");
-    else if (tabId === "team") navigate("/projects/team");
   };
 
   const getContent = () => {
@@ -571,6 +597,17 @@ const Projects: React.FC = () => {
           <div>{project.size}</div>
         </div>
 
+        {(project.width || project.height || project.duration_seconds) && (
+          <div className="mt-1 flex items-center justify-between text-[10px] text-gray-400 dark:text-zinc-500">
+            <div>
+              {project.width && project.height ? `${project.width}x${project.height}` : ''}
+            </div>
+            <div>
+              {project.duration_seconds ? `${project.duration_seconds}s` : ''}
+            </div>
+          </div>
+        )}
+
         <div className="mt-3 flex items-center gap-2 border-t border-gray-100 dark:border-white/10 pt-3">
           <button className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
             <Share2 className="h-3.5 w-3.5" />
@@ -614,6 +651,12 @@ const Projects: React.FC = () => {
             <span>{project.lastUpdated}</span>
           </div>
           <div>{project.size}</div>
+          {project.width && project.height && (
+            <div className="text-[10px] text-gray-400 dark:text-zinc-500">{project.width}x{project.height}</div>
+          )}
+          {project.duration_seconds && (
+            <div className="text-[10px] text-gray-400 dark:text-zinc-500">{project.duration_seconds}s</div>
+          )}
           {project.sharedBy && (
             <span className="text-gray-400 dark:text-zinc-400">Shared by {project.sharedBy.split(" ")[0]}</span>
           )}
