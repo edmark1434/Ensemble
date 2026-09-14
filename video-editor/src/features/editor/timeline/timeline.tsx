@@ -115,6 +115,13 @@ function applyItemDetails(canvas: CanvasTimeline, itemsMap: Record<string, any>)
       item.hasControls = !locked;
       item.dirty = true;
     }
+    // Scene draws its name as a canvas label cached on the instance
+    // (Scene.updateName), rather than reading it fresh per paint like the
+    // fields above, so it needs the same explicit push. updateName()
+    // already no-ops when unchanged, so this is cheap to call unconditionally.
+    if (typeof item.updateName === "function") {
+      item.updateName(details?.name || "Scene");
+    }
   });
 }
 

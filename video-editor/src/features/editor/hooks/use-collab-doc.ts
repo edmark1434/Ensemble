@@ -22,7 +22,9 @@ import {
 import { setupMirrorOutFromStateManager, setupMirrorOutFromStore } from "../collab/mirror-out";
 import { attachWsProvider } from "../collab/ws-provider";
 import {CollabTarget} from "@/features/editor/collab/collab-target";
-import {patchBlock} from "@/features/editor/control-item/common/composition-controls";
+import {patchBlock, patchProject} from "@/features/editor/control-item/common/composition-controls";
+import {isSceneItem} from "@/features/editor/types/ensemble-scene";
+import {patchBlockMeta, patchProjectSceneDetails} from "@/features/editor/collab/remote-patch";
 
 export interface CollabDoc {
   doc: Y.Doc;
@@ -46,8 +48,7 @@ export interface CollabDoc {
 // longer holds. Always reconciled FROM the doc, never the other direction,
 // at the two points a block's doc is guaranteed settled: right after it
 // finishes loading, and right before it's torn down.
-function reconcileBlockToDb(target: CollabTarget, schema: CollabSchema) {
-  if (target.kind !== "block") return;
+function reconcileTargetToDb(target: CollabTarget, schema: CollabSchema): void {
   const snapshot = readStateFromDoc(schema);
   const updates: { name?: string; width?: number; height?: number } = {};
   if (snapshot.projectName !== undefined) updates.name = snapshot.projectName;
@@ -56,8 +57,44 @@ function reconcileBlockToDb(target: CollabTarget, schema: CollabSchema) {
     updates.height = snapshot.size.height;
   }
   if (Object.keys(updates).length === 0) return;
-  patchBlock(target.id, updates).catch((err) => {
-    console.error("useCollabDoc: failed to reconcile block metadata to db", err);
+
+  const patch = target.kind === "block" ? patchBlock(target.id, updates) : patchProject(target.id, updates);
+  patch.catch((err) => {
+    console.error(`useCollabDoc: failed to reconcile ${target.kind} metadata to db`, err);
+  });
+}
+
+// A project doc's Scene trackItem.details.name is a one-shot copy of its
+// block's own name, kept in sync outside either doc's undo history.
+// Re-push it whenever the project doc settles.
+function reconcileSceneNamesToBlocks(target: CollabTarget, schema: CollabSchema, userId: string): void {
+  if (target.kind !== "project") return;
+  const snapshot = readStateFromDoc(schema);
+  for (const item of Object.values(snapshot.trackItemsMap)) {
+    if (!isSceneItem((item as any).type)) continue;
+    const details = (item as any).details ?? {};
+    if (!details.blockId || details.name === undefined) continue;
+
+    patchBlockMeta(target.id, details.blockId, userId, { projectName: details.name }).catch((err) => {
+      console.error("useCollabDoc: failed to reconcile scene name to block doc", err);
+    });
+    patchBlock(details.blockId, { name: details.name }).catch((err) => {
+      console.error("useCollabDoc: failed to reconcile scene name to block db row", err);
+    });
+  }
+}
+
+// Mirror image: this block's own name is a one-shot copy on the project
+// doc's Scene item. Undoing a rename made from inside the scene reverts
+// this doc correctly but leaves the project's copy stale until this runs.
+function reconcileBlockNameToProjectScene(target: CollabTarget, schema: CollabSchema, userId: string): void {
+  if (target.kind !== "block") return;
+  const snapshot = readStateFromDoc(schema);
+  if (snapshot.projectName === undefined) return;
+  const { projectId, activeSceneItemId } = useStore.getState();
+  if (!projectId || !activeSceneItemId) return;
+  patchProjectSceneDetails(projectId, activeSceneItemId, userId, { name: snapshot.projectName }).catch((err) => {
+    console.error("useCollabDoc: failed to reconcile block name to project scene", err);
   });
 }
 
@@ -96,6 +133,24 @@ export function useCollabDoc(
       [schema.trackItems, schema.trackItemIds, schema.transitions, schema.transitionIds, schema.tracks, schema.markers, schema.meta],
       { trackedOrigins: new Set([localOrigin]), captureTimeout: 300 },
     );
+
+    // Undo/redo mutates the doc directly and never re-runs whatever REST
+    // call the original edit made — debounced since holding Ctrl+Z pops
+    // several stack items in a burst; only the settled value matters.
+    let undoReconcileTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleUndoRedo = (event: { changedParentTypes: Map<any, any> }) => {
+      const metaChanged = event.changedParentTypes.has(schema.meta);
+      const sceneNamesChanged = event.changedParentTypes.has(schema.trackItems);
+      if (!metaChanged && !sceneNamesChanged) return;
+      if (undoReconcileTimer) clearTimeout(undoReconcileTimer);
+      undoReconcileTimer = setTimeout(() => {
+        undoReconcileTimer = null;
+        if (metaChanged) reconcileTargetToDb(target, schema);
+        if (sceneNamesChanged) reconcileSceneNamesToBlocks(target, schema, userId);
+        if (metaChanged) reconcileBlockNameToProjectScene(target, schema, userId);
+      }, 500);
+    };
+    undoManager.on("stack-item-popped", handleUndoRedo);
 
     // Skips the debounce and persists whatever's queued right now — wired
     // up to the navbar's save-status button. Reads persistenceHandle at
@@ -363,7 +418,9 @@ export function useCollabDoc(
           }
         }
 
-        reconcileBlockToDb(target, schema);
+        reconcileTargetToDb(target, schema);
+        reconcileSceneNamesToBlocks(target, schema, userId);
+        reconcileBlockNameToProjectScene(target, schema, userId);
 
         undoManager.clear();
         if (cancelled) return;
@@ -380,6 +437,8 @@ export function useCollabDoc(
 
     return () => {
       cancelled = true;
+      undoManager.off("stack-item-popped", handleUndoRedo);
+      if (undoReconcileTimer) clearTimeout(undoReconcileTimer);
       teardownMirrorIn?.();
       teardownMirrorOutStateManager?.();
       teardownMirrorOutStore?.();
@@ -388,7 +447,11 @@ export function useCollabDoc(
       teardownTimelineWatch?.();
       if (timelineResyncInterval) clearInterval(timelineResyncInterval);
       if (activeSessionId !== null) endSession(activeSessionId);
-      reconcileBlockToDb(target, schema);
+
+      reconcileTargetToDb(target, schema);
+      reconcileSceneNamesToBlocks(target, schema, userId);
+      reconcileBlockNameToProjectScene(target, schema, userId);
+
       useStore.getState().setCollabSchema(null, null);
       undoManager.destroy();
       schema.awareness.destroy();

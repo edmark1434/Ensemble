@@ -33,6 +33,21 @@ export function useSceneContentBroadcast(
     const localOrigin = `${userId}:scene-broadcast`;
     const target = { kind: "project" as const, id: projectId };
 
+    // The project's own name is still shown in the UI while inside a
+    // scene, but nothing keeps it live here — the block-target
+    // useCollabDoc instance never touches the project doc, and mirror-in
+    // only ever routes projectName into `currentBlockName` when
+    // !isProjectTarget. Piggyback on this connection (already open for
+    // content broadcast) to mirror renames back into the store.
+    const syncProjectName = (event: { keysChanged: Set<string> }) => {
+      if (!event.keysChanged.has("projectName")) return;
+      const name = schema.meta.get("projectName");
+      if (typeof name === "string" && name !== useStore.getState().projectName) {
+        useStore.setState({ projectName: name });
+      }
+    };
+    schema.meta.observe(syncProjectName);
+
     const buildContent = (): SceneRenderContent => {
       const state = stateManager.getState();
       const { size, background } = useStore.getState();
@@ -187,6 +202,7 @@ export function useSceneContentBroadcast(
           })
           .finally(() => {
             clearWorkingInsideScene(schema.awareness);
+            schema.meta.unobserve(syncProjectName);
             teardownWs();
             schema.awareness.destroy();
             doc.destroy();

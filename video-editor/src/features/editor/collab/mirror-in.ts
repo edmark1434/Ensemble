@@ -62,15 +62,6 @@ export function setupMirrorIn(
 
         stateManager.updateState(statePatch, { updateHistory: false });
 
-        if (canvas && isProjectTarget) {
-          canvas.getTrackItems().forEach((item: any) => {
-            if (!isSceneItem(item.type)) return;
-            const data = snapshot.trackItemsMap[item.id];
-            const name = data?.details?.name || (data as any)?.metadata?.name || "Scene";
-            item.updateName?.(name);
-          });
-        }
-
         const { activeIds } = stateManager.getState();
         if (activeIds.length) {
           const survivingIds = activeIds.filter(
