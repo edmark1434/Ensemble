@@ -454,9 +454,91 @@ async function getContractsByUserId(accountIds) {
     return res.rows;
 }
 
+async function createContractDispute(accountIds, contractId, { reason, details }) {
+    const contractQ = await pool.query(`
+        SELECT 
+            c.contract_id,
+            c.rate_credits,
+            COALESCE(jc_info.client_account_id, gc_info.client_account_id) AS client_account_id,
+            COALESCE(jc_info.freelancer_account_id, gc_info.freelancer_account_id) AS freelancer_account_id,
+            COALESCE(jc_info.title, gc_info.title, 'Contract') AS contract_title
+        FROM contracts c
+        LEFT JOIN (
+            SELECT jc.contract_id, j.client_account_id, p.freelancer_account_id, j.title
+            FROM job_contracts jc
+            JOIN proposals p ON jc.proposal_id = p.proposal_id
+            JOIN jobs j ON p.job_id = j.job_id
+        ) jc_info ON c.contract_id = jc_info.contract_id
+        LEFT JOIN (
+            SELECT gc.contract_id, gr.client_account_id, g.freelancer_account_id, g.title
+            FROM gig_contracts gc
+            JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+            JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+            JOIN gigs g ON gt.gig_id = g.gig_id
+        ) gc_info ON c.contract_id = gc_info.contract_id
+        WHERE c.contract_id = $1
+    `, [contractId]);
+
+    if (!contractQ.rows.length) {
+        throw new Error('Contract not found');
+    }
+
+    const contract = contractQ.rows[0];
+    const userAccId = accountIds.find(id => 
+        String(id) === String(contract.client_account_id) || 
+        String(id) === String(contract.freelancer_account_id)
+    );
+
+    if (!userAccId) {
+        throw new Error('Unauthorized: You are not a party to this contract');
+    }
+
+    const respondentId = String(userAccId) === String(contract.client_account_id)
+        ? contract.freelancer_account_id
+        : contract.client_account_id;
+
+    const disputeNumber = `DIS-${Date.now().toString().slice(-6)}`;
+    const creditAmount = Math.max(0, parseInt(contract.rate_credits, 10) || 0);
+
+    const disputeRes = await pool.query(`
+        INSERT INTO disputes (
+            dispute_number,
+            type,
+            title,
+            description,
+            status,
+            priority,
+            by_account_id,
+            for_account_id,
+            credit_amount_involved,
+            opened_at,
+            visibility,
+            created_at,
+            updated_at
+        ) VALUES (
+            $1, 'Contract', $2, $3, 'pending_review', 'medium', $4, $5, $6, NOW(), true, NOW(), NOW()
+        ) RETURNING *
+    `, [
+        disputeNumber,
+        `Contract Dispute: ${reason || contract.contract_title}`.slice(0, 255),
+        details || reason || 'Dispute opened by contract participant.',
+        userAccId,
+        respondentId,
+        creditAmount
+    ]);
+
+    const createdDispute = disputeRes.rows[0];
+
+    const { applyDisputeAutomations } = require('../lib/ModerationPolicy');
+    const enrichedDispute = await applyDisputeAutomations(createdDispute);
+
+    return enrichedDispute || createdDispute;
+}
+
 module.exports = {
     sendJobOffer,
     acceptJobOffer,
     rejectJobOffer,
-    getContractsByUserId
+    getContractsByUserId,
+    createContractDispute
 };

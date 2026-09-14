@@ -386,6 +386,11 @@ async function createReport({
 
 // Scoped disputes list. Filter by dispute type and status.
 async function fetchScopedDisputes({ entityTypesIn, status } = {}) {
+  try {
+    const { reconcileUnassignedDisputes } = require('../lib/ModerationPolicy');
+    await reconcileUnassignedDisputes();
+  } catch {}
+
   const where = [];
   const params = [];
   if (entityTypesIn && entityTypesIn.length) {

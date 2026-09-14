@@ -10,6 +10,7 @@ const {
   getConversationByConvoId,
 } = require('./InboxRepositories');
 const { createNotificationServices } = require('../services/NotificationServices');
+const { getSectionValue } = require('./AdminSettingsRepositories');
 const {
   isMongoReady,
   getDisputeChatId,
@@ -292,6 +293,16 @@ async function createSupportTicket(input, session = null) {
   );
 
   const ticketId = insert.rows[0].ticket_id;
+
+  try {
+    const { dispatchPlatformNotification } = require('../services/PlatformAlertServices');
+    dispatchPlatformNotification('NEW_TICKET', {
+      ticket_id: ticketId,
+      ticket_number: ticketNumber,
+      reason,
+      type,
+    }).catch(() => {});
+  } catch {}
 
   if (description) {
     const authorSession = session || {
@@ -1067,15 +1078,17 @@ async function updateTicket(ticketId, patch, staffSession) {
   }
 
   const currentRow = await pool.query(
-    `SELECT handled_by_staff_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    `SELECT handled_by_staff_id, status, account_id, ticket_number FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
   );
   if (!currentRow.rows.length) return null;
-  const currentAssignee = currentRow.rows[0].handled_by_staff_id;
+  const currentTicket = currentRow.rows[0];
+  const currentAssignee = currentTicket.handled_by_staff_id;
+  const currentStatus = currentTicket.status;
   const { buildTicketPermissions } = require('./TicketAssignmentHelpers');
   const staff = await resolveDisputeStaffId(staffSession);
   const ticketPerms = buildTicketPermissions(
-    currentRow.rows[0],
+    currentTicket,
     staff,
     sessionStaffId(staffSession)
   );
@@ -1197,6 +1210,53 @@ async function updateTicket(ticketId, patch, staffSession) {
       `UPDATE tickets SET ${sets.join(', ')} WHERE ticket_id = $${idx} AND deleted_at IS NULL`,
       values
     );
+
+    try {
+      const notifSettings = await getSectionValue('notifications');
+      const { getIo } = require('../lib/WebSocket');
+      const io = getIo();
+
+      // 1. Notify assignee on ticket assignment
+      const nextAssignee = patch.handled_by_staff_id !== undefined ? patch.handled_by_staff_id : null;
+      const isNewlyAssigned = nextAssignee && normalizeStaffId(nextAssignee) !== normalizeStaffId(currentAssignee);
+      if (isNewlyAssigned && notifSettings?.notifyAssigneeOnTicket !== false) {
+        const staffRes = await pool.query(`SELECT account_id FROM staff WHERE staff_id = $1`, [nextAssignee]);
+        if (staffRes.rows.length && staffRes.rows[0].account_id) {
+          const staffAccountId = staffRes.rows[0].account_id;
+          const notif = await createNotificationServices({
+            account_id: String(staffAccountId),
+            message: `You have been assigned to ticket #${currentTicket.ticket_number}.`,
+            is_read: false,
+            reference_table: 'tickets',
+            reference_prefix: 'TICKET_ASSIGNED',
+            reference_path: `/staff/tickets?ticketId=${ticketId}`,
+            reference_id: randomUUID(),
+          });
+          if (io) {
+            io.to(String(staffAccountId)).emit('notification', notif);
+          }
+        }
+      }
+
+      // 2. Notify requester on ticket resolution
+      const isResolving = patch.status && isClosedStatus(patch.status) && !isClosedStatus(currentStatus);
+      if (isResolving && currentTicket.account_id && notifSettings?.notifyRequesterOnResolution !== false) {
+        const notif = await createNotificationServices({
+          account_id: String(currentTicket.account_id),
+          message: `Your ticket #${currentTicket.ticket_number} has been resolved.`,
+          is_read: false,
+          reference_table: 'tickets',
+          reference_prefix: 'TICKET_RESOLVED',
+          reference_path: `/tickets/${ticketId}`,
+          reference_id: randomUUID(),
+        });
+        if (io) {
+          io.to(String(currentTicket.account_id)).emit('notification', notif);
+        }
+      }
+    } catch (notifErr) {
+      console.error('Error dispatching ticket configuration-based notifications:', notifErr.message);
+    }
   }
 
   if (patch.note) {

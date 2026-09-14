@@ -407,8 +407,52 @@ function startPaymentReconciliationJob() {
         }
     });
 
+    // Daily purge of expired audit logs based on security.auditLogRetentionDays
+    cron.schedule("0 2 * * *", async () => {
+        try {
+            await purgeExpiredAuditLogsServices();
+        } catch (err) {
+            console.error("Audit log cleanup failed:", err.message);
+        }
+    });
+
+    // Periodic reconciliation of unassigned disputes based on moderation.disputeAutoAssign
+    cron.schedule("*/5 * * * *", async () => {
+        try {
+            await reconcileUnassignedDisputesServices();
+        } catch (err) {
+            console.error("Dispute auto-assign reconciliation failed:", err.message);
+        }
+    });
+
+}
+
+async function purgeExpiredAuditLogsServices() {
+    const { getSecuritySettings } = require('./ModerationPolicy');
+    const { pool } = require('./Database');
+    const security = await getSecuritySettings();
+    const retentionDays = Math.max(1, Number(security?.auditLogRetentionDays) || 90);
+    const result = await pool.query(
+        `DELETE FROM account_activity WHERE created_at < NOW() - ($1 || ' days')::interval`,
+        [retentionDays]
+    );
+    if (result.rowCount > 0) {
+        console.log(`Purged ${result.rowCount} expired audit log(s) older than ${retentionDays} days.`);
+    }
+    return { purged: result.rowCount, retentionDays };
+}
+
+async function reconcileUnassignedDisputesServices() {
+    const { reconcileUnassignedDisputes } = require('./ModerationPolicy');
+    const result = await reconcileUnassignedDisputes();
+    if (result?.assigned > 0) {
+        console.log(`Auto-assigned ${result.assigned} unassigned dispute(s) to staff.`);
+    }
+    return result;
 }
 
 module.exports = {
-    startPaymentReconciliationJob
+    startPaymentReconciliationJob,
+    purgeExpiredAuditLogsServices,
+    reconcileUnassignedDisputesServices
 };

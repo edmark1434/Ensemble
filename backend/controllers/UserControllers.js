@@ -165,6 +165,36 @@ async function loginCredentials(req, res) {
                 existSession: true,
             });
         }
+
+        // Check if staff 2FA is dynamically required
+        if (credentials.type === 'Staff') {
+            const { getSecuritySettings } = require('../lib/ModerationPolicy');
+            const security = await getSecuritySettings();
+            if (security?.requireStaff2fa) {
+                const staffEmail = (credentials.email_address || credentials.email || '').toLowerCase();
+                const submitted2fa = req.body.twoFactorCode;
+                const expected2fa = await redis.get(`staff2fa:${staffEmail}`);
+                if (!submitted2fa) {
+                    const crypto = require('crypto');
+                    const code = crypto.randomInt(100000, 999999).toString();
+                    await redis.set(`staff2fa:${staffEmail}`, code, { EX: 10 * 60 });
+                    return res.status(200).json({
+                        success: true,
+                        require2fa: true,
+                        message: 'Two-factor authentication code required for staff login',
+                        email: staffEmail,
+                    });
+                } else if (submitted2fa !== expected2fa) {
+                    return res.status(401).json({
+                        success: false,
+                        message: 'Invalid two-factor authentication code',
+                    });
+                } else {
+                    await redis.del(`staff2fa:${staffEmail}`);
+                }
+            }
+        }
+
         credentials.email = credentials.email_address; // Ensure email is included in the credentials for token generation
         delete credentials.email_address; // Remove redundant email_address field
         delete credentials.password_hash; // Ensure password hash is not included in the access token payload

@@ -77,7 +77,7 @@ interface SubscriptionData {
   xendit_plan_id: string | null;
 }
 
-const creditPacks: CreditPack[] = [
+const DEFAULT_CREDIT_PACKS: CreditPack[] = [
   { id: "pocket", name: "Pocket", price: 99, credits: 80 },
   { id: "bundle", name: "Bundle", price: 299, credits: 250 },
   { id: "box", name: "Box", price: 849, credits: 750 },
@@ -127,6 +127,7 @@ const CreditShop: React.FC = () => {
 
   const [showCustom, setShowCustom] = useState(false);
   const [customCredits, setCustomCredits] = useState<number>(100);
+  const [creditPacks, setCreditPacks] = useState<CreditPack[]>(DEFAULT_CREDIT_PACKS);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [currentBalance, setCurrentBalance] = useState<number>(0);
 
@@ -157,13 +158,18 @@ const CreditShop: React.FC = () => {
   useEffect(() => {
     const fetchMemberships = async () => {
       try {
-        const [planResponse, userSubscriptionResponse, getWalletResponse] = await Promise.all([
+        const [planResponse, userSubscriptionResponse, getWalletResponse, packsResponse] = await Promise.all([
           api.get("api/subscription/plans"),
           api.get("api/subscription"),
           api.get("/api/accounts/wallet", {
             params: { type: "account_wallets" },
           }),
+          api.get("api/payment/credit-packages").catch(() => null),
         ]);
+
+        if (packsResponse?.data?.success && Array.isArray(packsResponse.data?.creditPackages) && packsResponse.data.creditPackages.length > 0) {
+          setCreditPacks(packsResponse.data.creditPackages);
+        }
 
         console.log("Fetch wallet response:", getWalletResponse.data);
         setCurrentBalance(getWalletResponse.data?.wallet?.balance_credits || 0);
@@ -576,8 +582,8 @@ const CreditShop: React.FC = () => {
               className="space-y-6"
             >
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {creditPacks.map((pack) => {
-                  const isBestValue = pack.id === "vault";
+                {creditPacks.map((pack, index) => {
+                  const isBestValue = pack.id === "vault" || pack.id === "pkg-studio" || (creditPacks.length > 1 && index === creditPacks.length - 1);
                   return (
                     <div
                       key={pack.id}

@@ -103,16 +103,27 @@ export const DisputeFormPage: React.FC = () => {
     }
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!selectedContractId || !reason || !details) return;
     setIsSubmitting(true);
     
-    // Simulate dummy submission
-    setTimeout(() => {
+    try {
+      const res = await api.post(`/api/contracts/${selectedContractId}/dispute`, {
+        reason,
+        details,
+      });
+      if (res.data?.success) {
+        toast.success("Dispute submitted to Moderators for review.");
+        navigate("/contracts");
+      } else {
+        toast.error(res.data?.message || "Failed to submit dispute.");
+      }
+    } catch (err: any) {
+      console.error("Dispute submission error:", err);
+      toast.error(err.response?.data?.message || "Failed to submit dispute. Please try again.");
+    } finally {
       setIsSubmitting(false);
-      toast.success("Dispute submitted to Moderators for review.");
-      navigate("/contracts");
-    }, 1500);
+    }
   };
 
   return (

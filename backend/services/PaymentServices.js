@@ -37,6 +37,7 @@ const {
 const {
     createNotification
 } = require("../repositories/NotificationRepositories");
+const { getSectionValue } = require("../repositories/AdminSettingsRepositories");
 
 const redisClient = require('../lib/Redis');
 const TOPUP_PACKS = new Map([
@@ -47,12 +48,34 @@ const TOPUP_PACKS = new Map([
 ]);
 const CUSTOM_CREDIT_RATE = 1.25;
 
-function validateTopupRequest(body = {}) {
+async function validateTopupRequest(body = {}) {
     const credits = Number(body.credits);
     if (!Number.isSafeInteger(credits) || credits < 10 || credits > 1000000 || body.currency !== 'PHP') throw new Error('INVALID_TOPUP');
-    const pack = body.itemType === 'topup' ? TOPUP_PACKS.get(credits) : null;
-    if (body.itemType === 'topup' && !pack) throw new Error('INVALID_TOPUP');
     if (!['topup', 'custom'].includes(body.itemType)) throw new Error('INVALID_TOPUP');
+
+    let pack = null;
+    if (body.itemType === 'topup') {
+        try {
+            const economy = await getSectionValue('economy');
+            const creditPackages = Array.isArray(economy?.creditPackages) ? economy.creditPackages : [];
+            const configuredPack = creditPackages.find(p => p && p.active !== false && Number(p.credits) === credits);
+            if (configuredPack) {
+                pack = {
+                    amount: Number(configuredPack.pricePhp),
+                    name: `${configuredPack.name} (${Number(configuredPack.credits).toLocaleString()} Credits)`
+                };
+            }
+        } catch (err) {
+            console.error('Error fetching economy configuration in validateTopupRequest:', err);
+        }
+
+        if (!pack && TOPUP_PACKS.has(credits)) {
+            pack = TOPUP_PACKS.get(credits);
+        }
+
+        if (!pack) throw new Error('INVALID_TOPUP');
+    }
+
     const amount = pack?.amount ?? Math.round(credits * CUSTOM_CREDIT_RATE * 100) / 100;
     return { amount, credits, currency: 'PHP', itemName: pack?.name ?? `Custom Top-up (${credits.toLocaleString()} Credits)` };
 }
@@ -308,7 +331,7 @@ async function xenditWebhookHandler(req, res) {
 
 async function processTopUpPayment(req, res) {
     let validated;
-    try { validated = validateTopupRequest(req.body); }
+    try { validated = await validateTopupRequest(req.body); }
     catch { return res.status(422).json({ success: false, message: 'Invalid top-up selection.' }); }
     let accountName = {};
 if (!req.session) {
@@ -782,7 +805,7 @@ async function paymentSessionExpiredWebhookHandler(req, res) {
 async function TopUpPaymentByPaymentMethod(req, res) {
     let { userId } = req.session;
     let validated;
-    try { validated = validateTopupRequest(req.body); }
+    try { validated = await validateTopupRequest(req.body); }
     catch { return res.status(422).json({ success: false, message: 'Invalid top-up selection.' }); }
     const { paymentMethodId } = req.body;
     if (typeof paymentMethodId !== 'string' || !paymentMethodId || !await paymentMethodExists({ user_id: userId, payment_token_id: paymentMethodId, status: 'ACTIVE' })) {
@@ -1498,6 +1521,25 @@ function getAnchorDate(daysOfTrial) {
 
 
 
+async function getActiveCreditPackagesService(req, res) {
+    try {
+        const economy = await getSectionValue('economy');
+        const creditPackages = Array.isArray(economy?.creditPackages) ? economy.creditPackages : [];
+        const activePackages = creditPackages
+            .filter(p => p && p.active !== false)
+            .map(p => ({
+                id: p.id,
+                name: p.name,
+                price: Number(p.pricePhp),
+                credits: Number(p.credits)
+            }));
+        return res.status(200).json({ success: true, creditPackages: activePackages });
+    } catch (error) {
+        console.error('Failed to get credit packages:', error);
+        return res.status(500).json({ success: false, message: 'Failed to load credit packages.' });
+    }
+}
+
 module.exports = {
     xenditWebhookHandler,
     processSubscriptionPayment,
@@ -1511,5 +1553,6 @@ module.exports = {
     subscriptionWebhookHandler,
     endSubscription,
     cancelSubscription,
-    updateSubscriptionPayment
+    updateSubscriptionPayment,
+    getActiveCreditPackagesService
 };

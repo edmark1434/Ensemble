@@ -168,9 +168,39 @@ async function rejectJobOfferController(req, res) {
     }
 }
 
+async function createContractDisputeController(req, res) {
+    try {
+        const personalAccountId = req.user.account_id || req.user.accountId;
+        const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
+        const { contractId } = req.params;
+        const { reason, details } = req.body;
+
+        if (!contractId) {
+            return res.status(400).json({ success: false, message: 'Contract ID is required' });
+        }
+        if (!reason || !details) {
+            return res.status(400).json({ success: false, message: 'Dispute reason and details are required' });
+        }
+
+        const dispute = await ContractRepositories.createContractDispute(actorIds, contractId, { reason, details });
+        return res.status(201).json({
+            success: true,
+            message: 'Dispute submitted successfully',
+            data: dispute
+        });
+    } catch (err) {
+        console.error('Error creating contract dispute:', err);
+        return res.status(err.message?.includes('Unauthorized') ? 403 : 500).json({
+            success: false,
+            message: err.message || 'Internal server error'
+        });
+    }
+}
+
 module.exports = {
     sendJobOfferController,
     acceptJobOfferController,
     rejectJobOfferController,
-    getContractsController
+    getContractsController,
+    createContractDisputeController
 };

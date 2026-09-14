@@ -383,17 +383,19 @@ async function listAssetsServices(accountId, query = {}) {
     offset: (page - 1) * pageSize,
   });
   const total = rows[0]?.total_count || 0;
+  const feePercent = await getMarketplaceTransactionFeePercent();
   return {
-    assets: rows.map(publicAsset),
+    assets: rows.map((row) => publicAsset(row, feePercent)),
     pagination: { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
   };
 }
 
 async function getAssetServices(assetId, accountId) {
   requireUuid(assetId);
+  const feePercent = await getMarketplaceTransactionFeePercent();
   const asset = await getAssetRepository(assetId, accountId);
   if (!asset) throw new AssetError('Asset not found.', 404, 'ASSET_NOT_FOUND');
-  return publicAsset(asset);
+  return publicAsset(asset, feePercent);
 }
 
 async function createAssetServices(accountId, payload) {
@@ -417,6 +419,9 @@ async function createAssetServices(accountId, payload) {
   } catch (error) {
     if (['ASSET_VERIFICATION_REQUIRED', 'ASSET_POST_LIMIT_REACHED', 'ASSET_POSTING_UNAVAILABLE'].includes(error.code)) {
       throw assetPostingError(error.code, error.eligibility);
+    }
+    if (error.code === 'INSUFFICIENT_CREDITS') {
+      throw new AssetError(`Insufficient credits for marketplace listing fee. Required: ${error.required}, Available: ${error.available}.`, 400, error.code);
     }
     if (error.code === 'ASSET_FILE_NOT_OWNED') {
       throw new AssetError('The uploaded file is unavailable or is not owned by this account.', 400, error.code);

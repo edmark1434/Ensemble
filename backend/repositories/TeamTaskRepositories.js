@@ -330,11 +330,12 @@ async function listPendingOverdueNotifications(limit = 100) {
             task.due_at,
             workspace.team_id,
             workspace.contract_id,
-            team.display_name AS team_name
+            COALESCE(team_account.display_name, team_account.handle, 'Team') AS team_name
        FROM team_workspace_tasks task
        JOIN team_contract_workspaces workspace
          ON workspace.workspace_id = task.workspace_id
        JOIN teams team ON team.team_id = workspace.team_id
+       JOIN accounts team_account ON team_account.account_id = team.account_id
       WHERE task.deleted_at IS NULL
         AND task.status = 'overdue'
         AND task.due_at IS NOT NULL
