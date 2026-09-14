@@ -487,10 +487,12 @@ async function createPaymentToken(req, res) {
                 country: "PH",
                 ...customerPayload,
                 success_return_url:
-                    `${process.env.FRONTEND_URL}/credits?success`,
+                    `https://app.com/credits?success`,
+            // `${process.env.FRONTEND_URL}/credits?success`
 
                 cancel_return_url:
-                    `${process.env.FRONTEND_URL}/credits?cancel`,
+                    `https://app.com/credits?cancel`,
+            // `${process.env.FRONTEND_URL}/credits?success`
                 metadata: {
                     user_id: `${userId}`
                 }

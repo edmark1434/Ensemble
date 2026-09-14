@@ -925,6 +925,7 @@ async function seedModerationExtras(userAccountIds, staffByRole) {
       'VIOLATION_ISSUED',
       'violations',
       'VIO',
+      userAccountIds[3] ? String(userAccountIds[3]) : null,
       supportStaffId,
       JSON.stringify({ type: 'Spam posting', points: 2 }),
     ],
@@ -934,6 +935,7 @@ async function seedModerationExtras(userAccountIds, staffByRole) {
       'ACCOUNT_WARNED',
       'violations',
       'VIO',
+      userAccountIds[0] ? String(userAccountIds[0]) : null,
       supportStaffId,
       JSON.stringify({ type: 'Harassment warning', points: 3 }),
     ],
@@ -943,6 +945,7 @@ async function seedModerationExtras(userAccountIds, staffByRole) {
       'ACCOUNT_PARDONED',
       'pardons',
       'PAR',
+      userAccountIds[0] ? String(userAccountIds[0]) : null,
       adminStaffId,
       JSON.stringify({ status: 'Active' }),
     ],
@@ -952,6 +955,7 @@ async function seedModerationExtras(userAccountIds, staffByRole) {
       'RESTRICTION_ISSUED',
       'restrictions',
       'RST',
+      userAccountIds[1] ? String(userAccountIds[1]) : null,
       adminStaffId,
       JSON.stringify({ type: 'feature_hold', module: 'jobs' }),
     ],
@@ -961,6 +965,7 @@ async function seedModerationExtras(userAccountIds, staffByRole) {
       'ACCOUNT_STATUS_CHANGED',
       'accounts',
       'ACC',
+      userAccountIds[3] ? String(userAccountIds[3]) : null,
       adminStaffId,
       JSON.stringify({ status: 'Suspended', source: 'seed' }),
     ],
@@ -973,7 +978,7 @@ async function seedModerationExtras(userAccountIds, staffByRole) {
          account_id, action, event_code,
          reference_table, reference_prefix, reference_id,
          actor_staff_id, metadata
-       ) VALUES ($1,$2,$3,$4,$5,$1,$6,$7::jsonb)`,
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
       row
     );
   }

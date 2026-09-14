@@ -168,6 +168,37 @@ COMBO_SK=
 COMBO_SH_JWT=
 ```
 
+### 8. Set up the RAG documentation index (optional but recommended)
+
+The backend includes a documentation ingestion pipeline for semantic search and support chat. To build or refresh the searchable knowledge base:
+
+```bash
+cd backend
+npm run rag:ingest
+```
+
+This reads the enabled sources from `backend/data/sources.json`, parses the Markdown files under `backend/data/`, splits each page into sections/chunks, generates embeddings, and stores them in the database.
+
+If you update documentation or want to re-index the corpus, run the same command again. It will replace the stored chunks for each source.
+
+#### How chunking works
+
+The chunking logic is automatic and is configured in `backend/services/ChunkServices.js`:
+
+- It groups content by Markdown section.
+- It tries to keep chunks around 2,200 characters, with a hard cap near 3,000 characters.
+- It splits oversized paragraphs into smaller sentence-based pieces before merging them into chunks.
+- Each chunk is embedded with the page title and section heading so related retrieval performs better.
+
+This means you usually do not need a separate manual chunk script. The supported workflow is simply:
+
+1. Update or add files in `backend/data/`
+2. Ensure the source is enabled in `backend/data/sources.json`
+3. Run `npm run rag:ingest`
+4. Restart the backend if needed to use the refreshed index
+
+If the project does not yet have a source in `sources.json`, add it there first and keep the path relative to `backend/data/`.
+
 ## Run the app
 
 Use **two terminals** for the main stack.
