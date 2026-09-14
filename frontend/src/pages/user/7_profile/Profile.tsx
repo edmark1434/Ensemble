@@ -108,6 +108,10 @@ const services = [
 const constructAvatarUrl = (path: string | undefined): string | undefined => {
   if (!path) return undefined;
   if (path.startsWith('http')) return path;
+  const presetMatch = path.match(/p\d+\.png$/i);
+  if (presetMatch) {
+    return `/profile_presets/${presetMatch[0]}`;
+  }
   const cloudfrontUrl = import.meta.env.VITE_CLOUDFRONT_URL;
   if (!cloudfrontUrl) return path;
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;

@@ -74,11 +74,15 @@ export default function UserSettings() {
   const [isCancellingSubscription, setIsCancellingSubscription] = useState(false);
 
   const constructAvatarUrl = (path: string | undefined): string => {
-    if (!path) return "https://i.pravatar.cc/150?u=user";
+    if (!path) return "";
     if (path.startsWith("http")) return path;
-    const cloudfront = import.meta.env.VITE_CLOUDFRONT_URL;
+    const presetMatch = path.match(/p\d+\.png$/i);
+    if (presetMatch) {
+      return `/profile_presets/${presetMatch[0]}`;
+    }
+    const cloudfront = (import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/$/, "");
     const cleanPath = path.startsWith("/") ? path.substring(1) : path;
-    return `${cloudfront}/${cleanPath}`;
+    return cloudfront ? `${cloudfront}/${cleanPath}` : `/${cleanPath}`;
   };
 
   const fetchAvatarPresets = async () => {

@@ -230,7 +230,9 @@ async function loginCredentials(req, res) {
                 role: credentials.role,
                 userId: credentials.userId,
                 displayName: credentials.display_name,
-                staffId: credentials.staff_id ?? credentials.staffId
+                staffId: credentials.staff_id ?? credentials.staffId,
+                avatar_file_id: credentials.avatar_file_id,
+                avatar_preset_url: credentials.avatar_preset_url,
             },
         });
     } catch (err) {
@@ -358,10 +360,30 @@ async function LogoutUsers(req, res) {
     }
 }
 
-async function getCurrentUser(req,res){
+async function getCurrentUser(req, res) {
+    let sessionUser = req.session || null;
+    if (sessionUser && (sessionUser.account_id || sessionUser.accountId)) {
+        const accountId = sessionUser.account_id || sessionUser.accountId;
+        if (!sessionUser.avatar_preset_url || !sessionUser.avatar_file_id) {
+            try {
+                const { getProfileCurrentAvatarByAccountId } = require('../repositories/ProfileRepositories');
+                const avatar = await getProfileCurrentAvatarByAccountId(accountId);
+                if (avatar) {
+                    sessionUser.avatar_file_id = avatar.file_id;
+                    sessionUser.avatar_preset_url = avatar.path;
+                    const sessionId = req.cookies?.sessionId;
+                    if (sessionId && redis) {
+                        redis.set(`session:${sessionId}`, JSON.stringify(sessionUser), { KEEPTTL: true }).catch(() => {});
+                    }
+                }
+            } catch (err) {
+                console.error('Error hydrating avatar in getCurrentUser:', err);
+            }
+        }
+    }
     res.status(200).json({
         success: true,
-        user: req.session || null,
+        user: sessionUser,
     });
 }
 
