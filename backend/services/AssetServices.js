@@ -312,11 +312,14 @@ function publicAsset(asset, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_F
   const transactionFeeCredits = calculateAssetTransactionFee(priceCredits, feePercent);
   return {
     ...safeAsset,
+    owner_account_id: _ownerAccountId,
     like_count: Number(safeAsset.like_count || 0),
     save_count: Number(safeAsset.save_count || 0),
     review_count: Number(safeAsset.review_count || 0),
     purchase_count: Number(safeAsset.purchase_count || 0),
     average_rating: Number(safeAsset.average_rating || 0),
+    creator_average_rating: Number(safeAsset.creator_average_rating || 0),
+    creator_rating_count: Number(safeAsset.creator_rating_count || 0),
     transaction_fee_percent: feePercent,
     transaction_fee_credits: transactionFeeCredits,
     owner_net_credits: priceCredits - transactionFeeCredits,

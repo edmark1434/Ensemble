@@ -206,6 +206,14 @@ const ASSET_SELECT = `
            WHERE mat.market_asset_id = ma.market_asset_id
              AND mat.deleted_at IS NULL AND t.deleted_at IS NULL
          ), ARRAY[]::varchar[]) AS tags,
+         (SELECT COUNT(*)::int FROM asset_reviews ar
+          JOIN user_market_assets uma ON uma.market_asset_id = ar.market_asset_id
+          JOIN users u ON u.user_id = uma.user_id
+          WHERE u.account_id = owner.account_id AND ar.deleted_at IS NULL AND uma.status = 'active' AND uma.deleted_at IS NULL) AS creator_rating_count,
+         COALESCE((SELECT ROUND(AVG(ar.rating)::numeric, 1) FROM asset_reviews ar
+          JOIN user_market_assets uma ON uma.market_asset_id = ar.market_asset_id
+          JOIN users u ON u.user_id = uma.user_id
+          WHERE u.account_id = owner.account_id AND ar.deleted_at IS NULL AND uma.status = 'active' AND uma.deleted_at IS NULL), 0) AS creator_average_rating,
          (SELECT COUNT(*)::int FROM asset_comments ac
           WHERE ac.market_asset_id = ma.market_asset_id AND ac.deleted_at IS NULL) AS comment_count,
          (SELECT COUNT(*)::int
