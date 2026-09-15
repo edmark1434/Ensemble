@@ -36,7 +36,7 @@ const { getMarketplaceTransactionFeePercent } = require('../lib/PlatformFeeSetti
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ASSET_TYPES = new Set(['image', 'video', 'audio', 'template']);
 const ASSET_STATUSES = new Set(['draft', 'published']);
-const ASSET_VIEWS = new Set(['discover', 'mine', 'purchased', 'saved']);
+const ASSET_VIEWS = new Set(['discover', 'mine', 'purchased', 'saved', 'liked']);
 const MAX_BUNDLE_FILES = 20;
 const MAX_BUNDLE_BYTES = 500 * 1024 * 1024;
 const MAX_THUMBNAILS = 8;
@@ -315,6 +315,7 @@ function publicAsset(asset, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_F
     like_count: Number(safeAsset.like_count || 0),
     save_count: Number(safeAsset.save_count || 0),
     review_count: Number(safeAsset.review_count || 0),
+    purchase_count: Number(safeAsset.purchase_count || 0),
     average_rating: Number(safeAsset.average_rating || 0),
     transaction_fee_percent: feePercent,
     transaction_fee_credits: transactionFeeCredits,

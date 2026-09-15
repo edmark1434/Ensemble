@@ -207,7 +207,12 @@ const ASSET_SELECT = `
              AND mat.deleted_at IS NULL AND t.deleted_at IS NULL
          ), ARRAY[]::varchar[]) AS tags,
          (SELECT COUNT(*)::int FROM asset_comments ac
-          WHERE ac.market_asset_id = ma.market_asset_id AND ac.deleted_at IS NULL) AS comment_count
+          WHERE ac.market_asset_id = ma.market_asset_id AND ac.deleted_at IS NULL) AS comment_count,
+         (SELECT COUNT(*)::int
+          FROM user_market_assets uma
+          WHERE uma.market_asset_id = ma.market_asset_id
+            AND uma.status = 'active'
+            AND uma.deleted_at IS NULL) AS purchase_count
   FROM market_assets ma
   JOIN LATERAL (
     SELECT m.media_asset_id, m.type, m.width, m.height, m.duration_seconds,
@@ -387,6 +392,13 @@ async function listAssetsRepository({ accountId, search, type, status, view, lim
             WHERE saved_asset.market_asset_id = ma.market_asset_id
               AND saved_asset.account_id = $1
               AND saved_asset.deleted_at IS NULL
+          )`
+      : view === 'liked'
+        ? `ma.status = 'published' AND EXISTS (
+            SELECT 1 FROM asset_likes liked_asset
+            WHERE liked_asset.market_asset_id = ma.market_asset_id
+              AND liked_asset.account_id = $1
+              AND liked_asset.deleted_at IS NULL
           )`
       : `ma.status = 'published'`;
   const { rows } = await pool.query(

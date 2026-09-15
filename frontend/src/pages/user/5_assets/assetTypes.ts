@@ -62,6 +62,7 @@ export interface AssetRecord {
   like_count: number;
   save_count: number;
   review_count: number;
+  purchase_count: number;
   average_rating: number;
   tags: string[];
   comment_count: number;
