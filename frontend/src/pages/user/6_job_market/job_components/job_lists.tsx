@@ -216,7 +216,7 @@ const JobList: React.FC<JobListProps> = ({
                         </div>
                       </div>
 
-                    <div className="flex items-center justify-between gap-1.5 mb-2"><div className="flex flex-wrap items-center gap-1.5">
+                    <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
                       {!job.isOwnPost && !isGuestMode && (
                         <button
                           title="Report Post"
@@ -230,7 +230,7 @@ const JobList: React.FC<JobListProps> = ({
                         <button
                           title="Edit Post"
                           onClick={(e) => handleEditClick(e, job.id)}
-                          className="p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm text-gray-500 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-gray-900 dark:text-white transition-colors"
+                          className="p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm text-gray-500 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition-colors"
                         >
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
@@ -239,16 +239,13 @@ const JobList: React.FC<JobListProps> = ({
                         <button
                           onClick={(e) => onToggleSave(e, job.id)}
                           className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
-                            job.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-gray-900 dark:text-white"
+                            job.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                           }`}
                         >
-                          <Bookmark className={`h-4 w-4 ${job.isSaved ? "fill-current" : ""}`} />
-                          <span className="text-[10px] font-bold text-gray-700 dark:text-white">{job.savesCount}</span>
+                          <Bookmark className={`h-3.5 w-3.5 ${job.isSaved ? "fill-current" : ""}`} />
                         </button>
                       )}
                     </div>
-                  </div>
-
                   </div>
 
                   {/* Category Pill Tags */}
@@ -331,6 +328,37 @@ const JobList: React.FC<JobListProps> = ({
                   className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
+                
+                <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
+                  {!job.isOwnPost && !isGuestMode && (
+                    <button
+                      title="Report Post"
+                      onClick={(e) => handleReportClick(e, job)}
+                      className="p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm text-gray-500 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                    >
+                      <Flag className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {job.isManageablePost && (
+                    <button
+                      title="Edit Post"
+                      onClick={(e) => handleEditClick(e, job.id)}
+                      className="p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm text-gray-500 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {!isGuestMode && (
+                    <button
+                      onClick={(e) => onToggleSave(e, job.id)}
+                      className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
+                        job.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                      }`}
+                    >
+                      <Bookmark className={`h-3.5 w-3.5 ${job.isSaved ? "fill-current" : ""}`} />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="flex-1 flex flex-col justify-between min-w-0">
@@ -357,36 +385,6 @@ const JobList: React.FC<JobListProps> = ({
                         </span>
                         
                       </div>
-
-                    <div className="flex items-center gap-2">
-                      {!job.isOwnPost && !isGuestMode && (
-                        <button
-                          title="Report Post"
-                          onClick={(e) => handleReportClick(e, job)}
-                          className="p-1 rounded bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-500 hover:text-red-600 dark:hover:text-red-400 transition-colors border border-gray-200 dark:border-white/10"
-                        >
-                          <Flag className="h-4 w-4" />
-                        </button>
-                      )}
-                      {job.isManageablePost && (
-                        <button
-                          title="Edit Post"
-                          onClick={(e) => handleEditClick(e, job.id)}
-                          className="p-1 rounded bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-gray-900 dark:text-white transition-colors border border-gray-200 dark:border-white/10"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                      )}
-                      {!isGuestMode && (
-                        <button
-                          onClick={(e) => onToggleSave(e, job.id)}
-                          className={`transition-colors flex items-center gap-1 ${job.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-600 hover:text-gray-900 dark:hover:text-gray-900 dark:text-white"}`}
-                        >
-                          <Bookmark className={`h-5 w-5 ${job.isSaved ? "fill-current" : ""}`} />
-                          <span className="text-xs font-bold text-gray-700 dark:text-white">{job.savesCount}</span>
-                        </button>
-                      )}
-                    </div>
                   </div>
 
                   {/* Price */}
