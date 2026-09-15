@@ -1,5 +1,6 @@
 // src/pages/user/1_home/home_components/home_banner.tsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { motion } from "framer-motion";
 import { Search, X, ChevronUp, ChevronDown, HelpCircle, Briefcase, FileText, Users, Box } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { HomeQuickActButtons } from "./home_quickact_buttons";
@@ -280,8 +281,13 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
 
             {/* Embedded Search Bar */}
             <div className="mt-6 mb-2 relative z-40">
-              <div className="relative flex items-center rounded-xl border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/10 p-1.5 shadow-xl dark:shadow-2xl backdrop-blur-xl transition duration-300 focus-within:border-blue-500/50 dark:focus-within:border-cyan-500/50 focus-within:bg-gray-100 dark:focus-within:bg-white/15 focus-within:shadow-blue-500/10 dark:focus-within:shadow-cyan-500/10 z-30">
-                <div className="flex items-center justify-center pl-3 pr-2 text-gray-400 dark:text-zinc-400">
+              <motion.div
+                initial={{ maxWidth: "48px", opacity: 0 }}
+                animate={{ maxWidth: "100%", opacity: 1 }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+                className="relative flex items-center overflow-hidden rounded-xl border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/10 p-1.5 shadow-xl dark:shadow-2xl backdrop-blur-xl transition-[border-color,background-color,box-shadow] duration-300 focus-within:border-blue-500/50 dark:focus-within:border-cyan-500/50 focus-within:bg-gray-100 dark:focus-within:bg-white/15 focus-within:shadow-blue-500/10 dark:focus-within:shadow-cyan-500/10 z-30"
+              >
+                <div className="flex shrink-0 items-center justify-center pl-3 pr-2 text-gray-400 dark:text-zinc-400">
                   <Search className="h-5 w-5" />
                 </div>
                 <input
@@ -305,18 +311,18 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
                     }
                   }}
                   placeholder="Search assets, libraries, effects, or templates across the ecosystem..."
-                  className="w-full bg-transparent px-2 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-400 focus:outline-none"
+                  className="w-full min-w-0 bg-transparent px-2 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-400 focus:outline-none"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 />
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery("")}
-                    className="mr-1 rounded-lg p-2 text-gray-400 dark:text-zinc-400 transition hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+                    className="mr-1 shrink-0 rounded-lg p-2 text-gray-400 dark:text-zinc-400 transition hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
                   >
                     <X className="h-4 w-4" />
                   </button>
                 )}
-              </div>
+              </motion.div>
 
               {/* Global Search Dropdown */}
               {searchQuery.trim() && (

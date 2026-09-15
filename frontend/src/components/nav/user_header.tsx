@@ -138,7 +138,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
 
   const initialCredits = hasCachedData
     ? cachedHeaderData!.credits
-    : (Number(userInfo?.wallet?.balance_credits) || 0);
+    : (userInfo?.wallet?.balance_credits !== undefined ? Number(userInfo?.wallet?.balance_credits) : null);
 
   const initialPlan = hasCachedData
     ? cachedHeaderData!.subscriptionPlan
@@ -152,7 +152,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
 
   const [showHeader, setShowHeader] = useState(canShowImmediately);
   const [isCheckingAccess, setIsCheckingAccess] = useState(!canShowImmediately);
-  const [userCredits, setCredits] = useState<number>(initialCredits);
+  const [userCredits, setCredits] = useState<number | null>(initialCredits);
   const [userAvatarState, setUserAvatarState] = useState<string>(initialAvatar);
   const [userSubscriptionPlan, setUserSubscriptionPlan] = useState<"Free" | "Premium" | "Business">(initialPlan);
   const [isVerified, setIsVerified] = useState<boolean>(initialVerified);
@@ -613,11 +613,17 @@ useEffect(() => {
                     onClick={handleTopUp}
                     onMouseEnter={() => setIsHovered(true)}
                     onMouseLeave={() => setIsHovered(false)}
-                    className="group relative flex items-center gap-2 overflow-hidden rounded-full border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-amber-500/10 to-orange-500/10 px-3 py-1.5 transition-all duration-300 hover:scale-105"
+                    className="group relative flex items-center overflow-hidden rounded-full border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-amber-500/10 to-orange-500/10 px-3 py-1.5 transition-all duration-300 hover:scale-105"
                   >
                     <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-                    <CreditIcon className="h-4 w-4 text-yellow-500" />
-                    <span className="text-sm font-bold text-gray-900 dark:text-yellow-200">{userCredits.toLocaleString()}</span>
+                    <CreditIcon className={`h-4 w-4 text-yellow-500 transition-all duration-500 ${userCredits === null ? "animate-pulse" : ""}`} />
+                    <span
+                      className={`text-sm font-bold text-gray-900 dark:text-yellow-200 overflow-hidden whitespace-nowrap transition-all duration-500 ease-out ${
+                        userCredits === null ? "max-w-0 opacity-0 ml-0" : "max-w-[120px] opacity-100 ml-2"
+                      }`}
+                    >
+                      {userCredits !== null ? userCredits.toLocaleString() : ""}
+                    </span>
                     {isHovered && (
                       <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] text-white shadow-lg animate-fade-in">
                         Go to Credit Shop
