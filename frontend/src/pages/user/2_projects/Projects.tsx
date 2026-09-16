@@ -24,9 +24,11 @@ import {
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import { useState, useEffect } from "react";
+import api from "@/lib/axios.ts";
+import { formatDistanceToNow } from "date-fns";
 
 interface Project {
-  id: number;
+  id: string;
   name: string;
   type: "video" | "audio" | "image";
   size: string;
@@ -39,6 +41,7 @@ interface Project {
   width?: number;
   height?: number;
   duration_seconds?: number;
+  role?: string;
 }
 
 interface TeamProject {
@@ -51,355 +54,10 @@ interface TeamProject {
   videoCount?: number;
 }
 
-// Personal Projects
-const personalProjects: Project[] = [
-  {
-    id: 1,
-    name: "Untitled.mp4",
-    type: "video",
-    size: "140MB",
-    duration: "02:34",
-    lastUpdated: "8 mins ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Untitled.mp4",
-    width: 1920,
-    height: 1080,
-    duration_seconds: 154
-  },
-  {
-    id: 2,
-    name: "Summer Vacation Reel",
-    type: "video",
-    size: "450MB",
-    duration: "05:23",
-    lastUpdated: "2 hours ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Summer+Vacation",
-    width: 3840,
-    height: 2160,
-    duration_seconds: 323
-  },
-  {
-    id: 3,
-    name: "Product Review Final",
-    type: "video",
-    size: "280MB",
-    duration: "03:45",
-    lastUpdated: "Yesterday",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Product+Review"
-  },
-  {
-    id: 4,
-    name: "Tutorial Part 1",
-    type: "video",
-    size: "620MB",
-    duration: "12:18",
-    lastUpdated: "2 days ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Tutorial+Part+1"
-  },
-  {
-    id: 5,
-    name: "Wedding Highlights",
-    type: "video",
-    size: "1.2GB",
-    duration: "08:42",
-    lastUpdated: "3 days ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Wedding+Highlights"
-  },
-  {
-    id: 6,
-    name: "Gaming Montage",
-    type: "video",
-    size: "890MB",
-    duration: "15:30",
-    lastUpdated: "5 days ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Gaming+Montage"
-  },
-];
-
-// Shared Projects (videos shared with you)
-const sharedProjects: Project[] = [
-  {
-    id: 7,
-    name: "YT-Vid v5 Minecraft",
-    type: "video",
-    size: "503MB",
-    duration: "22:15",
-    lastUpdated: "2 mins ago",
-    sharedBy: "Edmark Talingting",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Minecraft",
-    width: 1920,
-    height: 1080,
-    duration_seconds: 1335
-  },
-  {
-    id: 8,
-    name: "Untitled(2).mp4",
-    type: "video",
-    size: "25MB",
-    duration: "00:45",
-    lastUpdated: "8 mins ago",
-    sharedBy: "Jadei Pacibe",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Untitled(2).mp4",
-    width: 1280,
-    height: 720,
-    duration_seconds: 45
-  },
-  {
-    id: 9,
-    name: "01:58",
-    type: "video",
-    size: "140MB",
-    duration: "01:58",
-    lastUpdated: "8 mins ago",
-    sharedBy: "Jadei Pacibe",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=01:58",
-    width: 1920,
-    height: 1080,
-    duration_seconds: 118
-  },
-  {
-    id: 10,
-    name: "Team Alpha - Commercial",
-    type: "video",
-    size: "2.1GB",
-    duration: "45:20",
-    lastUpdated: "1 hour ago",
-    sharedBy: "Sarah Chen",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Team+Alpha",
-    width: 3840,
-    height: 2160,
-    duration_seconds: 2720
-  },
-  {
-    id: 11,
-    name: "Documentary Rough Cut",
-    type: "video",
-    size: "3.2GB",
-    duration: "01:23:45",
-    lastUpdated: "3 hours ago",
-    sharedBy: "Marcus Thompson",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Documentary",
-    width: 1920,
-    height: 1080,
-    duration_seconds: 5025
-  },
-];
-
-// With Contract Projects (projects with active contracts and progress)
-const contractProjects: Project[] = [
-  {
-    id: 12,
-    name: "Corporate Video - Tech Startup",
-    type: "video",
-    size: "1.8GB",
-    duration: "05:30",
-    lastUpdated: "2 days ago",
-    sharedBy: "Sarah Chen",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Corporate+Video",
-    progress: 75,
-    contractAmount: "15,000"
-  },
-  {
-    id: 13,
-    name: "Music Video - Indie Band",
-    type: "video",
-    size: "2.3GB",
-    duration: "04:15",
-    lastUpdated: "5 days ago",
-    sharedBy: "Emma Watson",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Music+Video",
-    progress: 45,
-    contractAmount: "25,000"
-  },
-  {
-    id: 14,
-    name: "Documentary - Nature",
-    type: "video",
-    size: "4.5GB",
-    duration: "45:00",
-    lastUpdated: "1 week ago",
-    sharedBy: "Marcus Thompson",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Nature+Doc",
-    progress: 90,
-    contractAmount: "50,000"
-  },
-  {
-    id: 15,
-    name: "Commercial - Product Launch",
-    type: "video",
-    size: "1.2GB",
-    duration: "00:30",
-    lastUpdated: "3 days ago",
-    sharedBy: "Jessica Martinez",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Commercial",
-    progress: 30,
-    contractAmount: "8,000"
-  },
-];
-
-// Recent Projects (mix of personal, shared, and team projects - most recently accessed)
-const recentProjects: Project[] = [
-  {
-    id: 1,
-    name: "YT-Vid v5 Minecraft",
-    type: "video",
-    size: "503MB",
-    duration: "22:15",
-    lastUpdated: "2 mins ago",
-    sharedBy: "Edmark Talingting",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Minecraft",
-    width: 1920,
-    height: 1080,
-    duration_seconds: 1335
-  },
-  {
-    id: 2,
-    name: "Summer Vacation Reel",
-    type: "video",
-    size: "450MB",
-    duration: "05:23",
-    lastUpdated: "2 hours ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Summer+Vacation",
-    width: 3840,
-    height: 2160,
-    duration_seconds: 323
-  },
-  {
-    id: 3,
-    name: "Corporate Video - Tech Startup",
-    type: "video",
-    size: "1.8GB",
-    duration: "05:30",
-    lastUpdated: "2 days ago",
-    sharedBy: "Sarah Chen",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Corporate+Video",
-    progress: 75,
-    contractAmount: "15,000"
-  },
-  {
-    id: 4,
-    name: "Team Alpha - Commercial",
-    type: "video",
-    size: "2.1GB",
-    duration: "45:20",
-    lastUpdated: "1 hour ago",
-    sharedBy: "Sarah Chen",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Team+Alpha"
-  },
-  {
-    id: 5,
-    name: "Untitled(2).mp4",
-    type: "video",
-    size: "25MB",
-    duration: "00:45",
-    lastUpdated: "8 mins ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Untitled(2).mp4"
-  },
-  {
-    id: 6,
-    name: "01:58",
-    type: "video",
-    size: "140MB",
-    duration: "01:58",
-    lastUpdated: "8 mins ago",
-    sharedBy: "Jadei Pacibe",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=01:58"
-  },
-  {
-    id: 7,
-    name: "Music Video - Indie Band",
-    type: "video",
-    size: "2.3GB",
-    duration: "04:15",
-    lastUpdated: "5 days ago",
-    sharedBy: "Emma Watson",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Music+Video",
-    progress: 45,
-    contractAmount: "25,000"
-  },
-  {
-    id: 8,
-    name: "Documentary - Nature",
-    type: "video",
-    size: "4.5GB",
-    duration: "45:00",
-    lastUpdated: "1 week ago",
-    sharedBy: "Marcus Thompson",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Nature+Doc",
-    progress: 90,
-    contractAmount: "50,000"
-  },
-  {
-    id: 9,
-    name: "Product Review Final",
-    type: "video",
-    size: "280MB",
-    duration: "03:45",
-    lastUpdated: "Yesterday",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Product+Review"
-  },
-  {
-    id: 10,
-    name: "Tutorial Part 1",
-    type: "video",
-    size: "620MB",
-    duration: "12:18",
-    lastUpdated: "2 days ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Tutorial+Part+1"
-  },
-  {
-    id: 11,
-    name: "Wedding Highlights",
-    type: "video",
-    size: "1.2GB",
-    duration: "08:42",
-    lastUpdated: "3 days ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Wedding+Highlights"
-  },
-  {
-    id: 12,
-    name: "Gaming Montage",
-    type: "video",
-    size: "890MB",
-    duration: "15:30",
-    lastUpdated: "5 days ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Gaming+Montage"
-  },
-];
-
-// Team Projects - Folders
-const teamProjects: TeamProject[] = [
-  {
-    id: 16,
-    name: "Team Alpha - Commercial",
-    sharedBy: "Sarah Chen",
-    lastUpdated: "1 hour ago",
-    size: "2.1GB",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Team+Alpha",
-    videoCount: 12
-  },
-  {
-    id: 17,
-    name: "Documentary Project",
-    sharedBy: "Marcus Thompson",
-    type: "video",
-    size: "4.5GB",
-    duration: "45:00",
-    lastUpdated: "1 week ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Documentary",
-  },
-  {
-    id: 18,
-    name: "Music Video - Indie Band",
-    sharedBy: "Emma Watson",
-    type: "video",
-    size: "2.3GB",
-    duration: "04:15",
-    lastUpdated: "5 days ago",
-    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Music+Video",
-  },
-];
-
-
+// Team Projects - Folders (placeholder)
+const teamProjects: TeamProject[] = [];
+// With Contract Projects (projects with active contracts and progress) (placeholder)
+const contractProjects: Project[] = [];
 
 type TabType = "recent" | "personal" | "shared";
 type ViewType = "grid" | "compact";
@@ -434,12 +92,21 @@ const ProjectCardSkeleton = ({ view = "grid" }: { view?: ViewType }) => (
 const Projects: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [hoveredProject, setHoveredProject] = useState<number | null>(null);
+  const [hoveredProject, setHoveredProject] = useState<string | number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewType>("grid");
   const [sortMethod, setSortMethod] = useState<"none" | "az" | "size">("none");
   const [openTeamFolderId, setOpenTeamFolderId] = useState<number | null>(null);
+
+  const cachedData = sessionStorage.getItem('ensemble_projects_data');
+  const parsedCache = cachedData ? JSON.parse(cachedData) : null;
+
+  const [personalProjects, setPersonalProjects] = useState<Project[]>(parsedCache?.personal || []);
+  const [sharedProjects, setSharedProjects] = useState<Project[]>(parsedCache?.shared || []);
+  const [recentProjects, setRecentProjects] = useState<Project[]>(parsedCache?.recent || []);
+
+  const [loading, setLoading] = useState(!parsedCache);
+  const [isRefreshing, setIsRefreshing] = useState(!!parsedCache);
 
   let activeTab: TabType = "recent";
   if (location.pathname.includes("/projects/personal")) {
@@ -448,10 +115,37 @@ const Projects: React.FC = () => {
     activeTab = "shared";
   }
 
-  // Simulate loading
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 800);
-    return () => clearTimeout(timer);
+    const fetchProjects = async () => {
+      try {
+        const response = await api.get('/api/projects');
+        const projects = response.data.projects.map((p: any) => {
+          return {
+            ...p,
+            type: "video",
+            duration: p.duration_seconds ? new Date(p.duration_seconds * 1000).toISOString().substr(11, 8) : "00:00:00",
+            lastUpdated: p.lastUpdated ? formatDistanceToNow(new Date(p.lastUpdated), { addSuffix: true }) : "Unknown"
+          };
+        });
+
+        const personal = projects.filter((p: Project) => p.role === "Owner");
+        const shared = projects.filter((p: Project) => p.role !== "Owner");
+
+        setPersonalProjects(personal);
+        setSharedProjects(shared);
+        setRecentProjects(projects);
+
+        sessionStorage.setItem('ensemble_projects_data', JSON.stringify({
+          personal, shared, recent: projects
+        }));
+      } catch (error) {
+        console.error("Failed to fetch projects:", error);
+      } finally {
+        setLoading(false);
+        setIsRefreshing(false);
+      }
+    };
+    fetchProjects();
   }, []);
 
   useEffect(() => {
@@ -487,6 +181,23 @@ const Projects: React.FC = () => {
     if (tabId === "recent") navigate("/projects");
     else if (tabId === "personal") navigate("/projects/personal");
     else if (tabId === "shared") navigate("/projects/shared");
+  };
+
+  const EDITOR_URL = import.meta.env.VITE_EDITOR_URL || 'http://localhost:3000';
+
+  const handleOpenProject = async (projectId: string) => {
+    try {
+      const { data } = await api.get('/api/editor/handoff-token');
+      const handoffToken = data.handoffToken;
+
+      const params = new URLSearchParams({
+        token: handoffToken,
+      });
+
+      window.location.href = `${EDITOR_URL}/editor/${projectId}?${params.toString()}`;
+    } catch (err) {
+      console.error('Failed to get editor handoff token:', err);
+    }
   };
 
   const getContent = () => {
@@ -525,9 +236,10 @@ const Projects: React.FC = () => {
   const renderProjectCard = (project: Project) => (
     <div
       key={project.id}
-      className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-dark-surface/80 hover:scale-[1.02] shadow-sm hover:shadow-md dark:shadow-none"
+      className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-dark-surface/80 hover:scale-[1.02] shadow-sm hover:shadow-md dark:shadow-none cursor-pointer"
       onMouseEnter={() => setHoveredProject(project.id)}
       onMouseLeave={() => setHoveredProject(null)}
+      onClick={() => handleOpenProject(project.id)}
     >
       <div className="relative h-36 w-full overflow-hidden bg-gray-200 dark:bg-gradient-to-br dark:from-dark-surface dark:to-dark-surface">
         <img
@@ -555,15 +267,22 @@ const Projects: React.FC = () => {
           </div>
         )}
 
-        <button className="absolute right-3 top-3 rounded-full bg-black/50 p-1.5 text-zinc-400 transition hover:text-white backdrop-blur-sm">
+        <button 
+          className="absolute right-3 top-3 rounded-full bg-black/50 p-1.5 text-zinc-400 transition hover:text-white backdrop-blur-sm"
+          onClick={(e) => e.stopPropagation()}
+        >
           <MoreVertical className="h-3.5 w-3.5" />
         </button>
       </div>
 
       <div className="p-4">
-        <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white truncate">
-          {project.name}
-        </h3>
+        {isRefreshing ? (
+          <div className="mb-2 h-4 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
+        ) : (
+          <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white truncate">
+            {project.name}
+          </h3>
+        )}
 
         {/* Progress Bar for Contract Projects */}
         {activeTab === "contract" && project.progress !== undefined && (
@@ -594,7 +313,11 @@ const Projects: React.FC = () => {
             <Clock className="h-3 w-3" />
             <span>{project.lastUpdated}</span>
           </div>
-          <div>{project.size}</div>
+          {isRefreshing ? (
+            <div className="h-3 w-16 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
+          ) : (
+            <div>{project.size}</div>
+          )}
         </div>
 
         {(project.width || project.height || project.duration_seconds) && (
@@ -609,10 +332,16 @@ const Projects: React.FC = () => {
         )}
 
         <div className="mt-3 flex items-center gap-2 border-t border-gray-100 dark:border-white/10 pt-3">
-          <button className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
+          <button 
+            className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
             <Share2 className="h-3.5 w-3.5" />
           </button>
-          <button className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
+          <button 
+            className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
             <Edit className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -628,7 +357,8 @@ const Projects: React.FC = () => {
   const renderCompactProjectCard = (project: Project) => (
     <div
       key={project.id}
-      className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-3 transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-dark-surface/80 shadow-sm hover:shadow-md dark:shadow-none"
+      className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-3 transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-dark-surface/80 shadow-sm hover:shadow-md dark:shadow-none cursor-pointer"
+      onClick={() => handleOpenProject(project.id)}
     >
       <div className="relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gray-200 dark:bg-gradient-to-br dark:from-dark-surface dark:to-dark-surface">
         <img
@@ -644,13 +374,21 @@ const Projects: React.FC = () => {
       </div>
 
       <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{project.name}</h3>
+        {isRefreshing ? (
+          <div className="h-4 w-1/3 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
+        ) : (
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{project.name}</h3>
+        )}
         <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-zinc-500">
           <div className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
             <span>{project.lastUpdated}</span>
           </div>
-          <div>{project.size}</div>
+          {isRefreshing ? (
+            <div className="h-3 w-12 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
+          ) : (
+            <div>{project.size}</div>
+          )}
           {project.width && project.height && (
             <div className="text-[10px] text-gray-400 dark:text-zinc-500">{project.width}x{project.height}</div>
           )}
@@ -679,10 +417,16 @@ const Projects: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-1">
-        <button className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
+        <button 
+          className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+          onClick={(e) => e.stopPropagation()}
+        >
           <Share2 className="h-3.5 w-3.5" />
         </button>
-        <button className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
+        <button 
+          className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+          onClick={(e) => e.stopPropagation()}
+        >
           <Edit className="h-3.5 w-3.5" />
         </button>
       </div>
