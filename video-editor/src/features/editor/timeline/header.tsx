@@ -297,7 +297,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
   const isTransitionSelected = activeIds.length > 0 && activeItems.length === 0;
 
   const doAddScene = () => {
-    const { trackItemsMap, trackItemIds, tracks, duration } = useStore.getState();
+    const { trackItemsMap, trackItemIds, tracks, duration, projectId, size } = useStore.getState();
     const time = getCurrentTime();
     const SCENE_DEFAULT_DURATION_MS = 5000;
     const id = crypto.randomUUID();
@@ -311,6 +311,10 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
       details: {
         blockId: crypto.randomUUID(),
         name: "Scene",
+        width: size.width,
+        height: size.height,
+        top: 0,
+        left: 0,
       },
     };
 
@@ -361,7 +365,6 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
     // Fire-and-forget: the scene is already usable locally; if this hasn't
     // landed by the time someone double-clicks in, there's just nothing to
     // load yet, same as any other race between a write and a fast re-read.
-    const { projectId, size } = useStore.getState();
     fetch("/api/blocks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

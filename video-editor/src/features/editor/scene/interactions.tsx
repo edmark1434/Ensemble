@@ -821,8 +821,13 @@ export function SceneInteractions({
 
             const signX = scaleStartRef.current[0] < 0 ? -1 : 1;
             const signY = scaleStartRef.current[1] < 0 ? -1 : 1;
+
+            const startRatio =
+              Math.abs(scaleStartRef.current[0]) > 0
+                ? Math.abs(scaleStartRef.current[1]) / Math.abs(scaleStartRef.current[0])
+                : 1;
             const newScaleX = signX * magnitude;
-            const newScaleY = signY * magnitude;
+            const newScaleY = signY * magnitude * startRatio;
 
             const oldScaleX = scaleStartRef.current[0];
             const oldScaleY = scaleStartRef.current[1];

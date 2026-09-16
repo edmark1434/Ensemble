@@ -406,7 +406,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       // add scene
       if (!viewOnlyRef.current && !mod && !e.shiftKey && e.code === "KeyS") {
         e.preventDefault();
-        const { activeIds, trackItemsMap, trackItemIds, tracks, duration, activeSceneBlockId } = useStore.getState();
+        const { activeIds, trackItemsMap, trackItemIds, tracks, duration, activeSceneBlockId, projectId, size } = useStore.getState();
         if (activeSceneBlockId) return;
         const activeItems = activeIds.map((id) => trackItemsMap[id]).filter(Boolean);
         if (activeItems.some((item) => isSceneItem(item.type))) return;
@@ -424,6 +424,10 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
           details: {
             blockId: crypto.randomUUID(),
             name: "Scene",
+            width: size.width,
+            height: size.height,
+            top: 0,
+            left: 0,
           },
         };
 
@@ -474,7 +478,6 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         // Fire-and-forget: the scene is already usable locally; if this hasn't
         // landed by the time someone double-clicks in, there's just nothing to
         // load yet, same as any other race between a write and a fast re-read.
-        const { projectId, size } = useStore.getState();
         fetch("/api/blocks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

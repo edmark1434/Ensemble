@@ -14,6 +14,10 @@ export interface SequenceItemOptions {
   size?: ISize;
   frame?: number;
   isTransition?: boolean;
+  // true only for items rendered inside a Scene's nested content layer —
+  // a read-only snapshot that must never be individually selectable/
+  // draggable in the player
+  nested?: boolean;
 }
 
 export const BaseSequence = ({
@@ -26,7 +30,7 @@ export const BaseSequence = ({
   children: React.ReactNode;
 }) => {
   const { details } = item as ITrackItem;
-  const { fps, isTransition } = options;
+  const { fps, isTransition, nested } = options;
   const { from, durationInFrames } = calculateFrames(
     {
       from: item.display.from,
@@ -48,6 +52,12 @@ export const BaseSequence = ({
         ? details?.background
         : "transparent";
 
+  const className = nested
+    ? `designcombo-scene-nested-item id-${item.id} designcombo-scene-item-type-${item.type}`
+    : `designcombo-scene-item id-${item.id} designcombo-scene-item-type-${item.type}`;
+
+  console.log("[BaseSequence]", item.id, item.type, { nested, isTransition });
+
   if (isTransition) {
     return (
       <TransitionSeries.Sequence
@@ -58,8 +68,8 @@ export const BaseSequence = ({
         <AbsoluteFill
           id={item.id}
           data-track-item="transition-element"
-          className={`designcombo-scene-item id-${item.id} designcombo-scene-item-type-${item.type}`}
-          style={calculateContainerStyles(details, crop, { background })}
+          className={className}
+          style={calculateContainerStyles(details, crop, { background, pointerEvents: nested ? "none" : "auto" })}
         >
           {children}
         </AbsoluteFill>
@@ -79,13 +89,13 @@ export const BaseSequence = ({
       <AbsoluteFill
         id={item.id}
         data-track-item="transition-element"
-        className={`designcombo-scene-item id-${item.id} designcombo-scene-item-type-${item.type}`}
+        className={className}
         style={calculateContainerStyles(
           details,
           crop,
           {
             background,
-            pointerEvents: item.type === "audio" ? "none" : "auto",
+            pointerEvents: nested ? "none" : (item.type === "audio" ? "none" : "auto"),
             overflow:
               item.type !== "caption" && item.type !== "text"
                 ? "hidden"
