@@ -125,6 +125,11 @@ export interface DocSnapshot {
   transitionIds: string[];
   tracks: ITrack[];
   markers: IMarker[];
+  // Transitions that exist in the doc but whose endpoints don't resolve
+  // yet. Withheld from transitionsMap above so nothing downstream chokes
+  // on them; surfaced here so callers can tell "not ready" apart from
+  // "gone", and log rather than silently swallow.
+  orphanTransitionIds: string[];
   size?: ISize;
   fps?: number;
   duration?: number;
@@ -148,10 +153,22 @@ export function readStateFromDoc(schema: CollabSchema): DocSnapshot {
   });
 
   // A transition can outlive one of its endpoints (e.g. the endpoint gets
-  // replaced by a split's two new ids) — drop it before it reaches
-  // stateManager/canvas.renderTransitions(), which assume both ids resolve.
+  // replaced by a split's two new ids, or a paste lands items and
+  // transitions in two separate state emissions) — withhold it before it
+  // reaches stateManager/canvas.renderTransitions(), which assume both
+  // ids resolve.
+  //
+  // WITHHELD, NOT DELETED. This map is only what's safe to *render right
+  // now*; it is never a statement that the transition should stop
+  // existing. mirror-out must not treat an id missing from here as a
+  // removal — see deletableTransitionIds there. If the endpoint shows up
+  // later (the other half of a paste, an undo, a peer's item arriving
+  // after its transition), the transition reappears on the next read with
+  // no repair step.
+  const orphanTransitionIds: string[] = [];
   for (const [id, t] of Object.entries(transitionsMap)) {
     if (!(t.fromId in trackItemsMap) || !(t.toId in trackItemsMap)) {
+      orphanTransitionIds.push(id);
       delete transitionsMap[id];
     }
   }
@@ -204,6 +221,7 @@ export function readStateFromDoc(schema: CollabSchema): DocSnapshot {
     transitionIds,
     tracks,
     markers,
+    orphanTransitionIds,
     size: schema.meta.get("size"),
     fps: schema.meta.get("fps"),
     duration: schema.meta.get("duration"),

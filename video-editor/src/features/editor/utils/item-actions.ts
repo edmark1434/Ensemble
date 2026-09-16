@@ -174,7 +174,7 @@ export function cloneIntoNewTracks(
     if (!fromId || !toId) return;
     const oldTrackId = snapshot.trackIdByItemId[t.fromId] ?? snapshot.trackIdByItemId[t.toId];
     const newTrackId = (oldTrackId && trackIdMap.get(oldTrackId)) || t.trackId;
-    const newId = generateId();
+    const newId = `${fromId}-${toId}`;
     newTransitions.set(newId, { ...deepClone(t), id: newId, fromId, toId, trackId: newTrackId });
   });
 
@@ -296,7 +296,7 @@ export function cloneSelectionInto(
     const fromId = idMap.get(t.fromId);
     const toId = idMap.get(t.toId);
     if (!fromId || !toId) return; // an endpoint didn't make it into the copy
-    const newId = generateId();
+    const newId = `${fromId}-${toId}`;
     newTransitions.set(newId, { ...deepClone(t), id: newId, fromId, toId });
   });
 
@@ -434,16 +434,16 @@ export function splitItemsAtTime(
 
     Object.values(transitionsMap).forEach((t) => {
       if (t.toId === id) {
-        const updated = { ...t, toId: left.id };
-        transitionsMap[t.id] = updated;
+        const newId = `${t.fromId}-${left.id}`;
+        const updated = { ...t, id: newId, toId: left.id };
+        delete transitionsMap[t.id];
+        transitionsMap[newId] = updated;
         left.transitionInfo = { isFrom: false, isTo: true, transition: updated };
 
         // The transition's OTHER endpoint (unaffected by this split) still
-        // has its own cached copy of `t` pointing at the pre-split ids.
-        // Refresh it to the same `updated` object or it goes stale — same
-        // id, mismatched fromId/toId — and that mismatch is exactly what
-        // crashes stateManager.updateState() once it round-trips through
-        // the doc.
+        // has its own cached copy of `t` pointing at the pre-split id. Refresh
+        // it to the same `updated` object (same fix as before, now also
+        // carrying the new id) or it goes stale.
         const otherItem = trackItemsMap[t.fromId];
         if (otherItem) {
           trackItemsMap[t.fromId] = {
@@ -453,8 +453,10 @@ export function splitItemsAtTime(
         }
       }
       if (t.fromId === id) {
-        const updated = { ...t, fromId: right.id };
-        transitionsMap[t.id] = updated;
+        const newId = `${right.id}-${t.toId}`;
+        const updated = { ...t, id: newId, fromId: right.id };
+        delete transitionsMap[t.id];
+        transitionsMap[newId] = updated;
         right.transitionInfo = { isFrom: true, isTo: false, transition: updated };
 
         const otherItem = trackItemsMap[t.toId];

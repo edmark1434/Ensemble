@@ -7,6 +7,34 @@ import useStore from "../store/use-store";
 import { CollabSchema, readStateFromDoc } from "./ydoc-schema";
 import { SyncGuard } from "./sync-guard";
 import {isSceneItem} from "@/features/editor/types/ensemble-scene";
+import { syncCanvasTransitions } from "../timeline/items/transitions/sync-canvas-transitions";
+
+// Field-wise, order-insensitive compare. The old JSON.stringify compare
+// was sensitive to key insertion order, so it reported phantom changes
+// after any map rebuild, and it compared whole transition objects, so an
+// incidental field could mask a real fromId/toId change.
+function sameTransitions(
+  a: Record<string, any>,
+  b: Record<string, any>,
+): boolean {
+  const aIds = Object.keys(a);
+  if (aIds.length !== Object.keys(b).length) return false;
+  for (const id of aIds) {
+    const x = a[id];
+    const y = b[id];
+    if (!y) return false;
+    if (
+      x.fromId !== y.fromId ||
+      x.toId !== y.toId ||
+      x.kind !== y.kind ||
+      x.duration !== y.duration ||
+      x.direction !== y.direction
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 // Pulls doc changes into stateManager (+ useStore for markers/projectName,
 // which aren't part of designcombo's State type).
@@ -45,19 +73,14 @@ export function setupMirrorIn(
       syncGuard.isApplyingRemote = true;
       try {
         const canvas = useStore.getState().timeline;
-        const transitionsChanged =
-          JSON.stringify(canvas?.transitionsMap ?? {}) !== JSON.stringify(snapshot.transitionsMap);
+        const transitionsChanged = !sameTransitions(canvas?.transitionsMap ?? {}, snapshot.transitionsMap);
 
-        if (canvas && transitionsChanged) {
-          canvas.transitionsMap = snapshot.transitionsMap;
-          canvas.transitionIds = snapshot.transitionIds;
-          canvas.getTrackItems().forEach((item: any) => {
-            const info = item.transitionInfo;
-            const t = info?.transition;
-            if (info && (!t || !t.id || !t.fromId || !t.toId)) {
-              item.transitionInfo = undefined;
-            }
-          });
+        if (snapshot.orphanTransitionIds.length) {
+          // Not an error and not a leak — these stay in the doc and come
+          // back on their own once their endpoints resolve. Logged because
+          // a *persistently* orphaned id means something upstream cloned a
+          // transition without remapping its endpoint ids.
+          console.debug("mirror-in: transitions withheld this pass", snapshot.orphanTransitionIds);
         }
 
         stateManager.updateState(statePatch, { updateHistory: false });
@@ -95,15 +118,13 @@ export function setupMirrorIn(
           ...(snapshot.background ? { background: snapshot.background } : {}),
         });
 
+        // Everything the canvas needs (transitionsMap/transitionIds,
+        // stale transitionInfo cleanup, the render call itself) happens
+        // together, AFTER stateManager/useStore hold the new snapshot —
+        // see sync-canvas-transitions.ts for why all three steps have to
+        // run as one unit.
         if (canvas && transitionsChanged) {
-          if (Object.keys(snapshot.transitionsMap).length > 0) {
-            try {
-              canvas.renderTransitions();
-            } catch (renderErr) {
-              console.error("mirror-in: renderTransitions failed, skipping this pass", renderErr);
-            }
-          }
-          canvas.requestRenderAll();
+          syncCanvasTransitions(canvas, snapshot.transitionsMap, "mirror-in");
         }
       } finally {
         syncGuard.isApplyingRemote = false;

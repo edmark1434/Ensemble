@@ -25,6 +25,7 @@ import {CollabTarget} from "@/features/editor/collab/collab-target";
 import {patchBlock, patchProject} from "@/features/editor/control-item/common/composition-controls";
 import {isSceneItem} from "@/features/editor/types/ensemble-scene";
 import {patchBlockMeta, patchProjectSceneDetails} from "@/features/editor/collab/remote-patch";
+import { syncCanvasTransitions } from "../timeline/items/transitions/sync-canvas-transitions";
 
 export interface CollabDoc {
   doc: Y.Doc;
@@ -269,15 +270,14 @@ export function useCollabDoc(
                 }
               }
 
-              // existing transitions logic stays as-is, just rename resyncTransitions -> resyncCanvas
-              canvas.transitionsMap = current.transitionsMap ?? {};
-              canvas.transitionIds = Object.keys(current.transitionsMap ?? {});
-              if (Object.keys(current.transitionsMap ?? {}).length > 0) {
-                try { canvas.renderTransitions(); } catch (err) {
-                  console.error("useCollabDoc: renderTransitions failed on canvas mount", err);
-                }
-              }
-              canvas.requestRenderAll();
+              // Was previously hand-rolled here without the transitionInfo
+              // sanitize step the other two call sites have — a stale
+              // cached transitionInfo surviving a canvas remount (e.g.
+              // project <-> scene navigation) could crash on the next
+              // interaction that reads it. syncCanvasTransitions folds
+              // in that step so this path can't drift from the others
+              // again.
+              syncCanvasTransitions(canvas, current.transitionsMap ?? {}, "useCollabDoc: canvas mount");
             };
 
             // Timeline's own mount hydration can finish *after* `timeline` shows
@@ -360,20 +360,16 @@ export function useCollabDoc(
           syncGuard.isApplyingRemote = true;
           try {
             const canvas = useStore.getState().timeline as any;
+            // Same order-sensitivity problem as mirror-in.ts's old compare
+            // (see that file's sameTransitions) — a plain string diff of
+            // the two maps reports a phantom "changed" or, worse, a
+            // phantom "unchanged" depending on how the snapshot's key
+            // order happens to fall out of Object.entries(). This is a
+            // one-time load path so paying for a small local diff instead
+            // of importing sameTransitions is fine — just compare ids.
             const transitionsChanged =
-              JSON.stringify(canvas?.transitionsMap ?? {}) !== JSON.stringify(snapshot.transitionsMap);
-
-            if (canvas && transitionsChanged) {
-              canvas.transitionsMap = snapshot.transitionsMap;
-              canvas.transitionIds = snapshot.transitionIds;
-              canvas.getTrackItems().forEach((item: any) => {
-                const info = item.transitionInfo;
-                const t = info?.transition;
-                if (info && (!t || !t.id || !t.fromId || !t.toId)) {
-                  item.transitionInfo = undefined;
-                }
-              });
-            }
+              Object.keys(canvas?.transitionsMap ?? {}).sort().join(",") !==
+              Object.keys(snapshot.transitionsMap).sort().join(",");
 
             try {
               stateManager.updateState(
@@ -404,14 +400,7 @@ export function useCollabDoc(
             });
 
             if (canvas && transitionsChanged) {
-              if (Object.keys(snapshot.transitionsMap).length > 0) {
-                try {
-                  canvas.renderTransitions();
-                } catch (renderErr) {
-                  console.error("useCollabDoc: renderTransitions failed on initial load", renderErr);
-                }
-              }
-              canvas.requestRenderAll();
+              syncCanvasTransitions(canvas, snapshot.transitionsMap, "useCollabDoc: initial load");
             }
           } finally {
             syncGuard.isApplyingRemote = false;

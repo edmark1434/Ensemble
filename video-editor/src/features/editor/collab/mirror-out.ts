@@ -38,14 +38,21 @@ function syncOrderArray(yArr: Y.Array<string>, rawNext: string[]) {
   }
 }
 
+// `deletableIds`, when passed, is the ONLY set of ids this is allowed to
+// remove from the doc. Without it, "absent from local state" is treated as
+// "delete it", which is wrong for anything local state might be missing
+// for a reason other than intent — see the transition case in sync().
 function reconcileContentMap<T extends Record<string, any>>(
   yMap: Y.Map<Y.Map<any>>,
   items: Record<string, T>,
   toY: (item: T) => Y.Map<any>,
+  deletableIds?: Set<string>,
 ) {
   const nextIds = new Set(Object.keys(items));
   yMap.forEach((_, id) => {
-    if (!nextIds.has(id)) yMap.delete(id);
+    if (nextIds.has(id)) return;
+    if (deletableIds && !deletableIds.has(id)) return;
+    yMap.delete(id);
   });
   for (const [id, item] of Object.entries(items)) {
     const existing = yMap.get(id);
@@ -135,6 +142,12 @@ export function setupMirrorOutFromStateManager(
       state.size !== prevState.size ||
       state.fps !== prevState.fps;
 
+    // Snapshot of what local state knew about transitions BEFORE this
+    // change, captured before prevState advances below — this is what
+    // makes "was here, now isn't" (a real delete) distinguishable from
+    // "was never here" (withheld, or not ours to delete).
+    const prevTransitionsMap = prevState?.transitionsMap ?? {};
+
     // Always advance prevState, even when we're about to bail out below.
     // The old code returned early (on the isApplyingRemote guard) BEFORE
     // this assignment ran, so after any remote/undo-driven apply, prevState
@@ -147,11 +160,40 @@ export function setupMirrorOutFromStateManager(
     if (syncGuard.isApplyingRemote) return;
     if (!relevantChanged) return;
 
+    // A transition may be absent from state.transitionsMap for two very
+    // different reasons, and the doc must not confuse them:
+    //   1. someone deleted it        -> remove it from the doc
+    //   2. readStateFromDoc withheld it because an endpoint didn't
+    //      resolve at read time     -> LEAVE IT ALONE
+    // Case 2 is what made pasted/duplicated transitions vanish for good:
+    // withheld -> pushed into stateManager -> reconciled back as a
+    // deletion -> gone from the Y.Doc, for every collaborator, forever.
+    // Only an id that local state *used to* have and now doesn't is a
+    // real removal.
+    const deletableTransitionIds = new Set<string>();
+    for (const id of Object.keys(prevTransitionsMap)) {
+      if (!(id in state.transitionsMap)) deletableTransitionIds.add(id);
+    }
+
     schema.doc.transact(() => {
       reconcileContentMap<ITrackItem>(schema.trackItems, state.trackItemsMap, itemToY);
       syncOrderArray(schema.trackItemIds, state.trackItemIds);
-      reconcileContentMap<ITransition>(schema.transitions, state.transitionsMap, transitionToY);
-      syncOrderArray(schema.transitionIds, state.transitionIds);
+      reconcileContentMap<ITransition>(
+        schema.transitions,
+        state.transitionsMap,
+        transitionToY,
+        deletableTransitionIds,
+      );
+
+      // Order array follows the map, not local state — a transition we
+      // deliberately kept above would otherwise lose its id here and come
+      // back on the next read as a map entry with no place in the order.
+      const survivingOrder = [...state.transitionIds];
+      const seen = new Set(survivingOrder);
+      schema.transitions.forEach((_, id) => {
+        if (!seen.has(id)) survivingOrder.push(id);
+      });
+      syncOrderArray(schema.transitionIds, survivingOrder);
       reconcileTracks(schema.tracks, state.tracks);
       if (schema.meta.get("duration") !== state.duration) schema.meta.set("duration", state.duration);
       if (JSON.stringify(schema.meta.get("size")) !== JSON.stringify(state.size)) schema.meta.set("size", state.size);

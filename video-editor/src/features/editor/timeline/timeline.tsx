@@ -26,10 +26,10 @@ import PreviewTrackItem from "./items/preview-drag-item";
 import {useTimelineOffsetX} from "../hooks/use-timeline-offset";
 import {useStateManagerEvents} from "../hooks/use-state-manager-events";
 import {useResizbleTimeline} from "../hooks/use-resizable-timeline";
-import "./items/transition-render";
-import {patchTransitionGuideRender} from "@/features/editor/timeline/items/transition-guide-render";
+import "./items/transitions/transition-render";
+import {patchTransitionGuideRender} from "@/features/editor/timeline/items/transitions/transition-guide-render";
 import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
-import {patchTransitionZOrder} from "@/features/editor/timeline/items/transition-z-order";
+import {patchTransitionZOrder} from "@/features/editor/timeline/items/transitions/transition-z-order";
 import {
   broadcastLiveTransform,
   clearLiveTransform,
@@ -44,6 +44,8 @@ import {
 } from "../collab/live-transform";
 import {FabricText, Path, Rect} from "fabric";
 import Scene from "./items/ensemble-scene";
+import {syncCanvasTransitions} from "@/features/editor/timeline/items/transitions/sync-canvas-transitions";
+import { patchTransitionRenderPositioning } from "./items/transitions/transition-position-patch";
 
 CanvasTimeline.registerItems({
   Text,
@@ -60,6 +62,8 @@ CanvasTimeline.registerItems({
   HillAudioBars,
   Scene
 });
+
+patchTransitionRenderPositioning();
 
 const EMPTY_SIZE = { width: 0, height: 0 };
 
@@ -476,14 +480,53 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
 
     const timelineGestureIds = new Set<string>();
 
+    // Transition guides aren't part of the dragged ActiveSelection, so Fabric
+    // doesn't move them for free — without this they sit frozen until the
+    // eventual state commit triggers canvas.renderTransitions() on release.
+    // Reuses the same fromRect-only math as transition-position-patch.ts's
+    // renderTransitions() so there's no jump when the drag ends.
+    const repositionConnectedTransitions = (children: any[]) => {
+      const { transitionsMap } = useStore.getState();
+      const movingIds = new Set(children.map((c) => c.id).filter(Boolean));
+      if (movingIds.size === 0) return;
+
+      let moved = false;
+      Object.values(transitionsMap).forEach((t) => {
+        if (!movingIds.has(t.fromId)) return;
+
+        const transitionObj = canvas
+          .getObjects()
+          .find((o: any) => o.type === "transition" && o.id === t.id);
+        if (!transitionObj) return;
+
+        const fromObj = children.find((c) => c.id === t.fromId);
+        const fromRect = fromObj.getBoundingRect();
+        const widthPx = timeMsToUnits(t.duration, (canvas as any).tScale);
+
+        transitionObj.set({
+          left: fromRect.left + fromRect.width - widthPx / 2,
+          top: fromRect.top,
+          height: fromRect.height,
+          width: widthPx,
+        });
+        transitionObj.setCoords();
+        moved = true;
+      });
+
+      if (moved) canvas.requestRenderAll();
+    };
+
     const broadcastTimelineGesture = (e: any) => {
       const targetObj = e.target;
       if (!targetObj) return;
-      const { collabSchema, scale, trackItemsMap, transitionsMap } = useStore.getState();
-      if (!collabSchema) return;
 
       const children: any[] =
         typeof targetObj.getObjects === "function" ? targetObj.getObjects() : [targetObj];
+
+      repositionConnectedTransitions(children);
+
+      const { collabSchema, scale, trackItemsMap, transitionsMap } = useStore.getState();
+      if (!collabSchema) return;
 
       const patch: LiveTransformState = {};
       for (const child of children) {
@@ -1065,6 +1108,20 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     applyItemDetails(canvas, trackItemsMap);
     canvas.requestRenderAll();
   }, [trackItemsMap]);
+
+  // Transitions have no native creation path the way track items do —
+  // @designcombo/state builds trackItem Fabric objects itself as part of
+  // updateState(), but a transition guide only ever gets built by an
+  // explicit canvas.renderTransitions() call, and previously the only
+  // caller was mirror-in.ts, deferred behind the collab doc round trip.
+  // That made every local paste/duplicate/split depend on Yjs for its
+  // OWN client's canvas to update — this reacts to the local store
+  // directly instead, so it's not gated on doc sync at all.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    syncCanvasTransitions(canvas, transitionsMap, "timeline: local edit");
+  }, [transitionsMap]);
 
   return (
     <div
