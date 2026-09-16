@@ -1,47 +1,29 @@
-# Current Task — Single-editor Settings pattern
+# Current Task — Fix UserHeader Avatar Display from Database avatar_file_id
 
-Settings tabs own editing; operational Admin pages show status + links.
-
-## Scope
-
-1. **Moderation:** Settings → Moderation = editor; Moderation → Automod = status only. Security stays separate.
-2. **Economy:** Settings → Economy = editor; Credits & Economy → Management (packages / fees / marketplace) = status only.
+Ensure user header displays the user's actual database avatar associated with `avatar_file_id` / preset `path` instead of falling back to the Pravatar dataset URL.
 
 ## Acceptance Criteria
 
-- [x] Automod is read-only status with CTA to Settings → Moderation (+ Security link).
-- [x] Credit Economy Management sections are read-only status with CTA to Settings → Economy.
-- [x] Settings Moderation / Economy / Security cards link across related surfaces.
-- [x] Settings → Economy can add/remove packages (moved from Credit Economy editor).
-- [x] No duplicate save forms for the same `configuration` keys.
-# Current Task — Floating Chat Sync & Inbox Skeleton Loading
-
-Sync the minimized floating chat stack with the chat system so it displays real recent conversations, and add a skeleton loading state to the inbox while data is fetching from the database.
-
-## Acceptance Criteria
-
-- [x] **Backend Member Profile Enrichment**:
-  - In `backend/services/InboxServices.js`, enrich inboxes returned by `getAllInboxesByAccountIdServices` and `getInboxByAccountIdServices` with member names, handles, and avatars from PostgreSQL.
-  - Set direct chat `conversation_name` and `profile_image` using the other member's profile if unset.
-- [x] **Chat State & Floating Windows**:
-  - In `frontend/src/components/ui/chat_bubble/chat_state.ts`, add `hasLoadedConversations` to track when initial conversations have loaded from DB.
-  - Sanitize initial floating windows from `localStorage` so stale mock datasets do not persist.
-  - Keep conversations sorted by recent message activity on new messages.
-- [x] **Floating Chat Minimized Sync**:
-  - In `frontend/src/components/ui/Layout.tsx`, derive `recentChats` from the chat system's real conversations, mapping each conversation to a `ChatTarget` (with proper name, avatar, and unread count).
-  - In `frontend/src/components/ui/chat_bubble/chat_main.tsx`, sync minimized chats with `recentChats`, fix `closeWindow(chat)` bug, support dismissing from stack with `X`, and limit the stack height.
-- [x] **Inbox Skeleton Loading**:
-  - In `frontend/src/components/ui/inbox/inbox_components/inbox_list.tsx`, replace the small spinner with a skeleton loading list.
-  - In `frontend/src/components/ui/inbox/inbox_main.tsx`, show the skeleton loading state until initial conversations finish fetching from DB.
-  - In `frontend/src/components/ui/inbox/inbox_components/inbox_panel_viewmessage.tsx`, replace the text "Loading messages..." with skeleton message bubbles.
-- [x] **Message Seen Receipts & Profile Avatars**:
-  - In `backend/services/InboxServices.js`, enriched inbox members with full name fallback and real avatar URLs from `files` / `account_profile_files` (fixed `f2.created_at` column error).
-  - In `backend/services/InboxServices.js` and `backend/lib/WebSocket.js`, emit `messagesSeen` across both conversation room and each individual member account room.
-  - In `frontend/src/components/ui/inbox/inbox_main.tsx`, seed profiles synchronously from cached conversations, resolve real CDN/attachment avatar URLs, compute `seenReaderIds` for all conversation types (direct, marketplace, and group chats), and auto-mark active conversations as read.
-  - In `frontend/src/components/ui/chat_bubble/chat_bubble_components/ChatWindow.tsx`, update seen avatar lookup to use real profile avatars instead of letter initials.
-- [x] **Verification**:
-  - `node -c backend/services/InboxServices.js` & `node -c backend/lib/WebSocket.js` exit code 0.
-  - `cd frontend && npm run build` passed with 0 errors.
+- [x] Identify root cause of Pravatar dataset fallback (`userAvatar = "https://i.pravatar.cc/150?u=john"` default prop, missing avatar joins in `UserRepositories.js`, and Vite path mismatch for `/public/p1.png`).
+- [x] Update `backend/repositories/UserRepositories.js` (`getEmailandPasswordHashByEmail` & `getEmailandPasswordHashByUsername`) to join `files` on `avatar_file_id` and select `avatar_preset_url`.
+- [x] Update `backend/controllers/UserControllers.js` (`loginCredentials` & `getCurrentUser`) to include `avatar_file_id` and hydrate `avatar_preset_url` from database.
+- [x] Update `backend/controllers/ProfileControllers.js` (`getProfileCurrentAvatarByAccountIdController`) to safely handle `req.session?.account_id || req.session?.accountId`.
+- [x] Update `frontend/src/components/nav/user_header.tsx`:
+  - [x] Add `constructAvatarUrl` mapping `/public/p*.png` to `/profile_presets/p*.png`.
+  - [x] Remove Pravatar default prop and replace with dynamic name-based avatar fallback.
+  - [x] Format `initialAvatar` with `constructAvatarUrl`.
+  - [x] Sync `userAvatarState` when global user state changes.
+  - [x] Prevent image error infinite loops on `onError`.
+- [x] Update `user_settings.tsx` and `Profile.tsx` `constructAvatarUrl` helpers to map preset avatars to `/profile_presets/`.
+- [x] Verify frontend build passes with 0 errors (`npm run build`).
 
 Status: Completed.
 
+## Verification Results
+
+### Frontend Build Verification
+- Command: `cd frontend && npm run build`
+- Output: `✓ built in 10.99s` with 0 errors.
+
+### Backend Verification
+- Syntax and imports verified across modified controllers and repositories.

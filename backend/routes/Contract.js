@@ -15,4 +15,7 @@ router.post('/:contractId/accept', requireAuth, ContractControllers.acceptJobOff
 // Reject a job offer (Applicant action)
 router.post('/:contractId/reject', requireAuth, ContractControllers.rejectJobOfferController);
 
+// Submit a dispute for a contract
+router.post('/:contractId/dispute', requireAuth, ContractControllers.createContractDisputeController);
+
 module.exports = router;

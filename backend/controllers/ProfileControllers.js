@@ -171,7 +171,13 @@ async function getProfileAvatarsByAccountIdController(req, res) {
 
 async function getProfileCurrentAvatarByAccountIdController(req, res) {
     try {
-        const { account_id } = req.session;
+        const account_id = req.session?.account_id || req.session?.accountId;
+        if (!account_id) {
+            return res.status(401).json({
+                success: false,
+                message: 'No active session or account ID found'
+            });
+        }
         const currentAvatar = await getProfileCurrentAvatarByAccountIdService(account_id);
         return res.status(200).json({
             success: true,

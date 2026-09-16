@@ -169,12 +169,36 @@ async function calculateCashoutFeePhpCents(amountCredits, phpCentsPerCredit) {
   return envFlatFee;
 }
 
+async function getMarketplaceListingFeeCredits() {
+  const economy = await getSectionValue('economy');
+  const configured = Number(economy?.marketplaceSettings?.listingFeeCredits);
+  if (Number.isFinite(configured) && configured >= 0) return configured;
+  return RECOMMENDED_MARKETPLACE_SETTINGS.listingFeeCredits;
+}
+
+async function getMarketplaceRefundWindowDays() {
+  const economy = await getSectionValue('economy');
+  const configured = Number(economy?.marketplaceSettings?.refundWindowDays);
+  if (Number.isFinite(configured) && configured >= 0) return configured;
+  return RECOMMENDED_MARKETPLACE_SETTINGS.refundWindowDays;
+}
+
+async function getMarketplaceEscrowHoldDays() {
+  const economy = await getSectionValue('economy');
+  const configured = Number(economy?.marketplaceSettings?.escrowHoldDays);
+  if (Number.isFinite(configured) && configured >= 0) return configured;
+  return RECOMMENDED_MARKETPLACE_SETTINGS.escrowHoldDays;
+}
+
 module.exports = {
   RECOMMENDED_FEE_SETTINGS,
   RECOMMENDED_MARKETPLACE_SETTINGS,
   getEconomyFeeSettings,
   getFeeSettingById,
   getMarketplaceTransactionFeePercent,
+  getMarketplaceListingFeeCredits,
+  getMarketplaceRefundWindowDays,
+  getMarketplaceEscrowHoldDays,
   calculatePercentFeeAmount,
   calculateCashoutFeePhpCents,
 };

@@ -206,8 +206,21 @@ const ASSET_SELECT = `
            WHERE mat.market_asset_id = ma.market_asset_id
              AND mat.deleted_at IS NULL AND t.deleted_at IS NULL
          ), ARRAY[]::varchar[]) AS tags,
+         (SELECT COUNT(*)::int FROM asset_reviews ar
+          JOIN user_market_assets uma ON uma.market_asset_id = ar.market_asset_id
+          JOIN users u ON u.user_id = uma.user_id
+          WHERE u.account_id = owner.account_id AND ar.deleted_at IS NULL AND uma.status = 'active' AND uma.deleted_at IS NULL) AS creator_rating_count,
+         COALESCE((SELECT ROUND(AVG(ar.rating)::numeric, 1) FROM asset_reviews ar
+          JOIN user_market_assets uma ON uma.market_asset_id = ar.market_asset_id
+          JOIN users u ON u.user_id = uma.user_id
+          WHERE u.account_id = owner.account_id AND ar.deleted_at IS NULL AND uma.status = 'active' AND uma.deleted_at IS NULL), 0) AS creator_average_rating,
          (SELECT COUNT(*)::int FROM asset_comments ac
-          WHERE ac.market_asset_id = ma.market_asset_id AND ac.deleted_at IS NULL) AS comment_count
+          WHERE ac.market_asset_id = ma.market_asset_id AND ac.deleted_at IS NULL) AS comment_count,
+         (SELECT COUNT(*)::int
+          FROM user_market_assets uma
+          WHERE uma.market_asset_id = ma.market_asset_id
+            AND uma.status = 'active'
+            AND uma.deleted_at IS NULL) AS purchase_count
   FROM market_assets ma
   JOIN LATERAL (
     SELECT m.media_asset_id, m.type, m.width, m.height, m.duration_seconds,
@@ -387,6 +400,13 @@ async function listAssetsRepository({ accountId, search, type, status, view, lim
             WHERE saved_asset.market_asset_id = ma.market_asset_id
               AND saved_asset.account_id = $1
               AND saved_asset.deleted_at IS NULL
+          )`
+      : view === 'liked'
+        ? `ma.status = 'published' AND EXISTS (
+            SELECT 1 FROM asset_likes liked_asset
+            WHERE liked_asset.market_asset_id = ma.market_asset_id
+              AND liked_asset.account_id = $1
+              AND liked_asset.deleted_at IS NULL
           )`
       : `ma.status = 'published'`;
   const { rows } = await pool.query(
@@ -610,6 +630,53 @@ async function createAssetRepository(accountId, data) {
       previewFileIds: data.previewFileIds,
     });
     await syncAssetTags(client, market.rows[0].market_asset_id, data.tags);
+
+    const { getMarketplaceListingFeeCredits } = require('../lib/PlatformFeeSettings');
+    const listingFeeCredits = await getMarketplaceListingFeeCredits();
+    if (listingFeeCredits > 0) {
+      const walletsResult = await client.query(
+        `SELECT aw.account_id, w.wallet_id, w.type, w.status, w.balance_credits
+         FROM wallets w
+         LEFT JOIN account_wallets aw ON aw.wallet_id = w.wallet_id
+         WHERE (w.type = 'account wallets' AND aw.account_id = $1)
+            OR w.type = 'platform wallets'
+         ORDER BY w.wallet_id
+         FOR UPDATE OF w`,
+        [accountId]
+      );
+      const creatorWallet = walletsResult.rows.find((w) => String(w.account_id) === String(accountId));
+      const platformWallet = walletsResult.rows.find((w) => w.type === 'platform wallets');
+      if (!creatorWallet) {
+        const error = new Error('ASSET_WALLET_NOT_FOUND');
+        error.code = 'ASSET_WALLET_NOT_FOUND';
+        throw error;
+      }
+      if (Number(creatorWallet.balance_credits) < listingFeeCredits) {
+        const error = new Error('Insufficient credits for marketplace listing fee.');
+        error.code = 'INSUFFICIENT_CREDITS';
+        error.required = listingFeeCredits;
+        error.available = Number(creatorWallet.balance_credits);
+        throw error;
+      }
+      if (platformWallet) {
+        await client.query(
+          `UPDATE wallets SET balance_credits = balance_credits - $1 WHERE wallet_id = $2`,
+          [listingFeeCredits, creatorWallet.wallet_id]
+        );
+        await client.query(
+          `UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2`,
+          [listingFeeCredits, platformWallet.wallet_id]
+        );
+        await client.query(
+          `INSERT INTO credit_transactions (
+             amount, type, source_wallet_id, destination_wallet_id,
+             reference_table, reference_id, description, status, created_at, updated_at
+           ) VALUES ($1, 'Fee', $2, $3, 'market_assets', $4, 'Marketplace asset listing fee', 'completed', NOW(), NOW())`,
+          [listingFeeCredits, creatorWallet.wallet_id, platformWallet.wallet_id, market.rows[0].market_asset_id]
+        );
+      }
+    }
+
     await client.query('COMMIT');
     return market.rows[0].market_asset_id;
   } catch (error) {
@@ -1723,6 +1790,46 @@ async function deleteAssetReviewRepository(assetId, reviewId, accountId) {
   return result.rowCount === 1;
 }
 
+async function validateAssetRefundEligibility(marketAssetId, buyerAccountId) {
+  const { getMarketplaceRefundWindowDays } = require('../lib/PlatformFeeSettings');
+  const refundWindowDays = await getMarketplaceRefundWindowDays();
+  const purchaseRes = await pool.query(
+    `SELECT uma.user_market_asset_id, uma.created_at, uma.status, ma.price_credits
+     FROM user_market_assets uma
+     JOIN users u ON u.user_id = uma.user_id
+     JOIN market_assets ma ON ma.market_asset_id = uma.market_asset_id
+     WHERE uma.market_asset_id = $1 AND u.account_id = $2
+       AND uma.deleted_at IS NULL
+     ORDER BY uma.created_at DESC
+     LIMIT 1`,
+    [marketAssetId, buyerAccountId]
+  );
+  if (!purchaseRes.rows.length) {
+    return { allowed: false, reason: 'No active purchase found for this asset.' };
+  }
+  const purchase = purchaseRes.rows[0];
+  if (purchase.status === 'refunded') {
+    return { allowed: false, reason: 'This purchase has already been refunded.' };
+  }
+  const purchaseDate = new Date(purchase.created_at);
+  const now = new Date();
+  const ageInDays = (now - purchaseDate) / (1000 * 60 * 60 * 24);
+  if (ageInDays > refundWindowDays) {
+    return {
+      allowed: false,
+      reason: `Refund window of ${refundWindowDays} days has expired (${Math.floor(ageInDays)} days since purchase).`,
+      refundWindowDays,
+      ageInDays,
+    };
+  }
+  return {
+    allowed: true,
+    purchase,
+    refundWindowDays,
+    ageInDays,
+  };
+}
+
 module.exports = {
   getAssetPostingEligibilityRepository,
   listAssetsRepository,
@@ -1746,4 +1853,5 @@ module.exports = {
   createAssetReviewRepository,
   updateAssetReviewRepository,
   deleteAssetReviewRepository,
+  validateAssetRefundEligibility,
 };

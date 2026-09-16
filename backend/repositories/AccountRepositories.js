@@ -28,6 +28,7 @@ async function createAccount({
     description = null,
     type = 'User',
     status = 'active',
+    meritScore = 0,
     deletedAt = null,
 } = {}) {
     try {
@@ -40,10 +41,11 @@ async function createAccount({
                 description,
                 type,
                 status,
+                merit_score,
                 deleted_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING account_id, type, handle, status, display_name`,
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING account_id, type, handle, status, display_name, merit_score`,
             [
                 displayName,
                 handle,
@@ -52,6 +54,7 @@ async function createAccount({
                 description,
                 type,
                 status,
+                Math.max(0, Number(meritScore) || 0),
                 deletedAt,
             ]
         );

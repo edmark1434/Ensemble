@@ -142,8 +142,7 @@ async function applyDisputeAutomations(disputeRow) {
     SELECT s.staff_id
     FROM staff s
     JOIN accounts a ON a.account_id = s.account_id
-    WHERE s.deleted_at IS NULL
-      AND a.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL
       AND LOWER(COALESCE(a.status, 'active')) = 'active'
       AND LOWER(COALESCE(s.role, '')) IN (
         'admin', 'support moderator', 'support_moderator', 'moderator'
@@ -176,6 +175,35 @@ async function applyDisputeAutomations(disputeRow) {
   );
 
   return { ...disputeRow, handled_by_staff_id: staffId };
+}
+
+/**
+ * Reconcile unassigned open disputes in the system based on moderation.disputeAutoAssign.
+ */
+async function reconcileUnassignedDisputes() {
+  const settings = await getModerationSettings();
+  if (!settings.disputeAutoAssign) return { assigned: 0 };
+
+  const unassigned = await pool.query(
+    `
+    SELECT dispute_id, handled_by_staff_id, status
+    FROM disputes
+    WHERE handled_by_staff_id IS NULL
+      AND deleted_at IS NULL
+      AND LOWER(COALESCE(status, 'open')) NOT IN ('closed', 'resolved')
+    ORDER BY opened_at ASC NULLS LAST, created_at ASC
+    `
+  );
+
+  let assignedCount = 0;
+  for (const row of unassigned.rows) {
+    const updated = await applyDisputeAutomations(row);
+    if (updated?.handled_by_staff_id) {
+      assignedCount++;
+    }
+  }
+
+  return { assigned: assignedCount };
 }
 
 async function countActiveWarnings(accountId) {
@@ -330,6 +358,18 @@ async function applyReportAutomations(reportRow, { staffId = null } = {}) {
     });
   }
 
+  if (priority === 'high') {
+    try {
+      const { dispatchPlatformNotification } = require('../services/PlatformAlertServices');
+      dispatchPlatformNotification('HIGH_PRIORITY_REPORT', {
+        report_number: reportRow.report_number,
+        report_id: reportId,
+        reason: reportRow.type || reportRow.reason,
+        category: reportRow.category,
+      }).catch(() => {});
+    } catch {}
+  }
+
   return { ...reportRow, priority, ticketAutoCreated };
 }
 
@@ -339,6 +379,7 @@ module.exports = {
   evaluateUserContent,
   resolveMarketplacePublishStatus,
   applyDisputeAutomations,
+  reconcileUnassignedDisputes,
   countActiveWarnings,
   maybeAutoSuspendAfterWarning,
   applyReportAutomations,

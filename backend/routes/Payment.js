@@ -8,7 +8,8 @@ const {
     TopUpPaymentByPaymentMethod,
     createPaymentToken,
     subscriptionWebhookHandler,
-    cancelSubscription
+    cancelSubscription,
+    getActiveCreditPackagesService
 } = require('../services/PaymentServices');
 const { getAllPlanControllers,
     getSubcriptionByUserIdControllers
@@ -18,6 +19,7 @@ const checkSession = require('../middleware/CheckSession');
 const requireAuth = require('../middleware/RequireAuth');
 const verifyXenditWebhook = require('../middleware/VerifyXenditWebhook');
 
+router.get('/credit-packages', getActiveCreditPackagesService);
 router.post('/topup', [checkSession, requireAuth], processTopUpPayment);
 router.post('/webhooks/xendit', verifyXenditWebhook, xenditWebhookHandler);
 router.post('/subscription', [checkSession, requireAuth], processSubscriptionPayment);

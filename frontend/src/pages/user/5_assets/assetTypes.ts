@@ -53,6 +53,9 @@ export interface AssetRecord {
   creator_name: string;
   creator_handle: string | null;
   creator_avatar_path: string | null;
+  owner_account_id: string;
+  creator_average_rating: number;
+  creator_rating_count: number;
   is_owner: boolean;
   is_purchased: boolean;
   can_download?: boolean;
@@ -62,6 +65,7 @@ export interface AssetRecord {
   like_count: number;
   save_count: number;
   review_count: number;
+  purchase_count: number;
   average_rating: number;
   tags: string[];
   comment_count: number;

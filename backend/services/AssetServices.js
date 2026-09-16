@@ -36,7 +36,7 @@ const { getMarketplaceTransactionFeePercent } = require('../lib/PlatformFeeSetti
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ASSET_TYPES = new Set(['image', 'video', 'audio', 'template']);
 const ASSET_STATUSES = new Set(['draft', 'published']);
-const ASSET_VIEWS = new Set(['discover', 'mine', 'purchased', 'saved']);
+const ASSET_VIEWS = new Set(['discover', 'mine', 'purchased', 'saved', 'liked']);
 const MAX_BUNDLE_FILES = 20;
 const MAX_BUNDLE_BYTES = 500 * 1024 * 1024;
 const MAX_THUMBNAILS = 8;
@@ -312,10 +312,14 @@ function publicAsset(asset, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_F
   const transactionFeeCredits = calculateAssetTransactionFee(priceCredits, feePercent);
   return {
     ...safeAsset,
+    owner_account_id: _ownerAccountId,
     like_count: Number(safeAsset.like_count || 0),
     save_count: Number(safeAsset.save_count || 0),
     review_count: Number(safeAsset.review_count || 0),
+    purchase_count: Number(safeAsset.purchase_count || 0),
     average_rating: Number(safeAsset.average_rating || 0),
+    creator_average_rating: Number(safeAsset.creator_average_rating || 0),
+    creator_rating_count: Number(safeAsset.creator_rating_count || 0),
     transaction_fee_percent: feePercent,
     transaction_fee_credits: transactionFeeCredits,
     owner_net_credits: priceCredits - transactionFeeCredits,
@@ -383,17 +387,19 @@ async function listAssetsServices(accountId, query = {}) {
     offset: (page - 1) * pageSize,
   });
   const total = rows[0]?.total_count || 0;
+  const feePercent = await getMarketplaceTransactionFeePercent();
   return {
-    assets: rows.map(publicAsset),
+    assets: rows.map((row) => publicAsset(row, feePercent)),
     pagination: { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
   };
 }
 
 async function getAssetServices(assetId, accountId) {
   requireUuid(assetId);
+  const feePercent = await getMarketplaceTransactionFeePercent();
   const asset = await getAssetRepository(assetId, accountId);
   if (!asset) throw new AssetError('Asset not found.', 404, 'ASSET_NOT_FOUND');
-  return publicAsset(asset);
+  return publicAsset(asset, feePercent);
 }
 
 async function createAssetServices(accountId, payload) {
@@ -417,6 +423,9 @@ async function createAssetServices(accountId, payload) {
   } catch (error) {
     if (['ASSET_VERIFICATION_REQUIRED', 'ASSET_POST_LIMIT_REACHED', 'ASSET_POSTING_UNAVAILABLE'].includes(error.code)) {
       throw assetPostingError(error.code, error.eligibility);
+    }
+    if (error.code === 'INSUFFICIENT_CREDITS') {
+      throw new AssetError(`Insufficient credits for marketplace listing fee. Required: ${error.required}, Available: ${error.available}.`, 400, error.code);
     }
     if (error.code === 'ASSET_FILE_NOT_OWNED') {
       throw new AssetError('The uploaded file is unavailable or is not owned by this account.', 400, error.code);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, Bookmark, Calendar, CheckCircle2, Clock3, CornerDownRight, Download, Edit3, Eye, FileAudio, FileImage, FileVideo, Heart, Loader2, MessageSquare, PackageOpen, Pencil, Ruler, Send, ShoppingCart, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, Bookmark, Calendar, CheckCircle2, Clock3, CornerDownRight, Download, Edit3, Eye, FileAudio, FileImage, FileVideo, Heart, Loader2, MessageSquare, PackageOpen, Pencil, Ruler, Send, ShoppingCart, Star, Trash2, Video, Image as ImageIcon, AudioLines, LayoutTemplate, User } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/axios";
@@ -27,6 +27,16 @@ function formatDate(value: string, includeTime = false) {
   return new Intl.DateTimeFormat(undefined, includeTime
     ? { dateStyle: "medium", timeStyle: "short" }
     : { dateStyle: "medium" }).format(new Date(value));
+}
+
+function getTypeIcon(type: string) {
+  switch (type.toLowerCase()) {
+    case "video": return <Video className="h-3 w-3" />;
+    case "image": return <ImageIcon className="h-3 w-3" />;
+    case "audio": return <AudioLines className="h-3 w-3" />;
+    case "template": return <LayoutTemplate className="h-3 w-3" />;
+    default: return null;
+  }
 }
 
 function DetailSkeleton() {
@@ -375,62 +385,117 @@ export default function AssetDetails() {
       <main className="mx-auto w-full max-w-6xl p-5 md:p-8">
         <button type="button" onClick={() => navigate("/assets")} className="mb-5 inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"><ArrowLeft className="h-4 w-4" /> Back to Assets</button>
 
-        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
-          <AssetThumbnailCarousel asset={asset} />
-          <div className="p-5 md:p-7">
-            <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-blue-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-300">{asset.type}</span>{asset.is_purchased && !asset.is_owner && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-300"><CheckCircle2 className="h-3 w-3" /> Owned</span>}{asset.is_owner && <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${asset.status === "published" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300" : "bg-amber-500/10 text-amber-600 dark:text-amber-300"}`}>{asset.status}</span>}</div>
-                <h1 className="mt-3 break-words text-2xl font-bold md:text-3xl">{asset.name}</h1>
-                <p className="mt-2 text-sm text-gray-500 dark:text-zinc-400">Shared by <span className="font-semibold text-gray-800 dark:text-zinc-200">{asset.creator_name}</span>{asset.creator_handle ? ` · @${asset.creator_handle}` : ""}</p>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <button type="button" onClick={() => void updateEngagement("like")} disabled={Boolean(engagementPending)} className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${asset.is_liked ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300" : "border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`} aria-pressed={asset.is_liked}><Heart className={`h-4 w-4 ${asset.is_liked ? "fill-current" : ""}`} /> {asset.like_count}</button>
-                <button type="button" onClick={() => void updateEngagement("save")} disabled={Boolean(engagementPending)} className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${asset.is_saved ? "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`} aria-pressed={asset.is_saved}><Bookmark className={`h-4 w-4 ${asset.is_saved ? "fill-current" : ""}`} /> {asset.is_saved ? "Saved" : "Save"}</button>
-                <span className="mr-2 inline-flex items-center gap-1.5 text-lg font-bold text-amber-600 dark:text-amber-300"><CreditIcon className="h-5 w-5" /> {asset.price_credits.toLocaleString()} credits</span>
-                {asset.can_download ? (
-                  <button type="button" onClick={() => document.getElementById("asset-deliverables")?.scrollIntoView({ behavior: "smooth", block: "center" })} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
-                    <PackageOpen className="h-4 w-4" /> View contents
-                  </button>
-                ) : (
-                  <button type="button" onClick={requestPurchase} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
-                    <ShoppingCart className="h-4 w-4" /> {asset.type === "template" ? "Use this template" : asset.price_credits === 0 ? "Get asset" : "Purchase asset"}
-                  </button>
-                )}
-                {asset.is_owner && <><button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"><Pencil className="h-4 w-4" /> Edit</button><button type="button" onClick={() => setAssetToDelete(true)} className="rounded-xl border border-red-500/20 p-2.5 text-red-600 transition hover:bg-red-500/10 dark:text-red-300" aria-label="Delete asset"><Trash2 className="h-4 w-4" /></button></>}
-              </div>
-            </div>
+        <div className="flex flex-col lg:flex-row gap-6 mb-7">
+          <section className="lg:w-[45%] shrink-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
+            <AssetThumbnailCarousel asset={asset} />
+          </section>
 
-            <p className="mt-6 whitespace-pre-wrap text-sm leading-7 text-gray-700 dark:text-zinc-300">{asset.description}</p>
-
-            {asset.tags.length > 0 && (
-              <div className="mt-5 flex flex-wrap gap-2" aria-label="Asset tags">
-                {asset.tags.map((tag) => (
-                  <span key={tag.toLocaleLowerCase()} className="rounded-lg bg-blue-500/10 px-2.5 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300">#{tag}</span>
-                ))}
-              </div>
-            )}
-
-            {asset.is_owner && (
-              <div className="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
-                <div className="flex items-start gap-3">
-                  <CreditIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
-                  <div className="min-w-0 flex-1">
-                    <h2 className="text-sm font-bold text-gray-900 dark:text-white">Earnings per purchase</h2>
-                    <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-zinc-400">A {asset.transaction_fee_percent}% marketplace transaction fee is deducted from your sale proceeds.</p>
-                    <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
-                      <div><dt className="text-xs text-gray-500 dark:text-zinc-500">Listing price</dt><dd className="mt-1 font-bold">{asset.price_credits.toLocaleString()} credits</dd></div>
-                      <div><dt className="text-xs text-gray-500 dark:text-zinc-500">Transaction fee</dt><dd className="mt-1 font-bold text-amber-700 dark:text-amber-300">−{asset.transaction_fee_credits.toLocaleString()} credits</dd></div>
-                      <div><dt className="text-xs text-gray-500 dark:text-zinc-500">You receive</dt><dd className="mt-1 font-bold text-emerald-600 dark:text-emerald-300">{asset.owner_net_credits.toLocaleString()} credits</dd></div>
-                    </dl>
+          <section className="lg:w-[55%] flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none p-5 md:p-7">
+            <div className="flex flex-col h-full">
+              <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="relative overflow-hidden flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10 uppercase tracking-wider">
+                      <span className="relative z-10 flex items-center gap-1.5">
+                        {getTypeIcon(asset.type)}
+                        {asset.type}
+                      </span>
+                      <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+                    </span>
+                    <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10 uppercase tracking-wider">
+                      <ShoppingCart className="h-3 w-3" />
+                      {asset.purchase_count || 0} Sales
+                    </span>
+                    <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-[10px] font-semibold border border-white/10 text-white uppercase tracking-wider">
+                      <Star className={`h-3 w-3 ${asset.average_rating > 0 ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
+                      <span className={asset.average_rating > 0 ? "text-yellow-400" : "text-gray-300 dark:text-zinc-400"}>
+                        {asset.average_rating > 0 ? asset.average_rating.toFixed(1) : "N/A"}
+                      </span>
+                    </span>
+                    {asset.is_purchased && !asset.is_owner && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-300"><CheckCircle2 className="h-3 w-3" /> Owned</span>}
+                    {asset.is_owner && <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${asset.status === "published" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300" : "bg-amber-500/10 text-amber-600 dark:text-amber-300"}`}>{asset.status}</span>}
                   </div>
+                  <div className="mt-4 flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-xl font-bold text-amber-600 dark:text-amber-300"><CreditIcon className="h-6 w-6" /> {asset.price_credits.toLocaleString()} credits</span>
+                  </div>
+                  <h1 className="mt-3 break-words text-2xl font-bold md:text-3xl">{asset.name}</h1>
                 </div>
               </div>
-            )}
 
-            <div id="asset-deliverables" className="scroll-mt-24">
-              {asset.bundle_file_count > 0 && (asset.type !== "template" || asset.can_download) && (
-                <section className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.025]">
+              <p className="mt-6 whitespace-pre-wrap text-sm leading-7 text-gray-700 dark:text-zinc-300 flex-1">{asset.description}</p>
+
+              {asset.tags.length > 0 && (
+                <div className="mt-5 flex flex-wrap gap-2" aria-label="Asset tags">
+                  {asset.tags.map((tag) => (
+                    <span key={tag.toLocaleLowerCase()} className="rounded-lg bg-blue-500/10 px-2.5 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300">#{tag}</span>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 pt-5 dark:border-white/5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => void updateEngagement("like")} disabled={Boolean(engagementPending)} className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${asset.is_liked ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300" : "border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`} aria-pressed={asset.is_liked}><Heart className={`h-4 w-4 ${asset.is_liked ? "fill-current" : ""}`} /> {asset.like_count}</button>
+                  <button type="button" onClick={() => void updateEngagement("save")} disabled={Boolean(engagementPending)} className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${asset.is_saved ? "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`} aria-pressed={asset.is_saved}><Bookmark className={`h-4 w-4 ${asset.is_saved ? "fill-current" : ""}`} /> {asset.is_saved ? "Saved" : "Save"}</button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {asset.can_download ? (
+                    <button type="button" onClick={() => document.getElementById("asset-deliverables")?.scrollIntoView({ behavior: "smooth", block: "center" })} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
+                      <PackageOpen className="h-4 w-4" /> View contents
+                    </button>
+                  ) : (
+                    <button type="button" onClick={requestPurchase} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
+                      <ShoppingCart className="h-4 w-4" /> {asset.type === "template" ? "Use this template" : asset.price_credits === 0 ? "Get asset" : "Purchase asset"}
+                    </button>
+                  )}
+                  {asset.is_owner && <><button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"><Pencil className="h-4 w-4" /> Edit</button><button type="button" onClick={() => setAssetToDelete(true)} className="rounded-xl border border-red-500/20 p-2.5 text-red-600 transition hover:bg-red-500/10 dark:text-red-300" aria-label="Delete asset"><Trash2 className="h-4 w-4" /></button></>}
+                </div>
+              </div>
+
+              {asset.is_owner && (
+                <div className="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
+                  <div className="flex items-start gap-3">
+                    <CreditIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-sm font-bold text-gray-900 dark:text-white">Earnings per purchase</h2>
+                      <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-zinc-400">A {asset.transaction_fee_percent}% marketplace transaction fee is deducted from your sale proceeds.</p>
+                      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+                        <div><dt className="text-xs text-gray-500 dark:text-zinc-500">Listing price</dt><dd className="mt-1 font-bold">{asset.price_credits.toLocaleString()} credits</dd></div>
+                        <div><dt className="text-xs text-gray-500 dark:text-zinc-500">Transaction fee</dt><dd className="mt-1 font-bold text-amber-700 dark:text-amber-300">−{asset.transaction_fee_credits.toLocaleString()} credits</dd></div>
+                        <div><dt className="text-xs text-gray-500 dark:text-zinc-500">You receive</dt><dd className="mt-1 font-bold text-emerald-600 dark:text-emerald-300">{asset.owner_net_credits.toLocaleString()} credits</dd></div>
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <section className="mb-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
+          <div className="flex items-center gap-4">
+            <img src={asset.creator_avatar_path ? mediaUrl(asset.creator_avatar_path) : `https://ui-avatars.com/api/?name=${encodeURIComponent(asset.creator_name || 'User')}&background=0D8ABC&color=fff&size=128`} alt={asset.creator_name} className="h-12 w-12 rounded-full object-cover" />
+            <div>
+              <p className="text-[9px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-500 mb-0.5">Uploaded By</p>
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">{asset.creator_name}</p>
+                <div className="flex items-center gap-1 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 border border-gray-100 dark:border-white/5 shrink-0">
+                  <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
+                  <span>{asset.creator_average_rating > 0 ? asset.creator_average_rating.toFixed(1) : "0.0"} ({asset.creator_rating_count})</span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-zinc-400">{asset.creator_handle ? `@${asset.creator_handle}` : ""}</p>
+            </div>
+          </div>
+          <button type="button" onClick={() => navigate(`/profile/${asset.owner_account_id}`)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0">
+            <User className="h-3.5 w-3.5 text-blue-400" />
+            <span>View Profile</span>
+          </button>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 md:p-7 shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
+          <div id="asset-deliverables" className="scroll-mt-24">
+            {asset.bundle_file_count > 0 && (asset.type !== "template" || asset.can_download) && (
+              <section className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.025]">
                   <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
                     <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Package contents</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset.bundle_file_count} protected original {asset.bundle_file_count === 1 ? "file" : "files"}</p></div>
                     <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400">Low-quality previews · originals require ownership</span>
@@ -459,7 +524,6 @@ export default function AssetDetails() {
               <Metadata icon={Clock3} label="Duration" value={readableDuration(asset.duration_seconds)} />
               <Metadata icon={MessageSquare} label="Package size" value={readableSize(asset.bundle_files.reduce((total, file) => total + Number(file.size_bytes || 0), 0))} />
             </dl>
-          </div>
         </section>
 
         <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1fr)_320px]">

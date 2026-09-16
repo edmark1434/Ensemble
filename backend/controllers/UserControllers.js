@@ -165,6 +165,36 @@ async function loginCredentials(req, res) {
                 existSession: true,
             });
         }
+
+        // Check if staff 2FA is dynamically required
+        if (credentials.type === 'Staff') {
+            const { getSecuritySettings } = require('../lib/ModerationPolicy');
+            const security = await getSecuritySettings();
+            if (security?.requireStaff2fa) {
+                const staffEmail = (credentials.email_address || credentials.email || '').toLowerCase();
+                const submitted2fa = req.body.twoFactorCode;
+                const expected2fa = await redis.get(`staff2fa:${staffEmail}`);
+                if (!submitted2fa) {
+                    const crypto = require('crypto');
+                    const code = crypto.randomInt(100000, 999999).toString();
+                    await redis.set(`staff2fa:${staffEmail}`, code, { EX: 10 * 60 });
+                    return res.status(200).json({
+                        success: true,
+                        require2fa: true,
+                        message: 'Two-factor authentication code required for staff login',
+                        email: staffEmail,
+                    });
+                } else if (submitted2fa !== expected2fa) {
+                    return res.status(401).json({
+                        success: false,
+                        message: 'Invalid two-factor authentication code',
+                    });
+                } else {
+                    await redis.del(`staff2fa:${staffEmail}`);
+                }
+            }
+        }
+
         credentials.email = credentials.email_address; // Ensure email is included in the credentials for token generation
         delete credentials.email_address; // Remove redundant email_address field
         delete credentials.password_hash; // Ensure password hash is not included in the access token payload
@@ -200,7 +230,9 @@ async function loginCredentials(req, res) {
                 role: credentials.role,
                 userId: credentials.userId,
                 displayName: credentials.display_name,
-                staffId: credentials.staff_id ?? credentials.staffId
+                staffId: credentials.staff_id ?? credentials.staffId,
+                avatar_file_id: credentials.avatar_file_id,
+                avatar_preset_url: credentials.avatar_preset_url,
             },
         });
     } catch (err) {
@@ -328,10 +360,30 @@ async function LogoutUsers(req, res) {
     }
 }
 
-async function getCurrentUser(req,res){
+async function getCurrentUser(req, res) {
+    let sessionUser = req.session || null;
+    if (sessionUser && (sessionUser.account_id || sessionUser.accountId)) {
+        const accountId = sessionUser.account_id || sessionUser.accountId;
+        if (!sessionUser.avatar_preset_url || !sessionUser.avatar_file_id) {
+            try {
+                const { getProfileCurrentAvatarByAccountId } = require('../repositories/ProfileRepositories');
+                const avatar = await getProfileCurrentAvatarByAccountId(accountId);
+                if (avatar) {
+                    sessionUser.avatar_file_id = avatar.file_id;
+                    sessionUser.avatar_preset_url = avatar.path;
+                    const sessionId = req.cookies?.sessionId;
+                    if (sessionId && redis) {
+                        redis.set(`session:${sessionId}`, JSON.stringify(sessionUser), { KEEPTTL: true }).catch(() => {});
+                    }
+                }
+            } catch (err) {
+                console.error('Error hydrating avatar in getCurrentUser:', err);
+            }
+        }
+    }
     res.status(200).json({
         success: true,
-        user: req.session || null,
+        user: sessionUser,
     });
 }
 

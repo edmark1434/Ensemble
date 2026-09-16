@@ -34,8 +34,10 @@ const { getAllCountriesController,
     getAllPlacesController
 } = require('../controllers/SystemControllers')
 const editorRoutes = require('./Editor');
+const configurationRoutes = require('./Configuration');
 
 router.get('/csrf-token', checkSession, issueCsrfToken);
+router.use('/configuration', configurationRoutes);
 router.use('/chat', chatRoutes);
 router.use(requireCompletedOnboarding);
 router.use('/onboarding', onboardingRoutes);

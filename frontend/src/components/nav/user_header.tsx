@@ -57,9 +57,44 @@ const getSubscriptionIcon = (type: string) => {
   }
 };
 
+const constructAvatarUrl = (path?: string | null): string => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  // Map preset profile avatars (e.g. /public/p1.png or p1.png) to local Vite static assets
+  const presetMatch = path.match(/p\d+\.png$/i);
+  if (presetMatch) {
+    return `/profile_presets/${presetMatch[0]}`;
+  }
+  const cloudfrontUrl = (import.meta.env.VITE_CLOUDFRONT_URL || '').replace(/\/$/, '');
+  const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  if (cloudfrontUrl) {
+    return `${cloudfrontUrl}/${cleanPath}`;
+  }
+  return `/${cleanPath}`;
+};
+
+const getFallbackAvatar = (name?: string): string => {
+  const cleanName = encodeURIComponent((name || 'User').trim());
+  return `https://ui-avatars.com/api/?name=${cleanName}&background=0D8ABC&color=fff&size=128`;
+};
+
+interface CachedHeaderData {
+  accountId: string;
+  credits: number;
+  avatarUrl: string;
+  subscriptionPlan: "Free" | "Premium" | "Business";
+  isVerified: boolean;
+  lastFetched: number;
+}
+
+let cachedHeaderData: CachedHeaderData | null = null;
+let pendingHeaderFetch: Promise<void> | null = null;
+
 const UserHeader: React.FC<UserHeaderProps> = ({
   pageTitle,
-  userAvatar = "https://i.pravatar.cc/150?u=john",
+  userAvatar,
 }) => {
   const navigate = useNavigate();
 
@@ -85,20 +120,60 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const isGlobalLoading = useGlobalState((state) => state.isLoading);
   const isSessionLoading = isGlobalLoading || (!userInfo?.account_id && !isGuestMode);
   const isGuestView = isGuestMode || (!isSessionLoading && !userInfo?.account_id);
-  const [showHeader, setShowHeader] = useState(false);
-  const [isCheckingAccess, setIsCheckingAccess] = useState(true);
-  const [userCredits, setCredits] = useState(0);
-  const [userAvatarState, setUserAvatarState] = useState('');
-  const [userSubscriptionPlan, setUserSubscriptionPlan] = useState<"Free" | "Premium" | "Business">("Free");
-  const [isVerified, setIsVerified] = useState(false);
+
+  const hasCachedData = Boolean(
+    cachedHeaderData &&
+    userInfo?.account_id &&
+    cachedHeaderData.accountId === String(userInfo.account_id)
+  );
+
+  const displayName = userInfo?.display_name || userInfo?.displayName || userInfo?.username || "User";
+  const defaultFallback = userAvatar || getFallbackAvatar(displayName);
+
+  const initialRawAvatar = hasCachedData
+    ? cachedHeaderData!.avatarUrl
+    : (userInfo?.avatar_preset_url || userInfo?.avatar_url || userInfo?.avatar || '');
+
+  const initialAvatar = constructAvatarUrl(initialRawAvatar);
+
+  const initialCredits = hasCachedData
+    ? cachedHeaderData!.credits
+    : (userInfo?.wallet?.balance_credits !== undefined ? Number(userInfo?.wallet?.balance_credits) : null);
+
+  const initialPlan = hasCachedData
+    ? cachedHeaderData!.subscriptionPlan
+    : ((userInfo?.subscription_plan as "Free" | "Premium" | "Business") || 'Free');
+
+  const initialVerified = hasCachedData
+    ? cachedHeaderData!.isVerified
+    : (useGlobalState.getState().isVerified || userInfo?.is_verified || false);
+
+  const canShowImmediately = Boolean(isGuestView || userInfo?.account_id || hasCachedData);
+
+  const [showHeader, setShowHeader] = useState(canShowImmediately);
+  const [isCheckingAccess, setIsCheckingAccess] = useState(!canShowImmediately);
+  const [userCredits, setCredits] = useState<number | null>(initialCredits);
+  const [userAvatarState, setUserAvatarState] = useState<string>(initialAvatar);
+  const [userSubscriptionPlan, setUserSubscriptionPlan] = useState<"Free" | "Premium" | "Business">(initialPlan);
+  const [isVerified, setIsVerified] = useState<boolean>(initialVerified);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
 
- useEffect(() => {
-  setHasUnreadNotifications(
-    notifications.some((notification) => !notification.is_read)
-  );
-}, [notifications]);
+  useEffect(() => {
+    const rawPath = userInfo?.avatar_preset_url || userInfo?.avatar_url || userInfo?.avatar;
+    if (rawPath) {
+      const url = constructAvatarUrl(rawPath);
+      if (url && (!userAvatarState || userAvatarState !== url)) {
+        setUserAvatarState(url);
+      }
+    }
+  }, [userInfo?.avatar_preset_url, userInfo?.avatar_url, userInfo?.avatar]);
+
+  useEffect(() => {
+    setHasUnreadNotifications(
+      notifications.some((notification) => !notification.is_read)
+    );
+  }, [notifications]);
 
 
 useEffect(() => {
@@ -157,7 +232,12 @@ useEffect(() => {
 
   const handleWalletBalanceUpdated = ({ balance_credits }: { balance_credits: number }) => {
     const nextBalance = Number(balance_credits);
-    if (Number.isFinite(nextBalance)) setCredits(nextBalance);
+    if (Number.isFinite(nextBalance)) {
+      setCredits(nextBalance);
+      if (cachedHeaderData) {
+        cachedHeaderData.credits = nextBalance;
+      }
+    }
   };
 
   socket.on("notificationRead", handleNotificationRead);
@@ -207,7 +287,7 @@ useEffect(() => {
 
   useEffect(() => {
     if (isSessionLoading) {
-      setIsCheckingAccess(true);
+      if (!canShowImmediately) setIsCheckingAccess(true);
       return;
     }
     if (isGuestView) {
@@ -215,11 +295,27 @@ useEffect(() => {
       setIsCheckingAccess(false);
       return;
     }
-    setIsCheckingAccess(true);
-    const checkRole = async () => {
+
+    setShowHeader(true);
+    setIsCheckingAccess(false);
+
+    const now = Date.now();
+    const isCacheFresh = cachedHeaderData &&
+      cachedHeaderData.accountId === String(userInfo?.account_id) &&
+      (now - cachedHeaderData.lastFetched < 60000);
+
+    if (isCacheFresh) {
+      setCredits(cachedHeaderData.credits);
+      setUserAvatarState(cachedHeaderData.avatarUrl);
+      setUserSubscriptionPlan(cachedHeaderData.subscriptionPlan);
+      setIsVerified(cachedHeaderData.isVerified);
+      return;
+    }
+
+    let cancelled = false;
+    const refreshHeaderData = async () => {
       try {
-        const [, getWalletResponse, getAvatarResponse, getSubscriptionPlanResponse, getVerificationResponse] = await Promise.all([
-          api.get("/api/users/check-user-role"),
+        const [getWalletResponse, getAvatarResponse, getSubscriptionPlanResponse, getVerificationResponse] = await Promise.all([
           api.get("/api/accounts/wallet", {
             params: { type: 'account_wallets' },
           }),
@@ -228,38 +324,57 @@ useEffect(() => {
           api.get('/api/verification/status'),
         ]);
 
-        // ✅ Fix: Properly construct avatar URL
-        setUserSubscriptionPlan(getSubscriptionPlanResponse.data?.planDetails.plan_name);
-        setIsVerified(getVerificationResponse.data?.data?.is_verified || false);
-          useGlobalState.getState().setIsVerified(getVerificationResponse.data?.data?.is_verified || false);
+        if (cancelled) return;
+
+        const planName = (getSubscriptionPlanResponse.data?.planDetails?.plan_name as "Free" | "Premium" | "Business") || "Free";
+        const verified = Boolean(getVerificationResponse.data?.data?.is_verified);
+        useGlobalState.getState().setIsVerified(verified);
+
         let avatarUrl = '';
         if (getAvatarResponse.data?.data?.path) {
-          const path = getAvatarResponse.data.data.path;
-          
-          // Check if it's already a full URL
-          if (path.startsWith('http')) {
-            avatarUrl = path;
-          } else {
-            // Use CloudFront URL for profile images
-            const cloudfrontUrl = import.meta.env.VITE_CLOUDFRONT_URL;
-            // Remove leading slash if exists to avoid double slashes
-            const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-            avatarUrl = `${cloudfrontUrl}/${cleanPath}`;
-          }
+          avatarUrl = constructAvatarUrl(getAvatarResponse.data.data.path);
+        } else if (userInfo?.avatar_preset_url || userInfo?.avatar_url || userInfo?.avatar) {
+          avatarUrl = constructAvatarUrl(userInfo?.avatar_preset_url || userInfo?.avatar_url || userInfo?.avatar);
         }
 
-        setUserAvatarState(avatarUrl);
-        setCredits(getWalletResponse.data.wallet.balance_credits || 0);
-        setShowHeader(true);
+        const credits = Number(getWalletResponse.data?.wallet?.balance_credits) || 0;
+
+        cachedHeaderData = {
+          accountId: String(userInfo?.account_id),
+          credits,
+          avatarUrl: avatarUrl || cachedHeaderData?.avatarUrl || '',
+          subscriptionPlan: planName,
+          isVerified: verified,
+          lastFetched: Date.now(),
+        };
+
+        setUserSubscriptionPlan(planName);
+        setIsVerified(verified);
+        if (avatarUrl) {
+          setUserAvatarState(avatarUrl);
+          if (userInfo && userInfo.avatar_preset_url !== avatarUrl) {
+            useGlobalState.getState().setUser({
+              ...userInfo,
+              avatar_preset_url: avatarUrl,
+            });
+          }
+        }
+        setCredits(credits);
       } catch (err) {
-        console.error("Error checking user role:", err);
-        setShowHeader(false);
-      } finally {
-        setIsCheckingAccess(false);
+        if (!cancelled) console.error("Error refreshing header data:", err);
       }
     };
-    checkRole();
-  }, [isGuestView, userInfo?.account_id]);
+
+    if (!pendingHeaderFetch) {
+      pendingHeaderFetch = refreshHeaderData().finally(() => {
+        pendingHeaderFetch = null;
+      });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canShowImmediately, isGuestView, isSessionLoading, userInfo?.account_id]);
 
   useEffect(() => {
     const query = headerSearchInput.replace(/^@/, "").trim();
@@ -362,6 +477,7 @@ useEffect(() => {
       console.error("Unable to close the Firebase session during logout.");
     }
 
+    cachedHeaderData = null;
     useChatState.getState().reset();
     useGlobalState.getState().clearUser();
     setShowHeader(false);
@@ -497,11 +613,17 @@ useEffect(() => {
                     onClick={handleTopUp}
                     onMouseEnter={() => setIsHovered(true)}
                     onMouseLeave={() => setIsHovered(false)}
-                    className="group relative flex items-center gap-2 overflow-hidden rounded-full border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-amber-500/10 to-orange-500/10 px-3 py-1.5 transition-all duration-300 hover:scale-105"
+                    className="group relative flex items-center overflow-hidden rounded-full border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-amber-500/10 to-orange-500/10 px-3 py-1.5 transition-all duration-300 hover:scale-105"
                   >
                     <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-                    <CreditIcon className="h-4 w-4 text-yellow-500" />
-                    <span className="text-sm font-bold text-gray-900 dark:text-yellow-200">{userCredits.toLocaleString()}</span>
+                    <CreditIcon className={`h-4 w-4 text-yellow-500 transition-all duration-500 ${userCredits === null ? "animate-pulse" : ""}`} />
+                    <span
+                      className={`text-sm font-bold text-gray-900 dark:text-yellow-200 overflow-hidden whitespace-nowrap transition-all duration-500 ease-out ${
+                        userCredits === null ? "max-w-0 opacity-0 ml-0" : "max-w-[120px] opacity-100 ml-2"
+                      }`}
+                    >
+                      {userCredits !== null ? userCredits.toLocaleString() : ""}
+                    </span>
                     {isHovered && (
                       <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] text-white shadow-lg animate-fade-in">
                         Go to Credit Shop
@@ -541,12 +663,14 @@ useEffect(() => {
                     className="flex items-center gap-2 rounded-lg p-1 transition hover:bg-gray-100 dark:hover:bg-white/10"
                   >
                     <img 
-                      src={userAvatarState || userAvatar} 
+                      src={userAvatarState || defaultFallback} 
                       alt={userInfo?.username || "User"} 
                       className="h-8 w-8 rounded-full object-cover ring-2 ring-gray-200 dark:ring-white/20"
                       onError={(e) => {
-                        // o. Fallback if image fails to load
-                        (e.target as HTMLImageElement).src = userAvatar;
+                        const target = e.target as HTMLImageElement;
+                        if (target.src !== defaultFallback) {
+                          target.src = defaultFallback;
+                        }
                       }}
                     />
                     <div className="text-left hidden md:block">

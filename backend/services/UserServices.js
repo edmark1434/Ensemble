@@ -147,6 +147,13 @@ async function getUsersByListOfIdsServices(userIds) {
 
 //function to register a new user, handling both standard email/password registration and OAuth-based registration, including validation of input, checking for existing users, creating accounts and users in the database, hashing passwords, and returning the created user and account information
 async function registerUser(signupPayload = {}, options = {}) {
+    const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
+    const { DEFAULT_SETTINGS } = require('../lib/PlatformConfiguration');
+    const platform = await getSectionValue('platform').catch(() => DEFAULT_SETTINGS.platform);
+
+    if (platform && platform.registrationEnabled === false) {
+        throw new ServiceError('User registration is currently disabled.', 403);
+    }
 
     //normalize and validate the signup input
     const {
@@ -251,11 +258,13 @@ async function registerUser(signupPayload = {}, options = {}) {
     const { getModerationSettings } = require('../lib/ModerationPolicy');
     const moderation = await getModerationSettings();
     const accountStatus = moderation.autoHoldNewAccounts ? 'Locked' : 'active';
+    const defaultMerit = Number(platform?.defaultUserMerit);
     const account = await createAccount({
         displayName: [firstName, middleName, lastName, suffix].filter(Boolean).join(' ') || null,
         handle: username ?? `${firstName?.toLowerCase() || 'user'}${lastName ? lastName.toLowerCase() : ''}${Math.floor(1000 + Math.random() * 9000)}`,
         type: type ?? 'User',
         status: accountStatus,
+        meritScore: Number.isFinite(defaultMerit) ? defaultMerit : 50,
     });
     //hash the password if provided, otherwise set to null for OAuth users
     const passwordHash = options.passwordHash || (password ? await bcrypt.hash(password, SALT_ROUNDS) : null);
@@ -282,6 +291,17 @@ async function registerUser(signupPayload = {}, options = {}) {
 
     await redisClient.del(`sessionCredentials:${emailAddress}`);
     await redisClient.del(`verificationCode:${emailAddress}`);
+
+    try {
+        const { dispatchPlatformNotification } = require('./PlatformAlertServices');
+        dispatchPlatformNotification('NEW_SIGNUP', {
+            firstName: user.first_name,
+            lastName: user.last_name,
+            email: user.email_address,
+            displayName: account.display_name,
+        }).catch(() => {});
+    } catch {}
+
     //return the created user and account information
     return {
         credentials:{
@@ -445,13 +465,27 @@ async function AccessTokens(payload){
 async function RefreshTokens(payload){
     return jwt.sign(payload, process.env.REFRESH_TOKEN_JWT_SECRET, { expiresIn: '30d' });
 }
+
+async function getSessionTimeoutSeconds() {
+    try {
+        const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
+        const platform = await getSectionValue('platform');
+        const minutes = Number(platform?.sessionTimeoutMinutes);
+        if (Number.isFinite(minutes) && minutes > 0) {
+            return Math.floor(minutes * 60);
+        }
+    } catch (_err) {}
+    return 60 * 60; // default 60 minutes
+}
+
 async function createSessionId(credentials){
     const sessionId = uuidv4();
+    const timeoutSeconds = await getSessionTimeoutSeconds();
     await redisClient.set(
         `session:${sessionId}`,
         JSON.stringify(credentials),
-        { EX: 60 * 60 * 24 * 30 }
-    ); // Store as JSON string because Redis string values cannot be raw objects
+        { EX: timeoutSeconds }
+    ); // Store as JSON string with dynamically configured session timeout
     return sessionId;
 }
 
