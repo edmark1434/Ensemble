@@ -4,13 +4,15 @@ import { Label } from "@/components/ui/label";
 import { dispatch } from "@designcombo/events";
 import { EDIT_OBJECT } from "@designcombo/state";
 import { ITrackItem } from "@designcombo/types";
-import { useEffect, useState } from "react";
-import {Crop, FlipHorizontal, FlipVertical, Link, RotateCw, Unlink} from "lucide-react";
+import React, { useEffect, useState } from "react";
+import {Crop, FlipHorizontal, FlipVertical, Info, Link, RotateCw, Unlink} from "lucide-react";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
+import {cn} from "cn";
 
 interface LayoutMediaControlsProps {
   trackItem: ITrackItem & any;
+  showCrop?: boolean;
 }
 
 const getScaleXY = (transform?: string): [number, number] => {
@@ -18,7 +20,7 @@ const getScaleXY = (transform?: string): [number, number] => {
   return match ? [parseFloat(match[1]), parseFloat(match[2])] : [1, 1];
 };
 
-export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => {
+export const LayoutMediaControls = ({ trackItem, showCrop = true }: LayoutMediaControlsProps) => {
   const id = trackItem?.id;
   const details = trackItem?.details ?? {};
   const [isLinked, setIsLinked] = useState(true);
@@ -100,22 +102,24 @@ export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => 
       <Label className="font-sans text-sm font-semibold">Layout</Label>
       <div className="flex flex-col gap-3">
         <div className="flex gap-2">
-          <MediaDimension
-            axis="width"
-            label="Width"
-            baseValue={baseW}
-            transform={details.transform}
-            isLinked={isLinked}
-            onCommit={commitDimension}
-          />
-          <MediaDimension
-            axis="height"
-            label="Height"
-            baseValue={baseH}
-            transform={details.transform}
-            isLinked={isLinked}
-            onCommit={commitDimension}
-          />
+          <div className={cn("flex gap-2", showCrop ? "flex-2" : "flex-5")}>
+            <MediaDimension
+              axis="width"
+              label="Width"
+              baseValue={baseW}
+              transform={details.transform}
+              isLinked={isLinked}
+              onCommit={commitDimension}
+            />
+            <MediaDimension
+              axis="height"
+              label="Height"
+              baseValue={baseH}
+              transform={details.transform}
+              isLinked={isLinked}
+              onCommit={commitDimension}
+            />
+          </div>
           <div className="flex flex-col gap-2 flex-1">
             <div className="flex flex-1 items-center text-xs text-muted-foreground"></div>
             <div className="flex gap-1 flex-1">
@@ -127,7 +131,7 @@ export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => 
                     onClick={() => setIsLinked((prev) => !prev)}
                     aria-label={isLinked ? "Unlink dimensions" : "Link dimensions"}
                     aria-pressed={isLinked}
-                    className={"flex-1"}
+                    className="flex-1"
                   >
                     {isLinked ? <Link size={16} /> : <Unlink size={16} />}
                   </Button>
@@ -140,26 +144,32 @@ export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => 
                 </TooltipContent>
               </Tooltip>
 
-              <Tooltip delayDuration={10}>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={"secondary"}
-                    size={"icon"}
-                    onClick={() => setCropTarget(trackItem)}
-                    className={"flex-1"}
+              {showCrop && (
+                <Tooltip delayDuration={10}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={"secondary"}
+                      size={"icon"}
+                      onClick={() => setCropTarget(trackItem)}
+                      className={"flex-1"}
+                    >
+                      <Crop size={16} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side={"bottom"} align="center" sideOffset={1}
+                    className={"flex gap-2 items-center"}
                   >
-                    <Crop size={16} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side={"bottom"} align="center" sideOffset={1}
-                  className={"flex gap-2 items-center"}
-                >
-                  Crop
-                </TooltipContent>
-              </Tooltip>
+                    Crop
+                  </TooltipContent>
+                </Tooltip>
+              )}
             </div>
           </div>
+        </div>
+        <div className="flex gap-2 items-start text-xs text-muted-foreground text-pretty">
+          <Info size={16} />
+          <span>You can achieve stretching via unlinked width and height</span>
         </div>
         <div className="flex gap-2">
           <MediaPosition

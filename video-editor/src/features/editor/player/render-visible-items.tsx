@@ -40,7 +40,7 @@ export function renderVisibleItems({
       const item = trackItemsMap[group[0].id];
       if (skipIfNestedScene(item)) return null;
       return SequenceItem[item.type](item, {
-        fps, size, frame, handleTextChange, onTextBlur, editableTextId, isTransition: false,
+        fps, size, frame, handleTextChange, onTextBlur, editableTextId, isTransition: false, nested,
       });
     }
 
@@ -67,7 +67,7 @@ export function renderVisibleItems({
           const item = trackItemsMap[g.id];
           if (skipIfNestedScene(item)) return null;
           return SequenceItem[item.type](item, {
-            fps, size, frame, handleTextChange, onTextBlur, editableTextId, isTransition: true,
+            fps, size, frame, handleTextChange, onTextBlur, editableTextId, isTransition: true, nested,
           });
         })}
       </TransitionSeries>

@@ -10,6 +10,8 @@ export const getTargetControls = (targetType: string): string[] => {
       return ["nw", "n", "ne", "w", "e", "sw", "s", "se"];
     case "group":
       return ["nw", "ne", "sw", "se"];
+    case "scene":
+      return ["nw", "ne", "sw", "se"];
     default:
       return ["nw", "ne", "sw", "se"];
   }
@@ -69,6 +71,15 @@ export const getTargetAbles = (targetType: string): ITargetAbles => {
         scalable: true,
         keepRatio: true,
 
+        draggable: true,
+        snappable: true
+      };
+    case "scene":
+      return {
+        rotatable: true,
+        resizable: false,
+        scalable: true,
+        keepRatio: true,
         draggable: true,
         snappable: true
       };
