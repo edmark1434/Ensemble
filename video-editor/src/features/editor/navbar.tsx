@@ -40,6 +40,13 @@ import {Kbd, KbdGroup} from "@/components/ui/kbd";
 import {cn} from "@/lib/utils";
 import type * as Y from "yjs";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 export default function Navbar({
   user,
   stateManager,
@@ -136,9 +143,20 @@ export default function Navbar({
       <DownloadProgressModal />
 
       <div className="flex items-center gap-2">
-        <div className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-md invert dark:invert-0">
-          <LogoIcons.ensemble />
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <div className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-md invert dark:invert-0 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+              <LogoIcons.ensemble />
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-48 ml-2 mt-1 z-[100]">
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <a href={process.env.NEXT_PUBLIC_MAIN_APP_URL ? `${process.env.NEXT_PUBLIC_MAIN_APP_URL}/projects` : 'http://localhost:5173/projects'}>
+                Return to Projects
+              </a>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <div className=" pointer-events-auto flex h-10 items-center px-1.5">
           {!viewOnly && (

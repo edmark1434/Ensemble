@@ -33,12 +33,14 @@ const { issueCsrfToken } = require('../middleware/CsrfProtection');
 const { getAllCountriesController,
     getAllPlacesController
 } = require('../controllers/SystemControllers')
+const projectRoutes = require('./Project');
 const editorRoutes = require('./Editor');
 const configurationRoutes = require('./Configuration');
 
 router.get('/csrf-token', checkSession, issueCsrfToken);
 router.use('/configuration', configurationRoutes);
 router.use('/chat', chatRoutes);
+router.use('/projects', projectRoutes);
 router.use(requireCompletedOnboarding);
 router.use('/onboarding', onboardingRoutes);
 router.use('/inbox', inboxRoutes);
