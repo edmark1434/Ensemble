@@ -90,6 +90,7 @@ export const Scene = ({ item, options }: { item: ISceneTrackItem; options: Seque
                 fps={fps}
                 muted={details.volume === 0}
                 outerWidth={details.width}
+                outerHeight={details.height}
               />
             )}
           </ContentAnim>
@@ -108,29 +109,33 @@ export const Scene = ({ item, options }: { item: ISceneTrackItem; options: Seque
 };
 
 const SceneContentLayer = ({
-                             content,
-                             fps,
-                             muted,
-                             outerWidth
-                           }: {
+  content,
+  fps,
+  muted,
+  outerWidth,
+  outerHeight
+}: {
   content: SceneRenderContent;
   fps: number;
   muted: boolean;
   outerWidth?: number;
+  outerHeight?: number;
 }) => {
-  // Remotion's frame is relative to the nearest ancestor <Sequence> —
-  // BaseSequence already put us inside the scene's own Sequence, so this
-  // is the scene-local frame, exactly what the nested items need.
   const frame = useCurrentFrame();
 
-  // Falls back to unscaled (old scenes with no seeded details.width yet)
-  // rather than blowing up — scale just stays 1 until width is backfilled.
   const nativeWidth = content.size?.width || outerWidth || 1;
-  const nativeHeight = content.size?.height || nativeWidth;
-  const scale = outerWidth ? outerWidth / nativeWidth : 1;
+  const nativeHeight = content.size?.height || outerHeight || nativeWidth;
 
-  // Scene-level mute wins over whatever each nested item's own volume
-  // says — same semantics as toggling mute on the scene item itself.
+  // Independent per axis now — a single uniform scale (old: derived from
+  // width alone) only stays correct as long as the frozen base's aspect
+  // ratio happens to match the current native content's aspect ratio.
+  // The outer transform (details.transform) composes with this
+  // multiplicatively regardless of axis, so scaling each axis to its own
+  // frozen-base dimension here is what makes the two stages cancel out
+  // to exactly the apparent box size, on both axes, for any native size.
+  const scaleX = outerWidth ? outerWidth / nativeWidth : 1;
+  const scaleY = outerHeight ? outerHeight / nativeHeight : scaleX;
+
   const trackItemsMap = muted
     ? Object.fromEntries(
       Object.entries(content.trackItemsMap).map(([id, it]) => [id, { ...it, details: { ...it.details, volume: 0 } }]),
@@ -142,7 +147,7 @@ const SceneContentLayer = ({
       style={{
         width: nativeWidth,
         height: nativeHeight,
-        transform: `scale(${scale})`,
+        transform: `scale(${scaleX}, ${scaleY})`,
         transformOrigin: "top left",
         position: "absolute",
         top: 0,
@@ -155,8 +160,6 @@ const SceneContentLayer = ({
         trackItemIds: content.trackItemIds,
         trackItemsMap,
         transitionsMap: content.transitionsMap,
-        // Always the OUTER/project fps here, never the block's own stored
-        // fps — Remotion needs one consistent fps for the whole player.
         fps,
         size: content.size!,
         frame,

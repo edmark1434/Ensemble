@@ -3,14 +3,26 @@ import {isSceneItem, DEFAULT_SCENE_DURATION_MS, SceneRenderContent, ISceneDetail
 
 export const DURATION_SYNC_INTERVAL_MS = 400;
 
-// Pushes a scene's live content AND its derived duration into the project
-// doc's own scene trackItem, in one transact. Content goes into
-// details.content (opaque blob, same style as the rest of `details`);
-// duration drives the same display.to cascade this always did. Because
-// both land together, any viewer with the project open gets content
-// updates through the exact same path (mirror-in -> stateManager -> props)
-// that already delivers position/duration to every scene item — no
-// separate content channel needed.
+// Same technique as LayoutMediaControls' commitDimension: scenes are
+// scale-locked, so details.width/height are an immutable base size set
+// once at creation, and apparent on-screen size is always base *
+// |scale| via details.transform. The renderer scales around the box's
+// own center, so writing to width/height directly drags the center —
+// that's what was moving the item. Fix: only ever touch transform here,
+// and compensate left/top by half the resulting size delta so the
+// VISIBLE top-left corner stays put (cancelling the shift, not causing
+// one).
+function getScaleXY(transform?: string): [number, number] {
+  const match = (transform || "").match(/scale\(\s*([-\d.]+)\s*,\s*([-\d.]+)/);
+  return match ? [parseFloat(match[1]), parseFloat(match[2])] : [1, 1];
+}
+
+function parseNumeric(v: number | string | undefined): number {
+  if (typeof v === "number") return v;
+  const parsed = parseFloat(v ?? "");
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 export function applySceneContentToDoc(
   projectSchema: CollabSchema,
   sceneItemId: string,
@@ -37,10 +49,53 @@ export function applySceneContentToDoc(
       })
       : [];
 
+  const details = sceneItem.details as ISceneDetails;
+  const newSize = newContent.size;
+  const oldSize = details.content?.size;
+
+  let transformPatch: string | undefined;
+  let leftPatch: number | undefined;
+  let topPatch: number | undefined;
+
+  if (
+    newSize && newSize.width > 0 && newSize.height > 0 &&
+    oldSize && oldSize.width > 0 && oldSize.height > 0 &&
+    (newSize.width !== oldSize.width || newSize.height !== oldSize.height)
+  ) {
+    const baseW = details.width ?? 0;
+    const baseH = details.height ?? 0;
+    const [curSx, curSy] = getScaleXY(details.transform);
+
+    const curDisplayW = baseW * Math.abs(curSx);
+    const curDisplayH = baseH * Math.abs(curSy);
+
+    const nextDisplayW = curDisplayW * (newSize.width / oldSize.width);
+    const nextDisplayH = curDisplayH * (newSize.height / oldSize.height);
+
+    const signX = curSx < 0 ? -1 : 1;
+    const signY = curSy < 0 ? -1 : 1;
+
+    const nextSx = baseW > 0 ? signX * (nextDisplayW / baseW) : curSx;
+    const nextSy = baseH > 0 ? signY * (nextDisplayH / baseH) : curSy;
+
+    const deltaW = nextDisplayW - curDisplayW;
+    const deltaH = nextDisplayH - curDisplayH;
+
+    transformPatch = `scale(${nextSx}, ${nextSy})`;
+    leftPatch = parseNumeric(details.left) + deltaW / 2;
+    topPatch = parseNumeric(details.top) + deltaH / 2;
+  }
+
   projectSchema.doc.transact(() => {
     const yItem = projectSchema.trackItems.get(sceneItemId);
     if (yItem) {
-      yItem.set("details", { ...yItem.get("details"), content: newContent });
+      const patch: Partial<ISceneDetails> = { content: newContent };
+      if (transformPatch !== undefined) {
+        patch.transform = transformPatch;
+        patch.left = leftPatch;
+        patch.top = topPatch;
+      }
+      yItem.set("details", { ...yItem.get("details"), ...patch });
     }
 
     for (const id of affectedIds) {

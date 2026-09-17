@@ -480,6 +480,39 @@ export function SceneInteractions({
     };
   }, []);
 
+  // Double-click a Scene on the canvas to open it — the player-canvas
+  // counterpart to timeline.tsx's `canvas.on("mouse:dblclick", ...)`.
+  // Selection's own click handling doesn't emit a dblclick event, so this
+  // listens natively on the container and filters for scene items itself.
+  // A nested scene's content is never selectable in the first place
+  // (renderVisibleItems drops it before it reaches the DOM), so no extra
+  // guard against opening a scene from inside another scene is needed here.
+  useEffect(() => {
+    if (viewOnly) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onDblClick = (e: MouseEvent) => {
+      const el = (e.target as HTMLElement)?.closest?.(
+        ".designcombo-scene-item.designcombo-scene-item-type-scene"
+      ) as HTMLElement | null;
+      if (!el) return;
+
+      const id = getIdFromClassName(el.className);
+      const sceneItem = useStore.getState().trackItemsMap[id];
+      const blockId = sceneItem?.details?.blockId;
+      if (!blockId) return;
+
+      // Old selection references ids that won't exist in the scene's own
+      // content — clear before swapping, same as timeline.tsx's handler.
+      stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+      useStore.getState().openScene?.(blockId, id, sceneItem?.details?.name);
+    };
+
+    container.addEventListener("dblclick", onDblClick);
+    return () => container.removeEventListener("dblclick", onDblClick);
+  }, []);
+
   useEffect(() => {
     const activeSelectionSubscription = stateManager.subscribeToActiveIds(
       (newState) => {
