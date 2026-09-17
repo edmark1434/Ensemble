@@ -1153,7 +1153,7 @@ const InboxMain = () => {
 
   return (
     <div className="w-full h-screen bg-gray-50 dark:bg-dark-base flex flex-col overflow-hidden">
-      <UserHeader pageTitle="Inbox" credits={1250} />
+      <UserHeader pageTitle="Inbox" />
 
       <div className="w-full flex-1 min-h-0 overflow-hidden flex border-t border-gray-200 dark:border-white/10 relative">
         {/* Animated Left Conversation Sidebar (Transitions smoothly between w-80/w-96 and compact w-20) */}

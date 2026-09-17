@@ -4,6 +4,7 @@ import { useInboxUploadMedia, InboxUploadMediaButton, InboxUploadMediaPreview } 
 import api from '@/lib/axios';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
 import { AlertCircle, CheckCircle } from 'lucide-react';
+import { showErrorToast } from '@/components/utility/toast';
 
 interface MilestoneSubmission {
     status?: string;
@@ -17,6 +18,15 @@ interface ActiveMilestone {
 
 interface DashboardTask {
     revision_price_credits?: number;
+    user_role?: {
+        effective_role?: string;
+        can_buy_revision?: boolean;
+        can_review_milestone?: boolean;
+        can_submit_milestone?: boolean;
+        is_team_client?: boolean;
+        is_project_lead?: boolean;
+        team_role?: string;
+    };
 }
 
 interface Props {
@@ -63,7 +73,7 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
             onSuccess(response.data.task);
         } catch (error) {
             console.error("Failed to submit review", error);
-            alert("Failed to submit review. Please try again.");
+            showErrorToast("Failed to submit review. Please try again.");
         } finally {
             setIsSubmitting(false);
         }
@@ -85,7 +95,7 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
         } catch (error: unknown) {
             console.error("Failed to buy revision", error);
             const apiError = error as AxiosError<{ message?: string }>;
-            alert(apiError.response?.data?.message || "Failed to buy revision.");
+            showErrorToast(apiError.response?.data?.message || "Failed to buy revision.");
         } finally {
             setIsSubmitting(false);
         }
@@ -125,6 +135,7 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
     if (action === 'buy_revision') {
         const rate = task?.revision_price_credits || 0;
         const total = rate;
+        const canBuyRevision = task?.user_role ? Boolean(task.user_role.can_buy_revision) : true;
         
         return (
             <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-5 space-y-5">
@@ -156,11 +167,17 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
                     </div>
                 </div>
 
+                {!canBuyRevision && (
+                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-500 font-medium leading-relaxed">
+                        Only Team Owners and Admins can purchase additional revisions using Team funds. Please contact your team administrator.
+                    </div>
+                )}
+
                 <div className="flex justify-end pt-2">
                     <button 
                         onClick={handleBuyRevision}
-                        disabled={isSubmitting}
-                        className="bg-yellow-500 hover:bg-yellow-600 text-black px-6 py-2.5 rounded-lg text-sm font-bold transition shadow-lg shadow-yellow-500/20 disabled:opacity-50"
+                        disabled={isSubmitting || !canBuyRevision}
+                        className="bg-yellow-500 hover:bg-yellow-600 text-black px-6 py-2.5 rounded-lg text-sm font-bold transition shadow-lg shadow-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isSubmitting ? 'Processing...' : 'Pay & Add Revision'}
                     </button>

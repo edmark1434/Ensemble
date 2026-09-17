@@ -37,6 +37,13 @@ export interface Job {
   isPersonalPost?: boolean;
   hasProposed?: boolean;
   myProposalId?: string | null;
+  team_id?: string | null;
+  teamId?: string | null;
+  team_visibility?: "Public" | "Private" | string | null;
+  teamVisibility?: "Public" | "Private" | string | null;
+  is_team?: boolean;
+  isTeam?: boolean;
+  posted_as?: "Team" | "Self" | string;
 }
 
 interface JobListProps {

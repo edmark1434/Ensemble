@@ -5,6 +5,7 @@ import api from "@/lib/axios";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
+import { showErrorToast } from "@/components/utility/toast";
 
 export const IncomingOrderDetail = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -20,25 +21,25 @@ export const IncomingOrderDetail = () => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleReject = async () => {
-    if (!rejectReason.trim()) return alert("Please provide a reason");
+    if (!rejectReason.trim()) return showErrorToast("Please provide a reason");
     setIsProcessing(true);
     try {
         await api.post(`/api/gigs/orders/${order.id}/reject`, { reason: rejectReason });
         navigate(-1);
     } catch(e) {
-        alert("Failed to reject order");
+        showErrorToast("Failed to reject order");
         setIsProcessing(false);
     }
   };
 
   const handleAccept = async () => {
-    if (!agreedToTerms) return alert("You must agree to the terms");
+    if (!agreedToTerms) return showErrorToast("You must agree to the terms");
     setIsProcessing(true);
     try {
         await api.post(`/api/gigs/orders/${order.id}/accept`);
         navigate('/contracts');
     } catch(e) {
-        alert("Failed to accept order");
+        showErrorToast("Failed to accept order");
         setIsProcessing(false);
     }
   };

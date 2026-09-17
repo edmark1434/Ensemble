@@ -8,6 +8,7 @@ import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import PopupConfirmReturn from "@/pages/user/6_job_market/job_components/job_popups/popup_confirm_return";
+import { showErrorToast } from "@/components/utility/toast";
 
 // Types
 import type { GigTier, Milestone, Questionnaire } from "../gig_datasets";
@@ -197,7 +198,7 @@ const GigEditPage: React.FC = () => {
       navigate("/gigs/my-services");
     } catch (err: any) {
       console.error("Failed to delete gig:", err);
-      alert(err.response?.data?.message || "Failed to delete gig");
+      showErrorToast(err.response?.data?.message || "Failed to delete gig");
     } finally {
       setIsDeleting(false);
     }
@@ -337,7 +338,7 @@ const GigEditPage: React.FC = () => {
       setIsSuccessOpen(true);
     } catch (err: any) {
       console.error("Error updating gig:", err);
-      alert(err.response?.data?.message || err.message || "Failed to update gig");
+      showErrorToast(err.response?.data?.message || err.message || "Failed to update gig");
     } finally {
       setIsSubmitting(false);
     }

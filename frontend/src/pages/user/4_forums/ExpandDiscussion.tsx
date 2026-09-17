@@ -528,7 +528,7 @@ const ExpandDiscussion = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-        <UserHeader pageTitle="Discussion" credits={1250} />
+        <UserHeader pageTitle="Discussion" />
         <div className="mx-auto max-w-4xl p-8">
           <div className="h-80 animate-pulse rounded-xl bg-gray-100 dark:bg-white/10" />
         </div>
@@ -539,7 +539,7 @@ const ExpandDiscussion = () => {
   if (!discussion) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-        <UserHeader pageTitle="Discussion" credits={1250} />
+        <UserHeader pageTitle="Discussion" />
         <div className="mx-auto max-w-4xl p-8 text-center text-gray-500 dark:text-zinc-400">
           Discussion not found.
         </div>
@@ -584,7 +584,7 @@ const ExpandDiscussion = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-      <UserHeader pageTitle="Discussion" credits={1250} />
+      <UserHeader pageTitle="Discussion" />
       <main className="mx-auto max-w-4xl p-6 md:p-8">
         <button onClick={() => navigate(-1)} className="mb-5 flex items-center gap-2 text-sm text-gray-500 dark:text-zinc-400">
           <ArrowLeft className="h-4 w-4" /> Back

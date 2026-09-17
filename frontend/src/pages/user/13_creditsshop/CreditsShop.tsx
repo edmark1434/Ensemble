@@ -116,7 +116,6 @@ const CreditShop: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useGlobalState((state) => state.theme);
-  const userCurrentCredits = 1250;
 
   const [loading, setLoading] = useState(true);
 
@@ -474,7 +473,7 @@ const CreditShop: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-700 dark:text-zinc-300 font-inter">
-        <UserHeader pageTitle="Credit Shop" credits={userCurrentCredits} />
+        <UserHeader pageTitle="Credit Shop" />
         <div className="mx-auto max-w-6xl px-6 py-24 flex items-center justify-center">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500/30 border-t-blue-500" />
         </div>
@@ -498,7 +497,7 @@ const CreditShop: React.FC = () => {
       </div>
 
       <div className="sticky top-0 z-30 bg-white dark:bg-[#0a0a0a] border-b border-gray-200 dark:border-white/10 shadow-sm">
-        <UserHeader pageTitle="Credit Shop" credits={userCurrentCredits} />
+        <UserHeader pageTitle="Credit Shop" />
       </div>
 
       <div className="relative z-10 mx-auto max-w-6xl px-6 py-10 space-y-8">

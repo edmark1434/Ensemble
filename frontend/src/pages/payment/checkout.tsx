@@ -78,7 +78,6 @@ const CheckoutPage: React.FC = () => {
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [selectedPaymentOption, setSelectedPaymentOption] = useState<PaymentOption>("checkout");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const userCurrentCredits = 1250;
 
   useEffect(() => {
     const state = location.state as { item: CheckoutItem };
@@ -339,7 +338,7 @@ const CheckoutPage: React.FC = () => {
   if (isSuccess) {
     return (
       <div className="h-screen bg-[#080a12] flex flex-col overflow-hidden">
-        <UserHeader pageTitle="Checkout" credits={userCurrentCredits} />
+        <UserHeader pageTitle="Checkout" />
         <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
           <div className="bg-[#0d0f1a] border border-emerald-500/30 rounded-2xl p-8 max-w-md w-full text-center">
             <div className="h-16 w-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -377,7 +376,7 @@ const CheckoutPage: React.FC = () => {
 
   return (
     <div className="h-screen bg-[#080a12] text-white flex flex-col overflow-hidden relative">
-      <UserHeader pageTitle="Checkout" credits={userCurrentCredits} />
+      <UserHeader pageTitle="Checkout" />
 
       <div className="absolute top-[10%] left-[-10%] w-[500px] h-[500px] bg-blue-500/5 filter blur-[140px] pointer-events-none" />
       <div className="absolute bottom-[10%] right-[-10%] w-[500px] h-[500px] bg-teal-500/5 filter blur-[140px] pointer-events-none" />

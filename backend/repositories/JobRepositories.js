@@ -88,9 +88,16 @@ async function getAllJobsRepositories(filters = {}, accountId = null, actorIds =
                 j.client_account_id = ANY($2::uuid[]) AS is_manageable_post,
                 j.client_account_id = $1::uuid AS is_personal_post,
                 (SELECT f.path FROM job_attachments ja JOIN files f ON ja.file_id = f.file_id WHERE ja.job_id = j.job_id AND ja.index = 0 LIMIT 1) as thumbnail_path,
-                (SELECT ARRAY_AGG(t.name) FROM job_tags jt JOIN tags t ON jt.tag_id = t.tag_id WHERE jt.job_id = j.job_id) as tags
+                (SELECT ARRAY_AGG(t.name) FROM job_tags jt JOIN tags t ON jt.tag_id = t.tag_id WHERE jt.job_id = j.job_id) as tags,
+                COALESCE(j.team_id, tm.team_id) as team_id,
+                tm.visibility as team_visibility,
+                (j.posted_as = 'Team' OR j.team_id IS NOT NULL OR tm.team_id IS NOT NULL) as is_team
             FROM jobs j
             LEFT JOIN accounts a ON j.client_account_id = a.account_id
+            LEFT JOIN teams tm ON (
+                (j.team_id IS NOT NULL AND j.team_id = tm.team_id)
+                OR (j.client_account_id = tm.account_id)
+            ) AND tm.deleted_at IS NULL
             WHERE j.deleted_at IS NULL
         `;
         
@@ -315,7 +322,10 @@ async function getProposalsByJobIdRepositories(jobId, accountIds) {
                 a.display_name as freelancer_name,
                 a.handle as freelancer_handle,
                 (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as freelancer_avatar_path,
+                COALESCE(j.team_id, (SELECT ct.team_id FROM teams ct WHERE ct.account_id = j.client_account_id AND ct.deleted_at IS NULL LIMIT 1)) as client_team_id,
+                (SELECT ct.visibility FROM teams ct WHERE (ct.team_id = j.team_id OR ct.account_id = j.client_account_id) AND ct.deleted_at IS NULL LIMIT 1) as client_team_visibility,
                 (SELECT ft.team_id FROM teams ft WHERE ft.account_id = p.freelancer_account_id AND ft.deleted_at IS NULL LIMIT 1) as freelancer_team_id,
+                (SELECT ft.visibility FROM teams ft WHERE ft.account_id = p.freelancer_account_id AND ft.deleted_at IS NULL LIMIT 1) as freelancer_team_visibility,
                 t.terms_title, t.terms_type,
                 j.title as job_title,
                 j.category as job_category,
@@ -343,7 +353,9 @@ async function getProposalsByFreelancerRepositories(accountIds) {
                 j.title as job_title,
                 j.category as job_category,
                 COALESCE(j.team_id, (SELECT ct.team_id FROM teams ct WHERE ct.account_id = j.client_account_id AND ct.deleted_at IS NULL LIMIT 1)) as client_team_id,
+                (SELECT ct.visibility FROM teams ct WHERE (ct.team_id = j.team_id OR ct.account_id = j.client_account_id) AND ct.deleted_at IS NULL LIMIT 1) as client_team_visibility,
                 (SELECT ft.team_id FROM teams ft WHERE ft.account_id = p.freelancer_account_id AND ft.deleted_at IS NULL LIMIT 1) as freelancer_team_id,
+                (SELECT ft.visibility FROM teams ft WHERE ft.account_id = p.freelancer_account_id AND ft.deleted_at IS NULL LIMIT 1) as freelancer_team_visibility,
                 c.display_name as client_name,
                 c.handle as client_handle,
                 (SELECT f.path FROM files f WHERE f.file_id = c.avatar_file_id LIMIT 1) as client_avatar_path,
@@ -373,7 +385,9 @@ async function getProposalByIdRepositories(proposalId, accountIds) {
                 j.category as job_category,
                 j.client_account_id as client_account_id,
                 COALESCE(j.team_id, (SELECT ct.team_id FROM teams ct WHERE ct.account_id = j.client_account_id AND ct.deleted_at IS NULL LIMIT 1)) as client_team_id,
+                (SELECT ct.visibility FROM teams ct WHERE (ct.team_id = j.team_id OR ct.account_id = j.client_account_id) AND ct.deleted_at IS NULL LIMIT 1) as client_team_visibility,
                 (SELECT ft.team_id FROM teams ft WHERE ft.account_id = p.freelancer_account_id AND ft.deleted_at IS NULL LIMIT 1) as freelancer_team_id,
+                (SELECT ft.visibility FROM teams ft WHERE ft.account_id = p.freelancer_account_id AND ft.deleted_at IS NULL LIMIT 1) as freelancer_team_visibility,
                 j.created_at as job_created_at,
                 j.status as job_status,
                 j.deleted_at as job_deleted_at,

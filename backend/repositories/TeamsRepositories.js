@@ -75,7 +75,12 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
     FROM teams t JOIN accounts a ON a.account_id=t.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id
     LEFT JOIN verifications v ON v.account_id=t.account_id
     LEFT JOIN team_members am ON am.team_id=t.team_id LEFT JOIN users u ON u.account_id=$1 LEFT JOIN team_members mine ON mine.team_id=t.team_id AND mine.user_id=u.user_id
-    WHERE t.deleted_at IS NULL AND ($2='' OR a.display_name ILIKE '%'||$2||'%' OR a.handle ILIKE '%'||$2||'%') AND ($3::boolean=FALSE OR mine.status='Active') AND (t.visibility='Public' OR mine.status='Active')
+    WHERE t.deleted_at IS NULL
+      AND ($2='' OR a.display_name ILIKE '%'||$2||'%' OR a.handle ILIKE '%'||$2||'%')
+      AND (
+        ($3::boolean = TRUE AND mine.status = 'Active')
+        OR ($3::boolean = FALSE AND t.visibility = 'Public')
+      )
     GROUP BY t.team_id,a.account_id,f.path,v.is_verified,mine.role,mine.status ORDER BY a.display_name LIMIT $4 OFFSET $5`, [accountId,q,mine,limit,offset])).rows;
 }
 async function getMembership(teamId, accountId) { return (await pool.query(`SELECT tm.*,u.account_id,a.display_name,a.handle FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id WHERE tm.team_id=$1 AND u.account_id=$2`,[teamId,accountId])).rows[0]||null; }
@@ -87,7 +92,50 @@ async function updateTeam(teamId, accountId, data) { const client=await pool.con
 async function softDeleteTeam(teamId){return (await pool.query(`UPDATE teams SET deleted_at=NOW() WHERE team_id=$1 RETURNING *`,[teamId])).rows[0];}
 async function findByCode(code){return (await pool.query(`SELECT * FROM teams WHERE upper(join_code)=upper($1) AND deleted_at IS NULL`,[code])).rows[0]||null;}
 async function transferOwnership(teamId,oldUserId,newUserId){const c=await pool.connect();try{await c.query('BEGIN');await c.query(`UPDATE team_members SET role='Admin',updated_at=NOW() WHERE team_id=$1 AND user_id=$2 AND role='Owner'`,[teamId,oldUserId]);await c.query(`UPDATE team_members SET role='Owner',updated_at=NOW() WHERE team_id=$1 AND user_id=$2 AND status='Active'`,[teamId,newUserId]);await c.query('COMMIT');}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}
-async function wallet(teamId){return (await pool.query(`SELECT COALESCE(sum(w.balance_credits) FILTER(WHERE w.type='account wallets'),0)::int available_balance,COALESCE(sum(w.balance_credits) FILTER(WHERE w.type='escrow wallets'),0)::int escrow_balance,COALESCE(sum(w.frozen_balance_credits),0)::int frozen_balance,COALESCE(sum(w.balance_credits),0)::int total_balance FROM teams t JOIN account_wallets aw ON aw.account_id=t.account_id JOIN wallets w ON w.wallet_id=aw.wallet_id WHERE t.team_id=$1`,[teamId])).rows[0];}
+async function wallet(teamId){
+  const baseWallet = (await pool.query(`SELECT COALESCE(sum(w.balance_credits) FILTER(WHERE w.type='account wallets'),0)::int available_balance,COALESCE(sum(w.balance_credits) FILTER(WHERE w.type='escrow wallets'),0)::int escrow_balance,COALESCE(sum(w.frozen_balance_credits),0)::int frozen_balance,COALESCE(sum(w.balance_credits),0)::int total_balance FROM teams t JOIN account_wallets aw ON aw.account_id=t.account_id JOIN wallets w ON w.wallet_id=aw.wallet_id WHERE t.team_id=$1`,[teamId])).rows[0] || { available_balance: 0, escrow_balance: 0, frozen_balance: 0, total_balance: 0 };
+
+  const contractReservedResult = await pool.query(`
+    WITH team_wallet AS (
+      SELECT w.wallet_id
+        FROM teams t
+        JOIN account_wallets aw ON aw.account_id = t.account_id
+        JOIN wallets w ON w.wallet_id = aw.wallet_id
+       WHERE t.team_id = $1 AND w.type = 'account wallets'
+       LIMIT 1
+    ),
+    contract_releases AS (
+      SELECT ct.reference_id AS contract_id,
+             COALESCE(SUM(ct.amount_credits), 0)::int AS released_credits
+        FROM team_wallet tw
+        JOIN credit_transactions ct ON ct.destination_wallet_id = tw.wallet_id
+       WHERE ct.reference_table = 'contracts'
+         AND ct.type = 'Escrow Release'
+         AND LOWER(ct.status) = 'completed'
+       GROUP BY ct.reference_id
+    ),
+    contract_dists AS (
+      SELECT tcd.contract_id,
+             COALESCE(SUM(tcd.amount_credits), 0)::int AS distributed_credits
+        FROM team_contract_distributions tcd
+       WHERE tcd.team_id = $1
+       GROUP BY tcd.contract_id
+    )
+    SELECT COALESCE(SUM(GREATEST(0, cr.released_credits - COALESCE(cd.distributed_credits, 0))), 0)::int AS total_contract_reserved
+      FROM contract_releases cr
+      LEFT JOIN contract_dists cd ON cd.contract_id = cr.contract_id
+  `, [teamId]);
+
+  const contractReserved = Number(contractReservedResult.rows[0]?.total_contract_reserved || 0);
+  const availableBalance = Number(baseWallet.available_balance || 0);
+  const unreservedBalance = Math.max(0, availableBalance - contractReserved);
+
+  return {
+    ...baseWallet,
+    contract_reserved_balance: contractReserved,
+    unreserved_balance: unreservedBalance,
+  };
+}
 async function getTeamTransactions(teamId,{page=1,pageSize=10,search='',dateFrom='',dateTo=''}={}){const limit=Math.min(Math.max(Number(pageSize)||10,1),50),offset=(Math.max(Number(page)||1,1)-1)*limit,term=String(search||'').trim();const filters=[`ct.reference_table='teams'`,`ct.reference_id=$1`],values=[teamId],add=(sql,value)=>{values.push(value);filters.push(`${sql}=$${values.length}`);};if(term)add(`destination.display_name ILIKE`, `%${term}%`);if(dateFrom)add(`ct.created_at >=`, dateFrom);if(dateTo)add(`ct.created_at <`, `${dateTo}T23:59:59.999Z`);const where=filters.join(' AND ');const total=(await pool.query(`SELECT COUNT(*)::int AS total FROM credit_transactions ct JOIN wallets destination_wallet ON destination_wallet.wallet_id=ct.destination_wallet_id JOIN account_wallets destination_aw ON destination_aw.wallet_id=destination_wallet.wallet_id JOIN accounts destination ON destination.account_id=destination_aw.account_id WHERE ${where}`,values)).rows[0].total;values.push(limit,offset);const items=(await pool.query(`SELECT ct.credit_transaction_id,ct.type,ct.amount_credits,ct.status,ct.created_at,destination.display_name AS recipient_name,destination.handle AS recipient_handle FROM credit_transactions ct JOIN wallets destination_wallet ON destination_wallet.wallet_id=ct.destination_wallet_id JOIN account_wallets destination_aw ON destination_aw.wallet_id=destination_wallet.wallet_id JOIN accounts destination ON destination.account_id=destination_aw.account_id WHERE ${where} ORDER BY ct.created_at DESC,ct.credit_transaction_id DESC LIMIT $${values.length-1} OFFSET $${values.length}`,values)).rows;return{items,pagination:{page:Math.max(Number(page)||1,1),page_size:limit,total,total_pages:Math.max(Math.ceil(total/limit),1)}};}
 async function distributeTeamFunds(teamId, recipients) {
   const client=await pool.connect();
@@ -95,17 +143,50 @@ async function distributeTeamFunds(teamId, recipients) {
     await client.query('BEGIN');
     const source=(await client.query(`SELECT w.wallet_id,w.balance_credits,w.status FROM teams t JOIN account_wallets aw ON aw.account_id=t.account_id JOIN wallets w ON w.wallet_id=aw.wallet_id WHERE t.team_id=$1 AND t.deleted_at IS NULL AND w.type='account wallets' FOR UPDATE`,[teamId])).rows[0];
     if(!source||String(source.status).toLowerCase()!=='active')throw new Error('Team account wallet is unavailable');
+
+    const contractReservedResult = await client.query(`
+      WITH contract_releases AS (
+        SELECT ct.reference_id AS contract_id,
+               COALESCE(SUM(ct.amount_credits), 0)::int AS released_credits
+          FROM credit_transactions ct
+         WHERE ct.destination_wallet_id = $1
+           AND ct.reference_table = 'contracts'
+           AND ct.type = 'Escrow Release'
+           AND LOWER(ct.status) = 'completed'
+         GROUP BY ct.reference_id
+      ),
+      contract_dists AS (
+        SELECT tcd.contract_id,
+               COALESCE(SUM(tcd.amount_credits), 0)::int AS distributed_credits
+          FROM team_contract_distributions tcd
+         WHERE tcd.team_id = $2
+         GROUP BY tcd.contract_id
+      )
+      SELECT COALESCE(SUM(GREATEST(0, cr.released_credits - COALESCE(cd.distributed_credits, 0))), 0)::int AS total_contract_reserved
+        FROM contract_releases cr
+        LEFT JOIN contract_dists cd ON cd.contract_id = cr.contract_id
+    `, [source.wallet_id, teamId]);
+
+    const totalContractReserved = Number(contractReservedResult.rows[0]?.total_contract_reserved || 0);
+    const availableBalance = Number(source.balance_credits || 0);
+    const unreservedBalance = Math.max(0, availableBalance - totalContractReserved);
+
+    const total = recipients.reduce((sum, recipient) => sum + recipient.amount_credits, 0);
+    if (total > unreservedBalance) {
+      throw new Error(
+        `Distribution amount (${total.toLocaleString()} credits) exceeds unreserved Team balance (${unreservedBalance.toLocaleString()} credits). ${totalContractReserved.toLocaleString()} credits are locked/reserved for contract payouts.`
+      );
+    }
+
     const recipientIds=recipients.map((recipient)=>recipient.account_id);
     const recipientWallets=(await client.query(`SELECT aw.account_id,w.wallet_id,w.status FROM account_wallets aw JOIN wallets w ON w.wallet_id=aw.wallet_id JOIN users u ON u.account_id=aw.account_id JOIN team_members tm ON tm.user_id=u.user_id WHERE tm.team_id=$1 AND tm.status='Active' AND aw.account_id=ANY($2::uuid[]) AND w.type='account wallets' ORDER BY w.wallet_id FOR UPDATE`,[teamId,recipientIds])).rows;
     if(recipientWallets.length!==recipients.length||recipientWallets.some((wallet)=>String(wallet.status).toLowerCase()!=='active'))throw new Error('Every recipient must be an active Team member with an active account wallet');
-    const total=recipients.reduce((sum,recipient)=>sum+recipient.amount_credits,0);
-    if(Number(source.balance_credits)<total)throw new Error('Insufficient available Team balance');
     await client.query('UPDATE wallets SET balance_credits=balance_credits-$1 WHERE wallet_id=$2',[total,source.wallet_id]);
     const walletsByAccountId=new Map(recipientWallets.map((wallet)=>[String(wallet.account_id),wallet]));
     const transactions=[];
     for(const recipient of recipients){const destination=walletsByAccountId.get(String(recipient.account_id));await client.query('UPDATE wallets SET balance_credits=balance_credits+$1 WHERE wallet_id=$2',[recipient.amount_credits,destination.wallet_id]);const transaction=(await client.query(`INSERT INTO credit_transactions (type,amount_credits,status,source_wallet_id,destination_wallet_id,fee_transaction_id,reference_table,reference_id) VALUES ('Fund Transfer',$1,'completed',$2,$3,NULL,'teams',$4) RETURNING *`,[recipient.amount_credits,source.wallet_id,destination.wallet_id,teamId])).rows[0];transactions.push({...transaction,recipient_account_id:recipient.account_id});}
     await client.query('COMMIT');
-    return {transactions,distributed_credits:total,available_balance:Number(source.balance_credits)-total};
+    return {transactions,distributed_credits:total,available_balance:availableBalance-total,unreserved_balance:unreservedBalance-total,contract_reserved_balance:totalContractReserved};
   } catch(error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
 }
 async function listMarketplacePosts(teamId, type) {

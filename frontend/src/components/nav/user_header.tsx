@@ -89,12 +89,107 @@ interface CachedHeaderData {
   lastFetched: number;
 }
 
+interface HeaderFetchData {
+  credits: number;
+  avatarUrl: string;
+  subscriptionPlan: "Free" | "Premium" | "Business";
+  isVerified: boolean;
+}
+
 let cachedHeaderData: CachedHeaderData | null = null;
-let pendingHeaderFetch: Promise<void> | null = null;
+let pendingHeaderFetch: Promise<HeaderFetchData | null> | null = null;
+
+async function fetchHeaderData(accountId: string): Promise<HeaderFetchData | null> {
+  if (pendingHeaderFetch) return pendingHeaderFetch;
+
+  pendingHeaderFetch = (async () => {
+    try {
+      const [walletResult, avatarResult, planResult, verificationResult] = await Promise.allSettled([
+        api.get("/api/accounts/wallet", {
+          params: { type: 'account_wallets' },
+        }),
+        api.get(`/api/accounts/profile/current-avatar`),
+        api.get(`/api/subscription/plan-details`),
+        api.get('/api/verification/status'),
+      ]);
+
+      let planName: "Free" | "Premium" | "Business" = "Free";
+      if (planResult.status === 'fulfilled') {
+        planName = (planResult.value.data?.planDetails?.plan_name as "Free" | "Premium" | "Business") || "Free";
+      }
+
+      let verified = false;
+      if (verificationResult.status === 'fulfilled') {
+        verified = Boolean(verificationResult.value.data?.data?.is_verified);
+        useGlobalState.getState().setIsVerified(verified);
+      }
+
+      let avatarUrl = '';
+      if (avatarResult.status === 'fulfilled' && avatarResult.value.data?.data?.path) {
+        avatarUrl = constructAvatarUrl(avatarResult.value.data.data.path);
+      }
+
+      let credits = 0;
+      if (walletResult.status === 'fulfilled') {
+        const rawCredits = walletResult.value.data?.wallet?.balance_credits;
+        credits = (rawCredits !== undefined && rawCredits !== null && !isNaN(Number(rawCredits)))
+          ? Number(rawCredits)
+          : 0;
+      } else if (cachedHeaderData?.credits !== undefined) {
+        credits = cachedHeaderData.credits;
+      } else {
+        const currentWallet = useGlobalState.getState().user?.wallet?.balance_credits;
+        if (currentWallet !== undefined && currentWallet !== null) {
+          credits = Number(currentWallet) || 0;
+        }
+      }
+
+      const freshData: CachedHeaderData = {
+        accountId,
+        credits,
+        avatarUrl: avatarUrl || cachedHeaderData?.avatarUrl || '',
+        subscriptionPlan: planName,
+        isVerified: verified,
+        lastFetched: Date.now(),
+      };
+
+      cachedHeaderData = freshData;
+
+      const currentUser = useGlobalState.getState().user;
+      if (currentUser) {
+        useGlobalState.getState().setUser({
+          ...currentUser,
+          ...(avatarUrl ? { avatar_preset_url: avatarUrl } : {}),
+          wallet: {
+            ...(currentUser.wallet || {}),
+            balance_credits: credits,
+          },
+        });
+      }
+
+      return {
+        credits,
+        avatarUrl,
+        subscriptionPlan: planName,
+        isVerified: verified,
+      };
+    } catch (err) {
+      console.error("Error refreshing header data:", err);
+      return null;
+    } finally {
+      pendingHeaderFetch = null;
+    }
+  })();
+
+  return pendingHeaderFetch;
+}
 
 const UserHeader: React.FC<UserHeaderProps> = ({
   pageTitle,
+  credits: propCredits,
+  userName,
   userAvatar,
+  onTopUp,
 }) => {
   const navigate = useNavigate();
 
@@ -127,7 +222,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
     cachedHeaderData.accountId === String(userInfo.account_id)
   );
 
-  const displayName = userInfo?.display_name || userInfo?.displayName || userInfo?.username || "User";
+  const displayName = userName || userInfo?.display_name || userInfo?.displayName || userInfo?.username || "User";
   const defaultFallback = userAvatar || getFallbackAvatar(displayName);
 
   const initialRawAvatar = hasCachedData
@@ -136,9 +231,13 @@ const UserHeader: React.FC<UserHeaderProps> = ({
 
   const initialAvatar = constructAvatarUrl(initialRawAvatar);
 
-  const initialCredits = hasCachedData
+  const initialCredits = (hasCachedData && cachedHeaderData!.credits !== undefined)
     ? cachedHeaderData!.credits
-    : (userInfo?.wallet?.balance_credits !== undefined ? Number(userInfo?.wallet?.balance_credits) : null);
+    : (userInfo?.wallet?.balance_credits !== undefined && userInfo?.wallet?.balance_credits !== null
+      ? Number(userInfo.wallet.balance_credits)
+      : (propCredits !== undefined && propCredits !== null
+        ? propCredits
+        : (isGuestView ? 0 : null)));
 
   const initialPlan = hasCachedData
     ? cachedHeaderData!.subscriptionPlan
@@ -158,6 +257,24 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const [isVerified, setIsVerified] = useState<boolean>(initialVerified);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+
+  useEffect(() => {
+    if (propCredits !== undefined && propCredits !== null && userCredits === null) {
+      setCredits(propCredits);
+    }
+  }, [propCredits, userCredits]);
+
+  useEffect(() => {
+    if (userInfo?.wallet?.balance_credits !== undefined && userInfo?.wallet?.balance_credits !== null) {
+      const val = Number(userInfo.wallet.balance_credits);
+      if (!isNaN(val)) {
+        setCredits(val);
+        if (cachedHeaderData) {
+          cachedHeaderData.credits = val;
+        }
+      }
+    }
+  }, [userInfo?.wallet?.balance_credits]);
 
   useEffect(() => {
     const rawPath = userInfo?.avatar_preset_url || userInfo?.avatar_url || userInfo?.avatar;
@@ -237,6 +354,16 @@ useEffect(() => {
       if (cachedHeaderData) {
         cachedHeaderData.credits = nextBalance;
       }
+      const currentUser = useGlobalState.getState().user;
+      if (currentUser) {
+        useGlobalState.getState().setUser({
+          ...currentUser,
+          wallet: {
+            ...(currentUser.wallet || {}),
+            balance_credits: nextBalance,
+          },
+        });
+      }
     }
   };
 
@@ -299,80 +426,30 @@ useEffect(() => {
     setShowHeader(true);
     setIsCheckingAccess(false);
 
-    const now = Date.now();
-    const isCacheFresh = cachedHeaderData &&
-      cachedHeaderData.accountId === String(userInfo?.account_id) &&
-      (now - cachedHeaderData.lastFetched < 60000);
-
-    if (isCacheFresh) {
+    if (cachedHeaderData && cachedHeaderData.accountId === String(userInfo?.account_id)) {
       setCredits(cachedHeaderData.credits);
       setUserAvatarState(cachedHeaderData.avatarUrl);
       setUserSubscriptionPlan(cachedHeaderData.subscriptionPlan);
       setIsVerified(cachedHeaderData.isVerified);
-      return;
+      useGlobalState.getState().setIsVerified(cachedHeaderData.isVerified);
     }
 
-    let cancelled = false;
-    const refreshHeaderData = async () => {
-      try {
-        const [getWalletResponse, getAvatarResponse, getSubscriptionPlanResponse, getVerificationResponse] = await Promise.all([
-          api.get("/api/accounts/wallet", {
-            params: { type: 'account_wallets' },
-          }),
-          api.get(`/api/accounts/profile/current-avatar`),
-          api.get(`/api/subscription/plan-details`),
-          api.get('/api/verification/status'),
-        ]);
-
-        if (cancelled) return;
-
-        const planName = (getSubscriptionPlanResponse.data?.planDetails?.plan_name as "Free" | "Premium" | "Business") || "Free";
-        const verified = Boolean(getVerificationResponse.data?.data?.is_verified);
-        useGlobalState.getState().setIsVerified(verified);
-
-        let avatarUrl = '';
-        if (getAvatarResponse.data?.data?.path) {
-          avatarUrl = constructAvatarUrl(getAvatarResponse.data.data.path);
-        } else if (userInfo?.avatar_preset_url || userInfo?.avatar_url || userInfo?.avatar) {
-          avatarUrl = constructAvatarUrl(userInfo?.avatar_preset_url || userInfo?.avatar_url || userInfo?.avatar);
+    let isMounted = true;
+    const accountId = String(userInfo?.account_id || '');
+    if (accountId) {
+      fetchHeaderData(accountId).then((data) => {
+        if (!isMounted || !data) return;
+        setCredits(data.credits);
+        if (data.avatarUrl) {
+          setUserAvatarState(data.avatarUrl);
         }
-
-        const credits = Number(getWalletResponse.data?.wallet?.balance_credits) || 0;
-
-        cachedHeaderData = {
-          accountId: String(userInfo?.account_id),
-          credits,
-          avatarUrl: avatarUrl || cachedHeaderData?.avatarUrl || '',
-          subscriptionPlan: planName,
-          isVerified: verified,
-          lastFetched: Date.now(),
-        };
-
-        setUserSubscriptionPlan(planName);
-        setIsVerified(verified);
-        if (avatarUrl) {
-          setUserAvatarState(avatarUrl);
-          if (userInfo && userInfo.avatar_preset_url !== avatarUrl) {
-            useGlobalState.getState().setUser({
-              ...userInfo,
-              avatar_preset_url: avatarUrl,
-            });
-          }
-        }
-        setCredits(credits);
-      } catch (err) {
-        if (!cancelled) console.error("Error refreshing header data:", err);
-      }
-    };
-
-    if (!pendingHeaderFetch) {
-      pendingHeaderFetch = refreshHeaderData().finally(() => {
-        pendingHeaderFetch = null;
+        setUserSubscriptionPlan(data.subscriptionPlan);
+        setIsVerified(data.isVerified);
       });
     }
 
     return () => {
-      cancelled = true;
+      isMounted = false;
     };
   }, [canShowImmediately, isGuestView, isSessionLoading, userInfo?.account_id]);
 
@@ -443,7 +520,11 @@ useEffect(() => {
   }, []);
 
   const handleTopUp = () => {
-    navigate("/credits");
+    if (onTopUp) {
+      onTopUp();
+    } else {
+      navigate("/credits");
+    }
   };
 
   const handleHeaderSearchSubmit = (e: React.FormEvent) => {
@@ -484,7 +565,13 @@ useEffect(() => {
     navigate("/", { replace: true });
   };
 
-
+  const currentCredits = userCredits !== null
+    ? userCredits
+    : (userInfo?.wallet?.balance_credits !== undefined && userInfo?.wallet?.balance_credits !== null
+      ? Number(userInfo.wallet.balance_credits)
+      : (hasCachedData && cachedHeaderData?.credits !== undefined
+        ? cachedHeaderData.credits
+        : (propCredits !== undefined && propCredits !== null ? propCredits : null)));
 
   if (isCheckingAccess) {
     return (
@@ -616,13 +703,13 @@ useEffect(() => {
                     className="group relative flex items-center overflow-hidden rounded-full border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-amber-500/10 to-orange-500/10 px-3 py-1.5 transition-all duration-300 hover:scale-105"
                   >
                     <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-                    <CreditIcon className={`h-4 w-4 text-yellow-500 transition-all duration-500 ${userCredits === null ? "animate-pulse" : ""}`} />
+                    <CreditIcon className={`h-4 w-4 text-yellow-500 transition-all duration-500 ${currentCredits === null ? "animate-pulse" : ""}`} />
                     <span
                       className={`text-sm font-bold text-gray-900 dark:text-yellow-200 overflow-hidden whitespace-nowrap transition-all duration-500 ease-out ${
-                        userCredits === null ? "max-w-0 opacity-0 ml-0" : "max-w-[120px] opacity-100 ml-2"
+                        currentCredits === null ? "max-w-0 opacity-0 ml-0" : "max-w-[120px] opacity-100 ml-2"
                       }`}
                     >
-                      {userCredits !== null ? userCredits.toLocaleString() : ""}
+                      {currentCredits !== null ? currentCredits.toLocaleString() : ""}
                     </span>
                     {isHovered && (
                       <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] text-white shadow-lg animate-fade-in">

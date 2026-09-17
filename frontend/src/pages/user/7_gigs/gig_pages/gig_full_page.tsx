@@ -85,7 +85,7 @@ const GigFullPage: React.FC = () => {
       {/* Sticky Headers Container */}
       <div className="sticky top-0 z-40 bg-white dark:bg-dark-base flex flex-col border-b border-gray-200 dark:border-white/10 shadow-sm">
         <div className="z-50">
-          <UserHeader pageTitle="Gig Market" credits={1250} />
+          <UserHeader pageTitle="Gig Market" />
         </div>
         <div className="border-b border-gray-200 dark:border-white/10 px-6 py-4 flex items-center">
           <button

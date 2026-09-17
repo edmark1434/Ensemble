@@ -89,5 +89,5 @@ export default function ProfileRoute() {
   }
   if (state === "checking" || !id) return <ProfileRouteSkeleton />;
 
-  return <Profile validatedProfileId={id} />;
+  return <Profile key={id} validatedProfileId={id} />;
 }

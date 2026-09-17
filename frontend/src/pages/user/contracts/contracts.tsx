@@ -326,7 +326,7 @@ export const Contracts: React.FC = () => {
   return (
     <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white font-['Plus_Jakarta_Sans']">
       {/* Top Header */}
-      <UserHeader pageTitle="My Contracts" credits={1250} />
+      <UserHeader pageTitle="My Contracts" />
       {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="contracts" />}
 
       {loading ? (

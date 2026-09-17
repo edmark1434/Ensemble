@@ -2294,7 +2294,7 @@ const Forums = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-        <UserHeader pageTitle="Forums" credits={1250} />
+        <UserHeader pageTitle="Forums" />
         <div className="mx-auto max-w-7xl p-6 md:p-8">
           <div className="mb-6 flex items-center justify-between">
             <div>
@@ -2361,7 +2361,7 @@ const Forums = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-      <UserHeader pageTitle="Forums" credits={1250} />
+      <UserHeader pageTitle="Forums" />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8">
         <div className="mb-6 flex items-center justify-between">

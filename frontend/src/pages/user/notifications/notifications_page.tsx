@@ -145,7 +145,7 @@ const NotificationsPage: React.FC = () => {
       </div>
 
       <div className="relative z-20">
-        <UserHeader pageTitle="Notifications" credits={1250} />
+        <UserHeader pageTitle="Notifications" />
       </div>
 
       <div className="relative z-10 pt-6 pb-20 md:pt-10 flex-1">

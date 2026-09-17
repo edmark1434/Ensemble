@@ -99,4 +99,34 @@ async function deleteTask(req, res) {
   }
 }
 
-module.exports = { list, detail, addMembers, removeMember, createTask, updateTask, deleteTask };
+async function distributeFunds(req, res) {
+  try {
+    const data = await TeamTaskServices.distributeContractFundsServices(
+      req.params.teamId,
+      req.params.contractId,
+      accountId(req),
+      req.body
+    );
+    res.status(200).json({ success: true, data, message: 'Contract funds distributed successfully' });
+  } catch (error) {
+    console.error('Unable to distribute contract funds:', error.message);
+    sendError(res, error);
+  }
+}
+
+async function updateProjectLead(req, res) {
+  try {
+    const data = await TeamTaskServices.updateProjectLeadServices(
+      req.params.teamId,
+      req.params.contractId,
+      accountId(req),
+      req.body
+    );
+    res.status(200).json({ success: true, data, message: 'Contract project leader updated' });
+  } catch (error) {
+    console.error('Unable to update project leader:', error.message);
+    sendError(res, error);
+  }
+}
+
+module.exports = { list, detail, addMembers, removeMember, createTask, updateTask, deleteTask, distributeFunds, updateProjectLead };

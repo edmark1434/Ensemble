@@ -194,7 +194,7 @@ export const UserProfilesList: React.FC = () => {
 
   return (
     <div className="w-full h-screen flex flex-col bg-zinc-50 dark:bg-dark-base text-zinc-900 dark:text-white overflow-hidden">
-      <UserHeader pageTitle="User List" credits={1250} />
+      <UserHeader pageTitle="User List" />
 
       <div className="mx-auto max-w-5xl p-6 md:p-8 w-full flex flex-col flex-1 min-h-0">
 
