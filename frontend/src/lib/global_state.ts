@@ -57,7 +57,13 @@ const useGlobalState = create<GlobalState>((set) => ({
   setIsSidebarCollapsed: (isCollapsed) => set({ isSidebarCollapsed: isCollapsed }),
   setUser:            (user) => {
     localStorage.setItem('isGuestMode', 'false');
-    set({ user, isAuthenticated: true, isGuestMode: false });
+    const isVerified = user?.is_verified ?? user?.isVerified;
+    set({
+      user,
+      isAuthenticated: true,
+      isGuestMode: false,
+      ...(typeof isVerified === 'boolean' ? { isVerified } : {}),
+    });
   },
   setIsGuestMode:     (isGuestMode) => {
     localStorage.setItem('isGuestMode', String(isGuestMode));
@@ -73,6 +79,7 @@ const useGlobalState = create<GlobalState>((set) => ({
       isGuestMode: false,
       accessToken: null,
       signUpData: null,
+      isVerified: false,
     });
   },
   setAccessToken: (accessToken) => set({ accessToken }),

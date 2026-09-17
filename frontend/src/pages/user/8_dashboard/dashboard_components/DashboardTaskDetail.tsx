@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import api from '@/lib/axios';
 import useGlobalState from "@/lib/global_state";
 import { ArrowLeft, Send, ExternalLink, LoaderCircle, Star } from 'lucide-react';
@@ -19,24 +20,36 @@ export const DashboardTaskDetail = () => {
     const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
     const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
+    const resolveActiveMilestoneId = (fetchedTask: any, currentId: string | null) => {
+        if (!fetchedTask?.milestones?.length) return null;
+        
+        // If current milestone exists and is not completed/approved, keep it selected
+        if (currentId) {
+            const current = fetchedTask.milestones.find((m: any) => m.id === currentId);
+            if (current && current.status !== 'completed' && current.status !== 'approved') {
+                return currentId;
+            }
+        }
+        
+        // Otherwise, auto-advance to the first active or submitted_for_review milestone
+        const active = fetchedTask.milestones.find(
+            (m: any) => m.status === 'active' || m.status === 'submitted_for_review'
+        );
+        return active ? active.id : (currentId || fetchedTask.milestones[0].id);
+    };
+
     const fetchTask = useCallback(async () => {
         try {
             const response = await api.get(`/api/dashboard/tasks/${id}`);
             if (response.data.success) {
                 const fetchedTask = response.data.data;
                 setTask(fetchedTask);
-                setActiveMilestoneId((current) => {
-                    if (current || !fetchedTask?.milestones?.length) return current;
-                    const active = fetchedTask.milestones.find(
-                        (milestone: any) =>
-                            milestone.status === 'active' ||
-                            milestone.status === 'submitted_for_review'
-                    );
-                    return active ? active.id : fetchedTask.milestones[0].id;
-                });
+                setActiveMilestoneId((curr) => resolveActiveMilestoneId(fetchedTask, curr));
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error fetching task details:", error);
+            const message = error.response?.data?.message || "Failed to load contract task details.";
+            toast.error(message);
             navigate('/dashboard');
         } finally {
             setLoading(false);
@@ -48,16 +61,18 @@ export const DashboardTaskDetail = () => {
     }, [fetchTask]);
 
     useEffect(() => {
+        if (!socket.connected) {
+            socket.connect();
+        }
+
         const handleTaskUpdated = (event: {
             contract_id?: string;
             task?: { contract_id?: string; [key: string]: unknown };
         }) => {
-            if (
-                String(event?.contract_id || '') === String(id || '') &&
-                event?.task
-            ) {
-                setTask(event.task);
-                setLoading(false);
+            if (String(event?.contract_id || '') === String(id || '')) {
+                // Instantly re-fetch task with current user's session credentials so
+                // roles, permissions, and latest milestone statuses sync in real-time
+                void fetchTask();
             }
         };
         const handleReconnect = () => {
@@ -74,11 +89,11 @@ export const DashboardTaskDetail = () => {
 
     const applyTaskUpdate = (updatedTask?: unknown) => {
         const nextTask = updatedTask as
-            | { contract_id?: string; [key: string]: unknown }
+            | { contract_id?: string; milestones?: any[]; [key: string]: unknown }
             | undefined;
         if (String(nextTask?.contract_id || '') === String(id || '')) {
             setTask(nextTask);
-            return;
+            setActiveMilestoneId((curr) => resolveActiveMilestoneId(nextTask, curr));
         }
         void fetchTask();
     };
@@ -99,7 +114,9 @@ export const DashboardTaskDetail = () => {
         );
     }
 
-    const isFreelancer = user?.account_id === task.freelancer_account_id;
+    const isFreelancer = task?.user_role?.effective_role
+        ? task.user_role.effective_role === 'freelancer'
+        : user?.account_id === task.freelancer_account_id;
     const activeMilestone = task.milestones?.find((m: any) => m.id === activeMilestoneId);
     
     // Status Computation

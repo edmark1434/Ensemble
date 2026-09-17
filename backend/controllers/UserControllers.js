@@ -213,6 +213,13 @@ async function loginCredentials(req, res) {
         } else if (credentials.accountId != null) {
             credentials.account_id = credentials.accountId;
         }
+        try {
+            const { isAccountVerifiedByAccountId } = require('../repositories/AccountVerificationRepositories');
+            credentials.is_verified = Boolean(await isAccountVerifiedByAccountId(credentials.account_id));
+        } catch (err) {
+            console.error('Error checking is_verified in login:', err);
+            credentials.is_verified = false;
+        }
         const accessToken = await AccessTokens(credentials);
         setAccessTokenCookie(res, accessToken);
         await Promise.all([
@@ -233,6 +240,7 @@ async function loginCredentials(req, res) {
                 staffId: credentials.staff_id ?? credentials.staffId,
                 avatar_file_id: credentials.avatar_file_id,
                 avatar_preset_url: credentials.avatar_preset_url,
+                is_verified: credentials.is_verified,
             },
         });
     } catch (err) {
@@ -364,6 +372,7 @@ async function getCurrentUser(req, res) {
     let sessionUser = req.session || null;
     if (sessionUser && (sessionUser.account_id || sessionUser.accountId)) {
         const accountId = sessionUser.account_id || sessionUser.accountId;
+        let sessionModified = false;
         if (!sessionUser.avatar_preset_url || !sessionUser.avatar_file_id) {
             try {
                 const { getProfileCurrentAvatarByAccountId } = require('../repositories/ProfileRepositories');
@@ -371,13 +380,26 @@ async function getCurrentUser(req, res) {
                 if (avatar) {
                     sessionUser.avatar_file_id = avatar.file_id;
                     sessionUser.avatar_preset_url = avatar.path;
-                    const sessionId = req.cookies?.sessionId;
-                    if (sessionId && redis) {
-                        redis.set(`session:${sessionId}`, JSON.stringify(sessionUser), { KEEPTTL: true }).catch(() => {});
-                    }
+                    sessionModified = true;
                 }
             } catch (err) {
                 console.error('Error hydrating avatar in getCurrentUser:', err);
+            }
+        }
+        try {
+            const { isAccountVerifiedByAccountId } = require('../repositories/AccountVerificationRepositories');
+            const isVerified = await isAccountVerifiedByAccountId(accountId);
+            if (sessionUser.is_verified !== isVerified) {
+                sessionUser.is_verified = Boolean(isVerified);
+                sessionModified = true;
+            }
+        } catch (err) {
+            console.error('Error hydrating is_verified in getCurrentUser:', err);
+        }
+        if (sessionModified) {
+            const sessionId = req.cookies?.sessionId;
+            if (sessionId && redis) {
+                redis.set(`session:${sessionId}`, JSON.stringify(sessionUser), { KEEPTTL: true }).catch(() => {});
             }
         }
     }

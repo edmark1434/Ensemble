@@ -207,7 +207,7 @@ const ProjectsSelection: React.FC = () => {
       </div>
 
       {/* Top Header */}
-      <UserHeader pageTitle="Projects / Select Format" credits={1250} />
+      <UserHeader pageTitle="Projects / Select Format" />
 
       {/* Main Content */}
       <div className="relative z-10 mx-auto max-w-4xl p-6 md:p-8">

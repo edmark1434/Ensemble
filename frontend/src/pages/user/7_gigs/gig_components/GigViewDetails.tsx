@@ -32,11 +32,28 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
     }
   };
 
+  const isTeam = Boolean(
+    selectedGig?.is_team ||
+    selectedGig?.isTeam ||
+    selectedGig?.team_id ||
+    selectedGig?.teamId
+  );
+  const teamVisibility = String(selectedGig?.team_visibility || selectedGig?.teamVisibility || '').toLowerCase();
+  const isPrivateTeam = isTeam && teamVisibility === 'private';
+  const targetTeamId = selectedGig?.team_id || selectedGig?.teamId;
+
   const handleViewProfile = () => {
     if (!selectedGig) return;
 
     if (selectedGig.isPersonalGig) {
       navigate("/profile");
+      return;
+    }
+
+    if (isTeam) {
+      if (targetTeamId) {
+        navigate(`/teams/${encodeURIComponent(targetTeamId)}`);
+      }
       return;
     }
 
@@ -376,14 +393,16 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleViewProfile}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
-                >
-                  <User className="h-3.5 w-3.5 text-blue-400" />
-                  <span>View Profile</span>
-                </button>
+                {!isPrivateTeam && (
+                  <button
+                    type="button"
+                    onClick={handleViewProfile}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
+                  >
+                    <User className="h-3.5 w-3.5 text-blue-400" />
+                    <span>{isTeam ? "View Team Profile" : "View Profile"}</span>
+                  </button>
+                )}
               </div>
 
               {selectedGig.canManageGig ? (

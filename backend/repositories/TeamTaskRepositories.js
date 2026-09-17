@@ -98,8 +98,8 @@ async function ensureWorkspace(teamId, contractId, actorAccountId) {
   try {
     await client.query('BEGIN');
     const workspace = (await client.query(
-      `INSERT INTO team_contract_workspaces (team_id, contract_id, created_by_account_id)
-       VALUES ($1, $2, $3)
+      `INSERT INTO team_contract_workspaces (team_id, contract_id, created_by_account_id, project_lead_account_id)
+       VALUES ($1, $2, $3, $3)
        ON CONFLICT (team_id, contract_id)
        DO UPDATE SET updated_at = team_contract_workspaces.updated_at
        RETURNING *`,
@@ -122,7 +122,15 @@ async function ensureWorkspace(teamId, contractId, actorAccountId) {
 
 async function getWorkspace(teamId, contractId) {
   return (await pool.query(
-    `SELECT * FROM team_contract_workspaces WHERE team_id = $1 AND contract_id = $2`,
+    `SELECT tcw.*,
+            COALESCE(tcw.project_lead_account_id, tcw.created_by_account_id) AS effective_project_lead_account_id,
+            lead_acc.display_name AS project_lead_name,
+            lead_acc.handle AS project_lead_handle,
+            f.path AS project_lead_avatar_path
+       FROM team_contract_workspaces tcw
+       LEFT JOIN accounts lead_acc ON lead_acc.account_id = COALESCE(tcw.project_lead_account_id, tcw.created_by_account_id)
+       LEFT JOIN files f ON f.file_id = lead_acc.avatar_file_id
+      WHERE tcw.team_id = $1 AND tcw.contract_id = $2`,
     [teamId, contractId]
   )).rows[0] || null;
 }
@@ -528,6 +536,269 @@ async function deleteTask(workspaceId, taskId, actorAccountId) {
   }
 }
 
+async function getContractFinancialSnapshot(teamId, contractId) {
+  const contractResult = await pool.query(
+    `SELECT rate_credits, status FROM contracts WHERE contract_id = $1`,
+    [contractId]
+  );
+  const contract = contractResult.rows[0];
+  const contractValue = Number(contract?.rate_credits || 0);
+
+  const releasedResult = await pool.query(
+    `SELECT COALESCE(SUM(amount_credits), 0)::int AS released_credits
+       FROM credit_transactions
+      WHERE reference_table = 'contracts'
+        AND reference_id = $1
+        AND type = 'Escrow Release'
+        AND LOWER(status) = 'completed'`,
+    [contractId]
+  );
+  const releasedCredits = Number(releasedResult.rows[0]?.released_credits || 0);
+
+  const distributedResult = await pool.query(
+    `SELECT COALESCE(SUM(amount_credits), 0)::int AS distributed_credits
+       FROM team_contract_distributions
+      WHERE contract_id = $1`,
+    [contractId]
+  );
+  const distributedCredits = Number(distributedResult.rows[0]?.distributed_credits || 0);
+
+  const walletResult = await pool.query(
+    `SELECT COALESCE(SUM(w.balance_credits), 0)::int AS team_available_balance
+       FROM teams t
+       JOIN account_wallets aw ON aw.account_id = t.account_id
+       JOIN wallets w ON w.wallet_id = aw.wallet_id
+      WHERE t.team_id = $1 AND w.type = 'account wallets'`,
+    [teamId]
+  );
+  const teamAvailableBalance = Number(walletResult.rows[0]?.team_available_balance || 0);
+
+  const remainingDistributableCredits = Math.max(0, releasedCredits - distributedCredits);
+
+  return {
+    contract_value: contractValue,
+    released_credits: releasedCredits,
+    distributed_credits: distributedCredits,
+    remaining_distributable_credits: remainingDistributableCredits,
+    team_available_balance: teamAvailableBalance,
+    is_funded_and_released: releasedCredits > 0,
+    contract_status: contract?.status || 'Unknown',
+  };
+}
+
+async function listContractDistributions(contractId) {
+  const result = await pool.query(
+    `SELECT tcd.distribution_id,
+            tcd.workspace_id,
+            tcd.contract_id,
+            tcd.amount_credits,
+            tcd.created_at,
+            distributor.account_id AS distributor_account_id,
+            distributor.display_name AS distributor_name,
+            distributor.handle AS distributor_handle,
+            recipient.account_id AS recipient_account_id,
+            recipient.display_name AS recipient_name,
+            recipient.handle AS recipient_handle,
+            rf.path AS recipient_avatar_path
+       FROM team_contract_distributions tcd
+       JOIN accounts distributor ON distributor.account_id = tcd.distributed_by_account_id
+       JOIN accounts recipient ON recipient.account_id = tcd.recipient_account_id
+       LEFT JOIN files rf ON rf.file_id = recipient.avatar_file_id
+      WHERE tcd.contract_id = $1
+      ORDER BY tcd.created_at DESC`,
+    [contractId]
+  );
+  return result.rows;
+}
+
+async function updateProjectLead(workspaceId, projectLeadAccountId) {
+  const result = await pool.query(
+    `UPDATE team_contract_workspaces
+        SET project_lead_account_id = $2, updated_at = NOW()
+      WHERE workspace_id = $1
+      RETURNING *`,
+    [workspaceId, projectLeadAccountId]
+  );
+  return result.rows[0] || null;
+}
+
+async function distributeContractFunds(workspaceId, teamId, contractId, distributorAccountId, recipients) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Lock team account wallet
+    const source = (await client.query(
+      `SELECT w.wallet_id, w.balance_credits, w.status
+         FROM teams t
+         JOIN account_wallets aw ON aw.account_id = t.account_id
+         JOIN wallets w ON w.wallet_id = aw.wallet_id
+        WHERE t.team_id = $1 AND t.deleted_at IS NULL AND w.type = 'account wallets'
+          FOR UPDATE`,
+      [teamId]
+    )).rows[0];
+
+    if (!source || String(source.status).toLowerCase() !== 'active') {
+      throw new Error('Team account wallet is unavailable');
+    }
+
+    // 2. Lock & calculate released credits for this contract
+    const releasedRow = (await client.query(
+      `SELECT COALESCE(SUM(amount_credits), 0)::int AS released_credits
+         FROM credit_transactions
+        WHERE reference_table = 'contracts'
+          AND reference_id = $1
+          AND type = 'Escrow Release'
+          AND LOWER(status) = 'completed'`,
+      [contractId]
+    )).rows[0];
+    const releasedCredits = Number(releasedRow?.released_credits || 0);
+
+    // 3. Lock & calculate distributed credits for this contract
+    const distributedRow = (await client.query(
+      `SELECT COALESCE(SUM(amount_credits), 0)::int AS distributed_credits
+         FROM team_contract_distributions
+        WHERE contract_id = $1`,
+      [contractId]
+    )).rows[0];
+    const distributedCredits = Number(distributedRow?.distributed_credits || 0);
+
+    const remainingContractCredits = Math.max(0, releasedCredits - distributedCredits);
+    const totalRequested = recipients.reduce((sum, r) => sum + r.amount_credits, 0);
+
+    if (releasedCredits <= 0) {
+      throw new Error('Contract funds have not been released from client escrow yet');
+    }
+
+    if (totalRequested > remainingContractCredits) {
+      throw new Error(`Requested distribution (${totalRequested} credits) exceeds remaining contract budget (${remainingContractCredits} credits)`);
+    }
+
+    if (Number(source.balance_credits) < totalRequested) {
+      throw new Error('Insufficient available Team wallet balance');
+    }
+
+    // 4. Lock recipient wallets and verify they are workspace members
+    const recipientIds = recipients.map((r) => r.account_id);
+    const recipientWallets = (await client.query(
+      `SELECT aw.account_id, w.wallet_id, w.status, a.display_name, a.handle
+         FROM account_wallets aw
+         JOIN wallets w ON w.wallet_id = aw.wallet_id
+         JOIN users u ON u.account_id = aw.account_id
+         JOIN team_members tm ON tm.user_id = u.user_id
+         JOIN team_workspace_members twm ON twm.account_id = aw.account_id AND twm.workspace_id = $2
+         JOIN accounts a ON a.account_id = aw.account_id
+        WHERE tm.team_id = $1
+          AND tm.status = 'Active'
+          AND aw.account_id = ANY($3::uuid[])
+          AND w.type = 'account wallets'
+        ORDER BY w.wallet_id
+          FOR UPDATE`,
+      [teamId, workspaceId, recipientIds]
+    )).rows;
+
+    if (recipientWallets.length !== recipients.length) {
+      throw new Error('Every recipient must be an active workspace member of this contract with an active account wallet');
+    }
+
+    // 5. Deduct from team wallet
+    await client.query(
+      `UPDATE wallets SET balance_credits = balance_credits - $1 WHERE wallet_id = $2`,
+      [totalRequested, source.wallet_id]
+    );
+
+    const walletsByAccountId = new Map(recipientWallets.map((w) => [String(w.account_id), w]));
+    const transactions = [];
+    const distributions = [];
+
+    for (const recipient of recipients) {
+      const destination = walletsByAccountId.get(String(recipient.account_id));
+      await client.query(
+        `UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2`,
+        [recipient.amount_credits, destination.wallet_id]
+      );
+
+      const transaction = (await client.query(
+        `INSERT INTO credit_transactions (
+           type, amount_credits, status,
+           source_wallet_id, destination_wallet_id,
+           fee_transaction_id, reference_table, reference_id
+         ) VALUES (
+           'Fund Transfer', $1, 'completed',
+           $2, $3, NULL, 'team_contract_workspaces', $4
+         ) RETURNING *`,
+        [recipient.amount_credits, source.wallet_id, destination.wallet_id, workspaceId]
+      )).rows[0];
+
+      const distribution = (await client.query(
+        `INSERT INTO team_contract_distributions (
+           workspace_id, contract_id, team_id,
+           distributed_by_account_id, recipient_account_id,
+           amount_credits, credit_transaction_id
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING *`,
+        [
+          workspaceId,
+          contractId,
+          teamId,
+          distributorAccountId,
+          recipient.account_id,
+          recipient.amount_credits,
+          transaction.credit_transaction_id,
+        ]
+      )).rows[0];
+
+      transactions.push({
+        ...transaction,
+        recipient_account_id: recipient.account_id,
+        recipient_name: destination.display_name,
+        recipient_handle: destination.handle,
+      });
+
+      distributions.push({
+        ...distribution,
+        recipient_name: destination.display_name,
+        recipient_handle: destination.handle,
+      });
+    }
+
+    // 6. Log workspace activity
+    await client.query(
+      `INSERT INTO team_workspace_activity (workspace_id, actor_account_id, action, metadata)
+       VALUES ($1, $2, 'contract_funds_distributed', $3::jsonb)`,
+      [
+        workspaceId,
+        distributorAccountId,
+        JSON.stringify({
+          distributed_credits: totalRequested,
+          recipient_count: recipients.length,
+          remaining_contract_credits: remainingContractCredits - totalRequested,
+        }),
+      ]
+    );
+
+    await client.query(
+      `UPDATE team_contract_workspaces SET updated_at = NOW() WHERE workspace_id = $1`,
+      [workspaceId]
+    );
+
+    await client.query('COMMIT');
+
+    return {
+      transactions,
+      distributions,
+      distributed_credits: totalRequested,
+      remaining_contract_credits: remainingContractCredits - totalRequested,
+      available_team_balance: Number(source.balance_credits) - totalRequested,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   listContractWorkspaces,
   getEligibleContract,
@@ -549,4 +820,8 @@ module.exports = {
   createTask,
   updateTask,
   deleteTask,
+  getContractFinancialSnapshot,
+  listContractDistributions,
+  updateProjectLead,
+  distributeContractFunds,
 };

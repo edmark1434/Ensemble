@@ -13,7 +13,7 @@ const SectionPlaceholder = ({
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
       {/* Top Header */}
-      <UserHeader pageTitle={title} credits={1250} />
+      <UserHeader pageTitle={title} />
 
       {/* Main Content */}
       <div className="mx-auto max-w-7xl p-6 md:p-8">

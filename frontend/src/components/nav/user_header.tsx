@@ -94,7 +94,10 @@ let pendingHeaderFetch: Promise<void> | null = null;
 
 const UserHeader: React.FC<UserHeaderProps> = ({
   pageTitle,
+  credits: propCredits,
+  userName,
   userAvatar,
+  onTopUp,
 }) => {
   const navigate = useNavigate();
 
@@ -127,7 +130,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
     cachedHeaderData.accountId === String(userInfo.account_id)
   );
 
-  const displayName = userInfo?.display_name || userInfo?.displayName || userInfo?.username || "User";
+  const displayName = userName || userInfo?.display_name || userInfo?.displayName || userInfo?.username || "User";
   const defaultFallback = userAvatar || getFallbackAvatar(displayName);
 
   const initialRawAvatar = hasCachedData
@@ -136,9 +139,11 @@ const UserHeader: React.FC<UserHeaderProps> = ({
 
   const initialAvatar = constructAvatarUrl(initialRawAvatar);
 
-  const initialCredits = hasCachedData
-    ? cachedHeaderData!.credits
-    : (userInfo?.wallet?.balance_credits !== undefined ? Number(userInfo?.wallet?.balance_credits) : null);
+  const initialCredits = propCredits !== undefined && propCredits !== null
+    ? propCredits
+    : hasCachedData
+      ? cachedHeaderData!.credits
+      : (userInfo?.wallet?.balance_credits !== undefined ? Number(userInfo?.wallet?.balance_credits) : (isGuestView ? 0 : null));
 
   const initialPlan = hasCachedData
     ? cachedHeaderData!.subscriptionPlan
@@ -158,6 +163,15 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const [isVerified, setIsVerified] = useState<boolean>(initialVerified);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+
+  useEffect(() => {
+    if (propCredits !== undefined && propCredits !== null) {
+      setCredits(propCredits);
+      if (cachedHeaderData) {
+        cachedHeaderData.credits = propCredits;
+      }
+    }
+  }, [propCredits]);
 
   useEffect(() => {
     const rawPath = userInfo?.avatar_preset_url || userInfo?.avatar_url || userInfo?.avatar;
@@ -309,13 +323,14 @@ useEffect(() => {
       setUserAvatarState(cachedHeaderData.avatarUrl);
       setUserSubscriptionPlan(cachedHeaderData.subscriptionPlan);
       setIsVerified(cachedHeaderData.isVerified);
+      useGlobalState.getState().setIsVerified(cachedHeaderData.isVerified);
       return;
     }
 
     let cancelled = false;
     const refreshHeaderData = async () => {
       try {
-        const [getWalletResponse, getAvatarResponse, getSubscriptionPlanResponse, getVerificationResponse] = await Promise.all([
+        const [walletResult, avatarResult, planResult, verificationResult] = await Promise.allSettled([
           api.get("/api/accounts/wallet", {
             params: { type: 'account_wallets' },
           }),
@@ -326,18 +341,34 @@ useEffect(() => {
 
         if (cancelled) return;
 
-        const planName = (getSubscriptionPlanResponse.data?.planDetails?.plan_name as "Free" | "Premium" | "Business") || "Free";
-        const verified = Boolean(getVerificationResponse.data?.data?.is_verified);
-        useGlobalState.getState().setIsVerified(verified);
+        let planName: "Free" | "Premium" | "Business" = "Free";
+        if (planResult.status === 'fulfilled') {
+          planName = (planResult.value.data?.planDetails?.plan_name as "Free" | "Premium" | "Business") || "Free";
+        }
+
+        let verified = false;
+        if (verificationResult.status === 'fulfilled') {
+          verified = Boolean(verificationResult.value.data?.data?.is_verified);
+          useGlobalState.getState().setIsVerified(verified);
+        }
 
         let avatarUrl = '';
-        if (getAvatarResponse.data?.data?.path) {
-          avatarUrl = constructAvatarUrl(getAvatarResponse.data.data.path);
+        if (avatarResult.status === 'fulfilled' && avatarResult.value.data?.data?.path) {
+          avatarUrl = constructAvatarUrl(avatarResult.value.data.data.path);
         } else if (userInfo?.avatar_preset_url || userInfo?.avatar_url || userInfo?.avatar) {
           avatarUrl = constructAvatarUrl(userInfo?.avatar_preset_url || userInfo?.avatar_url || userInfo?.avatar);
         }
 
-        const credits = Number(getWalletResponse.data?.wallet?.balance_credits) || 0;
+        let credits = 0;
+        if (walletResult.status === 'fulfilled') {
+          credits = Number(walletResult.value.data?.wallet?.balance_credits) || 0;
+        } else if (propCredits !== undefined && propCredits !== null) {
+          credits = Number(propCredits) || 0;
+        } else if (userInfo?.wallet?.balance_credits !== undefined) {
+          credits = Number(userInfo.wallet.balance_credits) || 0;
+        } else if (cachedHeaderData?.credits !== undefined) {
+          credits = cachedHeaderData.credits;
+        }
 
         cachedHeaderData = {
           accountId: String(userInfo?.account_id),
@@ -361,7 +392,10 @@ useEffect(() => {
         }
         setCredits(credits);
       } catch (err) {
-        if (!cancelled) console.error("Error refreshing header data:", err);
+        if (!cancelled) {
+          console.error("Error refreshing header data:", err);
+          setCredits((prev) => (prev !== null ? prev : (propCredits ?? (userInfo?.wallet?.balance_credits !== undefined ? Number(userInfo.wallet.balance_credits) : 0))));
+        }
       }
     };
 
@@ -443,7 +477,11 @@ useEffect(() => {
   }, []);
 
   const handleTopUp = () => {
-    navigate("/credits");
+    if (onTopUp) {
+      onTopUp();
+    } else {
+      navigate("/credits");
+    }
   };
 
   const handleHeaderSearchSubmit = (e: React.FormEvent) => {

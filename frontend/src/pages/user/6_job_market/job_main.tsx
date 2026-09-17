@@ -135,7 +135,14 @@ const JobMain: React.FC = () => {
           isManageablePost: Boolean(j.is_manageable_post),
           isPersonalPost: Boolean(j.is_personal_post),
           hasProposed: j.has_proposed || false,
-          myProposalId: j.my_proposal_id || null
+          myProposalId: j.my_proposal_id || null,
+          team_id: j.team_id || null,
+          teamId: j.team_id || null,
+          team_visibility: j.team_visibility || null,
+          teamVisibility: j.team_visibility || null,
+          is_team: Boolean(j.is_team || j.posted_as === 'Team' || j.team_id),
+          isTeam: Boolean(j.is_team || j.posted_as === 'Team' || j.team_id),
+          posted_as: j.posted_as,
         }));
         setJobsList(mappedJobs);
       } catch (err) {
@@ -297,7 +304,7 @@ const JobMain: React.FC = () => {
     <div className="w-full min-h-screen bg-gray-50 dark:bg-dark-base relative">
       {/* Sticky User Header */}
       <div className="sticky top-0 z-50">
-        <UserHeader pageTitle="Job Market" credits={1250} />
+        <UserHeader pageTitle="Job Market" />
       </div>
 
       <div className="mx-auto max-w-7xl p-6 md:p-8 w-full">

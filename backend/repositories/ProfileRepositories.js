@@ -464,6 +464,8 @@ async function getProfileReviewsByAccountId(accountId) {
                     WHEN req.client_account_id = $1 OR j.client_account_id = $1 THEN 'client'
                     ELSE 'unknown'
                 END as role_type,
+                a.account_id as reviewer_account_id,
+                a.handle as reviewer_handle,
                 COALESCE(u.first_name || ' ' || u.last_name, a.handle) as reviewer_name,
                 f.path as reviewer_avatar
             FROM ratings r

@@ -1,4 +1,4 @@
-﻿import toast from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state.ts';
 
@@ -15,7 +15,9 @@ type ApiError = {
 
 export async function requireVerifiedAccount(): Promise<void> {
   const response = await api.get('/api/verification/status');
-  if (response.data?.data?.is_verified === true) return;
+  const isVerified = response.data?.data?.is_verified === true;
+  useGlobalState.getState().setIsVerified(isVerified);
+  if (isVerified) return;
 
   const error = new Error(VERIFICATION_REQUIRED_MESSAGE) as VerificationRequiredError;
   error.code = ACCOUNT_VERIFICATION_REQUIRED;

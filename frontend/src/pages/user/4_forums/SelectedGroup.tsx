@@ -1797,7 +1797,7 @@ const SelectedGroup = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-        <UserHeader pageTitle="Group" credits={1250} />
+        <UserHeader pageTitle="Group" />
         <div className="mx-auto max-w-7xl p-6 md:p-8">
           <div className="h-48 w-full animate-pulse rounded-xl bg-gray-100 dark:bg-white/10" />
           <div className="mt-6 h-10 w-48 animate-pulse rounded-lg bg-gray-100 dark:bg-white/10" />
@@ -1814,7 +1814,7 @@ const SelectedGroup = () => {
   if (!group) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-        <UserHeader pageTitle="Group" credits={1250} />
+        <UserHeader pageTitle="Group" />
         <div className="mx-auto max-w-7xl p-6 md:p-8 text-center">
           <p className="text-gray-500 dark:text-zinc-400">Group not found</p>
           <button
@@ -1830,7 +1830,7 @@ const SelectedGroup = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-      <UserHeader pageTitle={group.group_name} credits={1250} />
+      <UserHeader pageTitle={group.group_name} />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8">
         <div className="mb-6 flex items-center justify-between">

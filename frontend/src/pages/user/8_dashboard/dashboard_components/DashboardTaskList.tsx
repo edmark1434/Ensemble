@@ -17,6 +17,12 @@ interface DashboardTask {
     job_banner?: string;
     job_category?: string;
     job_difficulty?: string;
+    user_role?: {
+        effective_role?: string;
+        can_buy_revision?: boolean;
+        can_review_milestone?: boolean;
+        can_submit_milestone?: boolean;
+    };
 }
 
 interface DashboardTaskListProps {
@@ -43,7 +49,9 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
         <div className="grid gap-4">
             {tasks.map(task => {
                 const allMilestonesDone = task.milestones?.length > 0 && task.milestones.every((m: any) => m.status === 'completed' || m.status === 'approved');
-                const isFreelancerRole = task.freelancer_account_id === currentUserAccountId;
+                const isFreelancerRole = task.user_role?.effective_role
+                    ? task.user_role.effective_role === 'freelancer'
+                    : task.freelancer_account_id === currentUserAccountId;
                 const myReview = isFreelancerRole ? task.freelancer_rating : task.client_rating;
                 const theirReview = isFreelancerRole ? task.client_rating : task.freelancer_rating;
                 

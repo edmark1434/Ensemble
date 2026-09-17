@@ -65,7 +65,9 @@ function safeIo() {
 }
 
 async function notifyAndBroadcast({ task, actorId, recipientId, submission, milestone, action }) {
-    const isFreelancerAction = String(actorId) === String(task.freelancer_account_id);
+    const isFreelancerAction =
+        String(actorId) === String(task.freelancer_account_id) ||
+        task.user_role?.effective_role === 'freelancer';
     const actorName = isFreelancerAction ? task.freelancer_name : task.client_name;
     const milestoneName = milestone.name || 'milestone';
     const listingTitle = task.job_title || 'contract';
@@ -111,10 +113,28 @@ async function notifyAndBroadcast({ task, actorId, recipientId, submission, mile
             actor_account_id: String(actorId),
             emitted_at: new Date().toISOString(),
         };
-        io.to([
-            String(task.client_account_id),
-            String(task.freelancer_account_id),
-        ]).emit('dashboardTaskUpdated', event);
+        const targetRooms = new Set(
+            [
+                String(task.client_account_id),
+                String(task.freelancer_account_id),
+                String(recipientId),
+                String(actorId),
+            ].filter(Boolean)
+        );
+
+        let broadcaster = io;
+        for (const room of targetRooms) {
+            broadcaster = broadcaster.to(room);
+        }
+        broadcaster.emit('dashboardTaskUpdated', event);
+
+        // Also notify team contract workspaces if a team is involved
+        if (task.user_role?.team_id) {
+            io.emit('teamTaskWorkspaceUpdated', {
+                team_id: String(task.user_role.team_id),
+                contract_id: String(task.contract_id),
+            });
+        }
     }
 }
 
@@ -125,8 +145,8 @@ async function submitMilestoneServices({ accountId, contractId, milestoneId, pay
     const input = normalizeActionInput(payload, FREELANCER_STATUSES);
     const task = await DashboardRepositories.getTaskById(normalizedContractId, actorId);
 
-    if (!task || String(task.freelancer_account_id) !== actorId) {
-        throw new DashboardActionError('Task not found or unauthorized', 403);
+    if (!task || !task.user_role?.can_submit_milestone) {
+        throw new DashboardActionError('Only the freelancer, team Project Leader, or team Owner/Admin can submit milestone work', 403);
     }
 
     const result = await DashboardRepositories.recordMilestoneAction({
@@ -136,8 +156,14 @@ async function submitMilestoneServices({ accountId, contractId, milestoneId, pay
         attachments: input.attachments,
         submissionStatus: input.status,
         milestoneStatus:
-            input.status === 'submitted_for_review' ? 'submitted_for_review' : null,
-        allowedCurrentStatuses: ['active'],
+            input.status === 'submitted_for_review' ? 'submitted_for_review' : 'active',
+        allowedCurrentStatuses: [
+            'active',
+            'pending',
+            'revision_requested',
+            'revisions_requested',
+            'in_progress',
+        ],
     });
     const updatedTask = await DashboardRepositories.getTaskById(
         normalizedContractId,
@@ -163,8 +189,8 @@ async function reviewMilestoneServices({ accountId, contractId, milestoneId, pay
     const input = normalizeActionInput(payload, CLIENT_STATUSES);
     const task = await DashboardRepositories.getTaskById(normalizedContractId, actorId);
 
-    if (!task || String(task.client_account_id) !== actorId) {
-        throw new DashboardActionError('Task not found or unauthorized', 403);
+    if (!task || !task.user_role?.can_review_milestone) {
+        throw new DashboardActionError('Only the client, team Project Leader, or team Owner/Admin can review milestone submissions', 403);
     }
 
     const result = await DashboardRepositories.recordMilestoneAction({
@@ -265,10 +291,18 @@ async function buyRevisionServices({ accountId, contractId, milestoneId, payload
                 wallet_type: 'escrow wallets',
                 transaction_id: purchase.transactionId,
             });
-            io.to([
-                String(purchase.clientAccountId),
-                String(purchase.freelancerAccountId),
-            ]).emit('dashboardTaskUpdated', {
+            const purchaseRooms = new Set(
+                [
+                    String(purchase.clientAccountId),
+                    String(purchase.freelancerAccountId),
+                    String(actorId),
+                ].filter(Boolean)
+            );
+            let purchaseBroadcaster = io;
+            for (const room of purchaseRooms) {
+                purchaseBroadcaster = purchaseBroadcaster.to(room);
+            }
+            purchaseBroadcaster.emit('dashboardTaskUpdated', {
                 contract_id: normalizedContractId,
                 task,
                 action: 'revision_purchased',

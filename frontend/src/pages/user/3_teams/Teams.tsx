@@ -13,6 +13,7 @@ interface Team {
   handle: string;
   description: string;
   avatar_path?: string;
+  visibility?: "Public" | "Private";
   member_count: number;
   current_user_role?: string;
   current_user_status?: string;
@@ -24,6 +25,7 @@ interface CreateTeamValues {
   handle: string;
   tagline: string;
   description: string;
+  visibility: "Public" | "Private";
   photo: File;
 }
 
@@ -63,7 +65,8 @@ export default function Teams() {
         },
       });
 
-      setTeams(response.data.data || []);
+      const items = (response.data.data || []) as Team[];
+      setTeams(isBrowseMode ? items.filter((t) => t.visibility !== "Private") : items);
     } catch (error: unknown) {
       showErrorToast(getApiError(error, "Unable to load Teams"));
     } finally {
@@ -241,6 +244,11 @@ export default function Teams() {
                     </div>
 
                     <div className="flex flex-wrap justify-end gap-1.5">
+                      {team.visibility === "Private" && (
+                        <span className="h-fit rounded-full border border-amber-400/25 bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300">
+                          Private
+                        </span>
+                      )}
                       {team.current_user_role && (
                         <span className="h-fit rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
                           {team.current_user_role}

@@ -80,12 +80,18 @@ async function workspaceContext(teamId, contractId, actorAccountId, { createForM
 }
 
 async function getWorkspaceSnapshot(context) {
-  const [members, tasks, activity, activeTeamMembers] = await Promise.all([
+  const projectLeadId = context.workspace.project_lead_account_id || context.workspace.created_by_account_id;
+  const isProjectLead = String(context.actorAccountId) === String(projectLeadId);
+
+  const [members, tasks, activity, activeTeamMembers, budget, distributions] = await Promise.all([
     TeamTaskRepositories.listWorkspaceMembers(context.workspace.workspace_id),
     TeamTaskRepositories.listWorkspaceTasks(context.workspace.workspace_id),
     TeamTaskRepositories.listWorkspaceActivity(context.workspace.workspace_id),
     TeamRepositories.listMembers(context.teamId, ['Active']),
+    TeamTaskRepositories.getContractFinancialSnapshot(context.teamId, context.contractId),
+    TeamTaskRepositories.listContractDistributions(context.contractId),
   ]);
+
   return {
     workspace: context.workspace,
     contract: context.contract,
@@ -93,10 +99,21 @@ async function getWorkspaceSnapshot(context) {
     available_members: activeTeamMembers,
     tasks,
     activity,
+    budget,
+    distributions,
+    is_project_lead: isProjectLead,
+    project_lead: {
+      account_id: projectLeadId,
+      display_name: context.workspace.project_lead_name || 'Project Lead',
+      handle: context.workspace.project_lead_handle || '',
+      avatar_path: context.workspace.project_lead_avatar_path || null,
+    },
     permissions: {
       can_manage: context.canManage,
       can_create_tasks: context.canManage,
       can_manage_members: context.canManage,
+      can_distribute: isProjectLead,
+      can_assign_project_lead: context.canManage,
     },
     current_account_id: context.actorAccountId,
   };
@@ -396,6 +413,98 @@ async function deleteTaskServices(teamId, contractId, taskId, actorAccountId) {
   return getWorkspaceSnapshot(context);
 }
 
+async function distributeContractFundsServices(teamId, contractId, actorAccountId, payload) {
+  const context = await workspaceContext(teamId, contractId, actorAccountId);
+  const projectLeadId = context.workspace.project_lead_account_id || context.workspace.created_by_account_id;
+
+  if (String(context.actorAccountId) !== String(projectLeadId)) {
+    throw new TeamTaskError('Only the designated project leader of this contract can distribute its funds', 403, 'PROJECT_LEAD_DISTRIBUTION_ONLY');
+  }
+
+  const recipients = payload?.recipients;
+  if (!Array.isArray(recipients) || recipients.length === 0 || recipients.length > 50) {
+    throw new TeamTaskError('Select at least one workspace member to receive funds', 422, 'INVALID_RECIPIENTS');
+  }
+
+  const seen = new Set();
+  const normalizedRecipients = recipients.map((r) => {
+    const accountId = requireUuid(r?.account_id, 'recipient account ID');
+    const amount = Number(r?.amount_credits);
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      throw new TeamTaskError('Each recipient must have a positive whole credit amount', 422, 'INVALID_AMOUNT');
+    }
+    if (seen.has(accountId)) {
+      throw new TeamTaskError('Each member can only be included once per distribution', 422, 'DUPLICATE_RECIPIENT');
+    }
+    seen.add(accountId);
+    return { account_id: accountId, amount_credits: amount };
+  });
+
+  const workspaceMembers = await TeamTaskRepositories.listWorkspaceMembers(context.workspace.workspace_id);
+  const workspaceMemberSet = new Set(workspaceMembers.map((m) => String(m.account_id)));
+  for (const r of normalizedRecipients) {
+    if (!workspaceMemberSet.has(String(r.account_id))) {
+      throw new TeamTaskError('Every recipient must be a member of this contract workspace', 422, 'RECIPIENT_NOT_IN_WORKSPACE');
+    }
+  }
+
+  try {
+    const result = await TeamTaskRepositories.distributeContractFunds(
+      context.workspace.workspace_id,
+      context.teamId,
+      context.contractId,
+      context.actorAccountId,
+      normalizedRecipients
+    );
+
+    const io = getIo();
+    for (const transaction of result.transactions) {
+      try {
+        const recipientNotification = await createNotificationServices({
+          message: `You received ${transaction.amount_credits.toLocaleString()} credits from contract "${context.contract.listing_title}" by Project Lead.`,
+          is_read: false,
+          reference_table: 'credit_transactions',
+          reference_prefix: 'CONTRACT_FUND_DISTRIBUTION',
+          reference_path: `/teams/${context.teamId}/tasks/${context.contractId}`,
+          reference_id: transaction.credit_transaction_id,
+          account_id: transaction.recipient_account_id,
+        });
+        io.to(String(transaction.recipient_account_id)).emit('notification', recipientNotification);
+      } catch (notifErr) {
+        console.error('Failed to notify contract fund recipient:', notifErr.message);
+      }
+    }
+
+    await emitWorkspaceUpdate(context, 'funds_distributed');
+
+    return {
+      ...result,
+      snapshot: await getWorkspaceSnapshot(context),
+    };
+  } catch (error) {
+    throw new TeamTaskError(error.message, 422, 'DISTRIBUTION_FAILED');
+  }
+}
+
+async function updateProjectLeadServices(teamId, contractId, actorAccountId, payload) {
+  const context = await workspaceContext(teamId, contractId, actorAccountId);
+  if (!context.canManage) {
+    throw new TeamTaskError('Only a Team Owner or Admin can assign the contract project leader', 403, 'NOT_AUTHORIZED');
+  }
+
+  const newProjectLeadAccountId = requireUuid(payload?.project_lead_account_id, 'Project Lead account ID');
+  const isMember = await TeamTaskRepositories.isWorkspaceMember(context.workspace.workspace_id, newProjectLeadAccountId);
+  if (!isMember) {
+    throw new TeamTaskError('The Project Leader must be a member of this contract workspace', 422, 'LEAD_NOT_IN_WORKSPACE');
+  }
+
+  await TeamTaskRepositories.updateProjectLead(context.workspace.workspace_id, newProjectLeadAccountId);
+  await emitWorkspaceUpdate(context, 'project_lead_updated');
+
+  const reloadedContext = await workspaceContext(teamId, contractId, actorAccountId);
+  return getWorkspaceSnapshot(reloadedContext);
+}
+
 module.exports = {
   TeamTaskError,
   listWorkspacesServices,
@@ -406,4 +515,6 @@ module.exports = {
   updateTaskServices,
   deleteTaskServices,
   reconcileOverdueTeamTasksServices,
+  distributeContractFundsServices,
+  updateProjectLeadServices,
 };

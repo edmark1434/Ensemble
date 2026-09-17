@@ -114,7 +114,7 @@ export const OrdersMain: React.FC = () => {
   return (
     <div className="w-full min-h-screen bg-gray-50 dark:bg-dark-base relative">
       <div className="sticky top-0 z-50">
-        <UserHeader pageTitle="Gig Orders" credits={1250} />
+        <UserHeader pageTitle="Gig Orders" />
       </div>
 
       {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="gig orders" />}

@@ -49,6 +49,12 @@ interface DashboardTask {
     milestones: any[];
     client_rating?: any;
     freelancer_rating?: any;
+    user_role?: {
+        effective_role?: string;
+        can_buy_revision?: boolean;
+        can_review_milestone?: boolean;
+        can_submit_milestone?: boolean;
+    };
 }
 
 const DashboardMain = () => {
@@ -125,14 +131,16 @@ const DashboardMain = () => {
 
     const computeCompleted = (t: DashboardTask) => {
         const allMilestonesDone = t.milestones?.length > 0 && t.milestones.every((m: any) => m.status === 'completed' || m.status === 'approved');
-        const isFreelancer = t.freelancer_account_id === user?.account_id;
+        const isFreelancer = t.user_role?.effective_role
+            ? t.user_role.effective_role === 'freelancer'
+            : t.freelancer_account_id === user?.account_id;
         const myReview = isFreelancer ? t.freelancer_rating : t.client_rating;
         const theirReview = isFreelancer ? t.client_rating : t.freelancer_rating;
         return allMilestonesDone && myReview && theirReview;
     };
 
-    const myTasks = tasks.filter(t => t.freelancer_account_id === user?.account_id && !computeCompleted(t));
-    const toReview = tasks.filter(t => t.client_account_id === user?.account_id && !computeCompleted(t));
+    const myTasks = tasks.filter(t => (t.user_role?.effective_role === 'freelancer' || (t.freelancer_account_id === user?.account_id && t.user_role?.effective_role !== 'client')) && !computeCompleted(t));
+    const toReview = tasks.filter(t => (t.user_role?.effective_role === 'client' || (t.client_account_id === user?.account_id && t.user_role?.effective_role !== 'freelancer')) && !computeCompleted(t));
     const archivedTasks = tasks.filter(t => computeCompleted(t));
 
     const ongoingCount = [...myTasks, ...toReview].filter(t => t.contract_status === 'Active').length;

@@ -295,7 +295,10 @@ function App() {
           <Route path='/dashboard/review' element={<DashboardMain />} />
           <Route path='/dashboard/archived' element={<DashboardMain />} />
           <Route path='/dashboard/tasks/:id' element={<DashboardTaskDetail />} />
+          <Route path='/dashboard/update/:id' element={<DashboardTaskDetail />} />
           <Route path='/dashboard/review/:id' element={<DashboardTaskDetail />} />
+          <Route path='/review/:id' element={<DashboardTaskDetail />} />
+          <Route path='/update/:id' element={<DashboardTaskDetail />} />
           <Route path='/transactions' element={<TransactionHistoryMain />} />
           <Route path='/notifications' element={<NotificationsPage />} />
         </Route>
