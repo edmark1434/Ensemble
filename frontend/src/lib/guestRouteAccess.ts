@@ -15,6 +15,7 @@ const GUEST_DETAIL_PATHS = [
   /^\/gigs\/services\/[^/]+(?:\/page)?$/,
   /^\/profile\/[^/]+$/,
   /^\/search\/user\/[^/]+$/,
+  /^\/teams\/(?:invite|join)\/[^/]+$/,
 ];
 
 function normalizePath(pathname: string): string {

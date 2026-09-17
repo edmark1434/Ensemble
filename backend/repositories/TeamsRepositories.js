@@ -91,6 +91,27 @@ async function updateMembership(teamId,userId,fields) { const allowed=['role','s
 async function updateTeam(teamId, accountId, data) { const client=await pool.connect(); try { await client.query('BEGIN'); const a=(await client.query(`UPDATE accounts SET display_name=COALESCE($3,display_name),handle=COALESCE($4,handle),description=COALESCE($5,description),tagline=COALESCE($6,tagline),avatar_file_id=COALESCE($7,avatar_file_id) WHERE account_id=$1 AND EXISTS(SELECT 1 FROM teams WHERE team_id=$2 AND account_id=$1) RETURNING *`,[accountId,teamId,data.name,data.handle,data.description,data.tagline,data.avatarFileId])).rows[0]; const t=(await client.query(`UPDATE teams SET visibility=COALESCE($2,visibility),join_policy=COALESCE($3,join_policy),category=COALESCE($4,category),website=COALESCE($5,website),location=COALESCE($6,location),updated_at=NOW() WHERE team_id=$1 RETURNING *`,[teamId,data.visibility,data.joinPolicy,data.category,data.website,data.location])).rows[0]; await client.query('COMMIT'); return {...t,...a}; } catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();} }
 async function softDeleteTeam(teamId){return (await pool.query(`UPDATE teams SET deleted_at=NOW() WHERE team_id=$1 RETURNING *`,[teamId])).rows[0];}
 async function findByCode(code){return (await pool.query(`SELECT * FROM teams WHERE upper(join_code)=upper($1) AND deleted_at IS NULL`,[code])).rows[0]||null;}
+async function getTeamInvitePreview(code, accountId = null) {
+  return (await pool.query(`
+    SELECT t.team_id, t.join_code, t.category, t.visibility, t.join_policy, t.website, t.location,
+      a.display_name, a.handle, a.tagline, a.description, f.path AS avatar_path,
+      COALESCE(mc.member_count, 0)::int AS member_count,
+      tm.role AS current_user_role, tm.status AS current_user_status,
+      COALESCE(v.is_verified, FALSE) AS is_business_verified,
+      o.display_name AS owner_name, o.handle AS owner_handle
+    FROM teams t
+    JOIN accounts a ON a.account_id = t.account_id
+    LEFT JOIN files f ON f.file_id = a.avatar_file_id
+    LEFT JOIN verifications v ON v.account_id = t.account_id
+    LEFT JOIN users cu ON cu.account_id = $2
+    LEFT JOIN team_members tm ON tm.team_id = t.team_id AND tm.user_id = cu.user_id
+    LEFT JOIN (SELECT team_id, count(*) AS member_count FROM team_members WHERE status = 'Active' GROUP BY team_id) mc ON mc.team_id = t.team_id
+    LEFT JOIN team_members om ON om.team_id = t.team_id AND om.role = 'Owner' AND om.status = 'Active'
+    LEFT JOIN users ou ON ou.user_id = om.user_id
+    LEFT JOIN accounts o ON o.account_id = ou.account_id
+    WHERE upper(t.join_code) = upper($1) AND t.deleted_at IS NULL
+  `, [code, accountId])).rows[0] || null;
+}
 async function transferOwnership(teamId,oldUserId,newUserId){const c=await pool.connect();try{await c.query('BEGIN');await c.query(`UPDATE team_members SET role='Admin',updated_at=NOW() WHERE team_id=$1 AND user_id=$2 AND role='Owner'`,[teamId,oldUserId]);await c.query(`UPDATE team_members SET role='Owner',updated_at=NOW() WHERE team_id=$1 AND user_id=$2 AND status='Active'`,[teamId,newUserId]);await c.query('COMMIT');}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}
 async function wallet(teamId){
   const baseWallet = (await pool.query(`SELECT COALESCE(sum(w.balance_credits) FILTER(WHERE w.type='account wallets'),0)::int available_balance,COALESCE(sum(w.balance_credits) FILTER(WHERE w.type='escrow wallets'),0)::int escrow_balance,COALESCE(sum(w.frozen_balance_credits),0)::int frozen_balance,COALESCE(sum(w.balance_credits),0)::int total_balance FROM teams t JOIN account_wallets aw ON aw.account_id=t.account_id JOIN wallets w ON w.wallet_id=aw.wallet_id WHERE t.team_id=$1`,[teamId])).rows[0] || { available_balance: 0, escrow_balance: 0, frozen_balance: 0, total_balance: 0 };
@@ -136,7 +157,104 @@ async function wallet(teamId){
     unreserved_balance: unreservedBalance,
   };
 }
-async function getTeamTransactions(teamId,{page=1,pageSize=10,search='',dateFrom='',dateTo=''}={}){const limit=Math.min(Math.max(Number(pageSize)||10,1),50),offset=(Math.max(Number(page)||1,1)-1)*limit,term=String(search||'').trim();const filters=[`ct.reference_table='teams'`,`ct.reference_id=$1`],values=[teamId],add=(sql,value)=>{values.push(value);filters.push(`${sql}=$${values.length}`);};if(term)add(`destination.display_name ILIKE`, `%${term}%`);if(dateFrom)add(`ct.created_at >=`, dateFrom);if(dateTo)add(`ct.created_at <`, `${dateTo}T23:59:59.999Z`);const where=filters.join(' AND ');const total=(await pool.query(`SELECT COUNT(*)::int AS total FROM credit_transactions ct JOIN wallets destination_wallet ON destination_wallet.wallet_id=ct.destination_wallet_id JOIN account_wallets destination_aw ON destination_aw.wallet_id=destination_wallet.wallet_id JOIN accounts destination ON destination.account_id=destination_aw.account_id WHERE ${where}`,values)).rows[0].total;values.push(limit,offset);const items=(await pool.query(`SELECT ct.credit_transaction_id,ct.type,ct.amount_credits,ct.status,ct.created_at,destination.display_name AS recipient_name,destination.handle AS recipient_handle FROM credit_transactions ct JOIN wallets destination_wallet ON destination_wallet.wallet_id=ct.destination_wallet_id JOIN account_wallets destination_aw ON destination_aw.wallet_id=destination_wallet.wallet_id JOIN accounts destination ON destination.account_id=destination_aw.account_id WHERE ${where} ORDER BY ct.created_at DESC,ct.credit_transaction_id DESC LIMIT $${values.length-1} OFFSET $${values.length}`,values)).rows;return{items,pagination:{page:Math.max(Number(page)||1,1),page_size:limit,total,total_pages:Math.max(Math.ceil(total/limit),1)}};}
+async function getTeamTransactions(teamId,{page=1,pageSize=10,search='',dateFrom='',dateTo=''}={}){const limit=Math.min(Math.max(Number(pageSize)||10,1),50),offset=(Math.max(Number(page)||1,1)-1)*limit,term=String(search||'').trim();const filters=[`ct.reference_table='teams'`,`ct.reference_id=$1`],values=[teamId];if(term){values.push(`%${term}%`);filters.push(`(destination.display_name ILIKE $${values.length} OR destination.handle ILIKE $${values.length} OR source.display_name ILIKE $${values.length} OR source.handle ILIKE $${values.length})`);}if(dateFrom){values.push(dateFrom);filters.push(`ct.created_at >= $${values.length}`);}if(dateTo){values.push(`${dateTo}T23:59:59.999Z`);filters.push(`ct.created_at < $${values.length}`);}const where=filters.join(' AND ');const total=(await pool.query(`SELECT COUNT(*)::int AS total FROM credit_transactions ct JOIN teams t ON t.team_id=$1 JOIN wallets destination_wallet ON destination_wallet.wallet_id=ct.destination_wallet_id JOIN account_wallets destination_aw ON destination_aw.wallet_id=destination_wallet.wallet_id JOIN accounts destination ON destination.account_id=destination_aw.account_id LEFT JOIN wallets source_wallet ON source_wallet.wallet_id=ct.source_wallet_id LEFT JOIN account_wallets source_aw ON source_aw.wallet_id=source_wallet.wallet_id LEFT JOIN accounts source ON source.account_id=source_aw.account_id WHERE ${where}`,values)).rows[0]?.total||0;values.push(limit,offset);const items=(await pool.query(`SELECT ct.credit_transaction_id,ct.type,ct.amount_credits,ct.status,ct.created_at,CASE WHEN destination_aw.account_id = t.account_id THEN 'Deposit' ELSE 'Distribution' END AS direction,CASE WHEN destination_aw.account_id = t.account_id THEN COALESCE(source.display_name, 'Member') ELSE destination.display_name END AS recipient_name,CASE WHEN destination_aw.account_id = t.account_id THEN source.handle ELSE destination.handle END AS recipient_handle,source.display_name AS source_name,source.handle AS source_handle,destination.display_name AS destination_name,destination.handle AS destination_handle FROM credit_transactions ct JOIN teams t ON t.team_id=$1 JOIN wallets destination_wallet ON destination_wallet.wallet_id=ct.destination_wallet_id JOIN account_wallets destination_aw ON destination_aw.wallet_id=destination_wallet.wallet_id JOIN accounts destination ON destination.account_id=destination_aw.account_id LEFT JOIN wallets source_wallet ON source_wallet.wallet_id=ct.source_wallet_id LEFT JOIN account_wallets source_aw ON source_aw.wallet_id=source_wallet.wallet_id LEFT JOIN accounts source ON source.account_id=source_aw.account_id WHERE ${where} ORDER BY ct.created_at DESC,ct.credit_transaction_id DESC LIMIT $${values.length-1} OFFSET $${values.length}`,values)).rows;return{items,pagination:{page:Math.max(Number(page)||1,1),page_size:limit,total,total_pages:Math.max(Math.ceil(total/limit),1)}};}
+async function addTeamFunds(teamId, userAccountId, amountCredits) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Lock and retrieve user's personal account wallet
+    const userWallet = (await client.query(`
+      SELECT w.wallet_id, w.balance_credits, w.status
+      FROM account_wallets aw
+      JOIN wallets w ON w.wallet_id = aw.wallet_id
+      WHERE aw.account_id = $1 AND w.type = 'account wallets'
+      FOR UPDATE
+    `, [userAccountId])).rows[0];
+
+    if (!userWallet || String(userWallet.status).toLowerCase() !== 'active') {
+      throw new Error('Personal account wallet is not active or not found');
+    }
+
+    const userBalance = Number(userWallet.balance_credits || 0);
+    if (userBalance < amountCredits) {
+      throw new Error(`Insufficient personal balance. You have ${userBalance.toLocaleString()} credits, but tried to add ${amountCredits.toLocaleString()} credits.`);
+    }
+
+    // 2. Lock and retrieve team's account wallet
+    let teamWallet = (await client.query(`
+      SELECT w.wallet_id, w.balance_credits, w.status
+      FROM teams t
+      JOIN account_wallets aw ON aw.account_id = t.account_id
+      JOIN wallets w ON w.wallet_id = aw.wallet_id
+      WHERE t.team_id = $1 AND t.deleted_at IS NULL AND w.type = 'account wallets'
+      FOR UPDATE
+    `, [teamId])).rows[0];
+
+    if (!teamWallet) {
+      const teamAccount = (await client.query('SELECT account_id FROM teams WHERE team_id = $1 AND deleted_at IS NULL', [teamId])).rows[0];
+      if (!teamAccount) throw new Error('Team not found');
+      
+      const newW = (await client.query(`
+        INSERT INTO wallets (type, status, balance_credits, frozen_balance_credits, created_at)
+        VALUES ('account wallets', 'active', 0, 0, CURRENT_TIMESTAMP)
+        RETURNING wallet_id, balance_credits, status
+      `)).rows[0];
+      await client.query(`
+        INSERT INTO account_wallets (account_id, wallet_id)
+        VALUES ($1, $2)
+        ON CONFLICT DO NOTHING
+      `, [teamAccount.account_id, newW.wallet_id]);
+      teamWallet = newW;
+    } else if (String(teamWallet.status).toLowerCase() !== 'active') {
+      throw new Error('Team account wallet is not active');
+    }
+
+    // 3. Deduct credits from user wallet
+    await client.query('UPDATE wallets SET balance_credits = balance_credits - $1 WHERE wallet_id = $2', [amountCredits, userWallet.wallet_id]);
+
+    // 4. Add credits to team wallet
+    await client.query('UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2', [amountCredits, teamWallet.wallet_id]);
+
+    // 5. Record transaction
+    const transaction = (await client.query(`
+      INSERT INTO credit_transactions (
+        type,
+        amount_credits,
+        status,
+        source_wallet_id,
+        destination_wallet_id,
+        fee_transaction_id,
+        reference_table,
+        reference_id
+      ) VALUES (
+        'Fund Transfer',
+        $1,
+        'completed',
+        $2,
+        $3,
+        NULL,
+        'teams',
+        $4
+      ) RETURNING *
+    `, [amountCredits, userWallet.wallet_id, teamWallet.wallet_id, teamId])).rows[0];
+
+    await client.query('COMMIT');
+
+    const teamWalletSnapshot = await wallet(teamId);
+    return {
+      transaction,
+      added_credits: amountCredits,
+      team_wallet: teamWalletSnapshot,
+      user_balance_credits: userBalance - amountCredits
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 async function distributeTeamFunds(teamId, recipients) {
   const client=await pool.connect();
   try {
@@ -214,4 +332,4 @@ async function addReport(teamId,accountId,data){const team=await getTeam(teamId,
 async function getTeamInbox(teamId){return TeamInbox.findOne({team_id:String(teamId),conversation_type:'group',deleted_at:null});}
 async function createTeamInbox(team,members){const now=new Date();const result=await TeamInbox.insertOne({team_id:String(team.team_id),team_account_id:String(team.account_id),conversation_name:team.display_name,conversation_type:'group',conversation_image_key:team.avatar_path||null,members:members.map(m=>({account_id:String(m.account_id),role:m.role==='Owner'?'owner':'member',status:'active',joined_at:now})),pinned_messages:[],created_at:now,updated_at:now,deleted_at:null});return TeamInbox.findOne({_id:result.insertedId});}
 async function syncTeamInboxMembers(teamId,members){const inbox=await getTeamInbox(teamId);if(!inbox)return null;const active=new Map(members.map(m=>[String(m.account_id),m])),now=new Date();const merged=(inbox.members||[]).map(m=>active.has(String(m.account_id))?{...m,status:'active',role:active.get(String(m.account_id)).role==='Owner'?'owner':'member'}:{...m,status:'removed',left_at:now});for(const m of members)if(!merged.some(x=>String(x.account_id)===String(m.account_id)))merged.push({account_id:String(m.account_id),role:m.role==='Owner'?'owner':'member',status:'active',joined_at:now});await TeamInbox.updateOne({_id:inbox._id},{$set:{members:merged,updated_at:now}});return TeamInbox.findOne({_id:inbox._id});}
-module.exports={createTeam,getUserId,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers};
+module.exports={createTeam,getUserId,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers};

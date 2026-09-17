@@ -17,6 +17,7 @@ import {
   MessageCircle,
   MoreVertical,
   Search,
+  Plus,
   ShieldCheck,
   Star,
   Trash2,
@@ -28,6 +29,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import UserHeader from "@/components/nav/user_header";
+import useGlobalState from "@/lib/global_state";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import EditTeamModal, {
   type TeamFormValues,
@@ -37,6 +39,8 @@ import RemoveMemberModal from "./team_modals/RemoveMemberModal";
 import ReportTeamModal from "./team_modals/ReportTeamModal";
 import AddTeamReviewModal from "./team_modals/AddTeamReviewModal";
 import BusinessVerificationEligibilityModal from "./team_modals/BusinessVerificationEligibilityModal";
+import { AddTeamFundsModal } from "./team_modals/AddTeamFundsModal";
+import { InviteTeamModal } from "./team_modals/InviteTeamModal";
 import TeamTaskDashboard from "./team_tasks/TeamTaskDashboard";
 
 type PermissionSet = Record<string, boolean>;
@@ -144,6 +148,7 @@ export default function SelectedTeam() {
   const [showEdit, setShowEdit] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showVerificationEligibility, setShowVerificationEligibility] =
     useState(false);
@@ -152,6 +157,15 @@ export default function SelectedTeam() {
   const [showDistribution, setShowDistribution] = useState(false);
   const [distributionRecipientId, setDistributionRecipientId] = useState('');
   const [distributionAmount, setDistributionAmount] = useState('');
+  const { user } = useGlobalState();
+  const [showAddFunds, setShowAddFunds] = useState(false);
+  const [personalBalance, setPersonalBalance] = useState<number>(() => Number(user?.wallet?.balance_credits || user?.credits || 0));
+
+  useEffect(() => {
+    if (user?.wallet?.balance_credits !== undefined && user?.wallet?.balance_credits !== null) {
+      setPersonalBalance(Number(user.wallet.balance_credits));
+    }
+  }, [user?.wallet?.balance_credits]);
 
   const loadTeam = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -261,10 +275,9 @@ export default function SelectedTeam() {
     navigate("/teams");
   };
 
-  const inviteMember = async () => {
-    const accountId = window.prompt("Enter the user's account ID to invite");
-    if (!accountId) return;
-    await mutate("/invitations", "post", { accountId, role: "Member" });
+  const openInviteModal = () => {
+    setShowMenu(false);
+    setShowInviteModal(true);
   };
 
   const copyTeamCode = async () => {
@@ -394,6 +407,54 @@ export default function SelectedTeam() {
     try { const response = await api.get(`/api/teams/${id}/transactions`, { params: { page, pageSize: 10, search: transactionSearch, dateFrom: transactionDate, dateTo: transactionDate } }); setTransactions(response.data.data?.items || []); setTransactionPage(response.data.data?.pagination?.page || page); setTransactionTotalPages(response.data.data?.pagination?.total_pages || 1); } catch (error: unknown) { showErrorToast(axiosMessage(error, 'Unable to load Team transactions')); }
   };
 
+  const openAddFundsModal = async () => {
+    try {
+      const [userWalletRes, teamWalletRes] = await Promise.allSettled([
+        api.get("/api/accounts/wallet", { params: { type: 'account_wallets' } }),
+        !wallet ? api.get(`/api/teams/${id}/wallet`) : Promise.resolve(null),
+      ]);
+      if (userWalletRes.status === 'fulfilled') {
+        const credits = userWalletRes.value.data?.wallet?.balance_credits;
+        if (credits !== undefined && credits !== null) {
+          setPersonalBalance(Number(credits));
+        }
+      }
+      if (teamWalletRes.status === 'fulfilled' && teamWalletRes.value?.data?.data) {
+        setWallet(teamWalletRes.value.data.data);
+      }
+    } catch (_) {}
+    setShowAddFunds(true);
+  };
+
+  const handleAddFundsSuccess = (result: { added_credits: number; team_wallet: any; user_balance_credits: number }) => {
+    if (result.team_wallet) {
+      setWallet(result.team_wallet);
+    } else if (result.added_credits) {
+      setWallet((current) => current ? {
+        ...current,
+        available_balance: Number(current.available_balance || 0) + result.added_credits,
+        unreserved_balance: Number(current.unreserved_balance ?? current.available_balance ?? 0) + result.added_credits,
+        total_balance: Number(current.total_balance || 0) + result.added_credits,
+      } : current);
+    }
+    if (result.user_balance_credits !== undefined) {
+      setPersonalBalance(result.user_balance_credits);
+      const currentUser = useGlobalState.getState().user;
+      if (currentUser) {
+        useGlobalState.getState().setUser({
+          ...currentUser,
+          wallet: {
+            ...(currentUser.wallet || {}),
+            balance_credits: result.user_balance_credits,
+          },
+        });
+      }
+    }
+    if (activeTab === 'transactions') {
+      void loadTransactions(1);
+    }
+  };
+
   if (loading)
     return (
       <Page title="Team">
@@ -411,6 +472,10 @@ export default function SelectedTeam() {
   const permissions = membership?.permissions || {};
   const activeMember = membership?.status === "Active";
   const isTeamOwner = activeMember && membership?.role === "Owner";
+  const userRole = String(membership?.role || '').toLowerCase();
+  const isOwnerOrAdminOrLeader = activeMember &&
+    ['owner', 'admin', 'team leader', 'leader', 'manager'].includes(userRole);
+  const canAddFunds = Boolean(permissions.can_add_funds || isOwnerOrAdminOrLeader);
   const pendingRequests = requests.filter(
     (member) => member.status === "Pending",
   );
@@ -434,7 +499,8 @@ export default function SelectedTeam() {
         <div className="absolute inset-0 bg-gradient-to-t from-dark-base via-transparent to-transparent" />
         <button
           onClick={() => navigate("/teams")}
-          className="absolute left-4 top-4 rounded-full bg-black/50 p-2 text-gray-900 dark:text-white"
+          className="absolute left-4 top-4 cursor-pointer rounded-full bg-black/50 hover:bg-black/70 active:scale-95 p-2 text-white transition"
+          title="Back to Teams"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
@@ -458,7 +524,7 @@ export default function SelectedTeam() {
                   },
                 });
               }}
-              className="flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-black/60 px-4 py-2 text-sm font-medium text-gray-900 dark:text-white transition hover:border-emerald-400/40 hover:bg-emerald-500/15 hover:text-emerald-200"
+              className="flex cursor-pointer items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-black/60 px-4 py-2 text-sm font-medium text-white transition hover:border-emerald-400/40 hover:bg-emerald-500/20 hover:text-emerald-200 active:scale-[0.98]"
             >
               <ShieldCheck className="h-4 w-4" />
               Verify as Business
@@ -479,7 +545,7 @@ export default function SelectedTeam() {
                     },
                   })
                 }
-                className="flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-500/15 px-4 py-2 text-sm font-medium text-amber-200 transition hover:bg-amber-500/25"
+                className="flex cursor-pointer items-center gap-2 rounded-full border border-amber-400/30 bg-amber-500/15 px-4 py-2 text-sm font-medium text-amber-200 transition hover:bg-amber-500/25 active:scale-[0.98]"
               >
                 <ShieldCheck className="h-4 w-4" />
                 View Verification Status
@@ -488,7 +554,7 @@ export default function SelectedTeam() {
           {activeMember && (
             <button
               onClick={() => void openChat()}
-              className="flex items-center gap-2 rounded-full bg-blue-500 px-4 py-2 text-sm font-medium text-gray-900 dark:text-white"
+              className="flex cursor-pointer items-center gap-2 rounded-full bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-4 py-2 text-sm font-medium text-white transition shadow-sm"
             >
               <MessageCircle className="h-4 w-4" />
               Message
@@ -497,7 +563,7 @@ export default function SelectedTeam() {
           {permissions.can_manage_requests && (
             <button
               onClick={() => setActiveTab("requests")}
-              className="relative rounded-full bg-black/50 p-2 text-gray-900 dark:text-white"
+              className="relative cursor-pointer rounded-full bg-black/50 hover:bg-black/70 active:scale-95 p-2 text-white transition"
               title="View pending join requests"
             >
               <Bell className="h-5 w-5" />
@@ -548,7 +614,8 @@ export default function SelectedTeam() {
           <div className="relative">
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10"
+              className="cursor-pointer rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition"
+              title="Team options"
             >
               <MoreVertical className="h-5 w-5" />
             </button>
@@ -556,8 +623,8 @@ export default function SelectedTeam() {
               <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-2 shadow-2xl">
                 {permissions.can_update_team && (
                   <button
-                    onClick={() => setShowEdit(true)}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:bg-white/10"
+                    onClick={() => { setShowMenu(false); setShowEdit(true); }}
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition"
                   >
                     <Edit3 className="h-4 w-4" />
                     Edit Team
@@ -565,24 +632,24 @@ export default function SelectedTeam() {
                 )}
                 {permissions.can_manage_members && (
                   <button
-                    onClick={() => void inviteMember()}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:bg-white/10"
+                    onClick={openInviteModal}
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition"
                   >
                     <UserPlus className="h-4 w-4" />
                     Invite Member
                   </button>
                 )}
                 <button
-                  onClick={() => setShowReport(true)}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:bg-white/10"
+                  onClick={() => { setShowMenu(false); setShowReport(true); }}
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition"
                 >
                   <Flag className="h-4 w-4" />
                   Report Team
                 </button>
                 {activeMember && membership?.role !== "Owner" && (
                   <button
-                    onClick={() => setShowLeave(true)}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10"
+                    onClick={() => { setShowMenu(false); setShowLeave(true); }}
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
                   >
                     <LogOut className="h-4 w-4" />
                     Leave Team
@@ -590,8 +657,8 @@ export default function SelectedTeam() {
                 )}
                 {permissions.can_delete_team && (
                   <button
-                    onClick={() => void deleteTeam()}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10"
+                    onClick={() => { setShowMenu(false); void deleteTeam(); }}
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete Team
@@ -606,7 +673,7 @@ export default function SelectedTeam() {
           <button
             onClick={() => void requestToJoin()}
             disabled={saving}
-            className="mb-6 cursor-pointer rounded-full bg-blue-500 px-5 py-2 text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mb-6 cursor-pointer rounded-full bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-5 py-2 font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
           >
             {saving ? "Submitting request..." : "Ask to Join"}
           </button>
@@ -620,13 +687,13 @@ export default function SelectedTeam() {
           <div className="mb-6 flex gap-2">
             <button
               onClick={() => void mutate("/invitations/accept", "patch")}
-              className="rounded-full bg-emerald-500 px-5 py-2 text-gray-900 dark:text-white"
+              className="cursor-pointer rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] px-5 py-2 text-sm font-medium text-white transition shadow-sm"
             >
               Accept invitation
             </button>
             <button
               onClick={() => void mutate("/invitations/decline", "patch")}
-              className="rounded-full border border-red-500/40 px-5 py-2 text-red-300"
+              className="cursor-pointer rounded-full border border-red-500/40 hover:bg-red-500/10 active:scale-[0.98] px-5 py-2 text-sm font-medium text-red-400 transition"
             >
               Decline
             </button>
@@ -646,7 +713,7 @@ export default function SelectedTeam() {
             <button
               type="button"
               onClick={() => void copyTeamCode()}
-              className={`group mt-3 inline-flex min-w-32 items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 ease-out hover:-translate-y-0.5 hover:scale-105 active:translate-y-0 active:scale-95 sm:mt-0 ${
+              className={`cursor-pointer group mt-3 inline-flex min-w-32 items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 ease-out hover:-translate-y-0.5 hover:scale-105 active:translate-y-0 active:scale-95 sm:mt-0 ${
                 codeCopied
                   ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-300 shadow-[0_0_20px_rgba(52,211,153,0.15)]"
                   : "border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-600 dark:text-zinc-300 hover:border-blue-400/40 hover:bg-blue-500/10 hover:text-gray-900 dark:text-white"
@@ -665,7 +732,7 @@ export default function SelectedTeam() {
         <TeamTabs
           active={activeTab}
           showTasks={activeMember}
-          showWallet={Boolean(permissions.can_view_wallet)}
+          showWallet={Boolean(permissions.can_view_wallet || isOwnerOrAdminOrLeader)}
           showRequests={Boolean(permissions.can_manage_requests)}
           requestCount={pendingRequests.length}
           onSelect={selectTab}
@@ -680,6 +747,8 @@ export default function SelectedTeam() {
           requestSearch={requestSearch}
           canManage={Boolean(permissions.can_manage_members)}
           isOwner={membership?.role === "Owner"}
+          canAddFunds={canAddFunds}
+          onAddFunds={() => void openAddFundsModal()}
           canViewMarketplaceProposals={activeMember && ["Owner", "Admin"].includes(membership?.role || "")}
           saving={saving}
           onSuspend={(account) =>
@@ -710,6 +779,22 @@ export default function SelectedTeam() {
           onReview={() => setShowReviewModal(true)}
         />
       </main>
+
+      <AddTeamFundsModal
+        isOpen={showAddFunds}
+        onClose={() => setShowAddFunds(false)}
+        teamId={id}
+        teamName={team.display_name}
+        teamBalance={Number(wallet?.available_balance || 0)}
+        userBalance={personalBalance}
+        onSuccess={handleAddFundsSuccess}
+      />
+
+      <InviteTeamModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        team={team}
+      />
 
       <LeaveTeamModal
         isOpen={showLeave}
@@ -803,8 +888,8 @@ export default function SelectedTeam() {
               />
             </label>
             <div className="mt-5 flex justify-end gap-3">
-              <button type="button" disabled={saving} onClick={() => setShowDistribution(false)} className="rounded-lg border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:bg-white/[0.05]">Cancel</button>
-              <button type="button" disabled={saving || !distributionRecipientId || !distributionAmount} onClick={() => void distributeFunds()} className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-400 disabled:opacity-50"><ArrowRightLeft className="h-4 w-4" />{saving ? 'Distributing...' : 'Distribute funds'}</button>
+              <button type="button" disabled={saving} onClick={() => setShowDistribution(false)} className="cursor-pointer rounded-lg border border-gray-200 dark:border-white/10 px-4 py-2 text-sm text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/[0.05] transition active:scale-[0.98]">Cancel</button>
+              <button type="button" disabled={saving || !distributionRecipientId || !distributionAmount} onClick={() => void distributeFunds()} className="cursor-pointer inline-flex items-center gap-2 rounded-lg bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"><ArrowRightLeft className="h-4 w-4" />{saving ? 'Distributing...' : 'Distribute funds'}</button>
             </div>
           </div>
         </div>
@@ -844,7 +929,11 @@ function TeamTabs({
         <button
           key={id}
           onClick={() => onSelect(id)}
-          className={`flex items-center gap-2 rounded-t-lg px-4 py-2 text-sm ${active === id ? "border-b-2 border-blue-500 bg-blue-500/5 text-blue-400" : "text-gray-500 dark:text-zinc-400 hover:bg-white dark:bg-white/5 shadow-sm dark:shadow-none"}`}
+          className={`flex cursor-pointer items-center gap-2 rounded-t-lg px-4 py-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.98] ${
+            active === id
+              ? "border-b-2 border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+              : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+          }`}
         >
           <Icon className="h-4 w-4" />
           {label}
@@ -1026,7 +1115,7 @@ function TeamMarketplaceSection({
             key={item}
             type="button"
             onClick={() => setView(item)}
-            className={`inline-flex cursor-pointer items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition ${view === item ? "bg-blue-500 text-white" : "text-gray-500 hover:bg-white hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"}`}
+            className={`inline-flex cursor-pointer items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition active:scale-[0.98] ${view === item ? "bg-blue-500 text-white shadow-sm" : "text-gray-500 hover:bg-white hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"}`}
           >
             {item === "posts" ? <Briefcase className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
             {singular} {item === "posts" ? "Posts" : "Proposals"}
@@ -1057,6 +1146,8 @@ function TeamTabContent({
   requestSearch,
   canManage,
   isOwner,
+  canAddFunds,
+  onAddFunds,
   canViewMarketplaceProposals,
   saving,
   onSuspend,
@@ -1080,6 +1171,8 @@ function TeamTabContent({
   requestSearch: string;
   canManage: boolean;
   isOwner: boolean;
+  canAddFunds: boolean;
+  onAddFunds: () => void;
   canViewMarketplaceProposals: boolean;
   saving: boolean;
   onSuspend: (account: string) => void;
@@ -1113,7 +1206,7 @@ function TeamTabContent({
         <button
           disabled={saving}
           onClick={onReview}
-          className="rounded-full bg-blue-500 px-5 py-2 text-sm text-gray-900 dark:text-white disabled:opacity-50"
+          className="cursor-pointer rounded-full bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-5 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
         >
           Add Review
         </button>
@@ -1187,7 +1280,7 @@ function TeamTabContent({
                     type="button"
                     disabled={saving}
                     onClick={() => onApproveRequest(request.account_id)}
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] px-3.5 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
                   >
                     <Check className="h-4 w-4" /> Approve
                   </button>
@@ -1195,7 +1288,7 @@ function TeamTabContent({
                     type="button"
                     disabled={saving}
                     onClick={() => onDenyRequest(request.account_id)}
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-red-400/30 px-3 py-2 text-sm font-medium text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-red-400/30 hover:bg-red-500/10 active:scale-[0.98] px-3.5 py-2 text-sm font-medium text-red-400 transition disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <XCircle className="h-4 w-4" /> Deny
                   </button>
@@ -1209,18 +1302,27 @@ function TeamTabContent({
   if (active === "wallet")
     return wallet ? (
       <div>
-        {isOwner && (
-          <div className="mb-4 flex justify-end">
+        <div className="mb-4 flex flex-wrap justify-end gap-2">
+          {canAddFunds && (
+            <button
+              type="button"
+              onClick={onAddFunds}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] px-4 py-2 text-sm font-medium text-white transition shadow-sm"
+            >
+              <Plus className="h-4 w-4" /> Add Fund
+            </button>
+          )}
+          {isOwner && (
             <button
               type="button"
               onClick={onDistributeFunds}
               disabled={saving || Number(wallet.unreserved_balance ?? wallet.available_balance ?? 0) <= 0}
-              className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-4 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
             >
               <ArrowRightLeft className="h-4 w-4" /> Distribute funds
             </button>
-          </div>
-        )}
+          )}
+        </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border border-gray-200 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.02] dark:shadow-none">
             <p className="text-xs text-gray-500 dark:text-zinc-500">Unreserved Balance</p>
@@ -1255,7 +1357,83 @@ function TeamTabContent({
     ) : (
       <p className="text-gray-500 dark:text-zinc-400">Loading wallet…</p>
     );
-  if (active === 'transactions') return <div className="rounded-xl border border-white/10 p-4"><div className="mb-4 flex flex-wrap gap-2"><input value={transactionSearch} onChange={(e)=>onTransactionSearch(e.target.value)} placeholder="Search member name" className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white"/><input type="date" value={transactionDate} onChange={(e)=>onTransactionDate(e.target.value)} className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white"/><button onClick={()=>onLoadTransactions(1)} className="rounded-lg bg-blue-500 px-3 py-2 text-sm text-white">Filter</button></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-zinc-500"><tr><th className="pb-2">Date</th><th className="pb-2">Recipient</th><th className="pb-2">Amount</th><th className="pb-2">Status</th></tr></thead><tbody>{transactions.map((item)=><tr key={item.credit_transaction_id} className="border-t border-white/[0.06]"><td className="py-3">{new Date(item.created_at).toLocaleDateString()}</td><td>{item.recipient_name || item.recipient_handle}</td><td>{item.amount_credits.toLocaleString()} credits</td><td>{item.status}</td></tr>)}{!transactions.length&&<tr><td colSpan={4} className="py-6 text-center text-zinc-500">No Team transactions found.</td></tr>}</tbody></table></div><div className="mt-4 flex justify-end gap-2"><button disabled={transactionPage<=1} onClick={()=>onLoadTransactions(transactionPage-1)} className="rounded border border-white/10 px-3 py-1 disabled:opacity-40">Previous</button><span className="px-2 text-sm text-zinc-400">{transactionPage} / {transactionTotalPages}</span><button disabled={transactionPage>=transactionTotalPages} onClick={()=>onLoadTransactions(transactionPage+1)} className="rounded border border-white/10 px-3 py-1 disabled:opacity-40">Next</button></div></div>;
+  if (active === 'transactions')
+    return (
+      <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 shadow-sm dark:shadow-none">
+        <div className="mb-4 flex flex-wrap gap-2">
+          <input
+            value={transactionSearch}
+            onChange={(e) => onTransactionSearch(e.target.value)}
+            placeholder="Search member name"
+            className="rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.04] px-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-400"
+          />
+          <input
+            type="date"
+            value={transactionDate}
+            onChange={(e) => onTransactionDate(e.target.value)}
+            className="rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.04] px-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-400"
+          />
+          <button
+            onClick={() => onLoadTransactions(1)}
+            className="cursor-pointer rounded-lg bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-4 py-2 text-sm font-medium text-white transition shadow-sm"
+          >
+            Filter
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="text-gray-500 dark:text-zinc-500">
+              <tr>
+                <th className="pb-2">Date</th>
+                <th className="pb-2">Recipient</th>
+                <th className="pb-2">Amount</th>
+                <th className="pb-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((item) => (
+                <tr key={item.credit_transaction_id} className="border-t border-gray-100 dark:border-white/[0.06]">
+                  <td className="py-3 text-gray-900 dark:text-white">{new Date(item.created_at).toLocaleDateString()}</td>
+                  <td className="text-gray-900 dark:text-white">{item.recipient_name || item.recipient_handle}</td>
+                  <td className="text-gray-900 dark:text-white">{item.amount_credits.toLocaleString()} credits</td>
+                  <td>
+                    <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-600 dark:text-emerald-300">
+                      {item.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {!transactions.length && (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-gray-500 dark:text-zinc-500">
+                    No Team transactions found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            disabled={transactionPage <= 1}
+            onClick={() => onLoadTransactions(transactionPage - 1)}
+            className="cursor-pointer rounded-lg border border-gray-200 dark:border-white/10 px-3 py-1.5 text-xs text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Previous
+          </button>
+          <span className="px-2 text-sm text-gray-500 dark:text-zinc-400">
+            {transactionPage} / {transactionTotalPages}
+          </span>
+          <button
+            disabled={transactionPage >= transactionTotalPages}
+            onClick={() => onLoadTransactions(transactionPage + 1)}
+            className="cursor-pointer rounded-lg border border-gray-200 dark:border-white/10 px-3 py-1.5 text-xs text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    );
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {members.map((member) => (
@@ -1297,7 +1475,7 @@ function TeamTabContent({
                   <button
                     disabled={saving}
                     onClick={() => onRestore(member.account_id)}
-                    className="text-emerald-300"
+                    className="cursor-pointer text-emerald-500 dark:text-emerald-300 hover:text-emerald-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Restore
                   </button>
@@ -1305,7 +1483,7 @@ function TeamTabContent({
                   <button
                     disabled={saving}
                     onClick={() => onSuspend(member.account_id)}
-                    className="text-amber-300"
+                    className="cursor-pointer text-amber-500 dark:text-amber-300 hover:text-amber-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Suspend
                   </button>
@@ -1313,7 +1491,7 @@ function TeamTabContent({
                 <button
                   disabled={saving}
                   onClick={() => onRemove(member)}
-                  className="text-red-300"
+                  className="cursor-pointer text-red-500 dark:text-red-400 hover:text-red-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Remove
                 </button>
@@ -1321,7 +1499,7 @@ function TeamTabContent({
                   <button
                     disabled={saving}
                     onClick={() => onTransfer(member.account_id)}
-                    className="text-blue-300"
+                    className="cursor-pointer text-blue-500 dark:text-blue-400 hover:text-blue-400 hover:underline transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Transfer ownership
                   </button>
