@@ -99,7 +99,7 @@ class Scene extends Resizable {
       tile.height = 12;
       const tctx = tile.getContext("2d")!;
       tctx.strokeStyle = "rgba(255,255,255,0.08)";
-      tctx.lineWidth = 3;
+      tctx.lineWidth = 2;
       tctx.beginPath();
       tctx.moveTo(-3, 15);
       tctx.lineTo(15, -3);
@@ -107,6 +107,9 @@ class Scene extends Resizable {
       this.stripePattern = ctx.createPattern(tile, "repeat");
     }
     ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(-this.width / 2, -this.height / 2, this.width, this.height, this.rx);
+    ctx.clip();
     ctx.fillStyle = this.stripePattern ?? "transparent";
     ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
     ctx.restore();
