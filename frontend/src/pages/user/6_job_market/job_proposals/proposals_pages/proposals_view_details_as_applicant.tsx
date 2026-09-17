@@ -27,6 +27,7 @@ import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
 import { JobRichText } from "../../job_components/JobRichText";
 import { toast } from "react-hot-toast";
+import { showErrorToast } from "@/components/utility/toast";
 import { sampleIncomingProposals, sampleSentProposals } from "../proposals_datasets";
 import { sampleJobs } from "../../job_datasets";
 import type { ProposalItemData, ProposalStatus } from "../proposals_components/proposals_list";
@@ -88,6 +89,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             freelancerAccountId: p.freelancer_account_id,
             clientTeamId: p.client_team_id || undefined,
             freelancerTeamId: p.freelancer_team_id || undefined,
+            clientTeamVisibility: p.client_team_visibility || undefined,
+            freelancerTeamVisibility: p.freelancer_team_visibility || undefined,
             clientName: p.client_name || p.client_handle || "Unknown Client",
             clientAvatar: p.client_avatar_path
               ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.client_avatar_path.startsWith('/') ? '' : '/'}${p.client_avatar_path}`
@@ -217,7 +220,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
       navigate("/jobs/proposals");
     } catch (error: any) {
       console.error("Failed to accept offer:", error);
-      alert(error.response?.data?.message || "Failed to accept offer.");
+      showErrorToast(error.response?.data?.message || "Failed to accept offer.");
     } finally {
       setIsProcessing(false);
     }
@@ -249,7 +252,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
       navigate(`/jobs/proposals/sent/${proposal.id}`);
     } catch (error: any) {
       console.error("Failed to reject offer:", error);
-      alert(error.response?.data?.message || "Failed to reject offer.");
+      showErrorToast(error.response?.data?.message || "Failed to reject offer.");
     } finally {
       setIsProcessing(false);
     }
@@ -425,13 +428,21 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => handleViewProfile(proposal.freelancerAccountId, proposal.freelancerTeamId)}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
-                >
-                  <User className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>{proposal.type === "sent" ? "View Your Profile" : "View Applicant Profile"}</span>
-                </button>
+                {!(proposal.freelancerTeamId && proposal.freelancerTeamVisibility?.toLowerCase() === "private") && (
+                  <button
+                    onClick={() => handleViewProfile(proposal.freelancerAccountId, proposal.freelancerTeamId)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
+                  >
+                    <User className="h-3.5 w-3.5 text-emerald-400" />
+                    <span>
+                      {proposal.freelancerTeamId
+                        ? "View Team Profile"
+                        : proposal.type === "sent"
+                        ? "View Your Profile"
+                        : "View Applicant Profile"}
+                    </span>
+                  </button>
+                )}
               </div>
 
               {/* 2. TARGET JOB POST (WITH AUTHOR INTEGRATED INSIDE) */}
@@ -509,13 +520,21 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleViewProfile(proposal.clientAccountId, proposal.clientTeamId)}
-                    className="px-2.5 py-1 text-[10px] font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 rounded-lg border border-gray-200 dark:border-white/10 transition shrink-0 flex items-center gap-1"
-                  >
-                    <User className="h-3 w-3 text-blue-400" />
-                    <span>{proposal.type === "incoming" ? "View Your Profile" : "View Client Profile"}</span>
-                  </button>
+                  {!(proposal.clientTeamId && proposal.clientTeamVisibility?.toLowerCase() === "private") && (
+                    <button
+                      onClick={() => handleViewProfile(proposal.clientAccountId, proposal.clientTeamId)}
+                      className="px-2.5 py-1 text-[10px] font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 rounded-lg border border-gray-200 dark:border-white/10 transition shrink-0 flex items-center gap-1"
+                    >
+                      <User className="h-3 w-3 text-blue-400" />
+                      <span>
+                        {proposal.clientTeamId
+                          ? "View Team Profile"
+                          : proposal.type === "incoming"
+                          ? "View Your Profile"
+                          : "View Client Profile"}
+                      </span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Explicit Timestamps */}

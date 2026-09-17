@@ -28,7 +28,7 @@ const Home: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-        <UserHeader pageTitle="Home" credits={1250} />
+        <UserHeader pageTitle="Home" />
         <div className="mx-auto max-w-7xl p-6 md:p-8">
           <WelcomeCardSkeleton />
 
@@ -84,7 +84,7 @@ const Home: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
       {/* Top Header */}
-      <UserHeader pageTitle="Home" credits={1250} />
+      <UserHeader pageTitle="Home" />
 
       {/* Main Content */}
       <div className="mx-auto max-w-7xl p-6 md:p-8">

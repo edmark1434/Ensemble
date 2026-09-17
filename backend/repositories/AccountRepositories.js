@@ -169,8 +169,30 @@ async function getAccountWalletRepositories(accountId,type = 'account wallets') 
 
         const result = await pool.query(queryText, [accountId, type]);
 
-        // If a matching active account wallet is found, return it. Otherwise, return null.
-        return result.rows.length > 0 ? result.rows[0] : null;
+        // If a matching active account wallet is found, return it.
+        if (result.rows.length > 0) {
+            return result.rows[0];
+        }
+
+        // Auto-provision if missing for standard account or escrow wallets
+        if (type === 'account wallets' || type === 'escrow wallets') {
+            const insertWallet = await pool.query(
+                `INSERT INTO wallets (type, status, balance_credits, frozen_balance_credits, created_at)
+                 VALUES ($1, 'active', 0, 0, CURRENT_TIMESTAMP)
+                 RETURNING wallet_id, type, status, balance_credits, frozen_balance_credits`,
+                [type]
+            );
+            const newWallet = insertWallet.rows[0];
+            await pool.query(
+                `INSERT INTO account_wallets (account_id, wallet_id)
+                 VALUES ($1, $2)
+                 ON CONFLICT DO NOTHING`,
+                [accountId, newWallet.wallet_id]
+            );
+            return newWallet;
+        }
+
+        return null;
 
     } catch (err) {
         console.error(`Error fetching wallet for account ${accountId}:`, err);

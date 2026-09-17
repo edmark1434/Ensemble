@@ -37,11 +37,37 @@ export type TeamWorkspaceActivity = {
   created_at: string;
 };
 
+export type TeamContractBudget = {
+  contract_value: number;
+  released_credits: number;
+  distributed_credits: number;
+  remaining_distributable_credits: number;
+  team_available_balance: number;
+  is_funded_and_released: boolean;
+  contract_status: string;
+};
+
+export type TeamContractDistribution = {
+  distribution_id: string;
+  workspace_id: string;
+  contract_id: string;
+  amount_credits: number;
+  created_at: string;
+  distributor_account_id: string;
+  distributor_name: string;
+  distributor_handle: string;
+  recipient_account_id: string;
+  recipient_name: string;
+  recipient_handle: string;
+  recipient_avatar_path?: string;
+};
+
 export type TeamWorkspaceSnapshot = {
   workspace: {
     workspace_id: string;
     team_id: string;
     contract_id: string;
+    project_lead_account_id?: string;
     created_at: string;
     updated_at: string;
   };
@@ -61,10 +87,21 @@ export type TeamWorkspaceSnapshot = {
   available_members: TeamTaskMember[];
   tasks: TeamWorkspaceTask[];
   activity: TeamWorkspaceActivity[];
+  budget?: TeamContractBudget;
+  distributions?: TeamContractDistribution[];
+  is_project_lead?: boolean;
+  project_lead?: {
+    account_id: string;
+    display_name: string;
+    handle: string;
+    avatar_path?: string | null;
+  };
   permissions: {
     can_manage: boolean;
     can_create_tasks: boolean;
     can_manage_members: boolean;
+    can_distribute?: boolean;
+    can_assign_project_lead?: boolean;
   };
   current_account_id: string;
 };

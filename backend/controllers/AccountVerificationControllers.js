@@ -101,7 +101,7 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
 
 async function getAccountVerificationStatusController(req, res) {
     try{
-        const {account_id} = req.session;
+        const account_id = req.session?.account_id || req.session?.accountId;
         const verificationStatus = await getAccountVerificationStatusServices(account_id);
         return res.status(200).json({
             success: true,

@@ -3,6 +3,7 @@ import { useInboxUploadMedia, InboxUploadMediaButton, InboxUploadMediaPreview } 
 import api from '@/lib/axios';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
 import { Clock } from 'lucide-react';
+import { showErrorToast } from '@/components/utility/toast';
 
 interface Props {
     contractId: string;
@@ -47,7 +48,7 @@ export const MilestoneSubmissionForm: React.FC<Props> = ({ contractId, milestone
             onSuccess(response.data.task);
         } catch (error) {
             console.error("Failed to submit milestone update", error);
-            alert("Failed to submit update. Please try again.");
+            showErrorToast("Failed to submit update. Please try again.");
         } finally {
             setIsSubmitting(false);
         }

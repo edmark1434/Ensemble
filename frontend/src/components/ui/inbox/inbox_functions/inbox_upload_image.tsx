@@ -2,6 +2,7 @@
 import React, { useRef, useState, useCallback } from "react";
 import { X, Paperclip, Film, FileText } from "lucide-react";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
+import { showErrorToast } from "@/components/utility/toast";
 
 export type MediaType = "image" | "gif" | "video" | "file";
 
@@ -65,7 +66,7 @@ export const useInboxUploadMedia = (maxFiles = 3): UseInboxUploadMediaReturn => 
 
       const availableSlots = maxFiles - mediaList.length;
       if (availableSlots <= 0) {
-        alert(`You can only upload a maximum of ${maxFiles} items.`);
+        showErrorToast(`You can only upload a maximum of ${maxFiles} items.`);
         return;
       }
 

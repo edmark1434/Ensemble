@@ -226,9 +226,11 @@ async function acceptJobOffer(freelancerIds, contractId) {
                 await client.query(`
                     INSERT INTO contract_milestones (
                         contract_id, index, name, description, deadline, no_of_revisions_max, status, credits
-                    ) VALUES ($1, $2, $3, $4, $5, $6, 'Pending', $7)
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 `, [
-                    contractId, m.index, m.name, m.description, m.duration_hrs || 0, m.no_of_revisions_max || 0, mCredits
+                    contractId, m.index, m.name, m.description, m.duration_hrs || 0, m.no_of_revisions_max || 0,
+                    (i === 0 && contractStatus === 'Active') ? 'active' : 'pending',
+                    mCredits
                 ]);
             }
         }

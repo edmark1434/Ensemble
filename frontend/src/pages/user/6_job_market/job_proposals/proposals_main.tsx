@@ -148,7 +148,7 @@ export const ProposalsMain: React.FC = () => {
     <div className="w-full min-h-screen bg-gray-50 dark:bg-dark-base relative">
       {/* Sticky User Header */}
       <div className="sticky top-0 z-50">
-        <UserHeader pageTitle="Job Proposals" credits={1250} />
+        <UserHeader pageTitle="Job Proposals" />
       </div>
 
       {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="job proposals" />}

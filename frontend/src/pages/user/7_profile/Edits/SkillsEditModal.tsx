@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, Plus, Trash2, Check, Minus, AlertCircle, ChevronDown } from "lucide-react";
 import api from "@/lib/axios.ts";
+import { showErrorToast } from "@/components/utility/toast";
 
 type Proficiency = "beginner" | "intermediate" | "advanced" | "expert";
 
@@ -81,7 +82,7 @@ export default function SkillsEditModal({
   const addCompoundSkill = () => {
     if (!newSkill.name.trim()) return;
     if (skillsList.length >= 12) {
-      alert("Maximum of 12 capability blocks allowed in matrix registries.");
+      showErrorToast("Maximum of 12 capability blocks allowed in matrix registries.");
       return;
     }
 

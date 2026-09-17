@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarDays, ClipboardList, Edit3, Filter, Plus, Search, Trash2, Users } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, CalendarDays, ClipboardList, Edit3, Filter, Plus, Search, ShieldCheck, Trash2, Users } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/axios";
 import socket from "@/lib/socket";
@@ -7,6 +7,7 @@ import UserHeader from "@/components/nav/user_header";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import TeamTaskModal from "./TeamTaskModal";
 import WorkspaceMembersModal from "./WorkspaceMembersModal";
+import ContractDistributionModal from "./ContractDistributionModal";
 import type { TeamTaskFormValues, TeamWorkspaceSnapshot, TeamWorkspaceTask } from "./types";
 
 const COLUMNS: Array<{ id: TeamWorkspaceTask["status"]; label: string; color: string }> = [
@@ -31,6 +32,8 @@ function activityText(action: string) {
     task_deleted: "deleted a task",
     members_added: "added workspace members",
     member_removed: "removed a workspace member",
+    funds_distributed: "distributed contract funds to members",
+    project_lead_updated: "assigned a new contract project leader",
   } as Record<string, string>)[action] || action.replaceAll("_", " ");
 }
 
@@ -42,6 +45,7 @@ export default function TeamTaskWorkspace() {
   const [saving, setSaving] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [membersModalOpen, setMembersModalOpen] = useState(false);
+  const [distributionModalOpen, setDistributionModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TeamWorkspaceTask | null>(null);
   const [search, setSearch] = useState("");
   const [priority, setPriority] = useState("");
@@ -139,6 +143,34 @@ export default function TeamTaskWorkspace() {
     } finally { setSaving(false); }
   };
 
+  const distributeFunds = async (recipientAccountId: string, amountCredits: number) => {
+    setSaving(true);
+    try {
+      const response = await api.post(`/api/teams/${id}/task-workspaces/${contractId}/distributions`, {
+        recipients: [{ account_id: recipientAccountId, amount_credits: amountCredits }],
+      });
+      applySnapshot(response.data?.data?.snapshot || response);
+      showSuccessToast("Contract funds distributed successfully");
+      setDistributionModalOpen(false);
+    } catch (error: any) {
+      showErrorToast(error.response?.data?.message || "Unable to distribute contract funds");
+    } finally { setSaving(false); }
+  };
+
+  const changeProjectLead = async (newLeadAccountId: string) => {
+    if (!newLeadAccountId || newLeadAccountId === data?.project_lead?.account_id) return;
+    setSaving(true);
+    try {
+      const response = await api.patch(`/api/teams/${id}/task-workspaces/${contractId}/project-lead`, {
+        project_lead_account_id: newLeadAccountId,
+      });
+      applySnapshot(response);
+      showSuccessToast("Contract Project Leader updated");
+    } catch (error: any) {
+      showErrorToast(error.response?.data?.message || "Unable to update project leader");
+    } finally { setSaving(false); }
+  };
+
   if (loading || !data) {
     return <div className="min-h-screen"><UserHeader pageTitle="Team Workspace" /><div className="space-y-5 p-6"><div className="h-24 animate-pulse rounded-xl bg-white/5" /><div className="grid gap-4 lg:grid-cols-4">{[0,1,2,3].map((item) => <div key={item} className="h-96 animate-pulse rounded-xl bg-white/5" />)}</div></div></div>;
   }
@@ -154,13 +186,68 @@ export default function TeamTaskWorkspace() {
         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.03] dark:shadow-none">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500"><span>{data.contract.listing_type}</span><span>·</span><span>Team as {data.contract.team_role}</span><span>·</span><span>{data.contract.contract_status}</span></div>
+              <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                <span>{data.contract.listing_type}</span>
+                <span>·</span>
+                <span>Team as {data.contract.team_role}</span>
+                <span>·</span>
+                <span>{data.contract.contract_status}</span>
+              </div>
               <h1 className="mt-2 text-xl font-bold sm:text-2xl">{data.contract.listing_title}</h1>
               <p className="mt-1 text-sm text-zinc-500">{data.contract.client_name} · {data.contract.freelancer_name}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 font-medium text-blue-400">
+                  <ShieldCheck className="h-3.5 w-3.5" /> Project Lead: {data.project_lead?.display_name || "Lead"}
+                </span>
+                {data.permissions.can_assign_project_lead && data.members.length > 1 && (
+                  <select
+                    value={data.project_lead?.account_id || ""}
+                    disabled={saving}
+                    onChange={(e) => void changeProjectLead(e.target.value)}
+                    className="cursor-pointer rounded-lg border border-gray-200 bg-transparent px-2 py-1 text-xs text-zinc-500 outline-none hover:border-blue-400 dark:border-white/10 dark:bg-dark-base"
+                    title="Change Project Leader"
+                  >
+                    {data.members.map((m) => (
+                      <option key={m.account_id} value={m.account_id}>
+                        Lead: {m.display_name} (@{m.handle})
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {data.budget && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 font-medium text-emerald-400">
+                    Budget: {data.budget.distributed_credits.toLocaleString()} / {data.budget.released_credits.toLocaleString()} cr distributed
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => navigate(data.contract.team_role === "client" ? `/dashboard/review/${contractId}` : `/dashboard/tasks/${contractId}`)}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3.5 py-2 text-sm font-medium hover:border-blue-400 hover:text-blue-400 dark:border-white/10"
+                title="View Contract Milestones, Revision Output, and Activity"
+              >
+                <ClipboardList className="h-4 w-4 text-blue-400" /> Contract Milestones
+              </button>
               {data.permissions.can_manage_members && <button type="button" onClick={() => setMembersModalOpen(true)} className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3.5 py-2 text-sm hover:border-blue-400 hover:text-blue-400 dark:border-white/10"><Users className="h-4 w-4" />Members ({data.members.length})</button>}
               {data.permissions.can_create_tasks && <button type="button" onClick={() => { setEditingTask(null); setTaskModalOpen(true); }} className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-blue-500"><Plus className="h-4 w-4" />New task</button>}
+              {data.permissions.can_distribute ? (
+                <button
+                  type="button"
+                  onClick={() => setDistributionModalOpen(true)}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-emerald-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-500"
+                >
+                  <ArrowRightLeft className="h-4 w-4" /> Distribute Funds
+                </button>
+              ) : (
+                <div
+                  title={`Only the designated Project Lead (${data.project_lead?.display_name || "Leader"}) can distribute this contract's funds`}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs text-zinc-400 dark:border-white/10"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 text-zinc-500" /> Lead Distribution Only
+                </div>
+              )}
             </div>
           </div>
           <div className="mt-5 flex items-center gap-3"><div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-white/10"><div className="h-full bg-blue-500" style={{ width: `${progress}%` }} /></div><span className="text-xs font-medium text-zinc-500">{progress}% · {completed}/{data.tasks.length}</span></div>
@@ -206,6 +293,18 @@ export default function TeamTaskWorkspace() {
       </main>
       <TeamTaskModal open={taskModalOpen} task={editingTask} members={data.members} saving={saving} onClose={() => { setTaskModalOpen(false); setEditingTask(null); }} onSubmit={submitTask} />
       <WorkspaceMembersModal open={membersModalOpen} members={data.members} availableMembers={data.available_members} saving={saving} onClose={() => setMembersModalOpen(false)} onAdd={addMembers} onRemove={removeMember} />
+      <ContractDistributionModal
+        open={distributionModalOpen}
+        onClose={() => setDistributionModalOpen(false)}
+        contractTitle={data.contract.listing_title}
+        budget={data.budget}
+        members={data.members}
+        tasks={data.tasks}
+        distributions={data.distributions}
+        projectLeadName={data.project_lead?.display_name || "Project Lead"}
+        saving={saving}
+        onDistribute={distributeFunds}
+      />
     </div>
   );
 }

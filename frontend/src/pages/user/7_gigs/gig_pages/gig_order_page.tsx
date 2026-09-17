@@ -13,6 +13,7 @@ import SuccessModal from "@/components/ui/SuccessModal";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import { UploadCloud } from "lucide-react";
 import MarketplaceIdentitySelector from "@/components/marketplace/MarketplaceIdentitySelector";
+import { showErrorToast } from "@/components/utility/toast";
 
 const ORDER_WIZARD_STEPS = [
   { id: 1, label: "Order Details" },
@@ -206,7 +207,7 @@ const GigOrderPage: React.FC = () => {
     } catch (err) {
       console.error(err);
       setIsProcessing(false);
-      alert("Failed to submit order. Please try again.");
+      showErrorToast("Failed to submit order. Please try again.");
     }
   };
 
@@ -423,19 +424,19 @@ const GigOrderPage: React.FC = () => {
                                           
                                           const maxLimit = isPdf ? 1 : isVideo ? 1 : isImage ? (q.fileLimit || 1) : 5;
                                           if (fileArray.length > maxLimit) {
-                                            alert(`You can only upload up to ${maxLimit} file(s).`);
+                                            showErrorToast(`You can only upload up to ${maxLimit} file(s).`);
                                             e.target.value = '';
                                             return;
                                           }
                                           
                                           for (const file of fileArray) {
-                                            if (isPdf && !file.type.includes('pdf')) { alert("Only PDF allowed."); e.target.value = ''; return; }
-                                            if (isImage && !file.type.startsWith('image/')) { alert("Only images allowed."); e.target.value = ''; return; }
-                                            if (isVideo && !file.type.startsWith('video/')) { alert("Only videos allowed."); e.target.value = ''; return; }
+                                            if (isPdf && !file.type.includes('pdf')) { showErrorToast("Only PDF allowed."); e.target.value = ''; return; }
+                                            if (isImage && !file.type.startsWith('image/')) { showErrorToast("Only images allowed."); e.target.value = ''; return; }
+                                            if (isVideo && !file.type.startsWith('video/')) { showErrorToast("Only videos allowed."); e.target.value = ''; return; }
 
                                             const maxSizeMB = isVideo ? 15 : 10;
                                             if (file.size > maxSizeMB * 1024 * 1024) {
-                                              alert(`File ${file.name} exceeds ${maxSizeMB}MB limit.`);
+                                              showErrorToast(`File ${file.name} exceeds ${maxSizeMB}MB limit.`);
                                               e.target.value = '';
                                               return;
                                             }
@@ -452,7 +453,7 @@ const GigOrderPage: React.FC = () => {
                                             setQuestionAnswers(prev => ({ ...prev, [idx]: keys.join(',') }));
                                           } catch (err) {
                                             console.error(err);
-                                            alert("Failed to upload file(s). Please try again.");
+                                            showErrorToast("Failed to upload file(s). Please try again.");
                                           } finally {
                                             setUploadingFiles(prev => ({ ...prev, [idx]: false }));
                                           }

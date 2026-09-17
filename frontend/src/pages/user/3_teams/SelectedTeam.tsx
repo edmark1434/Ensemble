@@ -9,9 +9,10 @@ import {
   Edit3,
   FileText,
   Flag,
-  Image,
+  Globe,
   Info,
   LayoutDashboard,
+  Lock,
   LogOut,
   MessageCircle,
   MoreVertical,
@@ -34,6 +35,7 @@ import EditTeamModal, {
 import LeaveTeamModal from "./team_modals/LeaveTeamModal";
 import RemoveMemberModal from "./team_modals/RemoveMemberModal";
 import ReportTeamModal from "./team_modals/ReportTeamModal";
+import AddTeamReviewModal from "./team_modals/AddTeamReviewModal";
 import BusinessVerificationEligibilityModal from "./team_modals/BusinessVerificationEligibilityModal";
 import TeamTaskDashboard from "./team_tasks/TeamTaskDashboard";
 
@@ -50,6 +52,7 @@ type Team = {
   category?: string;
   location?: string;
   website?: string;
+  visibility?: "Public" | "Private";
   member_count: number;
   owner_name: string;
   join_code?: string;
@@ -102,7 +105,6 @@ type Tab =
   | "about"
   | "jobs"
   | "gigs"
-  | "assets"
   | "reviews"
   | "members"
   | "tasks"
@@ -142,6 +144,7 @@ export default function SelectedTeam() {
   const [showEdit, setShowEdit] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [showVerificationEligibility, setShowVerificationEligibility] =
     useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
@@ -297,6 +300,7 @@ export default function SelectedTeam() {
         handle: values.handle,
         tagline: values.tagline,
         description: values.description,
+        visibility: values.visibility,
         avatarFileId,
       });
 
@@ -309,6 +313,7 @@ export default function SelectedTeam() {
         handle: values.handle,
         tagline: values.tagline,
         description: values.description,
+        visibility: values.visibility,
       } : current);
       void loadTeam(false);
     } catch (error: unknown) {
@@ -330,23 +335,19 @@ export default function SelectedTeam() {
     }
   };
 
-  const addReview = async () => {
-    const ratingValue = window.prompt("Rating from 1 to 5");
-    if (ratingValue === null) return;
-
-    const rating = Number(ratingValue);
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-      showErrorToast("Rating must be a whole number from 1 to 5");
-      return;
+  const handleReviewSubmit = async (rating: number, comment: string) => {
+    try {
+      await api.post(`/api/teams/${id}/reviews`, {
+        rating,
+        comment: comment.trim() || undefined,
+      });
+      showSuccessToast("Review submitted successfully");
+      setShowReviewModal(false);
+      void loadTeam(false);
+    } catch (error: unknown) {
+      showErrorToast(axiosMessage(error, "Unable to submit review"));
+      throw error;
     }
-
-    const comment = window.prompt("Write your Team review");
-    if (comment === null) return;
-
-    await mutate("/reviews", "post", {
-      rating,
-      comment: comment.trim(),
-    });
   };
 
   const distributeFunds = async () => {
@@ -359,8 +360,9 @@ export default function SelectedTeam() {
       showErrorToast('Enter a whole number of credits to distribute');
       return;
     }
-    if (amount > Number(wallet?.available_balance || 0)) {
-      showErrorToast('Distribution amount exceeds the available Team balance');
+    const maxAllowed = Number(wallet?.unreserved_balance ?? wallet?.available_balance ?? 0);
+    if (amount > maxAllowed) {
+      showErrorToast(`Distribution amount exceeds the unreserved Team balance (${maxAllowed.toLocaleString()} credits)`);
       return;
     }
     setSaving(true);
@@ -372,6 +374,8 @@ export default function SelectedTeam() {
       setWallet((current) => current ? {
         ...current,
         available_balance: result.available_balance,
+        unreserved_balance: result.unreserved_balance,
+        contract_reserved_balance: result.contract_reserved_balance,
         total_balance: Number(current.total_balance || 0),
       } : current);
       setDistributionRecipientId('');
@@ -513,12 +517,28 @@ export default function SelectedTeam() {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               {team.display_name}
             </h1>
-            {team.is_business_verified && (
-              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
-                <ShieldCheck className="h-4 w-4" />
-                Verified Business
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {team.is_business_verified && (
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
+                  <ShieldCheck className="h-4 w-4" />
+                  Verified Business
+                </div>
+              )}
+              <div
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
+                  team.visibility === "Private"
+                    ? "border-amber-400/25 bg-amber-500/10 text-amber-300"
+                    : "border-white/10 bg-white/5 text-zinc-300"
+                }`}
+              >
+                {team.visibility === "Private" ? (
+                  <Lock className="h-3.5 w-3.5" />
+                ) : (
+                  <Globe className="h-3.5 w-3.5" />
+                )}
+                {team.visibility === "Private" ? "Private Team" : "Public Team"}
               </div>
-            )}
+            </div>
             <p className="mt-2 text-gray-500 dark:text-zinc-400">{team.description}</p>
             <p className="mt-3 text-sm text-gray-500 dark:text-zinc-500">
               @{team.handle} · {team.member_count} members · Owner:{" "}
@@ -687,7 +707,7 @@ export default function SelectedTeam() {
           onTransactionSearch={setTransactionSearch}
           onTransactionDate={setTransactionDate}
           onLoadTransactions={loadTransactions}
-          onReview={() => void addReview()}
+          onReview={() => setShowReviewModal(true)}
         />
       </main>
 
@@ -714,6 +734,12 @@ export default function SelectedTeam() {
           void mutate("/reports", "post", { category, description })
         }
       />
+      <AddTeamReviewModal
+        isOpen={showReviewModal}
+        onClose={() => setShowReviewModal(false)}
+        teamName={team.display_name}
+        onSubmit={handleReviewSubmit}
+      />
       <EditTeamModal
         isOpen={showEdit}
         onClose={() => setShowEdit(false)}
@@ -721,6 +747,7 @@ export default function SelectedTeam() {
         teamHandle={team.handle}
         teamTagline={team.tagline}
         teamDescription={team.description}
+        teamVisibility={team.visibility || "Public"}
         teamBanner={imageUrl(team.avatar_path)}
         saving={saving}
         onSave={(values) => void updateTeam(values)}
@@ -738,8 +765,24 @@ export default function SelectedTeam() {
           <div className="w-full max-w-md rounded-xl border border-white/10 bg-dark-base p-5 shadow-2xl">
             <h2 className="text-lg font-semibold text-white">Distribute Team funds</h2>
             <p className="mt-2 text-sm text-zinc-400">
-              Send credits from the Team account wallet to an active member’s account wallet. Available: {Number(wallet?.available_balance || 0).toLocaleString()} credits.
+              Send general team credits to an active member’s personal account wallet.
             </p>
+            <div className="mt-3 space-y-1.5 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs">
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Total Liquid Team Balance:</span>
+                <span className="font-semibold text-white">{Number(wallet?.available_balance || 0).toLocaleString()} cr</span>
+              </div>
+              {Number(wallet?.contract_reserved_balance || 0) > 0 && (
+                <div className="flex justify-between text-amber-400">
+                  <span>Reserved for Contracts (Locked):</span>
+                  <span>-{Number(wallet?.contract_reserved_balance).toLocaleString()} cr</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-white/10 pt-1 font-medium text-emerald-400">
+                <span>Unreserved Available:</span>
+                <span>{Number(wallet?.unreserved_balance ?? wallet?.available_balance ?? 0).toLocaleString()} cr</span>
+              </div>
+            </div>
             <label className="mt-4 block text-sm text-zinc-300">
               Team member
               <select value={distributionRecipientId} onChange={(event) => setDistributionRecipientId(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-dark-base px-3 py-2 text-white outline-none focus:border-blue-400">
@@ -789,7 +832,6 @@ function TeamTabs({
     { id: "about", label: "About", icon: Info },
     { id: "jobs", label: "Jobs", icon: Briefcase },
     { id: "gigs", label: "Gigs", icon: Briefcase },
-    { id: "assets", label: "Assets", icon: Image },
     { id: "reviews", label: "Reviews", icon: Star },
     { id: "members", label: "Members", icon: Users },
   ];
@@ -1065,12 +1107,6 @@ function TeamTabContent({
   if (active === "tasks") return <TeamTaskDashboard teamId={team.team_id} />;
   if (active === "jobs" || active === "gigs")
     return <TeamMarketplaceSection team={team} type={active} canViewProposals={canViewMarketplaceProposals} />;
-  if (active === "assets")
-    return (
-      <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-12 text-center text-gray-500 dark:text-zinc-400">
-        No asset posts available from the Teams API.
-      </div>
-    );
   if (active === "reviews")
     return (
       <div className="space-y-3">
@@ -1175,20 +1211,45 @@ function TeamTabContent({
       <div>
         {isOwner && (
           <div className="mb-4 flex justify-end">
-            <button type="button" onClick={onDistributeFunds} disabled={saving || Number(wallet.available_balance || 0) <= 0} className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50">
+            <button
+              type="button"
+              onClick={onDistributeFunds}
+              disabled={saving || Number(wallet.unreserved_balance ?? wallet.available_balance ?? 0) <= 0}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
               <ArrowRightLeft className="h-4 w-4" /> Distribute funds
             </button>
           </div>
         )}
-        <div className="grid gap-3 sm:grid-cols-4">
-          {Object.entries(wallet).map(([key, value]) => (
-            <div key={key} className="rounded-xl border border-gray-200 dark:border-white/10 p-4">
-              <p className="text-xs capitalize text-gray-500 dark:text-zinc-500">
-                {key.replaceAll("_", " ")}
-              </p>
-              <b>{value} credits</b>
-            </div>
-          ))}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border border-gray-200 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.02] dark:shadow-none">
+            <p className="text-xs text-gray-500 dark:text-zinc-500">Unreserved Balance</p>
+            <b className="mt-1 block text-xl font-bold text-emerald-400">
+              {Number(wallet.unreserved_balance ?? wallet.available_balance ?? 0).toLocaleString()} credits
+            </b>
+            <p className="mt-1 text-[11px] text-zinc-500">Available for general team distributions</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.02] dark:shadow-none">
+            <p className="text-xs text-gray-500 dark:text-zinc-500">Reserved for Contracts</p>
+            <b className="mt-1 block text-xl font-bold text-amber-400">
+              {Number(wallet.contract_reserved_balance || 0).toLocaleString()} credits
+            </b>
+            <p className="mt-1 text-[11px] text-zinc-500">Locked for contract workspace payouts</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.02] dark:shadow-none">
+            <p className="text-xs text-gray-500 dark:text-zinc-500">Total Liquid Balance</p>
+            <b className="mt-1 block text-xl font-bold text-gray-900 dark:text-white">
+              {Number(wallet.available_balance || 0).toLocaleString()} credits
+            </b>
+            <p className="mt-1 text-[11px] text-zinc-500">Total account wallet balance</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.02] dark:shadow-none">
+            <p className="text-xs text-gray-500 dark:text-zinc-500">Escrow Balance</p>
+            <b className="mt-1 block text-xl font-bold text-gray-900 dark:text-white">
+              {Number(wallet.escrow_balance || 0).toLocaleString()} credits
+            </b>
+            <p className="mt-1 text-[11px] text-zinc-500">Held in escrow for active contracts</p>
+          </div>
         </div>
       </div>
     ) : (

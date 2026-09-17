@@ -74,6 +74,12 @@ export interface Gig {
   savesCount?: number;
   ordersCount?: number;
   freelancerAccountId?: string;
+  team_id?: string | null;
+  teamId?: string | null;
+  team_visibility?: "Public" | "Private" | string | null;
+  teamVisibility?: "Public" | "Private" | string | null;
+  is_team?: boolean;
+  isTeam?: boolean;
 }
 
 export const sampleGigs: Gig[] = [];

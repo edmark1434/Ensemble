@@ -5,6 +5,7 @@ import api from "@/lib/axios";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
+import { showErrorToast } from "@/components/utility/toast";
 
 export const SentOrderDetail = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -23,7 +24,7 @@ export const SentOrderDetail = () => {
         navigate('/gigs/orders/sent');
     } catch (err) {
         console.error("Failed to withdraw:", err);
-        alert("Failed to withdraw order.");
+        showErrorToast("Failed to withdraw order.");
         setIsWithdrawing(false);
     }
   };

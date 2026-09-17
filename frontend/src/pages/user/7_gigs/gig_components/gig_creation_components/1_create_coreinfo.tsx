@@ -1,6 +1,7 @@
 import React, { useRef, useState, type ChangeEvent } from "react";
 import { ArrowRight, Image as ImageIcon, ChevronDown, Check, Bold, Italic, List, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { showErrorToast } from "@/components/utility/toast";
 
 export const categories = [
   "Ads & Social",
@@ -178,7 +179,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
 
   const processFile = (file: File) => {
     if (!file.type.startsWith("image/")) {
-      alert("Please upload an image file.");
+      showErrorToast("Please upload an image file.");
       return;
     }
     const localUrl = URL.createObjectURL(file);

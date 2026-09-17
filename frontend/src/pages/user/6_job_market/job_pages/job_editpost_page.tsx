@@ -10,6 +10,7 @@ import { categories, difficulties } from "../job_components/job_creation_compone
 import type { Job } from "../job_components/job_lists";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { JobRichText } from "../job_components/JobRichText";
+import { showErrorToast } from "@/components/utility/toast";
 
 interface CustomSelectProps {
   label: string;
@@ -176,7 +177,7 @@ export const JobEditPostPage: React.FC = () => {
   // Thumbnail Handlers
   const processFile = (file: File) => {
     if (!file.type.startsWith("image/")) {
-      alert("Please upload an image file.");
+      showErrorToast("Please upload an image file.");
       return;
     }
     const localUrl = URL.createObjectURL(file);

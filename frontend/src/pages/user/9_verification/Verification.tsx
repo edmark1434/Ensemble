@@ -369,7 +369,7 @@ const Verification = () => {
 
   return (
     <div className="min-h-screen bg-[#080a12]">
-      <UserHeader pageTitle="Verification" credits={1250} />
+      <UserHeader pageTitle="Verification" />
 
       <div className="mx-auto max-w-4xl p-6 md:p-8">
         <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-6 md:p-8">

@@ -49,9 +49,10 @@ async function getAccountByHandle(req, res) {
 
 async function searchUserAccountsByHandleController(req, res) {
     try {
+        const account_id = req.user?.account_id || req.user?.accountId || req.session?.account_id || req.session?.accountId;
         const accounts = await searchUserAccountsByHandleService(
             req.query.handle,
-            req.session.account_id,
+            account_id,
             req.query.role
         );
         return res.status(200).json({ success: true, data: accounts });
@@ -67,8 +68,7 @@ async function getAccountWalletController(req, res) {
     }
 
     type = type.replace('_', ' ');
-    const { account_id } = req.session;
-    console.log('Account ID from session:', req.session);
+    const account_id = req.user?.account_id || req.user?.accountId || req.session?.account_id || req.session?.accountId;
     if (!account_id) {
         return res.status(401).json({ success: false, message: 'Unauthorized. Account session not found.' });
     }
@@ -85,20 +85,21 @@ async function getAccountWalletController(req, res) {
         // }
 
         const wallet = await getAccountWalletService(account_id, type);
-        if (!wallet) {
-            return res.status(404).json({
-                success: false,
-                message: 'Wallet not found',
-            });
-        }
+        const resolvedWallet = wallet || {
+            balance_credits: 0,
+            frozen_balance_credits: 0,
+            type,
+            status: 'active'
+        };
 
         return res.status(200).json({
             success: true,
             message: 'Wallet fetched successfully',
-            wallet,
+            wallet: resolvedWallet,
         });
 
     } catch (err) {
+        console.error('Error in getAccountWalletController:', err);
         return res.status(500).json({
             success: false,
             message: 'Internal server error',

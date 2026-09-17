@@ -327,7 +327,7 @@ export const CreateGigWizard: React.FC = () => {
 
   return (
     <div className="w-full min-h-screen bg-dark-base text-white overflow-x-hidden">
-      <UserHeader pageTitle="Create a Marketplace Gig" credits={1250} />
+      <UserHeader pageTitle="Create a Marketplace Gig" />
 
       <div className="mx-auto max-w-3xl p-6 md:p-8 w-full">
         {/* Navigation Action Header */}

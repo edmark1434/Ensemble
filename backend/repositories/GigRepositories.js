@@ -214,9 +214,13 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
             (SELECT json_agg(json_build_object('name', gm.name, 'description', gm.description)) FROM gig_milestones gm WHERE gm.gig_id = g.gig_id) as milestones
             ${accountId ? `, (SELECT COUNT(*) FROM gig_saves gs WHERE gs.gig_id = g.gig_id AND gs.account_id = $1) > 0 as "isSaved"` : `, false as "isSaved"`},
             (SELECT COUNT(*) FROM gig_saves gs WHERE gs.gig_id = g.gig_id) as "savesCount",
-            (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id WHERE gt.gig_id = g.gig_id) as "ordersCount"
+            (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id WHERE gt.gig_id = g.gig_id) as "ordersCount",
+            tm.team_id as "teamId",
+            tm.visibility as "teamVisibility",
+            (tm.team_id IS NOT NULL) as "isTeam"
         FROM gigs g
         JOIN accounts a ON g.freelancer_account_id = a.account_id
+        LEFT JOIN teams tm ON tm.account_id = g.freelancer_account_id AND tm.deleted_at IS NULL
         WHERE LOWER(g.status) != 'archived' AND LOWER(g.status) != 'deleted'
         ORDER BY g.created_at DESC
     `;
@@ -257,6 +261,9 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
             savesCount: parseInt(row.savesCount || 0, 10),
             ordersCount: parseInt(row.ordersCount || 0, 10),
             freelancerAccountId: row.freelancer_account_id,
+            teamId: row.teamId || null,
+            teamVisibility: row.teamVisibility || null,
+            isTeam: Boolean(row.isTeam || row.teamId),
         };
     });
 }
@@ -325,9 +332,13 @@ async function getSavedGigsRepository(accountId) {
                 'daysOfDelivery', gt.delivery_days,
                 'revisions', gt.no_of_revisions_max
             )) FROM gig_tiers gt WHERE gt.gig_id = g.gig_id) as tiers,
-            (SELECT json_agg(json_build_object('name', gm.name, 'description', gm.description)) FROM gig_milestones gm WHERE gm.gig_id = g.gig_id) as milestones
+            (SELECT json_agg(json_build_object('name', gm.name, 'description', gm.description)) FROM gig_milestones gm WHERE gm.gig_id = g.gig_id) as milestones,
+            tm.team_id as "teamId",
+            tm.visibility as "teamVisibility",
+            (tm.team_id IS NOT NULL) as "isTeam"
         FROM gigs g
         JOIN accounts a ON g.freelancer_account_id = a.account_id
+        LEFT JOIN teams tm ON tm.account_id = g.freelancer_account_id AND tm.deleted_at IS NULL
         JOIN gig_saves gs ON gs.gig_id = g.gig_id
         WHERE gs.account_id = $1 AND LOWER(g.status) != 'archived' AND LOWER(g.status) != 'deleted'
         ORDER BY gs.created_at DESC
@@ -356,7 +367,10 @@ async function getSavedGigsRepository(accountId) {
             postedAt: row.postedAt,
             isSaved: true,
             clientRating: parseFloat(row.clientRating || 0),
-            ratingCount: parseInt(row.ratingCount || 0, 10)
+            ratingCount: parseInt(row.ratingCount || 0, 10),
+            teamId: row.teamId || null,
+            teamVisibility: row.teamVisibility || null,
+            isTeam: Boolean(row.isTeam || row.teamId),
         };
     });
 }
@@ -577,9 +591,13 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
                 )
             ) as "hasPendingOrder",
             (SELECT COUNT(*) FROM gig_saves gs WHERE gs.gig_id = g.gig_id) as "savesCount",
-            (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id WHERE gt.gig_id = g.gig_id) as "ordersCount"
+            (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id WHERE gt.gig_id = g.gig_id) as "ordersCount",
+            tm.team_id as "teamId",
+            tm.visibility as "teamVisibility",
+            (tm.team_id IS NOT NULL) as "isTeam"
         FROM gigs g
         JOIN accounts a ON g.freelancer_account_id = a.account_id
+        LEFT JOIN teams tm ON tm.account_id = g.freelancer_account_id AND tm.deleted_at IS NULL
         WHERE g.gig_id = $1 AND LOWER(g.status) != 'archived' AND LOWER(g.status) != 'deleted'
     `;
     const res = await pool.query(query, [gigId, accountId, actorIds, affiliatedAccountIds]);
@@ -621,7 +639,10 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
         isPersonalGig: row.isPersonalGig,
         savesCount: parseInt(row.savesCount || 0, 10),
         ordersCount: parseInt(row.ordersCount || 0, 10),
-        freelancerAccountId: row.freelancer_account_id
+        freelancerAccountId: row.freelancer_account_id,
+        teamId: row.teamId || null,
+        teamVisibility: row.teamVisibility || null,
+        isTeam: Boolean(row.isTeam || row.teamId)
     };
 }
 
@@ -890,7 +911,8 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
         for (let i = 0; i < milestones.length; i++) {
             const m = milestones[i];
             await client.query(msQuery, [
-                contractId, m.index || i, m.name, m.description || '', 0, no_of_revisions_max || 0, 'pending'
+                contractId, m.index || i, m.name, m.description || '', 0, no_of_revisions_max || 0,
+                i === 0 ? 'active' : 'pending'
             ]);
         }
 

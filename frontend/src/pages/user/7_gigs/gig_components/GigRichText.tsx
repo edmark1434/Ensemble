@@ -235,11 +235,28 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
     }
   };
 
+  const isTeam = Boolean(
+    gig?.is_team ||
+    gig?.isTeam ||
+    gig?.team_id ||
+    gig?.teamId
+  );
+  const teamVisibility = String(gig?.team_visibility || gig?.teamVisibility || '').toLowerCase();
+  const isPrivateTeam = isTeam && teamVisibility === 'private';
+  const targetTeamId = gig?.team_id || gig?.teamId;
+
   const handleViewProfile = () => {
     if (!gig) return;
 
     if (gig.isPersonalGig) {
       navigate("/profile");
+      return;
+    }
+
+    if (isTeam) {
+      if (targetTeamId) {
+        navigate(`/teams/${encodeURIComponent(targetTeamId)}`);
+      }
       return;
     }
 
@@ -309,14 +326,16 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={handleViewProfile}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition shrink-0"
-      >
-        <User className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
-        <span>View Profile</span>
-      </button>
+      {!isPrivateTeam && (
+        <button
+          type="button"
+          onClick={handleViewProfile}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition shrink-0"
+        >
+          <User className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
+          <span>{isTeam ? "View Team Profile" : "View Profile"}</span>
+        </button>
+      )}
     </div>
   );
 

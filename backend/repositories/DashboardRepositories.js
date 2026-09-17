@@ -1,6 +1,178 @@
 const pool = require('../lib/Database').pool;
+const { getAffiliatedAccountIds } = require('./MarketplaceActorRepositories');
+
+async function getContractPermissions(contractId, personalAccountId, dbClient = pool) {
+    const participantsResult = await dbClient.query(
+        `SELECT 
+            c.contract_id,
+            c.status AS contract_status,
+            c.rate_credits,
+            c.revision_price_credits,
+            
+            -- Client
+            client_acc.account_id AS client_account_id,
+            client_acc.display_name AS client_name,
+            client_acc.type AS client_account_type,
+            client_team.team_id AS client_team_id,
+            CASE WHEN client_team.team_id IS NOT NULL THEN client_acc.display_name ELSE NULL END AS client_team_name,
+            
+            -- Freelancer
+            free_acc.account_id AS freelancer_account_id,
+            free_acc.display_name AS freelancer_name,
+            free_acc.type AS freelancer_account_type,
+            free_team.team_id AS freelancer_team_id,
+            CASE WHEN free_team.team_id IS NOT NULL THEN free_acc.display_name ELSE NULL END AS freelancer_team_name,
+            
+            -- Client Workspace Project Lead
+            client_tcw.workspace_id AS client_workspace_id,
+            client_tcw.project_lead_account_id AS client_project_lead_account_id,
+            
+            -- Freelancer Workspace Project Lead
+            free_tcw.workspace_id AS free_workspace_id,
+            free_tcw.project_lead_account_id AS free_project_lead_account_id,
+
+            COALESCE(j.title, g.title) AS listing_title
+
+        FROM contracts c
+        LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
+        LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+        LEFT JOIN jobs j ON j.job_id = p.job_id
+
+        LEFT JOIN gig_contracts gc ON gc.contract_id = c.contract_id
+        LEFT JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
+        LEFT JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+        LEFT JOIN gigs g ON g.gig_id = gt.gig_id
+
+        JOIN accounts client_acc ON client_acc.account_id = COALESCE(j.client_account_id, gr.client_account_id)
+        JOIN accounts free_acc ON free_acc.account_id = COALESCE(p.freelancer_account_id, g.freelancer_account_id)
+
+        LEFT JOIN teams client_team ON client_team.account_id = client_acc.account_id AND client_team.deleted_at IS NULL
+        LEFT JOIN teams free_team ON free_team.account_id = free_acc.account_id AND free_team.deleted_at IS NULL
+
+        LEFT JOIN team_contract_workspaces client_tcw ON client_tcw.team_id = client_team.team_id AND client_tcw.contract_id = c.contract_id
+        LEFT JOIN team_contract_workspaces free_tcw ON free_tcw.team_id = free_team.team_id AND free_tcw.contract_id = c.contract_id
+
+        WHERE c.contract_id = $1
+        LIMIT 1`,
+        [contractId]
+    );
+
+    const contractInfo = participantsResult.rows[0];
+    if (!contractInfo) return null;
+
+    const teamIds = [contractInfo.client_team_id, contractInfo.freelancer_team_id].filter(Boolean);
+    let memberships = [];
+    let workspaceMemberships = [];
+
+    if (teamIds.length > 0 && personalAccountId) {
+        const memberRes = await dbClient.query(
+            `SELECT tm.team_id, tm.role, tm.status
+             FROM team_members tm
+             JOIN users u ON u.user_id = tm.user_id
+             WHERE u.account_id = $1 AND tm.status = 'Active'
+               AND tm.team_id = ANY($2::uuid[])`,
+            [personalAccountId, teamIds]
+        );
+        memberships = memberRes.rows;
+
+        const wsMemberRes = await dbClient.query(
+            `SELECT tcw.team_id
+             FROM team_workspace_members twm
+             JOIN team_contract_workspaces tcw ON tcw.workspace_id = twm.workspace_id
+             WHERE tcw.contract_id = $1 AND twm.account_id = $2`,
+            [contractId, personalAccountId]
+        );
+        workspaceMemberships = wsMemberRes.rows;
+    }
+
+    const isDirectClient = String(contractInfo.client_account_id) === String(personalAccountId);
+    const isDirectFreelancer = String(contractInfo.freelancer_account_id) === String(personalAccountId);
+
+    const isClientTeam = Boolean(contractInfo.client_team_id);
+    const clientMember = memberships.find((m) => String(m.team_id) === String(contractInfo.client_team_id));
+    const clientMemberRole = clientMember?.role || null;
+    const isClientOwnerOrAdmin = isClientTeam && ['Owner', 'Admin'].includes(clientMemberRole);
+    const isClientProjectLead = isClientTeam && String(contractInfo.client_project_lead_account_id) === String(personalAccountId);
+    const isClientWorkspaceMember = isClientTeam && workspaceMemberships.some((w) => String(w.team_id) === String(contractInfo.client_team_id));
+
+    const isFreelancerTeam = Boolean(contractInfo.freelancer_team_id);
+    const freelancerMember = memberships.find((m) => String(m.team_id) === String(contractInfo.freelancer_team_id));
+    const freelancerMemberRole = freelancerMember?.role || null;
+    const isFreelancerOwnerOrAdmin = isFreelancerTeam && ['Owner', 'Admin'].includes(freelancerMemberRole);
+    const isFreelancerProjectLead = isFreelancerTeam && String(contractInfo.free_project_lead_account_id) === String(personalAccountId);
+    const isFreelancerWorkspaceMember = isFreelancerTeam && workspaceMemberships.some((w) => String(w.team_id) === String(contractInfo.freelancer_team_id));
+
+    const canBuyRevision = isDirectClient || isClientOwnerOrAdmin;
+    const canReviewMilestone = isDirectClient || isClientOwnerOrAdmin || isClientProjectLead;
+    const canSubmitMilestone = isDirectFreelancer || isFreelancerOwnerOrAdmin || isFreelancerProjectLead;
+    const canViewTask =
+        isDirectClient ||
+        isDirectFreelancer ||
+        canBuyRevision ||
+        canReviewMilestone ||
+        canSubmitMilestone ||
+        isClientWorkspaceMember ||
+        isFreelancerWorkspaceMember ||
+        Boolean(clientMember) ||
+        Boolean(freelancerMember);
+
+    let effectiveRole = 'none';
+    if (isDirectFreelancer || isFreelancerOwnerOrAdmin || isFreelancerProjectLead || isFreelancerWorkspaceMember || Boolean(freelancerMember)) {
+        effectiveRole = 'freelancer';
+    } else if (isDirectClient || isClientOwnerOrAdmin || isClientProjectLead || isClientWorkspaceMember || Boolean(clientMember)) {
+        effectiveRole = 'client';
+    }
+
+    const isProjectLead =
+        (effectiveRole === 'freelancer' && isFreelancerProjectLead) ||
+        (effectiveRole === 'client' && isClientProjectLead);
+
+    const activeTeamId = effectiveRole === 'freelancer' ? contractInfo.freelancer_team_id : (effectiveRole === 'client' ? contractInfo.client_team_id : null);
+    const activeTeamName = effectiveRole === 'freelancer' ? contractInfo.freelancer_team_name : (effectiveRole === 'client' ? contractInfo.client_team_name : null);
+    const activeTeamRole = effectiveRole === 'freelancer' ? freelancerMemberRole : (effectiveRole === 'client' ? clientMemberRole : null);
+
+    return {
+        contract: contractInfo,
+        participants: {
+            client_account_id: contractInfo.client_account_id,
+            client_name: contractInfo.client_name,
+            freelancer_account_id: contractInfo.freelancer_account_id,
+            freelancer_name: contractInfo.freelancer_name,
+            listing_title: contractInfo.listing_title,
+        },
+        isDirectClient,
+        isDirectFreelancer,
+        isClientTeam,
+        clientTeamId: contractInfo.client_team_id,
+        isClientOwnerOrAdmin,
+        isClientProjectLead,
+        isFreelancerTeam,
+        freelancerTeamId: contractInfo.freelancer_team_id,
+        isFreelancerOwnerOrAdmin,
+        isFreelancerProjectLead,
+        canBuyRevision,
+        canReviewMilestone,
+        canSubmitMilestone,
+        canViewTask,
+        userRole: {
+            effective_role: effectiveRole,
+            can_buy_revision: canBuyRevision,
+            can_review_milestone: canReviewMilestone,
+            can_submit_milestone: canSubmitMilestone,
+            can_view_task: canViewTask,
+            is_project_lead: isProjectLead,
+            is_team_client: isClientTeam,
+            is_team_freelancer: isFreelancerTeam,
+            team_id: activeTeamId,
+            team_name: activeTeamName,
+            team_role: activeTeamRole,
+        },
+    };
+}
+
 //jp
 async function getDashboardTasks(accountId) {
+    const actorAccountIds = await getAffiliatedAccountIds(accountId);
     const query = `
         SELECT 
             c.contract_id,
@@ -42,7 +214,7 @@ async function getDashboardTasks(accountId) {
         LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
         JOIN accounts free_acc ON p.freelancer_account_id = free_acc.account_id
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
-        WHERE (j.client_account_id = $1 OR p.freelancer_account_id = $1)
+        WHERE (j.client_account_id = ANY($1::uuid[]) OR p.freelancer_account_id = ANY($1::uuid[]))
           AND LOWER(c.status) IN ('active', 'waiting', 'done', 'completed')
         
         UNION ALL
@@ -88,16 +260,29 @@ async function getDashboardTasks(accountId) {
         LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
         JOIN accounts free_acc ON g.freelancer_account_id = free_acc.account_id
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
-        WHERE (gr.client_account_id = $1 OR g.freelancer_account_id = $1)
+        WHERE (gr.client_account_id = ANY($1::uuid[]) OR g.freelancer_account_id = ANY($1::uuid[]))
           AND LOWER(c.status) IN ('active', 'waiting', 'done', 'completed')
         
         ORDER BY contract_id DESC
     `;
-    const result = await pool.query(query, [accountId]);
-    return result.rows;
+    const result = await pool.query(query, [actorAccountIds]);
+    return result.rows.map((row) => {
+        const isFreelancer = actorAccountIds.includes(String(row.freelancer_account_id));
+        return {
+            ...row,
+            user_role: {
+                effective_role: isFreelancer ? 'freelancer' : 'client',
+            },
+        };
+    });
 }
 
 async function getTaskById(contractId, accountId) {
+    const permissions = await getContractPermissions(contractId, accountId);
+    if (!permissions || !permissions.canViewTask) {
+        return null;
+    }
+
     const query = `
         SELECT 
             c.contract_id,
@@ -151,7 +336,7 @@ async function getTaskById(contractId, accountId) {
         LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
         JOIN accounts free_acc ON p.freelancer_account_id = free_acc.account_id
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
-        WHERE c.contract_id = $1 AND (j.client_account_id = $2 OR p.freelancer_account_id = $2)
+        WHERE c.contract_id = $1
         
         UNION ALL
         
@@ -208,49 +393,23 @@ async function getTaskById(contractId, accountId) {
         LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
         JOIN accounts free_acc ON g.freelancer_account_id = free_acc.account_id
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
-        WHERE c.contract_id = $1 AND (gr.client_account_id = $2 OR g.freelancer_account_id = $2)
+        WHERE c.contract_id = $1
     `;
-    const result = await pool.query(query, [contractId, accountId]);
-    return result.rows[0];
+    const result = await pool.query(query, [contractId]);
+    const task = result.rows[0];
+    if (!task) return null;
+    task.user_role = permissions.userRole;
+    return task;
 }
 
 async function verifyFreelancer(contractId, accountId) {
-    const query = `
-        SELECT 1 
-        FROM contracts c
-        JOIN job_contracts jc ON c.contract_id = jc.contract_id
-        JOIN proposals p ON jc.proposal_id = p.proposal_id
-        WHERE c.contract_id = $1 AND p.freelancer_account_id = $2
-        UNION ALL
-        SELECT 1
-        FROM contracts c
-        JOIN gig_contracts gc ON c.contract_id = gc.contract_id
-        JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
-        JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-        JOIN gigs g ON gt.gig_id = g.gig_id
-        WHERE c.contract_id = $1 AND g.freelancer_account_id = $2
-    `;
-    const res = await pool.query(query, [contractId, accountId]);
-    return res.rowCount > 0;
+    const permissions = await getContractPermissions(contractId, accountId);
+    return Boolean(permissions?.canSubmitMilestone || permissions?.isDirectFreelancer);
 }
 
 async function verifyClient(contractId, accountId) {
-    const query = `
-        SELECT 1 
-        FROM contracts c
-        JOIN job_contracts jc ON c.contract_id = jc.contract_id
-        JOIN proposals p ON jc.proposal_id = p.proposal_id
-        JOIN jobs j ON p.job_id = j.job_id
-        WHERE c.contract_id = $1 AND j.client_account_id = $2
-        UNION ALL
-        SELECT 1
-        FROM contracts c
-        JOIN gig_contracts gc ON c.contract_id = gc.contract_id
-        JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
-        WHERE c.contract_id = $1 AND gr.client_account_id = $2
-    `;
-    const res = await pool.query(query, [contractId, accountId]);
-    return res.rowCount > 0;
+    const permissions = await getContractPermissions(contractId, accountId);
+    return Boolean(permissions?.canReviewMilestone || permissions?.isDirectClient);
 }
 
 async function addMilestoneSubmission(milestoneId, message, attachments, status) {
@@ -279,14 +438,14 @@ async function updateMilestoneStatus(milestoneId, status) {
 }
 
 async function unlockNextMilestone(contractId, currentMilestoneId) {
-    // Find the next milestone that is 'locked' and set it to 'active'
+    // Find the next milestone that is 'locked' or 'pending' and set it to 'active'
     const query = `
         UPDATE contract_milestones
         SET status = 'active'
         WHERE contract_milestone_id = (
             SELECT contract_milestone_id 
             FROM contract_milestones 
-            WHERE contract_id = $1 AND status = 'locked' 
+            WHERE contract_id = $1 AND LOWER(status) IN ('locked', 'pending') 
             ORDER BY index ASC 
             LIMIT 1
         )
@@ -309,7 +468,7 @@ async function recordMilestoneAction({
     try {
         await client.query('BEGIN');
         const milestoneResult = await client.query(
-            `SELECT contract_milestone_id, name, status
+            `SELECT contract_milestone_id, name, status, index
              FROM contract_milestones
              WHERE contract_milestone_id = $1 AND contract_id = $2
              FOR UPDATE`,
@@ -321,6 +480,23 @@ async function recordMilestoneAction({
             error.statusCode = 404;
             throw error;
         }
+
+        if (Number(milestone.index) > 0) {
+            const precedingIncomplete = await client.query(
+                `SELECT COUNT(*)::integer AS count
+                 FROM contract_milestones
+                 WHERE contract_id = $1
+                   AND index < $2
+                   AND LOWER(status) NOT IN ('completed', 'approved')`,
+                [contractId, milestone.index]
+            );
+            if (Number(precedingIncomplete.rows[0].count) > 0) {
+                const error = new Error('Previous milestones must be completed before updating this milestone');
+                error.statusCode = 409;
+                throw error;
+            }
+        }
+
         if (
             allowedCurrentStatuses.length > 0 &&
             !allowedCurrentStatuses.includes(String(milestone.status).toLowerCase())
@@ -365,7 +541,7 @@ async function recordMilestoneAction({
                  WHERE contract_milestone_id = (
                     SELECT contract_milestone_id
                     FROM contract_milestones
-                    WHERE contract_id = $1 AND status = 'locked'
+                    WHERE contract_id = $1 AND LOWER(status) IN ('locked', 'pending')
                     ORDER BY index ASC
                     LIMIT 1
                  )`,
@@ -634,32 +810,13 @@ async function buyRevision({
             throw error;
         }
 
-        const participantsResult = await client.query(
-            `SELECT j.client_account_id, p.freelancer_account_id, j.title AS listing_title,
-                    client_acc.display_name AS client_name
-             FROM job_contracts jc
-             JOIN proposals p ON p.proposal_id = jc.proposal_id
-             JOIN jobs j ON j.job_id = p.job_id
-             JOIN accounts client_acc ON client_acc.account_id = j.client_account_id
-             WHERE jc.contract_id = $1
-             UNION ALL
-             SELECT gr.client_account_id, g.freelancer_account_id, g.title AS listing_title,
-                    client_acc.display_name AS client_name
-             FROM gig_contracts gc
-             JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
-             JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
-             JOIN gigs g ON g.gig_id = gt.gig_id
-             JOIN accounts client_acc ON client_acc.account_id = gr.client_account_id
-             WHERE gc.contract_id = $1
-             LIMIT 1`,
-            [contractId]
-        );
-        const participants = participantsResult.rows[0];
-        if (!participants || String(participants.client_account_id) !== String(clientAccountId)) {
-            const error = new Error('Task not found or unauthorized');
+        const permissions = await getContractPermissions(contractId, clientAccountId, client);
+        if (!permissions || !permissions.canBuyRevision) {
+            const error = new Error('Only the client or team Owner/Admin can purchase additional revisions');
             error.statusCode = 403;
             throw error;
         }
+        const participants = permissions.participants;
 
         const priceCredits = Number(contract.revision_price_credits);
         if (!Number.isSafeInteger(priceCredits) || priceCredits <= 0) {
@@ -788,6 +945,43 @@ async function buyRevision({
             throw error;
         }
 
+        if (permissions.isClientTeam) {
+            const contractReservedResult = await client.query(
+                `WITH contract_releases AS (
+                     SELECT ct.reference_id AS contract_id,
+                            COALESCE(SUM(ct.amount_credits), 0)::int AS released_credits
+                     FROM credit_transactions ct
+                     WHERE ct.destination_wallet_id = $1
+                       AND ct.reference_table = 'contracts'
+                       AND ct.type = 'Escrow Release'
+                       AND LOWER(ct.status) = 'completed'
+                     GROUP BY ct.reference_id
+                 ),
+                 contract_dists AS (
+                     SELECT tcd.contract_id,
+                            COALESCE(SUM(tcd.amount_credits), 0)::int AS distributed_credits
+                     FROM team_contract_distributions tcd
+                     WHERE tcd.team_id = $2
+                     GROUP BY tcd.contract_id
+                 )
+                 SELECT COALESCE(SUM(GREATEST(0, cr.released_credits - COALESCE(cd.distributed_credits, 0))), 0)::int AS total_contract_reserved
+                 FROM contract_releases cr
+                 LEFT JOIN contract_dists cd ON cd.contract_id = cr.contract_id`,
+                [clientWallet.wallet_id, permissions.clientTeamId]
+            );
+            const totalContractReserved = Number(contractReservedResult.rows[0]?.total_contract_reserved || 0);
+            const availableBalance = Number(clientWallet.balance_credits || 0);
+            const unreservedBalance = Math.max(0, availableBalance - totalContractReserved);
+
+            if (priceCredits > unreservedBalance) {
+                const error = new Error(
+                    `Insufficient unreserved Team balance for the additional revision (${unreservedBalance.toLocaleString()} credits available). ${totalContractReserved.toLocaleString()} credits are locked/reserved for contract payouts.`
+                );
+                error.statusCode = 409;
+                throw error;
+            }
+        }
+
         const debitResult = await client.query(
             `UPDATE wallets
              SET balance_credits = balance_credits - $1
@@ -880,6 +1074,7 @@ async function buyRevision({
 }
 
 module.exports = {
+    getContractPermissions,
     getDashboardTasks,
     getTaskById,
     verifyFreelancer,

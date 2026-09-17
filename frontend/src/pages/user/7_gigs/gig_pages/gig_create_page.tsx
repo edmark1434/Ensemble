@@ -25,13 +25,50 @@ const GigCreatePage: React.FC = () => {
   const navigate = useNavigate();
   const isVerified = useGlobalState((state) => state.isVerified);
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isGlobalLoading = useGlobalState((state) => state.isLoading);
+  const user = useGlobalState((state) => state.user);
+  const [isCheckingVerification, setIsCheckingVerification] = useState(!isVerified);
 
   useEffect(() => {
-    if (!isGuestMode && !isVerified) {
-      useGlobalState.getState().setIsVerificationModalOpen(true, "Account Verification is required to access Gig Creation. Please verify your identity to proceed.");
-      navigate("/");
+    let cancelled = false;
+
+    if (isGuestMode) {
+      navigate("/login");
+      return;
     }
-  }, [isGuestMode, isVerified, navigate]);
+
+    if (isGlobalLoading) {
+      return;
+    }
+
+    if (isVerified || user?.is_verified) {
+      if (!isVerified && user?.is_verified) {
+        useGlobalState.getState().setIsVerified(true);
+      }
+      setIsCheckingVerification(false);
+      return;
+    }
+
+    requireVerifiedAccount()
+      .then(() => {
+        if (!cancelled) {
+          setIsCheckingVerification(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          useGlobalState.getState().setIsVerificationModalOpen(
+            true,
+            "Account Verification is required to access Gig Creation. Please verify your identity to proceed."
+          );
+          navigate("/");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuestMode, isGlobalLoading, isVerified, user?.is_verified, navigate]);
   const theme = useGlobalState((state) => state.theme);
   
   const [currentSlide, setCurrentSlide] = useState<number>(1);
@@ -224,6 +261,14 @@ const GigCreatePage: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
+  if (isCheckingVerification) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-dark-base">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-gray-200 overflow-hidden font-inter transition-colors duration-300">

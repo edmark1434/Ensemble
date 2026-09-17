@@ -647,7 +647,7 @@ const Projects: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-      <UserHeader pageTitle="Projects" credits={1250} />
+      <UserHeader pageTitle="Projects" />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8">
 

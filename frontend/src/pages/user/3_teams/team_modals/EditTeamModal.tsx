@@ -1,6 +1,5 @@
-// src/components/modals/EditTeamModal.tsx
 import { useState } from "react";
-import { X, Upload, Image as ImageIcon } from "lucide-react";
+import { X, Upload, Image as ImageIcon, Globe, Lock } from "lucide-react";
 
 interface EditTeamModalProps {
   isOpen: boolean;
@@ -10,6 +9,7 @@ interface EditTeamModalProps {
   teamTagline?: string;
   teamDescription?: string;
   teamBanner?: string;
+  teamVisibility?: "Public" | "Private";
   onSave?: (values: TeamFormValues) => void;
   mode?: "edit" | "create";
   saving?: boolean;
@@ -22,6 +22,7 @@ export interface TeamFormValues {
   handle: string;
   tagline: string;
   description: string;
+  visibility: "Public" | "Private";
   photo?: File;
 }
 
@@ -32,6 +33,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
   teamTagline,
   teamDescription,
   teamBanner,
+  teamVisibility,
   onSave,
   mode = "edit",
   saving = false,
@@ -42,6 +44,9 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
   const [handle, setHandle] = useState(teamHandle || "");
   const [tagline, setTagline] = useState(teamTagline || "");
   const [description, setDescription] = useState(teamDescription || "");
+  const [visibility, setVisibility] = useState<"Public" | "Private">(
+    teamVisibility === "Private" ? "Private" : "Public",
+  );
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState(teamBanner || "");
   const [photoError, setPhotoError] = useState("");
@@ -61,6 +66,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
         handle: handle.trim(),
         tagline: tagline.trim(),
         description: description.trim(),
+        visibility,
         photo,
       });
     } else if (
@@ -75,6 +81,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
         handle: handle.trim(),
         tagline: tagline.trim(),
         description: description.trim(),
+        visibility,
         photo: photo || undefined,
       });
     }
@@ -223,6 +230,57 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
               )}
             </div>
 
+            <div>
+              <label className="mb-2 block text-sm font-medium text-zinc-300">
+                Team Visibility
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setVisibility("Public")}
+                  className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition ${
+                    visibility === "Public"
+                      ? "border-blue-500 bg-blue-500/10 text-white ring-1 ring-blue-500/30"
+                      : "border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:text-zinc-200"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Globe
+                      className={`h-4 w-4 ${
+                        visibility === "Public" ? "text-blue-400" : "text-zinc-400"
+                      }`}
+                    />
+                    <span className="text-sm font-semibold">Public</span>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                    Visible to everyone. Discoverable in search and directory.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setVisibility("Private")}
+                  className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition ${
+                    visibility === "Private"
+                      ? "border-blue-500 bg-blue-500/10 text-white ring-1 ring-blue-500/30"
+                      : "border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:text-zinc-200"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Lock
+                      className={`h-4 w-4 ${
+                        visibility === "Private" ? "text-blue-400" : "text-zinc-400"
+                      }`}
+                    />
+                    <span className="text-sm font-semibold">Private</span>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                    Hidden from directory. Accessible only to members or via join code.
+                  </p>
+                </button>
+              </div>
+            </div>
+
             {mode === "create" && (
               <div>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
@@ -238,9 +296,25 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                       />
                     )}
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-white">
-                        {name || "Team name"}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="truncate font-semibold text-white">
+                          {name || "Team name"}
+                        </p>
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
+                            visibility === "Private"
+                              ? "border border-amber-400/30 bg-amber-500/15 text-amber-300"
+                              : "border border-blue-400/30 bg-blue-500/15 text-blue-300"
+                          }`}
+                        >
+                          {visibility === "Private" ? (
+                            <Lock className="h-2.5 w-2.5" />
+                          ) : (
+                            <Globe className="h-2.5 w-2.5" />
+                          )}
+                          {visibility}
+                        </span>
+                      </div>
                       <p className="text-xs text-zinc-500">
                         @{handle || "handle"}
                       </p>
@@ -269,7 +343,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
               !description.trim() ||
               (mode === "create" && !photo)
             }
-            className="flex-1 cursor-pointer rounded-full bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2 text-sm font-medium text-white transition duration-200 hover:brightness-110 hover:shadow-lg hover:shadow-blue-500/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100 disabled:hover:shadow-none"
+            className="flex-1 cursor-pointer rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 active:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving
               ? savingLabel || "Saving..."
@@ -278,8 +352,9 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                 : "Save Changes"}
           </button>
           <button
+            type="button"
             onClick={onClose}
-            className="flex-1 cursor-pointer rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-400 transition hover:border-white/25 hover:bg-white/10 hover:text-white active:scale-[0.98]"
+            className="flex-1 cursor-pointer rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:border-white/25 hover:bg-white/10 hover:text-white"
           >
             Cancel
           </button>

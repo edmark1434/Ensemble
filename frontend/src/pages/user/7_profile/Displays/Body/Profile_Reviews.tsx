@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Star, MessageSquare, Loader2 } from "lucide-react";
 import api from "@/lib/axios";
 
@@ -17,18 +18,69 @@ interface Review {
   created_at: string;
   contract_id: string;
   role_type: string;
+  reviewer_account_id?: string;
+  reviewer_handle?: string;
   reviewer_name: string;
   reviewer_avatar: string;
 }
 
+const constructAvatarUrl = (path?: string | null): string => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  // Map preset profile avatars (e.g. /public/p1.png or p1.png) to local Vite static assets
+  const presetMatch = path.match(/p\d+\.png$/i);
+  if (presetMatch) {
+    return `/profile_presets/${presetMatch[0]}`;
+  }
+  const cloudfrontUrl = (import.meta.env.VITE_CLOUDFRONT_URL || '').replace(/\/$/, '');
+  const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  if (cloudfrontUrl) {
+    return `${cloudfrontUrl}/${cleanPath}`;
+  }
+  return `/${cleanPath}`;
+};
+
 const ReviewItem: React.FC<{ review: Review }> = ({ review }) => {
+  const navigate = useNavigate();
+  const [imgError, setImgError] = useState(false);
+  const avatarUrl = constructAvatarUrl(review.reviewer_avatar);
+
+  const handleNavigateToReviewer = () => {
+    if (review.reviewer_account_id) {
+      navigate(`/profile/${review.reviewer_account_id}`);
+    }
+  };
+
+  const isClickable = Boolean(review.reviewer_account_id);
+
   return (
     <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-sm flex flex-col gap-3">
       <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 dark:bg-dark-elevated flex-shrink-0">
-            {review.reviewer_avatar ? (
-              <img src={`http://localhost:4000/api/files/${review.reviewer_avatar}`} alt={review.reviewer_name} className="w-full h-full object-cover" />
+        <div
+          onClick={handleNavigateToReviewer}
+          className={`flex items-center gap-3 transition-opacity ${
+            isClickable ? "cursor-pointer group/reviewer select-none hover:opacity-90" : ""
+          }`}
+          role={isClickable ? "button" : undefined}
+          tabIndex={isClickable ? 0 : undefined}
+          onKeyDown={(e) => {
+            if (isClickable && (e.key === "Enter" || e.key === " ")) {
+              e.preventDefault();
+              handleNavigateToReviewer();
+            }
+          }}
+          title={isClickable ? `View ${review.reviewer_name || "user"}'s profile` : undefined}
+        >
+          <div className={`w-10 h-10 rounded-full overflow-hidden bg-gray-200 dark:bg-dark-elevated flex-shrink-0 transition-transform ${isClickable ? "group-hover/reviewer:scale-105" : ""}`}>
+            {avatarUrl && !imgError ? (
+              <img
+                src={avatarUrl}
+                alt={review.reviewer_name}
+                className="w-full h-full object-cover"
+                onError={() => setImgError(true)}
+              />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-500 font-bold">
                 {review.reviewer_name?.[0]?.toUpperCase() || "?"}
@@ -36,7 +88,9 @@ const ReviewItem: React.FC<{ review: Review }> = ({ review }) => {
             )}
           </div>
           <div>
-            <h4 className="text-sm font-bold text-gray-900 dark:text-white">{review.reviewer_name || "Unknown User"}</h4>
+            <h4 className={`text-sm font-bold text-gray-900 dark:text-white transition-colors ${isClickable ? "group-hover/reviewer:text-blue-500 group-hover/reviewer:underline" : ""}`}>
+              {review.reviewer_name || "Unknown User"}
+            </h4>
             <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wider block mt-0.5">
               {new Date(review.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
             </span>
@@ -49,7 +103,7 @@ const ReviewItem: React.FC<{ review: Review }> = ({ review }) => {
       </div>
       
       {review.feedback && (
-        <p className="text-sm text-gray-600 dark:text-zinc-300 leading-relaxed bg-gray-50 dark:bg-dark-elevated p-3 rounded-lg border border-gray-100 dark:border-white/5 italic">
+        <p className="text-sm text-gray-600 dark:text-zinc-300 leading-relaxed bg-gray-50 dark:bg-dark-elevated p-3 rounded-lg border border-gray-100 dark:border-white/5 italic whitespace-pre-wrap break-words">
           "{review.feedback}"
         </p>
       )}

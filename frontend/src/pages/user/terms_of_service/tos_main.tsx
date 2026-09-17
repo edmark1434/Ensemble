@@ -140,7 +140,7 @@ export const TosMain: React.FC = () => {
   return (
     <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white">
       {/* Top Header */}
-      <UserHeader pageTitle="Terms of Service" credits={1250} />
+      <UserHeader pageTitle="Terms of Service" />
       {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="terms of service" />}
 
       {loading ? (

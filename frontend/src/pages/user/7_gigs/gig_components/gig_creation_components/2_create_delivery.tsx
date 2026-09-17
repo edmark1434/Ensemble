@@ -1,6 +1,7 @@
 import React, { type FormEvent, useRef, useState, type ChangeEvent } from "react";
 import { ArrowRight, X, Plus, Minus, Image as ImageIcon, ChevronDown, Check, Edit2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { showErrorToast } from "@/components/utility/toast";
 
 interface CreateDeliveryProps {
   slots: number;
@@ -160,7 +161,7 @@ export const CreateDelivery: React.FC<CreateDeliveryProps> = ({
 
   const processFile = (file: File) => {
     if (!file.type.startsWith("image/")) {
-      alert("Please upload an image file.");
+      showErrorToast("Please upload an image file.");
       return;
     }
     setGalleryUrls(prev => {
@@ -179,7 +180,7 @@ export const CreateDelivery: React.FC<CreateDeliveryProps> = ({
     if (e.target.files && e.target.files.length > 0) {
       const remaining = 5 - galleryUrls.length;
       if (e.target.files.length > remaining) {
-        alert("You can upload a maximum of 5 supporting pictures.");
+        showErrorToast("You can upload a maximum of 5 supporting pictures.");
       }
       Array.from(e.target.files).slice(0, remaining).forEach(file => processFile(file));
       clearError("galleryUrls");
