@@ -27,6 +27,7 @@ import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
 import { JobRichText } from "../../job_components/JobRichText";
 import { toast } from "react-hot-toast";
+import { showErrorToast } from "@/components/utility/toast";
 import { sampleIncomingProposals, sampleSentProposals } from "../proposals_datasets";
 import { sampleJobs } from "../../job_datasets";
 import type { ProposalItemData, ProposalStatus } from "../proposals_components/proposals_list";
@@ -219,7 +220,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
       navigate("/jobs/proposals");
     } catch (error: any) {
       console.error("Failed to accept offer:", error);
-      alert(error.response?.data?.message || "Failed to accept offer.");
+      showErrorToast(error.response?.data?.message || "Failed to accept offer.");
     } finally {
       setIsProcessing(false);
     }
@@ -251,7 +252,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
       navigate(`/jobs/proposals/sent/${proposal.id}`);
     } catch (error: any) {
       console.error("Failed to reject offer:", error);
-      alert(error.response?.data?.message || "Failed to reject offer.");
+      showErrorToast(error.response?.data?.message || "Failed to reject offer.");
     } finally {
       setIsProcessing(false);
     }

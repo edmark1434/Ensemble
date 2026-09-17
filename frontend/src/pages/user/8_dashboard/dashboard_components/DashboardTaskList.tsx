@@ -5,6 +5,7 @@ import { ExternalLink, CheckCircle } from 'lucide-react';
 
 interface DashboardTask {
     contract_id: string;
+    contract_type?: string;
     contract_status: string;
     job_title: string;
     client_name: string;
@@ -17,6 +18,8 @@ interface DashboardTask {
     job_banner?: string;
     job_category?: string;
     job_difficulty?: string;
+    client_rating?: any;
+    freelancer_rating?: any;
     user_role?: {
         effective_role?: string;
         can_buy_revision?: boolean;
@@ -31,10 +34,9 @@ interface DashboardTaskListProps {
     isArchivedTab?: boolean;
     currentUserAccountId?: string;
     onOpenRateReview?: (contractId: string, reviewTargetName: string, contractValue: string, isFreelancerRole: boolean) => void;
-    onClaimCredits?: (contractId: string, contractValue: string) => void;
 }
 
-export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isFreelancerTab, isArchivedTab, currentUserAccountId, onOpenRateReview, onClaimCredits }) => {
+export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isFreelancerTab, isArchivedTab, currentUserAccountId, onOpenRateReview }) => {
     const navigate = useNavigate();
 
     if (tasks.length === 0) {
@@ -93,22 +95,24 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                                         {computedStatus}
                                     </span>
                                     <span className="text-[10px] uppercase font-bold px-2 py-1 rounded border bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20">
-                                        Job
+                                        {task.contract_type?.toLowerCase() === 'gig' ? 'Gig' : 'Job'}
                                     </span>
                                 </div>
                             </div>
                             
                             <div className="flex items-center gap-2 mb-1">
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate max-w-sm">{task.job_title}</h3>
-                                <a 
-                                    href={`/jobs/postings/${task.job_id}`} 
-                                    target="_blank" 
-                                    rel="noreferrer" 
-                                    className="flex items-center justify-center p-1 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition-colors shrink-0"
-                                    title="View Original Job Post"
-                                >
-                                    <ExternalLink className="h-4 w-4" />
-                                </a>
+                                {task.job_id && (
+                                    <a 
+                                        href={task.contract_type?.toLowerCase() === 'gig' ? `/gigs/pages/${task.job_id}` : `/jobs/postings/${task.job_id}`} 
+                                        target="_blank" 
+                                        rel="noreferrer" 
+                                        className="flex items-center justify-center p-1 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition-colors shrink-0"
+                                        title={task.contract_type?.toLowerCase() === 'gig' ? "View Original Gig Post" : "View Original Job Post"}
+                                    >
+                                        <ExternalLink className="h-4 w-4" />
+                                    </a>
+                                )}
                             </div>
                             <div className="flex items-center gap-1 text-yellow-500 font-bold mb-2 text-sm">
                                 <CreditIcon className="h-4 w-4" /> {task.contract_value}
@@ -182,16 +186,6 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                                             </div>
                                         )}
                                     </>
-                                )}
-
-                                {/* Completed status (both reviewed) */}
-                                {computedStatus === 'Completed' && isFreelancerRole && onClaimCredits && (
-                                    <button 
-                                        onClick={() => onClaimCredits(task.contract_id, task.contract_value)}
-                                        className="bg-yellow-500 hover:bg-yellow-400 text-black px-5 py-2 rounded-lg text-sm font-bold transition shadow-lg shadow-yellow-500/20"
-                                    >
-                                        Claim Credits
-                                    </button>
                                 )}
 
                                 {/* View Progress / Update Milestones Button */}

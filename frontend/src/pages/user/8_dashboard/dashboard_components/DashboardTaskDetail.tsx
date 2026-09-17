@@ -143,7 +143,7 @@ export const DashboardTaskDetail = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-            <UserHeader pageTitle={isFreelancer ? "My Task" : "To Review"} credits={user?.wallet?.balance_credits || 0} />
+            <UserHeader pageTitle={isFreelancer ? "My Task" : "To Review"} />
             
             <div className="mx-auto flex min-h-[calc(100dvh-100px)] max-w-7xl flex-col p-4 sm:p-6 md:p-8 lg:h-[calc(100vh-100px)] lg:min-h-0">
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:flex-1 lg:min-h-0 lg:gap-8">

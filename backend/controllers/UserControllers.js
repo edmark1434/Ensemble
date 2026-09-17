@@ -396,6 +396,16 @@ async function getCurrentUser(req, res) {
         } catch (err) {
             console.error('Error hydrating is_verified in getCurrentUser:', err);
         }
+        try {
+            const { getAccountWalletRepositories } = require('../repositories/AccountRepositories');
+            const wallet = await getAccountWalletRepositories(accountId, 'account wallets');
+            if (wallet) {
+                sessionUser.wallet = wallet;
+                sessionModified = true;
+            }
+        } catch (err) {
+            console.error('Error hydrating wallet in getCurrentUser:', err);
+        }
         if (sessionModified) {
             const sessionId = req.cookies?.sessionId;
             if (sessionId && redis) {

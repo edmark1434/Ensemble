@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import api from "@/lib/axios";
+import { showErrorToast } from "@/components/utility/toast";
 import {
   CheckCircle2,
   ArrowLeft,
@@ -103,11 +104,11 @@ export const VerificationStatus: React.FC = () => {
         window.location.href = verificationUrl;
       } else {
         console.error("No verification URL found in response");
-        alert("Unable to create verification session. Please try again.");
+        showErrorToast("Unable to create verification session. Please try again.");
       }
     } catch (error) {
       console.error("Error starting verification:", error);
-      alert("An error occurred while starting verification. Please try again.");
+      showErrorToast("An error occurred while starting verification. Please try again.");
     } finally {
       setIsLoading(false);
       setIsProcessing(false);

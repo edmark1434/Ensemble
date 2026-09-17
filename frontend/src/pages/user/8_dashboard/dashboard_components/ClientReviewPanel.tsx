@@ -4,6 +4,7 @@ import { useInboxUploadMedia, InboxUploadMediaButton, InboxUploadMediaPreview } 
 import api from '@/lib/axios';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
 import { AlertCircle, CheckCircle } from 'lucide-react';
+import { showErrorToast } from '@/components/utility/toast';
 
 interface MilestoneSubmission {
     status?: string;
@@ -72,7 +73,7 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
             onSuccess(response.data.task);
         } catch (error) {
             console.error("Failed to submit review", error);
-            alert("Failed to submit review. Please try again.");
+            showErrorToast("Failed to submit review. Please try again.");
         } finally {
             setIsSubmitting(false);
         }
@@ -94,7 +95,7 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
         } catch (error: unknown) {
             console.error("Failed to buy revision", error);
             const apiError = error as AxiosError<{ message?: string }>;
-            alert(apiError.response?.data?.message || "Failed to buy revision.");
+            showErrorToast(apiError.response?.data?.message || "Failed to buy revision.");
         } finally {
             setIsSubmitting(false);
         }

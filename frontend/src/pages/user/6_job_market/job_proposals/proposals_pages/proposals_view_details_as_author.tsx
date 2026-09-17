@@ -25,6 +25,7 @@ import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import { JobRichText } from "../../job_components/JobRichText";
 import { toast } from "react-hot-toast";
+import { showErrorToast } from "@/components/utility/toast";
 import { sampleIncomingProposals, sampleSentProposals } from "../proposals_datasets";
 import { sampleJobs } from "../../job_datasets";
 import type { ProposalItemData, ProposalStatus } from "../proposals_components/proposals_list";
@@ -161,11 +162,11 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
         setIsShortlistModalOpen(false);
         setShortlistMessage("");
       } else {
-        alert("Failed to shortlist applicant");
+        showErrorToast("Failed to shortlist applicant");
       }
     } catch (error) {
       console.error(error);
-      alert("Error shortlisting applicant");
+      showErrorToast("Error shortlisting applicant");
     }
   };
 
@@ -200,11 +201,11 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
         setIsRejectModalOpen(false);
         setRejectionReason("");
       } else {
-        alert("Failed to reject applicant");
+        showErrorToast("Failed to reject applicant");
       }
     } catch (error) {
       console.error(error);
-      alert("Error rejecting applicant");
+      showErrorToast("Error rejecting applicant");
     }
   };
 
@@ -244,7 +245,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
     } catch (err: any) {
       console.error("Failed to send job offer", err);
       const msg = err.response?.data?.message || err.message || "Unknown error";
-      alert(`Failed to send job offer: ${msg}`);
+      showErrorToast(`Failed to send job offer: ${msg}`);
     }
   };
 

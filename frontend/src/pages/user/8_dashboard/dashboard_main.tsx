@@ -8,7 +8,6 @@ import { motion } from 'framer-motion';
 import UserHeader from "@/components/nav/user_header";
 import { DashboardTaskList } from './dashboard_components/DashboardTaskList';
 import { RateReviewModal } from './dashboard_components/RateReviewModal';
-import { ClaimCreditsModal } from './dashboard_components/ClaimCreditsModal';
 import socket from '@/lib/socket';
 
 // ============================================================================
@@ -66,9 +65,6 @@ const DashboardMain = () => {
 
     const [reviewModalOpen, setReviewModalOpen] = useState(false);
     const [reviewTarget, setReviewTarget] = useState({ id: '', name: '', value: '', isFreelancerRole: false });
-
-    const [claimModalOpen, setClaimModalOpen] = useState(false);
-    const [claimTarget, setClaimTarget] = useState({ id: '', value: '' });
 
     const activeTab = location.pathname.includes('/dashboard/review') 
         ? 'client' 
@@ -152,7 +148,7 @@ const DashboardMain = () => {
     return (
         <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base">
             {/* Top Header */}
-            <UserHeader pageTitle="Dashboard" credits={user?.wallet?.balance_credits || 0} />
+            <UserHeader pageTitle="Dashboard" />
             {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="deliveries and tasks" />}
 
             {/* Main Content */}
@@ -454,10 +450,6 @@ const DashboardMain = () => {
                             setReviewTarget({ id, name, value, isFreelancerRole: role });
                             setReviewModalOpen(true);
                         }}
-                        onClaimCredits={(id, value) => {
-                            setClaimTarget({ id, value });
-                            setClaimModalOpen(true);
-                        }}
                     />
                 )}
             </div>
@@ -480,14 +472,6 @@ const DashboardMain = () => {
                 reviewTargetName={reviewTarget.name}
                 isFreelancerRole={reviewTarget.isFreelancerRole}
                 contractValue={reviewTarget.value}
-                onSuccess={() => fetchTasks()}
-            />
-
-            <ClaimCreditsModal
-                isOpen={claimModalOpen}
-                onClose={() => setClaimModalOpen(false)}
-                contractId={claimTarget.id}
-                contractValue={claimTarget.value}
                 onSuccess={() => fetchTasks()}
             />
         </div>

@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Calendar, Mail, MapPin, Camera, Lock, Save, ShieldCheck, Send, CheckCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
 import api from "@/lib/axios";
+import { showErrorToast } from "@/components/utility/toast";
 
 interface AccountDetailsProps {
   fullName: string;
@@ -248,7 +249,7 @@ export const UserSettingsAccountDetails: React.FC<AccountDetailsProps> = ({
 
     // Verification is only required when the email has actually changed.
     if (isEmailChanged && !isEmailVerified) {
-      alert("Please verify your email before saving.");
+      showErrorToast("Please verify your email before saving.");
       return;
     }
 
