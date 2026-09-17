@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 import { useGoogleAuth } from "./Oauth";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import useGlobalState from "@/lib/global_state";
 import { API_BASE_URL } from "@/lib/api";
@@ -344,6 +344,8 @@ export default function LoginPage({
   const [pageLoaded, setPageLoaded] = useState(false);
   const { setUser, setIsAuthenticated, setSignUpData, theme } = useGlobalState();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectUrl = searchParams.get('redirect');
 
   useEffect(() => {
     const styleEl = document.createElement("style");
@@ -430,7 +432,7 @@ export default function LoginPage({
         }
         setUser(result.data.credentials ?? result.data.user);
         setIsAuthenticated(true);
-        onSuccess ? onSuccess() : navigate('/');
+        onSuccess ? onSuccess() : navigate(redirectUrl || '/');
       }else{
         setErrors({ password: result.data.message || "Login failed. Please try again." });
       }
@@ -688,7 +690,7 @@ export default function LoginPage({
           <p className="fade-in-up delay-500" style={{ color: T.dim, fontSize: 13, marginTop: 24, textAlign: "center", fontFamily: T.fontBody }}>
             Don't have an account?{" "}
             <button
-              onClick={() => navigate('/signup')}
+              onClick={() => navigate(redirectUrl ? `/signup?redirect=${encodeURIComponent(redirectUrl)}` : '/signup')}
               style={{
                 background: "none",
                 border: "none",

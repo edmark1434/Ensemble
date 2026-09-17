@@ -300,13 +300,14 @@ export default function Teams() {
               <button
                 disabled={isSaving || !joinCode.trim()}
                 onClick={() => void joinTeam()}
-                className="flex-1 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 py-2 text-gray-900 dark:text-white disabled:opacity-50"
+                className="flex-1 cursor-pointer rounded-full bg-blue-500 hover:bg-blue-400 active:scale-[0.98] py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
               >
                 {isSaving ? "Joining..." : "Join Team"}
               </button>
               <button
+                type="button"
                 onClick={() => setIsJoinModalOpen(false)}
-                className="flex-1 rounded-full border border-gray-200 dark:border-white/15 py-2 text-gray-500 dark:text-zinc-400"
+                className="flex-1 cursor-pointer rounded-full border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition active:scale-[0.98]"
               >
                 Cancel
               </button>
