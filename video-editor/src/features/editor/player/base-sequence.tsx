@@ -56,8 +56,6 @@ export const BaseSequence = ({
     ? `designcombo-scene-nested-item id-${item.id} designcombo-scene-item-type-${item.type}`
     : `designcombo-scene-item id-${item.id} designcombo-scene-item-type-${item.type}`;
 
-  console.log("[BaseSequence]", item.id, item.type, { nested, isTransition });
-
   if (isTransition) {
     return (
       <TransitionSeries.Sequence

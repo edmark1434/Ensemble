@@ -73,12 +73,21 @@ export async function createBlock({
   });
 }
 
+export async function getBlockProjectId(blockId: string): Promise<string | null> {
+  const row = await db
+    .selectFrom("blocks")
+    .where("block_id", "=", blockId)
+    .select(["project_id"])
+    .executeTakeFirst();
+  return row?.project_id ?? null;
+}
+
 export async function updateBlock({
-                                    blockId,
-                                    name,
-                                    width,
-                                    height,
-                                  }: {
+  blockId,
+  name,
+  width,
+  height,
+}: {
   blockId: string;
   name?: string;
   width?: number;
@@ -97,13 +106,4 @@ export async function updateBlock({
     .where("block_id", "=", blockId)
     .where("deleted_at", "is", null)
     .execute();
-}
-
-export async function getBlockProjectId(blockId: string): Promise<string | null> {
-  const row = await db
-    .selectFrom("blocks")
-    .where("block_id", "=", blockId)
-    .select(["project_id"])
-    .executeTakeFirst();
-  return row?.project_id ?? null;
 }

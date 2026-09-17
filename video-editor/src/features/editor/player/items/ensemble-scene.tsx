@@ -26,8 +26,15 @@ const getSceneAppearanceStyle = (details: ISceneDetails): React.CSSProperties =>
     filters.push(`brightness(${details.brightness}%)`);
   }
 
+  // Same convention as calculateCropStyles: borderRadius is 0-100,
+  // scaled against the item's own smaller dimension.
+  const minDimension = Math.min(details.width || 0, details.height || 0);
+  const radiusPx = details.borderRadius
+    ? minDimension * (details.borderRadius / 100)
+    : 0;
+
   return {
-    borderRadius: details.borderRadius ? `${details.borderRadius}px` : undefined,
+    borderRadius: radiusPx ? `${radiusPx}px` : undefined,
     filter: filters.length ? filters.join(" ") : undefined
   };
 };
