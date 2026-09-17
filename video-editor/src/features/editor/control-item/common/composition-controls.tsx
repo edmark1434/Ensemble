@@ -41,10 +41,12 @@ export async function patchBlock(
 export const NameField = ({
                             label = "Name",
                             value,
+                            maxLength,
                             onCommit
                           }: {
   label?: string;
   value: string;
+  maxLength?: number;
   onCommit: (v: string) => void;
 }) => {
   const [localValue, setLocalValue] = useState<string>(value);
@@ -75,6 +77,7 @@ export const NameField = ({
       </div>
       <Input
         value={localValue}
+        maxLength={maxLength}
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={commit}
         onKeyDown={handleKeyDown}

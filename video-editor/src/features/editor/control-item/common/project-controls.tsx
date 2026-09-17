@@ -32,7 +32,7 @@ export const ProjectControls = () => {
       <div className="flex flex-col gap-3">
         <Label className="font-sans text-sm font-semibold">Project</Label>
         <div className="flex flex-col gap-3">
-          <NameField value={projectName} onCommit={handleNameCommit} />
+          <NameField value={projectName} maxLength={50} onCommit={handleNameCommit} />
           <SizeFields width={size.width} height={size.height} onCommit={handleSizeCommit} />
           <BackgroundField
             value={background.value}

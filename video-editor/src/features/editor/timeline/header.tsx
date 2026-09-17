@@ -658,7 +658,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
               </Tooltip>
             )}
 
-            {!activeSceneBlockId && !activeItems.some(item => isSceneItem(item.type)) && (
+            {(
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button onClick={doAddScene} variant={"ghost"} size={"icon"}>

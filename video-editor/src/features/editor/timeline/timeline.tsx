@@ -150,6 +150,11 @@ function formatScenePresenceLabel(
   return insideSentence ?? "";
 }
 
+const getItemRect = (item: any): { left: number; top: number; width: number; height: number } => {
+  if (typeof item.getBoundingRect === "function") return item.getBoundingRect();
+  return { left: item.left, top: item.top, width: item.width, height: item.height };
+};
+
 const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
   // prevent duplicate scroll events
   const canScrollRef = useRef(false);
@@ -747,10 +752,11 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       grouped.forEach(({ color, userName, ids }, clientId) => {
         const items = ids.map(findItem).filter(Boolean);
         if (items.length === 0) return;
-        const left = Math.min(...items.map((i) => i.left));
-        const top = Math.min(...items.map((i) => i.top));
-        const right = Math.max(...items.map((i) => i.left + i.width));
-        const bottom = Math.max(...items.map((i) => i.top + i.height));
+        const rects = items.map(getItemRect);
+        const left = Math.min(...rects.map((r) => r.left));
+        const top = Math.min(...rects.map((r) => r.top));
+        const right = Math.max(...rects.map((r) => r.left + r.width));
+        const bottom = Math.max(...rects.map((r) => r.top + r.height));
         const boxHeight = bottom - top;
         const isGroup = items.length > 1;
         const isSceneSoloSelection = !isGroup && items[0]?.type === "scene";
@@ -868,9 +874,13 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
         const item = findItem(id);
         if (!item) return;
 
-        if (item.type === "scene") {
-          // Scene items always get their border from the unified
-          // scene-presence pass below, never this generic one.
+        const isSingle = singleSelectionClientIds.has(editor.clientId);
+
+        if (item.type === "scene" && isSingle) {
+          // Solo-selected scenes get their border from the unified
+          // scene-presence pass below (it folds in "inside" info too).
+          // Scenes that are part of a *group* selection fall through,
+          // same as every other item type.
           const stale = itemOverlaysById.get(id);
           if (stale) {
             canvas.remove(stale);
@@ -879,21 +889,16 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
           return;
         }
 
+        const rect = getItemRect(item);
         const radius = item.type === "transition" ? 8 : 4;
-        const isSingle = singleSelectionClientIds.has(editor.clientId);
         const itemStrokeWidth = isSingle ? 2 : 1;
         const inset = itemStrokeWidth / 2;
         const d = roundedRectPathD(
-          item.left + inset,
-          item.top + inset,
-          item.width - itemStrokeWidth,
-          item.height - itemStrokeWidth,
-          {
-            tl: isSingle ? 0 : radius,
-            tr: radius,
-            br: radius,
-            bl: radius
-          }
+          rect.left + inset,
+          rect.top + inset,
+          rect.width - itemStrokeWidth,
+          rect.height - itemStrokeWidth,
+          { tl: isSingle ? 0 : radius, tr: radius, br: radius, bl: radius }
         );
 
         const existing = itemOverlaysById.get(id);
@@ -946,13 +951,14 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
         const insideEditors = workingInsideByItemId.get(id) ?? [];
         const color = onEditor?.color ?? insideEditors[0]?.color ?? "#6366F1";
 
+        const rect = getItemRect(item);
         const strokeWidth = 2;
         const inset = strokeWidth / 2;
         const d = roundedRectPathD(
-          item.left + inset,
-          item.top + inset,
-          item.width - strokeWidth,
-          item.height - strokeWidth,
+          rect.left + inset,
+          rect.top + inset,
+          rect.width - strokeWidth,
+          rect.height - strokeWidth,
           { tl: 0, tr: 4, br: 4, bl: 4 }
         );
 
@@ -1010,13 +1016,13 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
 
         const bgWidth = label.width + LABEL_PAD_X * 2;
         const bgHeight = label.height + LABEL_PAD_TOP + LABEL_PAD_BOTTOM;
-        const outside = item.height <= LABEL_OUTSIDE_THRESHOLD;
-        const bgTop = outside ? item.top - bgHeight : item.top;
+        const outside = rect.height <= LABEL_OUTSIDE_THRESHOLD;
+        const bgTop = outside ? rect.top - bgHeight : rect.top;
 
-        labelBg.set({ left: item.left, top: bgTop, width: bgWidth, height: bgHeight, fill: color });
+        labelBg.set({ left: rect.left, top: bgTop, width: bgWidth, height: bgHeight, fill: color });
         labelBg.setCoords();
 
-        label.set({ left: item.left + LABEL_PAD_X, top: bgTop + LABEL_PAD_TOP });
+        label.set({ left: rect.left + LABEL_PAD_X, top: bgTop + LABEL_PAD_TOP });
         label.setCoords();
 
         canvas.bringObjectToFront(labelBg);

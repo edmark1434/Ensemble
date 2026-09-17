@@ -23,7 +23,7 @@ export const SceneControls = ({
       <div className="flex flex-col gap-3">
         <Label className="font-sans text-sm font-semibold">Scene</Label>
         <div className="flex flex-col gap-3">
-          <NameField value={name} onCommit={onNameCommit} />
+          <NameField value={name} maxLength={20} onCommit={onNameCommit} />
           {size && onSizeCommit && (
             <SizeFields width={size.width} height={size.height} onCommit={onSizeCommit} />
           )}
