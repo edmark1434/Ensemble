@@ -65,13 +65,24 @@ async function getPublicForumUserIdentities(userIds = []) {
             requested_ids.requested_id AS user_id,
             COALESCE(NULLIF(a.display_name, ''), NULLIF(CONCAT_WS(' ', u.first_name, u.last_name), ''), a.handle, 'Forum member') AS display_name,
             a.handle,
-            f.path AS avatar_preset_url
+            f.path AS avatar_preset_url,
+            COALESCE(v.is_verified, false) AS is_verified,
+            COALESCE(p.name, 'Free') AS subscription_plan
         FROM requested_ids
         INNER JOIN users u
             ON u.user_id = requested_ids.requested_id
             OR u.account_id = requested_ids.requested_id
         INNER JOIN accounts a ON a.account_id = u.account_id
         LEFT JOIN files f ON f.file_id = a.avatar_file_id
+        LEFT JOIN verifications v ON v.account_id = a.account_id
+        LEFT JOIN LATERAL (
+          SELECT pl.name
+          FROM subscriptions s
+          INNER JOIN plans pl ON pl.plan_id = s.plan_id
+          WHERE s.user_id = u.user_id
+          ORDER BY s.created_at DESC
+          LIMIT 1
+        ) p ON TRUE
         WHERE a.deleted_at IS NULL
     `, [uniqueUserIds]);
     return rows;
