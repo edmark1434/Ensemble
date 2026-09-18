@@ -2235,7 +2235,7 @@ const Forums = () => {
         <div
           key={group.id}
           onClick={() => navigate(`/forums/group/${group.id}`)}
-          className="group relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-linear-to-br from-white/5 to-transparent transition-all duration-300 hover:scale-[1.02] hover:border-white/20 hover:bg-gray-100 dark:bg-white/10"
+          className="group relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 transition-all duration-300 hover:scale-[1.02] hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 shadow-sm dark:shadow-none"
         >
           {group.image_url ? (
             <img src={`${import.meta.env.VITE_CLOUDFRONT_URL}/${group.image_url}`} alt={group.group_name} className="h-24 w-full object-cover" />
@@ -2272,8 +2272,8 @@ const Forums = () => {
             </div>
             <p className="mt-1 line-clamp-2 text-xs text-gray-500 dark:text-zinc-400">{group.content}</p>
             <div className="mt-2 flex items-center gap-2">
-              <Users className="h-3 w-3 text-gray-500 dark:text-zinc-500" />
-              <p className="text-xs text-gray-500 dark:text-zinc-500">{group.members?.length || 0} members</p>
+              <Users className="h-3 w-3 text-gray-600 dark:text-zinc-300" />
+              <p className="text-xs font-medium text-gray-600 dark:text-zinc-300">{group.members?.length || 0} members</p>
             </div>
             <div className="mt-3 flex flex-wrap gap-1">
               {group.tags?.slice(0, 3).map((tag) => (
@@ -2434,7 +2434,7 @@ const Forums = () => {
               {activeTab === "feed" && selectedGroupIds.length > 0 && (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <p className="text-sm text-gray-500 dark:text-zinc-500">
-                    Showing {displayPosts.length} discussion{displayPosts.length !== 1 ? 's' : ''} from your joined groups
+                    Showing {displayPosts.length} discussion{displayPosts.length !== 1 ? 's' : ''} from selected groups
                   </p>
                   <button
                     onClick={() => {
@@ -2507,13 +2507,15 @@ const Forums = () => {
                     </div>
                   ) : (
                     <>
-                      <p className="text-sm text-gray-500 dark:text-zinc-500">
-                        {searchQuery 
-                          ? `Found ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
-                          : isForumAuthenticated
-                            ? `Showing ${displayPosts.length} discussions from your joined groups`
-                            : `Showing ${displayPosts.length} discussions from all forums by popularity`}
-                      </p>
+                      {selectedGroupIds.length === 0 && (
+                        <p className="text-sm text-gray-500 dark:text-zinc-500 mb-4">
+                          {searchQuery 
+                            ? `Found ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
+                            : isForumAuthenticated
+                              ? `Showing ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} from your joined groups`
+                              : `Showing ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} from all forums by popularity`}
+                        </p>
+                      )}
                       {displayPosts.map((post) => renderPostCard(post, true))}
                     </>
                   )}
