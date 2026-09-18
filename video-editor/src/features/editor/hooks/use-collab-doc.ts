@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import {useEffect, useRef, useState} from "react";
 import * as Y from "yjs";
 import type StateManager from "@designcombo/state";
 import useStore from "../store/use-store";
@@ -26,6 +26,10 @@ import {patchBlock, patchProject} from "@/features/editor/control-item/common/co
 import {isSceneItem} from "@/features/editor/types/ensemble-scene";
 import {patchBlockMeta, patchProjectSceneDetails} from "@/features/editor/collab/remote-patch";
 import { syncCanvasTransitions } from "../timeline/items/transitions/sync-canvas-transitions";
+import {dispatch} from "@designcombo/events";
+import {PLAYER_PAUSE} from "@/features/editor/constants/events";
+import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
+import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
 
 export interface CollabDoc {
   doc: Y.Doc;
@@ -113,6 +117,15 @@ export function useCollabDoc(
 
   useEffect(() => {
     if (!target || !rootProjectId || !userId) return;
+
+    // The whole stateManager/Player content is about to be swapped to a
+    // different target (entering or leaving a scene). Whatever's playing
+    // against the OLD composition has to stop now, before the async reload
+    // below — otherwise it keeps rendering/playing stale content through
+    // the gap and can end up desynced from the DOM media elements once the
+    // new composition lands. Root of the audio surviving/going-silent bugs
+    // when switching project <-> scene view.
+    dispatch(PLAYER_PAUSE);
 
     let cancelled = false;
     let teardownMirrorIn: (() => void) | null = null;

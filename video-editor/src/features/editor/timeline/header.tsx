@@ -53,6 +53,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import {PLAYER_PAUSE} from "@/features/editor/constants/events";
 
 const IconAddMarker = ({ size }: { size: number }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 2.5 24 24" fill="none" stroke="currentColor"
@@ -383,6 +384,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
   const goHome = () => {
     if (isSaving) return;
     stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+    dispatch(PLAYER_PAUSE);
     closeScene();
   };
 
@@ -658,7 +660,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
               </Tooltip>
             )}
 
-            {(
+            {!activeSceneBlockId && (
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button onClick={doAddScene} variant={"ghost"} size={"icon"}>

@@ -95,7 +95,7 @@ export const Scene = ({ item, options }: { item: ISceneTrackItem; options: Seque
               <SceneContentLayer
                 content={content}
                 fps={fps}
-                muted={details.volume === 0}
+                volume={details.volume}
                 outerWidth={details.width}
                 outerHeight={details.height}
               />
@@ -116,15 +116,15 @@ export const Scene = ({ item, options }: { item: ISceneTrackItem; options: Seque
 };
 
 const SceneContentLayer = ({
-  content,
-  fps,
-  muted,
-  outerWidth,
-  outerHeight
-}: {
+                             content,
+                             fps,
+                             volume,
+                             outerWidth,
+                             outerHeight
+                           }: {
   content: SceneRenderContent;
   fps: number;
-  muted: boolean;
+  volume?: number;
   outerWidth?: number;
   outerHeight?: number;
 }) => {
@@ -133,21 +133,24 @@ const SceneContentLayer = ({
   const nativeWidth = content.size?.width || outerWidth || 1;
   const nativeHeight = content.size?.height || outerHeight || nativeWidth;
 
-  // Independent per axis now — a single uniform scale (old: derived from
-  // width alone) only stays correct as long as the frozen base's aspect
-  // ratio happens to match the current native content's aspect ratio.
-  // The outer transform (details.transform) composes with this
-  // multiplicatively regardless of axis, so scaling each axis to its own
-  // frozen-base dimension here is what makes the two stages cancel out
-  // to exactly the apparent box size, on both axes, for any native size.
   const scaleX = outerWidth ? outerWidth / nativeWidth : 1;
   const scaleY = outerHeight ? outerHeight / nativeHeight : scaleX;
 
-  const trackItemsMap = muted
-    ? Object.fromEntries(
-      Object.entries(content.trackItemsMap).map(([id, it]) => [id, { ...it, details: { ...it.details, volume: 0 } }]),
-    )
-    : content.trackItemsMap;
+  // Scene volume is a multiplier over each inner item's own volume, not a
+  // standalone level — same 0-100 scale everything else uses.
+  const sceneVolumeMultiplier = (volume ?? 100) / 100;
+  const trackItemsMap =
+    sceneVolumeMultiplier === 1
+      ? content.trackItemsMap
+      : Object.fromEntries(
+        Object.entries(content.trackItemsMap).map(([id, it]) => {
+          const innerVolume = (it as any).details?.volume ?? 100;
+          return [
+            id,
+            { ...it, details: { ...it.details, volume: innerVolume * sceneVolumeMultiplier } },
+          ];
+        }),
+      );
 
   return (
     <div

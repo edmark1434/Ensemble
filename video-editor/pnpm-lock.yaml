@@ -117,6 +117,9 @@ importers:
       '@remotion/cli':
         specifier: ^4.0.503
         version: 4.0.503(@swc/helpers@0.5.15)(postcss@8.5.3)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(typescript@5.8.3)
+      '@remotion/media':
+        specifier: ^4.0.503
+        version: 4.0.503(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@remotion/media-utils':
         specifier: ^4.0.503
         version: 4.0.503(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -3013,6 +3016,12 @@ packages:
 
   '@remotion/media-utils@4.0.503':
     resolution: {integrity: sha512-dvI1GfojNvGy0/UszB2js6Labzp3fMKJV3fACDCHbJbmMsgpaukhmNxGzd9TYJRiGFoUySaoxRYwcwtlmx1yRg==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+
+  '@remotion/media@4.0.503':
+    resolution: {integrity: sha512-CEVrLrGJ/5DNYzGr0S6XquvsA/Gc0P1Ku9uIC0aZWhrq4so0NKBsoNEsUwknxjYTNr6HUlTA+jsox9Ju1Axujg==}
     peerDependencies:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
@@ -8749,6 +8758,14 @@ snapshots:
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
       remotion: 4.0.503(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+
+  '@remotion/media@4.0.503(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      mediabunny: 1.50.8
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+      remotion: 4.0.503(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      zod: 4.4.3
 
   '@remotion/paths@4.0.340': {}
 

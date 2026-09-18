@@ -238,13 +238,21 @@ const AudioItem = ({
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
 
   useEffect(() => {
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+
     if (isPlaying) {
-      audioRef.current?.play();
+      audioEl.play().catch((err) => {
+        // Expected when a quick pause() (switching tracks, unmount) interrupts
+        // an in-flight play() request — see https://goo.gl/LdLk22. Anything
+        // else is a real playback failure worth knowing about.
+        if (err.name !== "AbortError") {
+          console.error("Failed to play audio preview", err);
+        }
+      });
     } else {
-      audioRef.current?.pause();
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-      }
+      audioEl.pause();
+      audioEl.currentTime = 0;
     }
   }, [isPlaying]);
 

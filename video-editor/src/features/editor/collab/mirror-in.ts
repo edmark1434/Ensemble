@@ -36,6 +36,12 @@ function sameTransitions(
   return true;
 }
 
+function arraysEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 // Pulls doc changes into stateManager (+ useStore for markers/projectName,
 // which aren't part of designcombo's State type).
 //
@@ -58,12 +64,35 @@ export function setupMirrorIn(
     if (syncGuard.isApplyingRemote) return;
 
     try {
+      // Mirrors mirror-out's reconcileContentMap, in the other direction: keep
+// the OLD reference for anything unchanged, so a transaction that only
+// touched one item doesn't hand every other item a new object identity
+// (which busts React.memo / Zustand selectors / Remotion prop-diffing
+// for everything on screen, not just the thing that actually changed).
+      function reconcileMapReferences<T>(prevMap: Record<string, T>, nextMap: Record<string, T>): Record<string, T> {
+        const nextIds = Object.keys(nextMap);
+        let anyChanged = nextIds.length !== Object.keys(prevMap).length;
+        const result: Record<string, T> = {};
+        for (const id of nextIds) {
+          const prev = prevMap[id];
+          const next = nextMap[id];
+          if (prev && JSON.stringify(prev) === JSON.stringify(next)) {
+            result[id] = prev;
+          } else {
+            result[id] = next;
+            anyChanged = true;
+          }
+        }
+        return anyChanged ? result : prevMap;
+      }
+
       const snapshot = readStateFromDoc(schema);
+      const current = stateManager.getState();
       const statePatch: Partial<State> = {
-        trackItemsMap: snapshot.trackItemsMap,
-        trackItemIds: snapshot.trackItemIds,
-        transitionsMap: snapshot.transitionsMap,
-        transitionIds: snapshot.transitionIds,
+        trackItemsMap: reconcileMapReferences(current.trackItemsMap, snapshot.trackItemsMap),
+        trackItemIds: arraysEqual(current.trackItemIds, snapshot.trackItemIds) ? current.trackItemIds : snapshot.trackItemIds,
+        transitionsMap: reconcileMapReferences(current.transitionsMap, snapshot.transitionsMap),
+        transitionIds: arraysEqual(current.transitionIds, snapshot.transitionIds) ? current.transitionIds : snapshot.transitionIds,
         tracks: snapshot.tracks,
       };
       if (snapshot.size) statePatch.size = snapshot.size;

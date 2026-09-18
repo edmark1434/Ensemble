@@ -24,6 +24,7 @@ import {
   SCENE_TYPE,
   ISceneTrackItem,
 } from "../types/ensemble-scene";
+import {PLAYER_PAUSE} from "@/features/editor/constants/events";
 
 export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y.UndoManager, viewOnly?: boolean) {
   const viewOnlyRef = useRef(viewOnly);
@@ -500,6 +501,7 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         if (!activeSceneBlockId) return;
         if (saveStatus === "saving" || compactStatus === "compacting") return;
         stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+        dispatch(PLAYER_PAUSE);
         closeScene();
       }
     };

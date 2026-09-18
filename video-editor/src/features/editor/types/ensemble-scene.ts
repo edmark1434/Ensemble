@@ -16,6 +16,11 @@ export interface ISceneDetails {
   thumbnail?: string;
   hidden?: boolean;
   locked?: boolean;
+  // 0-100, same scale as every other item's own `volume`. Applied as a
+  // multiplier over each inner item's own volume (see SceneContentLayer in
+  // player/items/ensemble-scene.tsx) — not a standalone level. Undefined
+  // behaves as 100 (no attenuation), matching every other item type's
+  // `volume ?? 100` convention.
   volume?: number;
   content?: SceneRenderContent;
 

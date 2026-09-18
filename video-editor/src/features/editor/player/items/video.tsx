@@ -4,7 +4,7 @@ import { BoxAnim, ContentAnim, MaskAnim } from "@designcombo/animations";
 import { calculateContainerStyles, calculateMediaStyles } from "../styles";
 import { getAnimations } from "../../utils/get-animations";
 import { calculateFrames } from "../../utils/frames";
-import { OffthreadVideo } from "remotion";
+import { Video as RemotionVideo } from "@remotion/media";
 
 export const Video = ({
   item,
@@ -13,7 +13,10 @@ export const Video = ({
   item: IVideo;
   options: SequenceItemOptions;
 }) => {
-  const { fps, frame } = options;
+  // const { fps } = options;
+  const fps = 30;
+
+  const { frame } = options;
   const { details, animations } = item;
   const playbackRate = item.playbackRate || 1;
   const { animationIn, animationOut, animationTimed } = getAnimations(
@@ -30,6 +33,7 @@ export const Video = ({
   };
   const { durationInFrames } = calculateFrames(item.display, fps);
   const currentFrame = (frame || 0) - (item.display.from * fps) / 1000;
+  const hasTrimTo = typeof item.trim?.to === "number" && item.trim.to > 0;
 
   const children = (
     <BoxAnim
@@ -52,9 +56,9 @@ export const Video = ({
           frame={frame || 0}
         >
           <div style={calculateMediaStyles(details, crop)}>
-            <OffthreadVideo
-              startFrom={(item.trim?.from! / 1000) * fps}
-              endAt={(item.trim?.to! / 1000) * fps || 1 / fps}
+            <RemotionVideo
+              trimBefore={((item.trim?.from ?? 0) / 1000) * fps}
+              trimAfter={hasTrimTo ? (item.trim!.to! / 1000) * fps : undefined}
               playbackRate={playbackRate}
               src={details.src}
               volume={() => (details.volume ?? 100) / 100}

@@ -168,10 +168,10 @@ const BasicSceneItem = ({
         />
       )
     },
-    // {
-    //   key: "access",
-    //   component: <Access />
-    // },
+    {
+      key: "access",
+      component: <Access />
+    },
   ];
 
   return (

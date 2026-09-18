@@ -29,6 +29,7 @@ import {
   LiveTransformState
 } from "../collab/live-transform";
 import {createPortal} from "react-dom";
+import {PLAYER_PAUSE} from "@/features/editor/constants/events";
 
 let holdGroupPosition: Record<string, any> | null = null;
 let groupTextScaleStart: Record<string, {
@@ -506,6 +507,7 @@ export function SceneInteractions({
       // Old selection references ids that won't exist in the scene's own
       // content — clear before swapping, same as timeline.tsx's handler.
       stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+      dispatch(PLAYER_PAUSE);
       useStore.getState().openScene?.(blockId, id, sceneItem?.details?.name);
     };
 

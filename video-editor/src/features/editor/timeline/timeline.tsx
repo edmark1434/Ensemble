@@ -46,6 +46,8 @@ import {FabricText, Path, Rect} from "fabric";
 import Scene from "./items/ensemble-scene";
 import {syncCanvasTransitions} from "@/features/editor/timeline/items/transitions/sync-canvas-transitions";
 import { patchTransitionRenderPositioning } from "./items/transitions/transition-position-patch";
+import {dispatch} from "@designcombo/events";
+import {PLAYER_PAUSE} from "@/features/editor/constants/events";
 
 CanvasTimeline.registerItems({
   Text,
@@ -480,6 +482,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       // Old selection references ids that won't exist in the scene's own
       // content — clear before swapping, same as any other selection reset.
       stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+      dispatch(PLAYER_PAUSE);
       useStore.getState().openScene?.(blockId, target.id, sceneItem?.details?.name);
     });
 

@@ -48,6 +48,7 @@
 		"@radix-ui/react-toggle-group": "^1.1.10",
 		"@radix-ui/react-tooltip": "^1.2.6",
 		"@remotion/cli": "^4.0.503",
+		"@remotion/media": "^4.0.503",
 		"@remotion/media-utils": "^4.0.503",
 		"@remotion/paths": "^4.0.503",
 		"@remotion/player": "^4.0.503",
