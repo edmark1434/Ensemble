@@ -31,10 +31,7 @@ export const BaseSequence = ({
 }) => {
   const { details } = item as ITrackItem;
 
-  // const { fps } = options;
-  const fps = 30;
-
-  const { isTransition, nested } = options;
+  const { fps, isTransition, nested } = options;
   const { from, durationInFrames } = calculateFrames(
     {
       from: item.display.from,
