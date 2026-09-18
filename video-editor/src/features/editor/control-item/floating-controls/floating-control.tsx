@@ -7,6 +7,7 @@ import AnimationPicker from "./animation-picker";
 import CaptionPresetPicker from "./caption-preset-picker";
 import FontFamilyPicker from "./font-family-picker";
 import TextPresetPicker from "./text-preset-picker";
+import AccessPicker from "./access-picker";
 
 export default function FloatingControl({ anchorRef }: { anchorRef: React.RefObject<HTMLDivElement | null> }) {
   const { floatingControl, trackItem, floatingControlIds, floatingControlAnimationType } = useLayoutStore();
@@ -43,6 +44,7 @@ export default function FloatingControl({ anchorRef }: { anchorRef: React.RefObj
     );
   else if (floatingControl === "animation-caption") content = <AnimationCaption />;
   else if (floatingControl === "caption-preset-picker") content = <CaptionPresetPicker trackItem={trackItem} />;
+  else if (floatingControl === "access-picker") content = <AccessPicker />;
 
   useEffect(() => {
     if (!spawnPos || !measureRef.current || dragStartSetRef.current) return;

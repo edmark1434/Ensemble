@@ -103,7 +103,6 @@ async function getOrCreateRoom(target: CollabTarget): Promise<Room> {
       target.kind === "project"
         ? await loadLatestProjectState(target.id)
         : await loadLatestBlockState(target.id);
-    console.log("[collab] hydrating new room", { key, hasSnapshot: !!snapshot, updateCount: updates.length });
 
     if (snapshot || updates.length > 0) {
       doc.transact(() => {

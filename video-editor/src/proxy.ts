@@ -22,7 +22,7 @@ export async function proxy(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 5, // 1 day — long enough for an editing session
+      maxAge: 60 * 60 * 24, // 1 day — long enough for an editing session
       path: "/",
     });
 

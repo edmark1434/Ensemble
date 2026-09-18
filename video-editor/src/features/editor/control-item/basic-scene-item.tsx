@@ -2,6 +2,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {Info, Lock } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import type { ITrackItem } from "@designcombo/types";
+import { dispatch } from "@designcombo/events";
+import { EDIT_OBJECT } from "@designcombo/state";
 
 import { SceneControls } from "./common/scene-controls";
 import { patchBlock } from "./common/composition-controls";
@@ -12,12 +14,15 @@ import type { ISceneDetails } from "../types/ensemble-scene";
 import { Appearance } from "@/features/editor/control-item/common/appearance";
 import { Animations } from "./common/animations";
 import { LayoutMediaControls } from "@/features/editor/control-item/common/layout-media";
+import { PlaybackControls } from "./common/playback";
+import { Access } from "@/features/editor/control-item/common/access";
 
 interface ISceneControlProps {
   opacity: number;
   borderRadius: number;
   blur: number;
   brightness: number;
+  volume: number;
 }
 
 const getPropertiesFromDetails = (details: ISceneDetails): ISceneControlProps => ({
@@ -25,12 +30,13 @@ const getPropertiesFromDetails = (details: ISceneDetails): ISceneControlProps =>
   borderRadius: details.borderRadius ?? 0,
   blur: details.blur ?? 0,
   brightness: details.brightness ?? 100,
+  volume: (details as any).volume ?? 100,
 });
 
 const BasicSceneItem = ({
-                          trackItem,
-                          type
-                        }: {
+  trackItem,
+  type
+}: {
   trackItem: ITrackItem & { details: ISceneDetails };
   type?: string;
 }) => {
@@ -84,6 +90,19 @@ const BasicSceneItem = ({
     }
   };
 
+  const handleChangeVolume = (v: number) => {
+    dispatch(EDIT_OBJECT, {
+      payload: { [trackItem.id]: { details: { volume: v } } }
+    });
+    setProperties((prev) => ({ ...prev, volume: v }));
+  };
+
+  const handleChangeSpeed = (v: number) => {
+    dispatch(EDIT_OBJECT, {
+      payload: { [trackItem.id]: { playbackRate: v } }
+    });
+  };
+
   const isLocked = (trackItem.details as any)?.locked === true;
 
   const components = [
@@ -127,6 +146,18 @@ const BasicSceneItem = ({
       )
     },
     {
+      key: "playback",
+      component: (
+        <PlaybackControls
+          speed={trackItem.playbackRate ?? 1}
+          volume={properties.volume}
+          onChangeSpeed={handleChangeSpeed}
+          onChangeVolume={handleChangeVolume}
+          disabled={isLocked}
+        />
+      )
+    },
+    {
       key: "animations",
       component: (
         <Animations
@@ -137,6 +168,10 @@ const BasicSceneItem = ({
         />
       )
     },
+    // {
+    //   key: "access",
+    //   component: <Access />
+    // },
   ];
 
   return (
