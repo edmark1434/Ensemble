@@ -284,17 +284,17 @@ const ImageGallery = ({ attachments, imageKeys }: { attachments?: { file_path: s
 
   return (
     <>
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+      <div className={`mt-3 grid gap-2 ${allImages.length === 1 ? 'grid-cols-1' : allImages.length === 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'}`}>
         {allImages.map((filePath, idx) => (
           <button
             key={idx}
             onClick={() => setSelectedImage(getImageUrl(filePath))}
-            className="group relative overflow-hidden rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition-all hover:scale-105 hover:border-white/20"
+            className="group relative overflow-hidden rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 shadow-sm dark:shadow-none transition-all hover:border-gray-300 dark:hover:border-white/20"
           >
             <img
               src={getImageUrl(filePath)}
               alt={`Post image ${idx + 1}`}
-              className="h-32 w-full object-cover transition-all group-hover:scale-110"
+              className={`${allImages.length === 1 ? 'max-h-[500px] w-full object-contain' : 'h-48 w-full object-cover'} transition-all group-hover:opacity-90`}
               onError={(e) => {
                 (e.target as HTMLImageElement).src = "https://placehold.co/400x300?text=Image+Not+Found";
               }}
@@ -787,6 +787,14 @@ const CommentItem = ({
   );
 };
 
+const getSubscriptionIcon = (type: string) => {
+  switch (type.toLowerCase()) {
+    case "premium": return "/icons/subscription/premium.png";
+    case "business": return "/icons/subscription/studio.png";
+    default: return "/icons/subscription/freemium.png";
+  }
+};
+
 const SelectedGroup = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -805,7 +813,7 @@ const SelectedGroup = () => {
   const [isNewDiscussionOpen, setIsNewDiscussionOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("latest");
-
+  const [memberRoleFilter, setMemberRoleFilter] = useState<"All" | "Admin" | "Member">("All");
   const [showMenu, setShowMenu] = useState(false);
   const [showMemberMenu, setShowMemberMenu] = useState<number | null>(null);
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
@@ -858,13 +866,43 @@ const SelectedGroup = () => {
     setIsGuestLoginOpen(true);
     return false;
   };
+
+  const currentUserName = user?.display_name || user?.displayName || user?.username || user?.name || "Guest";
+
+  const fetchParticipantDetails = async (userIds: number[]) => {
+    const missingIds = userIds.filter(id => !participantDetails[String(id)] && id !== currentUserId);
+    if (missingIds.length === 0) return;
+    try {
+      const { data } = await api.get(`/api/forum/members/batch?ids=${missingIds.join(",")}`);
+      if (data?.members) {
+        const newDetails: Record<string, { name: string; avatar: string }> = {};
+        data.members.forEach((m: any) => {
+          newDetails[String(m.userId)] = { name: m.name, avatar: m.avatar };
+        });
+        setParticipantDetails(prev => ({ ...prev, ...newDetails }));
+      }
+    } catch (error) {
+      console.error("Failed to fetch participant details:", error);
+    }
+  };
   
   const getMemberDetails = (userId: number) => {
+    if (userId === currentUserId) {
+      return {
+        name: currentUserName,
+        avatar: currentUserAvatar,
+        isVerified: useGlobalState.getState().isVerified || user?.is_verified || false,
+        subscriptionPlan: user?.subscription_plan || "Free",
+      };
+    }
     const member = membersWithDetails.find(m => m.userId === userId);
     const participant = participantDetails[String(userId)];
+    // Fallbacks since participant details doesn't have badges for now
     return {
       name: member?.name || participant?.name || "Forum member",
       avatar: member?.avatar || participant?.avatar || currentUserAvatar,
+      isVerified: false,
+      subscriptionPlan: "Free",
     };
   };
 
@@ -1003,6 +1041,8 @@ const SelectedGroup = () => {
       _id: post._id,
       author: authorDetails.name,
       authorAvatar: authorDetails.avatar,
+      authorIsVerified: authorDetails.isVerified,
+      authorSubscriptionPlan: authorDetails.subscriptionPlan,
       excerpt: post.content,
       content: post.content,
       ago: getTimeAgo(post.created_at),
@@ -1465,9 +1505,10 @@ const SelectedGroup = () => {
         );
         showSuccessToast(`"${postData.title}" posted successfully!`);
       }
-    }catch(error) {
+    }catch(error: any) {
       console.error("Error creating post:", error);
-      showErrorToast("Failed to create post. Please try again.");
+      const errorMessage = error.response?.data?.error || "Failed to create post. Please try again.";
+      showErrorToast(errorMessage);
       throw error;
     }
   };
@@ -1932,8 +1973,8 @@ const SelectedGroup = () => {
                 />
               )}
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{group.group_name}</h1>
-                <p className="mt-2 text-gray-700 dark:text-zinc-200 max-w-2xl">{group.description}</p>
+                <h1 className="text-3xl font-bold text-white">{group.group_name}</h1>
+                <p className="mt-2 text-zinc-200 max-w-2xl">{group.description}</p>
                 {!isActiveMember && (
                   <button type="button" onClick={() => void handleJoinGroup()} disabled={joiningGroup} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
                     {joiningGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
@@ -1942,7 +1983,7 @@ const SelectedGroup = () => {
                 )}
               </div>
             </div>
-            <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-zinc-300">
+            <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-zinc-300">
               <div className="flex items-center gap-1">
                 <span>Created at {group.created_at.split('T')[0]}</span>
               </div>
@@ -1996,35 +2037,37 @@ const SelectedGroup = () => {
         <div className="mt-6">
           {activeTab === "posts" && (
             <>
-              {isActiveMember && <div className="mb-6 flex justify-end">
-                <button
-                  onClick={() => setIsNewDiscussionOpen(true)}
-                  className="group flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-black shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl"
-                >
-                  <PlusCircle className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
-                  New Discussion
-                </button>
-              </div>}
+              <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
+                {isActiveMember && (
+                  <button
+                    onClick={() => setIsNewDiscussionOpen(true)}
+                    className="shrink-0 flex items-center justify-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group whitespace-nowrap"
+                  >
+                    <PlusCircle className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
+                    <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                      New Discussion
+                    </span>
+                  </button>
+                )}
 
-              <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 sm:w-64">
-                  <Search className="h-4 w-4 text-gray-500 dark:text-zinc-500" />
+                <div className="relative flex-1 w-full min-w-0">
+                  <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 dark:text-zinc-500" />
                   <input
-                    className="w-full bg-transparent text-sm text-gray-900 dark:text-white outline-none placeholder:text-gray-500 dark:text-zinc-500"
+                    type="text"
                     placeholder="Search discussions..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 pl-11 pr-10 py-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500"
                   />
                   {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery("")}
-                      className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
-                    >
-                      <X className="h-3.5 w-3.5" />
+                    <button onClick={() => setSearchQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white">
+                      <X className="h-4 w-4" />
                     </button>
                   )}
                 </div>
+              </div>
 
+              <div className="mb-6 flex justify-end">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500 dark:text-zinc-500">Sort by:</span>
@@ -2033,10 +2076,10 @@ const SelectedGroup = () => {
                         <button
                           key={option.value}
                           onClick={() => setSortBy(option.value)}
-                          className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs transition ${
+                          className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs transition-all duration-200 ${
                             sortBy === option.value
-                              ? "bg-blue-500 text-gray-900 dark:text-white"
-                              : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white"
+                              ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
+                              : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:border-white/30 hover:text-gray-900 dark:hover:text-white"
                           }`}
                         >
                           {option.icon}
@@ -2065,20 +2108,31 @@ const SelectedGroup = () => {
                           <img
                             src={post.authorAvatar}
                             alt={post.author}
-                            className="h-10 w-10 rounded-full object-cover ring-2 ring-white/20"
+                            className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white/20"
                           />
                           <div className="flex-1">
                             <div className="flex items-center justify-between flex-wrap gap-2">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-sm font-medium text-gray-900 dark:text-white">{post.author}</p>
-                                <span className="text-xs text-gray-500 dark:text-zinc-500">{post.ago}</span>
+                              <div className="flex flex-col gap-1.5">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{post.author}</p>
+                                    {post.authorIsVerified && (
+                                      <img src="/icons/verification/lvl2_verified.png" alt="Verified" className="h-3.5 w-3.5 object-contain" title="Verified" />
+                                    )}
+                                    {post.authorSubscriptionPlan && post.authorSubscriptionPlan !== "Free" && (
+                                      <img src={getSubscriptionIcon(post.authorSubscriptionPlan)} alt={post.authorSubscriptionPlan} className="h-3.5 w-3.5 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" title={`${post.authorSubscriptionPlan} Tier`} />
+                                    )}
+                                  </div>
+                                  <span className="text-xs text-gray-500 dark:text-zinc-500">{post.ago}</span>
+                                </div>
                                 {post.tagsList && post.tagsList.length > 0 && (
                                   <div className="flex items-center gap-1 flex-wrap">
                                     {post.tagsList.map((tag, tagIdx) => (
                                       <span 
                                         key={tag.tag_id || tagIdx} 
-                                        className={`rounded-full px-2 py-0.5 text-[10px] ${getTagColor(tag.tag_id)}`}
+                                        className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:text-zinc-300 border border-gray-200 dark:border-white/10"
                                       >
+                                        <Tag className="h-2.5 w-2.5" />
                                         {tag.tag_name || `Tag ${tag.tag_id}`}
                                       </span>
                                     ))}
@@ -2129,18 +2183,20 @@ const SelectedGroup = () => {
                                 </button>
                               )}
                             </div>
+                          </div>
+                        </div>
 
-                            <h3 className="mt-1 text-base font-semibold text-gray-900 dark:text-white">{post.title}</h3>
+                        <h3 className="mt-3 text-base font-semibold text-gray-900 dark:text-white">{post.title}</h3>
 
-                            <div className="mt-2 text-sm text-gray-600 dark:text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
-                                {post.content || post.description}
-                              </ReactMarkdown>
-                            </div>
+                        <div className="mt-2 text-sm text-gray-600 dark:text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                            {post.content || post.description}
+                          </ReactMarkdown>
+                        </div>
 
-                            <ImageGallery attachments={post.attachments} imageKeys={post.imageKeys} />
+                        <ImageGallery attachments={post.attachments} imageKeys={post.imageKeys} />
 
-                            <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
+                        <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
                               <button
                                 onClick={() => toggleExpand(post.id)}
                                 className="inline-flex items-center gap-1 text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
@@ -2229,8 +2285,6 @@ const SelectedGroup = () => {
                                 </div>
                               </div>
                             )}
-                          </div>
-                        </div>
                       </div>
                     );
                   })
@@ -2243,23 +2297,48 @@ const SelectedGroup = () => {
           )}
 
           {activeTab === "members" && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {membersWithDetails.map((member) => (
-                <div key={member.userId} className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4">
-                  <img
-                    src={member.avatar}
-                    alt={member.name}
-                    className="h-12 w-12 rounded-full object-cover ring-2 ring-white/20"
-                  />
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{member.name}</p>
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs text-gray-500 dark:text-zinc-500">Joined {member.joinedAt.split('T')[0]}</p>
-                      {member.role === "Admin" && (
-                        <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-400">Admin</span>
-                      )}
+            <div className="space-y-6">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-500 dark:text-zinc-400">Filter roles:</span>
+                <div className="flex rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1">
+                  {(["All", "Admin", "Member"] as const).map((role) => (
+                    <button
+                      key={role}
+                      onClick={() => setMemberRoleFilter(role)}
+                      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                        memberRoleFilter === role
+                          ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white"
+                          : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                      }`}
+                    >
+                      {role}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {membersWithDetails
+                  .filter((member) => {
+                    if (memberRoleFilter === "All") return true;
+                    if (memberRoleFilter === "Admin") return member.role === "Admin";
+                    return member.role !== "Admin";
+                  })
+                  .map((member) => (
+                  <div key={member.userId} className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4">
+                    <img
+                      src={member.avatar}
+                      alt={member.name}
+                      className="h-12 w-12 rounded-full object-cover ring-2 ring-white/20"
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{member.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-gray-500 dark:text-zinc-500">Joined {member.joinedAt.split('T')[0]}</p>
+                        {member.role === "Admin" && (
+                          <span className="rounded-full bg-amber-100 dark:bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">Admin</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
                   {member.userId !== currentUserId && (
                     <div className="relative">
@@ -2304,6 +2383,7 @@ const SelectedGroup = () => {
                 </div>
               ))}
             </div>
+          </div>
           )}
 
           {activeTab === "about" && (

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Check, User, Users, ChevronDown } from "lucide-react";
+import { Check, User, Users, ChevronDown, HelpCircle } from "lucide-react";
 import { JobRichText } from "../JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -221,7 +221,15 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           {/* ROW 2: Timeline Envelope & Positions Open */}
           <div className="grid grid-cols-2 gap-3 pt-1">
             <div className="p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
-              <span className="text-gray-600 dark:text-zinc-400 block mb-0.5 text-[10px]">Timeline Envelope</span>
+              <span className="text-gray-600 dark:text-zinc-400 mb-0.5 text-[10px] flex items-center gap-1">
+                Estimated Deadline (Days)
+                <div className="group relative flex items-center">
+                  <HelpCircle className="h-3 w-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
+                    The minimum and maximum days expected to complete the project.
+                  </div>
+                </div>
+              </span>
               <span className="text-xs font-bold text-gray-900 dark:text-white">{minTimeline} - {maxTimeline} Days</span>
             </div>
             <div className="p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">

@@ -1,6 +1,7 @@
 import {
   Bookmark,
   MessageCircle,
+  Plus,
   PlusCircle,
   Search,
   ThumbsUp,
@@ -21,6 +22,7 @@ import {
   UserPlus,
   CheckCircle,
   Reply,
+  Tag,
 } from "lucide-react";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -282,17 +284,17 @@ const ImageGallery = ({ attachments, imageKeys }: {
 
   return (
     <>
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+      <div className={`mt-3 grid gap-2 ${allImages.length === 1 ? 'grid-cols-1' : allImages.length === 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'}`}>
         {allImages.map((filePath, idx) => (
           <button
             key={idx}
             onClick={() => setSelectedImage(getImageUrl(filePath))}
-            className="group relative overflow-hidden rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition-all hover:scale-105 hover:border-white/20"
+            className="group relative overflow-hidden rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 shadow-sm dark:shadow-none transition-all hover:border-gray-300 dark:hover:border-white/20"
           >
             <img
               src={getImageUrl(filePath)}
               alt={`Post image ${idx + 1}`}
-              className="h-32 w-full object-cover transition-all group-hover:scale-110"
+              className={`${allImages.length === 1 ? 'max-h-[500px] w-full object-contain' : 'h-48 w-full object-cover'} transition-all group-hover:opacity-90`}
               onError={(e) => {
                 (e.target as HTMLImageElement).src = "https://placehold.co/400x300?text=Image+Not+Found";
               }}
@@ -409,7 +411,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => applyFormatting("bold")}
-              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:hover:text-white"
               title="Bold"
             >
               <strong className="text-xs">B</strong>
@@ -417,7 +419,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => applyFormatting("italic")}
-              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:hover:text-white"
               title="Italic"
             >
               <em className="text-xs">I</em>
@@ -425,7 +427,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => applyFormatting("bullet-list")}
-              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:hover:text-white"
               title="Bullet List"
             >
               <span className="text-xs">•</span>
@@ -433,7 +435,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => applyFormatting("code")}
-              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:hover:text-white"
               title="Code"
             >
               <span className="text-xs">{'<>'}</span>
@@ -441,7 +443,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:hover:text-white"
               title="Upload Image"
             >
               <ImageIcon className="h-3 w-3" />
@@ -449,7 +451,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => setShowPreview(!showPreview)}
-              className="ml-auto rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+              className="ml-auto rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:hover:text-white"
               title={showPreview ? "Edit" : "Preview"}
             >
               {showPreview ? <Edit2 className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
@@ -505,7 +507,7 @@ const ReplyInput = ({
           <div className="mt-2 flex justify-end gap-2">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 text-xs text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+              className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 text-xs text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:hover:text-white"
             >
               <ImageIcon className="h-3 w-3" />
               Add Image
@@ -761,7 +763,7 @@ const CommentItem = ({
               <button
                 onClick={() => onLike(postId, comment.comment_id)}
                 className={`inline-flex items-center gap-1 text-xs transition ${
-                  isLiked ? "text-red-400" : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
+                  isLiked ? "text-red-400" : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
                 <Heart className={`h-3 w-3 ${isLiked ? "fill-red-400" : ""}`} />
@@ -769,7 +771,7 @@ const CommentItem = ({
               </button>
               <button
                 onClick={() => onReply(postId, comment.comment_id, commentAuthor.name, comment.user_id)}
-                className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
+                className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:hover:text-white"
               >
                 <Reply className="h-3 w-3" />
                 <span>Reply</span>
@@ -777,7 +779,7 @@ const CommentItem = ({
               {hasChildren && (
                 <button
                   onClick={handleToggleChildren}
-                  className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
+                  className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:hover:text-white"
                 >
                   {showChildren ? (
                     <ChevronUp className="h-3 w-3" />
@@ -797,7 +799,7 @@ const CommentItem = ({
                 <span className="text-xs text-blue-400">Replying to @{replyingTo.authorName}</span>
                 <button
                   onClick={() => setReplyingTo(null)}
-                  className="text-xs text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
+                  className="text-xs text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -821,7 +823,7 @@ const CommentItem = ({
             <div className="mt-2 text-xs text-gray-500 dark:text-zinc-500">
               <button
                 onClick={handleToggleChildren}
-                className="hover:text-gray-900 dark:text-white transition"
+                className="hover:text-gray-900 dark:hover:text-white transition"
               >
                 View {childCount} {childCount === 1 ? 'reply' : 'replies'}
               </button>
@@ -951,7 +953,7 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
               <div className="relative">
                 <button
                   onClick={() => setPostMenuOpen(postMenuOpen === post.id ? null : post.id)}
-                  className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+                  className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:hover:text-white"
                 >
                   <MoreVertical className="h-4 w-4" />
                 </button>
@@ -1000,7 +1002,7 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
           <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
             <button
               onClick={() => toggleExpand(post.id)}
-              className="inline-flex items-center gap-1 text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
+              className="inline-flex items-center gap-1 text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:hover:text-white"
             >
               <MessageCircle className="h-3.5 w-3.5" />
               <span>{post.commentCount} replies</span>
@@ -1012,7 +1014,7 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
               className={`inline-flex items-center gap-1 transition-all duration-200 ${
                 isLiked 
                   ? "text-red-400 hover:text-red-300" 
-                  : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
+                  : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white"
               }`}
               type="button"
             >
@@ -1025,7 +1027,7 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
               className={`inline-flex items-center gap-1 transition-all duration-200 ${
                 isSaved 
                   ? "text-yellow-400 hover:text-yellow-300" 
-                  : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
+                  : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white"
               }`}
               type="button"
             >
@@ -1107,6 +1109,14 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
 };
 
 // ==================== MAIN COMPONENT ====================
+const getSubscriptionIcon = (type: string) => {
+  switch (type.toLowerCase()) {
+    case "premium": return "/icons/subscription/premium.png";
+    case "business": return "/icons/subscription/studio.png";
+    default: return "/icons/subscription/freemium.png";
+  }
+};
+
 const Forums = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ForumTab>("feed");
@@ -1135,7 +1145,7 @@ const Forums = () => {
   const [groupDiscussions, setGroupDiscussions] = useState<Post[]>([]);
   const [myDiscussionPosts, setMyDiscussionPosts] = useState<Post[]>([]);
   const [savedDiscussions, setSavedDiscussions] = useState<Post[]>([]);
-  const [membersDetailsMap, setMembersDetailsMap] = useState<Record<number, { name: string; avatar: string }>>({});
+  const [membersDetailsMap, setMembersDetailsMap] = useState<Record<number, { name: string; avatar: string; isVerified?: boolean; subscriptionPlan?: string }>>({});
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1151,7 +1161,7 @@ const Forums = () => {
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const currentUserId = user?.user_id || user?.userId || 0;
   const isForumAuthenticated = !isGuestMode && Boolean(user?.account_id && currentUserId);
-  const currentUserName = user?.displayName || user?.name || "Guest";
+  const currentUserName = user?.display_name || user?.displayName || user?.username || user?.name || "Guest";
   const [currentUserAvatar, setCurrentUserAvatar] = useState(user?.avatar || DEFAULT_AVATAR);
 
   useEffect(() => {
@@ -1402,13 +1412,17 @@ const Forums = () => {
 
     return posts.map((post, index) => {
       // Get user details from membersDetailsMap
-      let authorName, authorAvatar;
+      let authorName, authorAvatar, authorIsVerified = false, authorSubscriptionPlan = "Free";
       if (post.user_id === currentUserId) {
         authorName = currentUserName;
         authorAvatar = currentUserAvatar;
+        authorIsVerified = useGlobalState.getState().isVerified || user?.is_verified || false;
+        authorSubscriptionPlan = user?.subscription_plan || "Free";
       } else if (membersDetailsMap[post.user_id]) {
         authorName = membersDetailsMap[post.user_id].name;
         authorAvatar = membersDetailsMap[post.user_id].avatar;
+        authorIsVerified = membersDetailsMap[post.user_id].isVerified || false;
+        authorSubscriptionPlan = membersDetailsMap[post.user_id].subscriptionPlan || "Free";
       } else {
         authorName = "Forum member";
         authorAvatar = DEFAULT_AVATAR;
@@ -1423,6 +1437,8 @@ const Forums = () => {
         id: post._id || String(index),
         author: authorName,
         authorAvatar: authorAvatar,
+        authorIsVerified,
+        authorSubscriptionPlan,
         excerpt: post.content,
         ago: getTimeAgo(post.created_at),
         tagsList: post.tags || [],
@@ -1899,9 +1915,10 @@ const Forums = () => {
         posts.some((post) => String(post._id) === String(newPost._id)) ? posts : [newPost, ...posts]
       );
       showSuccessToast(`"${postData.title}" posted successfully!`);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      showErrorToast("Failed to create post. Please try again.");
+      const errorMessage = error.response?.data?.error || "Failed to create post. Please try again.";
+      showErrorToast(errorMessage);
       throw error;
     }
   };
@@ -1960,32 +1977,10 @@ const Forums = () => {
   }, [activeTab, isForumAuthenticated]);
 
   // ==================== RENDER HELPERS ====================
-  const renderFilterSidebar = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <button
-          onClick={() => setIsFilterVisible(!isFilterVisible)}
-          className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 text-sm text-gray-500 dark:text-zinc-400 transition hover:border-white/30 hover:text-gray-900 dark:text-white"
-        >
-          <Filter className="h-4 w-4" />
-          {isFilterVisible ? "Hide Filters" : "Show Filters"}
-          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isFilterVisible ? "rotate-180" : ""}`} />
-        </button>
-
-        {selectedGroupIds.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 dark:text-zinc-500">{selectedGroupIds.length}</span>
-            <button onClick={clearAllGroups} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300">
-              <X className="h-3 w-3" />
-              Clear
-            </button>
-          </div>
-        )}
-      </div>
-
-      {isFilterVisible && (
-        <div className="space-y-4 animate-slide-in">
-          <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-linear-to-br from-white/5 to-transparent p-4 backdrop-blur-sm">
+  const renderFilterSidebar = () => {
+    return (
+      <div className="space-y-4 w-full">
+        <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-linear-to-br from-white/5 to-transparent p-4 backdrop-blur-sm">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{isForumAuthenticated ? "My Groups" : "All Groups"}</h3>
               <div className="flex gap-2">
@@ -2001,8 +1996,8 @@ const Forums = () => {
                   onClick={() => toggleGroupFilter(group.id)}
                   className={`rounded-full px-3 py-1 text-xs transition-all duration-200 ${
                     selectedGroupIds.includes(group.id)
-                      ? "bg-blue-500 text-gray-900 dark:text-white shadow-lg shadow-blue-500/25"
-                      : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:border-white/30 hover:text-gray-900 dark:text-white"
+                      ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
+                      : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:border-white/30 hover:text-gray-900 dark:hover:text-white"
                   }`}
                 >
                   {group.group_name}
@@ -2025,8 +2020,8 @@ const Forums = () => {
                   disabled={!isForumAuthenticated}
                   className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs transition-all duration-200 disabled:cursor-default ${
                     (isForumAuthenticated ? sortBy : "popular") === option.value
-                      ? "bg-blue-500 text-gray-900 dark:text-white shadow-lg shadow-blue-500/25"
-                      : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:border-white/30 hover:text-gray-900 dark:text-white"
+                      ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
+                      : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:border-white/30 hover:text-gray-900 dark:hover:text-white"
                   }`}
                 >
                   {option.icon}
@@ -2036,9 +2031,8 @@ const Forums = () => {
             </div>
           </div>
         </div>
-      )}
-    </div>
-  );
+    );
+  };
 
   const renderPostCard = (post: any, showGroupName: boolean = true) => {
     const group = groupsList.find((item) => String(item.id) === String(post.forum_group_id));
@@ -2049,27 +2043,46 @@ const Forums = () => {
     return (
       <div key={post.id} className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
         <div className="flex gap-3">
-          <img src={post.authorAvatar} alt={post.author} className="h-10 w-10 rounded-full object-cover ring-2 ring-white/20" />
+          <img src={post.authorAvatar} alt={post.author} className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white/20" />
           <div className="flex-1">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{post.author}</p>
-                <span className="text-xs text-gray-500 dark:text-zinc-500">{post.ago}</span>
-                {showGroupName && group && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-400">
-                    {group.group_name}
-                  </span>
-                )}
-                {post.tagsList && post.tagsList.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{post.author}</p>
+                    {post.authorIsVerified && (
+                      <img src="/icons/verification/lvl2_verified.png" alt="Verified" className="h-3.5 w-3.5 object-contain" title="Verified" />
+                    )}
+                    {post.authorSubscriptionPlan && post.authorSubscriptionPlan !== "Free" && (
+                      <img src={getSubscriptionIcon(post.authorSubscriptionPlan)} alt={post.authorSubscriptionPlan} className="h-3.5 w-3.5 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" title={`${post.authorSubscriptionPlan} Tier`} />
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-500 dark:text-zinc-500">{post.ago}</span>
+                </div>
+                {(showGroupName || (post.tagsList && post.tagsList.length > 0)) && (
                   <div className="flex items-center gap-1 flex-wrap">
-                    {post.tagsList.map((tag: ForumTag, tagIdx: number) => (
-                      <span 
-                        key={tag.tag_id || tagIdx} 
-                        className={`rounded-full px-2 py-0.5 text-[10px] ${getTagColor(tag.tag_id)}`}
-                      >
-                        {tag.tag_name || `Tag ${tag.tag_id}`}
-                      </span>
-                    ))}
+                    {showGroupName && group && (
+                      <>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
+                          <Users className="h-3 w-3" />
+                          {group.group_name}
+                        </span>
+                        {post.tagsList && post.tagsList.length > 0 && (
+                          <span className="text-gray-300 dark:text-zinc-600 mx-1">|</span>
+                        )}
+                      </>
+                    )}
+                    {post.tagsList && post.tagsList.length > 0 && (
+                      post.tagsList.map((tag: ForumTag, tagIdx: number) => (
+                        <span 
+                          key={tag.tag_id || tagIdx} 
+                          className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:text-zinc-300 border border-gray-200 dark:border-white/10"
+                        >
+                          <Tag className="h-2.5 w-2.5" />
+                          {tag.tag_name || `Tag ${tag.tag_id}`}
+                        </span>
+                      ))
+                    )}
                   </div>
                 )}
               </div>
@@ -2078,7 +2091,7 @@ const Forums = () => {
                 <div className="relative">
                   <button
                     onClick={() => setPostMenuOpen(postMenuOpen === post.id ? null : post.id)}
-                    className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+                    className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:hover:text-white"
                   >
                     <MoreVertical className="h-4 w-4" />
                   </button>
@@ -2113,21 +2126,23 @@ const Forums = () => {
                 </button>
               )}
             </div>
+          </div>
+        </div>
 
-            <h3 className="mt-1 text-base font-semibold text-gray-900 dark:text-white">{post.title}</h3>
+        <h3 className="mt-3 text-base font-semibold text-gray-900 dark:text-white">{post.title}</h3>
 
-            <div className="mt-2 text-sm text-gray-600 dark:text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
-                {post.content}
-              </ReactMarkdown>
-            </div>
+        <div className="mt-2 text-sm text-gray-600 dark:text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+            {post.content}
+          </ReactMarkdown>
+        </div>
 
-            <ImageGallery attachments={post.attachments} imageKeys={post.imageKeys} />
+        <ImageGallery attachments={post.attachments} imageKeys={post.imageKeys} />
 
-            <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
+        <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
               <button
                 onClick={() => toggleExpand(post.id)}
-                className="inline-flex items-center gap-1 text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
+                className="inline-flex items-center gap-1 text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:hover:text-white"
               >
                 <MessageCircle className="h-3.5 w-3.5" />
                 <span>{post.commentCount} replies</span>
@@ -2139,7 +2154,7 @@ const Forums = () => {
                 className={`inline-flex items-center gap-1 transition-all duration-200 ${
                   isLiked 
                     ? "text-red-400 hover:text-red-300" 
-                    : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
+                    : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white"
                 }`}
                 type="button"
               >
@@ -2152,7 +2167,7 @@ const Forums = () => {
                 className={`inline-flex items-center gap-1 transition-all duration-200 ${
                   isSaved 
                     ? "text-yellow-400 hover:text-yellow-300" 
-                    : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
+                    : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white"
                 }`}
                 type="button"
               >
@@ -2210,19 +2225,17 @@ const Forums = () => {
                 </div>
               </div>
             )}
-          </div>
-        </div>
       </div>
     );
   };
 
   const renderGroupsGrid = () => (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {visibleGroups.map((group) => (
         <div
           key={group.id}
           onClick={() => navigate(`/forums/group/${group.id}`)}
-          className="group relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-linear-to-br from-white/5 to-transparent transition-all duration-300 hover:scale-[1.02] hover:border-white/20 hover:bg-gray-100 dark:bg-white/10"
+          className="group relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 transition-all duration-300 hover:scale-[1.02] hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 shadow-sm dark:shadow-none"
         >
           {group.image_url ? (
             <img src={`${import.meta.env.VITE_CLOUDFRONT_URL}/${group.image_url}`} alt={group.group_name} className="h-24 w-full object-cover" />
@@ -2232,12 +2245,11 @@ const Forums = () => {
           <div className="p-4">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="text-xs text-gray-500 dark:text-zinc-500">Forum Group</p>
                 <h3 className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{group.group_name}</h3>
               </div>
               {!group.joined ? (
                 <button
-                  className="flex items-center gap-1 rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] text-blue-400 transition hover:bg-blue-500/30 hover:scale-105 disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-full bg-blue-500 px-3 py-1 text-[10px] font-medium text-white shadow-sm transition hover:bg-blue-600 hover:scale-105 disabled:opacity-50"
                   onClick={(e) => {
                     e.stopPropagation();
                     joinGroup(group.id);
@@ -2252,7 +2264,7 @@ const Forums = () => {
                   Join
                 </button>
               ) : (
-                <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-400">
+                <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-[10px] font-medium text-emerald-500 dark:text-emerald-400 border border-emerald-500/20">
                   <CheckCircle className="h-3 w-3" />
                   Joined
                 </span>
@@ -2260,15 +2272,15 @@ const Forums = () => {
             </div>
             <p className="mt-1 line-clamp-2 text-xs text-gray-500 dark:text-zinc-400">{group.content}</p>
             <div className="mt-2 flex items-center gap-2">
-              <Users className="h-3 w-3 text-gray-500 dark:text-zinc-500" />
-              <p className="text-xs text-gray-500 dark:text-zinc-500">{group.members?.length || 0} members</p>
+              <Users className="h-3 w-3 text-gray-600 dark:text-zinc-300" />
+              <p className="text-xs font-medium text-gray-600 dark:text-zinc-300">{group.members?.length || 0} members</p>
             </div>
             <div className="mt-3 flex flex-wrap gap-1">
               {group.tags?.slice(0, 3).map((tag) => (
-                <span key={tag.tag_id} className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[9px] text-blue-400">{tag.tag}</span>
+                <span key={tag.tag_id} className="rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.5 text-[9px] font-medium text-gray-600 dark:text-zinc-300">{tag.tag}</span>
               ))}
               {group.tags?.length > 3 && (
-                <span className="rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.5 text-[9px] text-gray-500 dark:text-zinc-400">+{group.tags.length - 3}</span>
+                <span className="rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.5 text-[9px] font-medium text-gray-600 dark:text-zinc-300">+{group.tags.length - 3}</span>
               )}
             </div>
           </div>
@@ -2290,71 +2302,43 @@ const Forums = () => {
     </div>
   );
 
-  // ==================== LOADING STATE ====================
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
-        <UserHeader pageTitle="Forums" />
-        <div className="mx-auto max-w-7xl p-6 md:p-8">
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <div className="h-8 w-48 animate-pulse rounded-lg bg-gray-100 dark:bg-white/10" />
-              <div className="mt-1 h-4 w-64 animate-pulse rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-            </div>
-          </div>
-          <div className="mb-6 flex justify-end">
-            <div className="h-10 w-36 animate-pulse rounded-full bg-gray-100 dark:bg-white/10" />
-          </div>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
-            <div><div className="space-y-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4">
-              <div className="mb-2 h-5 w-24 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
-              <div className="mb-3 h-3 w-32 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-              <div className="flex flex-wrap gap-2">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="h-7 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-white/10" />
-                ))}
+  // ==================== LOADING SKELETONS ====================
+  const renderPostsSkeleton = () => (
+    <div className="space-y-4">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4">
+          <div className="flex gap-3">
+            <div className="h-10 w-10 animate-pulse rounded-full bg-gray-100 dark:bg-white/10" />
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <div className="h-4 w-32 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
+                <div className="h-3 w-20 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
               </div>
-            </div></div>
-            <div>
-              <div className="mb-4 h-10 w-full animate-pulse rounded-full bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-              <div className="mb-4 flex gap-2 border-b border-gray-200 dark:border-white/10 pb-3">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="h-8 w-20 animate-pulse rounded-full bg-gray-100 dark:bg-white/10" />
-                ))}
+              <div className="mt-2 h-5 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
+              <div className="mt-2 space-y-2">
+                <div className="h-4 w-full animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+                <div className="h-4 w-2/3 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
               </div>
-              <div className="mb-4 h-4 w-48 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-              <div className="space-y-4">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4">
-                    <div className="flex gap-3">
-                      <div className="h-10 w-10 animate-pulse rounded-full bg-gray-100 dark:bg-white/10" />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <div className="h-4 w-32 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
-                          <div className="h-3 w-20 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-                        </div>
-                        <div className="mt-2 h-5 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
-                        <div className="mt-2 space-y-2">
-                          <div className="h-4 w-full animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-                          <div className="h-4 w-2/3 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-                        </div>
-                        <div className="mt-3 flex gap-4">
-                          <div className="h-6 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-white/10" />
-                          <div className="h-4 w-20 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-                          <div className="h-4 w-16 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-                          <div className="h-4 w-12 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div className="mt-3 flex gap-4">
+                <div className="h-6 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-white/10" />
+                <div className="h-4 w-20 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+                <div className="h-4 w-16 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+                <div className="h-4 w-12 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
               </div>
             </div>
           </div>
         </div>
-      </div>
-    );
-  }
+      ))}
+    </div>
+  );
+
+  const renderGroupsSkeleton = () => (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+        <div key={i} className="h-48 animate-pulse rounded-xl bg-gray-100 dark:bg-white/10" />
+      ))}
+    </div>
+  );
 
   // ==================== MAIN RENDER ====================
   const feedBlocked = isForumAuthenticated && activeTab === "feed" && selectedGroupIds.length === 0;
@@ -2371,163 +2355,227 @@ const Forums = () => {
           </div>
         </div>
 
-        <div className="mb-6 flex justify-end">
-          <button
-            type="button"
-            onClick={handleActionClick}
-            className="group flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-black shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl active:scale-95"
-          >
-            <PlusCircle className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
-            {activeTab === "groups" || activeTab === "my-groups" ? "Create a Group" : "New Discussion"}
-          </button>
-        </div>
-
-        <div className={`grid grid-cols-1 gap-6 ${activeTab === "feed" && isFilterVisible ? "lg:grid-cols-[280px_1fr]" : "lg:grid-cols-1"}`}>
+        <div className="flex flex-col lg:flex-row items-start w-full transition-all duration-300 ease-in-out">
           {activeTab === "feed" && (
-            <div>
-              {renderFilterSidebar()}
+            <div 
+              className={`lg:sticky lg:top-24 self-start transition-all duration-300 ease-in-out overflow-hidden shrink-0 ${
+                isFilterVisible ? "w-full lg:w-[280px] lg:mr-6 opacity-100 mb-6 lg:mb-0 max-h-[2000px]" : "w-0 opacity-0 max-h-0 lg:max-h-[2000px] lg:mr-0 mb-0"
+              }`}
+            >
+              <div className="w-full lg:w-[280px] max-h-[calc(100vh-8rem)] overflow-y-auto no-scrollbar pr-2">
+                {renderFilterSidebar()}
+              </div>
             </div>
           )}
 
-          <div className={activeTab === "feed" ? "" : "mx-auto w-full max-w-4xl"}>
-            <div className="mb-4 flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5">
-              <Search className="h-4 w-4 text-gray-500 dark:text-zinc-500" />
-              <input
-                className="w-full bg-transparent text-sm text-gray-900 dark:text-white outline-none placeholder:text-gray-500 dark:text-zinc-500"
-                placeholder="Search discussions or groups..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery && (
-                <button onClick={() => setSearchQuery("")} className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white">
-                  <X className="h-3.5 w-3.5" />
-                </button>
+          <div className="flex-1 transition-all duration-300 ease-in-out w-full min-w-0">
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
+              <button
+                type="button"
+                onClick={handleActionClick}
+                className="shrink-0 flex items-center justify-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group whitespace-nowrap"
+              >
+                <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
+                <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                  {activeTab === "groups" || activeTab === "my-groups" ? "Create a Group" : "New Discussion"}
+                </span>
+              </button>
+
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-zinc-500" />
+                <input
+                  type="text"
+                  placeholder="Search discussions or groups..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 pl-11 pr-10 py-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white">
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="mb-4 flex flex-col gap-3 border-b border-gray-200 dark:border-white/10 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {tabOptions.filter((tab) => isForumAuthenticated || ["feed", "groups"].includes(tab.key)).map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => {
+                        setActiveTab(tab.key);
+                        setSearchQuery("");
+                      }}
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                        activeTab === tab.key
+                          ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
+                          : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:border-white/30 hover:text-gray-900 dark:hover:text-white"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {activeTab === "feed" && (
+                  <button
+                    onClick={() => setIsFilterVisible(!isFilterVisible)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-gray-100 dark:bg-white/5 px-4 py-2 text-sm font-medium text-gray-900 dark:text-white transition hover:bg-gray-200 dark:hover:bg-white/10 shrink-0"
+                  >
+                    <Filter className="h-4 w-4" />
+                    {isFilterVisible ? "Hide Filters" : "Show Filters"}
+                  </button>
+                )}
+              </div>
+
+              {activeTab === "feed" && selectedGroupIds.length > 0 && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <p className="text-sm text-gray-500 dark:text-zinc-500">
+                    Showing {displayPosts.length} discussion{displayPosts.length !== 1 ? 's' : ''} from selected groups
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSelectedGroupIds([]);
+                      setSearchQuery("");
+                    }}
+                    className="text-sm font-medium text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:hover:text-white"
+                  >
+                    Clear All Filters
+                  </button>
+                </div>
               )}
             </div>
 
-            <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-gray-200 dark:border-white/10 pb-3">
-              {tabOptions.filter((tab) => isForumAuthenticated || ["feed", "groups"].includes(tab.key)).map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => {
-                    setActiveTab(tab.key);
-                    setSearchQuery("");
-                  }}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
-                    activeTab === tab.key
-                      ? "bg-blue-500 text-gray-900 dark:text-white shadow-lg shadow-blue-500/25"
-                      : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:border-white/30 hover:text-gray-900 dark:text-white"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            <div key={activeTab} className="animate-fade-in-up">
+              {(activeTab === "groups" || activeTab === "my-groups") && (
+                <>
+                  {loading ? (
+                    renderGroupsSkeleton()
+                  ) : visibleGroups.length === 0 ? (
+                    renderEmptyState(
+                      <Users className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
+                      "No groups found",
+                      searchQuery ? `No groups matching "${searchQuery}"` : "No groups available",
+                      activeTab === "my-groups" ? "Browse Groups" : undefined,
+                      activeTab === "my-groups" ? () => setActiveTab("groups") : undefined
+                    )
+                  ) : (
+                    <>
+                      {searchQuery && (
+                        <p className="mb-3 text-sm text-gray-500 dark:text-zinc-500">Found {visibleGroups.length} group{visibleGroups.length !== 1 ? "s" : ""} matching "{searchQuery}"</p>
+                      )}
+                      {renderGroupsGrid()}
+                    </>
+                  )}
+                </>
+              )}
+
+              {activeTab === "feed" && (
+                <div className="space-y-4">
+                  {loading ? (
+                    renderPostsSkeleton()
+                  ) : feedBlocked || displayPosts.length === 0 ? (
+                    <div className="space-y-8">
+                      {feedBlocked ? (
+                        renderEmptyState(
+                          <Users className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
+                          "No groups selected",
+                          "Select at least one group from the filters to see its discussions",
+                          isForumAuthenticated ? "Select All My Groups" : "Select All Groups",
+                          selectAllGroups
+                        )
+                      ) : (
+                        renderEmptyState(
+                          <MessageCircle className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
+                          searchQuery ? "No matching discussions" : "No discussions yet",
+                          searchQuery ? `No discussions found matching "${searchQuery}"` : "Start a discussion in one of your selected groups",
+                          !searchQuery ? "Create Discussion" : undefined,
+                          !searchQuery ? handleActionClick : undefined
+                        )
+                      )}
+                      
+                      <div className="pt-4 border-t border-gray-200 dark:border-white/10">
+                        <div className="mb-4">
+                          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Discover Groups</h3>
+                          <p className="text-sm text-gray-500 dark:text-zinc-400">Join groups to populate your feed with interesting discussions.</p>
+                        </div>
+                        {renderGroupsGrid()}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {selectedGroupIds.length === 0 && (
+                        <p className="text-sm text-gray-500 dark:text-zinc-500 mb-4">
+                          {searchQuery 
+                            ? `Found ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
+                            : isForumAuthenticated
+                              ? `Showing ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} from your joined groups`
+                              : `Showing ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} from all forums by popularity`}
+                        </p>
+                      )}
+                      {displayPosts.map((post) => renderPostCard(post, true))}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "my-discussions" && (
+                <div className="space-y-4">
+                  {loading ? (
+                    renderPostsSkeleton()
+                  ) : displayPosts.length === 0 ? (
+                    renderEmptyState(
+                      <MessageCircle className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
+                      searchQuery ? "No matching discussions" : "No discussions yet",
+                      searchQuery ? `No discussions found matching "${searchQuery}"` : "Start a new discussion in one of your groups!",
+                      !searchQuery ? "Create Discussion" : undefined,
+                      !searchQuery ? handleActionClick : undefined
+                    )
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-500 dark:text-zinc-500">
+                        {searchQuery 
+                          ? `Found ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
+                          : `Showing ${displayPosts.length} discussions created by you`}
+                      </p>
+                      {displayPosts.map((post) => renderPostCard(post, true))}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "saved" && (
+                <div className="space-y-4">
+                  {loading ? (
+                    renderPostsSkeleton()
+                  ) : displayPosts.length === 0 ? (
+                    renderEmptyState(
+                      <Bookmark className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
+                      searchQuery ? "No matching saved discussions" : "No saved discussions yet",
+                      searchQuery ? `No saved discussions found matching "${searchQuery}"` : "Bookmark discussions to see them here"
+                    )
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-500 dark:text-zinc-500">
+                        {searchQuery 
+                          ? `Found ${displayPosts.length} saved discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
+                          : `${displayPosts.length} saved discussion${displayPosts.length !== 1 ? "s" : ""}`}
+                      </p>
+                      {displayPosts.map((post) => renderPostCard(post, true))}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {["feed", "my-discussions", "saved"].includes(activeTab) && !feedBlocked && (
+                <div ref={feedSentinelRef} className="flex min-h-12 items-center justify-center py-4 text-sm text-gray-500 dark:text-zinc-500">
+                  {loadingMore ? <Loader2 className="h-5 w-5 animate-spin" /> : hasMore ? "Scroll for more" : ""}
+                </div>
+              )}
             </div>
-
-            {(activeTab === "groups" || activeTab === "my-groups") && (
-              <>
-                {visibleGroups.length === 0 ? (
-                  renderEmptyState(
-                    <Users className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
-                    "No groups found",
-                    searchQuery ? `No groups matching "${searchQuery}"` : "No groups available",
-                    activeTab === "my-groups" ? "Browse Groups" : undefined,
-                    activeTab === "my-groups" ? () => setActiveTab("groups") : undefined
-                  )
-                ) : (
-                  <>
-                    {searchQuery && (
-                      <p className="mb-3 text-sm text-gray-500 dark:text-zinc-500">Found {visibleGroups.length} group{visibleGroups.length !== 1 ? "s" : ""} matching "{searchQuery}"</p>
-                    )}
-                    {renderGroupsGrid()}
-                  </>
-                )}
-              </>
-            )}
-
-            {activeTab === "feed" && (
-              <div className="space-y-4">
-                {feedBlocked ? (
-                  renderEmptyState(
-                    <Users className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
-                    "No groups selected",
-                    "Select at least one group from the filters to see its discussions",
-                    isForumAuthenticated ? "Select All My Groups" : "Select All Groups",
-                    selectAllGroups
-                  )
-                ) : displayPosts.length === 0 ? (
-                  renderEmptyState(
-                    <MessageCircle className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
-                    searchQuery ? "No matching discussions" : "No discussions yet",
-                    searchQuery ? `No discussions found matching "${searchQuery}"` : "Start a discussion in one of your selected groups",
-                    !searchQuery ? "Create Discussion" : undefined,
-                    !searchQuery ? handleActionClick : undefined
-                  )
-                ) : (
-                  <>
-                    <p className="text-sm text-gray-500 dark:text-zinc-500">
-                      {searchQuery 
-                        ? `Found ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
-                        : isForumAuthenticated
-                          ? `Showing ${displayPosts.length} discussions from your joined groups`
-                          : `Showing ${displayPosts.length} discussions from all forums by popularity`}
-                    </p>
-                    {displayPosts.map((post) => renderPostCard(post, true))}
-                  </>
-                )}
-              </div>
-            )}
-
-            {activeTab === "my-discussions" && (
-              <div className="space-y-4">
-                {displayPosts.length === 0 ? (
-                  renderEmptyState(
-                    <MessageCircle className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
-                    searchQuery ? "No matching discussions" : "No discussions yet",
-                    searchQuery ? `No discussions found matching "${searchQuery}"` : "Start a new discussion in one of your groups!",
-                    !searchQuery ? "Create Discussion" : undefined,
-                    !searchQuery ? handleActionClick : undefined
-                  )
-                ) : (
-                  <>
-                    <p className="text-sm text-gray-500 dark:text-zinc-500">
-                      {searchQuery 
-                        ? `Found ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
-                        : `Showing ${displayPosts.length} discussions created by you`}
-                    </p>
-                    {displayPosts.map((post) => renderPostCard(post, true))}
-                  </>
-                )}
-              </div>
-            )}
-
-            {activeTab === "saved" && (
-              <div className="space-y-4">
-                {displayPosts.length === 0 ? (
-                  renderEmptyState(
-                    <Bookmark className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
-                    searchQuery ? "No matching saved discussions" : "No saved discussions yet",
-                    searchQuery ? `No saved discussions found matching "${searchQuery}"` : "Bookmark discussions to see them here"
-                  )
-                ) : (
-                  <>
-                    <p className="text-sm text-gray-500 dark:text-zinc-500">
-                      {searchQuery 
-                        ? `Found ${displayPosts.length} saved discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
-                        : `${displayPosts.length} saved discussion${displayPosts.length !== 1 ? "s" : ""}`}
-                    </p>
-                    {displayPosts.map((post) => renderPostCard(post, true))}
-                  </>
-                )}
-              </div>
-            )}
-
-            {["feed", "my-discussions", "saved"].includes(activeTab) && !feedBlocked && (
-              <div ref={feedSentinelRef} className="flex min-h-12 items-center justify-center py-4 text-sm text-gray-500 dark:text-zinc-500">
-                {loadingMore ? <Loader2 className="h-5 w-5 animate-spin" /> : hasMore ? "Scroll for more" : ""}
-              </div>
-            )}
           </div>
         </div>
       </div>

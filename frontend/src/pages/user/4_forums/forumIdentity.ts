@@ -25,5 +25,7 @@ export function identityFromDetails(details: any) {
       || details.handle
       || "Forum member",
     avatar: forumAvatarUrl(details.avatar_preset_url || details.avatar_url || details.path),
+    isVerified: Boolean(details.is_verified),
+    subscriptionPlan: details.subscription_plan || "Free",
   };
 }

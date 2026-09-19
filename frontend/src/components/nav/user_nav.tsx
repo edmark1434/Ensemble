@@ -6,7 +6,6 @@ import {
     Handshake,
     Home,
     Inbox,
-    Megaphone,
     MessageSquare,
     Palette,
     Shield,
@@ -16,8 +15,14 @@ import {
     ChevronRight,
     ChevronDown,
     BriefcaseBusiness,
-    MicVocal,
+    Clapperboard,
+    MonitorPlay,
     LayoutDashboard,
+    Film,
+    Video,
+    ListVideo,
+    Projector,
+    Library
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
@@ -33,19 +38,19 @@ type NavItem = {
 
 let primaryNavInitial: NavItem[] = [
     { label: "Home", icon: Home, to: "/home" },
-    { label: "Projects", icon: FolderKanban, to: "/projects" },
+    { label: "Projects", icon: ListVideo, to: "/projects" },
     { label: "Teams", icon: Users, to: "/teams" },
-    { label: "Forums", icon: MessageSquare, to: "/forums" },
-    { label: "Asset Library", icon: Palette, to: "/assets" },
+    { label: "Forums", icon: Projector, to: "/forums" },
+    { label: "Asset Library", icon: Library, to: "/assets" },
 ];
 
 let jobsItemsInitial: NavItem[] = [
-    { label: "Job Posting", icon: Briefcase, to: "/jobs" },
+    { label: "Job Posting", icon: Video, to: "/jobs" },
     { label: "Proposals", icon: ClipboardList, to: "/jobs/proposals" },
 ];
 
 let gigsItemsInitial: NavItem[] = [
-    { label: "Services", icon: Megaphone, to: "/gigs" },
+    { label: "Services", icon: MonitorPlay, to: "/gigs" },
     { label: "Orders", icon: Inbox, to: "/gigs/orders" },
 ];
 
@@ -231,7 +236,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                       {!isCollapsed ? (
                          <div className="mb-2">
                             <button onClick={() => setIsJobsOpen(!isJobsOpen)} className={sectionHeaderClassName()}>
-                               <BriefcaseBusiness className="h-4 w-4 shrink-0" />
+                               <Film className="h-4 w-4 shrink-0" />
                                <span className="flex-1 text-left text-sm font-medium">Jobs</span>
                                <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${isJobsOpen ? "rotate-180" : ""}`} />
                             </button>
@@ -269,7 +274,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                          /* Collapsed Menu Flyout Item for Jobs */
                          <div className="group w-full flex justify-center hover:z-50">
                             <div className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 dark:text-zinc-400 transition-colors group-hover:bg-gray-100 dark:group-hover:bg-white/5 group-hover:text-gray-900 dark:group-hover:text-white cursor-pointer">
-                               <BriefcaseBusiness className="h-4 w-4" />
+                               <Film className="h-4 w-4" />
                             </div>
 
                             <div className="absolute left-full -ml-6 pl-6 hidden w-52 group-hover:block z-50">
@@ -297,7 +302,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                       {!isCollapsed ? (
                          <div className="mb-2">
                             <button onClick={() => setIsGigsOpen(!isGigsOpen)} className={sectionHeaderClassName()}>
-                               <MicVocal className="h-4 w-4 shrink-0" />
+                               <Clapperboard className="h-4 w-4 shrink-0" />
                                <span className="flex-1 text-left text-sm font-medium">Gigs</span>
                                <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${isGigsOpen ? "rotate-180" : ""}`} />
                             </button>
@@ -335,7 +340,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                          /* Collapsed Menu Flyout Item for Gigs */
                          <div className="group w-full flex justify-center hover:z-50">
                             <div className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 dark:text-zinc-400 transition-colors group-hover:bg-gray-100 dark:group-hover:bg-white/5 group-hover:text-gray-900 dark:group-hover:text-white cursor-pointer">
-                               <MicVocal className="h-4 w-4" />
+                               <Clapperboard className="h-4 w-4" />
                             </div>
 
                             <div className="absolute left-full -ml-6 pl-6 hidden w-52 group-hover:block z-50">
