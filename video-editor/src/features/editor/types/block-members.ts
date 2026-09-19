@@ -35,3 +35,42 @@ export interface BlockAccess {
   // True when the requesting user is this block's Owner.
   canManage: boolean;
 }
+
+export type GeneralAccessLevel =
+  | "Anyone can edit"
+  | "Anyone can comment"
+  | "Anyone can view"
+  | "Restricted";
+
+export const GENERAL_ACCESS_LEVELS: GeneralAccessLevel[] = [
+  "Anyone can edit",
+  "Anyone can comment",
+  "Anyone can view",
+  "Restricted",
+];
+
+export const DEFAULT_GENERAL_ACCESS: GeneralAccessLevel = "Anyone can edit";
+
+export interface BlockAccess {
+  owner: BlockPerson | null;
+  members: BlockMember[];
+  candidates: BlockPerson[];
+  canManage: boolean;
+  generalAccess: GeneralAccessLevel;
+}
+
+/**
+ * Whether `viewerUserId` can open/use this block at all — as the scene
+ * Owner, an explicit block member (any role), or via general access when
+ * it isn't Restricted. Doesn't distinguish role level (Editor vs Viewer) —
+ * callers that need the specific role should read `owner`/`members` directly.
+ */
+export function hasBlockAccess(
+  access: Pick<BlockAccess, "owner" | "members" | "generalAccess">,
+  viewerUserId: string,
+): boolean {
+  if (!viewerUserId) return false;
+  if (access.owner?.userId === viewerUserId) return true;
+  if (access.members.some((m) => m.userId === viewerUserId)) return true;
+  return access.generalAccess !== "Restricted";
+}

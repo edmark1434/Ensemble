@@ -130,6 +130,8 @@ class Video extends Trimmable {
     this.volume = props.volume ?? 100;
     this.name = props.metadata?.name || "Video";
     this.startLoadingAnimation();
+
+    this.hoverCursor = "pointer";
   }
 
   private initOffscreenCanvas() {

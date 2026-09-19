@@ -71,6 +71,7 @@ interface BlocksTable {
   frame_rate: number;
   project_id: string;
   deleted_at: Date | null;
+  general_access: string;
 }
 
 interface BlockMembersTable {

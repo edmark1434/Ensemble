@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
-import { getBlockProjectId } from "@/lib/db/blocks";
+import {getBlockProjectId, updateBlock} from "@/lib/db/blocks";
 import {
   addBlockMember,
   getBlockAccess,
@@ -14,13 +14,16 @@ import {
 } from "@/lib/db/block-members";
 import {
   ASSIGNABLE_BLOCK_ROLES,
-  type AssignableBlockRole,
+  type AssignableBlockRole, GENERAL_ACCESS_LEVELS, GeneralAccessLevel,
 } from "@/features/editor/types/block-members";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const isAssignableRole = (v: unknown): v is AssignableBlockRole =>
   typeof v === "string" && (ASSIGNABLE_BLOCK_ROLES as string[]).includes(v);
+
+const isGeneralAccessLevel = (v: unknown): v is GeneralAccessLevel =>
+  typeof v === "string" && (GENERAL_ACCESS_LEVELS as string[]).includes(v);
 
 const fail = (error: string, status: number) =>
   NextResponse.json({ error }, { status });
@@ -97,6 +100,15 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if ("error" in auth) return auth.error;
 
   const body = await req.json().catch(() => null);
+
+  if (body?.generalAccess !== undefined) {
+    if (!isGeneralAccessLevel(body.generalAccess)) {
+      return fail("Invalid generalAccess", 400);
+    }
+    await updateBlock({ blockId: auth.blockId, generalAccess: body.generalAccess });
+    return NextResponse.json({ ok: true });
+  }
+
   if (typeof body?.userId !== "string" || !isAssignableRole(body?.role)) {
     return fail("Invalid userId/role", 400);
   }

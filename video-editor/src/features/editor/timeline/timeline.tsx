@@ -48,6 +48,7 @@ import {syncCanvasTransitions} from "@/features/editor/timeline/items/transition
 import { patchTransitionRenderPositioning } from "./items/transitions/transition-position-patch";
 import {dispatch} from "@designcombo/events";
 import {PLAYER_PAUSE} from "@/features/editor/constants/events";
+import {canOpenScene} from "@/features/editor/utils/scene-access";
 
 CanvasTimeline.registerItems({
   Text,
@@ -337,6 +338,9 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       .getPropertyValue("--primary-canvas")
       .trim() + "80";
 
+    // Pointer, not the default move cursor, when hovering any track item.
+    canvas.hoverCursor = "pointer";
+
     canvas.initScrollbars({
       offsetX: TIMELINE_OFFSET_CANVAS_LEFT + timelineOffsetX,
       offsetY: 0,
@@ -474,16 +478,20 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       const target = e.target;
       if (!target || target.type !== "scene") return;
 
-      const { trackItemsMap } = useStore.getState();
+      const { trackItemsMap, userId } = useStore.getState();
       const sceneItem = trackItemsMap[target.id];
       const blockId = sceneItem?.details?.blockId;
       if (!blockId) return;
 
-      // Old selection references ids that won't exist in the scene's own
-      // content — clear before swapping, same as any other selection reset.
-      stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
-      dispatch(PLAYER_PAUSE);
-      useStore.getState().openScene?.(blockId, target.id, sceneItem?.details?.name);
+      void canOpenScene(blockId, userId).then((allowed) => {
+        if (!allowed) return;
+
+        // Old selection references ids that won't exist in the scene's own
+        // content — clear before swapping, same as any other selection reset.
+        stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+        dispatch(PLAYER_PAUSE);
+        useStore.getState().openScene?.(blockId, target.id, sceneItem?.details?.name);
+      });
     });
 
     const timelineGestureIds = new Set<string>();

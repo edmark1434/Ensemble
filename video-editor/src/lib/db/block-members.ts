@@ -5,7 +5,7 @@ import type {
   AssignableBlockRole,
   BlockAccess,
   BlockPerson,
-  BlockRole,
+  BlockRole, GeneralAccessLevel,
 } from "@/features/editor/types/block-members";
 
 type PersonRow = {
@@ -87,7 +87,7 @@ export async function getBlockAccess(
   projectId: string,
   viewerUserId: string,
 ): Promise<BlockAccess> {
-  const [memberRows, candidateRows] = await Promise.all([
+  const [memberRows, candidateRows, blockRow] = await Promise.all([
     db
       .selectFrom("block_members as bm")
       .innerJoin("users as u", "u.user_id", "bm.user_id")
@@ -141,6 +141,13 @@ export async function getBlockAccess(
       .orderBy("u.first_name")
       .orderBy("u.last_name")
       .execute(),
+
+    db
+      .selectFrom("blocks")
+      .where("block_id", "=", blockId)
+      .where("deleted_at", "is", null)
+      .select(["general_access"])
+      .executeTakeFirst(),
   ]);
 
   const ownerRow = memberRows.find((r) => r.role === "Owner");
@@ -152,6 +159,7 @@ export async function getBlockAccess(
     ),
     candidates: candidateRows.map(toPerson),
     canManage: !!ownerRow && ownerRow.user_id === viewerUserId,
+    generalAccess: (blockRow?.general_access as GeneralAccessLevel) ?? "Anyone can edit",
   };
 }
 

@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import * as Y from "yjs";
 import { createCollabSchema, hydrateDocFromState } from "@/features/editor/collab/ydoc-schema";
+import {DEFAULT_GENERAL_ACCESS, GeneralAccessLevel} from "@/features/editor/types/block-members";
 
 const BLOCK_FRAME_RATE = 30;
 const BLOCK_COLOR_SPACE = "RGB";
@@ -59,6 +60,7 @@ export async function createBlock({
         color_space: BLOCK_COLOR_SPACE,
         frame_rate: BLOCK_FRAME_RATE,
         project_id: projectId,
+        general_access: DEFAULT_GENERAL_ACCESS,
       })
       .execute();
 
@@ -107,16 +109,19 @@ export async function updateBlock({
   name,
   width,
   height,
+  generalAccess,
 }: {
   blockId: string;
   name?: string;
   width?: number;
   height?: number;
+  generalAccess?: GeneralAccessLevel;
 }): Promise<void> {
   const updates: Record<string, unknown> = {};
   if (name !== undefined) updates.name = name;
   if (width !== undefined) updates.resolution_width = width;
   if (height !== undefined) updates.resolution_height = height;
+  if (generalAccess !== undefined) updates.general_access = generalAccess;
 
   if (Object.keys(updates).length === 0) return;
 

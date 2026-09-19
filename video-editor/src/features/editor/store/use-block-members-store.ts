@@ -10,7 +10,7 @@ import { isSceneItem, type ISceneDetails } from "@/features/editor/types/ensembl
 import type {
   AssignableBlockRole,
   BlockAccess,
-  BlockPerson,
+  BlockPerson, GeneralAccessLevel,
 } from "@/features/editor/types/block-members";
 
 type Status = "idle" | "loading" | "ready" | "error";
@@ -24,6 +24,8 @@ interface BlockMembersState extends BlockAccess {
   addMember: (person: BlockPerson, role: AssignableBlockRole) => Promise<void>;
   changeRole: (userId: string, role: AssignableBlockRole) => Promise<void>;
   removeMember: (userId: string) => Promise<void>;
+
+  setGeneralAccess: (generalAccess: GeneralAccessLevel) => Promise<void>;
 }
 
 const membersUrl = (blockId: string) => `/api/blocks/${blockId}/members`;
@@ -55,10 +57,9 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
   members: [],
   candidates: [],
   canManage: false,
+  generalAccess: "Restricted",
 
   load: async (blockId) => {
-    // Re-loading the block that's already showing keeps the current list on
-    // screen (no flicker); switching blocks starts clean.
     if (get().blockId !== blockId) {
       set({
         blockId,
@@ -68,6 +69,7 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
         members: [],
         candidates: [],
         canManage: false,
+        generalAccess: "Restricted",
       });
     }
 
@@ -75,12 +77,25 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
       const res = await fetch(membersUrl(blockId));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: BlockAccess = await res.json();
-      if (get().blockId !== blockId) return; // user moved to another scene
+      if (get().blockId !== blockId) return;
       set({ ...data, status: "ready", error: null });
     } catch (err) {
       if (get().blockId !== blockId) return;
       console.error("Failed to load scene access", err);
       set({ status: "error", error: "Couldn't load who has access." });
+    }
+  },
+
+  setGeneralAccess: async (generalAccess) => {
+    const { blockId } = get();
+    if (!blockId) return;
+
+    const previous = get().generalAccess;
+    set({ error: null, generalAccess });
+
+    const ok = await request(membersUrl(blockId), "PATCH", { generalAccess });
+    if (!ok) {
+      set({ generalAccess: previous, error: "Couldn't change general access." });
     }
   },
 

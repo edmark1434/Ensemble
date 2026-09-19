@@ -31,6 +31,7 @@ class Text extends Resizable {
     this.stroke = "transparent";
     this.text = props.text;
     this.hidden = props.hidden ?? false;
+    this.hoverCursor = "pointer";
     // this.rx = 0;
     // this.ry = 0;
   }

@@ -16,6 +16,8 @@ import { Animations } from "./common/animations";
 import { LayoutMediaControls } from "@/features/editor/control-item/common/layout-media";
 import { PlaybackControls } from "./common/playback";
 import { Access } from "@/features/editor/control-item/common/access";
+import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
+import {hasBlockAccess} from "@/features/editor/types/block-members";
 
 interface ISceneControlProps {
   opacity: number;
@@ -43,6 +45,26 @@ const BasicSceneItem = ({
   const showAll = !type;
   const { collabSchema, collabOrigin, projectId, userId } = useStore();
   const { blockId, name } = trackItem.details;
+
+  const {
+    blockId: loadedAccessBlockId,
+    status: accessStatus,
+    owner: blockOwner,
+    members: blockMembers,
+    generalAccess,
+    load: loadBlockAccess,
+  } = useBlockMembersStore();
+
+  useEffect(() => {
+    void loadBlockAccess(blockId);
+  }, [blockId, loadBlockAccess]);
+
+  // Default to "has access" while loading so the copy doesn't flash the
+  // restricted phrasing before we actually know.
+  const hasAccess =
+    loadedAccessBlockId === blockId && accessStatus === "ready"
+      ? hasBlockAccess({ owner: blockOwner, members: blockMembers, generalAccess }, userId)
+      : true;
 
   const [properties, setProperties] = useState<ISceneControlProps>(() =>
     getPropertiesFromDetails(trackItem.details)
@@ -120,7 +142,11 @@ const BasicSceneItem = ({
           />
           <div className="flex gap-2 items-start text-xs text-muted-foreground -mt-3 text-pretty">
             <Info size={16} />
-            <span>Double-click the scene to edit scene size, background and content</span>
+            <span>
+              {hasAccess
+                ? "Double-click the scene to edit scene size, background and content"
+                : "Users with access can double-click to edit scene size, background and content"}
+            </span>
           </div>
         </>
       )

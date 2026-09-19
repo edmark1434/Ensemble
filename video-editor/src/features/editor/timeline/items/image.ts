@@ -46,6 +46,7 @@ class Image extends Resizable {
     this.ry = 4;
     this.name = props.metadata?.name || "Image";
     this.startLoadingAnimation();
+    this.hoverCursor = "pointer";
   }
 
   public _render(ctx: CanvasRenderingContext2D) {
