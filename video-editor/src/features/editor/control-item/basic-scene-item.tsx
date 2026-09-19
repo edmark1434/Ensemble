@@ -170,7 +170,7 @@ const BasicSceneItem = ({
     },
     {
       key: "access",
-      component: <Access />
+      component: <Access blockId={blockId} />
     },
   ];
 

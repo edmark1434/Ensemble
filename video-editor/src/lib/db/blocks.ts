@@ -14,12 +14,14 @@ export async function createBlock({
   name,
   width,
   height,
+  ownerUserId,
 }: {
   blockId: string;
   projectId: string;
   name: string;
   width: number;
   height: number;
+  ownerUserId: string;
 }): Promise<void> {
   // Same seed shape a brand-new project's doc gets — empty content, but
   // size/fps/background already set so the timeline that opens it isn't
@@ -69,6 +71,24 @@ export async function createBlock({
     await trx
       .insertInto("block_yjs_snapshots")
       .values({ yjs_snapshot_id: snapshot.yjs_snapshot_id, block_id: blockId })
+      .execute();
+
+    const ownerMembership = await trx
+      .selectFrom("project_members")
+      .where("project_id", "=", projectId)
+      .where("user_id", "=", ownerUserId)
+      .where("deleted_at", "is", null)
+      .select(["cursor_color"])
+      .executeTakeFirst();
+
+    await trx
+      .insertInto("block_members")
+      .values({
+        block_id: blockId,
+        user_id: ownerUserId,
+        role: "Owner",
+        cursor_color: ownerMembership?.cursor_color ?? "#a1a1aa",
+      })
       .execute();
   });
 }

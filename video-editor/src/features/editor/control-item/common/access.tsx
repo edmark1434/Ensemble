@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/popover";
 import { Check, ChevronDown, Info, Users } from "lucide-react";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
+import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
 
 type GeneralAccessOption =
   | "Anyone can edit"
@@ -25,11 +26,11 @@ const GENERAL_ACCESS_OPTIONS: GeneralAccessOption[] = [
 // Same popover-list pattern used by the font controls (e.g. word break,
 // font style) — a button trigger with a checkmark against the active option.
 const SelectPopover = ({
-                         value,
-                         options,
-                         onChange,
-                         disabled = false
-                       }: {
+  value,
+  options,
+  onChange,
+  disabled = false
+}: {
   value: string;
   options: string[];
   onChange: (v: string) => void;
@@ -76,10 +77,40 @@ const SelectPopover = ({
   );
 };
 
-export const Access = () => {
-  // Hardcoded for now — nothing wired to the backend yet.
+export const Access = ({ blockId }: { blockId: string }) => {
+  // General access is still local-only — it isn't part of block_members.
   const [generalAccess, setGeneralAccess] = useState<string>("Anyone can edit");
   const { floatingControl, setFloatingControl } = useLayoutStore();
+  const {
+    blockId: loadedBlockId,
+    status,
+    owner,
+    members,
+    canManage,
+    load
+  } = useBlockMembersStore();
+
+  useEffect(() => {
+    void load(blockId);
+  }, [blockId, load]);
+
+  const summary = (() => {
+    // The store may still be holding the previously selected scene for a
+    // render or two — don't show its numbers under this scene's name.
+    if (loadedBlockId !== blockId || status === "idle" || status === "loading") {
+      return "Loading…";
+    }
+    if (status === "error") return "Couldn't load";
+
+    const others = members.length;
+    if (canManage) {
+      return others === 0
+        ? "Only you"
+        : `You and ${others} other${others === 1 ? "" : "s"}`;
+    }
+    const total = others + (owner ? 1 : 0);
+    return `${total} ${total === 1 ? "person" : "people"}`;
+  })();
 
   return (
     <div className="flex flex-col gap-3">
@@ -92,7 +123,7 @@ export const Access = () => {
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-2">
-          <div className="text-xs text-muted-foreground">General access</div>
+          <div className="text-xs text-muted-foreground">General</div>
           <SelectPopover
             value={generalAccess}
             options={GENERAL_ACCESS_OPTIONS}
@@ -101,10 +132,10 @@ export const Access = () => {
         </div>
 
         <div className="flex flex-col gap-2">
-          <div className="text-xs text-muted-foreground">People with access</div>
+          <div className="text-xs text-muted-foreground">Specific</div>
           {/* Opens the same floating panel system as the font/animation
               pickers — the add-people field and the user list both live
-              there now, see ./floating/access-picker */}
+              there, see ./floating/access-picker */}
           <Button
             variant="outline"
             className="flex w-full items-center justify-between text-sm font-normal"
@@ -114,8 +145,8 @@ export const Access = () => {
             }}
           >
             <div className="flex items-center gap-2 overflow-hidden text-left">
-              <Users size={14} className="text-muted-foreground shrink-0" />
-              <p className="truncate">You and 3 others</p>
+              {/*<Users size={14} className="text-muted-foreground shrink-0" />*/}
+              <p className="truncate">{summary}</p>
             </div>
             <ChevronDown className="text-muted-foreground" size={14} />
           </Button>

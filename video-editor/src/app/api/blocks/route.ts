@@ -39,6 +39,6 @@ export async function POST(req: NextRequest) {
   //   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   // }
 
-  await createBlock({ blockId, projectId, name, width, height });
+  createBlock({ blockId, projectId, name, width, height, ownerUserId: decoded.userId })
   return NextResponse.json({ ok: true });
 }
