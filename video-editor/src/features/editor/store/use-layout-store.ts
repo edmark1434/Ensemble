@@ -44,6 +44,8 @@ const useLayoutStore = create<ILayoutState>((set) => ({
 
   controlsPanelRef: null,
   setControlsPanelRef: (ref) => set({ controlsPanelRef: ref }),
+
+  activeRightItem: "controls"
 }));
 
 export default useLayoutStore;

@@ -4,7 +4,7 @@ import Outline from "./common/outline";
 import Shadow from "./common/shadow";
 import AspectRatio from "./common/aspect-ratio";
 import { Button } from "@/components/ui/button";
-import { Crop, Lock } from "lucide-react";
+import {Crop, Eye, Lock} from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { dispatch } from "@designcombo/events";
 import { EDIT_OBJECT } from "@designcombo/state";
@@ -15,6 +15,7 @@ import { Appearance } from "@/features/editor/control-item/common/appearance";
 import { LayoutControls } from "@/features/editor/control-item/common/layout";
 import { PlaybackControls } from "./common/playback";
 import {LayoutMediaControls} from "@/features/editor/control-item/common/layout-media";
+import {useViewOnly} from "@/features/editor/hooks/use-view-only";
 
 interface IVideoControlProps {
   opacity: number;
@@ -114,7 +115,9 @@ const BasicVideo = ({
     });
   };
 
+  const viewOnly = useViewOnly();
   const isLocked = (trackItem.details as any)?.locked === true;
+  const isDisabled = isLocked || viewOnly;
 
   const components = [
     {
@@ -130,7 +133,7 @@ const BasicVideo = ({
           cornerRadius={properties.borderRadius}
           blur={properties.blur}
           brightness={properties.brightness}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -142,7 +145,7 @@ const BasicVideo = ({
           volume={properties.volume}
           onChangeSpeed={handleChangeSpeed}
           onChangeVolume={handleChangeVolume}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -152,7 +155,7 @@ const BasicVideo = ({
         <Animations
           trackItem={trackItem}
           properties={properties}
-          disabled={isLocked}
+          disabled={isDisabled}
           showLoop={false}
         />
       )
@@ -162,12 +165,20 @@ const BasicVideo = ({
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden min-h-0">
       <ScrollArea className="h-full">
-        <fieldset disabled={isLocked} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
+        <fieldset disabled={isDisabled} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
           {isLocked && (
             <div className="flex gap-2 items-center text-primary text-sm font-normal">
               <Lock size={16} />
               <span>
                 This item has been locked
+              </span>
+            </div>
+          )}
+          {viewOnly && (
+            <div className="flex gap-2 items-center text-primary text-sm font-normal">
+              <Eye size={16} />
+              <span>
+                You only have view access to controls
               </span>
             </div>
           )}

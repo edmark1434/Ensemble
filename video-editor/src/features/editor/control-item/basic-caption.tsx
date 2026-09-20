@@ -12,7 +12,7 @@ import CaptionColors from "./common/caption-colors";
 import { TextControls } from "./common/text";
 import { Animation, presets } from "../player/animated";
 import { PresetName } from "../player/animated/presets";
-import {Lock, X} from "lucide-react";
+import {Eye, Lock, X} from "lucide-react";
 import { ICompactFont, IFont } from "../interfaces/editor";
 import { DEFAULT_FONT } from "../constants/font";
 import { PresetCaption } from "./common/preset-caption";
@@ -20,6 +20,7 @@ import AnimationCaption from "./common/animation-caption";
 import {LayoutControls} from "@/features/editor/control-item/common/layout";
 import {CaptionDimensionsSync} from "@/features/editor/control-item/common/caption-dimensions-sync";
 import {Appearance} from "@/features/editor/control-item/common/appearance";
+import {useViewOnly} from "@/features/editor/hooks/use-view-only";
 
 interface ITextControlProps {
   color: string;
@@ -405,7 +406,9 @@ const BasicCaption = ({
     "in"
   );
 
+  const viewOnly = useViewOnly();
   const isLocked = (trackItem.details as any)?.locked === true;
+  const isDisabled = isLocked || viewOnly;
 
   const components = [
     {
@@ -429,7 +432,7 @@ const BasicCaption = ({
           id={trackItem.id}
           opacity={properties.opacity}
           cornerRadius={trackItem.details?.borderRadius ?? 0}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -447,7 +450,7 @@ const BasicCaption = ({
           onChangeTextDecorationLines={onChangeTextDecorationLines}
           onChangeTextDecorationColor={onChangeTextDecorationColor}
           showFill={false}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -463,7 +466,7 @@ const BasicCaption = ({
           appearedColor={properties.appearedColor}
           isKeywordColor={properties.isKeywordColor}
           preservedColorKeyWord={properties.preservedColorKeyWord}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -476,7 +479,7 @@ const BasicCaption = ({
           onChangeBorderColor={(v: string) => onChangeBorderColor(v)}
           valueBorderWidth={properties.borderWidth as number}
           valueBorderColor={properties.borderColor as string}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -487,7 +490,7 @@ const BasicCaption = ({
           label="Shadow"
           onChange={(v: IBoxShadow) => onChangeBoxShadow(v)}
           value={properties.boxShadow}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -531,12 +534,20 @@ const BasicCaption = ({
 
       <div className="flex h-full flex-1 flex-col overflow-hidden min-h-0">
         <ScrollArea className="h-full">
-          <fieldset disabled={isLocked} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
+          <fieldset disabled={isDisabled} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
             {isLocked && (
               <div className="flex gap-2 items-center text-primary text-sm font-normal">
                 <Lock size={16} />
                 <span>
                 This item has been locked
+              </span>
+              </div>
+            )}
+            {viewOnly && (
+              <div className="flex gap-2 items-center text-primary text-sm font-normal">
+                <Eye size={16} />
+                <span>
+                You only have view access to controls
               </span>
               </div>
             )}

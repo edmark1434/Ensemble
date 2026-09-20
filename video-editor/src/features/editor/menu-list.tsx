@@ -134,7 +134,7 @@ function MenuList() {
 
   return (
     <>
-      <div className="relative flex items-center bg-card">
+      <div className="relative flex items-center bg-card py-4">
         {showLeftFade && (
           <div className="absolute left-0 top-0 bottom-0 w-8 bg-linear-to-r from-card to-transparent z-10 pointer-events-none" />
         )}

@@ -3,8 +3,9 @@ import { IAudio, ITrackItem } from "@designcombo/types";
 import React, {useEffect, useState} from "react";
 import { dispatch } from "@designcombo/events";
 import { EDIT_OBJECT } from "@designcombo/state";
-import { Lock } from "lucide-react";
+import {Eye, Lock} from "lucide-react";
 import { PlaybackControls } from "./common/playback";
+import {useViewOnly} from "@/features/editor/hooks/use-view-only";
 
 const BasicAudio = ({
   trackItem,
@@ -59,7 +60,9 @@ const BasicAudio = ({
     });
   };
 
+  const viewOnly = useViewOnly();
   const isLocked = (trackItem.details as any)?.locked === true;
+  const isDisabled = isLocked || viewOnly;
 
   const components = [
     {
@@ -70,7 +73,7 @@ const BasicAudio = ({
           volume={properties.details.volume ?? 100}
           onChangeSpeed={handleChangeSpeed}
           onChangeVolume={handleChangeVolume}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     }
@@ -79,12 +82,20 @@ const BasicAudio = ({
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden min-h-0">
       <ScrollArea className="h-full">
-        <fieldset disabled={isLocked} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
+        <fieldset disabled={isDisabled} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
           {isLocked && (
             <div className="flex gap-2 items-center text-primary text-sm font-normal">
               <Lock size={16} />
               <span>
                 This item has been locked
+              </span>
+            </div>
+          )}
+          {viewOnly && (
+            <div className="flex gap-2 items-center text-primary text-sm font-normal">
+              <Eye size={16} />
+              <span>
+                You only have view access to controls
               </span>
             </div>
           )}

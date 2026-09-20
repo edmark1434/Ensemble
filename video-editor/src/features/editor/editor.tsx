@@ -48,6 +48,10 @@ import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
 import {useCollabDoc} from "@/features/editor/hooks/use-collab-doc";
 import {CollabTarget} from "@/features/editor/collab/collab-target";
 import {useSceneContentBroadcast} from "@/features/editor/hooks/use-scene-content-broadcast";
+import {RightPanelContent} from "@/features/editor/right-panel-content";
+import {canEditWithRole, EditorRole} from "@/features/editor/types/editor-role";
+import {useEditorRole} from "@/features/editor/hooks/use-editor-role";
+import {ViewOnlyProvider} from "@/features/editor/hooks/use-view-only";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -348,7 +352,9 @@ const Panels = ({
   viewOnly,
   timelineLoading,
 }: any) => {
-  const { showMenuItem, setControlsPanelRef } = useLayoutStore();
+  const { showMenuItem: menuItemOpen, setControlsPanelRef } = useLayoutStore();
+  const showMenuItem = menuItemOpen && !viewOnly;
+
   const { activeSceneBlockId } = useStore();
   const menuPanelRef = useRef<ImperativePanelHandle>(null);
   const controlsPanelRef = useRef<HTMLDivElement>(null);
@@ -370,7 +376,9 @@ const Panels = ({
     setControlsPanelRef(controlsPanelRef);
   }, []);
 
-  if (!isLargeScreen || viewOnly) {
+  // Mobile stays preview-only regardless of role — no timeline/controls UI
+// built for that viewport yet.
+  if (!isLargeScreen) {
     return (
       <div className="relative flex h-full w-full flex-col bg-background">
         <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} viewOnly={viewOnly} />
@@ -386,16 +394,16 @@ const Panels = ({
     <div className="relative flex h-full w-full flex-col bg-background">
       <div className="flex-1 relative overflow-hidden w-full h-full">
         <div className="flex h-full flex-1">
-          <div className="flex w-[54px] h-full bg-card border-r border-border/80">
-            <MenuList />
-          </div>
+          {!viewOnly && (
+            <>
+              <div className="flex w-[54px] h-full bg-card border-r border-border/80">
+                <MenuList />
+              </div>
+              <Separator orientation="vertical" />
+            </>
+          )}
 
-          <Separator orientation="vertical" />
-
-          <ResizablePanelGroup
-            direction="horizontal"
-            className="w-full h-full overflow-hidden"
-          >
+          <ResizablePanelGroup direction="horizontal" className="w-full h-full overflow-hidden">
             <ResizablePanel
               ref={menuPanelRef}
               collapsible
@@ -428,14 +436,14 @@ const Panels = ({
               <Controls panelRef={controlsPanelRef} />
             </ResizablePanel>
 
-            <FloatingControl anchorRef={controlsPanelRef} />
+            {!viewOnly && <FloatingControl anchorRef={controlsPanelRef} />}
           </ResizablePanelGroup>
         </div>
       </div>
 
       <div className="relative w-full border-t border-border/80 bg-card">
         <div className={cn(timelineLoading && "pointer-events-none opacity-60 transition-opacity")}>
-          {playerRef && <Timeline key={timelineKey} stateManager={stateManager} />}
+          {playerRef && <Timeline key={timelineKey} stateManager={stateManager} readOnly={viewOnly} />}
         </div>
         {timelineLoading && (
           <div className="absolute inset-0 z-20 flex items-center justify-center gap-2">
@@ -451,49 +459,23 @@ const Panels = ({
   );
 };
 
-// const Sidebar = () => {
-//   const { showMenuItem } = useLayoutStore();
-//
-//   return (
-//     // h-[calc(100vh-52px)]
-//     <div className="bg-card w-full flex flex-none h-full overflow-hidden">
-//       <div className="flex w-full min-h-0 overflow-hidden">
-//         <MenuList />
-//         {showMenuItem && (
-//           <>
-//             <Separator orientation="vertical" />
-//             <MenuItem />
-//           </>
-//         )}
-//       </div>
-//     </div>
-//   );
-// };
-
 const Controls = ({ panelRef }: { panelRef: React.RefObject<HTMLDivElement | null> }) => {
   return (
     <div ref={panelRef} className="bg-card w-full flex flex-none h-full relative">
       <div className="flex w-full">
-        <ControlItem />
+        <RightPanelContent panelRef={panelRef} />
       </div>
     </div>
   );
 };
 
-const Editor = ({
-  id,
-  userId,
-  userName,
-  width,
-  height,
-  role,
-}: {
+const Editor = ({ id, userId, userName, width, height, role }: {
   id?: string;
   userId?: string;
   userName?: string;
   width?: number;
   height?: number;
-  role?: string;
+  role?: EditorRole;
 }) => {
   const [storeSynced, setStoreSynced] = useState(false);
   useEffect(() => {
@@ -569,7 +551,9 @@ const Editor = ({
   } = useLayoutStore();
 
   const isLargeScreen = useIsLargeScreen();
-  const viewOnly = role === "Viewer";
+  const resolvedRole = useEditorRole(projectId, activeSceneBlockId, storeUserId, role ?? null);
+  const canEdit = canEditWithRole(resolvedRole);
+  const viewOnly = !canEdit; // kept as `viewOnly` since ScenePlayer / useKeyboardShortcuts already take this name
 
   useTimelineEvents();
 
@@ -662,47 +646,49 @@ const Editor = ({
   const timelineLoading = !collab?.ready; // true only on later scene switches now
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-background">
-      <Navbar
-        user={null}
-        stateManager={stateManager}
-        undoManager={collab?.undoManager}
-        viewOnly={viewOnly}
-        saveStatus={collab?.saveStatus}
-        compactStatus={collab?.compactStatus}
-        onForceSave={collab?.forceSave}
-      />
+    <ViewOnlyProvider value={viewOnly}>
+      <div className="flex h-screen w-screen flex-col bg-background">
+        <Navbar
+          user={null}
+          stateManager={stateManager}
+          undoManager={collab?.undoManager}
+          viewOnly={viewOnly}
+          saveStatus={collab?.saveStatus}
+          compactStatus={collab?.compactStatus}
+          onForceSave={collab?.forceSave}
+        />
 
-      <div className="flex flex-1 h-[calc(100vh-56px)]">
-        {isLargeScreen ? (
-          <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-            <ResizablePanel defaultSize={100} minSize={40} className="min-w-0 min-h-0">
-              <Panels
-                sceneRef={sceneRef}
-                playerRef={playerRef}
-                stateManager={stateManager}
-                trackItem={trackItem}
-                loaded={loaded}
-                isLargeScreen={isLargeScreen}
-                viewOnly={viewOnly}
-                timelineLoading={timelineLoading}
-              />
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        ) : (
-          <Panels
-            sceneRef={sceneRef}
-            playerRef={playerRef}
-            stateManager={stateManager}
-            trackItem={trackItem}
-            loaded={loaded}
-            isLargeScreen={isLargeScreen}
-            viewOnly={viewOnly}
-            timelineLoading={timelineLoading}
-          />
-        )}
+        <div className="flex flex-1 h-[calc(100vh-56px)]">
+          {isLargeScreen ? (
+            <ResizablePanelGroup direction="horizontal" className="h-full w-full">
+              <ResizablePanel defaultSize={100} minSize={40} className="min-w-0 min-h-0">
+                <Panels
+                  sceneRef={sceneRef}
+                  playerRef={playerRef}
+                  stateManager={stateManager}
+                  trackItem={trackItem}
+                  loaded={loaded}
+                  isLargeScreen={isLargeScreen}
+                  viewOnly={viewOnly}
+                  timelineLoading={timelineLoading}
+                />
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          ) : (
+            <Panels
+              sceneRef={sceneRef}
+              playerRef={playerRef}
+              stateManager={stateManager}
+              trackItem={trackItem}
+              loaded={loaded}
+              isLargeScreen={isLargeScreen}
+              viewOnly={viewOnly}
+              timelineLoading={timelineLoading}
+            />
+          )}
+        </div>
       </div>
-    </div>
+    </ViewOnlyProvider>
   );
 };
 
