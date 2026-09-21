@@ -80,9 +80,20 @@ async function validateTopupRequest(body = {}) {
     return { amount, credits, currency: 'PHP', itemName: pack?.name ?? `Custom Top-up (${credits.toLocaleString()} Credits)` };
 }
 async function xenditWebhookHandler(req, res) {
-    const { event, data } = req.body;
+    const { event, data } = req.body || {};
 
     try {
+        const eventType = String(event || '').toLowerCase();
+        if (
+            eventType.includes('session.completed') ||
+            eventType.includes('payment_session.completed') ||
+            eventType.includes('payment_token.activated') ||
+            eventType.includes('payment_method.activated') ||
+            data?.session_type === 'SAVE' ||
+            String(data?.reference_id || '').startsWith('SAVE-CARD-USER-')
+        ) {
+            return paymentSessionCompleteWebhookHandler(req, res);
+        }
 
         // ==========================
         // SUBSCRIPTION PAYMENT
@@ -490,32 +501,265 @@ const customerPayload = await getCustomerPayload(req);
     }
 }
 
+async function savePaymentTokenForUser(userId, paymentTokenId, sessionDetails = null) {
+    if (!userId || !paymentTokenId) {
+        console.warn("[savePaymentTokenForUser] Missing userId or paymentTokenId:", { userId, paymentTokenId });
+        return null;
+    }
+
+    try {
+        const response = await axios.get(
+            `https://api.xendit.co/v3/payment_tokens/${paymentTokenId}`,
+            {
+                auth: {
+                    username: process.env.XENDIT_API_KEY,
+                    password: ""
+                },
+                headers: {
+                    "Content-Type": "application/json",
+                    "api-version": "2024-11-11"
+                }
+            }
+        );
+
+        const tokenData = response.data;
+        const channelCode = tokenData.channel_code;
+        const status = tokenData.status || 'ACTIVE';
+
+        let type = 'PAYMENT_METHOD';
+        let displayName = channelCode;
+        let cardBrand = null;
+        let maskedCardNumber = null;
+        let cardExpMonth = null;
+        let cardExpYear = null;
+        let fingerprint = null;
+
+        if (channelCode === 'CARDS') {
+            const cardDetails = tokenData.channel_properties?.card_details || tokenData.card_details || {};
+            type = cardDetails.type || 'CARD';
+            const cardholderName = [cardDetails.cardholder_first_name, cardDetails.cardholder_last_name].filter(Boolean).join(' ').trim();
+            maskedCardNumber = cardDetails.masked_card_number || null;
+            displayName = cardholderName || (maskedCardNumber ? `Card ending in ${maskedCardNumber.slice(-4)}` : 'Credit/Debit Card');
+            cardBrand = cardDetails.network || null;
+            cardExpMonth = cardDetails.expiry_month ? String(cardDetails.expiry_month) : null;
+            cardExpYear = cardDetails.expiry_year ? String(cardDetails.expiry_year) : null;
+            fingerprint = cardDetails.fingerprint || null;
+        } else {
+            const tokenDetails = tokenData.token_details || tokenData.channel_properties || {};
+            const isEWallet = ['GCASH', 'PAYMAYA', 'SHOPEEPAY', 'GRABPAY', 'GCASH_LINK_AND_PAY'].includes(channelCode);
+            const isDirectDebit = ['UBP_DIRECT_DEBIT', 'BPI_DIRECT_DEBIT', 'UBP_EADA'].includes(channelCode);
+            type = isEWallet ? 'E-WALLET' : (isDirectDebit ? 'DIRECT-DEBIT' : channelCode);
+            displayName = tokenDetails.account_number 
+                || tokenDetails.masked_bank_account_number 
+                || tokenDetails.account_name 
+                || channelCode;
+        }
+
+        // 1. Check if token already exists for this user
+        const existingByToken = await pool.query(
+            'SELECT * FROM payment_methods WHERE user_id = $1 AND payment_token_id = $2',
+            [userId, paymentTokenId]
+        );
+        if (existingByToken.rows.length > 0) {
+            if (existingByToken.rows[0].status !== 'ACTIVE' && status === 'ACTIVE') {
+                await updatePaymentMethodStatus(paymentTokenId, 'ACTIVE');
+            }
+            return existingByToken.rows[0];
+        }
+
+        // 2. Check if card fingerprint already exists for this user
+        if (channelCode === 'CARDS' && fingerprint) {
+            const existingByFingerprint = await pool.query(
+                'SELECT * FROM payment_methods WHERE user_id = $1 AND fingerprint = $2',
+                [userId, fingerprint]
+            );
+            if (existingByFingerprint.rows.length > 0) {
+                await pool.query(
+                    `UPDATE payment_methods 
+                     SET payment_token_id = $1, status = $2, card_exp_month = $3, card_exp_year = $4, updated_at = CURRENT_TIMESTAMP
+                     WHERE id = $5`,
+                    [paymentTokenId, status, cardExpMonth, cardExpYear, existingByFingerprint.rows[0].id]
+                );
+                return existingByFingerprint.rows[0];
+            }
+        }
+
+        // 3. Check if e-wallet / direct debit account already exists for this user
+        if (channelCode !== 'CARDS' && displayName) {
+            const existingByAccount = await pool.query(
+                'SELECT * FROM payment_methods WHERE user_id = $1 AND channel_code = $2 AND display_name = $3',
+                [userId, channelCode, displayName]
+            );
+            if (existingByAccount.rows.length > 0) {
+                await pool.query(
+                    `UPDATE payment_methods 
+                     SET payment_token_id = $1, status = $2, updated_at = CURRENT_TIMESTAMP
+                     WHERE id = $3`,
+                    [paymentTokenId, status, existingByAccount.rows[0].id]
+                );
+                return existingByAccount.rows[0];
+            }
+        }
+
+        // 4. Create new payment method record
+        const customerRefId = sessionDetails?.reference_id || tokenData.reference_id || null;
+        const newMethod = await createPaymentMethodForUser({
+            user_id: userId,
+            payment_token_id: paymentTokenId,
+            channel_code: channelCode,
+            type: type,
+            status: status,
+            is_default: false,
+            display_name: displayName,
+            card_brand: cardBrand,
+            masked_card_number: maskedCardNumber,
+            card_exp_month: cardExpMonth,
+            card_exp_year: cardExpYear,
+            customer_reference_id: customerRefId,
+            fingerprint: fingerprint
+        });
+
+        // 5. Update user customer_id if present
+        if (tokenData.customer_id) {
+            await redisClient.set(`customerId:${userId}`, tokenData.customer_id, 'EX', 60 * 60 * 24 * 30).catch(() => null);
+            await updateUserCustomerId(userId, tokenData.customer_id).catch(err => {
+                console.warn("[savePaymentTokenForUser] Error updating user customer_id:", err.message);
+            });
+        }
+
+        // 6. Clean up pending save session in Redis
+        await redisClient.del(`user_pending_save_session:${userId}`).catch(() => null);
+
+        console.log(`✅ [PaymentMethod Saved] Successfully saved payment method for user ${userId}: ${channelCode} (${paymentTokenId})`);
+        return newMethod;
+    } catch (err) {
+        console.error(`[savePaymentTokenForUser Error] Failed to save token ${paymentTokenId} for user ${userId}:`, err.response?.data || err.message);
+        throw err;
+    }
+}
+
+async function savePaymentMethodFromSession(sessionId, fallbackUserId = null) {
+    if (!sessionId) return null;
+    try {
+        const response = await axios.get(
+            `https://api.xendit.co/sessions/${sessionId}`,
+            {
+                auth: {
+                    username: process.env.XENDIT_API_KEY,
+                    password: ""
+                },
+                headers: {
+                    "api-version": "2024-11-11"
+                }
+            }
+        );
+
+        const session = response.data;
+        console.log(`[PaymentSession] Session fetched: ${sessionId}, status: ${session?.status}`);
+
+        const paymentTokenId = session?.payment_token_id
+            || session?.payment_token?.id
+            || session?.payment_tokens?.[0]?.payment_token_id
+            || session?.payment_tokens?.[0]?.id
+            || session?.payment_method_id
+            || session?.token_id;
+
+        let userId = session?.metadata?.user_id || session?.metadata?.userId || fallbackUserId;
+        if (!userId) {
+            userId = await redisClient.get(`save_session_user:${sessionId}`).catch(() => null);
+        }
+
+        if (paymentTokenId && userId) {
+            const saved = await savePaymentTokenForUser(userId, paymentTokenId, session);
+            await redisClient.del(`save_session_user:${sessionId}`).catch(() => null);
+            return saved;
+        }
+
+        return null;
+    } catch (err) {
+        console.error(`[savePaymentMethodFromSession Error] Failed to process session ${sessionId}:`, err.response?.data || err.message);
+        throw err;
+    }
+}
+
+function resolveHttpsUrl(rawUrl, req) {
+    if (!rawUrl) return null;
+    const trimmed = String(rawUrl).trim();
+    if (trimmed.startsWith('https://')) {
+        return trimmed;
+    }
+
+    // Xendit strictly requires an HTTPS URL for return endpoints.
+    // When running locally on http://localhost, route through an HTTPS trampoline if an HTTPS domain/tunnel exists.
+    const proto = req?.headers?.['x-forwarded-proto'] || (req?.secure ? 'https' : null);
+    const host = req?.headers?.['x-forwarded-host'] || req?.headers?.host;
+    let httpsOrigin = null;
+
+    if (proto === 'https' && host) {
+        httpsOrigin = `https://${host}`;
+    } else if (process.env.BACKEND_URL && process.env.BACKEND_URL.startsWith('https://')) {
+        httpsOrigin = process.env.BACKEND_URL.replace(/\/+$/, '');
+    } else if (process.env.GOOGLE_MEET_REDIRECT_URL && process.env.GOOGLE_MEET_REDIRECT_URL.startsWith('https://')) {
+        try {
+            httpsOrigin = new URL(process.env.GOOGLE_MEET_REDIRECT_URL).origin;
+        } catch (_) {}
+    }
+
+    if (httpsOrigin) {
+        return `${httpsOrigin}/api/payment/return-trampoline?target=${encodeURIComponent(trimmed)}`;
+    }
+
+    // Fallback: convert http:// to https://
+    return trimmed.replace(/^http:\/\//i, 'https://');
+}
+
+function returnTrampolineController(req, res) {
+    const target = req.query.target || req.query.url;
+    if (!target) {
+        return res.redirect(process.env.FRONTEND_URL || '/');
+    }
+    try {
+        const parsed = new URL(target);
+        const frontendUrl = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL) : null;
+        const isSafe = 
+            parsed.hostname === 'localhost' || 
+            parsed.hostname === '127.0.0.1' || 
+            (frontendUrl && parsed.hostname === frontendUrl.hostname);
+        if (isSafe) {
+            return res.redirect(target);
+        }
+    } catch (e) {
+        console.warn("[returnTrampolineController] Invalid target URL:", target);
+    }
+    return res.redirect(process.env.FRONTEND_URL || '/');
+}
+
 async function createPaymentToken(req, res) {
-    const { userId } = req.session;
+    const userId = req.session?.userId || req.session?.user_id;
+    const { returnUrl, cancelUrl } = req.body || {};
     const customerPayload = await getCustomerPayload(req);
-    try{
-        console.log({
-    reference_id: `SAVE-CARD-USER-${uuidv4()}`,
-    ...customerPayload
-});
+    try {
+        const referenceId = `SAVE-CARD-USER-${uuidv4()}`;
+        const rawSuccessUrl = returnUrl || `${process.env.FRONTEND_URL}/credits/checkout?save_payment=success`;
+        const rawCancelUrl = cancelUrl || `${process.env.FRONTEND_URL}/credits/checkout?save_payment=cancel`;
+        const successReturnUrl = resolveHttpsUrl(rawSuccessUrl, req);
+        const cancelReturnUrl = resolveHttpsUrl(rawCancelUrl, req);
+
         const response = await axios.post(
             "https://api.xendit.co/sessions",
             {
-                reference_id: `SAVE-CARD-USER-${uuidv4()}`,
+                reference_id: referenceId,
                 session_type: "SAVE",
                 mode: "PAYMENT_LINK",
                 amount: 0,
                 currency: "PHP",
                 country: "PH",
                 ...customerPayload,
-                success_return_url:
-            `${process.env.FRONTEND_URL}/credits?success`,
-
-                cancel_return_url:
-                    `${process.env.FRONTEND_URL}/credits?cancel`,
-            // `${process.env.FRONTEND_URL}/credits?success`
+                success_return_url: successReturnUrl,
+                cancel_return_url: cancelReturnUrl,
                 metadata: {
-                    user_id: `${userId}`
+                    user_id: `${userId}`,
+                    userId: `${userId}`
                 }
             },
             {
@@ -529,85 +773,40 @@ async function createPaymentToken(req, res) {
                 }
             }
         );
-        res.status(200).json({
-            paymentSessionId: response.data.payment_session_id,
+
+        const paymentSessionId = response.data.id || response.data.payment_session_id;
+
+        if (paymentSessionId) {
+            await redisClient.set(`user_pending_save_session:${userId}`, paymentSessionId, 'EX', 86400).catch(() => null);
+            await redisClient.set(`save_session_user:${paymentSessionId}`, String(userId), 'EX', 86400).catch(() => null);
+        }
+
+        return res.status(200).json({
+            paymentSessionId: paymentSessionId,
             paymentLink: response.data.payment_link_url
         });
-    }catch(err){
-        console.error(err.response?.data || err);
-        res.status(500).json({
+    } catch (err) {
+        console.error("Error creating payment token session:", err.response?.data || err);
+        return res.status(500).json({
             error: 'Unable to create payment token.'
         });
     }
 }
 
 async function savePaymentMethod(data) {
-    let payment = await getPaymentByReferenceId(data.reference_id.split("_")[0] || data.reference_id);
-    payment.user_id = payment.user_id; // Ensure user_id is an integer
-    if(!payment){
-        console.error("Payment not found for reference_id:", data.reference_id);
-        return res.status(404).json({ error: "Payment not found" });
+    try {
+        let payment = await getPaymentByReferenceId(data.reference_id?.split("_")[0] || data.reference_id);
+        if (!payment) {
+            console.error("Payment not found for reference_id:", data.reference_id);
+            return;
+        }
+        const paymentTokenId = data.payment_token_id || data.payment_tokens?.[0]?.payment_token_id || data.payment_tokens?.[0]?.id;
+        if (paymentTokenId && payment.user_id) {
+            return await savePaymentTokenForUser(payment.user_id, paymentTokenId, data);
+        }
+    } catch (err) {
+        console.error("Error in savePaymentMethod:", err.message);
     }
-    const hasToken = data.payment_token_id ? true : false;
-            if(hasToken){
-                const response = await axios.get(
-                    `https://api.xendit.co/v3/payment_tokens/${data.payment_token_id}`,
-                    {
-                        auth: {
-                            username: process.env.XENDIT_API_KEY,
-                            password: ""
-                        },
-                        headers: {
-                            "Content-Type": "application/json",
-                            "api-version": "2024-11-11"
-                        }
-                    }
-                );
-
-                const checkExistingPaymentMethod = await paymentMethodExists(
-                    { user_id: payment.user_id, payment_token_id: data.payment_token_id }
-                );
-                if(!checkExistingPaymentMethod){
-                    if(response.data.channel_code === 'CARDS'){
-                        const checkExistingCard = await paymentMethodExists(
-                            { user_id: payment.user_id, fingerprint: response.data.channel_properties.card_details.fingerprint }
-                        )
-                        if(!checkExistingCard){
-                            await createPaymentMethodForUser({
-                                user_id: payment.user_id,
-                                payment_token_id: data.payment_token_id,
-                                channel_code: response.data.channel_code,
-                                type: response.data.channel_properties.card_details.type,
-                                status:response.data.status,
-                                is_default: false,
-                                display_name: `${response.data.channel_properties.card_details.cardholder_first_name} ${response.data.channel_properties.card_details.cardholder_last_name}`,
-                                card_brand: response.data.channel_properties.card_details.network,
-                                masked_card_number: response.data.channel_properties.card_details.masked_card_number,
-                                card_exp_month: response.data.channel_properties.card_details.expiry_month,
-                                card_exp_year: response.data.channel_properties.card_details.expiry_year,
-                                customer_reference_id: response.data.reference_id,
-                                fingerprint: response.data.channel_properties.card_details.fingerprint
-                            });
-                        }
-                    }else{
-                        await createPaymentMethodForUser({
-                                user_id: payment.user_id,
-                                payment_token_id: data.payment_token_id,
-                                channel_code: response.data.channel_code,
-                                type: ['GCASH','PAYMAYA','SHOPEEPAY','GRABPAY'].includes(response.data.channel_code) ? 'E-WALLET' : ['UBP_DIRECT_DEBIT','BPI_DIRECT_DEBIT','UBP_EADA'].includes(response.data.channel_code) ? 'DIRECT-DEBIT' : response.data.channel_code,
-                                status:response.data.status,
-                                is_default: false,
-                                display_name: response.data.token_details.account_number || response.data.token_details.masked_bank_account_number || response.data.channel_code,
-                                card_brand: null,
-                                masked_card_number: null,
-                                card_exp_month: null,
-                                card_exp_year: null,
-                                customer_reference_id: response.data.reference_id,
-                                fingerprint: null
-                        })
-                    }
-                }
-            }
 }
 
 
@@ -702,102 +901,101 @@ async function getCustomerPayload(req) {
 }
 async function getAllPaymentMethodsByUserIdService(req, res) {
     const user_id = req.session.userId || req.session.user_id;
-    try{
+    try {
+        // Fallback reconciliation: check if user has a pending save session in Redis
+        const pendingSessionId = await redisClient.get(`user_pending_save_session:${user_id}`).catch(() => null);
+        if (pendingSessionId) {
+            try {
+                await savePaymentMethodFromSession(pendingSessionId, user_id);
+            } catch (syncErr) {
+                console.warn(`[PaymentSync] Auto-sync session ${pendingSessionId} skipped or failed:`, syncErr.message);
+            }
+        }
+
         const paymentMethods = await getAllPaymentMethodsByUserId(user_id);
         res.status(200).json({ paymentMethods });
-    }catch(err){
+    } catch (err) {
         console.error("Error fetching payment methods:", err);
         res.status(500).json({ error: "Internal Server Error" });
     }
 }
 
-async function paymentSessionCompleteWebhookHandler(req, res) {
-    const { event, data } = req.body;
-    const hasToken = data.payment_token_id ? true : false;
-    const userId = data.metadata?.user_id|| null; 
-    console.log("User ID from metadata:", userId);
-    if(hasToken){
-                const response = await axios.get(
-                    `https://api.xendit.co/v3/payment_tokens/${data.payment_token_id}`,
-                    {
-                        auth: {
-                            username: process.env.XENDIT_API_KEY,
-                            password: ""
-                        },
-                        headers: {
-                            "Content-Type": "application/json",
-                            "api-version": "2024-11-11"
-                        }
-                    }
-                );
-                
-                const checkExistingPaymentMethod = await paymentMethodExists(
-                    { user_id: userId, payment_token_id: data.payment_token_id }
-                );
-                if(!checkExistingPaymentMethod){
-                    if(response.data.channel_code === 'CARDS'){
-                        const checkExistingCard = await paymentMethodExists(
-                            { user_id: userId, fingerprint: response.data.channel_properties.card_details.fingerprint }
-                        )
-                        if(!checkExistingCard){
-                            await createPaymentMethodForUser({
-                                user_id: userId,
-                                payment_token_id: data.payment_token_id,
-                                channel_code: response.data.channel_code,
-                                type: response.data.channel_properties.card_details.type,
-                                status:response.data.status,
-                                is_default: false,
-                                display_name: `${response.data.channel_properties.card_details.cardholder_first_name} ${response.data.channel_properties.card_details.cardholder_last_name}`,
-                                card_brand: response.data.channel_properties.card_details.network,
-                                masked_card_number: response.data.channel_properties.card_details.masked_card_number,
-                                card_exp_month: response.data.channel_properties.card_details.expiry_month,
-                                card_exp_year: response.data.channel_properties.card_details.expiry_year,
-                                fingerprint: response.data.channel_properties.card_details.fingerprint
-                            });
-                        }
-                    }else{
-                        if(response.data.channel_code === 'PAYMAYA' || response.data.channel_code === 'SHOPEEPAY' || response.data.channel_code === 'UBP_DIRECT_DEBIT'){
-                            const checkExistingCard = await paymentMethodExists(
-                                { user_id: userId, channel_code: response.data.channel_code, display_name: response.data.token_details.account_number ?? response.data.token_details.masked_bank_account_number }
-                            )
-                            if(checkExistingCard){
-                                console.log("Payment method already exists for user:", userId, "with channel code:", response.data.channel_code);
-                                return;
-                            }
-                        }
-                        await createPaymentMethodForUser({
-                                user_id: userId,
-                                payment_token_id: data.payment_token_id,
-                                channel_code: response.data.channel_code,
-                                type: ['GCASH','PAYMAYA','SHOPEEPAY','GRABPAY','GCASH_LINK_AND_PAY'].includes(response.data.channel_code) ? 'E-WALLET' : ['UBP_DIRECT_DEBIT','BPI_DIRECT_DEBIT','UBP_EADA'].includes(response.data.channel_code) ? 'DIRECT-DEBIT' : response.data.channel_code,
-                                status:response.data.status,
-                                is_default: false,
-                                display_name: response.data.token_details.account_number || response.data.token_details.masked_bank_account_number || response.data.channel_code,
-                                card_brand: null,
-                                masked_card_number: null,
-                                card_exp_month: null,
-                                card_exp_year: null,
-                                fingerprint: null
-                        })
-                    }
-                }
-        const result = await pool.query(
-            `SELECT customer_id
-            FROM users
-            WHERE user_id = $1`,
-            [userId]
-        );
-        
-        // If found in DB, cache it in Redis
-        const customerId = result.rows[0]?.customer_id || null;
-        if (!customerId) {
-            await redisClient.set(`customerId:${userId}`, response.data.customer_id, 'EX', 60 * 60 * 24 * 30); // Cache for 30 days
-            await updateUserCustomerId(userId, response.data.customer_id); // Ensure DB is updated
+async function syncPaymentSessionController(req, res) {
+    const userId = req.session?.userId || req.session?.user_id;
+    const { sessionId } = req.body || {};
+    try {
+        const targetSessionId = sessionId || await redisClient.get(`user_pending_save_session:${userId}`).catch(() => null);
+        if (!targetSessionId) {
+            return res.status(200).json({ success: false, message: "No pending save session found." });
         }
+        const saved = await savePaymentMethodFromSession(targetSessionId, userId);
+        const paymentMethods = await getAllPaymentMethodsByUserId(userId);
+        return res.status(200).json({ success: true, saved, paymentMethods });
+    } catch (err) {
+        console.error("Error syncing payment session:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+}
+
+async function paymentSessionCompleteWebhookHandler(req, res) {
+    try {
+        const { event, data } = req.body || {};
+        console.log(`[Webhook] Handling payment session/token event: ${event}`);
+
+        let paymentTokenId = data?.payment_token_id
+            || data?.payment_token?.id
+            || data?.payment_tokens?.[0]?.payment_token_id
+            || data?.payment_tokens?.[0]?.id
+            || data?.token_id
+            || data?.payment_method_id;
+
+        const sessionId = data?.id?.startsWith('ps_') || data?.id?.startsWith('sess_') || data?.session_type
+            ? data?.id
+            : (data?.payment_session_id || null);
+
+        let userId = data?.metadata?.user_id || data?.metadata?.userId || null;
+
+        if (!userId && sessionId) {
+            userId = await redisClient.get(`save_session_user:${sessionId}`).catch(() => null);
+        }
+
+        if (paymentTokenId && userId) {
+            await savePaymentTokenForUser(userId, paymentTokenId, data);
+        } else if (sessionId) {
+            await savePaymentMethodFromSession(sessionId, userId);
+        } else if (event?.toLowerCase().includes('token') && data?.id) {
+            if (!userId && data?.customer_id) {
+                const userRow = await pool.query('SELECT user_id FROM users WHERE customer_id = $1', [data.customer_id]);
+                userId = userRow.rows[0]?.user_id;
+            }
+            if (userId) {
+                await savePaymentTokenForUser(userId, data.id, data);
+            }
+        }
+
+        return res.status(200).json({ received: true, status: "SUCCESS" });
+    } catch (error) {
+        console.error("[Webhook Error] paymentSessionCompleteWebhookHandler failed:", error);
+        return res.status(200).json({ received: true, error: error.message });
     }
 }
 
 async function paymentSessionExpiredWebhookHandler(req, res) {
+    try {
+        const { data } = req.body || {};
+        const sessionId = data?.id || data?.payment_session_id;
+        const userId = data?.metadata?.user_id || data?.metadata?.userId;
+        if (userId) {
+            await redisClient.del(`user_pending_save_session:${userId}`).catch(() => null);
+        }
+        if (sessionId) {
+            await redisClient.del(`save_session_user:${sessionId}`).catch(() => null);
+        }
+        return res.status(200).json({ received: true, status: "EXPIRED" });
+    } catch (err) {
+        console.error("Error in paymentSessionExpiredWebhookHandler:", err);
+        return res.status(200).json({ received: true });
+    }
 }
 
 async function TopUpPaymentByPaymentMethod(req, res) {
@@ -1552,5 +1750,10 @@ module.exports = {
     endSubscription,
     cancelSubscription,
     updateSubscriptionPayment,
-    getActiveCreditPackagesService
+    getActiveCreditPackagesService,
+    savePaymentTokenForUser,
+    savePaymentMethodFromSession,
+    syncPaymentSessionController,
+    returnTrampolineController,
+    resolveHttpsUrl
 };
