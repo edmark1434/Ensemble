@@ -391,11 +391,10 @@ const customerPayload = await getCustomerPayload(req);
         },
 
         success_return_url:
-            `https://app.com/credits?success`,
-            // `${process.env.FRONTEND_URL}/credits?success`
+            `${process.env.FRONTEND_URL}/credits?success`
+        ,
         cancel_return_url:
-            `https://app.com/credits?success`,
-            // `${process.env.FRONTEND_URL}/credits?cancel`,
+            `${process.env.FRONTEND_URL}/credits?cancel`,
 
     };
     const topUpPayload = {
@@ -510,11 +509,10 @@ async function createPaymentToken(req, res) {
                 country: "PH",
                 ...customerPayload,
                 success_return_url:
-                    `https://app.com/credits?success`,
-            // `${process.env.FRONTEND_URL}/credits?success`
+            `${process.env.FRONTEND_URL}/credits?success`,
 
                 cancel_return_url:
-                    `https://app.com/credits?cancel`,
+                    `${process.env.FRONTEND_URL}/credits?cancel`,
             // `${process.env.FRONTEND_URL}/credits?success`
                 metadata: {
                     user_id: `${userId}`
@@ -831,9 +829,9 @@ async function TopUpPaymentByPaymentMethod(req, res) {
         capture_method: "AUTOMATIC",
         description: `Top-up ${validated.credits} credits for ${validated.itemName}`,
         channel_properties: {
-            success_return_url: `https://app.com/credits?success`,
-            cancel_return_url: `https://app.com/credits?cancel`,
-            failure_return_url: `https://app.com/credits?failure`
+            success_return_url: `${process.env.FRONTEND_URL}/credits?success`,
+            cancel_return_url: `${process.env.FRONTEND_URL}/credits?cancel`,
+            failure_return_url: `${process.env.FRONTEND_URL}/credits?failure`
         },
         payment_token_id: paymentMethodId,
     }
@@ -1371,9 +1369,9 @@ async function updateSubscriptionPayment(req, res) {
                 xenditPlanId: subscriptionDetails[0].xendit_plan_id,
             },
             channel_properties: {
-                success_return_url: `https://app.com/subscription?success`,
-                cancel_return_url: `https://app.com/subscription?cancel`,
-                failure_return_url: `https://app.com/subscription?failure`
+                success_return_url: `${process.env.FRONTEND_URL}/subscription?success`,
+                cancel_return_url: `${process.env.FRONTEND_URL}/subscription?cancel`,
+                failure_return_url: `${process.env.FRONTEND_URL}/subscription?failure`
             }
         };
 
