@@ -52,13 +52,22 @@ function getDecisionPayload(payload) {
         || {};
 }
 
-async function processDiditVerificationStatusUpdate(webhookPayload) {
+async function processDiditVerificationStatusUpdate(webhookPayload, options = {}) {
+    const isTestWebhook = Boolean(
+        options?.isTestWebhook ||
+        webhookPayload?.metadata?.test_webhook ||
+        webhookPayload?.is_test
+    );
     const sessionId = webhookPayload?.session_id;
     const status = webhookPayload?.status;
     if (!sessionId || !status) {
         const error = new Error('Invalid verification status payload');
         error.statusCode = 400;
         throw error;
+    }
+
+    if (isTestWebhook) {
+        return { found: true, test: true };
     }
 
     const session = await getAccountVerificationSessionBySessionId(sessionId);
