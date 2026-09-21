@@ -23,7 +23,7 @@ function parseNumeric(v: number | string | undefined): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-export function applySceneContentToDoc(
+function applyContentToSceneItem(
   projectSchema: CollabSchema,
   sceneItemId: string,
   newContent: SceneRenderContent,
@@ -121,6 +121,51 @@ export function applySceneContentToDoc(
   return true;
 }
 
+// A scene item is one *instance* of a block. Duplicating it copies the item
+// (new track item id) but keeps details.blockId, so several items in the
+// project doc can render the same block. Content pushed from inside the block
+// has to land on every one of them, not just the one the user entered through.
+export function applySceneContentToDoc(
+  projectSchema: CollabSchema,
+  sceneItemId: string,
+  newContent: SceneRenderContent,
+  newContentDurationMs: number,
+  origin: unknown,
+): boolean {
+  const source = projectSchema.trackItems.get(sceneItemId);
+  if (!source || !isSceneItem(source.get("type"))) return false;
+
+  const blockId = (source.get("details") as ISceneDetails | undefined)?.blockId;
+
+  // Looked up fresh on every push, never cached: a clone made (or deleted)
+  // while someone is inside the scene is picked up on the next push.
+  const targetIds: string[] = [sceneItemId];
+  if (blockId) {
+    projectSchema.trackItems.forEach((y, id) => {
+      if (id === sceneItemId) return;
+      if (!isSceneItem(y.get("type"))) return;
+      if ((y.get("details") as ISceneDetails | undefined)?.blockId !== blockId) return;
+      targetIds.push(id);
+    });
+  }
+
+  // One outer transaction so collaborators receive a single update and a
+  // half-applied state never renders.
+  projectSchema.doc.transact(() => {
+    for (const id of targetIds) {
+      applyContentToSceneItem(projectSchema, id, newContent, newContentDurationMs, origin);
+    }
+  }, origin);
+
+  return true;
+}
+
+// Fields that describe the block itself, so every clone should show the same
+// value. Everything else on ISceneDetails (left/top/width/height/transform/
+// rotate/opacity/volume/hidden/locked/borderRadius/blur/brightness) is
+// per-instance and stays on the item it was written to.
+export const SHARED_SCENE_DETAIL_KEYS = ["name"] as const;
+
 // Generic patch into a scene trackItem's `details` map for editable
 // metadata that isn't part of the live-pushed render content (see
 // applySceneContentToDoc above) — e.g. the display name shown on the
@@ -134,11 +179,29 @@ export function applySceneDetailsPatch(
   patch: Partial<ISceneDetails>,
   origin: unknown,
 ): boolean {
-  const yItem = projectSchema.trackItems.get(sceneItemId);
-  if (!yItem || !isSceneItem(yItem.get("type"))) return false;
+  const source = projectSchema.trackItems.get(sceneItemId);
+  if (!source || !isSceneItem(source.get("type"))) return false;
+
+  const shared: Partial<ISceneDetails> = {};
+  for (const key of SHARED_SCENE_DETAIL_KEYS) {
+    if (key in patch) shared[key] = patch[key];
+  }
+  const hasShared = Object.keys(shared).length > 0;
+  const blockId = (source.get("details") as ISceneDetails | undefined)?.blockId;
 
   projectSchema.doc.transact(() => {
-    yItem.set("details", { ...yItem.get("details"), ...patch });
+    // The item the edit was made on gets the whole patch.
+    source.set("details", { ...source.get("details"), ...patch });
+
+    // Its clones get only the block-level fields.
+    if (!hasShared || !blockId) return;
+    projectSchema.trackItems.forEach((y, id) => {
+      if (id === sceneItemId) return;
+      if (!isSceneItem(y.get("type"))) return;
+      const details = y.get("details") as ISceneDetails | undefined;
+      if (details?.blockId !== blockId) return;
+      y.set("details", { ...details, ...shared });
+    });
   }, origin);
 
   return true;
