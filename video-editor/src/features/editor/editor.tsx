@@ -511,12 +511,16 @@ const Editor = ({ id, userId, userName, width, height, role }: {
     stateManager,
   );
 
+  const resolvedRole = useEditorRole(projectId, activeSceneBlockId, storeUserId, role ?? null);
+  const canEdit = canEditWithRole(resolvedRole);
+
   useSceneContentBroadcast(
     stateManager,
     activeSceneBlockId ? projectId : undefined,
     activeSceneBlockId ? storeUserId : undefined,
     activeSceneBlockId ? storeUserName : undefined,
     activeSceneBlockId ? activeSceneItemId ?? undefined : undefined,
+    canEdit,
   );
 
   // Only the very first sync should block the whole editor. Once we've
@@ -551,8 +555,6 @@ const Editor = ({ id, userId, userName, width, height, role }: {
   } = useLayoutStore();
 
   const isLargeScreen = useIsLargeScreen();
-  const resolvedRole = useEditorRole(projectId, activeSceneBlockId, storeUserId, role ?? null);
-  const canEdit = canEditWithRole(resolvedRole);
   const viewOnly = !canEdit; // kept as `viewOnly` since ScenePlayer / useKeyboardShortcuts already take this name
 
   useTimelineEvents();

@@ -15,6 +15,10 @@ export function useSceneContentBroadcast(
   userId: string | undefined,
   userName: string | undefined,
   sceneItemId: string | undefined,
+  // Whether this user may edit the scene they're inside. Only scene editors
+  // publish its content to the project doc. Everyone else still gets presence
+  // and live project-name updates over this connection, but never writes.
+  canPush: boolean,
 ) {
   useEffect(() => {
     if (!projectId || !userId || !sceneItemId) return;
@@ -70,7 +74,7 @@ export function useSceneContentBroadcast(
     let pushQueued = false;
 
     const attemptPush = (attempt: number): Promise<boolean> => {
-      if (!wsSynced || !blockHydrated) return Promise.resolve(false);
+      if (!canPush || !wsSynced || !blockHydrated) return Promise.resolve(false);
       const applied = applySceneContentToDoc(schema, sceneItemId, buildContent(), stateManager.getState().duration, localOrigin);
       if (!applied) {
         console.debug("[scene-broadcast] miss", {
@@ -111,6 +115,7 @@ export function useSceneContentBroadcast(
     };
 
     const schedulePush = () => {
+      if (!canPush) return;
       pendingPush = true;
       if (!flushTimer) {
         flushTimer = setTimeout(() => {
@@ -136,15 +141,17 @@ export function useSceneContentBroadcast(
     // Own persistence, independent of the room's 60s internal timer or
     // the (now-delayed) empty-room flush — writes made here should be
     // durable within a few seconds, not up to a minute.
-    createSession(projectId, userId).then((sessionId) => {
-      if (cancelled) {
-        endSession(sessionId);
-        return;
-      }
-      activeSessionId = sessionId;
-      const handle = attachPersistence(schema, target, sessionId, localOrigin);
-      forceFlush = handle.forceFlush;
-    });
+    if (canPush) {
+      createSession(projectId, userId).then((sessionId) => {
+        if (cancelled) {
+          endSession(sessionId);
+          return;
+        }
+        activeSessionId = sessionId;
+        const handle = attachPersistence(schema, target, sessionId, localOrigin);
+        forceFlush = handle.forceFlush;
+      });
+    }
 
     // Read current state right away instead of waiting for stateManager to
     // emit a change. Block hydration is a plain REST fetch and is usually
@@ -210,5 +217,5 @@ export function useSceneContentBroadcast(
           });
       });
     };
-  }, [stateManager, projectId, userId, userName, sceneItemId]);
+  }, [stateManager, projectId, userId, userName, sceneItemId, canPush]);
 }
