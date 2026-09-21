@@ -82,7 +82,14 @@ export function attachPersistence(
       body: toArrayBuffer(merged),
     })
       .then((res) => {
-        if (!res.ok) throw new Error(`persist failed: ${res.status}`);
+        if (res.status === 403) {
+          // The server says this user can't write here (view-only role, or a
+          // scene capped below Editor). Retrying can never succeed, so drop
+          // the update instead of requeuing it forever.
+          console.warn("collab update rejected: no write access, dropping it");
+        } else if (!res.ok) {
+          throw new Error(`persist failed: ${res.status}`);
+        }
         if (pending.length === 0 && !flushTimer) setStatus("saved");
       })
       .catch((err) => {

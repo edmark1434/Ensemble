@@ -78,6 +78,95 @@ export async function getBlockRole(
   return row?.role ?? null;
 }
 
+async function getProjectRole(
+  projectId: string,
+  userId: string,
+): Promise<BlockRole | null> {
+  const row = await db
+    .selectFrom("project_members")
+    .where("project_id", "=", projectId)
+    .where("user_id", "=", userId)
+    .where("deleted_at", "is", null)
+    .select(["role"])
+    .executeTakeFirst();
+  return row?.role ?? null;
+}
+
+const ROLE_RANK: Record<BlockRole, number> = {
+  Viewer: 0,
+  Commenter: 1,
+  Editor: 2,
+  Owner: 3,
+};
+
+// The most a general access level can give a project member. Their project
+// role can only lower this, never raise it, so "Anyone can edit" means
+// project Owners/Editors edit, Commenters comment, Viewers view.
+const GENERAL_ACCESS_CEILING: Record<GeneralAccessLevel, BlockRole | null> = {
+  "Anyone can edit": "Editor",
+  "Anyone can comment": "Commenter",
+  "Anyone can view": "Viewer",
+  "Restricted": null,
+};
+
+/**
+ * Effective role in a scene:
+ *  - the scene's Owner (block_members row with role Owner) is always Owner
+ *  - general access = min(project role, general access ceiling)
+ *  - a specific block_members row can raise that, never lower it
+ * `projectRole` null (not a project member) means general access gives nothing.
+ */
+export function resolveEffectiveBlockRole({
+                                            blockRole,
+                                            generalAccess,
+                                            projectRole,
+                                          }: {
+  blockRole: BlockRole | null;
+  generalAccess: GeneralAccessLevel;
+  projectRole: BlockRole | null;
+}): BlockRole | null {
+  if (blockRole === "Owner") return "Owner";
+
+  const ceiling = GENERAL_ACCESS_CEILING[generalAccess] ?? null;
+  const general: BlockRole | null =
+    ceiling && projectRole
+      ? ROLE_RANK[projectRole] < ROLE_RANK[ceiling]
+        ? projectRole
+        : ceiling
+      : null;
+
+  if (blockRole && general) {
+    return ROLE_RANK[blockRole] >= ROLE_RANK[general] ? blockRole : general;
+  }
+  return blockRole ?? general;
+}
+
+/** What the collab socket and the write routes check. null = no access. */
+export async function getEffectiveBlockRole(
+  blockId: string,
+  projectId: string,
+  userId: string,
+): Promise<BlockRole | null> {
+  const [blockRow, blockRole, projectRole] = await Promise.all([
+    db
+      .selectFrom("blocks")
+      .where("block_id", "=", blockId)
+      .where("deleted_at", "is", null)
+      .select(["general_access"])
+      .executeTakeFirst(),
+    getBlockRole(blockId, userId),
+    getProjectRole(projectId, userId),
+  ]);
+
+  if (!blockRow) return null;
+
+  return resolveEffectiveBlockRole({
+    blockRole,
+    generalAccess: blockRow.general_access as GeneralAccessLevel,
+    projectRole,
+  });
+}
+
 /**
  * Everything the access picker needs in one round trip: the owner, the people
  * who've been added, and the project members who could still be added.
@@ -87,7 +176,7 @@ export async function getBlockAccess(
   projectId: string,
   viewerUserId: string,
 ): Promise<BlockAccess> {
-  const [memberRows, candidateRows, blockRow] = await Promise.all([
+  const [memberRows, candidateRows, blockRow, projectRole] = await Promise.all([
     db
       .selectFrom("block_members as bm")
       .innerJoin("users as u", "u.user_id", "bm.user_id")
@@ -148,9 +237,14 @@ export async function getBlockAccess(
       .where("deleted_at", "is", null)
       .select(["general_access"])
       .executeTakeFirst(),
+
+    getProjectRole(projectId, viewerUserId),
   ]);
 
   const ownerRow = memberRows.find((r) => r.role === "Owner");
+  const viewerRow = memberRows.find((r) => r.user_id === viewerUserId);
+  const generalAccess =
+    (blockRow?.general_access as GeneralAccessLevel) ?? "Anyone can edit";
 
   return {
     owner: ownerRow ? toPerson(ownerRow) : null,
@@ -159,7 +253,12 @@ export async function getBlockAccess(
     ),
     candidates: candidateRows.map(toPerson),
     canManage: !!ownerRow && ownerRow.user_id === viewerUserId,
-    generalAccess: (blockRow?.general_access as GeneralAccessLevel) ?? "Anyone can edit",
+    generalAccess,
+    viewerRole: resolveEffectiveBlockRole({
+      blockRole: viewerRow?.role ?? null,
+      generalAccess,
+      projectRole,
+    }),
   };
 }
 
@@ -170,11 +269,11 @@ export type AddBlockMemberResult =
   | "already_member";
 
 export async function addBlockMember({
-  blockId,
-  projectId,
-  userId,
-  role,
-}: {
+                                       blockId,
+                                       projectId,
+                                       userId,
+                                       role,
+                                     }: {
   blockId: string;
   projectId: string;
   userId: string;
@@ -232,10 +331,10 @@ export async function addBlockMember({
 
 /** Returns false when there was nobody to update (or the target is the Owner). */
 export async function updateBlockMemberRole({
-  blockId,
-  userId,
-  role,
-}: {
+                                              blockId,
+                                              userId,
+                                              role,
+                                            }: {
   blockId: string;
   userId: string;
   role: AssignableBlockRole;
@@ -253,9 +352,9 @@ export async function updateBlockMemberRole({
 
 /** Soft delete, same as the rest of the schema. The Owner can't be removed. */
 export async function removeBlockMember({
-  blockId,
-  userId,
-}: {
+                                          blockId,
+                                          userId,
+                                        }: {
   blockId: string;
   userId: string;
 }): Promise<boolean> {

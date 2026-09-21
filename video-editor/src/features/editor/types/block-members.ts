@@ -57,6 +57,10 @@ export interface BlockAccess {
   candidates: BlockPerson[];
   canManage: boolean;
   generalAccess: GeneralAccessLevel;
+  // The requesting user's effective role in this block, resolved server-side
+  // (project role capped by general access, raised by a block_members row).
+  // null = no access.
+  viewerRole: BlockRole | null;
 }
 
 /**

@@ -12,6 +12,18 @@ import { ColorPickerField } from "./color-picker-field";
 
 const FRAME_RATE_OPTIONS = [3, 15, 24, 30, 60];
 
+// Thrown when the server says this user's role can't write (403). Callers that
+// run automatically (not from a user action) treat it as "skip", not a failure.
+export class ForbiddenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ForbiddenError";
+  }
+}
+
+export const isForbiddenError = (err: unknown): err is ForbiddenError =>
+  err instanceof Error && err.name === "ForbiddenError";
+
 export async function patchProject(
   projectId: string,
   updates: { name?: string; width?: number; height?: number }
@@ -21,6 +33,7 @@ export async function patchProject(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updates),
   });
+  if (res.status === 403) throw new ForbiddenError("Not allowed to update project");
   if (!res.ok) throw new Error("Failed to update project");
   return res.json();
 }
@@ -34,6 +47,7 @@ export async function patchBlock(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updates),
   });
+  if (res.status === 403) throw new ForbiddenError("Not allowed to update block");
   if (!res.ok) throw new Error("Failed to update block");
   return res.json();
 }

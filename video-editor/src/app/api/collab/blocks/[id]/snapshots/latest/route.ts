@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import * as Y from "yjs";
 import { db } from "@/lib/db";
 import { getBlockProjectId } from "@/lib/db/blocks";
+import { getEffectiveBlockRole } from "@/lib/db/block-members";
 import { loadLatestBlockState } from "@/lib/collab/block-persistence-store";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 
@@ -29,6 +30,11 @@ export async function GET(
     .select(["role"])
     .executeTakeFirst();
   if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  // Any scene role (even Viewer) can read. No role means the scene is
+  // Restricted and this user isn't on its list.
+  const role = await getEffectiveBlockRole(blockId, projectId, decoded.userId);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { snapshot, updates } = await loadLatestBlockState(blockId);
 

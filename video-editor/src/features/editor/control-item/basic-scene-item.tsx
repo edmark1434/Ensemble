@@ -19,6 +19,8 @@ import { Access } from "@/features/editor/control-item/common/access";
 import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
 import {hasBlockAccess} from "@/features/editor/types/block-members";
 import {useViewOnly} from "@/features/editor/hooks/use-view-only";
+import {getSceneRole} from "@/features/editor/utils/scene-access";
+import {canEditWithRole, type EditorRole} from "@/features/editor/types/editor-role";
 
 interface ISceneControlProps {
   opacity: number;
@@ -37,9 +39,9 @@ const getPropertiesFromDetails = (details: ISceneDetails): ISceneControlProps =>
 });
 
 const BasicSceneItem = ({
-  trackItem,
-  type
-}: {
+                          trackItem,
+                          type
+                        }: {
   trackItem: ITrackItem & { details: ISceneDetails };
   type?: string;
 }) => {
@@ -67,6 +69,26 @@ const BasicSceneItem = ({
       ? hasBlockAccess({ owner: blockOwner, members: blockMembers, generalAccess }, userId)
       : true;
 
+  // Renaming from here writes through to the scene itself (block name + block
+  // doc), so it needs edit access to the scene, not just the project. Every
+  // other control on this panel only touches the project doc and keeps
+  // following the project role. undefined = still resolving: leave the field
+  // enabled rather than flash it disabled (the server enforces either way).
+  const [sceneRole, setSceneRole] = useState<EditorRole | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSceneRole(undefined);
+    void getSceneRole(blockId, userId).then((role) => {
+      if (!cancelled) setSceneRole(role);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [blockId, userId]);
+
+  const canRenameScene = sceneRole === undefined || canEditWithRole(sceneRole);
+
   const [properties, setProperties] = useState<ISceneControlProps>(() =>
     getPropertiesFromDetails(trackItem.details)
   );
@@ -76,7 +98,7 @@ const BasicSceneItem = ({
   }, [trackItem.details]);
 
   const handleNameCommit = async (nextName: string) => {
-    if (!collabSchema || !collabOrigin) return;
+    if (!collabSchema || !collabOrigin || !canRenameScene) return;
     const previous = name ?? "";
     applySceneDetailsPatch(collabSchema, trackItem.id, { name: nextName }, collabOrigin);
     try {
@@ -138,6 +160,7 @@ const BasicSceneItem = ({
           <SceneControls
             name={name ?? ""}
             onNameCommit={handleNameCommit}
+            disabled={isDisabled || !canRenameScene}
             // size={content?.size}
             // onSizeCommit={handleSizeCommit}
             // background={content?.background?.value}

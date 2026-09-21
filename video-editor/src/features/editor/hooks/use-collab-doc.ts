@@ -22,7 +22,7 @@ import {
 import { setupMirrorOutFromStateManager, setupMirrorOutFromStore } from "../collab/mirror-out";
 import { attachWsProvider } from "../collab/ws-provider";
 import {CollabTarget} from "@/features/editor/collab/collab-target";
-import {patchBlock, patchProject} from "@/features/editor/control-item/common/composition-controls";
+import {isForbiddenError, patchBlock, patchProject} from "@/features/editor/control-item/common/composition-controls";
 import {isSceneItem} from "@/features/editor/types/ensemble-scene";
 import {patchBlockMeta, patchProjectSceneDetails} from "@/features/editor/collab/remote-patch";
 import { syncCanvasTransitions } from "../timeline/items/transitions/sync-canvas-transitions";
@@ -65,6 +65,8 @@ function reconcileTargetToDb(target: CollabTarget, schema: CollabSchema): void {
 
   const patch = target.kind === "block" ? patchBlock(target.id, updates) : patchProject(target.id, updates);
   patch.catch((err) => {
+    // Read-only role (403): nothing this user is allowed to correct.
+    if (isForbiddenError(err)) return;
     console.error(`useCollabDoc: failed to reconcile ${target.kind} metadata to db`, err);
   });
 }
@@ -84,6 +86,7 @@ function reconcileSceneNamesToBlocks(target: CollabTarget, schema: CollabSchema,
       console.error("useCollabDoc: failed to reconcile scene name to block doc", err);
     });
     patchBlock(details.blockId, { name: details.name }).catch((err) => {
+      if (isForbiddenError(err)) return;
       console.error("useCollabDoc: failed to reconcile scene name to block db row", err);
     });
   }

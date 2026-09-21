@@ -13,12 +13,17 @@ const remoteOrigin = "ws-remote";
 const BASE_RECONNECT_DELAY_MS = 500;
 const MAX_RECONNECT_DELAY_MS = 15_000;
 
+// Close codes collab.ts uses for "you can't be here" (bad request, no session,
+// no access, unknown block). Reconnecting can't change the answer, so stop
+// retrying instead of looping forever.
+const REJECTED_CLOSE_CODES = new Set([4000, 4001, 4003, 4004]);
+
 export function attachWsProvider(
   schema: CollabSchema,
   target: CollabTarget,
   userId: string,
   userName?: string,
-  options?: { announcePresence?: boolean; onFirstSync?: () => void },
+  options?: { announcePresence?: boolean; onFirstSync?: () => void; onRejected?: () => void },
 ): () => void {
   const announcePresence = options?.announcePresence ?? true;
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -113,9 +118,13 @@ export function attachWsProvider(
       }
     };
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       if (ws === socket) ws = null;
       if (destroyed) return;
+      if (REJECTED_CLOSE_CODES.has(event.code)) {
+        options?.onRejected?.();
+        return;
+      }
       scheduleReconnect();
     };
 
