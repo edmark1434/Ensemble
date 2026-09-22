@@ -5,6 +5,38 @@ import { cookies } from "next/headers";
 import { updateProject } from "@/lib/db/projects";
 import { db } from "@/lib/db";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { canEditWithRole } from "@/features/editor/types/editor-role";
+
+// The caller's current role in this project — lets the editor refresh its
+// role while a session stays open. 403 = not (or no longer) a member.
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get(EDITOR_SESSION_COOKIE)?.value;
+  const decoded = sessionCookie ? await verifyEditorSession(sessionCookie) : null;
+
+  if (!decoded) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  const membership = await db
+    .selectFrom("project_members")
+    .where("project_id", "=", id)
+    .where("user_id", "=", decoded.userId)
+    .where("deleted_at", "is", null)
+    .select(["role"])
+    .executeTakeFirst();
+
+  if (!membership) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  return NextResponse.json({ role: membership.role });
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -28,9 +60,9 @@ export async function PATCH(
     .select(["role"])
     .executeTakeFirst();
 
-  // if (!membership || membership.role === "Viewer") {
-  //   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // }
+  if (!membership || !canEditWithRole(membership.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const { name, width, height } = await req.json();
 

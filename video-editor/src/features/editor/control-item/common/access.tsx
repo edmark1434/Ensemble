@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
@@ -6,30 +6,19 @@ import {
   PopoverContent,
   PopoverTrigger
 } from "@/components/ui/popover";
-import { Check, ChevronDown, Info, Users } from "lucide-react";
+import {Check, ChevronDown, Info} from "lucide-react";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
-
-type GeneralAccessOption =
-  | "Anyone can edit"
-  | "Anyone can comment"
-  | "Anyone can view"
-  | "Restricted";
-
-const GENERAL_ACCESS_OPTIONS: GeneralAccessOption[] = [
-  "Anyone can edit",
-  "Anyone can comment",
-  "Anyone can view",
-  "Restricted"
-];
+import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
+import { GENERAL_ACCESS_LEVELS, type GeneralAccessLevel } from "@/features/editor/types/block-members";
 
 // Same popover-list pattern used by the font controls (e.g. word break,
 // font style) — a button trigger with a checkmark against the active option.
 const SelectPopover = ({
-                         value,
-                         options,
-                         onChange,
-                         disabled = false
-                       }: {
+  value,
+  options,
+  onChange,
+  disabled = false
+}: {
   value: string;
   options: string[];
   onChange: (v: string) => void;
@@ -76,10 +65,38 @@ const SelectPopover = ({
   );
 };
 
-export const Access = () => {
-  // Hardcoded for now — nothing wired to the backend yet.
-  const [generalAccess, setGeneralAccess] = useState<string>("Anyone can edit");
+export const Access = ({ blockId }: { blockId: string }) => {
   const { floatingControl, setFloatingControl } = useLayoutStore();
+  const {
+    blockId: loadedBlockId,
+    status,
+    owner,
+    members,
+    canManage,
+    generalAccess,
+    setGeneralAccess,
+    load
+  } = useBlockMembersStore();
+
+  useEffect(() => {
+    void load(blockId);
+  }, [blockId, load]);
+
+  // Only the scene owner gets to see this section at all — everyone else
+  // gets nothing here rather than a disabled/read-only version of it.
+  if (loadedBlockId === blockId && status === "ready" && !canManage) {
+    return null;
+  }
+
+  const summary = (() => {
+    if (loadedBlockId !== blockId || status === "idle" || status === "loading") {
+      return "Loading…";
+    }
+    if (status === "error") return "Couldn't load";
+
+    const others = members.length;
+    return others === 0 ? "Only you" : `You and ${others} other${others === 1 ? "" : "s"}`;
+  })();
 
   return (
     <div className="flex flex-col gap-3">
@@ -87,24 +104,22 @@ export const Access = () => {
 
       <div className="flex gap-2 items-start text-xs text-muted-foreground -mt-1 text-pretty">
         <Info size={16} className="shrink-0" />
-        <span>Only the scene owner can control access inside a scene</span>
+        <span>Only the scene owner can control scene access</span>
       </div>
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-2">
-          <div className="text-xs text-muted-foreground">General access</div>
+          <div className="text-xs text-muted-foreground">General</div>
           <SelectPopover
             value={generalAccess}
-            options={GENERAL_ACCESS_OPTIONS}
-            onChange={setGeneralAccess}
+            options={GENERAL_ACCESS_LEVELS}
+            onChange={(v) => void setGeneralAccess(v as GeneralAccessLevel)}
+            disabled={status !== "ready"}
           />
         </div>
 
         <div className="flex flex-col gap-2">
-          <div className="text-xs text-muted-foreground">People with access</div>
-          {/* Opens the same floating panel system as the font/animation
-              pickers — the add-people field and the user list both live
-              there now, see ./floating/access-picker */}
+          <div className="text-xs text-muted-foreground">Specific</div>
           <Button
             variant="outline"
             className="flex w-full items-center justify-between text-sm font-normal"
@@ -114,8 +129,7 @@ export const Access = () => {
             }}
           >
             <div className="flex items-center gap-2 overflow-hidden text-left">
-              <Users size={14} className="text-muted-foreground shrink-0" />
-              <p className="truncate">You and 3 others</p>
+              <p className="truncate">{summary}</p>
             </div>
             <ChevronDown className="text-muted-foreground" size={14} />
           </Button>

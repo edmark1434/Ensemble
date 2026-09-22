@@ -6,6 +6,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { cookies } from "next/headers";
+import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { isProjectMember } from "@/lib/db/block-members";
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const ab = new ArrayBuffer(bytes.byteLength);
@@ -17,7 +20,16 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; snapshotId: string }> }
 ) {
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get(EDITOR_SESSION_COOKIE)?.value;
+  const decoded = sessionCookie ? await verifyEditorSession(sessionCookie) : null;
+  if (!decoded) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { id: projectId, snapshotId: snapshotIdParam } = await params;
+
+  if (!(await isProjectMember(projectId, decoded.userId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const snapshotId = Number(snapshotIdParam);
   if (!Number.isFinite(snapshotId)) {

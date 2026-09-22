@@ -48,6 +48,7 @@ import {syncCanvasTransitions} from "@/features/editor/timeline/items/transition
 import { patchTransitionRenderPositioning } from "./items/transitions/transition-position-patch";
 import {dispatch} from "@designcombo/events";
 import {PLAYER_PAUSE} from "@/features/editor/constants/events";
+import {canOpenScene} from "@/features/editor/utils/scene-access";
 
 CanvasTimeline.registerItems({
   Text,
@@ -97,7 +98,7 @@ const getUIFont = () =>
   getComputedStyle(document.body).getPropertyValue("--font-plus-jakarta-sans").trim() ||
   "sans-serif";
 
-function applyItemDetails(canvas: CanvasTimeline, itemsMap: Record<string, any>) {
+function applyItemDetails(canvas: CanvasTimeline, itemsMap: Record<string, any>, readOnly = false) {
   canvas.getTrackItems().forEach((item: any) => {
     const details = itemsMap[item.id]?.details;
 
@@ -119,12 +120,23 @@ function applyItemDetails(canvas: CanvasTimeline, itemsMap: Record<string, any>)
       item.lockScalingY = locked;
       item.selectable = !locked;
       item.hasControls = !locked;
+      item.locked = locked;
       item.dirty = true;
     }
-    // Scene draws its name as a canvas label cached on the instance
-    // (Scene.updateName), rather than reading it fresh per paint like the
-    // fields above, so it needs the same explicit push. updateName()
-    // already no-ops when unchanged, so this is cheap to call unconditionally.
+
+    // Read-only viewers/commenters: same immovable treatment as a locked
+    // item, layered on top of the item's own lock state. Stays selectable
+    // so ControlItem can still show it — the panel itself is disabled at
+    // the wrapper level in editor.tsx, not per-item here.
+    if (readOnly) {
+      item.lockMovementX = true;
+      item.lockMovementY = true;
+      item.lockScalingX = true;
+      item.lockScalingY = true;
+      item.hasControls = false;
+      item.dirty = true;
+    }
+
     if (typeof item.updateName === "function") {
       item.updateName(details?.name || "Scene");
     }
@@ -157,7 +169,7 @@ const getItemRect = (item: any): { left: number; top: number; width: number; hei
   return { left: item.left, top: item.top, width: item.width, height: item.height };
 };
 
-const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
+const Timeline = ({ stateManager, readOnly = false }: { stateManager: StateManager; readOnly?: boolean }) => {
   // prevent duplicate scroll events
   const canScrollRef = useRef(false);
   const [scrollLeft, setScrollLeft] = useState(0);
@@ -174,6 +186,9 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
   timelineOffsetXRef.current = timelineOffsetX;
 
   const drawOverlaysRef = useRef<() => void>(() => {});
+
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
 
   const {
     timelineContainerRef,
@@ -337,6 +352,9 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       .getPropertyValue("--primary-canvas")
       .trim() + "80";
 
+    // Pointer, not the default move cursor, when hovering any track item.
+    canvas.hoverCursor = "pointer";
+
     canvas.initScrollbars({
       offsetX: TIMELINE_OFFSET_CANVAS_LEFT + timelineOffsetX,
       offsetY: 0,
@@ -363,7 +381,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
 
     // watch for state changes on canvas items
     canvas.state.subscribeToUpdateItemDetails(({ trackItemsMap }) => {
-      applyItemDetails(canvas, trackItemsMap);
+      applyItemDetails(canvas, trackItemsMap, readOnlyRef.current);
       canvas.requestRenderAll();
     });
 
@@ -474,16 +492,20 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       const target = e.target;
       if (!target || target.type !== "scene") return;
 
-      const { trackItemsMap } = useStore.getState();
+      const { trackItemsMap, userId } = useStore.getState();
       const sceneItem = trackItemsMap[target.id];
       const blockId = sceneItem?.details?.blockId;
       if (!blockId) return;
 
-      // Old selection references ids that won't exist in the scene's own
-      // content — clear before swapping, same as any other selection reset.
-      stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
-      dispatch(PLAYER_PAUSE);
-      useStore.getState().openScene?.(blockId, target.id, sceneItem?.details?.name);
+      void canOpenScene(blockId, userId).then((allowed) => {
+        if (!allowed) return;
+
+        // Old selection references ids that won't exist in the scene's own
+        // content — clear before swapping, same as any other selection reset.
+        stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+        dispatch(PLAYER_PAUSE);
+        useStore.getState().openScene?.(blockId, target.id, sceneItem?.details?.name);
+      });
     });
 
     const timelineGestureIds = new Set<string>();
@@ -1114,9 +1136,9 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    applyItemDetails(canvas, trackItemsMap);
+    applyItemDetails(canvas, trackItemsMap, readOnly);
     canvas.requestRenderAll();
-  }, [trackItemsMap]);
+  }, [trackItemsMap, readOnly]);
 
   // Transitions have no native creation path the way track items do —
   // @designcombo/state builds trackItem Fabric objects itself as part of

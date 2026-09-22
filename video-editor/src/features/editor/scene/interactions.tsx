@@ -30,6 +30,7 @@ import {
 } from "../collab/live-transform";
 import {createPortal} from "react-dom";
 import {PLAYER_PAUSE} from "@/features/editor/constants/events";
+import {canOpenScene} from "@/features/editor/utils/scene-access";
 
 let holdGroupPosition: Record<string, any> | null = null;
 let groupTextScaleStart: Record<string, {
@@ -504,11 +505,17 @@ export function SceneInteractions({
       const blockId = sceneItem?.details?.blockId;
       if (!blockId) return;
 
-      // Old selection references ids that won't exist in the scene's own
-      // content — clear before swapping, same as timeline.tsx's handler.
-      stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
-      dispatch(PLAYER_PAUSE);
-      useStore.getState().openScene?.(blockId, id, sceneItem?.details?.name);
+      const { userId } = useStore.getState();
+
+      void canOpenScene(blockId, userId).then((allowed) => {
+        if (!allowed) return;
+
+        // Old selection references ids that won't exist in the scene's own
+        // content — clear before swapping, same as timeline.tsx's handler.
+        stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+        dispatch(PLAYER_PAUSE);
+        useStore.getState().openScene?.(blockId, id, sceneItem?.details?.name);
+      });
     };
 
     container.addEventListener("dblclick", onDblClick);

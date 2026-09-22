@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { createBlock } from "@/lib/db/blocks";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { canEditWithRole } from "@/features/editor/types/editor-role";
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
@@ -35,10 +36,10 @@ export async function POST(req: NextRequest) {
     .select(["role"])
     .executeTakeFirst();
 
-  // if (!membership || membership.role === "Viewer") {
-  //   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // }
+  if (!membership || !canEditWithRole(membership.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
-  await createBlock({ blockId, projectId, name, width, height });
+  createBlock({ blockId, projectId, name, width, height, ownerUserId: decoded.userId })
   return NextResponse.json({ ok: true });
 }

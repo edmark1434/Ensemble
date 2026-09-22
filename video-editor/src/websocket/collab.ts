@@ -13,6 +13,8 @@ import { loadLatestProjectState, compactProject } from "@/lib/collab/persistence
 import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
 import {CollabTarget} from "@/features/editor/collab/collab-target";
 import {compactBlock, loadLatestBlockState, withBlockSnapshotLock} from "@/lib/collab/block-persistence-store";
+import { getEffectiveBlockRole } from "@/lib/db/block-members";
+import { canEditWithRole } from "@/features/editor/types/editor-role";
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
@@ -35,6 +37,12 @@ const SNAPSHOT_INTERVAL_MS = 60_000;
 // teardown so a same-session reconnect resumes the still-live doc
 // instead, letting Yjs's own sync handshake resolve it, not a REST race.
 const ROOM_EMPTY_GRACE_MS = 5_000;
+
+// Access can change while a socket stays open (project role changed, scene
+// general access changed, member removed). Every connection re-resolves its
+// access on this interval, so write permission follows and a connection that
+// lost access entirely gets closed.
+const ACCESS_RECHECK_MS = 15_000;
 
 interface ClientInfo {
   controlledAwarenessIds: Set<number>;
@@ -160,6 +168,31 @@ async function getOrCreateRoom(target: CollabTarget): Promise<Room> {
   return roomPromise;
 }
 
+// What this user may do in a room right now. allowed=false means no access at
+// all: not in the project, or a scene they hold no role in (e.g. Restricted).
+async function resolveRoomAccess(
+  target: CollabTarget,
+  projectId: string,
+  userId: string,
+): Promise<{ allowed: boolean; canWrite: boolean }> {
+  const membership = await db
+    .selectFrom("project_members")
+    .where("project_id", "=", projectId)
+    .where("user_id", "=", userId)
+    .where("deleted_at", "is", null)
+    .select(["role"])
+    .executeTakeFirst();
+
+  if (!membership) return { allowed: false, canWrite: false };
+
+  if (target.kind === "project") {
+    return { allowed: true, canWrite: canEditWithRole(membership.role) };
+  }
+
+  const blockRole = await getEffectiveBlockRole(target.id, projectId, userId);
+  return { allowed: blockRole !== null, canWrite: canEditWithRole(blockRole) };
+}
+
 export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage): Promise<void> {
   const url = new URL(req.url ?? "", "http://collab");
   const projectId = url.searchParams.get("projectId");
@@ -220,22 +253,20 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
     membershipProjectId = block.project_id;
   }
 
-  const membership = await db
-    .selectFrom("project_members")
-    .where("project_id", "=", membershipProjectId)
-    .where("user_id", "=", decoded.userId)
-    .where("deleted_at", "is", null)
-    .select(["role"])
-    .executeTakeFirst();
+  // Project doc: the project role decides. Scene doc: the effective scene role
+  // (project role capped by the scene's general access, raised by a
+  // block_members row). No write access = read-only: the client still syncs
+  // down, its own updates are just dropped below. No role at all = refused.
+  const access = await resolveRoomAccess(target, membershipProjectId, decoded.userId);
 
-  if (!membership) {
+  if (!access.allowed) {
     ws.off("message", bufferDuringSetup);
     ws.off("close", markClosedDuringSetup);
     ws.close(4003, "forbidden");
     return;
   }
 
-  const canWrite = membership.role === "Owner" || membership.role === "Editor";
+  const canWrite = access.canWrite;
 
   const room = await getOrCreateRoom(target);
 
@@ -303,7 +334,22 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
   for (const data of pendingMessages) handleMessage(data);
   ws.on("message", handleMessage);
 
+  const recheckTimer = setInterval(async () => {
+    try {
+      const next = await resolveRoomAccess(target, membershipProjectId, decoded.userId);
+      if (!next.allowed) {
+        ws.close(4003, "forbidden");
+        return;
+      }
+      const info = room.clients.get(ws);
+      if (info) info.canWrite = next.canWrite;
+    } catch (err) {
+      console.error(`collab: access recheck failed for ${roomKey(target)}`, err);
+    }
+  }, ACCESS_RECHECK_MS);
+
   ws.on("close", () => {
+    clearInterval(recheckTimer);
     const info = room.clients.get(ws);
     room.clients.delete(ws);
     if (info && info.controlledAwarenessIds.size > 0) {

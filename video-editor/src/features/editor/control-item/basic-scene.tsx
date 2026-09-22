@@ -3,6 +3,9 @@ import { SceneControls } from "./common/scene-controls";
 import { patchBlock } from "./common/composition-controls";
 import useStore from "../store/use-store";
 import {patchProjectSceneDetails} from "@/features/editor/collab/remote-patch";
+import {useViewOnly} from "@/features/editor/hooks/use-view-only";
+import {Eye} from "lucide-react";
+import React from "react";
 
 const BasicScene = () => {
   const {
@@ -53,10 +56,20 @@ const BasicScene = () => {
     }
   };
 
+  const viewOnly = useViewOnly();
+
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden min-h-0">
       <ScrollArea className="h-full">
-        <fieldset className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
+        <fieldset disabled={viewOnly} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
+          {viewOnly && (
+            <div className="flex gap-2 items-center text-primary text-sm font-normal">
+              <Eye size={16} />
+              <span>
+                You only have view access to controls
+              </span>
+            </div>
+          )}
           <SceneControls
             name={currentBlockName ?? ""}
             onNameCommit={handleNameCommit}
@@ -64,6 +77,7 @@ const BasicScene = () => {
             onSizeCommit={handleSizeCommit}
             background={background.value}
             onBackgroundChange={(v) => setState({ background: { type: "color", value: v } })}
+            disabled={viewOnly}
           />
         </fieldset>
       </ScrollArea>

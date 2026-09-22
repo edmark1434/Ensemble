@@ -14,8 +14,9 @@ import { PresetText } from "./common/preset-text";
 import { Animations } from "./common/animations";
 import {LayoutControls} from "@/features/editor/control-item/common/layout";
 import {TextContent} from "@/features/editor/control-item/common/text-content";
-import { Lock } from "lucide-react";
+import {Eye, Lock} from "lucide-react";
 import {Appearance} from "@/features/editor/control-item/common/appearance";
+import {useViewOnly} from "@/features/editor/hooks/use-view-only";
 
 interface ITextControlProps {
   color: string;
@@ -355,7 +356,9 @@ const BasicText = ({
     });
   };
 
+  const viewOnly = useViewOnly();
   const isLocked = (trackItem.details as any)?.locked === true;
+  const isDisabled = isLocked || viewOnly;
 
   const components = [
     {
@@ -377,7 +380,7 @@ const BasicText = ({
           id={trackItem.id}
           opacity={properties.opacity}
           cornerRadius={trackItem.details?.borderRadius ?? 0}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -396,7 +399,7 @@ const BasicText = ({
           onChangeTextAlign={onChangeTextAlign}
           onChangeTextDecorationLines={onChangeTextDecorationLines}
           onChangeTextDecorationColor={onChangeTextDecorationColor}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -409,7 +412,7 @@ const BasicText = ({
           onChangeBorderColor={(v: string) => onChangeBorderColor(v)}
           valueBorderWidth={properties.borderWidth as number}
           valueBorderColor={properties.borderColor as string}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -420,7 +423,7 @@ const BasicText = ({
           label="Shadow"
           onChange={(v: IBoxShadow) => onChangeBoxShadow(v)}
           value={properties.boxShadow}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -430,7 +433,7 @@ const BasicText = ({
         <Animations
           trackItem={trackItem}
           properties={properties}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
     },
   ];
@@ -438,12 +441,20 @@ const BasicText = ({
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden min-h-0">
       <ScrollArea className="h-full">
-        <fieldset disabled={isLocked} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
+        <fieldset disabled={isDisabled} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
           {isLocked && (
             <div className="flex gap-2 items-center text-primary text-sm font-normal">
               <Lock size={16} />
               <span>
                 This item has been locked
+              </span>
+            </div>
+          )}
+          {viewOnly && (
+            <div className="flex gap-2 items-center text-primary text-sm font-normal">
+              <Eye size={16} />
+              <span>
+                You only have view access to controls
               </span>
             </div>
           )}

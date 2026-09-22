@@ -34,6 +34,7 @@ class Caption extends Resizable {
     this.strokeWidth = 0;
 
     this.hidden = props.hidden ?? false;
+    this.hoverCursor = "pointer";
   }
 
   public _render(ctx: CanvasRenderingContext2D) {

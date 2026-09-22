@@ -1,7 +1,10 @@
 // app/api/collab/projects/[id]/updates/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
+import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { canEditWithRole } from "@/features/editor/types/editor-role";
 import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
 import { compactProject } from "@/lib/collab/persistence-store";
 
@@ -11,12 +14,28 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get(EDITOR_SESSION_COOKIE)?.value;
+  const decoded = sessionCookie ? await verifyEditorSession(sessionCookie) : null;
+  if (!decoded) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id: projectId } = await params;
+
+  const membership = await db
+    .selectFrom("project_members")
+    .where("project_id", "=", projectId)
+    .where("user_id", "=", decoded.userId)
+    .where("deleted_at", "is", null)
+    .select(["role"])
+    .executeTakeFirst();
+  if (!membership || !canEditWithRole(membership.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const sessionId = Number(request.nextUrl.searchParams.get("sessionId"));
   if (!Number.isFinite(sessionId)) {
     return NextResponse.json({ error: "invalid sessionId" }, { status: 400 });
   }
-
-  const { id: projectId } = await params;
 
   const buf = Buffer.from(await request.arrayBuffer());
   if (buf.length === 0) {

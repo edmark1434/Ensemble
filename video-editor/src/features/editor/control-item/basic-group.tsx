@@ -6,7 +6,7 @@ import { dispatch } from "@designcombo/events";
 import { ADD_ANIMATION, EDIT_OBJECT } from "@designcombo/state";
 import React, { useEffect, useState } from "react";
 import { IBoxShadow, ITrackItem } from "@designcombo/types";
-import {Group, Lock, X} from "lucide-react";
+import {Eye, Group, Lock, X} from "lucide-react";
 import Outline from "./common/outline";
 import Shadow from "./common/shadow";
 import { TextControls } from "./common/text";
@@ -22,6 +22,7 @@ import { DEFAULT_FONT } from "../constants/font";
 import { Appearance } from "@/features/editor/control-item/common/appearance";
 import { LayoutGroup } from "@/features/editor/control-item/common/layout-group";
 import PlaybackControls from "@/features/editor/control-item/common/playback";
+import {useViewOnly} from "@/features/editor/hooks/use-view-only";
 
 interface ITransitionLike {
   id: string;
@@ -329,7 +330,9 @@ const BasicGroup = ({ type }: { type?: string }) => {
       );
     });
 
+  const viewOnly = useViewOnly();
   const isLocked = items.some((item) => (item.details as any)?.locked === true);
+  const isDisabled = isLocked || viewOnly;
 
   const allComponents = [
     // nonAudioItems.length > 0 && {
@@ -350,7 +353,7 @@ const BasicGroup = ({ type }: { type?: string }) => {
               brightness: representativeMedia.details?.brightness ?? 100
             }
             : {})}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -363,7 +366,7 @@ const BasicGroup = ({ type }: { type?: string }) => {
           volume={representativePlayable?.details?.volume ?? 100}
           onChangeSpeed={handleChangeSpeed}
           onChangeVolume={handleChangeVolume}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -394,7 +397,7 @@ const BasicGroup = ({ type }: { type?: string }) => {
             onChangeTextDecorationLines={onChangeTextDecorationLines}
             onChangeTextDecorationColor={onChangeTextDecorationColor}
             {...(hasCaption ? { showFill: false } : { handleColorChange, handleBackgroundChange })}
-            disabled={isLocked}
+            disabled={isDisabled}
           />
           {hasCaption && (
             <CaptionColors
@@ -408,7 +411,7 @@ const BasicGroup = ({ type }: { type?: string }) => {
               appearedColor={properties.appearedColor}
               isKeywordColor={properties.isKeywordColor}
               preservedColorKeyWord={properties.preservedColorKeyWord}
-              disabled={isLocked}
+              disabled={isDisabled}
             />
           )}
         </>
@@ -424,7 +427,7 @@ const BasicGroup = ({ type }: { type?: string }) => {
           onChangeBorderColor={onChangeBorderColor}
           valueBorderWidth={properties.borderWidth}
           valueBorderColor={properties.borderColor}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -436,7 +439,7 @@ const BasicGroup = ({ type }: { type?: string }) => {
           ids={textLikeIds}
           onChange={onChangeBoxShadow}
           value={properties.boxShadow}
-          disabled={isLocked} />
+          disabled={isDisabled} />
       )
     },
     // nonAudioItems.length > 0 && {
@@ -453,7 +456,7 @@ const BasicGroup = ({ type }: { type?: string }) => {
     //         blur: representativeMedia?.details?.blur ?? 0,
     //         brightness: representativeMedia?.details?.brightness ?? 100
     //       }}
-    //       disabled={isLocked}
+    //       disabled={isDisabled}
     //       showLoop={hasText}
     //       captionIds={hasCaption ? captionIds : undefined}
     //       animationType={groupAnimationType}
@@ -466,7 +469,7 @@ const BasicGroup = ({ type }: { type?: string }) => {
     //     <TransitionControls
     //       id={transitionIds[0]}
     //       ids={transitionIds}
-    //       disabled={isLocked} />
+    //       disabled={isDisabled} />
     //   )
     // }
   ].filter(Boolean) as { key: string; component: React.ReactNode }[];
@@ -501,7 +504,7 @@ const BasicGroup = ({ type }: { type?: string }) => {
           </div>
         ) : (
           <ScrollArea className="h-full">
-            <fieldset disabled={isLocked} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
+            <fieldset disabled={isDisabled} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
               <div className="flex gap-2 items-center text-primary text-sm font-normal">
                 <Group size={16} />
                 <span>
@@ -514,6 +517,14 @@ const BasicGroup = ({ type }: { type?: string }) => {
                   <span>
                   These items have been locked
                 </span>
+                </div>
+              )}
+              {viewOnly && (
+                <div className="flex gap-2 items-center text-primary text-sm font-normal">
+                  <Eye size={16} />
+                  <span>
+                You only have view access to controls
+              </span>
                 </div>
               )}
 

@@ -57,6 +57,9 @@ export function patchBlockMeta(
 
     teardownWs = attachWsProvider(schema, target, userId, undefined, {
       announcePresence: false,
+      // The server refused the connection (no access to this room): nothing
+      // to patch, and retrying can't change that.
+      onRejected: () => finish(),
       onFirstSync: () => {
         createSession(projectId, userId)
           .then((sid) => {
@@ -121,6 +124,9 @@ export function patchProjectSceneDetails(
 
     teardownWs = attachWsProvider(schema, target, userId, undefined, {
       announcePresence: false,
+      // The server refused the connection (no access to this room): nothing
+      // to patch, and retrying can't change that.
+      onRejected: () => finish(),
       onFirstSync: () => {
         createSession(projectId, userId)
           .then((sid) => {

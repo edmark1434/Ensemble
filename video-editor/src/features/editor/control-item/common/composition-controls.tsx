@@ -12,6 +12,18 @@ import { ColorPickerField } from "./color-picker-field";
 
 const FRAME_RATE_OPTIONS = [3, 15, 24, 30, 60];
 
+// Thrown when the server says this user's role can't write (403). Callers that
+// run automatically (not from a user action) treat it as "skip", not a failure.
+export class ForbiddenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ForbiddenError";
+  }
+}
+
+export const isForbiddenError = (err: unknown): err is ForbiddenError =>
+  err instanceof Error && err.name === "ForbiddenError";
+
 export async function patchProject(
   projectId: string,
   updates: { name?: string; width?: number; height?: number }
@@ -21,6 +33,7 @@ export async function patchProject(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updates),
   });
+  if (res.status === 403) throw new ForbiddenError("Not allowed to update project");
   if (!res.ok) throw new Error("Failed to update project");
   return res.json();
 }
@@ -34,6 +47,7 @@ export async function patchBlock(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updates),
   });
+  if (res.status === 403) throw new ForbiddenError("Not allowed to update block");
   if (!res.ok) throw new Error("Failed to update block");
   return res.json();
 }
@@ -42,12 +56,14 @@ export const NameField = ({
                             label = "Name",
                             value,
                             maxLength,
-                            onCommit
+                            onCommit,
+                            disabled = false
                           }: {
   label?: string;
   value: string;
   maxLength?: number;
   onCommit: (v: string) => void;
+  disabled?: boolean;
 }) => {
   const [localValue, setLocalValue] = useState<string>(value);
 
@@ -81,6 +97,7 @@ export const NameField = ({
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={commit}
         onKeyDown={handleKeyDown}
+        disabled={disabled}
       />
     </div>
   );
@@ -88,10 +105,12 @@ export const NameField = ({
 
 export const BackgroundField = ({
                                   value,
-                                  onChange
+                                  onChange,
+                                  disabled = false
                                 }: {
   value: string;
   onChange: (v: string) => void;
+  disabled?: boolean;
 }) => (
   <div className="flex flex-col gap-2 flex-1">
     <div className="flex flex-1 items-center text-xs text-muted-foreground">Background</div>
@@ -101,7 +120,7 @@ export const BackgroundField = ({
       gradient={true}
       mobileControlType="compositionBackground"
       mobileControlLabel="Background"
-      disabled={false}
+      disabled={disabled}
     />
   </div>
 );
@@ -109,11 +128,13 @@ export const BackgroundField = ({
 export const SizeFields = ({
                              width,
                              height,
-                             onCommit
+                             onCommit,
+                             disabled = false
                            }: {
   width: number;
   height: number;
   onCommit: (width: number, height: number) => void;
+  disabled?: boolean;
 }) => {
   const [isLinked, setIsLinked] = useState(true);
 
@@ -143,6 +164,7 @@ export const SizeFields = ({
           value={width}
           isLinked={isLinked}
           onCommit={commitDimension}
+          disabled={disabled}
         />
         <SizeDimension
           field="height"
@@ -150,6 +172,7 @@ export const SizeFields = ({
           value={height}
           isLinked={isLinked}
           onCommit={commitDimension}
+          disabled={disabled}
         />
       </div>
       <div className="flex flex-col gap-2 flex-1">
@@ -161,6 +184,7 @@ export const SizeFields = ({
                 variant={isLinked ? "default" : "secondary"}
                 size="icon"
                 onClick={() => setIsLinked((prev) => !prev)}
+                disabled={disabled}
                 aria-label={isLinked ? "Unlink dimensions" : "Link dimensions"}
                 aria-pressed={isLinked}
                 className="flex-1"
@@ -186,13 +210,15 @@ const SizeDimension = ({
                          label,
                          value,
                          isLinked,
-                         onCommit
+                         onCommit,
+                         disabled = false
                        }: {
   field: "width" | "height";
   label: string;
   value: number;
   isLinked: boolean;
   onCommit: (field: "width" | "height", nextValue: number) => void;
+  disabled?: boolean;
 }) => {
   const [localValue, setLocalValue] = useState<string | number>(Math.round(value));
 
@@ -243,6 +269,7 @@ const SizeDimension = ({
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
             className={isLinked ? "border-primary" : ""}
+            disabled={disabled}
           />
         </div>
       </div>

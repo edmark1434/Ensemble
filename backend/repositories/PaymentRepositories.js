@@ -322,7 +322,8 @@ async function createPaymentMethodForUser(payload){
             INSERT INTO payment_methods(
                 user_id, payment_token_id, channel_code, type, status, is_default, display_name, card_brand,
                 masked_card_number, card_exp_month, card_exp_year, customer_reference_id, fingerprint, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`;
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                RETURNING *`;
         const values = [
             payload.user_id,
             payload.payment_token_id,

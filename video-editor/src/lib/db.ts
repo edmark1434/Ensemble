@@ -30,12 +30,15 @@ interface MediaAssetsTable {
 
 interface AccountsTable {
   account_id: Generated<string>;
+  avatar_file_id: string | null;
 }
 
 interface UsersTable {
   user_id: Generated<string>;
   account_id: string;
   first_name: string;
+  last_name: string;
+  email_address: string;
 }
 
 interface ProjectsTable {
@@ -53,7 +56,7 @@ interface ProjectsTable {
 interface ProjectMembersTable {
   project_id: string;
   user_id: string;
-  role: "Owner" | "Editor" | "Viewer";
+  role: "Owner" | "Editor" | "Commenter" | "Viewer";
   cursor_color: string;
   joined_at: Generated<Date>;
   deleted_at: Date | null;
@@ -68,12 +71,13 @@ interface BlocksTable {
   frame_rate: number;
   project_id: string;
   deleted_at: Date | null;
+  general_access: string;
 }
 
 interface BlockMembersTable {
   block_id: string;
   user_id: string;
-  role: "Owner" | "Editor" | "Viewer";
+  role: "Owner" | "Editor" | "Commenter" | "Viewer";
   cursor_color: string;
   joined_at: Generated<Date>;
   deleted_at: Date | null;

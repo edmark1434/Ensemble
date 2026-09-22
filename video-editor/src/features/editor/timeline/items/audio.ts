@@ -69,6 +69,7 @@ class Audio extends Trimmable {
     this.ry = 4;
     this.volume = props.volume ?? 100;
     this.startLoadingAnimation();
+    this.hoverCursor = "pointer";
   }
 
   // Update the _render method to handle the visible portion

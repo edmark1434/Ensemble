@@ -14,6 +14,9 @@ export type IMenuItem =
   | "elements"
   | "ai-voice"
   | "sfx";
+
+export type IRightItem = "controls" | "comments" | "saves";
+
 export interface ILayoutState {
   cropTarget: ITrackItem | null;
   trackItem: ITrackItem | null;
@@ -49,4 +52,6 @@ export interface ILayoutState {
 
   controlsPanelRef: React.RefObject<HTMLDivElement | null> | null;
   setControlsPanelRef: (ref: React.RefObject<HTMLDivElement | null>) => void;
+
+  activeRightItem: IRightItem;
 }

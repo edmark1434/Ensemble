@@ -1,5 +1,5 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {Info, Lock } from "lucide-react";
+import {Eye, Info, Lock} from "lucide-react";
 import React, { useEffect, useState } from "react";
 import type { ITrackItem } from "@designcombo/types";
 import { dispatch } from "@designcombo/events";
@@ -16,6 +16,11 @@ import { Animations } from "./common/animations";
 import { LayoutMediaControls } from "@/features/editor/control-item/common/layout-media";
 import { PlaybackControls } from "./common/playback";
 import { Access } from "@/features/editor/control-item/common/access";
+import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
+import {hasBlockAccess} from "@/features/editor/types/block-members";
+import {useViewOnly} from "@/features/editor/hooks/use-view-only";
+import {getSceneRole} from "@/features/editor/utils/scene-access";
+import {canEditWithRole, type EditorRole} from "@/features/editor/types/editor-role";
 
 interface ISceneControlProps {
   opacity: number;
@@ -34,15 +39,55 @@ const getPropertiesFromDetails = (details: ISceneDetails): ISceneControlProps =>
 });
 
 const BasicSceneItem = ({
-  trackItem,
-  type
-}: {
+                          trackItem,
+                          type
+                        }: {
   trackItem: ITrackItem & { details: ISceneDetails };
   type?: string;
 }) => {
   const showAll = !type;
   const { collabSchema, collabOrigin, projectId, userId } = useStore();
   const { blockId, name } = trackItem.details;
+
+  const {
+    blockId: loadedAccessBlockId,
+    status: accessStatus,
+    owner: blockOwner,
+    members: blockMembers,
+    generalAccess,
+    load: loadBlockAccess,
+  } = useBlockMembersStore();
+
+  useEffect(() => {
+    void loadBlockAccess(blockId);
+  }, [blockId, loadBlockAccess]);
+
+  // Default to "has access" while loading so the copy doesn't flash the
+  // restricted phrasing before we actually know.
+  const hasAccess =
+    loadedAccessBlockId === blockId && accessStatus === "ready"
+      ? hasBlockAccess({ owner: blockOwner, members: blockMembers, generalAccess }, userId)
+      : true;
+
+  // Renaming from here writes through to the scene itself (block name + block
+  // doc), so it needs edit access to the scene, not just the project. Every
+  // other control on this panel only touches the project doc and keeps
+  // following the project role. undefined = still resolving: leave the field
+  // enabled rather than flash it disabled (the server enforces either way).
+  const [sceneRole, setSceneRole] = useState<EditorRole | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSceneRole(undefined);
+    void getSceneRole(blockId, userId).then((role) => {
+      if (!cancelled) setSceneRole(role);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [blockId, userId]);
+
+  const canRenameScene = sceneRole === undefined || canEditWithRole(sceneRole);
 
   const [properties, setProperties] = useState<ISceneControlProps>(() =>
     getPropertiesFromDetails(trackItem.details)
@@ -53,7 +98,7 @@ const BasicSceneItem = ({
   }, [trackItem.details]);
 
   const handleNameCommit = async (nextName: string) => {
-    if (!collabSchema || !collabOrigin) return;
+    if (!collabSchema || !collabOrigin || !canRenameScene) return;
     const previous = name ?? "";
     applySceneDetailsPatch(collabSchema, trackItem.id, { name: nextName }, collabOrigin);
     try {
@@ -103,7 +148,9 @@ const BasicSceneItem = ({
     });
   };
 
+  const viewOnly = useViewOnly();
   const isLocked = (trackItem.details as any)?.locked === true;
+  const isDisabled = isLocked || viewOnly;
 
   const components = [
     {
@@ -113,6 +160,7 @@ const BasicSceneItem = ({
           <SceneControls
             name={name ?? ""}
             onNameCommit={handleNameCommit}
+            disabled={isDisabled || !canRenameScene}
             // size={content?.size}
             // onSizeCommit={handleSizeCommit}
             // background={content?.background?.value}
@@ -120,7 +168,11 @@ const BasicSceneItem = ({
           />
           <div className="flex gap-2 items-start text-xs text-muted-foreground -mt-3 text-pretty">
             <Info size={16} />
-            <span>Double-click the scene to edit scene size, background and content</span>
+            <span>
+              {hasAccess
+                ? "Double-click the scene to edit scene size, background and content"
+                : "Users with access can double-click to edit scene size, background and content"}
+            </span>
           </div>
         </>
       )
@@ -141,7 +193,7 @@ const BasicSceneItem = ({
           cornerRadius={properties.borderRadius}
           blur={properties.blur}
           brightness={properties.brightness}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -153,7 +205,7 @@ const BasicSceneItem = ({
           volume={properties.volume}
           onChangeSpeed={handleChangeSpeed}
           onChangeVolume={handleChangeVolume}
-          disabled={isLocked}
+          disabled={isDisabled}
         />
       )
     },
@@ -163,25 +215,33 @@ const BasicSceneItem = ({
         <Animations
           trackItem={trackItem}
           properties={properties}
-          disabled={isLocked}
+          disabled={isDisabled}
           showLoop={false}
         />
       )
     },
     {
       key: "access",
-      component: <Access />
+      component: <Access blockId={blockId} />
     },
   ];
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden min-h-0">
       <ScrollArea className="h-full">
-        <fieldset disabled={isLocked} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
+        <fieldset disabled={isDisabled} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
           {isLocked && (
             <div className="flex gap-2 items-center text-primary text-sm font-normal">
               <Lock size={16} />
               <span>This item has been locked</span>
+            </div>
+          )}
+          {viewOnly && (
+            <div className="flex gap-2 items-center text-primary text-sm font-normal">
+              <Eye size={16} />
+              <span>
+                You only have view access to controls
+              </span>
             </div>
           )}
           {components

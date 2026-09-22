@@ -2,10 +2,11 @@ import { Label } from "@/components/ui/label";
 import useStore from "../../store/use-store";
 import { NameField, SizeFields, BackgroundField, patchProject } from "./composition-controls";
 
-export const ProjectControls = () => {
+export const ProjectControls = ({ disabled = false }: { disabled?: boolean }) => {
   const { projectId, projectName, setProjectName, size, background, setState } = useStore();
 
   const handleNameCommit = async (name: string) => {
+    if (disabled) return;
     const previous = projectName;
     setProjectName(name);
     try {
@@ -17,6 +18,7 @@ export const ProjectControls = () => {
   };
 
   const handleSizeCommit = async (width: number, height: number) => {
+    if (disabled) return;
     const previous = size;
     setState({ size: { width, height } });
     try {
@@ -32,11 +34,15 @@ export const ProjectControls = () => {
       <div className="flex flex-col gap-3">
         <Label className="font-sans text-sm font-semibold">Project</Label>
         <div className="flex flex-col gap-3">
-          <NameField value={projectName} maxLength={50} onCommit={handleNameCommit} />
-          <SizeFields width={size.width} height={size.height} onCommit={handleSizeCommit} />
+          <NameField value={projectName} maxLength={50} onCommit={handleNameCommit} disabled={disabled} />
+          <SizeFields width={size.width} height={size.height} onCommit={handleSizeCommit} disabled={disabled} />
           <BackgroundField
             value={background.value}
-            onChange={(v) => setState({ background: { type: "color", value: v } })}
+            onChange={(v) => {
+              if (disabled) return;
+              setState({ background: { type: "color", value: v } });
+            }}
+            disabled={disabled}
           />
         </div>
       </div>

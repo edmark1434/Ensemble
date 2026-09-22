@@ -53,6 +53,8 @@ class Scene extends Resizable {
     this.ry = 4;
     this.name = props.metadata?.name || props.details?.name || "Scene";
     this.blockId = props.details?.blockId;
+
+    this.hoverCursor = "pointer";
   }
 
   // Call this when the nested block's actual content duration is known —

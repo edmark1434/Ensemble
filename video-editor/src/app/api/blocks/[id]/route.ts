@@ -3,7 +3,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { updateBlock, getBlockProjectId } from "@/lib/db/blocks";
-import { db } from "@/lib/db";
+import { getEffectiveBlockRole } from "@/lib/db/block-members";
+import { canEditWithRole } from "@/features/editor/types/editor-role";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 
 export async function PATCH(
@@ -25,25 +26,10 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const blockMembership = await db
-    .selectFrom("block_members")
-    .where("block_id", "=", id)
-    .where("user_id", "=", decoded.userId)
-    .where("deleted_at", "is", null)
-    .select(["role"])
-    .executeTakeFirst();
-
-  const membership = blockMembership ?? await db
-    .selectFrom("project_members")
-    .where("project_id", "=", projectId)
-    .where("user_id", "=", decoded.userId)
-    .where("deleted_at", "is", null)
-    .select(["role"])
-    .executeTakeFirst();
-
-  // if (!membership || membership.role === "Viewer") {
-  //   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // }
+  const role = await getEffectiveBlockRole(id, projectId, decoded.userId);
+  if (!canEditWithRole(role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const { name, width, height } = await req.json();
 

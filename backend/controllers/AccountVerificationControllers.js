@@ -82,7 +82,14 @@ async function createBusinessVerificationController(req,res){
 
 async function handleVerificationWebhookStatusUpdated(req, res) {
     try {
-        const result = await processDiditVerificationStatusUpdate(req.body);
+        const isTestWebhook = req.get('x-didit-test-webhook') === 'true' || Boolean(req.body?.metadata?.test_webhook);
+        const result = await processDiditVerificationStatusUpdate(req.body, { isTestWebhook });
+        if (result.test) {
+            return res.status(200).json({
+                success: true,
+                message: "Test webhook received successfully",
+            });
+        }
         if (!result.found) {
             return res.status(404).json({ success: false, message: 'Verification session not found' });
         }

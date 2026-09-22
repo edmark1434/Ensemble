@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import * as Y from "yjs";
 import { createCollabSchema, hydrateDocFromState } from "@/features/editor/collab/ydoc-schema";
+import {DEFAULT_GENERAL_ACCESS, GeneralAccessLevel} from "@/features/editor/types/block-members";
 
 const BLOCK_FRAME_RATE = 30;
 const BLOCK_COLOR_SPACE = "RGB";
@@ -14,12 +15,14 @@ export async function createBlock({
   name,
   width,
   height,
+  ownerUserId,
 }: {
   blockId: string;
   projectId: string;
   name: string;
   width: number;
   height: number;
+  ownerUserId: string;
 }): Promise<void> {
   // Same seed shape a brand-new project's doc gets — empty content, but
   // size/fps/background already set so the timeline that opens it isn't
@@ -57,6 +60,7 @@ export async function createBlock({
         color_space: BLOCK_COLOR_SPACE,
         frame_rate: BLOCK_FRAME_RATE,
         project_id: projectId,
+        general_access: DEFAULT_GENERAL_ACCESS,
       })
       .execute();
 
@@ -69,6 +73,24 @@ export async function createBlock({
     await trx
       .insertInto("block_yjs_snapshots")
       .values({ yjs_snapshot_id: snapshot.yjs_snapshot_id, block_id: blockId })
+      .execute();
+
+    const ownerMembership = await trx
+      .selectFrom("project_members")
+      .where("project_id", "=", projectId)
+      .where("user_id", "=", ownerUserId)
+      .where("deleted_at", "is", null)
+      .select(["cursor_color"])
+      .executeTakeFirst();
+
+    await trx
+      .insertInto("block_members")
+      .values({
+        block_id: blockId,
+        user_id: ownerUserId,
+        role: "Owner",
+        cursor_color: ownerMembership?.cursor_color ?? "#a1a1aa",
+      })
       .execute();
   });
 }
@@ -87,16 +109,19 @@ export async function updateBlock({
   name,
   width,
   height,
+  generalAccess,
 }: {
   blockId: string;
   name?: string;
   width?: number;
   height?: number;
+  generalAccess?: GeneralAccessLevel;
 }): Promise<void> {
   const updates: Record<string, unknown> = {};
   if (name !== undefined) updates.name = name;
   if (width !== undefined) updates.resolution_width = width;
   if (height !== undefined) updates.resolution_height = height;
+  if (generalAccess !== undefined) updates.general_access = generalAccess;
 
   if (Object.keys(updates).length === 0) return;
 

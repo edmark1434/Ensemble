@@ -9,7 +9,9 @@ const {
     createPaymentToken,
     subscriptionWebhookHandler,
     cancelSubscription,
-    getActiveCreditPackagesService
+    getActiveCreditPackagesService,
+    syncPaymentSessionController,
+    returnTrampolineController
 } = require('../services/PaymentServices');
 const { getAllPlanControllers,
     getSubcriptionByUserIdControllers
@@ -20,12 +22,14 @@ const requireAuth = require('../middleware/RequireAuth');
 const verifyXenditWebhook = require('../middleware/VerifyXenditWebhook');
 
 router.get('/credit-packages', getActiveCreditPackagesService);
+router.get('/return-trampoline', returnTrampolineController);
 router.post('/topup', [checkSession, requireAuth], processTopUpPayment);
 router.post('/webhooks/xendit', verifyXenditWebhook, xenditWebhookHandler);
 router.post('/subscription', [checkSession, requireAuth], processSubscriptionPayment);
 router.get('/plans', [], getAllPlanControllers);
 
 router.get('/payment-methods', [checkSession, requireAuth], getAllPaymentMethodsByUserIdService);
+router.post('/sync-payment-session', [checkSession, requireAuth], syncPaymentSessionController);
 router.post('/topup-by-payment-method', [checkSession, requireAuth], TopUpPaymentByPaymentMethod);
 router.post('/webhooks/payment-session-complete', verifyXenditWebhook, paymentSessionCompleteWebhookHandler);
 router.post('/webhooks/payment-session-expired', verifyXenditWebhook, paymentSessionExpiredWebhookHandler);
