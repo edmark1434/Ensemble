@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, Settings, LogOut, User, Search } from "lucide-react";
+import { Bell, ChevronDown, Settings, LogOut, User, Search, Sparkles, MessageSquare } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useGlobalState from "@/lib/global_state";
@@ -257,7 +257,17 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const [isVerified, setIsVerified] = useState<boolean>(initialVerified);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const [isAskAiLoaded, setIsAskAiLoaded] = useState(false);
+  const [isAskAiClickLoading, setIsAskAiClickLoading] = useState(false);
 
+  useEffect(() => {
+    if (!isCheckingAccess) {
+      const t = setTimeout(() => setIsAskAiLoaded(true), 300);
+      return () => clearTimeout(t);
+    } else {
+      setIsAskAiLoaded(false);
+    }
+  }, [isCheckingAccess]);
   useEffect(() => {
     if (propCredits !== undefined && propCredits !== null && userCredits === null) {
       setCredits(propCredits);
@@ -584,11 +594,14 @@ useEffect(() => {
               {pageTitle}
             </h1>
             {!isGuestView && (
-              <div className="relative w-full max-w-xs group">
-                <Search className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 dark:text-zinc-600" />
-                <div className="w-full h-[36px] bg-gray-100 dark:bg-white/5 border border-transparent rounded-full flex items-center pl-10">
-                  <div className="h-3 w-24 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
+              <div className="flex items-center gap-3 w-full max-w-md">
+                <div className="relative w-full max-w-xs group">
+                  <Search className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 dark:text-zinc-600" />
+                  <div className="w-full h-[36px] bg-gray-100 dark:bg-white/5 border border-transparent rounded-full flex items-center pl-10">
+                    <div className="h-3 w-24 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
+                  </div>
                 </div>
+                <div className="h-[36px] w-[36px] rounded-full bg-gray-200 dark:bg-white/10 animate-pulse border border-gray-100 dark:border-white/5 shadow-sm"></div>
               </div>
             )}
           </div>
@@ -621,58 +634,113 @@ useEffect(() => {
             </h1>
 
             {!isGuestView && (
-              <form ref={creatorSearchRef} onSubmit={handleHeaderSearchSubmit} className="relative w-full max-w-xs group">
-                <Search
-                  onClick={handleHeaderSearchSubmit}
-                  className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500 dark:text-zinc-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors cursor-pointer"
-                />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder="Search creators..."
-                  value={headerSearchInput}
-                  onFocus={() => setIsCreatorSearchOpen(true)}
-                  onChange={(e) => {
-                    setHeaderSearchInput(e.target.value);
-                    setIsCreatorSearchOpen(true);
-                  }}
-                  className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 pl-9 pr-14 py-1.5 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder-gray-400 dark:placeholder-zinc-500"
-                />
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
-                  <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 bg-gray-200 dark:bg-white/10 border border-gray-300 dark:border-white/20 rounded">
-                    Alt+K
-                  </kbd>
-                </div>
-
-                {isCreatorSearchOpen && headerSearchInput.replace(/^@/, "").trim().length > 0 && (
-                  <div className="absolute top-full mt-2 w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-xl z-50 overflow-hidden">
-                    {isSearchingCreators ? (
-                      <div className="p-4 text-center text-xs text-gray-500 dark:text-zinc-400">Searching...</div>
-                    ) : creatorSearchResults.length > 0 ? (
-                      <div className="max-h-64 overflow-y-auto custom-scrollbar">
-                        {creatorSearchResults.map((creator) => (
-                          <div
-                            key={creator.accountId}
-                            onClick={() => {
-                              navigate(`/search/user/${creator.username}`);
-                              setIsCreatorSearchOpen(false);
-                            }}
-                            className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-colors border-b border-gray-100 dark:border-white/5 last:border-none"
-                          >
-                            <img src={creator.avatar} alt={creator.name} className="h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-white/10" />
-                            <div className="min-w-0">
-                              <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{creator.name}</p>
-                              <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate">@{creator.username}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-4 text-center text-xs text-gray-500 dark:text-zinc-400">No creators found</div>
-                    )}
+              <div className="flex items-center gap-3 w-full max-w-md">
+                <form ref={creatorSearchRef} onSubmit={handleHeaderSearchSubmit} className="relative w-full max-w-xs group">
+                  <Search
+                    onClick={handleHeaderSearchSubmit}
+                    className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500 dark:text-zinc-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors cursor-pointer"
+                  />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    placeholder="Search creators..."
+                    value={headerSearchInput}
+                    onFocus={() => setIsCreatorSearchOpen(true)}
+                    onChange={(e) => {
+                      setHeaderSearchInput(e.target.value);
+                      setIsCreatorSearchOpen(true);
+                    }}
+                    className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 pl-9 pr-14 py-1.5 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder-gray-400 dark:placeholder-zinc-500"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+                    <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 bg-gray-200 dark:bg-white/10 border border-gray-300 dark:border-white/20 rounded">
+                      Alt+K
+                    </kbd>
                   </div>
-                )}
-              </form>
+
+                  {isCreatorSearchOpen && headerSearchInput.replace(/^@/, "").trim().length > 0 && (
+                    <div className="absolute top-full mt-2 w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-xl z-50 overflow-hidden">
+                      {isSearchingCreators ? (
+                        <div className="p-4 text-center text-xs text-gray-500 dark:text-zinc-400">Searching...</div>
+                      ) : creatorSearchResults.length > 0 ? (
+                        <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                          {creatorSearchResults.map((creator) => (
+                            <div
+                              key={creator.accountId}
+                              onClick={() => {
+                                navigate(`/search/user/${creator.username}`);
+                                setIsCreatorSearchOpen(false);
+                              }}
+                              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-colors border-b border-gray-100 dark:border-white/5 last:border-none"
+                            >
+                              <img src={creator.avatar} alt={creator.name} className="h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-white/10" />
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{creator.name}</p>
+                                <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate">@{creator.username}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center text-xs text-gray-500 dark:text-zinc-400">No creators found</div>
+                      )}
+                    </div>
+                  )}
+                </form>
+
+                <button
+                  onClick={() => {
+                    if (isAskAiClickLoading) return;
+                    setIsAskAiClickLoading(true);
+                    setTimeout(() => {
+                      setIsAskAiClickLoading(false);
+                      navigate("/landing/AskOurChatbot");
+                    }, 800);
+                  }}
+                  className={`group relative flex items-center justify-center overflow-hidden rounded-full border transition-all duration-700 ease-in-out border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 hover:scale-105 hover:shadow-[0_0_15px_rgba(156,163,175,0.2)] h-[36px] bg-white dark:bg-dark-base ${
+                    isAskAiLoaded ? 'w-[86px] px-3' : 'w-[36px] px-0'
+                  }`}
+                >
+                  <div 
+                    className="absolute inset-0 opacity-0 group-hover:opacity-60 dark:group-hover:opacity-100 transition-opacity duration-500 overflow-hidden rounded-full pointer-events-none"
+                  >
+                    <div
+                      className="absolute top-0 left-0 h-full w-[200%]"
+                      style={{
+                        backgroundImage: 'linear-gradient(90deg, #fef08a 0%, #e9d5ff 16.66%, #bfdbfe 33.33%, #fef08a 50%, #e9d5ff 66.66%, #bfdbfe 83.33%, #fef08a 100%)',
+                        animation: 'moveGradient 3s linear infinite',
+                      }}
+                    />
+                  </div>
+                  <style>{`
+                    @keyframes moveGradient {
+                      0% { transform: translateX(0); }
+                      100% { transform: translateX(-50%); }
+                    }
+                    @keyframes passiveShine {
+                      0% { transform: translateX(-100%); }
+                      25% { transform: translateX(100%); }
+                      100% { transform: translateX(100%); }
+                    }
+                  `}</style>
+                  <div 
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-100/80 dark:via-white/20 to-transparent z-10"
+                    style={{ animation: 'passiveShine 3s ease-in-out infinite' }}
+                  />
+                  
+                  {isAskAiClickLoading ? (
+                    <div className="h-4 w-4 border-2 border-gray-300 dark:border-gray-600 border-t-gray-700 dark:border-t-gray-300 rounded-full animate-spin z-20 shrink-0" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 text-gray-500 dark:text-zinc-400 group-hover:text-gray-800 dark:group-hover:text-gray-800 shrink-0 z-20 transition-colors duration-300" />
+                  )}
+                  
+                  <span className={`text-xs font-bold whitespace-nowrap overflow-hidden transition-all duration-700 ease-in-out z-20 text-gray-500 dark:text-zinc-400 group-hover:text-gray-800 dark:group-hover:text-gray-800 ${
+                    isAskAiLoaded ? 'max-w-[50px] opacity-100 ml-1.5' : 'max-w-0 opacity-0 ml-0'
+                  }`}>
+                    Ask AI
+                  </span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -793,6 +861,17 @@ useEffect(() => {
                         >
                           <Settings className="h-4 w-4" />
                           Settings
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setIsProfileOpen(false);
+                            navigate("/landing/SendAFeedback");
+                          }}
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                          Submit a Feedback
                         </button>
                         
                         <div className="my-2 border-t border-gray-200 dark:border-white/10" />
