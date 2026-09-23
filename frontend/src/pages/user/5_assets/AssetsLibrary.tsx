@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Compass, Folder, Heart, Image, LayoutTemplate, Loader2, Pencil, Plus, Search, ShoppingBag, Star, Trash2, Video } from "lucide-react";
+import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Compass, Folder, Heart, Image, LayoutTemplate, Loader2, Pencil, Plus, Search, ShoppingBag, Star, Trash2, Video, Zap } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -13,7 +13,7 @@ import AssetMedia from "./AssetMedia";
 import { AssetCard } from "./AssetCard";
 import type { AssetPagination, AssetRecord, AssetType } from "./assetTypes";
 import { mediaUrl } from "./assetTypes";
-import { getAssetPostingEligibility } from "./assetPostingEligibility";
+import { getAssetPostingEligibility, type AssetPostingEligibility } from "./assetPostingEligibility";
 import useGlobalState from "@/lib/global_state";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
@@ -96,6 +96,21 @@ export default function AssetsLibrary() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
+  const [eligibility, setEligibility] = useState<AssetPostingEligibility | null>(null);
+
+  const fetchEligibility = useCallback(async () => {
+    if (isGuestView) return;
+    try {
+      const data = await getAssetPostingEligibility();
+      setEligibility(data);
+    } catch (e) {
+      // ignore
+    }
+  }, [isGuestView]);
+
+  useEffect(() => {
+    void fetchEligibility();
+  }, [fetchEligibility]);
   
   useEffect(() => {
     if (location.state?.action === "upload" && !loading) {
@@ -224,7 +239,8 @@ export default function AssetsLibrary() {
     setEditorOpen(false);
     setEditingAsset(null);
     showSuccessToast(wasEditing ? "Asset updated." : "Asset uploaded.");
-    if (!wasEditing) {
+    void fetchEligibility();
+    if (!wasEditing && asset.status === "draft") {
       setPage(1);
       navigate('/assets/owned');
       setMineStatus(asset.review_status === "pending" || asset.status === "draft" ? "all" : "uploaded");
@@ -243,6 +259,7 @@ export default function AssetsLibrary() {
       setPagination((current) => ({ ...current, total: Math.max(0, current.total - 1) }));
       showSuccessToast("Asset deleted.");
       setDeletingAsset(null);
+      void fetchEligibility();
     } catch (error) {
       showErrorToast(requestError(error));
     } finally {
@@ -425,24 +442,30 @@ export default function AssetsLibrary() {
             </div>
         </div>
 
-        <div className="mt-6 flex items-center justify-between">
-          <p className="text-sm font-semibold">
-            {view === "mine"
-              ? (mineStatus === "all"
-                  ? "Your assets"
-                  : mineStatus === "uploaded"
-                    ? "Your published assets"
-                    : mineStatus === "in_review"
-                      ? "Assets under review"
-                      : mineStatus === "rejected"
-                        ? "Rejected assets"
-                        : "Your draft assets")
-              : view === "purchased"
-                ? "Your purchased assets"
-                : view === "saved"
-                  ? (savedStatus === "liked" ? "Your liked assets" : "Your saved assets")
-                  : "Community assets"}
-          </p>
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <p className="text-sm font-semibold">{view === "mine" ? (mineStatus === "draft" ? "Your draft assets" : "Your uploaded assets") : view === "purchased" ? "Your purchased assets" : view === "saved" ? (savedStatus === "liked" ? "Your liked assets" : "Your saved assets") : "Community assets"}</p>
+            {view === "mine" && eligibility && (
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 ring-1 ring-inset ring-gray-500/10 dark:bg-white/10 dark:text-zinc-300 dark:ring-white/20">
+                  {eligibility.unlimited ? "Unlimited uploads" : `${eligibility.used} / ${eligibility.limit} Uploaded`}
+                </span>
+                {!eligibility.unlimited && (
+                  <button 
+                    onClick={() => navigate("/credits-subscriptions")}
+                    className="group relative inline-flex items-center justify-center gap-1 overflow-hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-700 shadow-sm transition-all duration-500 hover:scale-105 hover:shadow-[0_0_15px_rgba(251,191,36,0.4)] dark:border-amber-600/80 dark:bg-transparent dark:text-amber-500 dark:hover:border-amber-500 dark:hover:text-amber-400 dark:hover:shadow-[0_0_15px_rgba(251,191,36,0.3)]"
+                  >
+                    <div 
+                      className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/20 dark:via-amber-400/20 to-transparent z-10"
+                      style={{ animation: 'passiveShine 3s ease-in-out infinite' }}
+                    />
+                    <Zap className="relative z-20 h-3 w-3 fill-amber-500/70 text-amber-500 dark:fill-amber-500/70 dark:text-amber-500 group-hover:dark:text-amber-400 group-hover:dark:fill-amber-400/70 transition-colors" />
+                    <span className="relative z-20">Upgrade</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
           {!loading && <p className="text-xs text-gray-500 dark:text-zinc-500">{pagination.total.toLocaleString()} {pagination.total === 1 ? "asset" : "assets"}</p>}
         </div>
 
