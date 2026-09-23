@@ -74,56 +74,125 @@ async function evaluateUserContent(text = '') {
 }
 
 /**
- * When marketplace listing review is on, queue a pending marketplace_listings row
+ * When marketplace listing review is on, queue or update a pending marketplace_listings row
  * and return the status that should be persisted on market_assets ('draft').
  * When off, returns requestedStatus unchanged.
  */
 async function resolveMarketplacePublishStatus({
   accountId,
+  marketAssetId = null,
   title,
   description,
   priceCredits,
   category = 'Assets',
+  thumbnailUrl = null,
   requestedStatus,
+  currentStatus = 'draft',
 }) {
   if (String(requestedStatus).toLowerCase() !== 'published') {
     return { status: requestedStatus, queued: false };
   }
+
+  // If the asset is ALREADY published, updating its details preserves published status
+  if (currentStatus === 'published') {
+    if (marketAssetId) {
+      try {
+        await pool.query(
+          `UPDATE marketplace_listings
+           SET title = $1, description = $2, category = $3, price_credits = $4,
+               thumbnail_url = COALESCE($5, thumbnail_url), updated_at = NOW()
+           WHERE market_asset_id = $6`,
+          [
+            String(title || 'Untitled').slice(0, 255),
+            description || null,
+            category,
+            Number(priceCredits) || 0,
+            thumbnailUrl || null,
+            marketAssetId,
+          ]
+        );
+      } catch (err) {
+        console.warn('marketplaceListing sync skipped:', err.message);
+      }
+    }
+    return { status: requestedStatus, queued: false };
+  }
+
   const settings = await getModerationSettings();
   if (!settings.marketplaceListingReview) {
     return { status: requestedStatus, queued: false };
   }
 
-  const listingNumber = `LST-${Date.now().toString().slice(-10)}`;
   try {
+    // Check if an existing listing already exists for this market_asset_id
+    let existingListing = null;
+    if (marketAssetId) {
+      const existing = await pool.query(
+        `SELECT listing_id, listing_number, status
+         FROM marketplace_listings
+         WHERE market_asset_id = $1
+         ORDER BY created_at DESC LIMIT 1`,
+        [marketAssetId]
+      );
+      existingListing = existing.rows[0] || null;
+    }
+
+    if (existingListing) {
+      // UPDATE existing listing instead of inserting duplicate!
+      await pool.query(
+        `UPDATE marketplace_listings
+         SET title = $1, description = $2, category = $3, price_credits = $4,
+             thumbnail_url = COALESCE($5, thumbnail_url), status = 'pending',
+             rejection_reason = NULL, reviewed_by_staff_id = NULL, reviewed_at = NULL,
+             updated_at = NOW()
+         WHERE listing_id = $6`,
+        [
+          String(title || 'Untitled').slice(0, 255),
+          description || null,
+          category,
+          Number(priceCredits) || 0,
+          thumbnailUrl || null,
+          existingListing.listing_id,
+        ]
+      );
+      return {
+        status: 'draft',
+        queued: true,
+        listingNumber: existingListing.listing_number,
+        message: 'Listing submitted for moderator approval. It will be published once approved.',
+      };
+    }
+
+    const listingNumber = `LST-${Date.now().toString().slice(-10)}`;
     await pool.query(
       `
       INSERT INTO marketplace_listings (
-        listing_number, submitted_by_account_id, title, description,
-        category, price_credits, status, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW(), NOW())
+        listing_number, submitted_by_account_id, market_asset_id, title, description,
+        category, price_credits, thumbnail_url, status, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW(), NOW())
       `,
       [
         listingNumber,
         accountId || null,
+        marketAssetId || null,
         String(title || 'Untitled').slice(0, 255),
         description || null,
         category,
         Number(priceCredits) || 0,
+        thumbnailUrl || null,
       ]
     );
+
+    return {
+      status: 'draft',
+      queued: true,
+      listingNumber,
+      message: 'Listing submitted for moderator approval. It will be published once approved.',
+    };
   } catch (err) {
     console.warn('marketplaceListingReview queue skipped:', err.message);
     return { status: requestedStatus, queued: false };
   }
-
-  return {
-    status: 'draft',
-    queued: true,
-    listingNumber,
-    message:
-      'Listing queued for staff review. It stays as a draft until a marketplace moderator approves it, then you can publish.',
-  };
 }
 
 /**
