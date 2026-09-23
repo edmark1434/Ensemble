@@ -8,7 +8,7 @@ async function getAllPlanRepositories() {
                 p.plan_id,
                 p.name,
                 p.description,
-                p.amount_php_cents as price,
+                (p.amount_php_cents / 100) as price,
                 p.billing_period,
                 p.days_of_trials,
                 COALESCE(

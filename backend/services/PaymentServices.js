@@ -121,7 +121,7 @@ async function xenditWebhookHandler(req, res) {
                     throw new Error("Subscription not found.");
 
                 const payload = {
-                    amount: planDetails.amount_php_cents,
+                    amount: planDetails.amount_php_cents / 100,
 
                     schedule: {
                         interval: planDetails.billing_period,
@@ -159,7 +159,7 @@ async function xenditWebhookHandler(req, res) {
                             type: "DIGITAL_PRODUCT",
                             reference_id: subscription.reference_id,
                             name: planDetails.name,
-                            net_unit_amount: planDetails.amount_php_cents,
+                            net_unit_amount: planDetails.amount_php_cents / 100,
                             quantity: 1,
                             category: "Plan",
                             description: planDetails.description
@@ -1313,7 +1313,7 @@ async function processSubscriptionPayment(req, res) {
             const payload = {
                 reference_id,
                 currency: "PHP",
-                amount: planDetails.amount_php_cents,
+                amount: planDetails.amount_php_cents / 100,
 
         //         // Inject either customer_id or customer_details
                 ...customerPayload,
@@ -1354,7 +1354,7 @@ async function processSubscriptionPayment(req, res) {
                         type: "DIGITAL_PRODUCT",
                         reference_id,
                         name: planDetails.name,
-                        net_unit_amount: planDetails.amount_php_cents,
+                        net_unit_amount: planDetails.amount_php_cents / 100,
                         quantity: 1,
                         category: "Plan",
                         description: planDetails.description,
@@ -1554,7 +1554,7 @@ async function updateSubscriptionPayment(req, res) {
             currency: "PHP",
 
             // Charge the full new plan amount
-            request_amount: serverAmount,
+            request_amount: serverAmount / 100,
 
             payment_token_id: req.body.paymentMethodId,
             description: `Subscription upgrade from ${subscriptionDetails[0].plan_id} to ${planDetails.plan_id}`,
@@ -1604,7 +1604,7 @@ async function updateSubscriptionPayment(req, res) {
             }
             anchorDate = anchorDate.toISOString();
             const payload = {
-                amount: planDetails.amount_php_cents,
+                amount: planDetails.amount_php_cents / 100,
                 schedule: {
                     interval: planDetails.billing_period,
                     interval_count: 1,
@@ -1639,7 +1639,7 @@ async function updateSubscriptionPayment(req, res) {
                         type: "DIGITAL_PRODUCT",
                         reference_id: subscriptionDetails[0].reference_id,
                         name: planDetails.name,
-                        net_unit_amount: planDetails.amount_php_cents,
+                        net_unit_amount: planDetails.amount_php_cents / 100,
                         quantity: 1,
                         category: "Plan",
                         description: planDetails.description,
