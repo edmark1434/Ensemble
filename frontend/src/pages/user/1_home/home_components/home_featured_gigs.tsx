@@ -103,8 +103,8 @@ export const HomeFeaturedGigs: React.FC = () => {
         </button>
       </div>
 
-      <div className="grid gap-5 grid-cols-1 md:grid-cols-3">
-        {gigs.map((gig) => {
+      <div className="grid gap-5 grid-cols-1 md:grid-cols-2 2xl:grid-cols-3">
+        {gigs.map((gig, index) => {
           const startingPrice =
             gig.tiers && gig.tiers.length > 0
               ? Math.min(...gig.tiers.map((t: any) => t.price))
@@ -116,7 +116,7 @@ export const HomeFeaturedGigs: React.FC = () => {
             <div
               key={gig.id}
               onClick={() => navigate(`/gigs/services/${gig.id}/page`)}
-              className="group flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer shadow-sm dark:shadow-none relative"
+              className={`group flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer shadow-sm dark:shadow-none relative ${index === 2 ? "hidden 2xl:flex" : "flex"}`}
             >
               <div>
                 {/* Thumbnail Image */}
@@ -185,18 +185,8 @@ export const HomeFeaturedGigs: React.FC = () => {
                       </span>
                     )}
                   </div>
-
                   <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 dark:bg-zinc-800 text-[10px] font-semibold text-gray-600 dark:text-zinc-300 border border-gray-300 dark:border-white/10 shrink-0">
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
                       <circle cx="9" cy="7" r="4" />
                       <path d="M22 21v-2a4 4 0 0 0-3-3.87" />

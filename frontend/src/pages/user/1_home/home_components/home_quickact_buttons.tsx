@@ -10,6 +10,7 @@ import {
   Upload,
   Users,
   MessageSquare,
+  Star,
 } from "lucide-react";
 
 import { useState } from "react";
@@ -88,6 +89,12 @@ export const HomeQuickActButtons: React.FC = () => {
       icon: MessageSquare,
       path: "/forums",
       color: "indigo",
+    },
+    {
+      label: "Submit a Feedback",
+      icon: Star,
+      path: "/landing/SendAFeedback",
+      color: "amber",
     },
   ];
 

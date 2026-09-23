@@ -4,7 +4,7 @@ import { APP_VERSION } from "@/version.tsx";
 
 export const HomeBannerVersion: React.FC = () => {
   return (
-    <div className="relative flex items-center gap-2 bg-white/70 dark:bg-zinc-950/70 px-3 py-1 backdrop-blur-md transition-all duration-300 border-y border-gray-300 dark:border-white/15 hover:border-gray-500 dark:hover:border-zinc-400/50">
+    <div className="hidden sm:flex relative items-center gap-2 bg-white/70 dark:bg-zinc-950/70 px-3 py-1 backdrop-blur-md transition-all duration-300 border-y border-gray-300 dark:border-white/15 hover:border-gray-500 dark:hover:border-zinc-400/50">
       {/* Neutral Gray Corner Brackets */}
       <div className="absolute -top-[1px] -left-[1px] h-1.5 w-1.5 border-t border-l border-gray-500/80 dark:border-zinc-400/80" />
       <div className="absolute -top-[1px] -right-[1px] h-1.5 w-1.5 border-t border-r border-gray-500/80 dark:border-zinc-400/80" />

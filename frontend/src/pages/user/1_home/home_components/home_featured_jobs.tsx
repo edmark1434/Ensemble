@@ -128,9 +128,9 @@ export const HomeFeaturedJobs: React.FC = () => {
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white">Latest Job Posts</h2>
                 </div>
               </div>
-              <div className="grid gap-5 grid-cols-1 md:grid-cols-3">
-                  {[1, 2, 3].map(i => (
-                      <div key={i} className="h-72 bg-gray-100 dark:bg-white/5 animate-pulse rounded-2xl border border-gray-200 dark:border-white/10" />
+              <div className="grid gap-5 grid-cols-1 md:grid-cols-2 2xl:grid-cols-3">
+                  {[1, 2, 3].map((i, index) => (
+                      <div key={i} className={`h-72 bg-gray-100 dark:bg-white/5 animate-pulse rounded-2xl border border-gray-200 dark:border-white/10 ${index === 2 ? "hidden 2xl:block" : ""}`} />
                   ))}
               </div>
           </section>
@@ -167,12 +167,12 @@ export const HomeFeaturedJobs: React.FC = () => {
         </button>
       </div>
 
-      <div className="grid gap-5 grid-cols-1 md:grid-cols-3">
-        {jobs.map((job: Job) => (
+      <div className="grid gap-5 grid-cols-1 md:grid-cols-2 2xl:grid-cols-3">
+        {jobs.map((job: Job, index: number) => (
           <div
             key={job.id}
             onClick={() => navigate(`/jobs/postings/${job.id}`)}
-            className="group flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer shadow-sm dark:shadow-none"
+            className={`group flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer shadow-sm dark:shadow-none ${index === 2 ? "hidden 2xl:flex" : "flex"}`}
           >
             <div>
               {/* Thumbnail Image */}
