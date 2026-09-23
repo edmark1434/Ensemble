@@ -46,6 +46,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import ShareModal from "@/components/share-modal";
 
 export default function Navbar({
   user,
@@ -67,7 +68,8 @@ export default function Navbar({
   const isLargeScreen = useIsLargeScreen();
   const isMediumScreen = useIsMediumScreen();
   const isSmallScreen = useIsSmallScreen();
-  const { isShortcutsModalOpen, setShortcutsModalOpen, projectName, setProjectName } = useStore();
+  const { isShortcutsModalOpen, setShortcutsModalOpen, projectName, setProjectName, projectId } = useStore();
+  const [isShareModalOpen, setShareModalOpen] = useState(false);
   const [title, setTitle] = useState(projectName);
 
   useEffect(() => {
@@ -297,6 +299,7 @@ export default function Navbar({
           <DownloadPopover stateManager={stateManager} />
           {!viewOnly && (
             <Button
+              onClick={() => setShareModalOpen(true)}
               className="flex h-8 gap-2 border border-border"
               variant="default"
               size={isMediumScreen ? "sm" : "icon"}
@@ -311,6 +314,11 @@ export default function Navbar({
       <ShortcutsModal
         open={isShortcutsModalOpen}
         onOpenChange={setShortcutsModalOpen}
+      />
+      <ShareModal
+        open={isShareModalOpen}
+        onOpenChange={setShareModalOpen}
+        projectId={projectId}
       />
     </div>
   );
