@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import api from "@/lib/axios";
+import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
@@ -19,8 +20,16 @@ import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 
 type FilterType = "all" | AssetType;
 type AssetView = "discover" | "mine" | "purchased" | "saved";
-type MineStatus = "uploaded" | "draft";
+type MineStatus = "all" | "uploaded" | "in_review" | "rejected" | "draft";
 type SavedStatus = "saved" | "liked";
+
+const MINE_STATUS_OPTIONS: { id: MineStatus; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "uploaded", label: "Published" },
+  { id: "in_review", label: "Under Review" },
+  { id: "rejected", label: "Rejected" },
+  { id: "draft", label: "Drafts" },
+];
 
 const FILTERS: { value: FilterType; label: string; icon: typeof Image }[] = [
   { value: "all", label: "All", icon: Image },
@@ -80,7 +89,7 @@ export default function AssetsLibrary() {
     else if (tab === 'mine') navigate('/assets/owned');
     else navigate(`/assets/${tab}`);
   };
-  const [mineStatus, setMineStatus] = useState<MineStatus>("uploaded");
+  const [mineStatus, setMineStatus] = useState<MineStatus>("all");
   const [savedStatus, setSavedStatus] = useState<SavedStatus>("saved");
   const [search, setSearch] = useState(location.state?.searchQuery || "");
   const [debouncedSearch, setDebouncedSearch] = useState(location.state?.searchQuery || "");
@@ -124,8 +133,27 @@ export default function AssetsLibrary() {
     setLoading(true);
     setLoadError("");
     try {
+      const statusParam = view === "mine"
+        ? (mineStatus === "all"
+            ? "all"
+            : mineStatus === "uploaded"
+              ? "published"
+              : mineStatus === "in_review"
+                ? "pending"
+                : mineStatus === "rejected"
+                  ? "rejected"
+                  : "draft")
+        : undefined;
+
       const response = await api.get<{ assets: AssetRecord[]; pagination: AssetPagination }>("/api/assets", {
-        params: { page, pageSize: 12, search: debouncedSearch, type: filter, view: view === "saved" ? savedStatus : view, status: view === "mine" ? (mineStatus === "uploaded" ? "published" : "draft") : undefined },
+        params: {
+          page,
+          pageSize: 12,
+          search: debouncedSearch,
+          type: filter,
+          view: view === "saved" ? savedStatus : view,
+          status: statusParam,
+        },
         signal,
       });
       setAssets(response.data.assets || []);
@@ -142,6 +170,18 @@ export default function AssetsLibrary() {
     const controller = new AbortController();
     void loadAssets(controller.signal);
     return () => controller.abort();
+  }, [loadAssets]);
+
+  useEffect(() => {
+    const handleStatusUpdate = () => {
+      void loadAssets();
+    };
+    socket.on("assetStatusUpdated", handleStatusUpdate);
+    socket.on("notification", handleStatusUpdate);
+    return () => {
+      socket.off("assetStatusUpdated", handleStatusUpdate);
+      socket.off("notification", handleStatusUpdate);
+    };
   }, [loadAssets]);
 
   const openCreate = async () => {
@@ -184,15 +224,10 @@ export default function AssetsLibrary() {
     setEditorOpen(false);
     setEditingAsset(null);
     showSuccessToast(wasEditing ? "Asset updated." : "Asset uploaded.");
-    if (!wasEditing && asset.status === "draft") {
+    if (!wasEditing) {
       setPage(1);
       navigate('/assets/owned');
-      setMineStatus("draft");
-      return;
-    }
-    if (!wasEditing && view === "mine" && mineStatus !== "uploaded") {
-      setPage(1);
-      setMineStatus("uploaded");
+      setMineStatus(asset.review_status === "pending" || asset.status === "draft" ? "all" : "uploaded");
       return;
     }
     if (page !== 1) setPage(1);
@@ -327,20 +362,20 @@ export default function AssetsLibrary() {
               {/* Mine sub-status */}
               {view === "mine" && (
                 <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1" role="tablist" aria-label="My asset status">
-                  {(["uploaded", "draft"] as MineStatus[]).map((statusTab) => (
+                  {MINE_STATUS_OPTIONS.map((statusTab) => (
                     <button
-                      key={statusTab}
+                      key={statusTab.id}
                       type="button"
                       role="tab"
-                      aria-selected={mineStatus === statusTab}
-                      onClick={() => { setPage(1); setMineStatus(statusTab); }}
+                      aria-selected={mineStatus === statusTab.id}
+                      onClick={() => { setPage(1); setMineStatus(statusTab.id); }}
                       className={`rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition ${
-                        mineStatus === statusTab
+                        mineStatus === statusTab.id
                           ? "bg-gray-100 text-gray-900 shadow-sm dark:bg-white/10 dark:text-white"
                           : "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-300"
                       }`}
                     >
-                      {statusTab}
+                      {statusTab.label}
                     </button>
                   ))}
                 </div>
@@ -391,7 +426,23 @@ export default function AssetsLibrary() {
         </div>
 
         <div className="mt-6 flex items-center justify-between">
-          <p className="text-sm font-semibold">{view === "mine" ? (mineStatus === "draft" ? "Your draft assets" : "Your uploaded assets") : view === "purchased" ? "Your purchased assets" : view === "saved" ? (savedStatus === "liked" ? "Your liked assets" : "Your saved assets") : "Community assets"}</p>
+          <p className="text-sm font-semibold">
+            {view === "mine"
+              ? (mineStatus === "all"
+                  ? "Your assets"
+                  : mineStatus === "uploaded"
+                    ? "Your published assets"
+                    : mineStatus === "in_review"
+                      ? "Assets under review"
+                      : mineStatus === "rejected"
+                        ? "Rejected assets"
+                        : "Your draft assets")
+              : view === "purchased"
+                ? "Your purchased assets"
+                : view === "saved"
+                  ? (savedStatus === "liked" ? "Your liked assets" : "Your saved assets")
+                  : "Community assets"}
+          </p>
           {!loading && <p className="text-xs text-gray-500 dark:text-zinc-500">{pagination.total.toLocaleString()} {pagination.total === 1 ? "asset" : "assets"}</p>}
         </div>
 
@@ -405,8 +456,42 @@ export default function AssetsLibrary() {
         ) : assets.length === 0 ? (
           <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-16 text-center dark:border-white/10 dark:bg-dark-surface">
             <AudioLines className="mx-auto h-10 w-10 text-gray-400 dark:text-zinc-600" />
-            <h2 className="mt-4 font-semibold">{view === "mine" ? (mineStatus === "draft" ? "You don't have any draft assets." : "You haven't uploaded any assets yet.") : view === "purchased" ? "You haven't purchased any assets yet." : view === "saved" ? (savedStatus === "liked" ? "You haven't liked any assets yet." : "You haven't saved any assets yet.") : "No assets found."}</h2>
-            <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">{search ? "Try a different search or filter." : view === "mine" && mineStatus === "draft" ? "Assets saved as drafts will appear here." : view === "purchased" ? "Assets you purchase will appear here." : view === "saved" ? (savedStatus === "liked" ? "Like assets to find them here later." : "Save assets to find them here later.") : "Uploaded media will appear here."}</p>
+            <h2 className="mt-4 font-semibold">
+              {view === "mine"
+                ? (mineStatus === "all"
+                    ? "You haven't uploaded any assets yet."
+                    : mineStatus === "uploaded"
+                      ? "You don't have any published assets."
+                      : mineStatus === "in_review"
+                        ? "No assets are currently under review."
+                        : mineStatus === "rejected"
+                          ? "No assets have been rejected."
+                          : "You don't have any draft assets.")
+                : view === "purchased"
+                  ? "You haven't purchased any assets yet."
+                  : view === "saved"
+                    ? (savedStatus === "liked" ? "You haven't liked any assets yet." : "You haven't saved any assets yet.")
+                    : "No assets found."}
+            </h2>
+            <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">
+              {search
+                ? "Try a different search or filter."
+                : view === "mine"
+                  ? (mineStatus === "all"
+                      ? "Assets you create and submit will appear here."
+                      : mineStatus === "uploaded"
+                        ? "Assets that have been approved by moderators will appear here."
+                        : mineStatus === "in_review"
+                          ? "Assets currently in the moderation review queue will appear here."
+                          : mineStatus === "rejected"
+                            ? "Assets rejected by moderators will appear here for revision."
+                            : "Assets saved as drafts will appear here.")
+                  : view === "purchased"
+                    ? "Assets you purchase will appear here."
+                    : view === "saved"
+                      ? (savedStatus === "liked" ? "Like assets to find them here later." : "Save assets to find them here later.")
+                      : "Uploaded media will appear here."}
+            </p>
             {view === "mine" && <button type="button" onClick={() => void openCreate()} disabled={checkingPostEligibility} className="mt-5 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">{checkingPostEligibility ? "Checking..." : "Upload your first asset"}</button>}
           </div>
         ) : (

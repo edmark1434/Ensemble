@@ -125,7 +125,8 @@ function validateAssetPayload(payload, { creating = false } = {}) {
   if (!Number.isInteger(priceCredits) || priceCredits < 0 || priceCredits > 100000000) {
     throw new AssetError('Price must be a whole number from 0 to 100,000,000 credits.', 400, 'VALIDATION_ERROR');
   }
-  if (!ASSET_STATUSES.has(payload?.status)) {
+  const status = payload?.status || 'published';
+  if (!ASSET_STATUSES.has(status)) {
     throw new AssetError('Status must be draft or published.', 400, 'VALIDATION_ERROR');
   }
 
@@ -133,7 +134,7 @@ function validateAssetPayload(payload, { creating = false } = {}) {
     name,
     description,
     priceCredits,
-    status: payload.status,
+    status,
     tags: normalizeTags(payload?.tags, { creating }),
   };
   if (!creating && payload?.contentUpdate == null) return result;
@@ -313,6 +314,8 @@ function publicAsset(asset, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_F
   return {
     ...safeAsset,
     owner_account_id: _ownerAccountId,
+    review_status: safeAsset.is_owner ? (safeAsset.review_status || null) : undefined,
+    rejection_reason: safeAsset.is_owner ? (safeAsset.rejection_reason || null) : undefined,
     like_count: Number(safeAsset.like_count || 0),
     save_count: Number(safeAsset.save_count || 0),
     review_count: Number(safeAsset.review_count || 0),
@@ -365,10 +368,6 @@ async function listAssetsServices(accountId, query = {}) {
   if (type && !ASSET_TYPES.has(type)) {
     throw new AssetError('Unsupported asset type filter.', 400, 'VALIDATION_ERROR');
   }
-  const status = !query.status ? '' : String(query.status);
-  if (status && !ASSET_STATUSES.has(status)) {
-    throw new AssetError('Unsupported asset status filter.', 400, 'VALIDATION_ERROR');
-  }
   const view = query.view
     ? String(query.view)
     : String(query.mine) === 'true'
@@ -376,6 +375,11 @@ async function listAssetsServices(accountId, query = {}) {
       : 'discover';
   if (!ASSET_VIEWS.has(view)) {
     throw new AssetError('Unsupported asset view.', 400, 'VALIDATION_ERROR');
+  }
+  const status = !query.status ? '' : String(query.status);
+  const ALLOWED_MINE_STATUSES = new Set(['', 'all', 'published', 'draft', 'pending', 'rejected']);
+  if (status && !ASSET_STATUSES.has(status) && !(view === 'mine' && ALLOWED_MINE_STATUSES.has(status))) {
+    throw new AssetError('Unsupported asset status filter.', 400, 'VALIDATION_ERROR');
   }
   const rows = await listAssetsRepository({
     accountId,

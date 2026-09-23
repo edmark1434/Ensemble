@@ -146,6 +146,8 @@ async function getAssetPostingEligibilityRepository(accountId) {
 const ASSET_SELECT = `
   SELECT ma.market_asset_id, ma.name, ma.description, ma.price_credits, ma.status,
          ma.created_at, ma.updated_at,
+         latest_listing.status AS review_status,
+         latest_listing.rejection_reason,
          media.media_asset_id, media.type, media.width, media.height,
          media.duration_seconds, media.proxy_path,
          media.thumbnail_path, media.mime_type, media.size_bytes,
@@ -345,6 +347,13 @@ const ASSET_SELECT = `
         AND owned_asset.deleted_at IS NULL
     ) AS is_purchased
   ) purchase_access ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT ml.status, ml.rejection_reason
+    FROM marketplace_listings ml
+    WHERE ml.market_asset_id = ma.market_asset_id
+    ORDER BY ml.created_at DESC
+    LIMIT 1
+  ) latest_listing ON TRUE
 `;
 const ASSET_SELECT_WITH_TOTAL = ASSET_SELECT.replace(
   '\n  FROM market_assets',
@@ -428,7 +437,14 @@ async function listAssetsRepository({ accountId, search, type, status, view, lim
              AND search_tag.name ILIKE '%' || $2 || '%'
          ))
        AND ($3 = '' OR media.type = $3)
-       AND ($4 = '' OR ma.status = $4)
+       AND (
+         $4 = '' OR $4 = 'all'
+         OR ($4 = 'published' AND ma.status = 'published')
+         OR ($4 = 'pending' AND ma.status = 'draft' AND latest_listing.status = 'pending')
+         OR ($4 = 'rejected' AND ma.status = 'draft' AND latest_listing.status = 'rejected')
+         OR ($4 = 'draft' AND ma.status = 'draft' AND (latest_listing.status IS NULL OR latest_listing.status NOT IN ('pending', 'rejected')))
+         OR (ma.status = $4)
+       )
      ORDER BY ma.created_at DESC, ma.market_asset_id DESC
      LIMIT $5 OFFSET $6`,
     [accountId, search, type, status, limit, offset]
@@ -1468,6 +1484,10 @@ async function deleteAssetRepository(assetId, accountId) {
        WHERE media_asset_id IN (
          SELECT media_asset_id FROM market_media_assets WHERE market_asset_id = $1
        )`,
+      [assetId]
+    );
+    await client.query(
+      `DELETE FROM marketplace_listings WHERE market_asset_id = $1`,
       [assetId]
     );
     await client.query('COMMIT');

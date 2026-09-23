@@ -8,6 +8,7 @@ const {
   markAccountActivityReversed,
   recordAccountActivity,
 } = require('./AccountActivityRepositories');
+const { sendMarketplaceListingNotification } = require('../lib/ModerationPolicy');
 
 const REVERSIBLE_EVENT_CODES = new Set([
   'ACCOUNT_STATUS_CHANGED',
@@ -981,7 +982,7 @@ async function updatePendingCase(caseId, body, session) {
       throw new Error('Listing status must be approved, rejected, delisted, or pending');
     }
     const before = await pool.query(
-      `SELECT listing_id, market_asset_id FROM marketplace_listings WHERE listing_id = $1`,
+      `SELECT listing_id, title, submitted_by_account_id, market_asset_id FROM marketplace_listings WHERE listing_id = $1`,
       [id]
     );
     if (!before.rows.length) throw new Error('Listing not found');
@@ -1004,7 +1005,8 @@ async function updatePendingCase(caseId, body, session) {
       ]
     );
 
-    const marketAssetId = before.rows[0]?.market_asset_id;
+    const listingRow = before.rows[0];
+    const marketAssetId = listingRow?.market_asset_id;
     if (marketAssetId) {
       if (status === 'approved') {
         await pool.query(
@@ -1020,6 +1022,18 @@ async function updatePendingCase(caseId, body, session) {
         );
       }
     }
+
+    if (['approved', 'rejected', 'delisted'].includes(status)) {
+      await sendMarketplaceListingNotification({
+        accountId: listingRow?.submitted_by_account_id,
+        marketAssetId: listingRow?.market_asset_id,
+        listingId: id,
+        title: listingRow?.title || 'Untitled Asset',
+        status,
+        rejectionReason: status === 'rejected' ? (body.rejectionReason || body.reason || null) : null,
+      });
+    }
+
     return { id, source, updated: true, status };
   }
 
@@ -1061,11 +1075,12 @@ async function deletePendingCase(caseId, body, session) {
            reviewed_at = NOW(),
            updated_at = NOW()
        WHERE listing_id = $3 AND LOWER(status) = 'pending'
-       RETURNING listing_id, market_asset_id`,
+       RETURNING listing_id, title, submitted_by_account_id, market_asset_id`,
       [body?.reason || null, staffId, id]
     );
     if (!result.rows.length) throw new Error('Pending listing not found');
-    const marketAssetId = result.rows[0]?.market_asset_id;
+    const listingRow = result.rows[0];
+    const marketAssetId = listingRow?.market_asset_id;
     if (marketAssetId) {
       await pool.query(
         `UPDATE market_assets SET status = 'draft', updated_at = NOW()
@@ -1073,6 +1088,14 @@ async function deletePendingCase(caseId, body, session) {
         [marketAssetId]
       );
     }
+    await sendMarketplaceListingNotification({
+      accountId: listingRow?.submitted_by_account_id,
+      marketAssetId: listingRow?.market_asset_id,
+      listingId: id,
+      title: listingRow?.title || 'Untitled Asset',
+      status: 'rejected',
+      rejectionReason: body?.reason || 'Removed from pending queue by admin',
+    });
     return { id, source, deleted: true };
   }
 

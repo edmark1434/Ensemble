@@ -1,5 +1,5 @@
 import React from "react";
-import { Heart, Star, Pencil, Trash2, CheckCircle2, Bookmark, Clock, Image as ImageIcon, Video, AudioLines, LayoutTemplate, ShoppingCart } from "lucide-react";
+import { Heart, Star, Pencil, Trash2, CheckCircle2, Bookmark, Clock, Image as ImageIcon, Video, AudioLines, LayoutTemplate, ShoppingCart, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -69,11 +69,25 @@ export const AssetCard: React.FC<AssetCardProps> = ({
             </span>
           )}
           {asset.is_owner && (
-            <span className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold uppercase text-white shadow-sm border ${
-              asset.status === "published" ? "bg-emerald-600 border-emerald-500" : "bg-amber-600 border-amber-500"
-            }`}>
-              {asset.status}
-            </span>
+            <>
+              {asset.status === "published" ? (
+                <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold uppercase text-white shadow-sm border bg-emerald-600 border-emerald-500">
+                  <CheckCircle2 className="h-3 w-3" /> Published
+                </span>
+              ) : asset.review_status === "pending" ? (
+                <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold uppercase text-white shadow-sm border bg-sky-600 border-sky-500">
+                  <Clock className="h-3 w-3" /> Under Review
+                </span>
+              ) : asset.review_status === "rejected" ? (
+                <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold uppercase text-white shadow-sm border bg-rose-600 border-rose-500">
+                  <AlertTriangle className="h-3 w-3" /> Rejected
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold uppercase text-white shadow-sm border bg-amber-600 border-amber-500">
+                  Draft
+                </span>
+              )}
+            </>
           )}
         </div>
         {!hideActions && onUpdateEngagement && (
@@ -144,6 +158,27 @@ export const AssetCard: React.FC<AssetCardProps> = ({
         <p className="line-clamp-2 text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
           {asset.description || "No description provided."}
         </p>
+
+        {asset.is_owner && asset.review_status === "rejected" && (
+          <div className="rounded-lg border border-rose-500/25 bg-rose-500/10 p-2 text-[11px] text-rose-300">
+            <div className="flex items-start gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400 mt-0.5" />
+              <div className="min-w-0">
+                <span className="font-semibold text-rose-200">Rejection note:</span>{" "}
+                <span className="line-clamp-2">{asset.rejection_reason || "Moderator rejected this submission. Click edit to revise and resubmit."}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {asset.is_owner && asset.review_status === "pending" && (
+          <div className="rounded-lg border border-sky-500/25 bg-sky-500/10 p-2 text-[11px] text-sky-300">
+            <div className="flex items-start gap-1.5">
+              <Clock className="h-3.5 w-3.5 shrink-0 text-sky-400 mt-0.5" />
+              <span className="line-clamp-1">In review by moderators — will publish upon approval</span>
+            </div>
+          </div>
+        )}
 
         {/* Divider */}
         <div className="my-1 h-px w-full bg-gray-100 dark:bg-white/5" />

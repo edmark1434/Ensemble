@@ -442,11 +442,67 @@ async function applyReportAutomations(reportRow, { staffId = null } = {}) {
   return { ...reportRow, priority, ticketAutoCreated };
 }
 
+/**
+ * Dispatch in-app notification and realtime socket events for marketplace listing review decisions.
+ */
+async function sendMarketplaceListingNotification({
+  accountId,
+  marketAssetId,
+  listingId,
+  title,
+  status,
+  rejectionReason = null,
+}) {
+  if (!accountId) return;
+  const assetTitle = String(title || 'Untitled Asset').trim();
+  let message = '';
+  if (status === 'approved') {
+    message = `Your asset "${assetTitle}" has been approved by moderators and is now published to the Marketplace!`;
+  } else if (status === 'rejected') {
+    message = `Your asset "${assetTitle}" was not approved.${rejectionReason ? ` Reason: ${rejectionReason}` : ''} You can edit the asset to address this feedback and resubmit.`;
+  } else if (status === 'delisted') {
+    message = `Your asset "${assetTitle}" has been delisted from the Marketplace and reverted to draft.`;
+  } else {
+    return;
+  }
+
+  try {
+    const { createNotification } = require('../repositories/NotificationRepositories');
+    const notification = await createNotification({
+      account_id: accountId,
+      message,
+      is_read: false,
+      reference_table: 'marketplace_listings',
+      reference_prefix: 'MARKETPLACE',
+      reference_path: marketAssetId ? `/assets/${marketAssetId}` : '/assets/owned',
+      reference_id: listingId,
+    });
+
+    try {
+      const { getIo } = require('./WebSocket');
+      const io = getIo();
+      if (io) {
+        io.to(String(accountId)).emit('notification', notification);
+        io.to(String(accountId)).emit('assetStatusUpdated', {
+          marketAssetId,
+          status,
+          rejectionReason,
+        });
+      }
+    } catch (wsErr) {
+      console.warn('WebSocket emit skipped:', wsErr.message);
+    }
+  } catch (err) {
+    console.warn('Failed to send marketplace listing notification:', err.message);
+  }
+}
+
 module.exports = {
   getModerationSettings,
   getSecuritySettings,
   evaluateUserContent,
   resolveMarketplacePublishStatus,
+  sendMarketplaceListingNotification,
   applyDisputeAutomations,
   reconcileUnassignedDisputes,
   countActiveWarnings,

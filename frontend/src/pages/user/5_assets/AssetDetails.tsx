@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, Bookmark, Calendar, CheckCircle2, Clock3, CornerDownRight, Download, Edit3, Eye, FileAudio, FileImage, FileVideo, Heart, Loader2, MessageSquare, PackageOpen, Pencil, Ruler, Send, ShoppingCart, Star, Trash2, Video, Image as ImageIcon, AudioLines, LayoutTemplate, User } from "lucide-react";
+import { ArrowLeft, Bookmark, Calendar, CheckCircle2, Clock3, CornerDownRight, Download, Edit3, Eye, FileAudio, FileImage, FileVideo, Heart, Loader2, MessageSquare, PackageOpen, Pencil, Ruler, Send, ShoppingCart, Star, Trash2, Video, Image as ImageIcon, AudioLines, LayoutTemplate, User, AlertTriangle, Clock } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/axios";
+import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
@@ -117,6 +118,20 @@ export default function AssetDetails() {
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
+
+  useEffect(() => {
+    const handleStatusUpdate = (payload?: { marketAssetId?: string }) => {
+      if (!payload?.marketAssetId || payload.marketAssetId === assetId) {
+        void load();
+      }
+    };
+    socket.on("assetStatusUpdated", handleStatusUpdate);
+    socket.on("notification", handleStatusUpdate);
+    return () => {
+      socket.off("assetStatusUpdated", handleStatusUpdate);
+      socket.off("notification", handleStatusUpdate);
+    };
+  }, [assetId, load]);
 
   const applyReviews = (nextReviews: AssetReview[]) => {
     setReviews(nextReviews);
@@ -413,7 +428,27 @@ export default function AssetDetails() {
                       </span>
                     </span>
                     {asset.is_purchased && !asset.is_owner && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-300"><CheckCircle2 className="h-3 w-3" /> Owned</span>}
-                    {asset.is_owner && <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${asset.status === "published" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300" : "bg-amber-500/10 text-amber-600 dark:text-amber-300"}`}>{asset.status}</span>}
+                    {asset.is_owner && (
+                      <>
+                        {asset.status === "published" ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-300">
+                            <CheckCircle2 className="h-3 w-3" /> Published
+                          </span>
+                        ) : asset.review_status === "pending" ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-sky-600 dark:text-sky-300">
+                            <Clock className="h-3 w-3" /> Under Review
+                          </span>
+                        ) : asset.review_status === "rejected" ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-rose-600 dark:text-rose-300">
+                            <AlertTriangle className="h-3 w-3" /> Rejected
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-amber-600 dark:text-amber-300">
+                            Draft
+                          </span>
+                        )}
+                      </>
+                    )}
                   </div>
                   <div className="mt-4 flex items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 text-xl font-bold text-amber-600 dark:text-amber-300"><CreditIcon className="h-6 w-6" /> {asset.price_credits.toLocaleString()} credits</span>
@@ -421,6 +456,43 @@ export default function AssetDetails() {
                   <h1 className="mt-3 break-words text-2xl font-bold md:text-3xl">{asset.name}</h1>
                 </div>
               </div>
+
+              {asset.is_owner && asset.review_status === "rejected" && (
+                <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-300">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-rose-400 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold text-rose-200">Listing Submission Rejected</h3>
+                      <p className="mt-1 text-xs text-rose-300/90 leading-relaxed">
+                        {asset.rejection_reason || "This submission was rejected by the moderation team."}
+                      </p>
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditing(true)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-rose-500 shadow-sm"
+                        >
+                          <Pencil className="h-3.5 w-3.5" /> Edit Asset to Fix & Resubmit
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {asset.is_owner && asset.review_status === "pending" && (
+                <div className="mt-4 rounded-xl border border-sky-500/30 bg-sky-500/10 p-4 text-sky-300">
+                  <div className="flex items-start gap-3">
+                    <Clock className="h-5 w-5 shrink-0 text-sky-400 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold text-sky-200">Under Moderator Review</h3>
+                      <p className="mt-1 text-xs text-sky-300/90 leading-relaxed">
+                        This asset is queued for review by moderators. Once approved, it will automatically become published to the marketplace.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <p className="mt-6 whitespace-pre-wrap text-sm leading-7 text-gray-700 dark:text-zinc-300 flex-1">{asset.description}</p>
 
