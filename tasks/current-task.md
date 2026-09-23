@@ -1,22 +1,19 @@
-# Current Task — Fix Saving Payment Methods
+# Current Task — Forgot & Reset Password Flow
 
-Fix issue where payment methods cannot be saved when adding a payment method via Xendit.
-
-## Root Causes Identified
-1. **Invalid Foreign Key Constraint (`fk_cust_ref_id`)**: `payment_methods.customer_reference_id` had a foreign key constraint referencing `payments(reference_id)`. When saving a payment method without a purchase, no payment row exists, causing any non-null customer reference ID to fail with foreign key violation `fk_cust_ref_id`.
-2. **Missing HTTP Response in Webhook Handler**: `paymentSessionCompleteWebhookHandler` never sent an HTTP response (`res.status(200).json(...)`), causing webhook deliveries to hang, time out, and fail.
-3. **Webhook Event Routing**: The main `/api/payment/webhooks/xendit` route ignored `payment_session.completed` / `session.completed` events, treating them as normal payments and dropping them because `reference_id` was not found in `payments`.
-4. **Lack of Fallback Reconciliation**: If the webhook wasn't delivered (e.g., local environment or tunnel issue), returning to the application after completing the Xendit flow did not reconcile the pending session.
+Implement a secure, expiring password recovery flow:
+1. User enters email at `/forgot-password`.
+2. Backend generates a cryptographically secure token with a 15-minute expiration stored in Redis, and sends an email via Brevo matching the platform's email template.
+3. User opens `/reset-password?token=...`, validates the 4 signup password rules (8+ chars, uppercase, lowercase, special character), and updates the password for their specific account.
+4. Token is single-use and invalidated immediately. Existing sessions are cleaned up.
 
 ## Acceptance Criteria
-- [x] Create and run migration `1812800000000_167-drop-payment-methods-cust-ref-fk.js` to drop `fk_cust_ref_id`.
-- [x] Create shared helper `savePaymentTokenForUser` and `savePaymentMethodFromSession` in `backend/services/PaymentServices.js`.
-- [x] Update `paymentSessionCompleteWebhookHandler` to properly save the token, catch errors, and return HTTP 200.
-- [x] Update `xenditWebhookHandler` to route session completion / payment token events to `paymentSessionCompleteWebhookHandler`.
-- [x] Track pending save sessions in Redis in `createPaymentToken` and auto-reconcile in `getAllPaymentMethodsByUserIdService`.
-- [x] Add `syncPaymentSessionController` and register route in `backend/routes/Payment.js`.
-- [x] Handle return parameters in frontend (`checkout.tsx` and `CreditsShop.tsx`), persist checkout item in sessionStorage, auto-select saved method, and show success toasts.
-- [x] Verify functionality with automated tests (all 7 automated integration tests passed).
-- [x] Verify frontend build passes (`npm run build` succeeds with zero errors).
+- [x] Backend: Update `UserRepositories.js` with `getUserByEmailForPasswordReset` and `updateUserPassword`.
+- [x] Backend: Update `UserServices.js` with `requestPasswordReset`, `resetPasswordWithToken`, `verifyResetToken`, and `sendPasswordResetEmail` (using platform Brevo template).
+- [x] Backend: Security compliance with `docs/security.md` (no user enumeration, crypto random token, 15m TTL in Redis, single-use token consumption, session revocation, rate limiting under verification policy, exempt from CSRF for unauthenticated access).
+- [x] Backend: Register `/forgot-password`, `/reset-password`, `/verify-reset-token/:token` in `backend/routes/User.js` and controllers.
+- [x] Backend: Add route exemptions to `CsrfProtection.js`, `RequireCompletedOnboarding.js`, and `RateLimiter.js`.
+- [x] Frontend: Wire up `ForgotPasswordPage.tsx` with error handling, loading states, and platform theme.
+- [x] Frontend: Update `ResetPasswordPage.tsx` with live 4-rule signup password validation (8+ chars, uppercase, lowercase, special char), token verification, submission to API, and error handling.
+- [x] Verification: Test password reset flow end-to-end with automated script and verify frontend build (`npm run build`).
 
 

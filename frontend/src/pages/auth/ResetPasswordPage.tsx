@@ -1,7 +1,8 @@
 // src/pages/auth/ResetPasswordPage.tsx
 import { useState, useEffect, useCallback } from "react";
-import { Lock, Eye, EyeOff, CheckCircle, Shield, Sparkles } from "lucide-react";
+import { Lock, Eye, EyeOff, CheckCircle, Shield, Sparkles, Check, AlertCircle } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import axios from "axios";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -19,6 +20,8 @@ const T = {
   fontDisplay: "'Plus Jakarta Sans', sans-serif",
   fontBody:    "'Plus Jakarta Sans', sans-serif",
 };
+
+const STRONG_PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9\s]).{8,}$/;
 
 // ─── Shared Components ────────────────────────────────────────────────────────
 function Logo({ size = 28 }) {
@@ -78,29 +81,29 @@ function RightPanel() {
   );
 }
 
-// ─── Password Strength Meter ──────────────────────────────────────────────────
-function StrengthMeter({ password }: { password: string }) {
-  const score = (() => {
-    if (!password) return 0;
-    let s = 0;
-    if (password.length >= 8) s++;
-    if (/[A-Z]/.test(password)) s++;
-    if (/[0-9]/.test(password)) s++;
-    if (/[^A-Za-z0-9]/.test(password)) s++;
-    return s;
-  })();
-  const labels = ["", "Weak", "Fair", "Good", "Strong"];
-  const colors = ["#2a2d3e", "#e05252", "#f0a43a", "#4a9eff", "#52e0a0"];
+// ─── Password Strength & 4-Rule Validation Checklist ─────────────────────────
+function PasswordRequirements({ password }: { password: string }) {
+  const requirements = [
+    { label: "At least 8 characters", met: password.length >= 8 },
+    { label: "At least 1 uppercase letter", met: /[A-Z]/.test(password) },
+    { label: "At least 1 lowercase letter", met: /[a-z]/.test(password) },
+    { label: "At least 1 special character", met: /[^A-Za-z0-9\s]/.test(password) },
+  ];
 
   if (!password) return null;
+
   return (
-    <div style={{ marginTop: -8, marginBottom: 14 }}>
-      <div style={{ display: "flex", gap: 4, marginBottom: 5 }}>
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= score ? colors[score] : "#2a2d3e", transition: "background .25s" }} />
-        ))}
-      </div>
-      <span style={{ fontSize: 11, color: colors[score], fontFamily: T.fontBody }}>{labels[score]}</span>
+    <div aria-live="polite" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "7px 12px", marginTop: -8, marginBottom: 16 }}>
+      {requirements.map((requirement) => (
+        <div key={requirement.label} style={{ display: "flex", alignItems: "center", gap: 6, color: requirement.met ? T.success : T.muted, fontSize: 11, fontFamily: T.fontBody }}>
+          {requirement.met ? (
+            <Check size={13} strokeWidth={2.5} color={T.success} aria-hidden="true" />
+          ) : (
+            <span aria-hidden="true" style={{ width: 13, textAlign: "center", color: T.dim }}>−</span>
+          )}
+          <span>{requirement.label}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -116,30 +119,86 @@ export default function ResetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [verifying, setVerifying] = useState(true);
+  const [tokenValid, setTokenValid] = useState<boolean | null>(null);
+  const [accountEmail, setAccountEmail] = useState("");
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [pageLoaded, setPageLoaded] = useState(false);
 
   useEffect(() => {
-    setTimeout(() => setPageLoaded(true), 50);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!token) setError("Invalid or expired reset token.");
+    const timer = setTimeout(() => setPageLoaded(true), 50);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Verify token on initial mount
+  useEffect(() => {
+    if (!token) {
+      setVerifying(false);
+      setTokenValid(false);
+      setError("No password reset token was provided. Please request a new link.");
+      return;
+    }
+
+    let isMounted = true;
+    axios.get(`${import.meta.env.VITE_BASE_URL}/api/users/verify-reset-token/${encodeURIComponent(token)}`)
+      .then((res) => {
+        if (!isMounted) return;
+        if (res.data.valid) {
+          setTokenValid(true);
+          setAccountEmail(res.data.email || "");
+          setError("");
+        } else {
+          setTokenValid(false);
+          setError("This password reset link is invalid or has expired.");
+        }
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        setTokenValid(false);
+        setError(err.response?.data?.message || "This password reset link is invalid or has expired.");
+      })
+      .finally(() => {
+        if (isMounted) setVerifying(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [token]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 8) return setError("Password must be at least 8 characters.");
-    if (password !== confirmPassword) return setError("Passwords do not match.");
+    if (!token) {
+      return setError("Invalid or expired reset token.");
+    }
+    if (!STRONG_PASSWORD_PATTERN.test(password)) {
+      return setError("Password must meet all 4 requirements: at least 8 characters, 1 uppercase letter, 1 lowercase letter, and 1 special character.");
+    }
+    if (password !== confirmPassword) {
+      return setError("Passwords do not match.");
+    }
 
     setLoading(true);
     setError("");
 
-    // Simulate API delay
-    setTimeout(() => {
-        setLoading(false);
+    try {
+      const res = await axios.post(`${import.meta.env.VITE_BASE_URL}/api/users/reset-password`, {
+        token,
+        password,
+      });
+
+      if (res.data.success) {
         setSubmitted(true);
-    }, 1500);
-  }, [password, confirmPassword]);
+      } else {
+        setError(res.data.message || "Failed to reset password. Please try again.");
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Unable to reset password. The link may have expired.");
+    } finally {
+      setLoading(false);
+    }
+  }, [token, password, confirmPassword]);
 
   return (
     <>
@@ -173,17 +232,46 @@ export default function ResetPasswordPage() {
       <div className={`page-container ${pageLoaded ? 'opacity-100' : 'opacity-0'}`} style={{ display: "flex", height: "100vh", background: T.bg, fontFamily: T.fontBody, overflow: "hidden" }}>
 
         {/* ── Left Section: Form ── */}
-        <div className="slide-in-left" style={{ width: "100%", maxWidth: 520, padding: "48px 56px", display: "flex", flexDirection: "column", zIndex: 10 }}>
+        <div className="slide-in-left" style={{ width: "100%", maxWidth: 520, padding: "48px 56px", display: "flex", flexDirection: "column", zIndex: 10, overflowY: "auto" }}>
           <button onClick={() => navigate("/login")} className="fade-in-up delay-100" style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, marginBottom: 32 }}>
             ← Return to Login
           </button>
 
           <div className="fade-in-up delay-200" style={{ marginBottom: 24 }}><Logo size={32} /></div>
 
-          {!submitted ? (
+          {verifying ? (
+            <div className="fade-in-up delay-300" style={{ marginTop: 40, color: T.muted, fontSize: 14 }}>
+              Verifying security token...
+            </div>
+          ) : tokenValid === false ? (
+            <div className="fade-in-up delay-300" style={{ textAlign: "center", marginTop: 24 }}>
+              <div style={{ width: 64, height: 64, background: "rgba(224, 82, 82, 0.1)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
+                <AlertCircle size={32} color={T.error} />
+              </div>
+              <h2 style={{ color: T.text, fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Link Expired or Invalid</h2>
+              <p style={{ color: T.muted, fontSize: 14, lineHeight: "1.6", marginBottom: 32 }}>
+                {error || "This password reset link is invalid, has already been used, or has expired. Links are valid for 15 minutes."}
+              </p>
+              <button
+                onClick={() => navigate("/forgot-password")}
+                style={{
+                  width: "100%", background: "#fff", color: "#080a12", border: "none", padding: "14px", borderRadius: 30, fontWeight: 600, fontSize: 14, cursor: "pointer", marginBottom: 12
+                }}
+              >
+                Request New Reset Link
+              </button>
+            </div>
+          ) : !submitted ? (
             <div className="fade-in-up delay-300">
               <h1 style={{ fontSize: 32, fontWeight: 700, color: T.text, marginBottom: 8, letterSpacing: -.5 }}>Reset Password</h1>
-              <p style={{ color: T.muted, fontSize: 14, marginBottom: 32 }}>Set a new secure password for your Ensemble account.</p>
+              <p style={{ color: T.muted, fontSize: 14, marginBottom: accountEmail ? 8 : 32 }}>
+                Set a new secure password for your Ensemble account.
+              </p>
+              {accountEmail && (
+                <p style={{ color: T.accent, fontSize: 13, fontWeight: 500, marginBottom: 28 }}>
+                  Resetting password for: <span style={{ color: T.text }}>{accountEmail}</span>
+                </p>
+              )}
 
               <form onSubmit={handleSubmit}>
                 {/* New Password */}
@@ -194,8 +282,8 @@ export default function ResetPasswordPage() {
                     <input
                       type={showPassword ? "text" : "password"}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
+                      onChange={(e) => { setPassword(e.target.value); setError(""); }}
+                      placeholder="8+ characters with upper, lower, and special"
                       style={{ width: "100%", padding: "12px 14px 12px 42px", background: T.bgInput, border: `1px solid ${T.border}`, borderRadius: 12, color: "#e2e8f0", fontSize: 14, outline: "none" }}
                     />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: T.muted, cursor: "pointer" }}>
@@ -203,7 +291,9 @@ export default function ResetPasswordPage() {
                     </button>
                   </div>
                 </div>
-                <StrengthMeter password={password} />
+
+                {/* 4-Rule Validation Checklist */}
+                <PasswordRequirements password={password} />
 
                 {/* Confirm Password */}
                 <div style={{ marginBottom: 24 }}>
@@ -213,8 +303,8 @@ export default function ResetPasswordPage() {
                     <input
                       type={showConfirm ? "text" : "password"}
                       value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="••••••••"
+                      onChange={(e) => { setConfirmPassword(e.target.value); setError(""); }}
+                      placeholder="Re-enter your password"
                       style={{ width: "100%", padding: "12px 14px 12px 42px", background: T.bgInput, border: `1px solid ${T.border}`, borderRadius: 12, color: "#e2e8f0", fontSize: 14, outline: "none" }}
                     />
                     <button type="button" onClick={() => setShowConfirm(!showConfirm)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: T.muted, cursor: "pointer" }}>
@@ -226,7 +316,7 @@ export default function ResetPasswordPage() {
 
                 <button
                   type="submit"
-                  disabled={loading || !token}
+                  disabled={loading}
                   style={{ width: "100%", background: loading ? "#555" : "#fff", color: "#080a12", border: "none", padding: "14px", borderRadius: 30, fontWeight: 600, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
                 >
                   {loading ? "Updating..." : "Update Password"} <Sparkles size={16} />
@@ -238,7 +328,7 @@ export default function ResetPasswordPage() {
               <div style={{ width: 64, height: 64, background: "rgba(82, 224, 160, 0.1)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
                 <CheckCircle size={32} color={T.success} />
               </div>
-              <h2 style={{ color: T.text, fontSize: 24, marginBottom: 12 }}>Password Updated</h2>
+              <h2 style={{ color: T.text, fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Password Updated</h2>
               <p style={{ color: T.muted, fontSize: 14, marginBottom: 32 }}>Your credentials have been successfully reset. You can now use your new password to sign in.</p>
               <button onClick={() => navigate("/login")} style={{ width: "100%", background: "#fff", color: "#080a12", border: "none", padding: "14px", borderRadius: 30, fontWeight: 600, fontSize: 14, cursor: "pointer" }}>Return to Login</button>
             </div>

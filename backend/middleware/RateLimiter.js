@@ -14,7 +14,7 @@ const POLICIES = {
 function selectPolicy(req) {
   const path = req.path.toLowerCase();
   if (/^\/users\/(?:login|signup|signup-save-session|refresh-token)/.test(path)) return ['authentication', POLICIES.authentication];
-  if (/^\/users\/(?:verify-email|resend-verification-email)/.test(path) || /^\/verification\/(?:email|verify-code)/.test(path)) return ['verification', POLICIES.verification];
+  if (/^\/users\/(?:verify-email|resend-verification-email|forgot-password|reset-password|verify-reset-token)/.test(path) || /^\/verification\/(?:email|verify-code)/.test(path)) return ['verification', POLICIES.verification];
   if (/search|suggestions|places/.test(path)) return ['search', POLICIES.search];
   if (/^\/(?:payment|cashouts)(?:\/|$)/.test(path) && !path.includes('/webhooks/') && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return ['transaction', POLICIES.transaction];
   if (/^\/files\/(?:upload-url|finalize|register)/.test(path) || /^\/onboarding\/avatar-upload-url/.test(path)) return ['upload', POLICIES.upload];

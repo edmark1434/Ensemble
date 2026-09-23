@@ -7,6 +7,7 @@ dotenv.config();
 //import all the necessary repository functions for user and account management
 const {
     getAllUsers,
+    getUserById,
     createUser,
     getUserByEmail,
     getEmailandPasswordHashByEmail,
@@ -15,7 +16,9 @@ const {
     getUserByListofIdsRepositories,
     getNameByUserId,
     updateUserDetails,
-    getUserOnboardingStep
+    getUserOnboardingStep,
+    getUserByEmailForPasswordReset,
+    updateUserPassword
 } = require('../repositories/UserRepositories');
 const {
     createAccount,
@@ -815,6 +818,266 @@ async function isUsernameUnique(username) {
         throw new ServiceError('Error checking username uniqueness', 500);
     }
 }
+
+const RESET_TOKEN_TTL_SECONDS = 15 * 60; // 15 minutes
+
+function getPasswordResetEmailHtml(firstName, resetLink) {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset Your Password</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f5f7;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:40px 20px;">
+<tr>
+<td align="center">
+
+<table width="500" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.05);">
+
+<tr>
+<td align="center" style="padding:32px 20px 10px;">
+<img
+    src="https://i.pinimg.com/736x/4c/0e/41/4c0e41b328ad5f3bc015686827b05fa9.jpg"
+    width="120"
+    alt="Ensemble"
+    style="display:block;border-radius:8px;">
+</td>
+</tr>
+
+<tr>
+<td style="padding:20px 40px 40px;text-align:center;">
+
+<h2 style="margin:0 0 12px;color:#1e1e2f;">
+Hi ${firstName || 'there'},
+</h2>
+
+<p style="font-size:15px;line-height:1.6;color:#555;">
+We received a request to reset the password for your <strong>Ensemble</strong> account. Click the button below to choose a new password. This link is valid for <strong>15 minutes</strong>.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0;">
+<tr>
+<td align="center">
+    <a href="${resetLink}"
+       target="_blank"
+       style="display:inline-block;padding:14px 32px;background:#6366f1;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;border-radius:8px;box-shadow:0 2px 6px rgba(99,102,241,0.35);">
+        Reset Password
+    </a>
+</td>
+</tr>
+</table>
+
+<p style="font-size:13px;color:#71717a;line-height:1.6;word-break:break-all;">
+If the button above does not work, copy and paste this URL into your browser:<br/>
+<a href="${resetLink}" style="color:#6366f1;text-decoration:underline;">${resetLink}</a>
+</p>
+
+<p style="font-size:13px;color:#94a3b8;line-height:1.6;margin-top:24px;">
+If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
+</p>
+
+</td>
+</tr>
+
+<tr>
+<td align="center"
+style="padding:20px;background:#fafafa;border-top:1px solid #eeeeee;font-size:12px;color:#999;">
+© 2026 Ensemble. Security Notification.
+</td>
+</tr>
+
+</table>
+
+</td>
+</tr>
+</table>
+
+</body>
+</html>
+`;
+}
+
+function passwordResetEmailPayload(email, firstName, lastName, resetLink) {
+    return {
+        sender: {
+            name: "Ensemble",
+            email: "ensemble.support@ensemble.software"
+        },
+        to: [
+            {
+                email,
+                name: `${firstName || ''} ${lastName || ''}`.trim() || 'Ensemble User'
+            }
+        ],
+        subject: 'Reset Your Ensemble Password',
+        htmlContent: getPasswordResetEmailHtml(firstName, resetLink)
+    };
+}
+
+async function sendPasswordResetEmail(email, firstName, lastName, resetLink) {
+    const payload = passwordResetEmailPayload(email, firstName, lastName, resetLink);
+    if (!process.env.BREVO_API_KEY) {
+        console.warn('BREVO_API_KEY is not configured. Reset link for debugging:', resetLink);
+        return;
+    }
+    const response = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
+        headers: {
+            'Content-Type': 'application/json',
+            'api-key': process.env.BREVO_API_KEY,
+            'Accept': 'application/json'
+        }
+    });
+    return response.data;
+}
+
+async function requestPasswordReset(email) {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+        throw new ServiceError('Please provide a valid email address.', 400);
+    }
+
+    try {
+        const user = await getUserByEmailForPasswordReset(normalizedEmail);
+        // Timing-safe user enumeration defense: return identical success message even if not found
+        if (!user) {
+            return {
+                message: 'If an account with that email exists, a password reset link has been sent.',
+            };
+        }
+
+        // Invalidate any existing active reset token for this user
+        const existingToken = await redisClient.get(`password-reset:user:${user.user_id}`);
+        if (existingToken) {
+            await redisClient.del(`password-reset:token:${existingToken}`);
+            await redisClient.del(`password-reset:user:${user.user_id}`);
+        }
+
+        // Generate 32-byte cryptographically secure random token (64 hex characters)
+        const token = crypto.randomBytes(32).toString('hex');
+
+        // Store token in Redis with 15-minute TTL
+        const tokenPayload = {
+            userId: user.user_id,
+            email: user.email_address,
+            accountId: user.account_id,
+            firstName: user.first_name,
+            createdAt: Date.now(),
+        };
+
+        await redisClient.set(
+            `password-reset:token:${token}`,
+            JSON.stringify(tokenPayload),
+            { EX: RESET_TOKEN_TTL_SECONDS }
+        );
+
+        await redisClient.set(
+            `password-reset:user:${user.user_id}`,
+            token,
+            { EX: RESET_TOKEN_TTL_SECONDS }
+        );
+
+        // Build reset link
+        const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+        const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+
+        // Send reset email via Brevo
+        try {
+            await sendPasswordResetEmail(user.email_address, user.first_name, user.last_name, resetLink);
+        } catch (emailErr) {
+            console.error('Failed to send password reset email via Brevo:', emailErr.message);
+        }
+
+        return {
+            message: 'If an account with that email exists, a password reset link has been sent.',
+        };
+    } catch (err) {
+        if (err instanceof ServiceError) throw err;
+        console.error('Error during requestPasswordReset:', err);
+        throw new ServiceError('Unable to process password reset request. Please try again later.', 500);
+    }
+}
+
+async function verifyResetToken(token) {
+    if (!token || typeof token !== 'string' || token.length < 32) {
+        throw new ServiceError('Invalid or expired password reset link.', 400);
+    }
+
+    try {
+        const raw = await redisClient.get(`password-reset:token:${token}`);
+        if (!raw) {
+            throw new ServiceError('Invalid or expired password reset link.', 400);
+        }
+        const data = JSON.parse(raw);
+        return {
+            valid: true,
+            email: data.email,
+        };
+    } catch (err) {
+        if (err instanceof ServiceError) throw err;
+        console.error('Error verifying reset token:', err);
+        throw new ServiceError('Invalid or expired password reset link.', 400);
+    }
+}
+
+async function resetPasswordWithToken(token, newPassword) {
+    if (!token || typeof token !== 'string' || token.length < 32) {
+        throw new ServiceError('Invalid or expired password reset link.', 400);
+    }
+
+    if (!newPassword || typeof newPassword !== 'string') {
+        throw new ServiceError('Password is required.', 400);
+    }
+
+    // Authoritative 4-rule signup password validation
+    if (!STRONG_PASSWORD_PATTERN.test(newPassword)) {
+        throw new ServiceError(
+            'Password must be at least 8 characters and include one uppercase letter, one lowercase letter, and one special character.',
+            400
+        );
+    }
+
+    try {
+        const tokenKey = `password-reset:token:${token}`;
+        const raw = await redisClient.get(tokenKey);
+        if (!raw) {
+            throw new ServiceError('Invalid or expired password reset link.', 400);
+        }
+
+        const data = JSON.parse(raw);
+        const { userId, email } = data;
+
+        // Authoritatively verify user existence in PostgreSQL
+        const user = await getUserById(userId);
+        if (!user || user.email_address.toLowerCase() !== email.toLowerCase()) {
+            await redisClient.del(tokenKey);
+            throw new ServiceError('Invalid or expired password reset link.', 400);
+        }
+
+        // Hash new password
+        const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+
+        // Update database
+        await updateUserPassword(userId, passwordHash);
+
+        // Immediately delete token (Single-use security enforcement)
+        await redisClient.del(tokenKey);
+        await redisClient.del(`password-reset:user:${userId}`);
+
+        return {
+            success: true,
+            message: 'Password successfully reset. You can now log in with your new password.',
+        };
+    } catch (err) {
+        if (err instanceof ServiceError) throw err;
+        console.error('Error resetting password with token:', err);
+        throw new ServiceError('Failed to reset password. Please try again.', 500);
+    }
+}
+
 module.exports = {
     ServiceError,
     fetchAllUsers,
@@ -833,5 +1096,9 @@ module.exports = {
     sendVerificationEmailServices,
     updatePersonalDetails,
     isUsernameUnique,
-    sendVerificationEmail
+    sendVerificationEmail,
+    requestPasswordReset,
+    verifyResetToken,
+    resetPasswordWithToken,
+    sendPasswordResetEmail,
 };
