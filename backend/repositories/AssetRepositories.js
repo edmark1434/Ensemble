@@ -398,26 +398,28 @@ async function syncAssetTags(client, marketAssetId, tagNames) {
   }
 }
 
-async function listAssetsRepository({ accountId, search, type, status, view, limit, offset }) {
+async function listAssetsRepository({ accountId, search, type, status, view, creatorAccountId, limit, offset }) {
   const visibility = view === 'mine'
     ? 'owner.account_id = $1'
-    : view === 'purchased'
-      ? 'purchase_access.is_purchased'
-      : view === 'saved'
-        ? `ma.status = 'published' AND EXISTS (
-            SELECT 1 FROM asset_saves saved_asset
-            WHERE saved_asset.market_asset_id = ma.market_asset_id
-              AND saved_asset.account_id = $1
-              AND saved_asset.deleted_at IS NULL
-          )`
-      : view === 'liked'
-        ? `ma.status = 'published' AND EXISTS (
-            SELECT 1 FROM asset_likes liked_asset
-            WHERE liked_asset.market_asset_id = ma.market_asset_id
-              AND liked_asset.account_id = $1
-              AND liked_asset.deleted_at IS NULL
-          )`
-      : `ma.status = 'published'`;
+    : view === 'creator'
+      ? `owner.account_id = $7 AND ma.status = 'published'`
+      : view === 'purchased'
+        ? 'purchase_access.is_purchased'
+        : view === 'saved'
+          ? `ma.status = 'published' AND EXISTS (
+              SELECT 1 FROM asset_saves saved_asset
+              WHERE saved_asset.market_asset_id = ma.market_asset_id
+                AND saved_asset.account_id = $1
+                AND saved_asset.deleted_at IS NULL
+            )`
+        : view === 'liked'
+          ? `ma.status = 'published' AND EXISTS (
+              SELECT 1 FROM asset_likes liked_asset
+              WHERE liked_asset.market_asset_id = ma.market_asset_id
+                AND liked_asset.account_id = $1
+                AND liked_asset.deleted_at IS NULL
+            )`
+        : `ma.status = 'published'`;
   const { rows } = await pool.query(
     `${ASSET_SELECT_WITH_TOTAL}
      WHERE ma.deleted_at IS NULL
@@ -447,7 +449,7 @@ async function listAssetsRepository({ accountId, search, type, status, view, lim
        )
      ORDER BY ma.created_at DESC, ma.market_asset_id DESC
      LIMIT $5 OFFSET $6`,
-    [accountId, search, type, status, limit, offset]
+    [accountId, search, type, status, limit, offset, creatorAccountId || null]
   );
   return rows;
 }

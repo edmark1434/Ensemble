@@ -191,6 +191,11 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
       showErrorToast("Please upload an image file.");
       return;
     }
+    const maxSizeInBytes = 20 * 1024 * 1024; // 20MB
+    if (file.size > maxSizeInBytes) {
+      showErrorToast("File exceeds the 20MB limit.");
+      return;
+    }
     const localUrl = URL.createObjectURL(file);
     setPreviewUrl(localUrl);
     setThumbnail(localUrl);
@@ -234,8 +239,8 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
         <p className="text-xs text-gray-600 dark:text-zinc-300">Provide fundamental background criteria for your project.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-5 items-start">
-        {/* Left: Square Image */}
+      <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-5 items-start">
+        {/* Left: Thumbnail Image */}
         <div className="flex flex-col">
           <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">Job Thumbnail</label>
           <div
@@ -243,7 +248,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`relative w-[140px] aspect-square rounded-xl border border-dashed flex flex-col items-center justify-center p-3 cursor-pointer transition-all duration-200 ${
+            className={`relative w-full aspect-[2/1] rounded-xl border border-dashed flex flex-col items-center justify-center p-3 cursor-pointer transition-all duration-200 ${
               isDragging ? "border-blue-500 bg-blue-500/10" : previewUrl ? "border-white/20 bg-white dark:bg-white/5 shadow-sm dark:shadow-none" : "border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:border-white/20"
             }`}
           >
@@ -253,11 +258,18 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
                 <img src={previewUrl} alt="Preview" className="w-full h-full object-cover opacity-80" />
               </div>
             ) : (
-              <div className="text-center space-y-1 pointer-events-none">
-                <ImageIcon className="h-5 w-5 mx-auto text-gray-500 dark:text-zinc-400" />
-                <div className="text-[10px] text-gray-600 dark:text-zinc-300 leading-tight">
-                  <span className="font-bold text-blue-500 dark:text-blue-400 block mb-0.5">Browse</span>
-                  or drop
+              <div className="flex items-center gap-4 text-left pointer-events-none w-full justify-center px-2">
+                <div className="flex flex-col items-center">
+                  <ImageIcon className="h-6 w-6 text-gray-400 dark:text-zinc-400 mb-1" />
+                  <div className="text-[10px] text-gray-600 dark:text-zinc-300 leading-tight text-center">
+                    <span className="font-bold text-blue-500 dark:text-blue-400">Browse</span><br/>
+                    or drop
+                  </div>
+                </div>
+                <div className="h-12 w-px bg-gray-200 dark:bg-white/10 shrink-0" />
+                <div className="text-[9px] text-gray-500 dark:text-zinc-400 leading-relaxed font-medium">
+                  <span className="text-gray-700 dark:text-zinc-200 font-bold">Max 20MB</span><br/>
+                  JPEG, PNG, WEBP
                 </div>
               </div>
             )}
