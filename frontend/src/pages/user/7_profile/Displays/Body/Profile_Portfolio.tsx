@@ -228,7 +228,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                     ) : item.type === "document" && item.fileUrl ? (
                       <>
                         <iframe
-                          src={`${item.fileUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0`}
+                          src={`${item.fileUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
                           title={`${item.title} PDF preview`}
                           className="pointer-events-none h-full w-full border-0 bg-white"
                           loading="lazy"
@@ -385,9 +385,9 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                   )}
 
                   {activeViewItem.type === "document" && activeViewItem.fileUrl && (
-                    <div className="w-full h-[500px] rounded-xl overflow-hidden border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-dark-surface/30">
+                    <div className="w-full h-[65vh] md:h-[70vh] rounded-xl overflow-hidden border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-dark-surface/30">
                       <iframe
-                        src={`${activeViewItem.fileUrl}#toolbar=0`}
+                        src={`${activeViewItem.fileUrl}#toolbar=0&view=FitH`}
                         className="w-full h-full border-none"
                         title={activeViewItem.title}
                       />
@@ -396,7 +396,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
 
                   {activeViewItem.type === "link" && activeViewItem.externalUrl && (
                     <div className="space-y-3">
-                      <div className="h-[500px] w-full overflow-hidden rounded-xl border border-emerald-500/20 bg-white">
+                      <div className="h-[65vh] md:h-[70vh] w-full overflow-hidden rounded-xl border border-emerald-500/20 bg-white">
                         <iframe
                           src={activeViewItem.externalUrl}
                           title={`${activeViewItem.title} website preview`}

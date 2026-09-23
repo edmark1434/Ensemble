@@ -179,7 +179,7 @@ export const GalleryUploadModal: React.FC<GalleryUploadModalProps> = ({
                 {/* File Upload Area */}
                 <div 
                   onClick={() => !isUploading && fileInputRef.current?.click()}
-                  className={`relative flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-2xl transition-all cursor-pointer overflow-hidden ${
+                  className={`relative min-h-[300px] flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-2xl transition-all cursor-pointer overflow-hidden ${
                     file 
                       ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/10' 
                       : 'border-gray-300 dark:border-white/10 hover:border-gray-400 dark:hover:border-white/20 bg-gray-50 dark:bg-white/5'
