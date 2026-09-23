@@ -16,7 +16,10 @@ const {
     sendVerificationEmailServices,
     getAllCountries,
     updatePersonalDetails,
-    isUsernameUnique
+    isUsernameUnique,
+    requestPasswordReset,
+    verifyResetToken,
+    resetPasswordWithToken
 } = require('../services/UserServices');
 const { getUserOnboardingStep } = require('../repositories/UserRepositories');
 const jwt = require('jsonwebtoken');
@@ -598,6 +601,74 @@ async function checkUsernameUniqueness(req, res) {
     }
 }
 
+async function forgotPasswordController(req, res) {
+    try {
+        const { email } = req.body;
+        const result = await requestPasswordReset(email);
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+        });
+    } catch (err) {
+        console.error('Error in forgotPasswordController:', err);
+        if (err instanceof ServiceError) {
+            return res.status(err.statusCode).json({
+                success: false,
+                message: err.message,
+                details: err.details || null,
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: 'Unable to process password reset request. Please try again later.',
+        });
+    }
+}
+
+async function verifyResetTokenController(req, res) {
+    try {
+        const { token } = req.params;
+        const result = await verifyResetToken(token);
+        return res.status(200).json({
+            success: true,
+            valid: result.valid,
+            email: result.email,
+        });
+    } catch (err) {
+        if (err instanceof ServiceError) {
+            return res.status(err.statusCode).json({
+                success: false,
+                message: err.message,
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: 'Invalid or expired password reset link.',
+        });
+    }
+}
+
+async function resetPasswordController(req, res) {
+    try {
+        const { token, password } = req.body;
+        const result = await resetPasswordWithToken(token, password);
+        return res.status(200).json(result);
+    } catch (err) {
+        console.error('Error in resetPasswordController:', err);
+        if (err instanceof ServiceError) {
+            return res.status(err.statusCode).json({
+                success: false,
+                message: err.message,
+                details: err.details || null,
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to reset password. Please try again.',
+        });
+    }
+}
+
 module.exports = {
     getAllUsers,
     signup,
@@ -609,11 +680,13 @@ module.exports = {
     CheckUserRole,
     getUsersByListOfIdsController,
     getNameByUserIdController,
-    getNameByUserIdController,
     signUpSaveSessionController,
     checkVerificationCodeController,
     sendVerificationEmailController,
     updatePersonalDetailsController,
     getUserSession,
-    checkUsernameUniqueness
+    checkUsernameUniqueness,
+    forgotPasswordController,
+    verifyResetTokenController,
+    resetPasswordController,
 };

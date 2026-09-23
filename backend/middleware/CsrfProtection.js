@@ -4,7 +4,7 @@ const redisClient = require('../lib/Redis');
 const TOKEN_TTL_SECONDS = 2 * 60 * 60;
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const EXEMPT_PATHS = [
-  /^\/users\/(?:login|signup|signup-save-session|verify-email|resend-verification-email|refresh-token)\/?$/,
+  /^\/users\/(?:login|signup|signup-save-session|verify-email|resend-verification-email|refresh-token|forgot-password|reset-password)\/?$/,
   /^\/(?:payment|cashouts)\/webhooks\//,
   /^\/verification\/webhook\//,
   /^\/google-meet\/oauth\/callback\/?$/,

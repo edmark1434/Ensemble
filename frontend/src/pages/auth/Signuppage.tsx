@@ -564,7 +564,16 @@ export default function SignupPage({
         setErrors({ email: res.data.message || "Signup failed. Please try again." });
       }
     } catch (err: any) {
-      setErrors(err.response?.data?.details);
+      const details = err.response?.data?.details;
+      const message = err.response?.data?.message;
+
+      if (details && typeof details === "object" && Object.keys(details).length > 0) {
+        setErrors(details);
+      } else if (message) {
+        setErrors({ email: message });
+      } else {
+        setErrors({ email: "Unable to reach server. Please check your connection and try again." });
+      }
     } finally {
       setLoading(false);
     }

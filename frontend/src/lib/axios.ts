@@ -25,7 +25,7 @@ async function getCsrfToken() {
   return csrfRequest;
 }
 
-const CSRF_EXEMPT_URL = /\/api\/(?:chat|users\/(?:login|signup|signup-save-session|verify-email|resend-verification-email|refresh-token|forgot-password))(?:$|[?#])/;
+const CSRF_EXEMPT_URL = /\/api\/(?:chat|users\/(?:login|signup|signup-save-session|verify-email|resend-verification-email|refresh-token|forgot-password|reset-password))(?:$|[?#])/;
 
 export function installDefaultAxiosCsrfInterceptor() {
   axios.interceptors.request.use(async (config) => {
@@ -48,7 +48,8 @@ const api = axios.create({
 
 api.interceptors.request.use(async (config) => {
   const method = String(config.method || "get").toLowerCase();
-  if (!["get", "head", "options"].includes(method)) {
+  const url = String(config.url || "");
+  if (!["get", "head", "options"].includes(method) && !CSRF_EXEMPT_URL.test(url)) {
     config.headers.set("X-CSRF-Token", await getCsrfToken());
   }
   return config;

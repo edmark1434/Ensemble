@@ -18,7 +18,10 @@ const {
     sendVerificationEmailController,
     updatePersonalDetailsController,
     getUserSession,
-    checkUsernameUniqueness
+    checkUsernameUniqueness,
+    forgotPasswordController,
+    verifyResetTokenController,
+    resetPasswordController
 } = require('../controllers/UserControllers');
 const {
     createPublicTicket,
@@ -62,5 +65,8 @@ router.get('/name/:userId', [checkSession, requireAuth], getNameByUserIdControll
 router.post('/signup-save-session', signUpSaveSessionController);
 router.post('/verify-email', checkVerificationCodeController);
 router.post('/resend-verification-email', sendVerificationEmailController);
+router.post('/forgot-password', forgotPasswordController);
+router.get('/verify-reset-token/:token', verifyResetTokenController);
+router.post('/reset-password', resetPasswordController);
 
 module.exports = router;
