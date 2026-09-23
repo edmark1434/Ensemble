@@ -405,19 +405,34 @@ async function getAssetServices(assetId, accountId) {
 async function createAssetServices(accountId, payload) {
   const data = validateAssetPayload(payload, { creating: true });
   try {
-    const { resolveMarketplacePublishStatus } = require('../lib/ModerationPolicy');
-    const publish = await resolveMarketplacePublishStatus({
-      accountId,
-      title: data.name,
-      description: data.description,
-      priceCredits: data.priceCredits,
-      requestedStatus: data.status,
-    });
-    data.status = publish.status;
+    const { resolveMarketplacePublishStatus, getModerationSettings } = require('../lib/ModerationPolicy');
+    const settings = await getModerationSettings();
+    const reviewRequired = settings.marketplaceListingReview && String(data.status).toLowerCase() === 'published';
+
+    // When review is required, asset is created as draft while awaiting moderator approval
+    const requestedStatus = data.status;
+    data.status = reviewRequired ? 'draft' : requestedStatus;
+
     const assetId = await createAssetRepository(accountId, data);
     const asset = await getAssetServices(assetId, accountId);
-    if (publish.queued) {
-      return { ...asset, reviewQueued: true, reviewMessage: publish.message };
+
+    let reviewInfo = { queued: false };
+    if (reviewRequired) {
+      reviewInfo = await resolveMarketplacePublishStatus({
+        accountId,
+        marketAssetId: assetId,
+        title: data.name,
+        description: data.description,
+        priceCredits: data.priceCredits,
+        category: asset?.type || 'Assets',
+        thumbnailUrl: asset?.thumbnails?.[0]?.path || asset?.thumbnail_path || null,
+        requestedStatus,
+        currentStatus: 'draft',
+      });
+    }
+
+    if (reviewInfo.queued) {
+      return { ...asset, reviewQueued: true, reviewMessage: reviewInfo.message };
     }
     return asset;
   } catch (error) {
@@ -563,13 +578,18 @@ async function updateAssetServices(assetId, accountId, payload) {
   requireUuid(assetId);
   const data = validateAssetPayload(payload);
   try {
+    const currentAsset = await getAssetServices(assetId, accountId);
     const { resolveMarketplacePublishStatus } = require('../lib/ModerationPolicy');
     const publish = await resolveMarketplacePublishStatus({
       accountId,
+      marketAssetId: assetId,
       title: data.name,
       description: data.description,
       priceCredits: data.priceCredits,
+      category: currentAsset?.type || 'Assets',
+      thumbnailUrl: currentAsset?.thumbnails?.[0]?.path || currentAsset?.thumbnail_path || null,
       requestedStatus: data.status,
+      currentStatus: currentAsset?.status || 'draft',
     });
     data.status = publish.status;
     const updated = await updateAssetRepository(assetId, accountId, data);

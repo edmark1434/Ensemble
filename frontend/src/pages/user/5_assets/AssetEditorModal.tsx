@@ -5,7 +5,7 @@ import { uploadFileWithIntent } from "@/lib/uploadFile";
 import { mediaUrl, type AssetRecord, type AssetStatus, type AssetType } from "./assetTypes";
 import { createAssetDocumentPreview, createAssetProxy, prepareAssetThumbnail, prepareTemplateThumbnail } from "./assetDerivatives";
 import { getAssetPostingEligibility } from "./assetPostingEligibility";
-import { showErrorToast } from "@/components/utility/toast";
+import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 
 type SourceKind = Exclude<AssetType, "template"> | "document" | "archive";
 
@@ -302,6 +302,9 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
             },
           } : {}),
         });
+        if (response.data.asset.reviewQueued && response.data.asset.reviewMessage) {
+          showSuccessToast(response.data.asset.reviewMessage);
+        }
         onSaved(response.data.asset);
       } catch (requestError) {
         const message = errorMessage(requestError);
@@ -344,6 +347,9 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
         thumbnailFileIds: thumbnailUploads.map((upload) => upload.fileId),
         type: listingType, ...metadata,
       });
+      if (response.data.asset.reviewQueued && response.data.asset.reviewMessage) {
+        showSuccessToast(response.data.asset.reviewMessage);
+      }
       onSaved(response.data.asset);
     } catch (requestError) {
       const message = errorMessage(requestError);

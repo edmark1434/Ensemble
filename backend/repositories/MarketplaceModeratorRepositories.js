@@ -21,6 +21,7 @@ function mapListingRow(row) {
     category: row.category,
     priceCredits: Number(row.price_credits || 0),
     thumbnailUrl: row.thumbnail_url,
+    marketAssetId: row.market_asset_id || null,
     status: row.status,
     rejectionReason: row.rejection_reason,
     submittedBy: {
@@ -188,7 +189,7 @@ async function reviewMarketplaceListing(listingId, { status, rejectionReason }, 
 
   const staffId = staffSession?.staff_id || staffSession?.staffId || null;
   const before = await pool.query(
-    `SELECT listing_id, listing_number, title, submitted_by_account_id
+    `SELECT listing_id, listing_number, title, submitted_by_account_id, market_asset_id
      FROM marketplace_listings WHERE listing_id = $1`,
     [listingId]
   );
@@ -202,6 +203,23 @@ async function reviewMarketplaceListing(listingId, { status, rejectionReason }, 
   );
 
   const row = before.rows[0];
+  if (row.market_asset_id) {
+    if (status === 'approved') {
+      await pool.query(
+        `UPDATE market_assets
+         SET status = 'published', updated_at = NOW()
+         WHERE market_asset_id = $1 AND deleted_at IS NULL`,
+        [row.market_asset_id]
+      );
+    } else if (status === 'rejected' || status === 'delisted') {
+      await pool.query(
+        `UPDATE market_assets
+         SET status = 'draft', updated_at = NOW()
+         WHERE market_asset_id = $1 AND deleted_at IS NULL`,
+        [row.market_asset_id]
+      );
+    }
+  }
   await recordAccountActivity({
     accountId: row.submitted_by_account_id,
     action: `Listing ${row.listing_number || row.title || listingId} ${status}`,

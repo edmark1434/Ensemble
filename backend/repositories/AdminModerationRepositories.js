@@ -980,12 +980,19 @@ async function updatePendingCase(caseId, body, session) {
     if (!allowed.includes(status)) {
       throw new Error('Listing status must be approved, rejected, delisted, or pending');
     }
+    const before = await pool.query(
+      `SELECT listing_id, market_asset_id FROM marketplace_listings WHERE listing_id = $1`,
+      [id]
+    );
+    if (!before.rows.length) throw new Error('Listing not found');
+
+    const reviewedAtSql = status === 'pending' ? 'NULL' : 'NOW()';
     const result = await pool.query(
       `UPDATE marketplace_listings
        SET status = $1,
            rejection_reason = $2,
            reviewed_by_staff_id = $3,
-           reviewed_at = CASE WHEN $1 = 'pending' THEN NULL ELSE NOW() END,
+           reviewed_at = ${reviewedAtSql},
            updated_at = NOW()
        WHERE listing_id = $4
        RETURNING listing_id`,
@@ -996,7 +1003,23 @@ async function updatePendingCase(caseId, body, session) {
         id,
       ]
     );
-    if (!result.rows.length) throw new Error('Listing not found');
+
+    const marketAssetId = before.rows[0]?.market_asset_id;
+    if (marketAssetId) {
+      if (status === 'approved') {
+        await pool.query(
+          `UPDATE market_assets SET status = 'published', updated_at = NOW()
+           WHERE market_asset_id = $1 AND deleted_at IS NULL`,
+          [marketAssetId]
+        );
+      } else if (status === 'rejected' || status === 'delisted') {
+        await pool.query(
+          `UPDATE market_assets SET status = 'draft', updated_at = NOW()
+           WHERE market_asset_id = $1 AND deleted_at IS NULL`,
+          [marketAssetId]
+        );
+      }
+    }
     return { id, source, updated: true, status };
   }
 
@@ -1038,10 +1061,18 @@ async function deletePendingCase(caseId, body, session) {
            reviewed_at = NOW(),
            updated_at = NOW()
        WHERE listing_id = $3 AND LOWER(status) = 'pending'
-       RETURNING listing_id`,
+       RETURNING listing_id, market_asset_id`,
       [body?.reason || null, staffId, id]
     );
     if (!result.rows.length) throw new Error('Pending listing not found');
+    const marketAssetId = result.rows[0]?.market_asset_id;
+    if (marketAssetId) {
+      await pool.query(
+        `UPDATE market_assets SET status = 'draft', updated_at = NOW()
+         WHERE market_asset_id = $1 AND deleted_at IS NULL`,
+        [marketAssetId]
+      );
+    }
     return { id, source, deleted: true };
   }
 
