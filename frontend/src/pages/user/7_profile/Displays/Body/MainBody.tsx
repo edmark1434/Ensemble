@@ -207,7 +207,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
               <Profile_JobPosts userDetails={userDetails} accountId={accountId} isOwner={isOwner} />
             )}
             {activeTab === "assets" && (
-              <Profile_Assets isOwner={isOwner} isLoading={loading} />
+              <Profile_Assets accountId={accountId} isOwner={isOwner} isLoading={loading} />
             )}
           </motion.div>
         </AnimatePresence>

@@ -22,10 +22,9 @@ export const Profile_Assets: React.FC<ProfileAssetsProps> = ({ accountId, isOwne
     setLoading(true);
     try {
       const response = await api.get<{ assets: AssetRecord[] }>("/api/assets", {
-        params: { 
-          creatorAccountId: accountId,
-          pageSize: 12
-        },
+        params: isOwner 
+          ? { view: 'mine', pageSize: 12 }
+          : { creatorAccountId: accountId, pageSize: 12 },
       });
       setAssets(response.data.assets || []);
     } catch (error) {
