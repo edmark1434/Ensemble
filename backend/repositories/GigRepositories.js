@@ -386,7 +386,7 @@ async function submitGigOrderRepository(accountId, gigId, orderData, prohibitedS
              FROM gigs g
              JOIN gig_tiers gt ON gt.gig_id = g.gig_id
              WHERE g.gig_id = $1 AND gt.gig_tier_id = $2
-               AND LOWER(g.status) = 'active'
+               AND LOWER(g.status) IN ('active', 'open')
              FOR UPDATE OF g`,
             [gigId, orderData.tierId, prohibitedSellerAccountIds]
         );
