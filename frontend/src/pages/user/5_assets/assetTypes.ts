@@ -69,6 +69,8 @@ export interface AssetRecord {
   average_rating: number;
   tags: string[];
   comment_count: number;
+  reviewQueued?: boolean;
+  reviewMessage?: string | null;
 }
 
 export interface AssetReview {
