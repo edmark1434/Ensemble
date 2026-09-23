@@ -1,3 +1,4 @@
+import { AdminSubscriptionsTab } from './components/AdminSubscriptionsTab';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
@@ -37,12 +38,13 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'management', label: 'Management', icon: Settings2 },
 ];
 
-type ManagementSection = 'packages' | 'fees' | 'marketplace';
+type ManagementSection = 'packages' | 'fees' | 'marketplace' | 'subscriptions';
 
 const MANAGEMENT_SECTIONS: { id: ManagementSection; label: string; icon: typeof Package }[] = [
   { id: 'packages', label: 'Credit packages', icon: Package },
   { id: 'fees', label: 'Fees', icon: Percent },
   { id: 'marketplace', label: 'Marketplace', icon: Store },
+    { id: 'subscriptions', label: 'Subscriptions', icon: Store },
 ];
 
 function formatDateTime(value: string) {
@@ -520,6 +522,10 @@ function ManagementTab({
       title: 'Marketplace rules',
       description: 'Listing, escrow, payout, and refund rules. Edit in System Settings → Economy.',
     },
+    subscriptions: {
+      title: 'Subscription Packages',
+      description: 'Manage platform membership plans.',
+    },
   };
 
   const activePackages = creditPackages.filter((p) => p.active).length;
@@ -629,6 +635,8 @@ function ManagementTab({
               </table>
             </section>
           )}
+
+          {section === 'subscriptions' && <AdminSubscriptionsTab />}
 
           {section === 'marketplace' && (
             <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-6">

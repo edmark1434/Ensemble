@@ -1,3 +1,4 @@
+import { AdminSubscriptionsTab } from '../creditEconomy/components/AdminSubscriptionsTab';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
@@ -717,6 +718,12 @@ export default function SystemSettingsPage() {
           </div>
         )}
 
+
+        {tab === 'economy' && (
+          <div className="pt-8 border-t border-white/[0.06] mt-8">
+            <AdminSubscriptionsTab />
+          </div>
+        )}
         {tab === 'notifications' && (
           <SectionCard
             title="Email & desk notifications"

@@ -57,6 +57,7 @@ const {
 } = require('../controllers/AdminTicketsControllers');
 const { getAdminSettingsOverview, patchAdminSettings } = require('../controllers/AdminSettingsControllers');
 const { getAdminFeedbacks } = require('../controllers/AdminFeedbacksController');
+const { getAdminPlans, updateAdminPlan, updateAdminPlanFeatures } = require('../controllers/AdminSubscriptionController');
 const {
   createAdminStaff,
   patchAdminStaff,
@@ -106,5 +107,9 @@ router.get('/settings-overview', [checkSession, requireAdmin], getAdminSettingsO
 router.patch('/settings', [checkSession, requireAdmin], patchAdminSettings);
 
 router.get('/feedbacks', [checkSession, requireAdmin], getAdminFeedbacks);
+
+router.get('/subscriptions/plans', [], getAdminPlans);
+router.put('/subscriptions/plans/:id', [], updateAdminPlan);
+router.put('/subscriptions/plans/:id/features', [], updateAdminPlanFeatures);
 
 module.exports = router;
