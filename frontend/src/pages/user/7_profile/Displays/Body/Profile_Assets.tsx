@@ -1,6 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Package, Plus } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
+import api from "@/lib/axios";
+import { AssetCard } from "@/pages/user/5_assets/AssetCard";
+import type { AssetRecord } from "@/pages/user/5_assets/assetTypes";
+import { useNavigate } from "react-router-dom";
 
 interface ProfileAssetsProps {
   accountId?: string;
@@ -8,8 +12,34 @@ interface ProfileAssetsProps {
   isLoading?: boolean;
 }
 
-export const Profile_Assets: React.FC<ProfileAssetsProps> = ({ isOwner = false, isLoading = false }) => {
-  const [assets] = useState<any[]>([]);
+export const Profile_Assets: React.FC<ProfileAssetsProps> = ({ accountId, isOwner = false, isLoading = false }) => {
+  const [assets, setAssets] = useState<AssetRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  const loadAssets = useCallback(async () => {
+    if (!accountId) return;
+    setLoading(true);
+    try {
+      const response = await api.get<{ assets: AssetRecord[] }>("/api/assets", {
+        params: { 
+          creatorAccountId: accountId,
+          pageSize: 12
+        },
+      });
+      setAssets(response.data.assets || []);
+    } catch (error) {
+      console.error("Failed to load assets:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [accountId]);
+
+  useEffect(() => {
+    loadAssets();
+  }, [loadAssets]);
+
+  const showLoading = isLoading || loading;
 
   return (
     <div className="flex-1 space-y-4 text-left">
@@ -18,19 +48,23 @@ export const Profile_Assets: React.FC<ProfileAssetsProps> = ({ isOwner = false, 
         <h4 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wider uppercase flex items-center gap-2">
           <Package className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
           {isOwner ? "My Assets" : "Assets"}
-          <span className="text-[10px] font-medium text-gray-500 dark:text-zinc-500 lowercase">
-            ({assets.length})
-          </span>
+          {!showLoading && (
+            <span className="text-[10px] font-medium text-gray-500 dark:text-zinc-500 lowercase">
+              ({assets.length})
+            </span>
+          )}
         </h4>
 
         <div className="flex items-center gap-3">
-          <span className="text-[10px] text-gray-500 dark:text-zinc-500 font-medium">
-            {assets.length} active assets
-          </span>
+          {!showLoading && (
+            <span className="text-[10px] text-gray-500 dark:text-zinc-500 font-medium">
+              {assets.length} active assets
+            </span>
+          )}
 
           {isOwner && (
             <button
-              onClick={() => {}}
+              onClick={() => navigate('/assets', { state: { action: 'upload' } })}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition-colors shadow-sm cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -40,7 +74,7 @@ export const Profile_Assets: React.FC<ProfileAssetsProps> = ({ isOwner = false, 
         </div>
       </div>
 
-      {isLoading ? (
+      {showLoading ? (
         <div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, idx) => (
             <div
@@ -79,13 +113,18 @@ export const Profile_Assets: React.FC<ProfileAssetsProps> = ({ isOwner = false, 
                 : "This user hasn't uploaded any downloadable assets or presets yet."
             }
             actionLabel={isOwner ? "Upload Asset" : undefined}
-            onAction={isOwner ? () => {} : undefined}
+            onAction={isOwner ? () => navigate('/assets', { state: { action: 'upload' } }) : undefined}
             className="!p-6 !py-8 [&_dotlottie-wc]:!h-20 [&_dotlottie-wc]:!w-20 [&_.grayscale]:!h-20 [&_.grayscale]:!w-20 [&_.grayscale]:!mb-2 [&_h3]:!text-sm [&_p]:!text-xs [&_button]:!mt-4 [&_button]:!py-2 [&_button]:!px-4 [&_button]:!text-xs"
           />
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {/* Asset item cards */}
+          {assets.map((asset) => (
+            <AssetCard 
+              key={asset.market_asset_id} 
+              asset={asset} 
+            />
+          ))}
         </div>
       )}
     </div>

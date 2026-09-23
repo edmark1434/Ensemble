@@ -369,20 +369,24 @@ async function listAssetsServices(accountId, query = {}) {
   if (status && !ASSET_STATUSES.has(status)) {
     throw new AssetError('Unsupported asset status filter.', 400, 'VALIDATION_ERROR');
   }
-  const view = query.view
-    ? String(query.view)
-    : String(query.mine) === 'true'
-      ? 'mine'
-      : 'discover';
-  if (!ASSET_VIEWS.has(view)) {
+  
+  let view = query.view ? String(query.view) : String(query.mine) === 'true' ? 'mine' : 'discover';
+  const creatorAccountId = query.creatorAccountId ? String(query.creatorAccountId) : '';
+  if (creatorAccountId && view !== 'mine') {
+    view = 'creator';
+  }
+
+  if (view !== 'creator' && !ASSET_VIEWS.has(view)) {
     throw new AssetError('Unsupported asset view.', 400, 'VALIDATION_ERROR');
   }
+
   const rows = await listAssetsRepository({
     accountId,
     search,
     type,
     status: view === 'mine' ? status : '',
     view,
+    creatorAccountId,
     limit: pageSize,
     offset: (page - 1) * pageSize,
   });

@@ -95,6 +95,40 @@ async function acceptJobOfferController(req, res) {
         const actorIds = await getAuthorizedActorAccountIds(freelancerId);
         const result = await ContractRepositories.acceptJobOffer(actorIds, contractId);
 
+        try {
+            const propQ = await pool.query(`
+                SELECT j.client_account_id, j.title, p.freelancer_account_id 
+                FROM job_contracts jc 
+                JOIN proposals p ON jc.proposal_id = p.proposal_id 
+                JOIN jobs j ON p.job_id = j.job_id 
+                WHERE jc.contract_id = $1
+            `, [contractId]);
+
+            if (propQ.rows[0]) {
+                const { client_account_id, title, freelancer_account_id } = propQ.rows[0];
+                const fAccQ = await pool.query('SELECT handle FROM accounts WHERE account_id = $1', [freelancer_account_id]);
+                
+                if (fAccQ.rows[0]) {
+                    const freelancerHandle = fAccQ.rows[0].handle;
+                    const notif = await createNotificationServices({
+                        message: `@${freelancerHandle} accepted your contract offer for ${title}`,
+                        reference_table: 'contracts',
+                        reference_prefix: 'offer_accepted',
+                        reference_path: `/contracts/${contractId}`,
+                        reference_id: contractId,
+                        account_id: client_account_id
+                    });
+
+                    const io = getIo();
+                    if (io) {
+                        io.to(String(client_account_id)).emit('notification', notif);
+                    }
+                }
+            }
+        } catch (notifErr) {
+            console.error('Error sending contract acceptance notification:', notifErr);
+        }
+
         return res.status(200).json({
             success: true,
             message: 'Job offer accepted successfully',
