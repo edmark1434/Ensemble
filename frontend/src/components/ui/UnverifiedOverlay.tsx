@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { useNavigate } from "react-router-dom";
 
@@ -16,7 +16,7 @@ export const UnverifiedOverlay = ({ featureName = "this area" }: { featureName?:
         You need a verified account to view and manage {featureName}. Please complete verification to unlock this feature.
       </p>
       <button 
-        onClick={() => navigate('/verification')}
+        onClick={() => navigate('/account-verification-status')}
         className="rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-10 py-4 text-sm font-bold uppercase tracking-wider text-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-blue-500/25 pointer-events-auto"
       >
         Verify Now

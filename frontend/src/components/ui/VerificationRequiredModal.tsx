@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -48,7 +48,7 @@ const VerificationRequiredModal = () => {
               <button
                 onClick={() => {
                   setIsVerificationModalOpen(false);
-                  navigate("/verification"); 
+                  navigate('/account-verification-status'); 
                 }}
                 className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-4 text-xs font-bold uppercase tracking-wider text-white transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-500/25"
               >

@@ -57,7 +57,6 @@ import IncomingOrders from '@/pages/user/7_gigs/gig_orders/incoming_orders.tsx'
 import IncomingOrderDetail from '@/pages/user/7_gigs/gig_orders/incoming_order_detail.tsx'
 import SentOrders from '@/pages/user/7_gigs/gig_orders/sent_orders.tsx'
 import SentOrderDetail from '@/pages/user/7_gigs/gig_orders/sent_order_detail.tsx'
-import Verification from '@/pages/user/9_verification/Verification.tsx'
 import BusinessVerification from '@/pages/user/9_verification/BusinessVerification.tsx'
 import TransactionHistoryMain from '@/pages/user/11_transactionhistory/main.tsx'
 import TosMain from '@/pages/user/terms_of_service/tos_main.tsx'
@@ -286,7 +285,6 @@ function App() {
           <Route path='/gigs/edit/:id' element={<GigEditPage />} />
           <Route path='/gigs/services/:id/page' element={<GigFullPage />} />
           <Route path='/gigs/services/:id/order' element={<GigOrderPage />} />
-          <Route path='/verification' element={<Verification />} />
           <Route path='/orders' element={<SectionPlaceholder title='INCOMING ORDERS' />} />
           <Route path='/my-orders' element={<SectionPlaceholder title='MY ORDERS' />} />
           <Route path='/terms-of-services' element={<TosMain />} />
