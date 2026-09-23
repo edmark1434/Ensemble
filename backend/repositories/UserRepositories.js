@@ -370,6 +370,37 @@ async function getUserOnboardingStep(userId) {
     }
 }
 
+async function getUserByEmailForPasswordReset(email) {
+    try {
+        const result = await pool.query(
+            `SELECT user_id, email_address, first_name, last_name, account_id
+             FROM users
+             WHERE LOWER(email_address) = LOWER($1)`,
+            [String(email || '').trim()]
+        );
+        return result.rows[0] || null;
+    } catch (err) {
+        console.error('Error fetching user for password reset by email:', err);
+        throw err;
+    }
+}
+
+async function updateUserPassword(userId, passwordHash) {
+    try {
+        const result = await pool.query(
+            `UPDATE users
+             SET password_hash = $1
+             WHERE user_id = $2
+             RETURNING user_id, email_address, account_id`,
+            [passwordHash, userId]
+        );
+        return result.rows[0] || null;
+    } catch (err) {
+        console.error('Error updating user password:', err);
+        throw err;
+    }
+}
+
 //exports all the repository functions for use in other parts of the application
 module.exports = {
     getAllUsers,
@@ -386,4 +417,6 @@ module.exports = {
     updateUserDetails,
     updateUserDetailsByAccountId,
     getUserOnboardingStep,
+    getUserByEmailForPasswordReset,
+    updateUserPassword,
 };

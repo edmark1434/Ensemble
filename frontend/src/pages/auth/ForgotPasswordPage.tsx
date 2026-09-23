@@ -228,6 +228,7 @@ export default function ForgotPasswordPage() {
                     placeholder="you@studio.com"
                     value={email}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => { setEmail(e.target.value); setError(""); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
                     style={{
                       width: "100%", padding: "12px 14px 12px 42px", background: T.bgInput,
                       border: `1px solid ${error ? T.error : T.border}`, borderRadius: 12, color: "#e2e8f0", fontSize: 14, outline: "none"

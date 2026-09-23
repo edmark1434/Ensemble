@@ -15,6 +15,7 @@ import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { WalletIcon } from "@/components/ui/wallet-icon";
+import toast from "react-hot-toast";
 
 // ---- Data models ----
 interface CreditPack {
@@ -144,6 +145,24 @@ const CreditShop: React.FC = () => {
       setActiveTab("topup");
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const saveStatus = searchParams.get("save_payment");
+    if (saveStatus === "success") {
+      toast.success("Payment method added successfully!");
+      navigate(location.pathname, { replace: true });
+    } else if (saveStatus === "cancel") {
+      toast.error("Adding payment method was cancelled.");
+      navigate(location.pathname, { replace: true });
+    } else if (searchParams.has("success")) {
+      toast.success("Payment completed successfully! Credits will update shortly.");
+      navigate(location.pathname, { replace: true });
+    } else if (searchParams.has("cancel")) {
+      toast.error("Payment was cancelled.");
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.search, location.pathname, navigate]);
 
   const handleTabChange = (tab: "topup" | "membership") => {
     setActiveTab(tab);

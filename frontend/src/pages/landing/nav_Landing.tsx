@@ -239,7 +239,7 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isBgmMuted, isSfxM
       "Ask our Chatbot": "/landing/AskOurChatbot",
       "Submit a Ticket": "/landing/SubmitATicket",
       "Support Us": "/landing/SupportUs",
-      "Send a Feedback": "/landing/SendAFeedback"
+      "Submit a Feedback": "/landing/SendAFeedback"
     };
 
     const target = routeMap[item];
@@ -292,7 +292,7 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isBgmMuted, isSfxM
 
         <NavDropdown
           label="Support"
-          items={["FAQ", "Ask our Chatbot", "Submit a Ticket", "Support Us", "Send a Feedback"]}
+          items={["FAQ", "Ask our Chatbot", "Submit a Ticket", "Support Us", "Submit a Feedback"]}
           isOpen={openDD === "support"}
           onToggle={toggle("support")}
           onItemClick={handleDropdownItemAction}

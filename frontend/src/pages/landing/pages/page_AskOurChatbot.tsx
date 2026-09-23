@@ -50,8 +50,16 @@ const PageAskOurChatbot: React.FC = () => {
   const [messages, setMessages] = useState<Msg[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isPageLoading, setIsPageLoading] = useState(true);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsPageLoading(false);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -108,8 +116,18 @@ const PageAskOurChatbot: React.FC = () => {
 
   return (
     <main className="ensemble-chat-page">
-      <div className="ensemble-chat-glow" aria-hidden="true" />
-      <div className="ensemble-chat-shell">
+      <div className={`ensemble-chat-glow transition-all duration-1000 ease-out ${!isPageLoading ? 'opacity-100' : 'opacity-0'}`} aria-hidden="true" />
+      
+      {/* Loading Overlay */}
+      <div className={`absolute inset-0 flex flex-col items-center justify-center transition-all duration-700 ease-in-out ${isPageLoading ? 'opacity-100 z-50' : 'opacity-0 -z-10 scale-95 pointer-events-none'}`}>
+        <div className="relative flex items-center justify-center h-20 w-20 rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/30 shadow-[0_0_40px_rgba(59,130,246,0.3)]">
+          <Sparkles className="h-8 w-8 text-blue-500 animate-pulse" />
+          <div className="absolute inset-0 border-2 border-blue-400 rounded-full animate-ping opacity-20" />
+        </div>
+        <p className="mt-8 text-sm font-semibold text-gray-500 dark:text-gray-400 tracking-widest uppercase animate-pulse">Initializing AI...</p>
+      </div>
+
+      <div className={`ensemble-chat-shell transition-all duration-1000 ease-out transform ${!isPageLoading ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
         <button className="ensemble-back-button" onClick={() => navigate(-1)}>
           <ArrowLeft size={16} /> Back to Ensemble
         </button>
@@ -218,7 +236,13 @@ const PageAskOurChatbot: React.FC = () => {
       </div>
       <style>{`
         .ensemble-chat-page { position: relative; min-height: 100vh; overflow: hidden; background: ${theme === 'dark' ? "#121214" : "#f9fafb"}; color: ${theme === 'dark' ? "#f8fafc" : "#111827"}; padding: 36px 32px 48px; font-family: "Plus Jakarta Sans", sans-serif; }
-        .ensemble-chat-glow { position: absolute; top: -180px; left: 50%; width: 620px; height: 360px; transform: translateX(-50%); border-radius: 50%; background: rgba(37, 99, 235, .12); filter: blur(100px); pointer-events: none; }
+        .ensemble-chat-glow { position: absolute; top: -180px; left: 50%; width: 620px; height: 360px; transform: translateX(-50%); border-radius: 50%; background: rgba(59,130,246,0.25); filter: blur(100px); pointer-events: none; animation: glowPulse 12s ease-in-out infinite; }
+        @keyframes glowPulse {
+          0% { background: rgba(59,130,246,0.25); }
+          33% { background: rgba(250,204,21,0.25); }
+          66% { background: rgba(168,85,247,0.25); }
+          100% { background: rgba(59,130,246,0.25); }
+        }
         .ensemble-chat-shell { position: relative; z-index: 1; width: min(1160px, 100%); margin: 0 auto; }
         .ensemble-back-button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 0; border: 0; background: transparent; color: ${theme === 'dark' ? "#7a8499" : "#6b7280"}; font: inherit; font-size: 13px; cursor: pointer; transition: color .2s ease; }
         .ensemble-back-button:hover { color: ${theme === 'dark' ? "#ffffff" : "#111827"}; }

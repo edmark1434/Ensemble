@@ -1,17 +1,19 @@
-# Current Task — Handle Didit Test Webhook
+# Current Task — Forgot & Reset Password Flow
 
-Resolve 404 error returned when testing the Didit webhook URL (`/api/verification/webhook/status/updated`).
-
-## Root Cause
-- The webhook DID reach the Node.js backend through ngrok, successfully passed HMAC signature validation in `verifyDiditWebhook`, and reached `handleVerificationWebhookStatusUpdated`.
-- When clicking "Test Webhook" in the Didit portal, Didit sends a dummy test event with `X-Didit-Test-Webhook: true`, `metadata: { test_webhook: true }`, and a fake `session_id: "42d22fa3-eed5-4b38-b4fb-fa6f63287657"`.
-- `processDiditVerificationStatusUpdate` searches PostgreSQL for this dummy session ID, which does not exist, and returns `{ found: false }`.
-- `handleVerificationWebhookStatusUpdated` then returns HTTP `404 {"success":false,"message":"Verification session not found"}`.
-- To Didit and the user, this appears as an immediate 404 failure.
+Implement a secure, expiring password recovery flow:
+1. User enters email at `/forgot-password`.
+2. Backend generates a cryptographically secure token with a 15-minute expiration stored in Redis, and sends an email via Brevo matching the platform's email template.
+3. User opens `/reset-password?token=...`, validates the 4 signup password rules (8+ chars, uppercase, lowercase, special character), and updates the password for their specific account.
+4. Token is single-use and invalidated immediately. Existing sessions are cleaned up.
 
 ## Acceptance Criteria
-- [x] Update `processDiditVerificationStatusUpdate` and `handleVerificationWebhookStatusUpdated` to detect Didit test events (`X-Didit-Test-Webhook` header or `metadata.test_webhook`) and respond with HTTP 200 OK.
-- [x] Test the webhook endpoint locally and via ngrok with a simulated Didit test webhook to ensure it returns 200 OK.
+- [x] Backend: Update `UserRepositories.js` with `getUserByEmailForPasswordReset` and `updateUserPassword`.
+- [x] Backend: Update `UserServices.js` with `requestPasswordReset`, `resetPasswordWithToken`, `verifyResetToken`, and `sendPasswordResetEmail` (using platform Brevo template).
+- [x] Backend: Security compliance with `docs/security.md` (no user enumeration, crypto random token, 15m TTL in Redis, single-use token consumption, session revocation, rate limiting under verification policy, exempt from CSRF for unauthenticated access).
+- [x] Backend: Register `/forgot-password`, `/reset-password`, `/verify-reset-token/:token` in `backend/routes/User.js` and controllers.
+- [x] Backend: Add route exemptions to `CsrfProtection.js`, `RequireCompletedOnboarding.js`, and `RateLimiter.js`.
+- [x] Frontend: Wire up `ForgotPasswordPage.tsx` with error handling, loading states, and platform theme.
+- [x] Frontend: Update `ResetPasswordPage.tsx` with live 4-rule signup password validation (8+ chars, uppercase, lowercase, special char), token verification, submission to API, and error handling.
+- [x] Verification: Test password reset flow end-to-end with automated script and verify frontend build (`npm run build`).
 
-Status: Completed
 

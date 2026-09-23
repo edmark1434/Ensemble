@@ -80,24 +80,45 @@ const CheckoutPage: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const state = location.state as { item: CheckoutItem };
+    const state = location.state as { item: CheckoutItem } | null;
     if (state?.item) {
       setCheckoutItem(state.item);
+      try {
+        sessionStorage.setItem("ensemble_checkout_item", JSON.stringify(state.item));
+      } catch (e) {
+        console.warn("Failed to store checkout item in sessionStorage", e);
+      }
     } else {
-      navigate("/credits");
+      const stored = sessionStorage.getItem("ensemble_checkout_item");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          setCheckoutItem(parsed);
+        } catch (e) {
+          navigate("/credits");
+        }
+      } else {
+        navigate("/credits");
+      }
     }
   }, [location, navigate]);
 
-  useEffect(() => {
-    fetchPaymentMethods();
-  }, []);
-
-  const fetchPaymentMethods = async () => {
+  const fetchPaymentMethods = async (autoSelectLatest = false) => {
     setLoadingPaymentMethods(true);
     try {
       const response = await api.get("api/payment/payment-methods");
       console.log("📥 Fetched Payment Methods:", response.data);
-      setPaymentMethods(response.data.paymentMethods || []);
+      const methods: PaymentMethod[] = response.data.paymentMethods || [];
+      setPaymentMethods(methods);
+      if (methods.length > 0) {
+        if (autoSelectLatest) {
+          setSelectedPaymentMethod(methods[methods.length - 1].payment_token_id);
+          setSelectedPaymentOption("saved_payment");
+        } else if (!selectedPaymentMethod) {
+          const defaultMethod = methods.find(m => m.is_default) || methods[0];
+          setSelectedPaymentMethod(defaultMethod.payment_token_id);
+        }
+      }
     } catch (error) {
       console.error("Error fetching payment methods:", error);
     } finally {
@@ -105,18 +126,36 @@ const CheckoutPage: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const saveStatus = searchParams.get("save_payment");
+    if (saveStatus === "success") {
+      toast.success("Payment method added successfully!");
+      setSelectedPaymentOption("saved_payment");
+      fetchPaymentMethods(true);
+      navigate(location.pathname, { replace: true, state: location.state });
+    } else if (saveStatus === "cancel") {
+      toast.error("Adding payment method was cancelled.");
+      fetchPaymentMethods(false);
+      navigate(location.pathname, { replace: true, state: location.state });
+    } else {
+      fetchPaymentMethods(false);
+    }
+  }, [location.search]);
+
   const handleAddPaymentMethod = async () => {
     setShowAddPayment(true);
-    // Simulate redirect to add payment method
-    try{
-      const result = await api.post("api/payment/create-payment-token");
-      if(result.data && result.status === 200 && result.data.paymentLink){
+    try {
+      const returnUrl = window.location.origin + "/credits/checkout?save_payment=success";
+      const cancelUrl = window.location.origin + "/credits/checkout?save_payment=cancel";
+      const result = await api.post("api/payment/create-payment-token", { returnUrl, cancelUrl });
+      if (result.data && result.status === 200 && result.data.paymentLink) {
         window.location.href = result.data.paymentLink;
       }
-    }catch(err){
+    } catch (err) {
       toast.error("Failed to add payment method. Please try again.");
-    }finally{
-      fetchPaymentMethods();
+    } finally {
+      setShowAddPayment(false);
     }
   };
 
@@ -153,6 +192,7 @@ const CheckoutPage: React.FC = () => {
         window.location.href = data.paymentLink;
       } else if (data.reference_id) {
         setReferenceNumber(data.reference_id);
+        sessionStorage.removeItem("ensemble_checkout_item");
         setIsSuccess(true);
       } else {
         setError("Payment initiation failed. Please try again.");
@@ -205,6 +245,7 @@ const CheckoutPage: React.FC = () => {
         window.location.href = data.paymentLink;
       } else if (data.reference_id) {
         setReferenceNumber(data.reference_id);
+        sessionStorage.removeItem("ensemble_checkout_item");
         setIsSuccess(true);
       } else {
         setError("Payment initiation failed. Please try again.");
@@ -261,6 +302,7 @@ const CheckoutPage: React.FC = () => {
       else if (response.status === 200 && (data?.subscriptionUpdate?.reference_id || data.reference_id)) {
         setReferenceNumber(data?.subscriptionUpdate?.reference_id || data.reference_id);
         setSuccessMessage(data?.message || "Subscription payment processed successfully");
+        sessionStorage.removeItem("ensemble_checkout_item");
         setIsSuccess(true);
       } else {
         setError("Subscription initiation failed. Please try again.");
