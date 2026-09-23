@@ -447,6 +447,7 @@ async function listAssetsRepository({ accountId, search, type, status, view, cre
          OR ($4 = 'draft' AND ma.status = 'draft' AND (latest_listing.status IS NULL OR latest_listing.status NOT IN ('pending', 'rejected')))
          OR (ma.status = $4)
        )
+       AND ($7::text IS NULL OR $7::text IS NOT NULL)
      ORDER BY ma.created_at DESC, ma.market_asset_id DESC
      LIMIT $5 OFFSET $6`,
     [accountId, search, type, status, limit, offset, creatorAccountId || null]

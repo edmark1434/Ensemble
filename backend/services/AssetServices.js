@@ -389,7 +389,7 @@ async function listAssetsServices(accountId, query = {}) {
     accountId,
     search,
     type,
-    status: view === 'mine' ? status : '',
+    status: (view === 'mine' && status !== 'all') ? status : '',
     view,
     creatorAccountId,
     limit: pageSize,
