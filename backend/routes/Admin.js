@@ -56,6 +56,7 @@ const {
   patchAdminReport,
 } = require('../controllers/AdminTicketsControllers');
 const { getAdminSettingsOverview, patchAdminSettings } = require('../controllers/AdminSettingsControllers');
+const { getAdminFeedbacks } = require('../controllers/AdminFeedbacksController');
 const {
   createAdminStaff,
   patchAdminStaff,
@@ -103,5 +104,7 @@ router.get('/reports/:id', [checkSession, requireAdmin], getAdminReportDetail);
 router.patch('/reports/:id', [checkSession, requireAdmin], patchAdminReport);
 router.get('/settings-overview', [checkSession, requireAdmin], getAdminSettingsOverview);
 router.patch('/settings', [checkSession, requireAdmin], patchAdminSettings);
+
+router.get('/feedbacks', [checkSession, requireAdmin], getAdminFeedbacks);
 
 module.exports = router;

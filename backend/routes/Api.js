@@ -35,6 +35,7 @@ const { getAllCountriesController,
 } = require('../controllers/SystemControllers')
 const projectRoutes = require('./Project');
 const editorRoutes = require('./Editor');
+const feedbackRoutes = require('./Feedback');
 const configurationRoutes = require('./Configuration');
 
 router.get('/csrf-token', checkSession, issueCsrfToken);
@@ -69,6 +70,7 @@ router.use('/cashouts', cashoutRoutes);
 router.use('/assets', assetRoutes);
 router.use('/gigs', gigRoutes);
 router.use('/editor', editorRoutes);
+router.use('/feedbacks', feedbackRoutes);
 
 router.get('/countries', getAllCountriesController);
 router.get('/places', getAllPlacesController);

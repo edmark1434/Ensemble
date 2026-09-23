@@ -3,6 +3,7 @@ import {
   BarChart3,
   ExternalLink,
   LayoutDashboard,
+  MessageSquare,
   Settings2,
   ShieldAlert,
   Sparkles,
@@ -27,6 +28,7 @@ const navItems: NavItem[] = [
   { label: 'Moderation', icon: ShieldAlert, to: '/admin/moderation' },
   { label: 'Analytics', icon: BarChart3, to: '/admin/analytics' },
   { label: 'Tickets', icon: Ticket, to: '/admin/ticket-management' },
+  { label: 'Platform Feedback', icon: MessageSquare, to: '/admin/feedbacks' },
   { label: 'Settings', icon: Settings2, to: '/admin/system-settings' },
 ];
 
