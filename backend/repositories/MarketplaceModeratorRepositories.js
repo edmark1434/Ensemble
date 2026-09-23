@@ -2,6 +2,7 @@ const { pool } = require('../lib/Database');
 const { QUEUE_SCOPES } = require('../lib/TicketEnums');
 const { MARKETPLACE_REPORT_TYPES } = require('../lib/ReportEnums');
 const { recordAccountActivity } = require('./AccountActivityRepositories');
+const { sendMarketplaceListingNotification } = require('../lib/ModerationPolicy');
 const {
   fetchScopedTickets,
   scopedTicketCounts,
@@ -187,7 +188,10 @@ async function reviewMarketplaceListing(listingId, { status, rejectionReason }, 
     throw new Error(`Invalid listing status: ${status}`);
   }
 
-  const staffId = staffSession?.staff_id || staffSession?.staffId || null;
+  const rawStaffId = staffSession?.staff_id || staffSession?.staffId || null;
+  const staffId = rawStaffId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawStaffId)
+    ? rawStaffId
+    : null;
   const before = await pool.query(
     `SELECT listing_id, listing_number, title, submitted_by_account_id, market_asset_id
      FROM marketplace_listings WHERE listing_id = $1`,
@@ -220,6 +224,16 @@ async function reviewMarketplaceListing(listingId, { status, rejectionReason }, 
       );
     }
   }
+
+  await sendMarketplaceListingNotification({
+    accountId: row.submitted_by_account_id,
+    marketAssetId: row.market_asset_id,
+    listingId,
+    title: row.title || 'Untitled Asset',
+    status,
+    rejectionReason: status === 'rejected' ? rejectionReason || null : null,
+  });
+
   await recordAccountActivity({
     accountId: row.submitted_by_account_id,
     action: `Listing ${row.listing_number || row.title || listingId} ${status}`,

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { ArrowLeft, ArrowRight, FileArchive, FileAudio, FileImage, FileText, FileVideo, Loader2, Plus, Upload, X } from "lucide-react";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
-import { mediaUrl, type AssetRecord, type AssetStatus, type AssetType } from "./assetTypes";
+import { mediaUrl, type AssetRecord, type AssetType } from "./assetTypes";
 import { createAssetDocumentPreview, createAssetProxy, prepareAssetThumbnail, prepareTemplateThumbnail } from "./assetDerivatives";
 import { getAssetPostingEligibility } from "./assetPostingEligibility";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
@@ -91,7 +91,6 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [priceCredits, setPriceCredits] = useState("0");
-  const [status, setStatus] = useState<AssetStatus>("published");
   const [files, setFiles] = useState<File[]>([]);
   const [thumbnailFiles, setThumbnailFiles] = useState<File[]>([]);
   const [retainedBundleFileIds, setRetainedBundleFileIds] = useState<string[]>([]);
@@ -114,7 +113,6 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
     setName(asset?.name || "");
     setDescription(asset?.description || "");
     setPriceCredits(String(asset?.price_credits ?? 0));
-    setStatus(asset?.status || "published");
     setFiles([]); setThumbnailFiles([]);
     setRetainedBundleFileIds((asset?.bundle_files || []).map((item) => item.media_asset_bundle_file_id));
     setRetainedThumbnailIds((asset?.thumbnails || []).map((item) => item.media_asset_thumbnail_id));
@@ -284,7 +282,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
           name: cleanName,
           description: cleanDescription,
           priceCredits: price,
-          status,
+          status: "published",
           tags: submittedTags,
           ...(hasContentUpdate ? {
             contentUpdate: {
@@ -341,7 +339,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
         Promise.all(preparedThumbnails.map((file) => uploadFileWithIntent(file, "assets"))),
       ]);
       const response = await api.post<{ asset: AssetRecord }>("/api/assets", {
-        name: cleanName, description: cleanDescription, priceCredits: price, status, tags: submittedTags,
+        name: cleanName, description: cleanDescription, priceCredits: price, status: "published", tags: submittedTags,
         originalFileIds: originalUploads.map((upload) => upload.fileId),
         previewFileIds: previewUploads.map((upload) => upload.fileId),
         thumbnailFileIds: thumbnailUploads.map((upload) => upload.fileId),
@@ -381,7 +379,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
           <label className="block"><span className="mb-2 block text-sm font-semibold">Title</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={50} className={inputClass} placeholder="Name your asset" /></label>
           <label className="block"><span className="mb-2 block text-sm font-semibold">Description</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={5000} rows={5} className={inputClass} placeholder="Describe what this asset contains" /></label>
           <div><label htmlFor="asset-tags" className="mb-2 block text-sm font-semibold">Tags <span className="font-normal text-gray-400">(optional)</span></label><div className="min-h-12 rounded-xl border border-gray-300 bg-white px-3 py-2 dark:border-white/10 dark:bg-[#0b0e17]"><div className="flex flex-wrap items-center gap-2">{tags.map((tag) => <span key={tag.toLowerCase()} className="inline-flex items-center gap-1 rounded-lg bg-blue-500/10 px-2.5 py-1.5 text-xs font-semibold text-blue-600">#{tag}<button type="button" onClick={() => setTags((current) => current.filter((item) => item !== tag))}><X className="h-3 w-3" /></button></span>)}<input id="asset-tags" value={tagInput} onChange={(event) => setTagInput(event.target.value)} onKeyDown={handleTagKeyDown} onBlur={() => addTag(tagInput)} maxLength={50} className="min-w-36 flex-1 bg-transparent px-1 py-1.5 text-sm outline-none" placeholder="Type a tag and press Enter" /></div></div></div>
-          <div className="grid gap-4 sm:grid-cols-2"><label><span className="mb-2 block text-sm font-semibold">Price in credits</span><input type="number" min="0" max="100000000" value={priceCredits} onChange={(event) => setPriceCredits(event.target.value)} className={inputClass} /></label><label><span className="mb-2 block text-sm font-semibold">Visibility</span><select value={status} onChange={(event) => setStatus(event.target.value as AssetStatus)} className={inputClass}><option value="published">Published</option><option value="draft">Draft</option></select></label></div>
+          <label className="block"><span className="mb-2 block text-sm font-semibold">Price in credits</span><input type="number" min="0" max="100000000" value={priceCredits} onChange={(event) => setPriceCredits(event.target.value)} className={inputClass} /></label>
           {error && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-300">{error}</p>}
           <div className="flex justify-end gap-3 border-t border-gray-200 pt-5 dark:border-white/10"><button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-gray-300 px-5 py-2.5 text-sm font-semibold dark:border-white/10">Cancel</button><button type="submit" disabled={saving} className="inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-500 disabled:opacity-60">{saving && <Loader2 className="h-4 w-4 animate-spin" />}{saving ? (asset ? "Saving..." : "Uploading...") : asset ? "Save changes" : "Upload asset"}</button></div>
         </form>

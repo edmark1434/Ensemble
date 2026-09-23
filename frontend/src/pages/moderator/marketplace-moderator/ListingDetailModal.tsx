@@ -381,7 +381,7 @@ export default function ListingDetailModal({
             <div className="space-y-6">
               {listing.thumbnailUrl && (
                 <img
-                  src={listing.thumbnailUrl}
+                  src={import.meta.env.VITE_CLOUDFRONT_URL +'/'+listing.thumbnailUrl}
                   alt={listing.title}
                   className="h-44 w-full rounded-xl object-cover ring-1 ring-white/10"
                 />

@@ -1,16 +1,16 @@
-# Current Task — Asset Moderation Approval & Publishing Pipeline
+# Current Task — Asset Moderation Status, Notifications & Rejection Lifecycle
 
-Fix the asset moderation and publishing pipeline so that:
-1. When assets are created or set to publish, they are held in draft while awaiting moderator approval.
-2. Editing a draft asset updates the existing review listing without creating duplicate records.
-3. Moderator approval in the moderator portal automatically publishes the asset in `market_assets`.
+Fix the user POV for approved/rejected assets, implement notifications for listing review decisions, and handle rejected asset feedback and resubmission.
 
 ## Acceptance Criteria
-- [x] Database: Add migration `170` to add `market_asset_id` to `marketplace_listings` with foreign key and index.
-- [x] Backend: Update `ModerationPolicy.js` to deduplicate and update existing `marketplace_listings` rows for the same `market_asset_id`.
-- [x] Backend: Update `AssetServices.js` (`createAssetServices`, `updateAssetServices`) to link `market_asset_id` and maintain published status for already-approved assets.
-- [x] Backend: Update `MarketplaceModeratorRepositories.js` (`reviewMarketplaceListing`) to update `market_assets.status = 'published'` on approval, and `'draft'` on rejection/delist.
-- [x] Backend: Update `AdminModerationRepositories.js` (`updatePendingCase`, `deletePendingCase`) to update `market_assets.status = 'published'` on approval and `'draft'` on reject/delist/delete.
-- [x] Frontend: In `AssetEditorModal.tsx`, display toast notification when an asset is queued for moderator review.
-- [x] Verification: Test creation, editing without duplicates, and moderator approval end-to-end.
+- [x] Backend: Add `sendMarketplaceListingNotification` in `ModerationPolicy.js` to create in-app notifications and emit WebSocket updates (`notification`, `assetStatusUpdated`) upon listing approval, rejection, and delisting.
+- [x] Backend: Call `sendMarketplaceListingNotification` in `MarketplaceModeratorRepositories.js` (`reviewMarketplaceListing`) and `AdminModerationRepositories.js` (`updatePendingCase`, `deletePendingCase`).
+- [x] Backend: In `AssetRepositories.js`, query `review_status` and `rejection_reason` via lateral join to `marketplace_listings` in `ASSET_SELECT`.
+- [x] Backend: In `AssetRepositories.js`, clean up `marketplace_listings` on asset deletion (`deleteAssetRepository`).
+- [x] Backend: In `AssetServices.js`, forward `review_status` and `rejection_reason` to asset owners in `publicAsset`, and allow `'all'`, `'published'`, `'pending'`, `'rejected'`, `'draft'` in `listAssetsServices` for owner view.
+- [x] Frontend: In `assetTypes.ts`, add `review_status` and `rejection_reason` to `AssetRecord` and update `MineStatus`.
+- [x] Frontend: In `AssetCard.tsx` and `AssetDetails.tsx`, display distinct status badges (**Published**, **Under Review**, **Rejected**, **Draft**) and show moderator rejection reason callout with edit-to-resubmit action.
+- [x] Frontend: In `AssetsLibrary.tsx`, update subtabs (All, Published, Under Review, Rejected, Drafts) and add WebSocket listener for `assetStatusUpdated` and `notification` for realtime updates.
+- [x] Verification: Test end-to-end approval, rejection, notifications, and frontend build.
+
 

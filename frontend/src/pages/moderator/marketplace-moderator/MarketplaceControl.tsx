@@ -409,7 +409,7 @@ export default function MarketplaceControl() {
                         >
                           {l.thumbnailUrl ? (
                             <img
-                              src={l.thumbnailUrl}
+                              src={import.meta.env.VITE_CLOUDFRONT_URL +'/'+l.thumbnailUrl}
                               alt=""
                               className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-white/10"
                             />

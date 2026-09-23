@@ -1,5 +1,6 @@
 export type AssetType = "image" | "video" | "audio" | "template";
 export type AssetStatus = "draft" | "published";
+export type AssetReviewStatus = "pending" | "approved" | "rejected" | "delisted";
 
 export interface AssetThumbnail {
   media_asset_thumbnail_id: string;
@@ -34,6 +35,8 @@ export interface AssetRecord {
   transaction_fee_credits: number;
   owner_net_credits: number;
   status: AssetStatus;
+  review_status?: AssetReviewStatus | null;
+  rejection_reason?: string | null;
   created_at: string;
   updated_at: string;
   type: AssetType;
