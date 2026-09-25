@@ -244,7 +244,7 @@ async function acceptGigOrderController(req, res) {
                 SELECT r.client_account_id, g.title
                 FROM gig_requests r 
                 JOIN gig_tiers t ON r.gig_tier_id = t.gig_tier_id
-                JOIN gigs g ON t.gig_id = g.id 
+                JOIN gigs g ON t.gig_id = g.gig_id 
                 WHERE r.gig_request_id = $1
             `, [orderId]);
 

@@ -784,7 +784,7 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
 
         // 1. Verify the order exists, is Pending, and belongs to the freelancer
         const reqCheckQuery = `
-            SELECT gr.gig_request_id, gr.status, gt.gig_tier_id, gt.rate_credits, gt.no_of_revisions_max, gt.gig_id, g.additional_work_rate, gr.client_account_id, g.freelancer_account_id, g.title as gig_title
+            SELECT gr.gig_request_id, gr.status, gt.gig_tier_id, gt.rate_credits, gt.no_of_revisions_max, gt.gig_id, gr.client_account_id, g.freelancer_account_id, g.title as gig_title
             FROM gig_requests gr
             JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
             JOIN gigs g ON gt.gig_id = g.gig_id
@@ -799,7 +799,7 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
             throw new Error('Gig order is not in Pending status');
         }
 
-        const { rate_credits, no_of_revisions_max, gig_id, additional_work_rate, client_account_id, freelancer_account_id: freelancerAccountId, gig_title } = reqCheck.rows[0];
+        const { rate_credits, no_of_revisions_max, gig_id, client_account_id, freelancer_account_id: freelancerAccountId, gig_title } = reqCheck.rows[0];
 
         const orderCredits = Number(rate_credits);
         if (!Number.isSafeInteger(orderCredits) || orderCredits <= 0) {
@@ -864,7 +864,7 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
         const contractRes = await client.query(
             `INSERT INTO contracts (contract_type, payment_type, starts_at, rate_credits, revision_price_credits, status)
              VALUES ($1, $2, NOW(), $3, $4, $5) RETURNING contract_id`,
-            ['gig', 'milestone', rate_credits, additional_work_rate || 50, 'Active']
+            ['gig', 'milestone', rate_credits, 50, 'Active']
         );
         const contractId = contractRes.rows[0].contract_id;
 
