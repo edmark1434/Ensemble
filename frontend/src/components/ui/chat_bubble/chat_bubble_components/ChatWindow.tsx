@@ -14,6 +14,8 @@ import {
   Trash2,
   Video,
   X,
+  FolderGit2,
+  ExternalLink,
 } from "lucide-react";
 import useGlobalState from "@/lib/global_state";
 import { useNavigate } from "react-router-dom";
@@ -492,40 +494,75 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         <span className="italic opacity-60">Message deleted</span>
                       ) : (
                         <>
-                          {/^(?:\[video-call:(?:missed|ended)\]|\[meeting:(?:requested|ended):[^\]]+\]|\[zoom-call:(?:started|ended):[^\]]+\])/.test(
-                            message.message_content || ""
-                          ) ? (
-                            <div className="min-w-40">
-                              <div className="flex items-center gap-2 font-semibold">
-                                <Video size={16} />
-                                <span>
-                                  {formatCallCardText(message.message_content)}
-                                </span>
-                              </div>
-                              {activeUser?.account_id && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void startCall(
-                                      conversationId,
-                                      activeUser.account_id!,
-                                      {
-                                        name: displayName,
-                                        avatar: activeUser.avatarUrl,
+                          {(() => {
+                            const projectInviteMatch = (message.message_content || "").match(
+                              /^\[project-invite:([^:\]]+)(?::([^\]]*))?\]\s*(.*)$/
+                            );
+                            if (projectInviteMatch) {
+                              const projectInviteId = projectInviteMatch[1];
+                              const projectInviteName = decodeURIComponent(projectInviteMatch[2] || "Project");
+                              const projectInviteText = projectInviteMatch[3] || `You're invited to collaborate on "${projectInviteName}".`;
+                              return (
+                                <div className="min-w-44 py-1">
+                                  <div className="flex items-center gap-1.5 mb-1.5 font-semibold text-xs">
+                                    <FolderGit2 size={15} className="text-indigo-400 shrink-0" />
+                                    <span className="truncate">{projectInviteName}</span>
+                                  </div>
+                                  <p className="text-[11px] mb-2 opacity-90 whitespace-pre-wrap">
+                                    {projectInviteText}
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const editorUrl = (import.meta.env.VITE_EDITOR_URL || 'http://localhost:3000').replace(/\/$/, '');
+                                      window.location.href = `${editorUrl}/editor/${projectInviteId}`;
+                                    }}
+                                    className="w-full flex items-center justify-center gap-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 text-[11px] font-semibold transition"
+                                  >
+                                    <ExternalLink size={12} />
+                                    <span>Open in Editor</span>
+                                  </button>
+                                </div>
+                              );
+                            }
+                            if (/^(?:\[video-call:(?:missed|ended)\]|\[meeting:(?:requested|ended):[^\]]+\]|\[zoom-call:(?:started|ended):[^\]]+\])/.test(
+                              message.message_content || ""
+                            )) {
+                              return (
+                                <div className="min-w-40">
+                                  <div className="flex items-center gap-2 font-semibold">
+                                    <Video size={16} />
+                                    <span>
+                                      {formatCallCardText(message.message_content)}
+                                    </span>
+                                  </div>
+                                  {activeUser?.account_id && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void startCall(
+                                          conversationId,
+                                          activeUser.account_id!,
+                                          {
+                                            name: displayName,
+                                            avatar: activeUser.avatarUrl,
+                                          }
+                                        )
                                       }
-                                    )
-                                  }
-                                  className="mt-2 w-full rounded-lg bg-white/15 px-3 py-1.5 text-[10px] font-semibold hover:bg-white/25"
-                                >
-                                  Call back
-                                </button>
-                              )}
-                            </div>
-                          ) : message.message_content && (
-                            <p className="whitespace-pre-wrap break-words">
-                              {message.message_content}
-                            </p>
-                          )}
+                                      className="mt-2 w-full rounded-lg bg-white/15 px-3 py-1.5 text-[10px] font-semibold hover:bg-white/25"
+                                    >
+                                      Call back
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            }
+                            return message.message_content ? (
+                              <p className="whitespace-pre-wrap break-words">
+                                {message.message_content}
+                              </p>
+                            ) : null;
+                          })()}
                           {(message.attachments || []).map((attachment) => {
                             const key =
                               attachment.attachment_key ||
