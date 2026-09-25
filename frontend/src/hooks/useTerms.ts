@@ -7,6 +7,7 @@ export interface TosTemplate {
   terms_title: string;
   terms_content: string;
   is_default: boolean;
+  terms_type: string;
 }
 
 export const useTerms = () => {
@@ -30,7 +31,7 @@ export const useTerms = () => {
     }
   }, []);
 
-  const createTerms = useCallback(async (data: { terms_title: string; terms_content: string }) => {
+  const createTerms = useCallback(async (data: { terms_title: string; terms_content: string; terms_type?: string }) => {
     setLoading(true);
     setError(null);
     try {
@@ -48,7 +49,7 @@ export const useTerms = () => {
     }
   }, []);
 
-  const updateTerms = useCallback(async (id: string, data: { terms_title: string; terms_content: string }) => {
+  const updateTerms = useCallback(async (id: string, data: { terms_title: string; terms_content: string; terms_type?: string }) => {
     setLoading(true);
     setError(null);
     try {
@@ -83,5 +84,28 @@ export const useTerms = () => {
     }
   }, []);
 
-  return { terms, loading, error, fetchTerms, createTerms, updateTerms, deleteTerms };
+  const setDefaultTerms = useCallback(async (id: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.put(`/api/terms-of-service/${id}/default`);
+      if (res.data.success) {
+        const updated = res.data.data;
+        setTerms((prev) => prev.map((t) => {
+          if (t.id === id) return updated;
+          if (t.terms_type === updated.terms_type) return { ...t, is_default: false };
+          return t;
+        }));
+        return updated;
+      }
+    } catch (err: any) {
+      console.error("Error setting default terms:", err);
+      setError(err.response?.data?.message || err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return { terms, loading, error, fetchTerms, createTerms, updateTerms, deleteTerms, setDefaultTerms };
 };

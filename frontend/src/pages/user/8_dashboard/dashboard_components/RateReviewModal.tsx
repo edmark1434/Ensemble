@@ -57,14 +57,14 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({ isOpen, onClos
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-dark-base border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-white dark:bg-dark-base border border-gray-200 dark:border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                 
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-white/10">
-                    <h2 className="text-xl font-bold text-white">Review {reviewTargetName}</h2>
+                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-white/10">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Review {reviewTargetName}</h2>
                     <button 
                         onClick={onClose}
-                        className="text-zinc-500 hover:text-white transition-colors"
+                        className="text-gray-500 hover:text-gray-900 dark:text-zinc-500 dark:hover:text-white transition-colors"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -73,24 +73,24 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({ isOpen, onClos
                 {/* Body */}
                 <div className="p-6 space-y-6">
                     {isFreelancerRole && contractValue && (
-                        <div className="bg-blue-900/10 border border-blue-500/20 rounded-xl p-4">
-                            <h3 className="text-sm font-semibold text-blue-400 mb-3">Expected Payout Summary</h3>
+                        <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-500/20 rounded-xl p-4">
+                            <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-3">Expected Payout Summary</h3>
                             <div className="space-y-2 text-xs">
-                                <div className="flex justify-between text-zinc-400">
+                                <div className="flex justify-between text-gray-600 dark:text-zinc-400">
                                     <span>Gross Contract Value:</span>
-                                    <span className="flex items-center gap-1 font-mono text-zinc-300">
+                                    <span className="flex items-center gap-1 font-mono text-gray-900 dark:text-zinc-300">
                                         <CreditIcon className="w-3 h-3 text-yellow-500" /> {contractValue}
                                     </span>
                                 </div>
-                                <div className="flex justify-between text-red-400">
+                                <div className="flex justify-between text-red-500 dark:text-red-400">
                                     <span>Platform Fee (10%):</span>
                                     <span className="flex items-center gap-1 font-mono">
                                         - <CreditIcon className="w-3 h-3 text-yellow-500" /> {Math.floor((typeof contractValue === 'number' ? contractValue : parseInt(String(contractValue).replace(/,/g, ''))) * 0.10).toLocaleString()}
                                     </span>
                                 </div>
-                                <div className="pt-2 border-t border-white/5 flex justify-between font-bold text-white text-sm">
+                                <div className="pt-2 border-t border-gray-200 dark:border-white/5 flex justify-between font-bold text-gray-900 dark:text-white text-sm">
                                     <span>Net Earnings:</span>
-                                    <span className="flex items-center gap-1 font-mono text-yellow-400">
+                                    <span className="flex items-center gap-1 font-mono text-yellow-500 dark:text-yellow-400">
                                         <CreditIcon className="w-4 h-4" /> {Math.floor((typeof contractValue === 'number' ? contractValue : parseInt(String(contractValue).replace(/,/g, ''))) * 0.90).toLocaleString()}
                                     </span>
                                 </div>
@@ -99,7 +99,7 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({ isOpen, onClos
                     )}
 
                     <div>
-                        <label className="block text-sm font-medium text-zinc-400 mb-3">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-zinc-400 mb-3">
                             Rate your experience
                         </label>
                         <div className="flex items-center gap-2">
@@ -110,7 +110,7 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({ isOpen, onClos
                                     className={`transition-all ${
                                         (hoverRating || rating) >= star 
                                             ? 'text-yellow-400 scale-110 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]' 
-                                            : 'text-zinc-700 hover:text-zinc-500'
+                                            : 'text-gray-300 hover:text-gray-400 dark:text-zinc-700 dark:hover:text-zinc-500'
                                     }`}
                                     onClick={() => setRating(star)}
                                     onMouseEnter={() => setHoverRating(star)}
@@ -123,24 +123,24 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({ isOpen, onClos
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-zinc-400 mb-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-zinc-400 mb-2">
                             Write a review
                         </label>
                         <textarea
                             value={feedback}
                             onChange={(e) => setFeedback(e.target.value)}
                             placeholder={`How was it working with ${reviewTargetName}?`}
-                            className="w-full h-32 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 resize-none transition-all"
+                            className="w-full h-32 px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 resize-none transition-all"
                         />
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-white/10 bg-dark-surface/50 flex justify-end gap-3">
+                <div className="p-6 border-t border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-surface/50 flex justify-end gap-3 rounded-b-2xl">
                     <button
                         onClick={onClose}
                         disabled={isSubmitting}
-                        className="px-5 py-2.5 rounded-xl text-sm font-semibold text-zinc-300 hover:text-white hover:bg-white/5 transition-all disabled:opacity-50"
+                        className="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/5 transition-all disabled:opacity-50"
                     >
                         Cancel
                     </button>

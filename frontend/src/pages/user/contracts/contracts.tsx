@@ -235,8 +235,18 @@ export const Contracts: React.FC = () => {
               status: m.status === 'completed' || m.status === 'approved' ? "Claimed" : m.status === 'active' || m.status === 'submitted_for_review' ? "In Progress" : "Locked"
             }));
 
-            const isCompleted = mappedMilestones.length > 0 && mappedMilestones.every((m: any) => m.status === 'Claimed');
-            const derivedStatus = isCompleted ? 'Closed' : (c.status === 'Done' ? 'Closed' : c.status);
+            const allMilestonesDone = mappedMilestones.length > 0 && mappedMilestones.every((m: any) => m.status === 'Claimed');
+            
+            let derivedStatus = c.status;
+            if (derivedStatus === 'Completed') derivedStatus = 'Closed';
+            
+            if (allMilestonesDone) {
+              if (c.client_rating && c.freelancer_rating) {
+                derivedStatus = 'Closed';
+              } else {
+                derivedStatus = 'Done';
+              }
+            }
 
             return {
             id: c.contract_id,
@@ -271,7 +281,7 @@ export const Contracts: React.FC = () => {
           };
           });
           
-          const validStatuses = ["Active", "Waiting", "Closed"];
+          const validStatuses = ["Active", "Waiting", "Done", "Closed"];
           const filteredContracts = mappedContracts.filter((c: DetailedContract) => validStatuses.includes(c.status));
           setContracts(filteredContracts);
 

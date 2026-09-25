@@ -1,7 +1,8 @@
-import React, { type FormEvent, useRef, useState, type ChangeEvent } from "react";
+import React, { type FormEvent, useRef, useState, type ChangeEvent, useEffect } from "react";
 import { ArrowRight, X, Plus, Minus, Image as ImageIcon, ChevronDown, Check, Edit2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { showErrorToast } from "@/components/utility/toast";
+import { useTerms } from "@/hooks/useTerms";
 
 interface CreateDeliveryProps {
   slots: number;
@@ -117,6 +118,21 @@ export const CreateDelivery: React.FC<CreateDeliveryProps> = ({
 }) => {
   const [skillInput, setSkillInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { terms, fetchTerms } = useTerms();
+
+  useEffect(() => {
+    fetchTerms();
+  }, [fetchTerms]);
+
+  const gigTerms = terms.filter(t => t.terms_type === 'gigs');
+
+  // Set default if none selected
+  useEffect(() => {
+    if (!termsOfService && gigTerms.length > 0) {
+      const defaultTerm = gigTerms.find(t => t.is_default) || gigTerms[0];
+      setTermsOfService(defaultTerm.terms_content);
+    }
+  }, [gigTerms, termsOfService, setTermsOfService]);
 
   const handleAddSkill = (e: FormEvent) => {
     e.preventDefault();
@@ -241,14 +257,13 @@ export const CreateDelivery: React.FC<CreateDeliveryProps> = ({
         <div className="mb-2 w-full lg:w-1/2">
           <CustomDropdown
             label="SELECT TOS PRESET"
-            value=""
-            options={["Standard Platform TOS", "Strict IP Transfer TOS"]}
+            value={termsOfService ? "Custom / Selected Terms" : ""}
+            options={gigTerms.map(t => t.terms_title)}
             placeholder="Select a template..."
             onSelect={(val) => {
-              if (val === "Standard Platform TOS") {
-                setTermsOfService("1. All deliverables remain property of the creator until final milestone payout.\n2. Source files delivered upon project completion.\n3. Communication conducted via platform inbox.\n4. Additional revisions outside milestone quotas billed at agreed additional work rate.");
-              } else if (val === "Strict IP Transfer TOS") {
-                setTermsOfService("1. Full IP transfer granted immediately upon each milestone approval.\n2. Raw media and project files transferred after step sign-off.\n3. Non-disclosure agreement applies to all unreleased media.");
+              const selectedTerm = gigTerms.find(t => t.terms_title === val);
+              if (selectedTerm) {
+                setTermsOfService(selectedTerm.terms_content);
               }
               clearError("termsOfService");
             }}

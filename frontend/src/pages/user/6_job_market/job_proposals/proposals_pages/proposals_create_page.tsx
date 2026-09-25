@@ -11,7 +11,7 @@ import MarketplaceIdentitySelector from "@/components/marketplace/MarketplaceIde
 // Sub-components & Wizard Steps
 import ProposalCreateHeader from "../proposals_components/proposals_creation_components/proposal_create_header";
 import ProposalPitchStep from "../proposals_components/proposals_creation_components/1_proposal_pitch";
-import ProposalTermsStep, { sampleTosTemplates } from "../proposals_components/proposals_creation_components/2_proposal_terms";
+import ProposalTermsStep from "../proposals_components/proposals_creation_components/2_proposal_terms";
 import ProposalMilestonesStep, { type Milestone } from "../proposals_components/proposals_creation_components/3_proposal_milestones";
 import ProposalReviewStep from "../proposals_components/proposals_creation_components/4_proposal_review";
 import ProposalCreationSuccess from "../proposals_components/proposals_creation_components/5_proposal_success.tsx";
@@ -40,8 +40,8 @@ const ProposalsCreatePage: React.FC = () => {
   const [coverLetter, setCoverLetter] = useState("");
 
   // Step 2: TOS States
-  const [selectedTosId, setSelectedTosId] = useState("default");
-  const [tosContent, setTosContent] = useState(sampleTosTemplates[0].content);
+  const [selectedTosId, setSelectedTosId] = useState("");
+  const [tosContent, setTosContent] = useState("");
 
   // Step 3: Milestones State
   const [milestones, setMilestones] = useState<Milestone[]>([
@@ -162,9 +162,9 @@ const ProposalsCreatePage: React.FC = () => {
         rate_credits: parseInt(bidAmount),
         revision_price_credits: additionalWorkRate,
         letter: coverLetter,
-        tos_title: sampleTosTemplates.find(t => t.id === selectedTosId)?.name || "Custom Terms",
+        tos_title: "Custom Terms",
         tos_content: tosContent,
-        terms_id: null,  
+        terms_id: selectedTosId || null,  
         acting_team_id: actingTeamId || null,
         milestones: milestones.map(m => ({
           title: m.name,

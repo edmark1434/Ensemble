@@ -123,7 +123,7 @@ function SummaryCard({
   color,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   detail: string;
   color: string;
 }) {
@@ -131,8 +131,8 @@ function SummaryCard({
     <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/70 shadow-sm dark:shadow-none p-5 shadow-xl">
       <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gray-500 dark:text-zinc-500">{label}</p>
       <p className={`mt-3 flex items-center gap-2 text-2xl font-bold tabular-nums ${color}`}>
-        <CircleDollarSign className="h-5 w-5" aria-hidden="true" />
-        {credits(value)}
+        {typeof value === 'number' && <CircleDollarSign className="h-5 w-5" aria-hidden="true" />}
+        {typeof value === 'number' ? credits(value) : value}
       </p>
       <p className="mt-2 text-xs text-gray-500 dark:text-zinc-500">{detail}</p>
     </div>
@@ -365,6 +365,12 @@ export const TransactionHistoryMain = () => {
 
           {!loading && !error && activeMainTab === "Summary" && (
             <div className="space-y-6 p-5 md:p-6">
+              <section aria-label="Performance summary" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <SummaryCard label="Gross Credits" value={totals.incoming} detail="Total of all incoming credits" color="text-emerald-400" />
+                <SummaryCard label="Net Credits" value={totals.incoming - totals.outgoing} detail="Incoming credits minus outgoing credits" color={totals.incoming - totals.outgoing >= 0 ? "text-emerald-300" : "text-rose-400"} />
+                <SummaryCard label="Return on Investment" value={totals.outgoing > 0 ? (((totals.incoming - totals.outgoing) / totals.outgoing) * 100).toFixed(2) + "%" : "N/A"} detail="Net credits relative to outgoing credits" color="text-purple-400" />
+              </section>
+
               <section aria-label="Credit summary" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <SummaryCard label="Settled incoming" value={totals.incoming} detail="Completed incoming transactions" color="text-emerald-300" />
                 <SummaryCard label="Settled outgoing" value={totals.outgoing} detail="Completed outgoing transactions" color="text-rose-300" />

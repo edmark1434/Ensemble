@@ -12,8 +12,7 @@ export const sampleIncomingProposals: ProposalItemData[] = [
     additionalWorkRate: 20,
     coverLetter:
       "I have created over 30+ tech intro animations for creators. I can craft a slick, high-energy intro in After Effects matching your brand colors and typography specifications.",
-    tosContent:
-      "1. Source files delivered upon project completion.\n2. Revisions beyond milestone quotas billed at agreed additional work rate.\n3. Native project assets maintained in After Effects CC 2026 format.",
+    tosContent: "1. Scope of Work: The freelancer will provide services as outlined in the accepted job proposal.\n2. Revisions: Revisions are limited to those explicitly agreed upon in the milestone or contract.\n3. Confidentiality: Both parties agree to keep any shared materials and intellectual property confidential.\n4. Delivery: Final deliverables will be provided upon milestone completion.",
     submittedAt: "Oct 28, 2026 • 2:30 PM",
     submittedAgo: "3 hours ago",
     updatedAt: "Oct 28, 2026 • 5:12 PM",
@@ -35,7 +34,7 @@ export const sampleIncomingProposals: ProposalItemData[] = [
     additionalWorkRate: 15,
     coverLetter:
       "I specialize in DaVinci Resolve color passes for indie rock and alt music videos. Ready to handle dark moody tones and neon light passes with precision curve mapping.",
-    tosContent: "1. All color passes provided in ProRes 4444 output.\n2. Raw media non-disclosure applies.\n3. Project timelines subject to timely footage delivery.",
+    tosContent: "1. Scope of Work: The freelancer will provide services as outlined in the accepted job proposal.\n2. Revisions: Revisions are limited to those explicitly agreed upon in the milestone or contract.\n3. Confidentiality: Both parties agree to keep any shared materials and intellectual property confidential.\n4. Delivery: Final deliverables will be provided upon milestone completion.",
     submittedAt: "Oct 27, 2026 • 11:00 AM",
     submittedAgo: "1 day ago",
     updatedAt: "Oct 27, 2026 • 3:45 PM",
@@ -57,7 +56,7 @@ export const sampleIncomingProposals: ProposalItemData[] = [
     additionalWorkRate: 10,
     coverLetter:
       "2D/3D motion designer with 4 years of experience building YouTube branding packages. I can deliver 60fps kinetic typography passes with custom audio overlays.",
-    tosContent: "1. Deliverables provided in MP4 4K + AE project file.\n2. 2 revision passes included per milestone.",
+    tosContent: "1. Scope of Work: The freelancer will provide services as outlined in the accepted job proposal.\n2. Revisions: Revisions are limited to those explicitly agreed upon in the milestone or contract.\n3. Confidentiality: Both parties agree to keep any shared materials and intellectual property confidential.\n4. Delivery: Final deliverables will be provided upon milestone completion.",
     submittedAt: "Oct 28, 2026 • 10:00 AM",
     submittedAgo: "7 hours ago",
     status: "Pending",
@@ -77,7 +76,7 @@ export const sampleIncomingProposals: ProposalItemData[] = [
     additionalWorkRate: 25,
     coverLetter:
       "Award-winning colorist with feature film credit history. Will deliver cinematic film emulation pass using DaVinci Resolve Studio & analog grain overlays.",
-    tosContent: "1. 4K ProRes master renders.\n2. Extra revision passes billed at +25% overage rate.",
+    tosContent: "1. Scope of Work: The freelancer will provide services as outlined in the accepted job proposal.\n2. Revisions: Revisions are limited to those explicitly agreed upon in the milestone or contract.\n3. Confidentiality: Both parties agree to keep any shared materials and intellectual property confidential.\n4. Delivery: Final deliverables will be provided upon milestone completion.",
     submittedAt: "Oct 26, 2026 • 4:15 PM",
     submittedAgo: "2 days ago",
     status: "Accepted",
@@ -97,7 +96,7 @@ export const sampleIncomingProposals: ProposalItemData[] = [
     additionalWorkRate: 30,
     coverLetter:
       "I can create a template-based intro animation quickly for your channel.",
-    tosContent: "1. Standard platform terms apply.",
+    tosContent: "1. Scope of Work: The freelancer will provide services as outlined in the accepted job proposal.\n2. Revisions: Revisions are limited to those explicitly agreed upon in the milestone or contract.\n3. Confidentiality: Both parties agree to keep any shared materials and intellectual property confidential.\n4. Delivery: Final deliverables will be provided upon milestone completion.",
     submittedAt: "Oct 25, 2026 • 1:00 PM",
     submittedAgo: "3 days ago",
     status: "Rejected",
@@ -120,7 +119,7 @@ export const sampleSentProposals: ProposalItemData[] = [
     additionalWorkRate: 20,
     coverLetter:
       "I have extensive experience with multi-cam wedding edits and cinematic color passes in DaVinci Resolve. Ready to build a high-energy highlights reel.",
-    tosContent: "1. Raw footage remains client property.\n2. All color passes provided in 4K format.",
+    tosContent: "1. Scope of Work: The freelancer will provide services as outlined in the accepted job proposal.\n2. Revisions: Revisions are limited to those explicitly agreed upon in the milestone or contract.\n3. Confidentiality: Both parties agree to keep any shared materials and intellectual property confidential.\n4. Delivery: Final deliverables will be provided upon milestone completion.",
     submittedAt: "Oct 25, 2026 • 9:15 AM",
     submittedAgo: "3 days ago",
     updatedAt: "Oct 25, 2026 • 10:00 AM",
@@ -142,7 +141,7 @@ export const sampleSentProposals: ProposalItemData[] = [
     additionalWorkRate: 15,
     coverLetter:
       "Full commercial video editing service including motion graphics callouts, sound design, and 4K rendering tailored for corporate investor presentations.",
-    tosContent: "1. Commercial usage rights granted upon final payout.",
+    tosContent: "1. Scope of Work: The freelancer will provide services as outlined in the accepted job proposal.\n2. Revisions: Revisions are limited to those explicitly agreed upon in the milestone or contract.\n3. Confidentiality: Both parties agree to keep any shared materials and intellectual property confidential.\n4. Delivery: Final deliverables will be provided upon milestone completion.",
     submittedAt: "Oct 24, 2026 • 2:00 PM",
     submittedAgo: "4 days ago",
     status: "Shortlisted",
@@ -162,7 +161,7 @@ export const sampleSentProposals: ProposalItemData[] = [
     additionalWorkRate: 10,
     coverLetter:
       "Expert short-form editor with 10M+ views across CapCut and Premiere Pro vertical content. Fast turnaround with viral hook framing and dynamic captions.",
-    tosContent: "1. Batch delivery of 10 short clips per milestone.",
+    tosContent: "1. Scope of Work: The freelancer will provide services as outlined in the accepted job proposal.\n2. Revisions: Revisions are limited to those explicitly agreed upon in the milestone or contract.\n3. Confidentiality: Both parties agree to keep any shared materials and intellectual property confidential.\n4. Delivery: Final deliverables will be provided upon milestone completion.",
     submittedAt: "Oct 22, 2026 • 11:30 AM",
     submittedAgo: "6 days ago",
     status: "Accepted",
