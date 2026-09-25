@@ -37,11 +37,13 @@ const projectRoutes = require('./Project');
 const editorRoutes = require('./Editor');
 const feedbackRoutes = require('./Feedback');
 const configurationRoutes = require('./Configuration');
+const invitationRoutes = require('./Invitation');
 
 router.get('/csrf-token', checkSession, issueCsrfToken);
 router.use('/configuration', configurationRoutes);
 router.use('/chat', chatRoutes);
 router.use('/projects', projectRoutes);
+router.use('/invitations', invitationRoutes);
 router.use(requireCompletedOnboarding);
 router.use('/onboarding', onboardingRoutes);
 router.use('/inbox', inboxRoutes);

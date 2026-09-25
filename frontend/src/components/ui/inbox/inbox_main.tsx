@@ -12,6 +12,8 @@ import {
   Flag,
   FileText,
   Video,
+  FolderGit2,
+  ExternalLink,
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
@@ -762,6 +764,13 @@ const InboxMain = () => {
       message.message_content || ""
     );
     const callCardText = formatCallCardText(message.message_content);
+    const projectInviteMatch = (message.message_content || "").match(
+      /^\[project-invite:([^:\]]+)(?::([^\]]*))?\]\s*(.*)$/
+    );
+    const isProjectInvite = Boolean(projectInviteMatch);
+    const projectInviteId = projectInviteMatch?.[1] || "";
+    const projectInviteName = decodeURIComponent(projectInviteMatch?.[2] || "Project");
+    const projectInviteText = projectInviteMatch?.[3] || `You're invited to collaborate on "${projectInviteName}".`;
 
     const previousMessage = index > 0 ? visibleMessages[index - 1] : undefined;
     const showTime = shouldDisplayTimestamp(
@@ -959,7 +968,28 @@ const InboxMain = () => {
                   </div>
                 )}
 
-                {isCallCard ? (
+                {isProjectInvite ? (
+                  <div className="min-w-60 max-w-sm py-1">
+                    <div className="flex items-center gap-2 mb-2 font-semibold">
+                      <FolderGit2 className="h-4 w-4 text-indigo-400 shrink-0" />
+                      <span className="text-sm font-semibold truncate">{projectInviteName}</span>
+                    </div>
+                    <p className="text-xs mb-3 opacity-90 whitespace-pre-wrap">
+                      {projectInviteText}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const editorUrl = (import.meta.env.VITE_EDITOR_URL || 'http://localhost:3000').replace(/\/$/, '');
+                        window.location.href = `${editorUrl}/editor/${projectInviteId}`;
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 text-xs font-semibold shadow-sm transition"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      <span>Open in Editor</span>
+                    </button>
+                  </div>
+                ) : isCallCard ? (
                   <div className="min-w-48">
                     <div className="flex items-center gap-2 font-semibold">
                       <Video className="h-5 w-5" />

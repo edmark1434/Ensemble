@@ -114,7 +114,8 @@ export const InboxList: React.FC<InboxListProps> = ({
         const name = getConversationName(inbox);
         const avatar = getAvatar(inbox);
         const readableLastMessage = inbox.last_message
-          ?.replace(/^(?:\[video-call:(?:missed|ended)\]|\[meeting:(?:requested|ended):[^\]]+\]|\[zoom-call:(?:started|ended):[^\]]+\])\s*/, "");
+          ?.replace(/^(?:\[video-call:(?:missed|ended)\]|\[meeting:(?:requested|ended):[^\]]+\]|\[zoom-call:(?:started|ended):[^\]]+\])\s*/, "")
+          ?.replace(/^\[project-invite:[^\]]+\]\s*/, "Project invitation: ");
         const lastMessage = readableLastMessage
           ? `${
               String(inbox.last_message_sender_id) ===

@@ -91,8 +91,12 @@ const NotificationsPage: React.FC = () => {
       });
       return;
     }
-    if (notification.reference_prefix === "TOPUP") {
-      window.location.href = referencePath; // For top-up, we might want to force a full page reload to ensure the user sees the updated balance.
+    if (
+      notification.reference_prefix === "TOPUP" ||
+      notification.reference_prefix === "PROJECT_INVITATION" ||
+      /^https?:\/\//i.test(referencePath)
+    ) {
+      window.location.href = referencePath;
       return;
     }
     navigate(referencePath); // Use React Router's navigate instead of window.location.href to keep it SPA
