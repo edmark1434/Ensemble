@@ -55,6 +55,7 @@ const PreviewScene: React.FC<{
         }}
       >
         <TextAnimated
+          id="preview-text"
           text={previewText}
           fps={30}
           details={fakeItem.details as any}

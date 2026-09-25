@@ -58,6 +58,7 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
   candidates: [],
   canManage: false,
   generalAccess: "Restricted",
+  viewerRole: null,
 
   load: async (blockId) => {
     if (get().blockId !== blockId) {

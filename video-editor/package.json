@@ -10,7 +10,8 @@
 		"migrate:up": "tsx scripts/migrate.ts up",
 		"migrate:down": "tsx scripts/migrate.ts down",
 		"cleanup-db": "tsx scripts/cleanup-db.ts",
-		"format": "biome format . --write"
+		"format": "biome format . --write",
+		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "^3.1101.0",

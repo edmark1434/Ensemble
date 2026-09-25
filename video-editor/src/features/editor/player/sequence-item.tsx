@@ -36,7 +36,7 @@ import { SequenceItemOptions } from "./base-sequence";
 
 export const SequenceItem: Record<
   string,
-  (item: ITrackItem, options: SequenceItemOptions) => React.JSX.Element
+  (item: ITrackItem, options: SequenceItemOptions) => React.JSX.Element | null
 > = {
   text: (item, options) => Text({ item: item as IText, options }),
   caption: (item, options) => Caption({ item: item as ICaption, options }),
