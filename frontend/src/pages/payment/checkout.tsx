@@ -46,6 +46,8 @@ interface CheckoutItem {
   isUserEligibleForTrial?: boolean;
   savings?: string;
   isCustom?: boolean;
+  isUpgrade?: boolean;
+  isDowngrade?: boolean;
 }
 
 interface PaymentMethod {
@@ -252,13 +254,14 @@ const CheckoutPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error("❌ Saved Payment Error:", error);
-      if (error.response?.data?.error?.message) {
-        setError(error.response.data.error.message);
-      } else if (error.response?.data?.message) {
-        setError(error.response.data.message);
-      } else {
-        setError(error.message || "Payment failed. Please try again.");
-      }
+      const errMsg =
+        error.response?.data?.message ||
+        (typeof error.response?.data?.error === "string"
+          ? error.response.data.error
+          : error.response?.data?.error?.message) ||
+        error.message ||
+        "Payment failed. Please try again.";
+      setError(errMsg);
     } finally {
       setIsProcessing(false);
     }
@@ -309,13 +312,14 @@ const CheckoutPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error("❌ Subscription Error:", error);
-      if (error.response?.data?.error?.message) {
-        setError(error.response.data.error.message);
-      } else if (error.response?.data?.message) {
-        setError(error.response.data.message);
-      } else {
-        setError(error.message || "Subscription failed. Please try again.");
-      }
+      const errMsg =
+        error.response?.data?.message ||
+        (typeof error.response?.data?.error === "string"
+          ? error.response.data.error
+          : error.response?.data?.error?.message) ||
+        error.message ||
+        "Subscription failed. Please try again.";
+      setError(errMsg);
     } finally {
       setIsProcessing(false);
     }
@@ -735,25 +739,53 @@ const CheckoutPage: React.FC = () => {
                     <span className="text-white font-medium">Monthly</span>
                   </div>
                 )}
-                {checkoutItem.type === "subscription" && checkoutItem.isUserEligibleForTrial && (
+                {checkoutItem.type === "subscription" && checkoutItem.isUpgrade && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-zinc-400">Billing Starts at</span>
-                    <span className="text-white font-medium">
-                      {(() => {
-                        const date = new Date();
-                        date.setDate(date.getDate() + checkoutItem?.trialDays);
-                        return date.toLocaleDateString();
-                      })()}
-                    </span>
+                    <span className="text-zinc-400">Plan change</span>
+                    <span className="text-blue-400 font-medium">Upgrade</span>
                   </div>
+                )}
+                {checkoutItem.type === "subscription" && checkoutItem.isDowngrade && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-zinc-400">Plan change</span>
+                    <span className="text-amber-400 font-medium">Downgrade</span>
+                  </div>
+                )}
+                {checkoutItem.type === "subscription" && checkoutItem.isUserEligibleForTrial && (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-zinc-400">Trial period</span>
+                      <span className="text-emerald-400 font-medium">{checkoutItem.trialDays || 7} days</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-zinc-400">Billing starts at</span>
+                      <span className="text-white font-medium">
+                        {(() => {
+                          const date = new Date();
+                          date.setDate(date.getDate() + (checkoutItem?.trialDays || 7));
+                          return date.toLocaleDateString();
+                        })()}
+                      </span>
+                    </div>
+                  </>
                 )}
                 <div className="border-t border-dashed border-white/10 pt-3 mt-1">
                   <div className="flex justify-between items-baseline">
                     <span className="text-sm font-semibold text-zinc-300">Total due today</span>
-                    <span className="text-2xl font-extrabold text-white">{checkoutItem.isUserEligibleForTrial ? "Free" : checkoutItem.price}</span>
+                    <span className="text-2xl font-extrabold text-white">
+                      {checkoutItem.isUserEligibleForTrial ? "Free" : checkoutItem.price}
+                    </span>
                   </div>
                   <p className="text-[11px] text-zinc-500 text-right mt-0.5">
-                    {isOneTime ? "One-time charge" : "Then monthly, cancel anytime"}
+                    {isOneTime
+                      ? "One-time charge"
+                      : checkoutItem.isUserEligibleForTrial
+                      ? `Free for ${checkoutItem.trialDays || 7} days, then ${checkoutItem.price}/mo`
+                      : checkoutItem.isUpgrade
+                      ? "Upgraded plan charges applied immediately"
+                      : checkoutItem.isDowngrade
+                      ? "Plan changed, then billed monthly"
+                      : "Then monthly, cancel anytime"}
                   </p>
                 </div>
               </div>
@@ -800,7 +832,13 @@ const CheckoutPage: React.FC = () => {
                       </>
                     ) : (
                       <>
-                        Subscribe Now
+                        {checkoutItem.isUserEligibleForTrial
+                          ? `Start Free Trial (${checkoutItem.trialDays || 7} days)`
+                          : checkoutItem.isUpgrade
+                          ? "Upgrade Now"
+                          : checkoutItem.isDowngrade
+                          ? "Confirm Downgrade"
+                          : "Subscribe Now"}
                         <ArrowRight className="h-4 w-4" />
                       </>
                     )}

@@ -8,6 +8,8 @@ interface SubscriptionDetailsProps {
     status: string;
     renews_at?: string;
     cancel_at_period_end?: boolean;
+    trial_starts_at?: string | null;
+    trial_ends_at?: string | null;
   };
   onCancelSubscription: () => void;
   isCancelling?: boolean;
@@ -23,6 +25,13 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
   const isFreePlan =
     !subscription.plan_name ||
     subscription.plan_name.toLowerCase().includes("free");
+
+  const isTrialActive = Boolean(
+    subscription.trial_ends_at && new Date(subscription.trial_ends_at).getTime() > Date.now()
+  );
+  const trialDaysRemaining = isTrialActive
+    ? Math.max(1, Math.ceil((new Date(subscription.trial_ends_at!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : 0;
 
   const plans = [
     {
@@ -95,16 +104,29 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
       <div className="p-6 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#18181b] flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/50 shadow-[0_0_10px_rgba(16,185,129,0.3)]">
-              {subscription.status || "Active"}
-            </span>
+            {isTrialActive ? (
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.3)]">
+                Free Trial ({trialDaysRemaining} {trialDaysRemaining === 1 ? "day" : "days"} left)
+              </span>
+            ) : (
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/50 shadow-[0_0_10px_rgba(16,185,129,0.3)]">
+                {subscription.status || "Active"}
+              </span>
+            )}
+            {subscription.cancel_at_period_end && (
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/50">
+                Cancels at period end
+              </span>
+            )}
           </div>
           <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <img src={activePlanDetails.icon} alt={activePlanDetails.name} className="w-6 h-6 object-contain" />
             {subscription.plan_name || "Free Tier"}
           </h3>
           <p className="text-xs text-gray-600 dark:text-zinc-400">
-            {subscription.renews_at
+            {isTrialActive
+              ? `Your free trial ends on ${new Date(subscription.trial_ends_at!).toLocaleDateString()}. Your first recurring billing of ${activePlanDetails.price} will occur on this date.`
+              : subscription.renews_at
               ? `Renews automatically on ${new Date(subscription.renews_at).toLocaleDateString()}`
               : "Standard tier with default access limits."}
           </p>
@@ -142,14 +164,20 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
               key={idx}
               className={`relative rounded-2xl p-8 border transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${
                 plan.current
-                  ? "border-[#10b981] bg-white dark:bg-[#18181b]"
+                  ? isTrialActive
+                    ? "border-amber-500/80 bg-white dark:bg-[#18181b]"
+                    : "border-[#10b981] bg-white dark:bg-[#18181b]"
                   : "border-gray-200 dark:border-white/10 bg-white dark:bg-[#18181b] hover:border-blue-500/50"
               }`}
             >
               {/* Badges */}
               {plan.current && (
-                <div className="absolute -top-3 left-4 bg-[#10b981] text-white text-[10px] font-extrabold tracking-wider uppercase px-3 py-1 rounded-full shadow-md z-10">
-                  DEFAULT PLAN
+                <div
+                  className={`absolute -top-3 left-4 text-white text-[10px] font-extrabold tracking-wider uppercase px-3 py-1 rounded-full shadow-md z-10 ${
+                    isTrialActive ? "bg-amber-500 shadow-amber-500/30" : "bg-[#10b981]"
+                  }`}
+                >
+                  {isTrialActive ? "FREE TRIAL ACTIVE" : isFreePlan ? "DEFAULT PLAN" : "CURRENT PLAN"}
                 </div>
               )}
 
@@ -187,7 +215,7 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
                       disabled
                       className="w-full py-3.5 rounded-lg border border-gray-200 dark:border-white/10 bg-transparent text-gray-400 dark:text-zinc-500 text-sm font-semibold cursor-not-allowed flex items-center justify-center mt-auto"
                     >
-                      Your Current Plan
+                      {isTrialActive ? "Currently on Free Trial" : "Your Current Plan"}
                     </button>
                   ) : (
                     <button

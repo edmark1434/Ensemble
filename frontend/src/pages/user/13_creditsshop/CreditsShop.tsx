@@ -212,11 +212,13 @@ const CreditShop: React.FC = () => {
           const hasValidPlan = sub.xendit_plan_id !== null && sub.xendit_plan_id !== "";
           setHasXenditPlan(hasValidPlan);
 
-          const isFreePlan = sub.plan_id === "75e5c586-eab8-4954-ac14-9874d5429b68";
+          const freePlan = sortedPlans.find(p => p.price === 0 || p.name.toLowerCase() === "free");
+          const isFreePlan = !sub.plan_id || (freePlan ? sub.plan_id === freePlan.plan_id : false) || !hasValidPlan;
           setIsOnFreePlan(isFreePlan);
 
           const status = sub.status?.toUpperCase() || "";
-          const isActiveOrTrialing = status === "ACTIVE" || status === "TRIALING" || status === "TRIAL";
+          const isTrialActive = Boolean(sub.trial_ends_at && new Date(sub.trial_ends_at) > new Date());
+          const isActiveOrTrialing = status === "ACTIVE" || status === "TRIALING" || status === "TRIAL" || isTrialActive;
 
           const subscribed = hasValidPlan && isActiveOrTrialing;
 
@@ -228,8 +230,6 @@ const CreditShop: React.FC = () => {
           console.log(`Status: ${sub.status}`);
           console.log(`Is active or trialing: ${isActiveOrTrialing}`);
           console.log(`User has real subscription: ${subscribed}`);
-          console.log(`Has xendit_plan_id: ${hasValidPlan}`);
-          console.log(`Is on free plan: ${isFreePlan}`);
           console.log(`===============================`);
         } else {
           setUserSubscription(null);
@@ -332,7 +332,8 @@ const CreditShop: React.FC = () => {
   const handleMembershipCheckout = (membership: Membership) => {
     if (membership.price === 0) return;
 
-    const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && membership.days_of_trials > 0;
+    const hasHadTrial = Boolean(userSubscription?.trial_starts_at || userSubscription?.trial_ends_at);
+    const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && !hasHadTrial && membership.days_of_trials > 0;
     const currentPlan = getCurrentPlan();
 
     let finalPrice = membership.price;
@@ -378,8 +379,9 @@ const CreditShop: React.FC = () => {
       id: membership.plan_id,
       name: membership.name,
       type: "subscription",
-      price: formatPHP(finalPrice),
-      priceValue: finalPrice,
+      price: isEligibleForTrial ? "Free" : formatPHP(finalPrice),
+      priceValue: isEligibleForTrial ? 0 : finalPrice,
+      originalPrice: isEligibleForTrial ? formatPHP(membership.price) : undefined,
       features: membership.features || [],
       trialDays: membership.days_of_trials || 0,
       isUserEligibleForTrial: isEligibleForTrial,
@@ -413,12 +415,14 @@ const CreditShop: React.FC = () => {
     const isFree = tier.price === 0;
     const currentPlan = isCurrentPlan(tier.plan_id);
     const hasFreeTrial = tier.days_of_trials > 0;
+    const hasHadTrial = Boolean(userSubscription?.trial_starts_at || userSubscription?.trial_ends_at);
+    const isCurrentTrialActive = currentPlan && Boolean(userSubscription?.trial_ends_at && new Date(userSubscription.trial_ends_at) > new Date());
 
-    const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && hasFreeTrial && !isFree;
+    const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && !hasHadTrial && hasFreeTrial && !isFree;
 
     if (currentPlan) {
       return {
-        buttonText: "Current Plan",
+        buttonText: isCurrentTrialActive ? "Current Plan (Free Trial)" : "Current Plan",
         isDisabled: true,
         isUpgrade: false,
         isDowngrade: false,
@@ -751,9 +755,11 @@ const CreditShop: React.FC = () => {
 
                 const { buttonText, isDisabled, isUpgrade, isDowngrade, proratedPrice, isCurrent } =
                   getMembershipButtonState(tier);
-                const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && tier.days_of_trials > 0 && !isFree;
+                const hasHadTrial = Boolean(userSubscription?.trial_starts_at || userSubscription?.trial_ends_at);
+                const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && !hasHadTrial && tier.days_of_trials > 0 && !isFree;
                 const showTrialBadge = isEligibleForTrial;
                 const currentPlanDetails = getCurrentPlan();
+                const isCurrentTrialActive = isCurrent && Boolean(userSubscription?.trial_ends_at && new Date(userSubscription.trial_ends_at) > new Date());
 
                 return (
                   <div
@@ -771,7 +777,7 @@ const CreditShop: React.FC = () => {
                     {/* Badges */}
                     {isCurrent && (
                       <div className="absolute -top-3 left-4 bg-emerald-500 text-white text-[10px] font-extrabold tracking-wider uppercase px-3 py-0.5 rounded-full shadow-md">
-                        Current Plan
+                        {isCurrentTrialActive ? "Active Free Trial" : "Current Plan"}
                       </div>
                     )}
 
@@ -858,6 +864,12 @@ const CreditShop: React.FC = () => {
                         <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1.5">
                           <span>✦</span>
                           <span>Try free for {tier.days_of_trials} days, then {formatPHP(tier.price)}/mo</span>
+                        </p>
+                      )}
+                      {isCurrentTrialActive && (
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-1.5">
+                          <span>✦</span>
+                          <span>Free trial active until {new Date(userSubscription!.trial_ends_at!).toLocaleDateString()}</span>
                         </p>
                       )}
 

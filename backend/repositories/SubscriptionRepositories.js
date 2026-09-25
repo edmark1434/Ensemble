@@ -81,7 +81,9 @@ async function forceUpdateSubscriptionByUserIdRepositories(userId, tierName) {
 async function getSubscriptionPlanDetailsByUserIdRepositories(userId) {
     try{
         const query = `SELECT P.NAME AS PLAN_NAME, S.STATUS, S.CURRENT_PERIOD_END AS RENEWS_AT,
-                              S.CANCEL_AT_PERIOD_END, S.CANCELED_AT
+                              S.CANCEL_AT_PERIOD_END, S.CANCELED_AT,
+                              S.TRIAL_STARTS_AT, S.TRIAL_ENDS_AT, S.XENDIT_PLAN_ID, S.PLAN_ID,
+                              P.DAYS_OF_TRIALS, (P.AMOUNT_PHP_CENTS / 100) AS PRICE
                        FROM SUBSCRIPTIONS S
                        JOIN PLANS P ON S.PLAN_ID = P.PLAN_ID
                        WHERE S.USER_ID = $1`;

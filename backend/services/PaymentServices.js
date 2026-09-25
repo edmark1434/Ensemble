@@ -123,16 +123,6 @@ async function xenditWebhookHandler(req, res) {
                 const payload = {
                     amount: planDetails.amount_php_cents / 100,
 
-                    schedule: {
-                        interval: planDetails.billing_period,
-                        interval_count: 1,
-                        anchor_date: anchorDate,
-                        retry_interval: "DAY",
-                        retry_interval_count: 1,
-                        total_retry: 3,
-                        failed_attempt_notifications: [1, 3]
-                    },
-
                     payment_tokens: [
                         {
                             payment_token_id: data.payment_token_id,
@@ -1001,30 +991,33 @@ async function paymentSessionExpiredWebhookHandler(req, res) {
 async function TopUpPaymentByPaymentMethod(req, res) {
     let { userId } = req.session;
     let validated;
-    try { validated = await validateTopupRequest(req.body); }
-    catch { return res.status(422).json({ success: false, message: 'Invalid top-up selection.' }); }
+    try {
+        validated = await validateTopupRequest(req.body);
+    } catch {
+        return res.status(422).json({ success: false, message: 'Invalid top-up selection.' });
+    }
     const { paymentMethodId } = req.body;
     if (typeof paymentMethodId !== 'string' || !paymentMethodId || !await paymentMethodExists({ user_id: userId, payment_token_id: paymentMethodId, status: 'ACTIVE' })) {
         return res.status(403).json({ success: false, message: 'Payment method is not available for this account.' });
     }
+
     const reference_id = `TOPUP-${uuidv4()}`;
-    const topUpPayload = {
-        user_id: userId,
-        amount: validated.amount,
-        currency: validated.currency,
-        credits: validated.credits,
-        description: validated.itemName
-    };
+    const customerPayload = await getCustomerPayload(req);
+
     const payload = {
         reference_id: reference_id,
         type: "PAY",
+        country: "PH",
         currency: validated.currency,
+        amount: validated.amount,
         request_amount: validated.amount,
+        capture_method: "AUTOMATIC",
+        ...customerPayload,
         metadata: {
             item_name: validated.itemName,
             credits: String(validated.credits),
+            userId: String(userId),
         },
-        capture_method: "AUTOMATIC",
         description: `Top-up ${validated.credits} credits for ${validated.itemName}`,
         channel_properties: {
             success_return_url: `${process.env.FRONTEND_URL}/credits?success`,
@@ -1032,36 +1025,12 @@ async function TopUpPaymentByPaymentMethod(req, res) {
             failure_return_url: `${process.env.FRONTEND_URL}/credits?failure`
         },
         payment_token_id: paymentMethodId,
-    }
-    const existingTopUp = await getPaymentCheckOutByPayload(topUpPayload,'payment-method');
-        console.log("💳 Payment Session Created:", existingTopUp);
+    };
 
-    let payment;
-
-    if (existingTopUp.length > 0) {
-        payment = existingTopUp[0];
-
-        // Reuse if still valid locally
-        if (
-            payment.status === "REQUIRES_ACTION" &&
-            payment.redirect_url 
-        ) {
-            return res.json({
-                paymentSessionId: payment.payment_session_id,
-                paymentLink: payment.redirect_url
-            });
-        }
-
-        
-    }
-    const updatedReferenceId = payment?.reference_id ?? reference_id;
-    try{
+    try {
         const response = await axios.post(
             "https://api.xendit.co/v3/payment_requests",
-            {
-                ...payload,
-                reference_id: updatedReferenceId,
-            },
+            payload,
             {
                 auth: {
                     username: process.env.XENDIT_API_KEY,
@@ -1070,50 +1039,83 @@ async function TopUpPaymentByPaymentMethod(req, res) {
                 headers: {
                     "Content-Type": "application/json",
                     "api-version": "2024-11-11",
-                    "Idempotency-Key": `${updatedReferenceId}` // Ensure idempotency for retries
+                    "Idempotency-Key": reference_id
                 }
             }
         );
-        const redirectUrl = response.data.actions ? response.data.actions.find(a => a.type === "REDIRECT_CUSTOMER" && a.descriptor === "WEB_URL")?.value : null;
-        if(redirectUrl || (response.data.status === "REQUIRES_ACTION" || response.data.status === "ACTIVE"|| response.data.status === "SUCCEEDED")) {
-            await createTopUpPaymentSession({
-                user_id: userId,
-                reference_id: response.data.reference_id,
-                amount: response.data.amount || response.data.request_amount,
-                currency: response.data.currency,
-                payment_token_id: response.data.payment_token_id,
-                status: response.data.status,
-                credits: response.data.metadata.credits,
-                description: response.data.metadata.item_name,
-                payment_type: "TOPUP"
-            });
-            const updatePaymentPayload={
-                reference_id: response.data.reference_id,
-                channel_code: response.data.channel_code,
-                payment_request_id: response.data.payment_request_id,
-                payment_token_id: response.data.payment_token_id,
-                customer_id: response.data.customer_id,
-                processed_at: new Date(),
-                redirect_url: redirectUrl,
+
+        const redirectUrl = response.data.actions?.find(a => a.type === "REDIRECT_CUSTOMER" && a.descriptor === "WEB_URL")?.value || null;
+        const status = response.data.status;
+
+        // Create the top-up payment record in our DB
+        await createTopUpPaymentSession({
+            user_id: userId,
+            reference_id: response.data.reference_id,
+            amount: response.data.amount || response.data.request_amount,
+            currency: response.data.currency,
+            payment_token_id: response.data.payment_token_id,
+            status: status,
+            credits: response.data.metadata?.credits || validated.credits,
+            description: response.data.metadata?.item_name || validated.itemName,
+            payment_type: "TOPUP"
+        });
+
+        const updatePaymentPayload = {
+            reference_id: response.data.reference_id,
+            channel_code: response.data.channel_code,
+            payment_request_id: response.data.payment_request_id || response.data.id,
+            payment_token_id: response.data.payment_token_id,
+            customer_id: response.data.customer_id,
+            processed_at: new Date(),
+            redirect_url: redirectUrl,
+        };
+        await updatePaymentByReference(response.data.reference_id, updatePaymentPayload);
+
+        // If the payment succeeded immediately without 3DS
+        if (status === "SUCCEEDED") {
+            const settlement = await settleSuccessfulTopUp(response.data.reference_id, response.data);
+            if (!settlement.alreadySettled) {
+                const io = getIo();
+                io.to(String(settlement.accountId)).emit("notification", settlement.notification);
+                io.to(String(settlement.accountId)).emit("walletBalanceUpdated", {
+                    balanceCredits: settlement.walletBalance,
+                });
             }
-  
-            await Promise.all([
-                updatePaymentByReference(response.data.reference_id, updatePaymentPayload),
-            ]);
-
             return res.json({
+                success: true,
+                status: "SUCCEEDED",
                 reference_id: response.data.reference_id,
-                paymentLink: redirectUrl
+                paymentLink: null,
+                message: "Credits added successfully!"
             });
         }
 
-    }catch(err){
-        console.log("💳 Error processing Top-Up Payment:", err.response?.data.error_code);
-        if(err.response?.data.error_code === "INVALID_TOKEN"){
-            await updatePaymentMethodStatus(paymentMethodId, 'INACTIVE');
+        if (status === "FAILED") {
+            const failureReason = response.data.failure_code || "Payment failed.";
+            return res.status(400).json({
+                success: false,
+                error: failureReason,
+                message: failureReason
+            });
         }
-        return res.status(500).json({
-            error: 'Unable to process top-up payment.'
+
+        return res.json({
+            success: true,
+            reference_id: response.data.reference_id,
+            paymentLink: redirectUrl
+        });
+
+    } catch (err) {
+        console.error("💳 Error processing Top-Up Payment:", err.response?.data || err);
+        const errorCode = err.response?.data?.error_code;
+        const errorMessage = err.response?.data?.message || err.message || 'Unable to process top-up payment.';
+        if (errorCode === "INVALID_TOKEN" || errorCode === "PAYMENT_METHOD_NOT_FOUND") {
+            await updatePaymentMethodStatus(paymentMethodId, 'INACTIVE').catch(() => null);
+        }
+        return res.status(err.response?.status || 500).json({
+            success: false,
+            error: errorMessage,
+            message: errorMessage
         });
     }
 }
@@ -1389,7 +1391,7 @@ async function processSubscriptionPayment(req, res) {
                 plan_id: response.data.metadata.planId,
                 reference_id: response.data.reference_id,
                 payment_token_id: req.body.paymentMethodId,
-                next_billing_at: new Date(new Date(anchorDate).setMonth(new Date(anchorDate).getMonth() + 1)).toISOString(),
+                next_billing_at: hasNoTrial ? new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString() : anchorDate,
             }
             const updateSubscription = await updateSubscriptionBySubscriptionId(response.data.metadata.subscriptionId, subscriptionUpdatePayload);
             console.log("Updating subscription with payload:", subscriptionUpdatePayload);
@@ -1512,147 +1514,208 @@ async function updateSubscriptionPayment(req, res) {
     if (!userId) {
         return res.status(400).json({ error: "Missing required field: userId" });
     }
-    if(!req.body.planId){
+    if (!req.body.planId) {
         return res.status(400).json({ error: "Missing required field: planId" });
     }
     const [subscriptionDetails, planDetails] = await Promise.all([
         getSubcriptionByUserIdRepositories(userId),
         getPlandetailsByPlanIdRepositories(req.body.planId)
     ]);
-    const subscriptionPlanDetails = await getPlandetailsByPlanIdRepositories(subscriptionDetails[0]?.plan_id);
-    if(!planDetails){
-        return res.status(404).json({ error: "No plan found for this planId" });
-    }
-    if(!subscriptionDetails){
+    const subscription = subscriptionDetails?.[0];
+    if (!subscription) {
         return res.status(404).json({ error: "No subscription found for this user" });
     }
-    if(subscriptionDetails[0].plan_id === planDetails.plan_id){
+    const subscriptionPlanDetails = await getPlandetailsByPlanIdRepositories(subscription.plan_id);
+    if (!planDetails) {
+        return res.status(404).json({ error: "No plan found for this planId" });
+    }
+    if (subscription.plan_id === planDetails.plan_id) {
         return res.status(400).json({ error: "User is already subscribed to this plan" });
-    }else if(subscriptionDetails[0].plan_id !== planDetails.plan_id && planDetails.amount_php_cents === 0){
+    } else if (subscription.plan_id !== planDetails.plan_id && planDetails.amount_php_cents === 0) {
         return res.status(400).json({ error: "Cannot switch to a free plan from a paid plan" });
     }
 
     const updateType = planDetails.amount_php_cents > subscriptionPlanDetails.amount_php_cents ? "UPGRADE" : "DOWNGRADE";
     if (updateType === "UPGRADE") {
-
-        const periodStart = new Date(subscriptionDetails[0].current_period_start).getTime();
-        const periodEnd = new Date(subscriptionDetails[0].current_period_end).getTime();
+        const periodStart = new Date(subscription.current_period_start || subscription.created_at).getTime();
+        const periodEnd = new Date(subscription.current_period_end || subscription.next_billing_at || (Date.now() + 30 * 24 * 3600 * 1000)).getTime();
         const now = Date.now();
         const total = periodEnd - periodStart;
         const remainingRatio = Number.isFinite(total) && total > 0
             ? Math.max(0, Math.min(1, (periodEnd - now) / total))
             : 1;
         const priceDifference = Number(planDetails.amount_php_cents) - Number(subscriptionPlanDetails.amount_php_cents);
-        const serverAmount = Math.max(1, Math.round(priceDifference * remainingRatio * 100) / 100);
+        const serverAmountCents = Math.max(100, Math.round(priceDifference * remainingRatio));
+        const chargeAmountPhp = Number((serverAmountCents / 100).toFixed(2));
 
-        const referenceId = `SUBSCRIPTION-${uuidv4()}`;
+        const referenceId = `SUBSCRIPTION-UPGRADE-${uuidv4()}`;
 
         const paymentPayload = {
             reference_id: referenceId,
             type: "PAY",
             country: "PH",
             currency: "PHP",
-
-            // Charge the full new plan amount
-            request_amount: serverAmount / 100,
-
+            amount: chargeAmountPhp,
+            request_amount: chargeAmountPhp,
             payment_token_id: req.body.paymentMethodId,
-            description: `Subscription upgrade from ${subscriptionDetails[0].plan_id} to ${planDetails.plan_id}`,
+            description: `Subscription upgrade from ${subscriptionPlanDetails.name} to ${planDetails.name}`,
             metadata: {
                 action: "UPGRADE",
                 userId,
-                subscriptionId: subscriptionDetails[0].subscription_id,
-                currentPlanId: subscriptionDetails[0].plan_id,
+                subscriptionId: subscription.subscription_id,
+                currentPlanId: subscription.plan_id,
                 newPlanId: planDetails.plan_id,
-                xenditPlanId: subscriptionDetails[0].xendit_plan_id,
+                xenditPlanId: subscription.xendit_plan_id,
             },
             channel_properties: {
-                success_return_url: `${process.env.FRONTEND_URL}/subscription?success`,
-                cancel_return_url: `${process.env.FRONTEND_URL}/subscription?cancel`,
-                failure_return_url: `${process.env.FRONTEND_URL}/subscription?failure`
+                success_return_url: `${process.env.FRONTEND_URL}/credits-subscriptions?success`,
+                cancel_return_url: `${process.env.FRONTEND_URL}/credits-subscriptions?cancel`,
+                failure_return_url: `${process.env.FRONTEND_URL}/credits-subscriptions?failure`
             }
         };
 
-        const paymentResponse = await axios.post(
-            "https://api.xendit.co/v3/payment_requests",
-            paymentPayload,
-            {
-                auth: {
-                    username: process.env.XENDIT_API_KEY,
-                    password: ""
-                },
-                headers: {
-                    "Content-Type": "application/json",
-                    "api-version": "2024-11-11",
-                    "Idempotency-Key": `${referenceId}` // Ensure idempotency for retries
-                }
-            }
-        );
-        const redirectUrl = paymentResponse.data.actions ? paymentResponse.data.actions.find(a => a.type === "REDIRECT_CUSTOMER" && a.descriptor === "WEB_URL")?.value : null;
-        return res.status(200).json({
-            message: "Upgrade payment created successfully.",
-            reference_id: subscriptionDetails[0].reference_id,
-            payment_link: redirectUrl,
-        });
-    } else{
-        console.log("Subscription Details:", subscriptionDetails);
-        console.log("Plan Details:", planDetails);
         try {
-            let anchorDate = new Date(subscriptionDetails[0].next_billing_at);
-            if (anchorDate.getDate() > 28) {
-                anchorDate.setDate(28);
-            }
-            anchorDate = anchorDate.toISOString();
-            const payload = {
-                amount: planDetails.amount_php_cents / 100,
-                schedule: {
-                    interval: planDetails.billing_period,
-                    interval_count: 1,
-                    anchor_date: anchorDate,
-                    retry_interval: "DAY",
-                    retry_interval_count: 1,
-                    total_retry: 3,
-                    failed_attempt_notifications: [1, 3]
-                },
+            const paymentResponse = await axios.post(
+                "https://api.xendit.co/v3/payment_requests",
+                paymentPayload,
+                {
+                    auth: {
+                        username: process.env.XENDIT_API_KEY,
+                        password: ""
+                    },
+                    headers: {
+                        "Content-Type": "application/json",
+                        "api-version": "2024-11-11",
+                        "Idempotency-Key": `${referenceId}`
+                    }
+                }
+            );
 
+            const redirectUrl = paymentResponse.data.actions?.find(a => a.type === "REDIRECT_CUSTOMER" && a.descriptor === "WEB_URL")?.value || null;
+            const isSucceeded = paymentResponse.data.status === "SUCCEEDED";
+
+            // If payment succeeded immediately (e.g. card without 3DS), apply upgrade right now
+            if (isSucceeded) {
+                if (subscription.xendit_plan_id) {
+                    try {
+                        await axios.patch(
+                            `https://api.xendit.co/recurring/plans/${subscription.xendit_plan_id}`,
+                            {
+                                amount: planDetails.amount_php_cents / 100,
+                                description: planDetails.description,
+                                locale: "en",
+                                notification_channels: ["EMAIL"],
+                                metadata: {
+                                    planId: planDetails.plan_id,
+                                    userId,
+                                    subscriptionId: subscription.subscription_id
+                                },
+                                items: [
+                                    {
+                                        type: "DIGITAL_PRODUCT",
+                                        reference_id: referenceId,
+                                        name: planDetails.name,
+                                        net_unit_amount: planDetails.amount_php_cents / 100,
+                                        quantity: 1,
+                                        category: "Plan",
+                                        description: planDetails.description
+                                    }
+                                ]
+                            },
+                            {
+                                auth: { username: process.env.XENDIT_API_KEY, password: "" },
+                                headers: { "Content-Type": "application/json", "api-version": "2026-01-01" }
+                            }
+                        );
+                    } catch (patchErr) {
+                        console.error("Error patching Xendit plan on immediate upgrade:", patchErr.response?.data || patchErr.message);
+                    }
+                }
+
+                const updatedSub = await updateSubscriptionBySubscriptionId(subscription.subscription_id, {
+                    plan_id: planDetails.plan_id,
+                    payment_token_id: req.body.paymentMethodId,
+                    status: 'ACTIVE'
+                });
+
+                if (subscription.xendit_plan_id) {
+                    await updateSubscriptionInvoiceAmountRepositories(subscription.xendit_plan_id, planDetails.amount_php_cents).catch(() => null);
+                }
+
+                const notification = await createNotification({
+                    message: `Your subscription has been successfully upgraded to ${planDetails.name}.`,
+                    is_read: false,
+                    reference_table: "subscriptions",
+                    reference_prefix: "SUBSCRIPTION",
+                    reference_path: `${process.env.FRONTEND_URL}/credits-subscriptions`,
+                    reference_id: subscription.subscription_id,
+                    user_id: subscription.user_id
+                }).catch(() => null);
+                if (notification) {
+                    const io = getIo();
+                    io.to(notification.account_id).emit("notification", notification);
+                }
+
+                return res.status(200).json({
+                    message: `Your subscription has been successfully upgraded to ${planDetails.name}.`,
+                    reference_id: referenceId,
+                    subscriptionUpdate: updatedSub,
+                    payment_link: null
+                });
+            }
+
+            return res.status(200).json({
+                message: "Upgrade payment initiated successfully.",
+                reference_id: referenceId,
+                payment_link: redirectUrl
+            });
+        } catch (error) {
+            console.error("Error in upgrade payment:", error.response?.data || error);
+            const errMsg = error.response?.data?.message || error.message || "Failed to process upgrade payment.";
+            return res.status(error.response?.status || 500).json({
+                message: errMsg,
+                error: errMsg
+            });
+        }
+    } else {
+        // DOWNGRADE
+        try {
+            if (!subscription.xendit_plan_id) {
+                return res.status(400).json({ error: "Cannot downgrade a subscription without an active recurring plan." });
+            }
+
+            const patchPayload = {
+                amount: planDetails.amount_php_cents / 100,
                 payment_tokens: [
                     {
                         payment_token_id: req.body.paymentMethodId,
                         rank: 1
                     }
                 ],
-
-                payment_link_for_failed_attempt: true,
-
                 locale: "en",
-
                 notification_channels: ["EMAIL"],
-
                 description: planDetails.description,
                 metadata: {
                     planId: planDetails.plan_id,
                     userId: userId,
-                    subscriptionId: subscriptionDetails[0].subscription_id
+                    subscriptionId: subscription.subscription_id
                 },
                 items: [
                     {
                         type: "DIGITAL_PRODUCT",
-                        reference_id: subscriptionDetails[0].reference_id,
+                        reference_id: subscription.reference_id || `SUB-${subscription.subscription_id}`,
                         name: planDetails.name,
                         net_unit_amount: planDetails.amount_php_cents / 100,
                         quantity: 1,
                         category: "Plan",
-                        description: planDetails.description,
-                        metadata: {
-                            "value":'string',
-                        }
+                        description: planDetails.description
                     }
                 ]
             };
 
             const response = await axios.patch(
-                `https://api.xendit.co/recurring/plans/${subscriptionDetails[0].xendit_plan_id}`,
-                payload,
+                `https://api.xendit.co/recurring/plans/${subscription.xendit_plan_id}`,
+                patchPayload,
                 {
                     auth: {
                         username: process.env.XENDIT_API_KEY,
@@ -1664,42 +1727,43 @@ async function updateSubscriptionPayment(req, res) {
                     }
                 }
             );
-            console.log("✅ Xendit Recurring Plan Response:", response.data);
-            
+
+            console.log("✅ Xendit Recurring Plan Updated for Downgrade:", response.data);
+
             const subscriptionUpdatePayload = {
-                plan_id: subscriptionDetails[0].plan_id,
                 payment_token_id: req.body.paymentMethodId
-            }
-            const updateSubscription = await updateSubscriptionBySubscriptionId(response.data.metadata.subscriptionId, subscriptionUpdatePayload);
-            await updateSubscriptionInvoiceAmountRepositories(subscriptionDetails[0].xendit_plan_id, response.data.amount);
-            const currentPlanDetails = await getPlandetailsByPlanIdRepositories(subscriptionDetails[0].plan_id);
-            console.log("Updating subscription with payload:", subscriptionUpdatePayload);
+            };
+            const updateSubscription = await updateSubscriptionBySubscriptionId(subscription.subscription_id, subscriptionUpdatePayload);
+            await updateSubscriptionInvoiceAmountRepositories(subscription.xendit_plan_id, response.data.amount || planDetails.amount_php_cents).catch(() => null);
+
             const notification = await createNotification({
-                message: `Your subscription downgrade from ${currentPlanDetails.name} to ${planDetails.name} has been initiated. The change will take effect in the next billing cycle.`,
+                message: `Your subscription downgrade from ${subscriptionPlanDetails.name} to ${planDetails.name} has been initiated. The change will take effect in the next billing cycle.`,
                 is_read: false,
                 reference_table: "subscriptions",
                 reference_prefix: "SUBSCRIPTION",
                 reference_path: `${process.env.FRONTEND_URL}/credits-subscriptions`,
-                reference_id: subscriptionDetails[0].subscription_id,
-                user_id: subscriptionDetails[0].user_id
-            });
-            const io = getIo();
-            io.to(notification.account_id).emit("notification", notification);
+                reference_id: subscription.subscription_id,
+                user_id: subscription.user_id
+            }).catch(() => null);
+            if (notification) {
+                const io = getIo();
+                io.to(notification.account_id).emit("notification", notification);
+            }
+
+            const nextBilling = subscription.next_billing_at ? new Date(subscription.next_billing_at).toLocaleDateString() : "the next billing cycle";
             return res.status(200).json({
-                message: `Recurring plan created successfully. Your subscription downgrade will take effect in the next billing cycle ${subscriptionDetails[0].next_billing_at}.`,
+                message: `Your subscription downgrade to ${planDetails.name} has been scheduled and will take effect in ${nextBilling}.`,
                 subscriptionUpdate: updateSubscription
             });
-
         } catch (error) {
-            console.error(error.response?.data || error);
-
+            console.error("Error in downgrade:", error.response?.data || error);
+            const errMsg = error.response?.data?.message || error.message || "Failed to update recurring plan for downgrade.";
             return res.status(error.response?.status || 500).json({
-                message: "Failed to create recurring plan",
-                error: error.response?.data || error.message
+                message: errMsg,
+                error: errMsg
             });
         }
     }
-
 }
 
 function getAnchorDate(daysOfTrial) {

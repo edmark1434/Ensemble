@@ -67,6 +67,8 @@ export default function UserSettings() {
     status: string;
     renews_at?: string;
     cancel_at_period_end?: boolean;
+    trial_starts_at?: string | null;
+    trial_ends_at?: string | null;
   }>({
     plan_name: "Free Member",
     status: "Active",
@@ -140,6 +142,8 @@ export default function UserSettings() {
             status: subRes.data.planDetails.status || "Active",
             renews_at: subRes.data.planDetails.renews_at,
             cancel_at_period_end: Boolean(subRes.data.planDetails.cancel_at_period_end),
+            trial_starts_at: subRes.data.planDetails.trial_starts_at,
+            trial_ends_at: subRes.data.planDetails.trial_ends_at,
           });
         }
       }
