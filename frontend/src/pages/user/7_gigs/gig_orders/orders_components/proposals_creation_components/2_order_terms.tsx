@@ -1,19 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ArrowRight, ChevronDown, Check, FileText, Edit3 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-
-export const sampleTosTemplates = [
-  {
-    id: "default",
-    name: "Standard Platform TOS",
-    content: "1. All deliverables remain property of the creator until final milestone payout.\n2. Source files delivered upon project completion.\n3. Communication conducted via platform inbox.\n4. Additional revisions outside milestone quotas billed at agreed additional work rate.",
-  },
-  {
-    id: "strict-ip",
-    name: "Strict IP Transfer TOS",
-    content: "1. Full IP transfer granted immediately upon each milestone approval.\n2. Raw media and project files transferred after step sign-off.\n3. Non-disclosure agreement applies to all unreleased media.",
-  },
-];
+import { useTerms } from "@/hooks/useTerms";
 
 interface OrderTermsProps {
   selectedTosId: string;
@@ -33,17 +21,36 @@ export const OrderTermsStep: React.FC<OrderTermsProps> = ({
   onAdvance,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const { terms, fetchTerms } = useTerms();
+
+  useEffect(() => {
+    fetchTerms();
+  }, [fetchTerms]);
+
+  // Only show Gig terms
+  const gigTerms = terms.filter(t => t.terms_type === 'gigs');
+
+  // Set default if none selected
+  useEffect(() => {
+    if (!selectedTosId && gigTerms.length > 0) {
+      const defaultTerm = gigTerms.find(t => t.is_default) || gigTerms[0];
+      setSelectedTosId(defaultTerm.id);
+      if (!tosContent) {
+        setTosContent(defaultTerm.terms_content);
+      }
+    }
+  }, [selectedTosId, gigTerms, setSelectedTosId, tosContent, setTosContent]);
 
   const handleSelectTemplate = (id: string) => {
     setSelectedTosId(id);
-    const found = sampleTosTemplates.find((t) => t.id === id);
+    const found = gigTerms.find((t) => t.id === id);
     if (found) {
-      setTosContent(found.content);
+      setTosContent(found.terms_content);
     }
   };
 
   const selectedName =
-    sampleTosTemplates.find((t) => t.id === selectedTosId)?.name || "Custom Terms of Service";
+    gigTerms.find((t) => t.id === selectedTosId)?.terms_title || "Select Terms of Service";
 
   return (
     <div className="space-y-5 text-left">
@@ -79,7 +86,7 @@ export const OrderTermsStep: React.FC<OrderTermsProps> = ({
                 exit={{ opacity: 0, y: -6 }}
                 className="absolute left-0 right-0 z-30 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1.5 shadow-2xl space-y-0.5"
               >
-                {sampleTosTemplates.map((tmpl) => {
+                {gigTerms.map((tmpl) => {
                   const isSelected = selectedTosId === tmpl.id;
                   return (
                     <button
@@ -93,7 +100,14 @@ export const OrderTermsStep: React.FC<OrderTermsProps> = ({
                         isSelected ? "bg-blue-500/15 text-blue-400" : "text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:text-white"
                       }`}
                     >
-                      <span>{tmpl.name}</span>
+                      <span className="flex items-center gap-2">
+                        {tmpl.terms_title}
+                        {tmpl.is_default && (
+                          <span className="rounded bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 dark:text-amber-300">
+                            DEFAULT
+                          </span>
+                        )}
+                      </span>
                       {isSelected && <Check className="h-3.5 w-3.5 text-blue-400" />}
                     </button>
                   );

@@ -54,9 +54,24 @@ async function deleteTermsController(req, res) {
     }
 }
 
+async function setDefaultTermsController(req, res) {
+    try {
+        const accountId = req.user?.accountId || req.user?.account_id;
+        const { id } = req.params;
+        if (!accountId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+        const terms = await TermsServices.setDefaultTermsServices(id, accountId);
+        res.status(200).json({ success: true, data: terms, message: 'Set as default successfully' });
+    } catch (err) {
+        console.error('Error in setDefaultTermsController:', err);
+        res.status(400).json({ success: false, message: err.message || 'Bad Request' });
+    }
+}
+
 module.exports = {
     getAllTermsController,
     createTermsController,
     updateTermsController,
-    deleteTermsController
+    deleteTermsController,
+    setDefaultTermsController
 };

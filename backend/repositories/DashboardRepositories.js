@@ -737,7 +737,7 @@ async function recordMilestoneAction({
 
                 await client.query(
                     `UPDATE contracts
-                     SET status = 'Completed'
+                     SET status = 'Done'
                      WHERE contract_id = $1`,
                     [contractId]
                 );
@@ -768,13 +768,39 @@ async function recordMilestoneAction({
 }
 
 async function submitContractReview(contractId, accountId, stars, feedback) {
-    const query = `
-        INSERT INTO ratings (contract_id, account_id, stars_out_of_five, feedback)
-        VALUES ($1, $2, $3, $4)
-        RETURNING *
-    `;
-    const result = await pool.query(query, [contractId, accountId, stars, feedback]);
-    return result.rows[0];
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        const query = `
+            INSERT INTO ratings (contract_id, account_id, stars_out_of_five, feedback)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *
+        `;
+        const result = await client.query(query, [contractId, accountId, stars, feedback]);
+        const rating = result.rows[0];
+
+        // Check if both parties have reviewed
+        const allRatings = await client.query(
+            `SELECT account_id FROM ratings WHERE contract_id = $1`,
+            [contractId]
+        );
+
+        if (allRatings.rows.length >= 2) {
+            await client.query(
+                `UPDATE contracts SET status = 'Completed' WHERE contract_id = $1 AND LOWER(status) = 'done'`,
+                [contractId]
+            );
+        }
+
+        await client.query('COMMIT');
+        return rating;
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
 }
 
 async function buyRevision({

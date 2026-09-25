@@ -263,13 +263,22 @@ async function createProposalRepositories(proposalData) {
             throw error;
         }
 
-        // 0. Insert Terms of Service
+        // 0. Make a unique copy of the Terms of Service for this proposal
+        let originalTitle = proposalData.tos_title || 'Custom Terms';
         let termsId = proposalData.terms_id;
-        if (!termsId && proposalData.tos_content) {
+
+        if (termsId) {
+            const origRes = await client.query('SELECT terms_title FROM terms_of_service WHERE terms_id = $1', [termsId]);
+            if (origRes.rows.length > 0) {
+                originalTitle = origRes.rows[0].terms_title;
+            }
+        }
+
+        if (proposalData.tos_content) {
             const tosRes = await client.query(
-                `INSERT INTO terms_of_service (terms_title, terms_description, terms_type)
-                 VALUES ($1, $2, $3) RETURNING terms_id`,
-                [proposalData.tos_title || 'Custom Terms', proposalData.tos_content, 'jobs']
+                `INSERT INTO terms_of_service (account_id, terms_title, terms_description, terms_type)
+                 VALUES ($1, $2, $3, $4) RETURNING terms_id`,
+                [proposalData.freelancer_account_id, `${originalTitle} (Proposal Copy)`, proposalData.tos_content, 'jobs']
             );
             termsId = tosRes.rows[0].terms_id;
         }

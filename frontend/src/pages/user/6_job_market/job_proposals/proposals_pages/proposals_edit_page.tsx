@@ -5,11 +5,9 @@ import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
 
 // Reused Creation Step Components & Header
-import ProposalEditHeader from "../proposals_components/proposals_edit_components/proposal_edit_header";
+import ProposalCreateHeader from "../proposals_components/proposals_edit_components/proposal_edit_header";
 import ProposalPitchStep from "../proposals_components/proposals_creation_components/1_proposal_pitch";
-import ProposalTermsStep, {
-  sampleTosTemplates,
-} from "../proposals_components/proposals_creation_components/2_proposal_terms";
+import ProposalTermsStep from "../proposals_components/proposals_creation_components/2_proposal_terms";
 import ProposalMilestonesStep, {
   type Milestone,
 } from "../proposals_components/proposals_creation_components/3_proposal_milestones";
@@ -41,8 +39,8 @@ export const ProposalsEditPage: React.FC = () => {
   const [coverLetter, setCoverLetter] = useState("");
 
   // Step 2: TOS States
-  const [selectedTosId, setSelectedTosId] = useState("default");
-  const [tosContent, setTosContent] = useState(sampleTosTemplates[0].content);
+  const [selectedTosId, setSelectedTosId] = useState("");
+  const [tosContent, setTosContent] = useState("");
 
   // Step 3: Milestones State
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -71,7 +69,7 @@ export const ProposalsEditPage: React.FC = () => {
           status: p.status,
           submittedAt: new Date(p.created_at).toLocaleDateString(),
           coverLetter: p.letter || "",
-          tosContent: p.terms || sampleTosTemplates[0].content,
+          tosContent: p.terms || "",
           milestones: p.milestones || [],
           type: "sent",
         };

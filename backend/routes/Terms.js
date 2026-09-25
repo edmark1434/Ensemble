@@ -7,6 +7,7 @@ const requireAuth = require('../middleware/RequireAuth');
 router.get('/', requireAuth, TermsControllers.getAllTermsController);
 router.post('/', requireAuth, TermsControllers.createTermsController);
 router.put('/:id', requireAuth, TermsControllers.updateTermsController);
+router.put('/:id/default', requireAuth, TermsControllers.setDefaultTermsController);
 router.delete('/:id', requireAuth, TermsControllers.deleteTermsController);
 
 module.exports = router;

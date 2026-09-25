@@ -30,9 +30,18 @@ async function deleteTermsServices(termsId, accountId) {
     return deleted;
 }
 
+async function setDefaultTermsServices(termsId, accountId) {
+    const updated = await TermsRepositories.setDefaultTermsRepository(termsId, accountId);
+    if (!updated) {
+        throw new Error('Terms not found or unauthorized to edit.');
+    }
+    return updated;
+}
+
 module.exports = {
     getAllTermsServices,
     createTermsServices,
     updateTermsServices,
-    deleteTermsServices
+    deleteTermsServices,
+    setDefaultTermsServices
 };
