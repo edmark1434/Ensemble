@@ -27,5 +27,6 @@ Resolve three issues reported by the user:
 - [x] Fix `updateSubscriptionPayment` for upgrades to immediately apply plan updates upon successful payment, and remove `schedule` from all Xendit recurring plan PATCH requests.
 - [x] Fix `updateSubscriptionPayment` for downgrades by removing immutable `schedule` and updating plans correctly.
 - [x] Fix `TopUpPaymentByPaymentMethod` to use unique `reference_id`, pass `country: "PH"`, immediately settle successful charges, and return friendly error messages.
+- [x] Remove `customerPayload` (`customer` / `customer_id`) from `TopUpPaymentByPaymentMethod` `PAY` request using `payment_token_id` to comply with Xendit v3 schema.
 - [x] Verify frontend build (`npm run build`).
 - [x] Verify backend functionality and syntax checks.

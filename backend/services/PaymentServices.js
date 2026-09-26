@@ -1002,7 +1002,6 @@ async function TopUpPaymentByPaymentMethod(req, res) {
     }
 
     const reference_id = `TOPUP-${uuidv4()}`;
-    const customerPayload = await getCustomerPayload(req);
 
     const payload = {
         reference_id: reference_id,
@@ -1012,7 +1011,6 @@ async function TopUpPaymentByPaymentMethod(req, res) {
         amount: validated.amount,
         request_amount: validated.amount,
         capture_method: "AUTOMATIC",
-        ...customerPayload,
         metadata: {
             item_name: validated.itemName,
             credits: String(validated.credits),
