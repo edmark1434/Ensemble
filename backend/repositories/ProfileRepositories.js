@@ -185,6 +185,7 @@ async function getProfileByAccountId(accountId) {
         // 1. Get profile data
         const profileQuery = `
             SELECT 
+                A.ACCOUNT_ID as account_id,
                 A.HANDLE AS username, 
                 U.FIRST_NAME || ' ' || U.LAST_NAME AS name, 
                 U.MIDDLE_NAME as middleName, 
@@ -279,7 +280,7 @@ async function getProfileByAccountId(accountId) {
             LEFT JOIN FILES F ON A.AVATAR_FILE_ID = F.FILE_ID
             LEFT JOIN SUBSCRIPTIONS S ON U.USER_ID = S.USER_ID
             LEFT JOIN PLANS P ON S.PLAN_ID = P.PLAN_ID
-            WHERE A.ACCOUNT_ID = $1
+            WHERE A.ACCOUNT_ID::text = $1 OR U.USER_ID::text = $1
         `;
         
         const profileResult = await pool.query(profileQuery, [accountId]);
