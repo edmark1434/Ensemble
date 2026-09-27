@@ -20,6 +20,7 @@ export async function loadCurrentForumAvatar(fallback?: string): Promise<string>
 
 export function identityFromDetails(details: any) {
   return {
+    accountId: details.account_id || details.accountId || null,
     name: details.display_name
       || [details.first_name, details.last_name].filter(Boolean).join(" ")
       || details.handle

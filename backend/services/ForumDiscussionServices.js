@@ -594,7 +594,9 @@ async function getForumDiscussionByIdServices(discussionId) {
     const discussion = await getForumDiscussionByIdRepository(discussionId);
     if (!discussion) return null;
     const group = await getForumGroupById(discussion.forum_group_id);
-    return group ? discussion : null;
+    if (!group) return null;
+    const [enriched] = await attachDiscussionIdentities([discussion]);
+    return enriched;
 }
 
 async function getForumDiscussionsByUserIdServices(userId, options = {}) {

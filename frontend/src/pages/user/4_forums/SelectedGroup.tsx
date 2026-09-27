@@ -76,6 +76,7 @@ type ForumTag = {
 
 type PublicForumIdentity = {
   user_id: string;
+  account_id?: string | null;
   display_name: string;
   handle?: string | null;
   avatar_preset_url?: string | null;
@@ -155,6 +156,7 @@ type Group = {
 
 type MemberWithDetails = {
   userId: number;
+  accountId?: string | null;
   role: string;
   name: string;
   avatar: string;
@@ -563,7 +565,7 @@ const CommentItem = ({
 }: { 
   comment: Comment;
   postId: string;
-  membersDetails: Record<string, { name: string; avatar: string }>;
+  membersDetails: Record<string, { name: string; avatar: string; accountId?: string | null }>;
   onLike: (postId: string, commentId: string) => void;
   onReply: (postId: string, commentId: string, authorName: string, authorId: number) => void;
   onEditComment: (postId: string, commentId: string, newText: string) => void;
@@ -581,6 +583,8 @@ const CommentItem = ({
   currentUserAvatar: string;
   isLastInThread?: boolean;
 }) => {
+  const navigate = useNavigate();
+  const user = useGlobalState((state) => state.user);
   const [showChildren, setShowChildren] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.comment);
@@ -589,6 +593,11 @@ const CommentItem = ({
   const commentAuthor = membersDetails[comment.user_id] || { name: "Unknown User", avatar: "https://i.pravatar.cc/150?u=unknown" };
   const isLiked = comment.likes?.some(like => like.user_id === currentUserId) || false;
   const isAuthor = comment.user_id === currentUserId;
+  const targetAccountId = (isAuthor ? (user?.account_id || user?.accountId) : null)
+    || (commentAuthor as any).accountId
+    || comment.author_identity?.account_id
+    || (comment.author_identity as any)?.accountId
+    || (typeof comment.user_id === "string" && (comment.user_id as string).length > 10 ? comment.user_id : undefined);
   const hasChildren = comment.children && comment.children.length > 0;
   const childCount = comment.children?.length || 0;
   const depth = comment.depth || 0;
@@ -611,15 +620,45 @@ const CommentItem = ({
   return (
     <div className={`${depthClass} mt-2 ${!isLastInThread ? "border-l-2 border-gray-200 dark:border-white/10 ml-2 pl-2" : ""}`}>
       <div className="flex gap-3 py-2">
-        <img
-          src={commentAuthor.avatar}
-          alt={commentAuthor.name}
-          className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20 flex-shrink-0"
-        />
+        {targetAccountId ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/profile/${encodeURIComponent(targetAccountId)}`);
+            }}
+            className="flex-shrink-0 cursor-pointer transition hover:opacity-80"
+          >
+            <img
+              src={commentAuthor.avatar}
+              alt={commentAuthor.name}
+              className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20"
+            />
+          </button>
+        ) : (
+          <img
+            src={commentAuthor.avatar}
+            alt={commentAuthor.name}
+            className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20 flex-shrink-0"
+          />
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">{commentAuthor.name}</p>
+              {targetAccountId ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/profile/${encodeURIComponent(targetAccountId)}`);
+                  }}
+                  className="text-sm font-medium text-gray-900 dark:text-white hover:underline cursor-pointer text-left"
+                >
+                  {commentAuthor.name}
+                </button>
+              ) : (
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{commentAuthor.name}</p>
+              )}
               <span className="text-xs text-gray-500 dark:text-zinc-500">{getTimeAgo(comment.created_at)}</span>
               {comment.is_edited && (
                 <span className="text-[10px] text-zinc-600">(edited)</span>
@@ -886,30 +925,32 @@ const SelectedGroup = () => {
     }
   };
   
-  const getMemberDetails = (userId: number) => {
+  const getMemberDetails = (userId: number | string) => {
     if (userId === currentUserId) {
       return {
         name: currentUserName,
         avatar: currentUserAvatar,
+        accountId: user?.account_id || user?.accountId || null,
         isVerified: useGlobalState.getState().isVerified || user?.is_verified || false,
         subscriptionPlan: user?.subscription_plan || "Free",
       };
     }
-    const member = membersWithDetails.find(m => m.userId === userId);
+    const member = membersWithDetails.find(m => String(m.userId) === String(userId));
     const participant = participantDetails[String(userId)];
     // Fallbacks since participant details doesn't have badges for now
     return {
       name: member?.name || participant?.name || "Forum member",
       avatar: member?.avatar || participant?.avatar || currentUserAvatar,
+      accountId: member?.accountId || (participant as any)?.accountId || (typeof userId === "string" && userId.length > 10 ? userId : null),
       isVerified: false,
       subscriptionPlan: "Free",
     };
   };
 
   const membersDetailsMap = membersWithDetails.reduce((acc, member) => {
-    acc[String(member.userId)] = { name: member.name, avatar: member.avatar };
+    acc[String(member.userId)] = { name: member.name, avatar: member.avatar, accountId: member.accountId };
     return acc;
-  }, { ...participantDetails } as Record<string, { name: string; avatar: string }>);
+  }, { ...participantDetails } as Record<string, { name: string; avatar: string; accountId?: string | null }>);
   useForumRealtime((event) => setPosts((current) => reconcileForumDiscussions(current, event)), { groupId: id });
 
   const participantIdsKey = useMemo(() => [...new Set(posts.flatMap((post) => [
@@ -918,7 +959,7 @@ const SelectedGroup = () => {
   ]).filter(Boolean).map(String))].sort().join(","), [posts]);
 
   useEffect(() => {
-    const identities: Record<string, { name: string; avatar: string }> = {};
+    const identities: Record<string, { name: string; avatar: string; accountId?: string | null }> = {};
     for (const post of posts) {
       if (post.author_identity) {
         identities[String(post.user_id)] = identityFromDetails(post.author_identity);
@@ -951,9 +992,10 @@ const SelectedGroup = () => {
         const memberDetailsList: MemberWithDetails[] = mockGroup.members.map((member) => {
           const identity = member.identity
             ? identityFromDetails(member.identity)
-            : { name: "Forum member", avatar: DEFAULT_FORUM_AVATAR };
+            : { name: "Forum member", avatar: DEFAULT_FORUM_AVATAR, accountId: null };
           return {
             userId: member.userId,
+            accountId: identity.accountId || (member.identity as any)?.account_id || (member.identity as any)?.accountId || (typeof member.userId === 'string' && (member.userId as string).length > 10 ? String(member.userId) : null),
             role: member.role,
             name: identity.name,
             avatar: identity.avatar,
@@ -1034,6 +1076,12 @@ const SelectedGroup = () => {
     const authorDetails = getMemberDetails(post.user_id);
     const isLikedByCurrentUser = post.likes?.some(like => like.user_id === currentUserId) || false;
     const isSavedByCurrentUser = post.saves?.some(save => save.user_id === currentUserId) || false;
+    const authorAccountId = (post.user_id === currentUserId ? (user?.account_id || user?.accountId) : null)
+      || authorDetails.accountId
+      || post.author_identity?.account_id
+      || (post.author_identity as any)?.accountId
+      || (typeof post.user_id === "string" && (post.user_id as string).length > 10 ? post.user_id : undefined);
+
     return {
       ...post,
       arrayIndex: index,
@@ -1041,6 +1089,7 @@ const SelectedGroup = () => {
       _id: post._id,
       author: authorDetails.name,
       authorAvatar: authorDetails.avatar,
+      authorAccountId,
       authorIsVerified: authorDetails.isVerified,
       authorSubscriptionPlan: authorDetails.subscriptionPlan,
       excerpt: post.content,
@@ -2105,17 +2154,47 @@ const SelectedGroup = () => {
                     return (
                       <div key={post.id} className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
                         <div className="flex gap-3">
-                          <img
-                            src={post.authorAvatar}
-                            alt={post.author}
-                            className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white/20"
-                          />
+                          {post.authorAccountId ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/profile/${encodeURIComponent(post.authorAccountId)}`);
+                              }}
+                              className="shrink-0 cursor-pointer transition hover:opacity-80"
+                            >
+                              <img
+                                src={post.authorAvatar}
+                                alt={post.author}
+                                className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white/20"
+                              />
+                            </button>
+                          ) : (
+                            <img
+                              src={post.authorAvatar}
+                              alt={post.author}
+                              className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white/20"
+                            />
+                          )}
                           <div className="flex-1">
                             <div className="flex items-center justify-between flex-wrap gap-2">
                               <div className="flex flex-col gap-1.5">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <div className="flex items-center gap-1.5">
-                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{post.author}</p>
+                                    {post.authorAccountId ? (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          navigate(`/profile/${encodeURIComponent(post.authorAccountId)}`);
+                                        }}
+                                        className="text-sm font-medium text-gray-900 dark:text-white hover:underline cursor-pointer text-left"
+                                      >
+                                        {post.author}
+                                      </button>
+                                    ) : (
+                                      <p className="text-sm font-medium text-gray-900 dark:text-white">{post.author}</p>
+                                    )}
                                     {post.authorIsVerified && (
                                       <img src="/icons/verification/lvl2_verified.png" alt="Verified" className="h-3.5 w-3.5 object-contain" title="Verified" />
                                     )}
@@ -2325,20 +2404,54 @@ const SelectedGroup = () => {
                   })
                   .map((member) => (
                   <div key={member.userId} className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4">
-                    <img
-                      src={member.avatar}
-                      alt={member.name}
-                      className="h-12 w-12 rounded-full object-cover ring-2 ring-white/20"
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{member.name}</p>
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs text-gray-500 dark:text-zinc-500">Joined {member.joinedAt.split('T')[0]}</p>
-                        {member.role === "Admin" && (
-                          <span className="rounded-full bg-amber-100 dark:bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">Admin</span>
-                        )}
-                      </div>
-                    </div>
+                    {(() => {
+                      const memberAccountId = (member.userId === currentUserId ? (user?.account_id || user?.accountId) : null)
+                        || member.accountId
+                        || (typeof member.userId === 'string' && (member.userId as string).length > 10 ? member.userId : undefined);
+
+                      return (
+                        <>
+                          {memberAccountId ? (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/profile/${encodeURIComponent(memberAccountId)}`)}
+                              className="cursor-pointer transition hover:opacity-80 shrink-0"
+                            >
+                              <img
+                                src={member.avatar}
+                                alt={member.name}
+                                className="h-12 w-12 rounded-full object-cover ring-2 ring-white/20"
+                              />
+                            </button>
+                          ) : (
+                            <img
+                              src={member.avatar}
+                              alt={member.name}
+                              className="h-12 w-12 rounded-full object-cover ring-2 ring-white/20"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            {memberAccountId ? (
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/profile/${encodeURIComponent(memberAccountId)}`)}
+                                className="text-sm font-semibold text-gray-900 dark:text-white hover:underline cursor-pointer text-left truncate block max-w-full"
+                              >
+                                {member.name}
+                              </button>
+                            ) : (
+                              <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{member.name}</p>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs text-gray-500 dark:text-zinc-500">Joined {member.joinedAt ? member.joinedAt.split('T')[0] : 'recently'}</p>
+                              {member.role === "Admin" && (
+                                <span className="rounded-full bg-amber-100 dark:bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">Admin</span>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
 
                   {member.userId !== currentUserId && (
                     <div className="relative">

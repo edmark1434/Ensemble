@@ -203,11 +203,15 @@ async function getAccountWalletRepositories(accountId,type = 'account wallets') 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isValidAccountId(accountId) {
-    return typeof accountId === 'string' && UUID_PATTERN.test(accountId);
+    if (typeof accountId === 'number' && Number.isInteger(accountId)) return true;
+    if (typeof accountId === 'string') {
+        return UUID_PATTERN.test(accountId) || /^\d+$/.test(accountId);
+    }
+    return false;
 }
 
 async function checkAccountId(accountId) { 
-    // PostgreSQL raises 22P02 when a non-UUID is compared to account_id.
+    // PostgreSQL raises 22P02 when a non-UUID is compared to account_id without casting.
     // Treat malformed external input as a non-existent account instead.
     if (!isValidAccountId(accountId)) {
         return false;
@@ -215,7 +219,9 @@ async function checkAccountId(accountId) {
     try {
         const queryText = `
             SELECT EXISTS(
-                SELECT 1 FROM accounts WHERE account_id = $1
+                SELECT 1 FROM accounts a
+                LEFT JOIN users u ON u.account_id = a.account_id
+                WHERE a.account_id::text = $1 OR u.user_id::text = $1
             );
         `;
         const result = await pool.query(queryText, [accountId]);
@@ -288,7 +294,13 @@ async function checkUserAccountIdRepositories(accountId) {
         return false;
     }
     try{
-        const isRoleResult = await pool.query('SELECT EXISTS(SELECT 1 FROM accounts WHERE account_id = $1 AND type = $2)', [accountId, 'User']);
+        const isRoleResult = await pool.query(`
+            SELECT EXISTS(
+                SELECT 1 FROM accounts a
+                LEFT JOIN users u ON u.account_id = a.account_id
+                WHERE (a.account_id::text = $1 OR u.user_id::text = $1) AND a.type = $2
+            )
+        `, [accountId, 'User']);
         return isRoleResult.rows[0].exists;
     }catch(err){
         console.error(`Error checking role for account ${accountId}:`, err);

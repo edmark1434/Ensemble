@@ -4,11 +4,11 @@ import api from "@/lib/axios";
 import NotFound from "@/pages/user/0_misc/NotFound.tsx";
 import Profile from "./Profile.tsx";
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ID_PATTERN =
+  /^([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|\d+)$/i;
 
 const isUuid = (value: string | undefined): value is string =>
-  Boolean(value && UUID_PATTERN.test(value));
+  Boolean(value && ID_PATTERN.test(value));
 
 type ValidationState = "checking" | "found" | "not-found" | "error";
 
