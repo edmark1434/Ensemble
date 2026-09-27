@@ -153,7 +153,7 @@ export default function Navbar({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-48 ml-2 mt-1 z-[100]">
             <DropdownMenuItem asChild className="cursor-pointer">
-              <a href={process.env.MAIN_APP_URL ? `${process.env.MAIN_APP_URL}/projects` : 'http://localhost:5173/projects'}>
+              <a href={process.env.MAIN_APP_URL ? `${process.env.MAIN_APP_URL}/projects` : 'https://ensemble.software/projects'}>
                 Return to Projects
               </a>
             </DropdownMenuItem>
