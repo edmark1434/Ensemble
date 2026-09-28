@@ -107,6 +107,9 @@ router.get('/settings-overview', [checkSession, requireAdmin], getAdminSettingsO
 router.patch('/settings', [checkSession, requireAdmin], patchAdminSettings);
 
 router.get('/feedbacks', [checkSession, requireAdmin], getAdminFeedbacks);
+const { getAdminSurveyResponsesController } = require('../controllers/AdminSurveyControllers');
+
+router.get('/survey-responses', [checkSession, requireAdmin], getAdminSurveyResponsesController);
 
 router.get('/subscriptions/plans', [], getAdminPlans);
 router.put('/subscriptions/plans/:id', [], updateAdminPlan);

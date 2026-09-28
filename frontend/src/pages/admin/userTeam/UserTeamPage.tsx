@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, RefreshCw, UserCircle, Users } from 'lucide-react';
+import { Activity, RefreshCw, UserCircle, Users, FileText } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import useGlobalState from '@/lib/global_state';
 import TeamsTab from './TeamsTab';
 import UsersTab from './UsersTab';
 import UserTeamOverviewTab from './UserTeamOverviewTab';
+import SurveyResponsesTab from './SurveyResponsesTab';
 import { getUserTeamCapabilities, type UserTeamVariant } from './userTeamCapabilities';
 
-type TabId = 'overview' | 'teams' | 'users';
+type TabId = 'overview' | 'teams' | 'users' | 'survey-responses';
 
 const ALL_TABS: { id: TabId; label: string; icon: typeof Activity }[] = [
   { id: 'overview', label: 'Overview', icon: Activity },
   { id: 'teams', label: 'Team accounts', icon: Users },
   { id: 'users', label: 'Platform users', icon: UserCircle },
+  { id: 'survey-responses', label: 'Survey Responses', icon: FileText },
 ];
 
 const VARIANT_META: Record<
@@ -170,6 +172,9 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
             onStatsLoaded={setUsersPending}
             capabilities={caps}
           />
+        )}
+        {tab === 'survey-responses' && (
+          <SurveyResponsesTab refreshToken={refreshToken} />
         )}
       </div>
     </main>
