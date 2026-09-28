@@ -982,7 +982,19 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                   Accepting will automatically form a binding escrow contract for the agreed bid across {proposal.milestones.length} milestone phases.
                 </div>
                 <div className="pt-2">
-                  <label className="text-xs font-medium text-gray-500 dark:text-zinc-400">Contract Start Date (Optional)</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-gray-500 dark:text-zinc-400">Contract Start Date (Optional)</label>
+                    <button 
+                      onClick={() => {
+                        const now = new Date();
+                        const localDateTime = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+                        setContractStartsAt(localDateTime);
+                      }}
+                      className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-md hover:bg-emerald-500/20 transition"
+                    >
+                      Set to Now
+                    </button>
+                  </div>
                   <input
                     type="datetime-local"
                     value={contractStartsAt}
