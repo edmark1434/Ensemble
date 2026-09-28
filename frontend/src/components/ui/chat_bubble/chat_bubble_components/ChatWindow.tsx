@@ -808,28 +808,35 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       )}
 
       {mediaList.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto border-t border-zinc-200 dark:border-white/10 px-3 py-2">
+        <div className="flex gap-2.5 overflow-x-auto border-t border-zinc-200 dark:border-white/10 px-3 py-3">
           {mediaList.map((media) => (
-            <div key={media.id} className="relative flex h-20 min-w-20 max-w-40 items-center justify-center overflow-hidden rounded-lg border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/10 text-[9px]">
-              {media.type === "file" ? (
-                <div className="flex w-36 items-center gap-2 px-2 text-zinc-700 dark:text-zinc-300">
-                  <FileText size={18} className="flex-shrink-0" />
-                  <span className="truncate">{media.file.name}</span>
-                </div>
-              ) : media.type === "video" ? (
-                <video
-                  src={media.previewUrl}
-                  muted
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <img
-                  src={media.previewUrl}
-                  alt={media.file.name}
-                  className="h-full w-full object-cover"
-                />
-              )}
-              <button onClick={() => removeMedia(media.id)} className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5"><X size={9} /></button>
+            <div key={media.id} className="relative flex h-20 min-w-20 max-w-40 flex-shrink-0 text-[9px]">
+              <div className="flex w-full h-full items-center justify-center overflow-hidden rounded-lg border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/10">
+                {media.type === "file" ? (
+                  <div className="flex w-36 items-center gap-2 px-2 text-zinc-700 dark:text-zinc-300">
+                    <FileText size={18} className="flex-shrink-0" />
+                    <span className="truncate">{media.file.name}</span>
+                  </div>
+                ) : media.type === "video" ? (
+                  <video
+                    src={media.previewUrl}
+                    muted
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <img
+                    src={media.previewUrl}
+                    alt={media.file.name}
+                    className="h-full w-full object-cover"
+                  />
+                )}
+              </div>
+              <button 
+                onClick={(e) => { e.stopPropagation(); removeMedia(media.id); }} 
+                className="absolute -right-2 -top-2 z-10 flex items-center justify-center rounded-full bg-zinc-200/50 p-1 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 shadow-sm"
+              >
+                <X size={10} strokeWidth={2.5} />
+              </button>
             </div>
           ))}
         </div>
