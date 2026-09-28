@@ -113,6 +113,9 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
       {!hasRestrictedMessageTools && pinnedMessages.map((pin) => {
         const msg = messages.find((m) => m._id === pin.message_id);
         if (!msg) return null;
+        
+        const isVideo = msg.attachments?.some(a => a.attachment_type === "video");
+        const fallbackText = isVideo ? "Pinned Video" : msg.attachments?.length ? "Pinned Photo" : "Pinned Message";
 
         return (
           <div
@@ -125,8 +128,8 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
               onClick={() => onJumpTo?.(pin.message_id)}
               className="flex items-center gap-2 min-w-0 flex-1 text-left hover:text-gray-900 dark:text-white transition"
             >
-              <Pin className="h-3.5 w-3.5 text-yellow-400 flex-shrink-0" />
-              <span className="truncate">{msg.message_content || "Photo"}</span>
+              <Pin className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+              <span className="truncate">{msg.message_content || fallbackText}</span>
             </button>
             <button
               type="button"

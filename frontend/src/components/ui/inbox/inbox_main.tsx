@@ -880,11 +880,11 @@ const InboxMain = () => {
               )}
               {pinned && !hasRestrictedMessageTools && (
                 <div
-                  className={`flex items-center gap-1 text-[11px] font-medium text-yellow-400 mb-1 ${
+                  className={`flex items-center gap-1 text-[11px] font-medium text-yellow-600 dark:text-yellow-400 mb-1 ${
                     isSender ? "self-end" : "self-start"
                   }`}
                 >
-                  <Pin className="h-3 w-3 fill-yellow-400/20 text-yellow-400" />
+                  <Pin className="h-3 w-3 fill-yellow-600/20 text-yellow-600 dark:fill-yellow-400/20 dark:text-yellow-400" />
                   <span>Pinned Message</span>
                 </div>
               )}
@@ -935,7 +935,7 @@ const InboxMain = () => {
                               type: a.attachment_type,
                             })
                           }
-                          className="relative min-h-20 w-full rounded-xl overflow-hidden bg-black/40 border border-gray-200 dark:border-white/10 flex items-center justify-center cursor-pointer hover:opacity-90 transition"
+                          className="relative min-h-20 w-full rounded-xl overflow-hidden flex items-center justify-center cursor-pointer hover:opacity-95 transition group shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/5"
                         >
                           {isFile ? (
                             <a
@@ -1122,12 +1122,12 @@ const InboxMain = () => {
                           }}
                           className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-gray-100 dark:bg-white/10"
                         >
-                          <Pencil className="h-3.5 w-3.5 text-emerald-400" />
+                          <Pencil className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
                           Edit
                         </button>
                         <button
                           onClick={() => handleUnsend(message._id)}
-                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-red-400 hover:bg-red-500/10"
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-red-500 hover:bg-red-500/10"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                           Unsend
@@ -1149,12 +1149,12 @@ const InboxMain = () => {
                     >
                       {pinned ? (
                         <>
-                          <PinOff className="h-3.5 w-3.5 text-yellow-400" />
+                          <PinOff className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
                           Unpin
                         </>
                       ) : (
                         <>
-                          <Pin className="h-3.5 w-3.5 text-yellow-400" />
+                          <Pin className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
                           Pin
                         </>
                       )}
@@ -1165,9 +1165,9 @@ const InboxMain = () => {
                           setReportModalMessage(message);
                           setActiveMenuId(null);
                         }}
-                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:bg-white/10"
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-gray-100 dark:bg-white/10"
                       >
-                        <Flag className="h-3.5 w-3.5 text-red-400" />
+                        <Flag className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
                         Report
                       </button>
                     )}

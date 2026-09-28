@@ -158,7 +158,7 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
 
         <button
           onClick={handleSendMessage}
-          className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 p-2.5 text-gray-900 dark:text-white transition hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+          className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 p-2.5 text-white transition hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
           disabled={!canSend || isSending}
         >
           <Send className="h-5 w-5" />
