@@ -154,7 +154,7 @@ export const HomeFeaturedGigs: React.FC = () => {
                     }}
                     className={`absolute top-2 right-2 rounded-full bg-white/80 dark:bg-black/50 p-1.5 backdrop-blur-sm transition ${
                       gig.isSaved
-                        ? "text-yellow-500"
+                        ? "text-amber-500 dark:text-amber-400"
                         : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                     }`}
                   >
@@ -199,7 +199,7 @@ export const HomeFeaturedGigs: React.FC = () => {
                 {/* Price */}
                 <div className="mb-1 flex items-center gap-1.5">
                   <div className="h-3 w-3 rounded-full bg-yellow-400" />
-                  <span className="text-base font-black text-yellow-500">
+                  <span className="text-base font-black text-amber-500 dark:text-amber-400">
                     {startingPrice.toLocaleString()}
                   </span>
                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">

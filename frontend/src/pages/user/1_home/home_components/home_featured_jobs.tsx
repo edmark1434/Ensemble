@@ -196,7 +196,7 @@ export const HomeFeaturedJobs: React.FC = () => {
                     handleToggleSave(job.id);
                   }}
                   className={`absolute top-2 right-2 rounded-full bg-white/80 dark:bg-black/50 p-1.5 backdrop-blur-sm transition ${
-                    job.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                    job.isSaved ? "text-amber-500 dark:text-amber-400" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                   }`}
                 >
                   <Bookmark className={`h-3.5 w-3.5 ${job.isSaved ? "fill-current" : ""}`} />
@@ -229,8 +229,8 @@ export const HomeFeaturedJobs: React.FC = () => {
               </div>
 
               {/* Price Range */}
-              <div className="mb-1 flex items-center gap-1 text-base font-black text-yellow-500">
-                <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
+              <div className="mb-1 flex items-center gap-1 text-base font-black text-amber-500 dark:text-amber-400">
+                <CreditIcon className="h-4 w-4 shrink-0 text-amber-500 dark:text-amber-400" />
                 <span>{job.priceRange}</span>
               </div>
 

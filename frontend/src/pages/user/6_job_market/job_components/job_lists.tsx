@@ -279,8 +279,8 @@ const JobList: React.FC<JobListProps> = ({
                   </div>
 
                   {/* Price & Title */}
-                  <div className="text-yellow-500 text-base font-black mb-1 flex items-center gap-1">
-                    <CreditIcon className="h-4 w-4 text-yellow-500 shrink-0" />
+                  <div className="text-amber-500 dark:text-amber-400 text-base font-black mb-1 flex items-center gap-1">
+                    <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0" />
                     <span>{job.priceRange}</span>
                   </div>
                   <h3 className="text-gray-900 dark:text-white text-base font-bold mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
@@ -395,8 +395,8 @@ const JobList: React.FC<JobListProps> = ({
                   </div>
 
                   {/* Price */}
-                  <div className="text-yellow-500 text-lg font-black mb-1 flex items-center gap-1.5">
-                    <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
+                  <div className="text-amber-500 dark:text-amber-400 text-lg font-black mb-1 flex items-center gap-1.5">
+                    <CreditIcon className="h-5 w-5 text-amber-500 dark:text-amber-400 shrink-0" />
                     <span>{job.priceRange}</span>
                   </div>
                   <h3 className="text-gray-900 dark:text-white text-xl font-bold mb-1.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{job.title}</h3>

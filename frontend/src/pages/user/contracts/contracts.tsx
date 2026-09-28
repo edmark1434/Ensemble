@@ -777,6 +777,29 @@ export const Contracts: React.FC = () => {
                   {selectedContract.freelancerTosContent}
                 </div>
               </div>
+
+              {/* V. PLATFORM AGREEMENT */}
+              <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-zinc-800">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-zinc-100">
+                    V. Platform Agreement
+                  </h3>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-3">
+                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                     <span className="text-sm font-mono text-gray-700 dark:text-zinc-300">Client Agreed to the Freelancer's Terms of Service</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                     <span className="text-sm font-mono text-gray-700 dark:text-zinc-300">Freelancer Accepts the Contract</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                     <span className="text-sm font-mono text-gray-700 dark:text-zinc-300">Both Party Accepts the Platform Terms and Policy</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Footer */}

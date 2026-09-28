@@ -63,9 +63,9 @@ interface CreditTransactionsResponse {
 }
 
 const directionMeta: Record<Direction, { label: string; icon: typeof ArrowDownLeft; color: string }> = {
-  incoming: { label: "Incoming", icon: ArrowDownLeft, color: "text-emerald-300" },
-  outgoing: { label: "Outgoing", icon: ArrowUpRight, color: "text-rose-300" },
-  internal: { label: "Internal", icon: ArrowLeftRight, color: "text-blue-300" },
+  incoming: { label: "Incoming", icon: ArrowDownLeft, color: "text-emerald-600 dark:text-emerald-300" },
+  outgoing: { label: "Outgoing", icon: ArrowUpRight, color: "text-rose-600 dark:text-rose-300" },
+  internal: { label: "Internal", icon: ArrowLeftRight, color: "text-blue-700 dark:text-blue-300" },
 };
 
 function credits(value: number) {
@@ -90,10 +90,10 @@ function formatStatus(value: string) {
 
 function statusClasses(status: string) {
   const value = status.toLowerCase();
-  if (value === "completed") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
-  if (["failed", "cancelled", "canceled"].includes(value)) return "border-rose-500/20 bg-rose-500/10 text-rose-300";
-  if (["refunded", "released"].includes(value)) return "border-blue-500/20 bg-blue-500/10 text-blue-300";
-  return "border-amber-500/20 bg-amber-500/10 text-amber-200";
+  if (value === "completed") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300";
+  if (["failed", "cancelled", "canceled"].includes(value)) return "border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-300";
+  if (["refunded", "released"].includes(value)) return "border-blue-500/20 bg-blue-50 dark:bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300";
+  return "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-200";
 }
 
 function isCompleted(status: string) {
@@ -103,10 +103,10 @@ function isCompleted(status: string) {
 function CreditAmount({ transaction }: { transaction: CreditTransaction }) {
   const sign = transaction.direction === "incoming" ? "+" : transaction.direction === "outgoing" ? "−" : "";
   const color = transaction.direction === "incoming"
-    ? "text-emerald-300"
+    ? "text-emerald-600 dark:text-emerald-300"
     : transaction.direction === "outgoing"
-      ? "text-rose-300"
-      : "text-blue-300";
+      ? "text-rose-600 dark:text-rose-300"
+      : "text-blue-700 dark:text-blue-300";
 
   return (
     <span className={`inline-flex items-center gap-1.5 font-semibold tabular-nums ${color}`}>
@@ -272,10 +272,13 @@ export const TransactionHistoryMain = () => {
           <button
             type="button"
             onClick={() => navigate("/credits")}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+            className="group relative overflow-hidden inline-flex items-center justify-center rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-amber-400 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
           >
-            <CircleDollarSign className="h-4 w-4" aria-hidden="true" />
-            Purchase credits
+            <span className="relative z-10 flex items-center gap-2">
+              <CircleDollarSign className="h-4 w-4" aria-hidden="true" />
+              Purchase credits
+            </span>
+            <span className="absolute inset-0 z-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-white/40 to-transparent" />
           </button>
         </div>
 
@@ -302,7 +305,7 @@ export const TransactionHistoryMain = () => {
                       if (tab === "Credits") setActiveChildTab("All Credits");
                       if (tab === "Assets") setActiveChildTab("All Assets");
                     }}
-                    className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-transparent text-gray-700 dark:text-zinc-300 hover:bg-gray-50 dark:bg-white/[0.03] hover:text-gray-900 dark:text-zinc-100"}`}
+                    className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive ? "border-blue-500/40 bg-blue-50 dark:bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300" : "border-transparent text-gray-700 dark:text-zinc-300 hover:bg-gray-50 dark:bg-white/[0.03] hover:text-gray-900 dark:text-zinc-100"}`}
                   >
                     <TabIcon className="h-3.5 w-3.5" aria-hidden="true" />
                     {tab}
@@ -335,7 +338,7 @@ export const TransactionHistoryMain = () => {
                       role="tab"
                       aria-selected={isActive}
                       onClick={() => setActiveChildTab(tab)}
-                      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-gray-100 dark:border-white/5 text-gray-700 dark:text-zinc-300 hover:bg-gray-50 dark:bg-white/[0.03] hover:text-gray-900 dark:text-zinc-100"}`}
+                      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive ? "border-blue-500/40 bg-blue-50 dark:bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300" : "border-gray-100 dark:border-white/5 text-gray-700 dark:text-zinc-300 hover:bg-gray-50 dark:bg-white/[0.03] hover:text-gray-900 dark:text-zinc-100"}`}
                     >
                       <List className="h-3.5 w-3.5" aria-hidden="true" />
                       {tab.startsWith("All ") ? tab : displayType(tab)}
@@ -366,15 +369,15 @@ export const TransactionHistoryMain = () => {
           {!loading && !error && activeMainTab === "Summary" && (
             <div className="space-y-6 p-5 md:p-6">
               <section aria-label="Performance summary" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <SummaryCard label="Gross Credits" value={totals.incoming} detail="Total of all incoming credits" color="text-emerald-400" />
-                <SummaryCard label="Net Credits" value={totals.incoming - totals.outgoing} detail="Incoming credits minus outgoing credits" color={totals.incoming - totals.outgoing >= 0 ? "text-emerald-300" : "text-rose-400"} />
-                <SummaryCard label="Return on Investment" value={totals.outgoing > 0 ? (((totals.incoming - totals.outgoing) / totals.outgoing) * 100).toFixed(2) + "%" : "N/A"} detail="Net credits relative to outgoing credits" color="text-purple-400" />
+                <SummaryCard label="Gross Credits" value={totals.incoming} detail="Total of all incoming credits" color="text-emerald-600 dark:text-emerald-400" />
+                <SummaryCard label="Net Credits" value={totals.incoming - totals.outgoing} detail="Incoming credits minus outgoing credits" color={totals.incoming - totals.outgoing >= 0 ? "text-emerald-600 dark:text-emerald-300" : "text-rose-600 dark:text-rose-400"} />
+                <SummaryCard label="Return on Investment" value={totals.outgoing > 0 ? (((totals.incoming - totals.outgoing) / totals.outgoing) * 100).toFixed(2) + "%" : "N/A"} detail="Net credits relative to outgoing credits" color="text-purple-600 dark:text-purple-400" />
               </section>
 
               <section aria-label="Credit summary" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <SummaryCard label="Settled incoming" value={totals.incoming} detail="Completed incoming transactions" color="text-emerald-300" />
-                <SummaryCard label="Settled outgoing" value={totals.outgoing} detail="Completed outgoing transactions" color="text-rose-300" />
-                <SummaryCard label="Credits on hold" value={totals.held} detail="Credits currently waiting for release or refund" color="text-amber-200" />
+                <SummaryCard label="Settled incoming" value={totals.incoming} detail="Completed incoming transactions" color="text-emerald-600 dark:text-emerald-300" />
+                <SummaryCard label="Settled outgoing" value={totals.outgoing} detail="Completed outgoing transactions" color="text-rose-600 dark:text-rose-300" />
+                <SummaryCard label="Credits on hold" value={totals.held} detail="Credits currently waiting for release or refund" color="text-amber-600 dark:text-amber-200" />
               </section>
 
               <section aria-labelledby="activity-breakdown-title" className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.015]">
