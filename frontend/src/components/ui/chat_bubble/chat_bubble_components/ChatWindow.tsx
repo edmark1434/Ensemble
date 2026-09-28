@@ -810,7 +810,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       )}
 
       {mediaList.length > 0 && (
-        <div className="flex gap-2.5 overflow-x-auto custom-scrollbar border-t border-zinc-200 dark:border-white/10 px-3 py-3">
+        <div className="flex flex-col border-t border-zinc-200 dark:border-white/10 bg-zinc-50/30 dark:bg-zinc-900/30">
+          <div className="flex items-center justify-between px-3 pt-2.5 pb-0.5">
+            <span className="text-[10px] font-medium text-zinc-500">Attached files</span>
+            <span className="text-[10px] font-medium text-zinc-500">
+              {(mediaList.reduce((sum, m) => sum + m.file.size, 0) / (1024 * 1024)).toFixed(1)}MB / 250MB
+            </span>
+          </div>
+          <div className="flex gap-2.5 overflow-x-auto custom-scrollbar px-3 pb-3 pt-1.5">
           {mediaList.map((media) => (
             <div key={media.id} className="relative flex h-[90px] min-w-[90px] max-w-[170px] flex-shrink-0 pt-2.5 pr-2.5 text-[9px]">
               <div className="flex w-full h-full items-center justify-center overflow-hidden rounded-lg border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/10">
@@ -847,6 +854,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           ))}
           {/* Spacer to ensure the last item's padding/button is fully visible when scrolled to the right end */}
           <div className="w-3 flex-shrink-0" />
+          </div>
         </div>
       )}
       {typingCount > 0 && (
