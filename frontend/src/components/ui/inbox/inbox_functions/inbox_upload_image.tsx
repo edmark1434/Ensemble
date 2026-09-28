@@ -72,7 +72,26 @@ export const useInboxUploadMedia = (maxFiles = 3): UseInboxUploadMediaReturn => 
 
       const filesToProcess = selectedFiles.slice(0, availableSlots);
 
+      // Calculate current total size of existing media
+      const MB = 1024 * 1024;
+      const BATCH_LIMIT_MB = 250;
+      let accumulatedSize = mediaList.reduce((sum, media) => sum + media.file.size, 0);
+
+      const validFiles: File[] = [];
+
       filesToProcess.forEach((file) => {
+        if (accumulatedSize + file.size > BATCH_LIMIT_MB * MB) {
+          showErrorToast(
+            `Cannot add "${file.name}". Batch limit of ${BATCH_LIMIT_MB}MB exceeded. ` +
+            `(Current total: ${((accumulatedSize + file.size) / MB).toFixed(1)}MB)`
+          );
+          return;
+        }
+        accumulatedSize += file.size;
+        validFiles.push(file);
+      });
+
+      validFiles.forEach((file) => {
         let mediaType: MediaType = "file";
         if (file.type.startsWith("video/")) {
           mediaType = "video";
@@ -83,16 +102,6 @@ export const useInboxUploadMedia = (maxFiles = 3): UseInboxUploadMediaReturn => 
           /\.(?:avif|bmp|jpe?g|png|svg|webp)$/i.test(file.name)
         ) {
           mediaType = "image";
-        }
-
-        const MB = 1024 * 1024;
-        let limitMB = 20; // Default for files/PDF
-        if (mediaType === "video") limitMB = 250;
-        else if (mediaType === "image" || mediaType === "gif") limitMB = 10;
-
-        if (file.size > limitMB * MB) {
-          showErrorToast(`${file.name} exceeds the ${limitMB}MB limit. (Your file: ${(file.size / MB).toFixed(1)}MB)`);
-          return;
         }
 
         const previewUrl =
@@ -110,7 +119,7 @@ export const useInboxUploadMedia = (maxFiles = 3): UseInboxUploadMediaReturn => 
 
       e.target.value = "";
     },
-    [maxFiles, mediaList.length]
+    [maxFiles, mediaList]
   );
 
   const removeMedia = useCallback((id: string) => {
