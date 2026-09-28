@@ -147,6 +147,19 @@ const ProposalsCreatePage: React.FC = () => {
       setErrors({ milestones: "You must create at least 1 milestone." });
       return;
     }
+
+    // Timeline Max Hours validation
+    const maxDaysMatch = job?.timeline?.match(/-(\d+)\s*Days/i);
+    const maxDays = maxDaysMatch ? parseInt(maxDaysMatch[1]) || 0 : 0;
+    const maxHoursAllowed = maxDays * 24;
+
+    const totalHours = milestones.reduce((sum, m) => sum + (Number(m.hours) || 0), 0);
+    
+    if (maxHoursAllowed > 0 && totalHours > maxHoursAllowed) {
+      setErrors({ milestones: `Total milestone hours (${totalHours}) cannot exceed the job's max timeline of ${maxDays} days (${maxHoursAllowed} hours).` });
+      return;
+    }
+
     setErrors({});
     setCurrentSlide(4);
   };
@@ -260,6 +273,7 @@ const ProposalsCreatePage: React.FC = () => {
                   setErrors={setErrors}
                   onBack={() => setCurrentSlide(2)}
                   onAdvance={handleMilestonesAdvance}
+                  jobTimeline={job?.timeline || ""}
                 />
               </motion.div>
             )}

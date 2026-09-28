@@ -7,8 +7,8 @@ export interface Milestone {
   id: string;
   name: string;
   description: string;
-  hours: number;
-  revisions: number;
+  hours: number | string;
+  revisions: number | string;
 }
 
 interface ProposalMilestonesProps {
@@ -20,6 +20,7 @@ interface ProposalMilestonesProps {
   setErrors: React.Dispatch<React.SetStateAction<{ [key: string]: string }>>;
   onBack: () => void;
   onAdvance: () => void;
+  jobTimeline?: string;
 }
 
 export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
@@ -31,11 +32,30 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
   setErrors,
   onBack,
   onAdvance,
+  jobTimeline,
 }) => {
   const totalBid = parseInt(bidAmount || "0");
   const count = milestones.length || 1;
   const milestonePayout = Math.floor(totalBid / count);
   const overageRateBonus = Math.floor(milestonePayout * (additionalWorkRate / 100));
+
+  const maxDaysMatch = jobTimeline?.match(/-(\d+)\s*Days/i);
+  const maxDays = maxDaysMatch ? parseInt(maxDaysMatch[1]) || 0 : 0;
+  const maxHoursAllowed = maxDays * 24;
+  const totalHours = milestones.reduce((sum, m) => sum + (Number(m.hours) || 0), 0);
+  const isOverLimit = maxHoursAllowed > 0 && totalHours > maxHoursAllowed;
+
+  React.useEffect(() => {
+    if (errors.milestones) {
+      const timer = setTimeout(() => {
+        setErrors((prev) => {
+          const { milestones, ...rest } = prev;
+          return rest;
+        });
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [errors.milestones, setErrors]);
 
   const handleAddMilestone = () => {
     const nextNum = milestones.length + 1;
@@ -71,11 +91,21 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
         <p className="text-xs text-gray-500 dark:text-zinc-400">Outline deliverables and revision limits for step-by-step client approval.</p>
       </div>
 
+      {maxHoursAllowed > 0 && (
+        <div className={`p-3 rounded-xl border flex items-center justify-between text-xs font-bold ${isOverLimit ? 'bg-red-500/10 border-red-500/20 text-red-500' : 'bg-blue-500/10 border-blue-500/20 text-blue-500 dark:text-blue-400'}`}>
+           <div className="flex items-center gap-2">
+             <Clock className="w-4 h-4" />
+             <span>Total Hours Limit (from {jobTimeline})</span>
+           </div>
+           <span>{totalHours} / {maxHoursAllowed} hrs</span>
+        </div>
+      )}
+
       {/* Escrow Pool Preview Banner */}
       <div className="p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
         <div>
           <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase">Total Escrow Bid</span>
-          <p className="text-sm font-extrabold text-yellow-500 flex items-center gap-1">
+          <p className="text-sm font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1">
             <CreditIcon className="h-4 w-4" /> {totalBid.toLocaleString()}
           </p>
         </div>
@@ -101,7 +131,7 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
               <div className="flex items-center gap-2">
                 <GripVertical className="h-4 w-4 text-gray-300 dark:text-zinc-600 cursor-grab active:cursor-grabbing" />
                 <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Layers className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500" /> Milestone {idx + 1} - <CreditIcon className="h-3 w-3 text-yellow-500" /> {milestonePayout.toLocaleString()} Credits
+                  <Layers className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500" /> Milestone {idx + 1} - <CreditIcon className="h-3 w-3 text-amber-500 dark:text-amber-400" /> {milestonePayout.toLocaleString()} Credits
                 </span>
               </div>
               {milestones.length > 1 && (
@@ -142,7 +172,7 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
                 <input
                   type="number"
                   value={m.hours}
-                  onChange={(e) => handleUpdate(m.id, "hours", parseInt(e.target.value) || 0)}
+                  onChange={(e) => handleUpdate(m.id, "hours", e.target.value === "" ? "" : parseInt(e.target.value) || 0)}
                   className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 text-xs text-gray-900 dark:text-white outline-none"
                 />
               </div>
@@ -154,7 +184,7 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
                 <input
                   type="number"
                   value={m.revisions}
-                  onChange={(e) => handleUpdate(m.id, "revisions", parseInt(e.target.value) || 0)}
+                  onChange={(e) => handleUpdate(m.id, "revisions", e.target.value === "" ? "" : parseInt(e.target.value) || 0)}
                   className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 text-xs text-gray-900 dark:text-white outline-none"
                 />
               </div>
