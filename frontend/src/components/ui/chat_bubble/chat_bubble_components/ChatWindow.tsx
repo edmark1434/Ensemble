@@ -469,7 +469,31 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     <Pin size={10} /> Pinned
                   </span>
                 )}
-                <div className={`flex max-w-[90%] items-center gap-1 ${isMe ? "flex-row-reverse" : ""}`}>
+                <div className={`flex max-w-[100%] items-end gap-1.5 ${isMe ? "flex-row-reverse" : ""}`}>
+                  {!isMe && (
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full overflow-hidden bg-zinc-200 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-sm mt-auto mb-1">
+                      {(() => {
+                        const avatarKey = activeUser?.avatarPayload?.[String(message.sender_id)] || activeUser?.avatarUrl;
+                        return avatarKey ? (
+                          <img 
+                            src={chatAttachmentUrl(avatarKey)} 
+                            alt={message.author_name || "User"} 
+                            className="w-full h-full object-cover" 
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(message.author_name || "User")}&background=6366f1&color=fff&bold=true`;
+                            }}
+                          />
+                        ) : (
+                          <img 
+                            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(message.author_name || "User")}&background=6366f1&color=fff&bold=true`} 
+                            alt="User" 
+                            className="w-full h-full object-cover" 
+                          />
+                        );
+                      })()}
+                    </div>
+                  )}
                   <div
                     className={`relative max-w-[85%] break-words rounded-2xl px-3 py-2 leading-relaxed shadow-sm ${
                       isMe
