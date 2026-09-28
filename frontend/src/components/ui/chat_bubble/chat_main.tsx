@@ -134,7 +134,7 @@ export const ChatMain: React.FC<ChatMainProps> = ({
   };
 
   return (
-    <div className="fixed bottom-5 right-4 z-50 flex max-w-[calc(100vw-3rem)] items-end gap-4 overflow-x-auto pr-2 pb-2 font-['Plus_Jakarta_Sans',sans-serif] hide-scrollbar">
+    <div className="fixed bottom-3 right-3 z-50 flex max-w-[calc(100vw-3rem)] items-end gap-4 overflow-x-auto pt-4 pr-4 pb-2 font-['Plus_Jakarta_Sans',sans-serif] hide-scrollbar">
       <style>{`
         .hide-scrollbar {
           -ms-overflow-style: none;
