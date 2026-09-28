@@ -900,6 +900,13 @@ async function pinMessageServices(conversationId, messageId, accountId) {
     ) {
         throw new ChatServiceError('Message not found in this conversation', 404);
     }
+    const currentlyPinned = inbox.pinned_messages || [];
+    if (
+        currentlyPinned.length >= 4 &&
+        !currentlyPinned.some(p => String(p.message_id) === String(messageId))
+    ) {
+        throw new ChatServiceError('Maximum of 4 pinned messages allowed.', 400);
+    }
     const actorAccountId = await resolveConversationActorAccountId(inbox, accountId);
     return await pinMessageRepositories(conversationId, {
         message_id: String(messageId),

@@ -1982,10 +1982,14 @@ const useChatState = create<ChatState>((set, get) => ({
   },
 
   pinMessage: async (conversationId, messageId, unpin = false) => {
-    await emitWithAck(unpin ? "unpinMessage" : "pinMessage", {
-      conversation_id: String(conversationId),
-      message_id: String(messageId),
-    });
+    try {
+      await emitWithAck(unpin ? "unpinMessage" : "pinMessage", {
+        conversation_id: String(conversationId),
+        message_id: String(messageId),
+      });
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to pin message");
+    }
   },
 
   renameConversation: async (conversationId, conversationName) => {
