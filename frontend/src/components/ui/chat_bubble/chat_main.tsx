@@ -134,7 +134,7 @@ export const ChatMain: React.FC<ChatMainProps> = ({
   };
 
   return (
-    <div className="fixed bottom-5 right-6 z-50 flex max-w-[calc(100vw-3rem)] items-end gap-4 overflow-x-auto font-['Plus_Jakarta_Sans',sans-serif] hide-scrollbar">
+    <div className="fixed bottom-5 right-4 z-50 flex max-w-[calc(100vw-3rem)] items-end gap-4 overflow-x-auto pr-2 pb-2 font-['Plus_Jakarta_Sans',sans-serif] hide-scrollbar">
       <style>{`
         .hide-scrollbar {
           -ms-overflow-style: none;
@@ -193,7 +193,6 @@ export const ChatMain: React.FC<ChatMainProps> = ({
                   <button
                     onClick={() => restoreWindow(chat)}
                     className="relative transition-transform active:scale-95 focus:outline-none"
-                    title={`Restore ${chat.name}`}
                   >
                     <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 p-[2px] shadow-xl hover:shadow-2xl">
                       <div className="w-full h-full rounded-full bg-[#080a12] flex items-center justify-center font-bold text-white text-xs overflow-hidden border border-white/10">
@@ -216,28 +215,31 @@ export const ChatMain: React.FC<ChatMainProps> = ({
                     </div>
                     <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-[#080a12]" />
                     {!!(unreadCounts[String(chat.inbox_id || chat.id)] || chat.unreadCount) && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center border-2 border-[#080a12] font-medium z-10 pointer-events-none">
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center border-2 border-[#080a12] z-10 pointer-events-none">
                         {(unreadCounts[String(chat.inbox_id || chat.id)] || chat.unreadCount || 0) > 99 ? "99+" : (unreadCounts[String(chat.inbox_id || chat.id)] || chat.unreadCount)}
                       </span>
                     )}
                   </button>
+
+                  <div className="absolute right-full top-1/2 -translate-y-1/2 mr-3 px-2.5 py-1.5 bg-zinc-900 text-zinc-100 text-[11px] font-medium rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity shadow-xl border border-white/10 z-50 flex items-center gap-1.5">
+                    {chat.name}
+                  </div>
 
                   <button
                     onClick={(event) => {
                       event.stopPropagation();
                       closeWindow(chat);
                     }}
-                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 border-2 border-[#080a12] shadow-lg z-10"
-                    title="Close chat"
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 border-2 border-[#080a12] shadow-lg z-20"
                   >
-                    <X size={10} />
+                    <X size={10} strokeWidth={3} />
                   </button>
                 </motion.div>
               );
             })}
         </AnimatePresence>
 
-        <div className="relative">
+        <div className="relative group/toggle">
           <button
             onClick={() => setIsStackExpanded((current) => !current)}
             className="w-12 h-12 rounded-full bg-white dark:bg-[#2a2d37] hover:bg-zinc-100 dark:hover:bg-[#343846] text-zinc-900 dark:text-zinc-200 flex items-center justify-center shadow-2xl border border-zinc-200 dark:border-white/10 transition-all duration-200 active:scale-90 focus:outline-none"
@@ -246,7 +248,7 @@ export const ChatMain: React.FC<ChatMainProps> = ({
             {isStackExpanded ? <X size={20} /> : <SquarePen size={20} />}
           </button>
           {!isStackExpanded && minimizedWindows.reduce((sum, chat) => sum + (unreadCounts[String(chat.inbox_id || chat.id)] || chat.unreadCount || 0), 0) > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center border-2 border-white dark:border-[#2a2d37] font-medium z-10 pointer-events-none shadow-sm">
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center border-2 border-white dark:border-[#2a2d37] z-10 pointer-events-none shadow-sm">
               {minimizedWindows.reduce((sum, chat) => sum + (unreadCounts[String(chat.inbox_id || chat.id)] || chat.unreadCount || 0), 0) > 99 ? "99+" : minimizedWindows.reduce((sum, chat) => sum + (unreadCounts[String(chat.inbox_id || chat.id)] || chat.unreadCount || 0), 0)}
             </span>
           )}
