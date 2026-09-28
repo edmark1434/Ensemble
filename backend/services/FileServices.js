@@ -43,7 +43,7 @@ const CONTENT_TYPE_EXTENSIONS = {
 
 const ABSOLUTE_MAX_FILE_SIZE = process.env.UPLOAD_ABSOLUTE_MAX_FILE_SIZE
     ? parseInt(process.env.UPLOAD_ABSOLUTE_MAX_FILE_SIZE)
-    : 100 * 1024 * 1024;
+    : 250 * 1024 * 1024;
 
 const MB = 1024 * 1024;
 const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/avif'];
@@ -56,7 +56,7 @@ const UPLOAD_POLICIES = {
     'forum-discussions': { types: [...IMAGE_TYPES, 'application/pdf'], imageLimit: 8 * MB, pdfLimit: 15 * MB },
     'forum-group': { types: IMAGE_TYPES, imageLimit: 8 * MB },
     'forum-covers': { types: IMAGE_TYPES, imageLimit: 8 * MB },
-    'chat-attachments': { types: [...IMAGE_TYPES, 'application/pdf', 'video/mp4'], imageLimit: 10 * MB, pdfLimit: 20 * MB, videoLimit: 50 * MB },
+    'chat-attachments': { types: [...IMAGE_TYPES, 'application/pdf', 'video/mp4'], imageLimit: 10 * MB, pdfLimit: 20 * MB, videoLimit: 250 * MB },
     documents: { types: [...IMAGE_TYPES, 'application/pdf'], imageLimit: 10 * MB, pdfLimit: 25 * MB },
     jobs: { types: [...IMAGE_TYPES, 'application/pdf'], imageLimit: 10 * MB, pdfLimit: 25 * MB },
     assets: { types: [...IMAGE_TYPES, 'video/mp4', ...AUDIO_TYPES], imageLimit: 25 * MB, videoLimit: 100 * MB, audioLimit: 50 * MB },
