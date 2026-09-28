@@ -201,38 +201,52 @@ export const InboxUploadMediaPreview: React.FC<InboxUploadMediaPreviewProps> = (
   if (!mediaList || mediaList.length === 0) return null;
 
   return (
-    <div className="px-4 pt-3 flex gap-2 overflow-x-auto flex-shrink-0 inbox-scroll-thin">
-      {mediaList.map((media) => (
-        <div key={media.id} className="relative inline-block flex-shrink-0">
-          {media.type === "file" ? (
-            <div className="h-20 w-40 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-3 text-gray-600 dark:text-zinc-300">
-              <FileText className="mb-1 h-5 w-5 text-blue-400" />
-              <p className="truncate text-xs">{media.file.name}</p>
-            </div>
-          ) : media.type === "video" ? (
-            <div className="relative h-20 w-20 rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 bg-black flex items-center justify-center">
-              <video src={media.previewUrl} className="h-full w-full object-cover" muted />
-              <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                <Film className="h-5 w-5 text-gray-900 dark:text-white/80" />
+    <div className="flex flex-col border-b border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-[#1a1b23]/50">
+      <div className="flex items-center justify-between px-4 pt-3 pb-1">
+        <span className="text-xs font-medium text-gray-500 dark:text-zinc-400">Attached files</span>
+        <span className="text-xs font-medium text-gray-500 dark:text-zinc-400">
+          {(mediaList.reduce((sum, m) => sum + m.file.size, 0) / (1024 * 1024)).toFixed(1)}MB / 250MB
+        </span>
+      </div>
+      <div className="px-4 pb-3 flex gap-3 overflow-x-auto flex-shrink-0 inbox-scroll-thin">
+        {mediaList.map((media) => (
+          <div key={media.id} className="relative inline-block flex-shrink-0 pt-1.5 pr-1.5">
+            <div className="relative overflow-hidden rounded-xl">
+              {media.type === "file" ? (
+                <div className="h-20 w-40 border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-3 text-gray-600 dark:text-zinc-300">
+                  <FileText className="mb-1 h-5 w-5 text-blue-400" />
+                  <p className="truncate text-xs">{media.file.name}</p>
+                </div>
+              ) : media.type === "video" ? (
+                <div className="relative h-20 w-20 border border-gray-200 dark:border-white/10 bg-black flex items-center justify-center">
+                  <video src={media.previewUrl} className="h-full w-full object-cover" muted />
+                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                    <Film className="h-5 w-5 text-gray-900 dark:text-white/80" />
+                  </div>
+                </div>
+              ) : (
+                <img
+                  src={media.previewUrl}
+                  alt="Media preview"
+                  className="h-20 w-20 object-cover border border-gray-200 dark:border-white/10"
+                />
+              )}
+              {/* Size Indicator Overlay */}
+              <div className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-medium text-white backdrop-blur-md z-10 pointer-events-none">
+                {(media.file.size / (1024 * 1024)).toFixed(1)}MB
               </div>
             </div>
-          ) : (
-            <img
-              src={media.previewUrl}
-              alt="Media preview"
-              className="h-20 w-20 rounded-xl object-cover border border-gray-200 dark:border-white/10"
-            />
-          )}
 
-          <button
-            type="button"
-            onClick={() => onRemove(media.id)}
-            className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-gray-50 dark:bg-dark-base border border-gray-200 dark:border-white/10 flex items-center justify-center text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-red-500/80 transition shadow-md"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </div>
-      ))}
+            <button
+              type="button"
+              onClick={() => onRemove(media.id)}
+              className="absolute top-0 right-0 h-5 w-5 rounded-full bg-gray-50 dark:bg-[#1a1b23] border border-gray-200 dark:border-white/10 flex items-center justify-center text-gray-600 dark:text-zinc-300 hover:text-gray-900 hover:dark:text-white hover:bg-red-500/80 transition shadow-md z-20"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
