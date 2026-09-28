@@ -937,6 +937,8 @@ async function deleteMessageServices(messageId, accountId) {
     if (String(message.sender_id) !== actorAccountId) {
         throw new ChatServiceError('You can only delete your own messages', 403);
     }
+    // Automatically unpin the message if it is deleted
+    await unpinMessageRepositories(message.conversation_id, messageId);
     return await deleteMessageRepositories(messageId);
 }
 
