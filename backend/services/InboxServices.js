@@ -908,11 +908,34 @@ async function pinMessageServices(conversationId, messageId, accountId) {
         throw new ChatServiceError('Maximum of 25 pinned messages allowed.', 400);
     }
     const actorAccountId = await resolveConversationActorAccountId(inbox, accountId);
-    return await pinMessageRepositories(conversationId, {
+    const updatedInbox = await pinMessageRepositories(conversationId, {
         message_id: String(messageId),
         pinned_by: actorAccountId,
         pinned_at: new Date(),
     });
+
+    const actorName = await actorDisplayName(accountId);
+    const isVideo = message.attachments?.some(a => a.attachment_type === "video");
+    const fallbackText = isVideo ? "Video" : message.attachments?.length ? "Photo" : "Message";
+    const now = new Date();
+    const insertedId = await createMessageRepositories({
+        conversation_id: String(conversationId),
+        sender_id: String(accountId),
+        message_type: 'system',
+        message_content: `${actorName} pinned a ${fallbackText.toLowerCase()}.`,
+        message_id_reply: null,
+        attachments: [],
+        links: [],
+        message_react: [],
+        read_by: [{ account_id: String(accountId), read_at: now }],
+        is_edited: false,
+        is_deleted: false,
+        created_at: now,
+        updated_at: now,
+    });
+    
+    updatedInbox.membership_event_message = await getMessageByIdRepositories(insertedId);
+    return updatedInbox;
 }
 
 async function unpinMessageServices(conversationId, messageId, accountId) {

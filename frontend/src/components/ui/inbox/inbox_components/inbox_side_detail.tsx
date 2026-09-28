@@ -242,7 +242,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
     >
       <div className="w-72 md:w-80 flex flex-col h-full">
         {/* Header Close Bar */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/10 sticky top-0 bg-white dark:bg-dark-surface/95 backdrop-blur-sm z-10">
+        <div className="flex items-center justify-between px-4 h-[73px] border-b border-gray-200 dark:border-white/10 sticky top-0 bg-white dark:bg-dark-surface/95 backdrop-blur-sm z-10">
           <h3 className="text-sm font-semibold text-gray-600 dark:text-zinc-300">Chat Details</h3>
           <button
             onClick={onClose}
@@ -321,13 +321,20 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           {!isGroup && (
             <div className="mt-5 flex justify-center">
               <button
-                onClick={() => console.log("Navigate to user profile")}
+                onClick={() => {
+                  const otherMember = selectedConversation.members?.find(
+                    (m) => String(m.account_id) !== String(currentUserId)
+                  );
+                  if (otherMember?.account_id) {
+                    navigate(`/profile/${otherMember.account_id}`);
+                  }
+                }}
                 className="flex flex-col items-center gap-1.5 text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition group"
               >
                 <div className="p-3 rounded-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 group-hover:bg-blue-500 group-hover:border-blue-500 transition">
                   <User className="h-5 w-5" />
                 </div>
-                <span className="text-xs font-medium">Profile</span>
+                <span className="text-xs font-medium">View Profile</span>
               </button>
             </div>
           )}
