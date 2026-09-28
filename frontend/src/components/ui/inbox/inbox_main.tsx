@@ -66,6 +66,7 @@ interface ProfileIdentity {
   name?: string;
   username?: string;
   avatar_preset_url?: string;
+  avatar_url?: string;
 }
 
 const InboxMain = () => {
@@ -1316,12 +1317,13 @@ const InboxMain = () => {
                 : profiles[accountId]?.name || `User ${accountId.slice(0, 8)}`
             }
             getMemberAvatar={(accountId: string) => {
-              const avatar = profiles[accountId]?.avatar_preset_url;
-              return avatar && /^https?:\/\//i.test(avatar)
-                ? avatar
-                : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    profiles[accountId]?.name || accountId.slice(0, 8)
-                  )}&background=6366f1&color=fff`;
+              const avatar = accountId === currentActorId 
+                ? (user?.avatar_preset_url || user?.avatar_url) 
+                : (profiles[accountId]?.avatar_preset_url || profiles[accountId]?.avatar_url);
+              if (avatar) return chatAttachmentUrl(avatar);
+              return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  accountId === currentActorId ? "You" : (profiles[accountId]?.name || accountId.slice(0, 8))
+                )}&background=6366f1&color=fff`;
             }}
             suggestedAccounts={suggestedAccounts}
             onUpdateMember={(
