@@ -976,7 +976,29 @@ async function updateGroupProfileImageServices(conversationId, imageKey, account
             conversation_image_url: '',
         },
     });
-    return await getInboxByIdRepositories(conversationId);
+
+    const updatedInbox = await getInboxByIdRepositories(conversationId);
+    
+    const actorName = await actorDisplayName(accountId);
+    const now = new Date();
+    const insertedId = await createMessageRepositories({
+        conversation_id: String(conversationId),
+        sender_id: String(accountId),
+        message_type: 'system',
+        message_content: `${actorName} changed the group photo.`,
+        message_id_reply: null,
+        attachments: [],
+        links: [],
+        message_react: [],
+        read_by: [{ account_id: String(accountId), read_at: now }],
+        is_edited: false,
+        is_deleted: false,
+        created_at: now,
+        updated_at: now,
+    });
+    
+    updatedInbox.membership_event_message = await getMessageByIdRepositories(insertedId);
+    return updatedInbox;
 }
 
 async function updateGroupMemberServices(conversationId, targetAccountId, payload, accountId) {

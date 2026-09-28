@@ -408,6 +408,12 @@ async function initSocket(httpServer) {
           payload.image_key,
           accountId
         );
+        if (inbox.membership_event_message) {
+          io.to(String(inbox._id)).emit(
+            'newMessage',
+            inbox.membership_event_message
+          );
+        }
         io.to(String(inbox._id)).emit('groupProfileImageUpdated', inbox);
         acknowledge(callback, inbox);
       } catch (error) {

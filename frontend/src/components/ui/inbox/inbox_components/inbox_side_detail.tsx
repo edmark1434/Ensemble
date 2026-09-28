@@ -18,6 +18,7 @@ import {
   LogOut,
   Camera,
   Plus,
+  Loader2,
 } from "lucide-react";
 import type {
   Inbox,
@@ -267,10 +268,14 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                   type="button"
                   disabled={isUploadingGroupImage}
                   onClick={() => groupImageInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 rounded-full bg-blue-600 p-2 text-white ring-2 ring-white dark:ring-dark-surface hover:bg-blue-500 transition disabled:opacity-50"
+                  className="absolute bottom-0 right-0 rounded-full bg-blue-600 p-2 text-white ring-2 ring-white dark:ring-dark-surface hover:bg-blue-500 transition disabled:opacity-80"
                   title="Change group image"
                 >
-                  <Camera className="h-3.5 w-3.5" />
+                  {isUploadingGroupImage ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Camera className="h-3.5 w-3.5" />
+                  )}
                 </button>
               </>
             ) : (
