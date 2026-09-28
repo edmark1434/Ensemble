@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
+import api from "@/lib/axios";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
+
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -20,7 +22,8 @@ import {
   User,
   Send,
   UserCheck2,
-  Check
+  Check,
+  TrendingUp
 } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
@@ -33,6 +36,8 @@ import { sampleJobs } from "../../job_datasets";
 import type { ProposalItemData, ProposalStatus } from "../proposals_components/proposals_list";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
+import { Profile_Portfolio, type PortfolioItem } from "@/pages/user/7_profile/Displays/Body/Profile_Portfolio";
+import { Profile_Gallery } from "@/pages/user/7_profile/Displays/Body/Profile_Gallery";
 
 export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   const { proposalId, contractId } = useParams<{ proposalId: string, contractId?: string }>();
@@ -57,6 +62,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   const [isRejectOfferModalOpen, setIsRejectOfferModalOpen] = useState(false);
   const [offerRejectReason, setOfferRejectReason] = useState("");
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+
+  const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -99,6 +106,9 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             freelancerAvatar: p.freelancer_avatar_path
               ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.freelancer_avatar_path.startsWith('/') ? '' : '/'}${p.freelancer_avatar_path}`
               : undefined,
+            jobBanner: p.job_thumbnail_path
+              ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.job_thumbnail_path.startsWith('/') ? '' : '/'}${p.job_thumbnail_path}`
+              : undefined,
             rating: 5.0, // Default since we don't fetch real rating yet
             bidAmount: parseFloat(p.rate_credits) || 0,
             additionalWorkRate: parseFloat(p.revision_price_credits) || 0,
@@ -109,6 +119,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             submittedAt: new Date(p.created_at).toLocaleDateString(),
             submittedAgo: "Recently",
             jobPostedAt: p.job_created_at ? new Date(p.job_created_at).toLocaleDateString() : "N/A",
+      totalApplicants: parseInt(p.total_applicants) || 0,
+      avgBid: parseFloat(p.avg_bid) || 0,
             jobStatus: p.job_status,
             jobDeletedAt: p.job_deleted_at,
             status: p.status,
@@ -124,6 +136,29 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 revisions: parseInt(m.revisions, 10) || 0
             }))
           });
+
+          try {
+            const attachmentsResponse = await api.get(`/api/accounts/profile/${p.freelancer_account_id}/attachments`);
+            const items = (attachmentsResponse.data?.attachments || []).map((att: any) => {
+              const cloudfront = import.meta.env.VITE_CLOUDFRONT_URL || '';
+              const path = att.file_path || '';
+              const fileUrl = path ? `${cloudfront}${path.startsWith('/') ? '' : '/'}${path}` : undefined;
+              return {
+                id: String(att.account_attachment_id || att.file_id || Math.random()),
+                type: att.attachment_kind === "link" ? "link" : "document",
+                title: att.name || "Attachment",
+                description: att.description || (att.attachment_kind === "link" ? att.external_url : att.file_name || "PDF document"),
+                fileUrl: fileUrl,
+                externalUrl: att.external_url || undefined,
+                createdAt: att.created_at
+              };
+            });
+            setPortfolioItems(items);
+          } catch (e: any) {
+            console.error("Failed to load portfolio items", e);
+            // @ts-ignore
+            window.alert("Error fetching portfolio items: " + (e?.message || "Unknown error"));
+          }
         } else {
           setDebugInfo({ 
             error: "Not found", 
@@ -335,7 +370,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   const isJobDeleted = proposal?.jobStatus === "Deleted" || !!proposal?.jobDeletedAt;
 
   return (
-    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-16">
+    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-clip pt-6 pb-40">
       {/* Animated Background Grid */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-30">
         <ShapeGrid
@@ -413,12 +448,12 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                       <h1 className="text-lg font-bold text-gray-900 dark:text-white tracking-tight truncate">
                         {proposerName}
                       </h1>
-                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-2 py-0.5 rounded-full">
                         Applicant
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                      <span className="flex items-center gap-1 text-yellow-500 font-bold">
+                      <span className="flex items-center gap-1 text-amber-500 dark:text-amber-400 font-bold">
                         <Star className="h-3.5 w-3.5 fill-yellow-500" />
                         {proposal.rating ? proposal.rating.toFixed(1) : "5.0"}
                       </span>
@@ -472,12 +507,12 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                     <span
                       className={`px-3 py-1 rounded-full text-[10px] font-bold border ${
                         proposal.status === "Accepted"
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                          ? "bg-emerald-100 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400"
                           : proposal.status === "Shortlisted"
-                          ? "bg-blue-500/10 border-blue-500/30 text-blue-400"
+                          ? "bg-blue-100 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-400"
                           : proposal.status === "Rejected"
-                          ? "bg-red-500/10 border-red-500/30 text-red-400"
-                          : "bg-yellow-500/10 border-yellow-500/30 text-yellow-400"
+                          ? "bg-red-100 dark:bg-red-500/10 border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-400"
+                          : "bg-yellow-100 dark:bg-yellow-500/10 border-yellow-200 dark:border-yellow-500/30 text-yellow-700 dark:text-yellow-400"
                       }`}
                     >
                       {proposal.status}
@@ -485,20 +520,40 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate flex items-center gap-2">
-                    <Briefcase className="h-4 w-4 text-blue-400 shrink-0" />
-                    {proposal.jobTitle}
-                  </h3>
+                {proposal.jobBanner && (
+                  <div className="relative w-full h-28 rounded-xl overflow-hidden shadow-sm mt-3 border border-gray-100 dark:border-white/5">
+                    <img src={proposal.jobBanner} className="w-full h-full object-cover" alt="Job Cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end justify-between p-3">
+                      <h3 className="text-sm font-bold text-white truncate flex items-center gap-2 drop-shadow-md">
+                        <Briefcase className="h-4 w-4 text-blue-300 shrink-0" />
+                        {proposal.jobTitle}
+                      </h3>
+                      <button
+                        onClick={handleViewTargetJob}
+                        className="p-1.5 rounded-lg bg-black/40 hover:bg-black/60 text-white/90 hover:text-white backdrop-blur-sm transition shrink-0"
+                        title="View Target Job Post"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-                  <button
-                    onClick={handleViewTargetJob}
-                    className="p-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition shrink-0"
-                    title="View Target Job Post"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                {!proposal.jobBanner && (
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate flex items-center gap-2">
+                      <Briefcase className="h-4 w-4 text-blue-400 shrink-0" />
+                      {proposal.jobTitle}
+                    </h3>
+                    <button
+                      onClick={handleViewTargetJob}
+                      className="p-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition shrink-0"
+                      title="View Target Job Post"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
 
                 {/* Author Info Embedded Inside Job Post Card */}
                 <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-white/[0.01] flex items-center justify-between gap-3">
@@ -538,19 +593,22 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 </div>
 
                 {/* Explicit Timestamps */}
-                <div className="space-y-1 pt-2 border-t border-gray-100 dark:border-white/5 text-[11px] text-gray-500 dark:text-zinc-400">
+                <div 
+                  className="space-y-1 pt-2 border-t border-gray-100 dark:border-white/5 text-[11px] text-gray-500 dark:text-zinc-400"
+                  style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                >
                   <div className="flex items-center justify-between">
                     <span className="text-gray-500 dark:text-zinc-500 flex items-center gap-1">
                       <Calendar className="h-3 w-3 text-gray-500 dark:text-zinc-500" /> Job Posted Date:
                     </span>
-                    <strong className="text-gray-600 dark:text-zinc-300 font-mono">{proposal.jobPostedAt}</strong>
+                    <strong className="text-gray-700 dark:text-zinc-300 font-semibold text-xs tracking-tight">{proposal.jobPostedAt}</strong>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <span className="text-gray-500 dark:text-zinc-500 flex items-center gap-1">
                       <Send className="h-3 w-3 text-blue-400" /> Proposal Sent Date:
                     </span>
-                    <strong className="text-gray-600 dark:text-zinc-300 font-mono">{proposal.submittedAt} ({proposal.submittedAgo || "Recently"})</strong>
+                    <strong className="text-gray-700 dark:text-zinc-300 font-semibold text-xs tracking-tight">{proposal.submittedAt} ({proposal.submittedAgo || "Recently"})</strong>
                   </div>
 
                   {proposal.updatedAt && (
@@ -558,7 +616,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                       <span className="text-gray-500 dark:text-zinc-500 flex items-center gap-1">
                         <Clock className="h-3 w-3 text-emerald-400" /> Last Proposal Update:
                       </span>
-                      <strong className="text-blue-400 font-mono">{proposal.updatedAt} ({proposal.updatedAgo || ""})</strong>
+                      <strong className="text-blue-500 dark:text-blue-400 font-semibold text-xs tracking-tight">{proposal.updatedAt} ({proposal.updatedAgo || ""})</strong>
                     </div>
                   )}
                 </div>
@@ -568,16 +626,25 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
                 <div>
                   <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Proposed Bid</span>
-                  <p className="text-base font-extrabold text-yellow-500 flex items-center gap-1 mt-0.5">
+                  <p className="text-base font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1 mt-0.5">
                     <CreditIcon className="h-4 w-4" /> {proposal.bidAmount.toLocaleString()}
                   </p>
+                  <span className="text-[10px] text-gray-500 dark:text-zinc-500 mt-1 block">
+                    You earn <strong className="text-gray-600 dark:text-zinc-400">{(Math.floor(proposal.bidAmount * 0.9)).toLocaleString()}</strong> (-10% platform fee)
+                  </span>
                 </div>
 
                 <div>
                   <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Additional Work Rate</span>
-                  <p className="text-xs font-bold text-blue-400 flex items-center gap-1 mt-1">
-                    <Percent className="h-3.5 w-3.5" /> +{proposal.additionalWorkRate}% / Revision
+                  <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 flex items-center gap-1 mt-1">
+                    +{proposal.additionalWorkRate}% / Extra Pass
                   </p>
+                  <div className="text-[10px] text-gray-500 dark:text-zinc-500 mt-1 space-y-0.5">
+                    <div>Charge <strong className="text-amber-500 dark:text-amber-400">+{addedOverageAmount.toLocaleString()}</strong> / extra pass</div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] text-gray-600 dark:text-zinc-400 font-bold">Earn {(Math.floor(addedOverageAmount * 0.9)).toLocaleString()}</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div>
@@ -585,6 +652,9 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   <p className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1 mt-1">
                     <Layers className="h-3.5 w-3.5 text-emerald-400" /> {proposal.milestones.length} Steps
                   </p>
+                  <span className="text-[10px] text-gray-500 dark:text-zinc-500 mt-1 block">
+                    {totalHours}h Total Estimated Hours
+                  </span>
                 </div>
               </div>
             </div>
@@ -598,6 +668,37 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 <JobRichText content={proposal.coverLetter} />
               </div>
             </div>
+
+            {/* Attachments Portfolio */}
+            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 backdrop-blur-xl shadow-2xl space-y-6 mt-6">
+              <Profile_Portfolio 
+                portfolioItems={portfolioItems} 
+                isOwner={false} 
+              />
+            </div>
+
+            {/* Competitive Insights */}
+            <div className="rounded-3xl border border-blue-500/20 bg-blue-50 dark:bg-blue-500/5 p-6 backdrop-blur-xl shadow-sm space-y-3 mt-6">
+              <h3 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+                <TrendingUp className="h-4 w-4" /> Competitive Insights
+              </h3>
+              <div className="grid grid-cols-2 gap-4 pt-1">
+                <div>
+                  <p className="text-[10px] text-blue-500/70 font-semibold uppercase">Total Applicants</p>
+                  <p className="text-lg font-extrabold text-blue-700 dark:text-blue-300">{proposal.totalApplicants || 0}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-blue-500/70 font-semibold uppercase">Avg. Bid</p>
+                  <p className="text-lg font-extrabold text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                    <CreditIcon className="h-4 w-4" /> {(proposal.avgBid || 0).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-blue-600 dark:text-blue-300/80 leading-relaxed pt-2 border-t border-blue-500/10">
+                Your bid is highly competitive. Clients viewing this job prefer comprehensive milestone breakdowns.
+              </p>
+            </div>
+
 
           </div>
 
@@ -618,10 +719,13 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   <div key={m.id || idx} className="p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] space-y-2 text-xs">
                     <div className="flex items-center justify-between font-bold text-gray-900 dark:text-white">
                       <span>Step {idx + 1}: {m.name}</span>
-                      <span className="text-yellow-500 font-mono flex items-center">
-                        <CreditIcon className="h-3.5 w-3.5 text-yellow-500 inline mr-1 shrink-0" />
-                        {milestonePayout.toLocaleString()}
-                      </span>
+                      <div className="flex flex-col items-end">
+                        <span className="text-amber-500 dark:text-amber-400 font-mono flex items-center">
+                          <CreditIcon className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400 inline mr-1 shrink-0" />
+                          {milestonePayout.toLocaleString()}
+                        </span>
+                        <span className="text-[9px] text-gray-600 dark:text-zinc-400">Net: {(Math.floor(milestonePayout * 0.9)).toLocaleString()}</span>
+                      </div>
                     </div>
 
                     {m.description && <p className="text-gray-500 dark:text-zinc-400 text-[11px] leading-relaxed">{m.description}</p>}
@@ -633,8 +737,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                       </span>
                       <span className="flex items-center gap-1">
                         Added Overage Rate:
-                        <strong className="text-yellow-500 font-mono flex items-center">
-                          +<CreditIcon className="h-3 w-3 text-yellow-500 inline mx-0.5 shrink-0" />
+                        <strong className="text-amber-500 dark:text-amber-400 font-mono flex items-center">
+                          +<CreditIcon className="h-3 w-3 text-amber-500 dark:text-amber-400 inline mx-0.5 shrink-0" />
                           {addedOverageAmount.toLocaleString()} (+{proposal.additionalWorkRate}%)
                         </strong>
                       </span>
@@ -664,31 +768,31 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               </div>
             </div>
 
+            {/* Attachments Gallery */}
+            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 backdrop-blur-xl shadow-2xl space-y-6 mt-6">
+              <Profile_Gallery 
+                accountId={proposal?.freelancerAccountId || ""} 
+                isOwner={false} 
+              />
+            </div>
+
           </div>
         </div>
 
         {/* ================= SECTION 5: EXPANDABLE HOVER DECISION CONTROLS (BOTTOM) ================= */}
-        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-4">
+        <div className="sticky bottom-6 z-40 rounded-2xl border border-gray-200 dark:border-white/10 bg-white/90 dark:bg-dark-surface/90 p-4 md:px-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] dark:shadow-2xl backdrop-blur-xl mt-8 w-full transition-all">
 
-          <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
-            <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-              Decision & Action Controls
-            </h3>
-            <span className="text-xs text-gray-500 dark:text-zinc-500 font-mono">Current Status: {proposal.status}</span>
-          </div>
-
-          {proposal.status === "Rejected" && proposal.rejectionReason && (
-            <div className="p-4 rounded-2xl border border-red-500/20 bg-red-500/5 text-xs space-y-1">
-              <span className="font-bold text-red-400 uppercase flex items-center gap-1 text-[10px]">
-                <ShieldAlert className="h-3.5 w-3.5" /> Rejection Rationale
-              </span>
-              <p className="text-gray-600 dark:text-zinc-300">{proposal.rejectionReason}</p>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <h3 className="text-[11px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider hidden sm:flex items-center gap-1.5">
+                Decision & Action Controls
+              </h3>
+              <span className="text-[11px] text-gray-500 dark:text-zinc-500 font-mono bg-gray-100 dark:bg-white/5 px-2 py-1 rounded-md">Current Status: {proposal.status}</span>
             </div>
-          )}
 
-          {/* Actions Bar for Client */}
-          {proposal.type === "incoming" && (
-            <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+            {/* Actions Bar for Client */}
+            {proposal.type === "incoming" && (
+              <div className="flex flex-wrap items-center justify-end gap-2">
 
               {/* Option 1: PENDING STATE -> Chat */}
               {proposal.status === "Pending" && (
@@ -782,6 +886,16 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               ) : null}
             </div>
           )}
+
+          {proposal.status === "Rejected" && proposal.rejectionReason && (
+            <div className="mt-3 p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs space-y-1">
+              <span className="font-bold text-red-400 uppercase flex items-center gap-1 text-[10px]">
+                <ShieldAlert className="h-3.5 w-3.5" /> Rejection Rationale
+              </span>
+              <p className="text-gray-600 dark:text-zinc-300">{proposal.rejectionReason}</p>
+            </div>
+          )}
+        </div>
         </div>
 
       </motion.div>
