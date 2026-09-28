@@ -61,6 +61,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   const [rejectionReason, setRejectionReason] = useState("");
 
   const [isAcceptConfirmOpen, setIsAcceptConfirmOpen] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [contractStartsAt, setContractStartsAt] = useState("");
 
@@ -776,7 +777,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
 
                   {/* Expandable Accept Button */}
                   <button
-                    onClick={() => setIsAcceptConfirmOpen(true)}
+                    onClick={() => { setAgreedToTerms(false); setIsAcceptConfirmOpen(true); }}
                     className="group relative flex items-center gap-2 overflow-hidden rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white transition-all duration-300 hover:bg-emerald-600 hover:shadow-lg hover:shadow-emerald-500/20"
                   >
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -823,7 +824,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
 
                   {/* Expandable Accept Button */}
                   <button
-                    onClick={() => setIsAcceptConfirmOpen(true)}
+                    onClick={() => { setAgreedToTerms(false); setIsAcceptConfirmOpen(true); }}
                     className="group relative flex items-center gap-2 overflow-hidden rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white transition-all duration-300 hover:bg-emerald-600 hover:shadow-lg hover:shadow-emerald-500/20"
                   >
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -990,6 +991,19 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                   />
                   <p className="text-[10px] text-gray-500 dark:text-zinc-500 mt-1">If left empty, contract starts immediately after applicant accepts.</p>
                 </div>
+                
+                <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-500/5 border border-blue-500/20 rounded-xl mt-3">
+                  <input
+                    type="checkbox"
+                    id="certify-terms"
+                    checked={agreedToTerms}
+                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-emerald-500 border-gray-300 dark:border-white/20 focus:ring-emerald-500/50 bg-white dark:bg-white/10 shrink-0 cursor-pointer"
+                  />
+                  <label htmlFor="certify-terms" className="text-[11px] text-gray-600 dark:text-zinc-300 leading-relaxed cursor-pointer select-none">
+                    I certify that I have read and accept the <strong className="text-gray-900 dark:text-white">Terms of Service</strong> proposed by the freelancer, and agree to form a binding escrow contract under these terms.
+                  </label>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -1002,7 +1016,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                 </button>
                 <button
                   onClick={handleConfirmAccept}
-                  disabled={loading}
+                  disabled={loading || !agreedToTerms}
                   className="px-5 py-2 rounded-xl bg-emerald-500 text-xs font-bold text-gray-900 dark:text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 disabled:opacity-50"
                 >
                   {loading ? "Processing..." : "Yes, Form Contract"}
