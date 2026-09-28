@@ -214,7 +214,8 @@ async function initSocket(httpServer) {
             if (notification) {
               io.to(String(recipientId)).emit('notification', notification);
             }
-            io.to(String(recipientId)).emit('conversationMessageNotification', messagePayload);
+            io.to(String(recipientId)).emit('newMessage', message);
+            io.to(String(recipientId)).emit('conversationMessageNotification', message);
           },
         });
         io.to(message.conversation_id).emit('newMessage', message);
@@ -234,6 +235,7 @@ async function initSocket(httpServer) {
             if (notification) {
               io.to(String(recipientId)).emit('notification', notification);
             }
+            io.to(String(recipientId)).emit('messageReplied', reply);
             io.to(String(recipientId)).emit('conversationMessageNotification', reply);
           },
         });
