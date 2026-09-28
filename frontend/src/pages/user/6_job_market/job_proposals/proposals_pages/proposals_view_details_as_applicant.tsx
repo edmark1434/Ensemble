@@ -1124,7 +1124,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                         await handleConfirmAccept();
                       }}
                       disabled={isProcessing || !agreedToTerms}
-                      className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-gray-900 dark:text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 flex items-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
+                      className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 flex items-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
                     >
                       <CheckCircle2 className="w-4 h-4" />
                       {isProcessing ? "Processing..." : "Sign & Accept Contract"}

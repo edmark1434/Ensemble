@@ -982,26 +982,26 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                   Accepting will automatically form a binding escrow contract for the agreed bid across {proposal.milestones.length} milestone phases.
                 </div>
                 <div className="pt-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-gray-500 dark:text-zinc-400">Contract Start Date (Optional)</label>
+                  <label className="text-xs font-medium text-gray-500 dark:text-zinc-400 mb-1 block">Contract Start Date (Optional)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="datetime-local"
+                      value={contractStartsAt}
+                      onChange={(e) => setContractStartsAt(e.target.value)}
+                      className="flex-1 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3 text-xs text-gray-900 dark:text-white outline-none focus:border-emerald-500/50 transition"
+                    />
                     <button 
                       onClick={() => {
                         const now = new Date();
                         const localDateTime = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
                         setContractStartsAt(localDateTime);
                       }}
-                      className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-md hover:bg-emerald-500/20 transition"
+                      className="shrink-0 text-[11px] bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 font-bold px-4 py-3 rounded-xl hover:bg-emerald-500/10 hover:text-emerald-500 dark:hover:text-emerald-400 hover:border-emerald-500/30 transition h-full"
                     >
                       Set to Now
                     </button>
                   </div>
-                  <input
-                    type="datetime-local"
-                    value={contractStartsAt}
-                    onChange={(e) => setContractStartsAt(e.target.value)}
-                    className="w-full mt-1 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3 text-xs text-gray-900 dark:text-white outline-none focus:border-emerald-500/50 transition"
-                  />
-                  <p className="text-[10px] text-gray-500 dark:text-zinc-500 mt-1">If left empty, contract starts immediately after applicant accepts.</p>
+                  <p className="text-[10px] text-gray-500 dark:text-zinc-500 mt-1.5">If left empty, contract starts immediately after applicant accepts.</p>
                 </div>
                 
                 <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-500/5 border border-blue-500/20 rounded-xl mt-3">
@@ -1029,7 +1029,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                 <button
                   onClick={handleConfirmAccept}
                   disabled={loading || !agreedToTerms}
-                  className="px-5 py-2 rounded-xl bg-emerald-500 text-xs font-bold text-gray-900 dark:text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 disabled:opacity-50"
                 >
                   {loading ? "Processing..." : "Yes, Form Contract"}
                 </button>
