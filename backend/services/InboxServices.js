@@ -902,10 +902,10 @@ async function pinMessageServices(conversationId, messageId, accountId) {
     }
     const currentlyPinned = inbox.pinned_messages || [];
     if (
-        currentlyPinned.length >= 4 &&
+        currentlyPinned.length >= 25 &&
         !currentlyPinned.some(p => String(p.message_id) === String(messageId))
     ) {
-        throw new ChatServiceError('Maximum of 4 pinned messages allowed.', 400);
+        throw new ChatServiceError('Maximum of 25 pinned messages allowed.', 400);
     }
     const actorAccountId = await resolveConversationActorAccountId(inbox, accountId);
     return await pinMessageRepositories(conversationId, {
