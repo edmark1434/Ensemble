@@ -442,8 +442,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         className="flex-1 space-y-2 overflow-y-auto custom-scrollbar bg-white dark:bg-zinc-950 p-3 text-[13px]"
       >
         {isLoading ? (
-          <div className="flex h-full items-center justify-center text-zinc-500">
-            Loading messages...
+          <div className="flex h-full items-center justify-center text-zinc-500 gap-2 flex-col">
+            <div className="flex gap-1 items-center">
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <span className="text-sm font-medium opacity-80 mt-1">Loading...</span>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-zinc-500">

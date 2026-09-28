@@ -36,6 +36,7 @@ export const ChatMain: React.FC<ChatMainProps> = ({
   );
   const loadingMessages = useChatState((state) => state.loadingMessages);
   const unreadCounts = useChatState((state) => state.unreadCounts);
+  const loadConversation = useChatState((state) => state.loadConversation);
 
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
@@ -81,6 +82,18 @@ export const ChatMain: React.FC<ChatMainProps> = ({
         .slice(0, 6),
     [dismissedIds, openIds, recentChats]
   );
+
+  useEffect(() => {
+    openWindows.forEach(chat => {
+      const conversationId = String(chat.inbox_id || chat.id);
+      if (
+        !messagesByConversation[conversationId] && 
+        !loadingMessages[conversationId]
+      ) {
+        loadConversation(conversationId).catch(() => {});
+      }
+    });
+  }, [openWindows, messagesByConversation, loadingMessages, loadConversation]);
 
   const minimizeWindow = (chat: ChatTarget) => {
     setOpenIds((current) => {
