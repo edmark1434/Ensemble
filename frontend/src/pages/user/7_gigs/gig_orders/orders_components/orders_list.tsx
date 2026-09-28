@@ -285,8 +285,8 @@ export const OrdersList: React.FC<OrdersListProps> = ({
                   <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
                     PROPOSED BID
                   </span>
-                  <div className="flex items-center gap-1.5 text-yellow-500">
-                    <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
+                  <div className="flex items-center gap-1.5 text-amber-500 dark:text-amber-400">
+                    <CreditIcon className="h-5 w-5 text-amber-500 dark:text-amber-400 shrink-0" />
                     <span className="text-lg font-black tracking-tight">
                       {item.bidAmount.toLocaleString()}
                     </span>
