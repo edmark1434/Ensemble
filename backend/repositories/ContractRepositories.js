@@ -409,7 +409,7 @@ async function getContractsByUserId(accountIds) {
         JOIN accounts free_acc ON p.freelancer_account_id = free_acc.account_id
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
         LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
-        LEFT JOIN terms_of_service global_t ON global_t.account_id IS NULL AND global_t.terms_type = 'jobs'
+        LEFT JOIN LATERAL (SELECT terms_title, terms_description FROM terms_of_service WHERE account_id IS NULL AND terms_type = 'jobs' LIMIT 1) global_t ON true
         WHERE j.client_account_id = ANY($1::uuid[]) OR p.freelancer_account_id = ANY($1::uuid[])
 
         UNION ALL
@@ -454,8 +454,8 @@ async function getContractsByUserId(accountIds) {
         LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
         JOIN accounts free_acc ON g.freelancer_account_id = free_acc.account_id
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
-        LEFT JOIN terms_of_service t ON g.freelancer_account_id = t.account_id AND t.terms_type = 'gigs' AND t.is_default = true
-        LEFT JOIN terms_of_service global_t ON global_t.account_id IS NULL AND global_t.terms_type = 'gigs'
+        LEFT JOIN LATERAL (SELECT terms_title, terms_description FROM terms_of_service WHERE account_id = g.freelancer_account_id AND terms_type = 'gigs' AND is_default = true LIMIT 1) t ON true
+        LEFT JOIN LATERAL (SELECT terms_title, terms_description FROM terms_of_service WHERE account_id IS NULL AND terms_type = 'gigs' LIMIT 1) global_t ON true
         WHERE gr.client_account_id = ANY($1::uuid[]) OR g.freelancer_account_id = ANY($1::uuid[])
         ORDER BY created_at DESC
     `;
