@@ -660,10 +660,11 @@ function reconcileMessage(message: Message, isNewMessage = false) {
       let targetId = conversationId;
 
       if (!alreadyFloating && conv) {
-        let targetName = conv.title || "User";
-        let targetAvatar = conv.profile_image || undefined;
+        let targetName = conv.conversation_name || conv.title || "Group Chat";
+        let targetAvatar = conv.conversation_image_key || conv.profile_image || undefined;
         
         if (conv.conversation_type === "direct") {
+          targetName = "User";
           const other = (conv.members || []).find((m: any) => String(m.account_id) !== authenticatedAccountId);
           if (other) {
             targetName = other.name || other.username || targetName;
@@ -701,7 +702,7 @@ function reconcileMessage(message: Message, isNewMessage = false) {
          if (existing) targetId = String(existing.id);
       }
 
-      if (conv?.conversation_type === "direct") {
+      if (conv?.conversation_type === "direct" || conv?.conversation_type === "group") {
         useChatState.setState({ activeFloatingId: targetId, isFloatingOpen: true });
       }
     }
