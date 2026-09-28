@@ -112,7 +112,7 @@ export const OrderPitchStep: React.FC<OrderPitchProps> = ({
         <div className="p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 flex items-center justify-between">
           <span className="text-xs text-gray-500 dark:text-zinc-400 font-medium">Client's Budget Range</span>
           <span className="text-sm font-extrabold text-gray-900 dark:text-white flex items-center gap-1.5">
-            <CreditIcon className="h-4 w-4 text-yellow-500" /> {gig.priceRange}
+            <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400" /> {gig.priceRange}
           </span>
         </div>
       )}
@@ -125,7 +125,7 @@ export const OrderPitchStep: React.FC<OrderPitchProps> = ({
             Your Bid <span className="text-red-500">*</span>
           </label>
           <div className="relative">
-            <CreditIcon className="absolute left-3.5 top-3 h-4 w-4 text-yellow-500 pointer-events-none" />
+            <CreditIcon className="absolute left-3.5 top-3 h-4 w-4 text-amber-500 dark:text-amber-400 pointer-events-none" />
             <input
               type="text"
               placeholder="e.g. 12,000"
