@@ -678,6 +678,32 @@ async function recordMilestoneAction({
                     throw error;
                 }
 
+                // Begin Fee Calculation
+                const feeId = contract.contract_type === 'gig' ? 'fee-gig' : 'fee-job';
+                const { getFeeSettingById, calculatePercentFeeAmount } = require('../lib/PlatformFeeSettings');
+                const feeSetting = await getFeeSettingById(feeId);
+                const percent = Number(feeSetting?.percent) || 0;
+                const flatFee = Number(feeSetting?.flatFee) || 0;
+                const feeCredits = calculatePercentFeeAmount(releaseCredits, percent, flatFee);
+                const freelancerCredits = releaseCredits - feeCredits;
+
+                let platformWallet = null;
+                if (feeCredits > 0) {
+                    const pwRes = await client.query(`
+                        SELECT w.wallet_id, w.status 
+                        FROM platform_wallets pw 
+                        JOIN wallets w ON w.wallet_id = pw.wallet_id 
+                        WHERE pw.type = 'Primary Platform Wallet' 
+                        FOR UPDATE OF w
+                    `);
+                    platformWallet = pwRes.rows[0];
+                    if (!platformWallet || platformWallet.status !== 'active') {
+                        const error = new Error('Platform wallet is unavailable for fee processing');
+                        error.statusCode = 409;
+                        throw error;
+                    }
+                }
+
                 const debitResult = await client.query(
                     `UPDATE wallets
                      SET balance_credits = balance_credits - $1
@@ -697,26 +723,50 @@ async function recordMilestoneAction({
                      SET balance_credits = balance_credits + $1
                      WHERE wallet_id = $2
                      RETURNING balance_credits`,
-                    [releaseCredits, accountWallet.wallet_id]
+                    [freelancerCredits, accountWallet.wallet_id]
                 );
+
+                let feeTransaction = null;
+                if (feeCredits > 0) {
+                    await client.query(`
+                        UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2
+                    `, [feeCredits, platformWallet.wallet_id]);
+
+                    const feeRes = await client.query(`
+                        INSERT INTO credit_transactions (
+                            type, amount_credits, status,
+                            source_wallet_id, destination_wallet_id,
+                            reference_table, reference_id
+                        ) VALUES ('Fee', $1, 'completed', $2, $3, 'contracts', $4)
+                        RETURNING credit_transaction_id
+                    `, [feeCredits, escrowWallet.wallet_id, platformWallet.wallet_id, contractId]);
+                    feeTransaction = feeRes.rows[0];
+                }
+
                 const transactionResult = await client.query(
                     `INSERT INTO credit_transactions (
                         type, amount_credits, status,
                         source_wallet_id, destination_wallet_id,
-                        reference_table, reference_id
+                        reference_table, reference_id, fee_transaction_id
                      )
                      VALUES (
                         'Escrow Release', $1, 'completed',
-                        $2, $3, 'contracts', $4
+                        $2, $3, 'contracts', $4, $5
                      )
                      RETURNING *`,
                     [
-                        releaseCredits,
+                        freelancerCredits,
                         escrowWallet.wallet_id,
                         accountWallet.wallet_id,
                         contractId,
+                        feeTransaction?.credit_transaction_id || null
                     ]
                 );
+                
+                const notificationMsg = feeCredits > 0 
+                    ? `${freelancerCredits} credits for "${participants.listing_title}" were released to your account wallet (after ${feeCredits} credits platform fee).`
+                    : `${freelancerCredits} credits for "${participants.listing_title}" were released to your account wallet.`;
+
                 const notificationResult = await client.query(
                     `INSERT INTO notifications (
                         message, is_read, reference_table, reference_prefix,
@@ -728,7 +778,7 @@ async function recordMilestoneAction({
                      )
                      RETURNING *`,
                     [
-                        `${releaseCredits} credits for "${participants.listing_title}" were released to your account wallet.`,
+                        notificationMsg,
                         `/dashboard/tasks/${contractId}`,
                         transactionResult.rows[0].credit_transaction_id,
                         participants.freelancer_account_id,
@@ -746,7 +796,7 @@ async function recordMilestoneAction({
                     transaction: transactionResult.rows[0],
                     notification: notificationResult.rows[0],
                     freelancerAccountId: participants.freelancer_account_id,
-                    releasedCredits: releaseCredits,
+                    releasedCredits: freelancerCredits,
                     accountBalanceCredits: Number(creditResult.rows[0].balance_credits),
                     escrowBalanceCredits: Number(debitResult.rows[0].balance_credits),
                 };

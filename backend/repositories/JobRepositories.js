@@ -400,6 +400,7 @@ async function getProposalByIdRepositories(proposalId, accountIds) {
                 j.created_at as job_created_at,
                 j.status as job_status,
                 j.deleted_at as job_deleted_at,
+                (SELECT f.path FROM job_attachments ja JOIN files f ON ja.file_id = f.file_id WHERE ja.job_id = j.job_id AND ja.index = 0 LIMIT 1) as job_thumbnail_path,
                 c.display_name as client_name,
                 c.handle as client_handle,
                 (SELECT f.path FROM files f WHERE f.file_id = c.avatar_file_id LIMIT 1) as client_avatar_path,
@@ -408,7 +409,9 @@ async function getProposalByIdRepositories(proposalId, accountIds) {
                 (SELECT f.path FROM files f WHERE f.file_id = f_acc.avatar_file_id LIMIT 1) as freelancer_avatar_path,
                 t.terms_title, t.terms_type, t.terms_description as terms_content,
                 (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max)) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id) as milestones,
-                (SELECT jc.contract_id FROM job_contracts jc JOIN contracts ct ON jc.contract_id = ct.contract_id WHERE jc.proposal_id = p.proposal_id ORDER BY ct.created_at DESC LIMIT 1) as contract_id
+                (SELECT jc.contract_id FROM job_contracts jc JOIN contracts ct ON jc.contract_id = ct.contract_id WHERE jc.proposal_id = p.proposal_id ORDER BY ct.created_at DESC LIMIT 1) as contract_id,
+                (SELECT COUNT(*) FROM proposals p2 WHERE p2.job_id = p.job_id AND p2.deleted_at IS NULL AND p2.status != 'Archived') as total_applicants,
+                (SELECT COALESCE(AVG(p2.rate_credits), 0) FROM proposals p2 WHERE p2.job_id = p.job_id AND p2.deleted_at IS NULL AND p2.status != 'Archived') as avg_bid
             FROM proposals p
             LEFT JOIN jobs j ON p.job_id = j.job_id
             LEFT JOIN accounts c ON j.client_account_id = c.account_id
