@@ -39,7 +39,7 @@ async function sendJobOfferController(req, res) {
                         message: `@${clientHandle} Sent you a Contract Offer for ${title}`,
                         reference_table: 'contracts',
                         reference_prefix: 'offer_received',
-                        reference_path: `/jobs/proposals/sent/${proposalId}`,
+                        reference_path: `/jobs/proposals/sent/${proposalId}/offer/${contractId}`,
                         reference_id: contractId,
                         account_id: freelancer_account_id
                     });

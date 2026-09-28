@@ -57,7 +57,15 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
     }
 
     onClose();
-    const referencePath = notification.reference_path || "";
+    let referencePath = notification.reference_path || "";
+
+    // For offer_received notifications, ensure the URL includes the contract ID
+    if (notification.reference_prefix === "offer_received" && notification.reference_id) {
+      if (!referencePath.includes("/offer/")) {
+        referencePath = `${referencePath}/offer/${notification.reference_id}`;
+      }
+    }
+
     const directConversationMatch = referencePath.match(
       /^\/inbox\/(?!direct(?:\/|$)|marketplace(?:\/|$))([^/?#]+)/
     );
@@ -73,7 +81,7 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
       });
       return;
     }
-    window.location.href = referencePath;
+    navigate(referencePath);
   };
 
   const handleMarkAllRead = async () => {

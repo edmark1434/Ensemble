@@ -140,8 +140,9 @@ export const OrdersList: React.FC<OrdersListProps> = ({
     switch (status) {
       case "Accepted":
       case "Hired":
-        return "bg-emerald-100 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
       case "Approved":
+      case "approved":
+        return "bg-emerald-100 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
       case "Shortlisted":
         return "bg-blue-100 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400";
       case "Rejected":
