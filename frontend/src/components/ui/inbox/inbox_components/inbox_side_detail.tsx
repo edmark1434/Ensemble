@@ -283,7 +283,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           </p>
 
           {isGroup && (
-            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 px-3 py-1 text-[11px] text-yellow-400">
+            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 px-3 py-1 text-[11px] text-yellow-600 dark:text-yellow-400">
               <Crown className="h-3 w-3" />
               <span>Created by {isCreatorSelf ? "You" : "Admin"}</span>
             </div>
@@ -552,7 +552,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
               className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5 transition"
             >
               <div className="flex items-center gap-2">
-                <Pin className="h-4 w-4 text-yellow-400" />
+                <Pin className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                 <span>Pinned Messages ({pinnedList.length})</span>
               </div>
               {isPinnedOpen ? (
@@ -573,12 +573,12 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                     <div
                       key={msg._id}
                       onClick={() => onJumpToMessage?.(msg._id)}
-                      className="p-2 rounded-lg bg-black/20 border border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:bg-white/5 transition cursor-pointer text-xs"
+                      className="p-2 rounded-lg bg-gray-100 dark:bg-black/20 border border-gray-200 dark:border-white/5 hover:bg-gray-200 dark:hover:bg-white/5 transition cursor-pointer text-xs"
                     >
                       <p className="text-gray-900 dark:text-zinc-200 line-clamp-2">
                         {msg.message_content || "[Attachment]"}
                       </p>
-                      <span className="text-[10px] text-yellow-400/80 mt-1 block">
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 block">
                         Click to jump
                       </span>
                     </div>
@@ -596,7 +596,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
               className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5 transition"
             >
               <div className="flex items-center gap-2">
-                <LinkIcon className="h-4 w-4 text-emerald-400" />
+                <LinkIcon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                 <span>Shared Links ({extractedLinks.length})</span>
               </div>
               {isLinksOpen ? (
@@ -639,7 +639,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
               className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5 transition"
             >
               <div className="flex items-center gap-2">
-                <Paperclip className="h-4 w-4 text-blue-400" />
+                <Paperclip className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                 <span>Attachments ({attachments.length})</span>
               </div>
               {isAttachmentsOpen ? (

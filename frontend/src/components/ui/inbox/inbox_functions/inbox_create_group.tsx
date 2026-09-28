@@ -126,7 +126,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-base p-6 shadow-2xl text-gray-900 dark:text-white"
+        className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base p-6 shadow-2xl text-gray-900 dark:text-white"
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
         {/* Modal Header */}
@@ -224,7 +224,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
                 {selectedMembers.map((member) => (
                   <span
                     key={member.account_id}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 border border-blue-500/30 pl-1 pr-2.5 py-1 text-xs text-blue-300"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-500/15 border border-blue-200 dark:border-blue-500/30 pl-1 pr-2.5 py-1 text-xs text-blue-700 dark:text-blue-300"
                   >
                     <img
                       src={member.avatar}

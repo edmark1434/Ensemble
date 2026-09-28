@@ -472,8 +472,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 className={`group flex flex-col ${isMe ? "items-end" : "items-start"}`}
               >
                 {!hasRestrictedMessageTools && pinnedIds.has(String(message._id)) && (
-                  <span className="mb-1 flex items-center gap-1 text-[9px] text-yellow-400">
-                    <Pin size={10} /> Pinned
+                  <span className="mb-1 flex items-center gap-1 text-[9px] font-medium text-yellow-600 dark:text-yellow-400">
+                    <Pin size={10} className="fill-yellow-600/20 dark:fill-yellow-400/20" /> Pinned
                   </span>
                 )}
                 <div className={`flex max-w-[100%] items-end gap-1.5 ${isMe ? "flex-row-reverse" : ""}`}>
