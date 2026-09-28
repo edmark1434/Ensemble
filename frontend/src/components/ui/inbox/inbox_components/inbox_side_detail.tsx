@@ -1,5 +1,6 @@
 // src/components/ui/inbox/inbox_functions/inbox_side_details.tsx
 import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   X,
   User,
@@ -19,6 +20,7 @@ import {
   Camera,
   Plus,
   Loader2,
+  Zap,
 } from "lucide-react";
 import type {
   Inbox,
@@ -79,6 +81,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   suggestedAccounts = [],
   isOpen,
 }) => {
+  const navigate = useNavigate();
   const isGroup = Boolean(
     selectedConversation.is_group ||
       selectedConversation.conversation_type === "group"
@@ -285,13 +288,28 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
             )}
           </div>
           <h2 className="text-base font-bold text-gray-900 dark:text-white mb-0.5">{name}</h2>
-          <p className="text-xs text-gray-500 dark:text-zinc-400">
-            {isGroup 
-              ? (getMemberLimit && getMemberLimit(selectedConversation)) 
-                ? `${activeMembers.length}/${getMemberLimit(selectedConversation)} members` 
-                : `${activeMembers.length} members` 
-              : "Active now"}
-          </p>
+          <div className="flex items-center justify-center gap-2">
+            <p className="text-xs text-gray-500 dark:text-zinc-400">
+              {isGroup 
+                ? (getMemberLimit && getMemberLimit(selectedConversation)) 
+                  ? `${activeMembers.length}/${getMemberLimit(selectedConversation)} members` 
+                  : `${activeMembers.length} members` 
+                : "Active now"}
+            </p>
+            {isGroup && isCreatorSelf && getMemberLimit?.(selectedConversation) !== 1000 && (
+              <button 
+                onClick={() => navigate("/credits-subscriptions")}
+                className="group relative inline-flex items-center justify-center gap-1 overflow-hidden rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 shadow-sm transition-all duration-500 hover:scale-105 hover:shadow-[0_0_15px_rgba(251,191,36,0.4)] dark:border-amber-600/80 dark:bg-transparent dark:text-amber-500 dark:hover:border-amber-500 dark:hover:text-amber-400 dark:hover:shadow-[0_0_15px_rgba(251,191,36,0.3)]"
+              >
+                <div 
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/20 dark:via-amber-400/20 to-transparent z-10"
+                  style={{ animation: 'passiveShine 3s ease-in-out infinite' }}
+                />
+                <Zap className="relative z-20 h-2.5 w-2.5 fill-amber-500/70 text-amber-500 dark:fill-amber-500/70 dark:text-amber-500 group-hover:dark:text-amber-400 group-hover:dark:fill-amber-400/70 transition-colors" />
+                <span className="relative z-20">Upgrade</span>
+              </button>
+            )}
+          </div>
 
           {isGroup && (
             <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 px-3 py-1 text-[11px] text-yellow-600 dark:text-yellow-400">
