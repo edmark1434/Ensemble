@@ -37,6 +37,7 @@ import { MarketplaceContextCard } from "./marketplace_context_card";
 interface InboxSideDetailsProps {
   selectedConversation: Inbox;
   getConversationName: (inbox: Inbox) => string;
+  getMemberLimit?: (inbox: Inbox) => number | null;
   getAvatar: (inbox: Inbox) => string;
   messages: Message[];
   pinnedMessages?: PinnedMessage[];
@@ -60,6 +61,7 @@ interface InboxSideDetailsProps {
 export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   selectedConversation,
   getConversationName,
+  getMemberLimit,
   getAvatar,
   messages,
   pinnedMessages = [],
@@ -284,7 +286,11 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           </div>
           <h2 className="text-base font-bold text-gray-900 dark:text-white mb-0.5">{name}</h2>
           <p className="text-xs text-gray-500 dark:text-zinc-400">
-            {isGroup ? `${activeMembers.length} members` : "Active now"}
+            {isGroup 
+              ? (getMemberLimit && getMemberLimit(selectedConversation)) 
+                ? `${activeMembers.length}/${getMemberLimit(selectedConversation)} members` 
+                : `${activeMembers.length} members` 
+              : "Active now"}
           </p>
 
           {isGroup && (
@@ -381,7 +387,10 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
               >
                 <button type="button" className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-blue-400" />
-                  <span>Members ({activeMembers.length})</span>
+                  <span>
+                    Members ({activeMembers.length}
+                    {getMemberLimit && getMemberLimit(selectedConversation) ? `/${getMemberLimit(selectedConversation)}` : ""})
+                  </span>
                 </button>
                 <div className="flex items-center gap-1">
                   {isActiveMember && (

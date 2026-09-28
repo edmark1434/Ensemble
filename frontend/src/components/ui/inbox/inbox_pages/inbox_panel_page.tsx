@@ -10,6 +10,7 @@ import { MarketplaceContextCard } from "../inbox_components/marketplace_context_
 export const InboxPanelPage = ({
   selectedConversation,
   getConversationName,
+  getMemberLimit,
   getAvatar,
   messages,
   visibleMessages,
@@ -76,6 +77,7 @@ export const InboxPanelPage = ({
         <InboxPanelHeader
           selectedConversation={selectedConversation}
           getConversationName={getConversationName}
+          getMemberLimit={getMemberLimit}
           getAvatar={getAvatar}
           onToggleDetails={() => onShowDetailsChange?.(!showDetails)}
         />
@@ -138,6 +140,7 @@ export const InboxPanelPage = ({
         isOpen={showDetails}
         selectedConversation={selectedConversation}
         getConversationName={getConversationName}
+        getMemberLimit={getMemberLimit}
         getAvatar={getAvatar}
         messages={messages}
         pinnedMessages={pinnedMessages}

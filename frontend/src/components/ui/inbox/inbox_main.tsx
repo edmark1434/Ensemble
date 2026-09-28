@@ -67,6 +67,7 @@ interface ProfileIdentity {
   username?: string;
   avatar_preset_url?: string;
   avatar_url?: string;
+  subscriptiontype?: string;
 }
 
 const InboxMain = () => {
@@ -269,6 +270,20 @@ const InboxMain = () => {
       )}&background=6366f1&color=fff&bold=true`;
     },
     [currentUserId, getConversationName, profiles, user]
+  );
+
+  const getMemberLimit = useCallback(
+    (inbox: Inbox): number | null => {
+      if (inbox.conversation_type !== "group") return null;
+      const owner = inbox.members?.find((m) => m.role === "owner");
+      const ownerId = String(owner?.account_id || inbox.creator_id || currentUserId);
+      const sub = profiles[ownerId]?.subscriptiontype || (ownerId === currentUserId ? (user as any)?.subscriptiontype : null);
+      const type = String(sub || "").toLowerCase();
+      if (type.includes("business") || type.includes("enterprise")) return 1000;
+      if (type.includes("premium")) return 50;
+      return 12;
+    },
+    [profiles, currentUserId, user]
   );
 
   const loadInbox = useCallback(async () => {
@@ -1269,6 +1284,7 @@ const InboxMain = () => {
           <InboxPanelPage
             selectedConversation={selectedConversation}
             getConversationName={getConversationName}
+            getMemberLimit={getMemberLimit}
             getAvatar={getAvatar}
             messages={messages}
             visibleMessages={visibleMessages}

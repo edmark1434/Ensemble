@@ -15,6 +15,7 @@ import useChatState from "../../chat_bubble/chat_state";
 interface InboxPanelHeaderProps {
   selectedConversation: Inbox;
   getConversationName: (inbox: Inbox) => string;
+  getMemberLimit?: (inbox: Inbox) => number | null;
   getAvatar: (inbox: Inbox) => string;
   onToggleDetails?: () => void;
 }
@@ -22,6 +23,7 @@ interface InboxPanelHeaderProps {
 export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
   selectedConversation,
   getConversationName,
+  getMemberLimit,
   getAvatar,
   onToggleDetails,
 }) => {
@@ -71,6 +73,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
       : listingType === "job" && selectedConversation.job_id
       ? `/jobs/postings/${selectedConversation.job_id}`
       : "");
+  const limit = getMemberLimit ? getMemberLimit(selectedConversation) : null;
   const statusLabel = typingCount
     ? typingCount === 1
       ? "Typing..."
@@ -78,7 +81,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
     : isTicket
     ? `${activeMemberCount} participants`
     : isGroup
-    ? `${activeMemberCount} members`
+    ? limit ? `${activeMemberCount}/${limit} members` : `${activeMemberCount} members`
     : isOnline
     ? "Active now"
     : "Offline";
