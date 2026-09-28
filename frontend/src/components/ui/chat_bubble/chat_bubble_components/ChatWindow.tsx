@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import toast from "react-hot-toast";
 import {
   FileText,
   Minus,
@@ -240,8 +241,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       setReplyTo(null);
       clearMedia();
       setTyping(conversationId, false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Unable to send chat message:", error);
+      toast.error(error?.message || error?.response?.data?.message || "Failed to send message");
     } finally {
       setIsSending(false);
     }
