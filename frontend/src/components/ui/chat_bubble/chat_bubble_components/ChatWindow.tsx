@@ -832,6 +832,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     className="h-full w-full object-cover"
                   />
                 )}
+                {/* Size Indicator Overlay */}
+                <div className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[7px] font-medium text-white backdrop-blur-md z-10 pointer-events-none">
+                  {(media.file.size / (1024 * 1024)).toFixed(1)}MB / {media.type === "video" ? "250MB" : media.type === "file" ? "20MB" : "10MB"}
+                </div>
               </div>
               <button 
                 onClick={(e) => { e.stopPropagation(); removeMedia(media.id); }} 

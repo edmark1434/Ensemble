@@ -85,6 +85,16 @@ export const useInboxUploadMedia = (maxFiles = 3): UseInboxUploadMediaReturn => 
           mediaType = "image";
         }
 
+        const MB = 1024 * 1024;
+        let limitMB = 20; // Default for files/PDF
+        if (mediaType === "video") limitMB = 250;
+        else if (mediaType === "image" || mediaType === "gif") limitMB = 10;
+
+        if (file.size > limitMB * MB) {
+          showErrorToast(`${file.name} exceeds the ${limitMB}MB limit. (Your file: ${(file.size / MB).toFixed(1)}MB)`);
+          return;
+        }
+
         const previewUrl =
           mediaType === "file" ? "" : URL.createObjectURL(file);
         setMediaList((prev) => [
