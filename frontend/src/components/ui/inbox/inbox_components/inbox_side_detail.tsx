@@ -387,7 +387,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <p className="text-xs text-gray-900 dark:text-zinc-200 font-medium truncate bg-black/20 p-2 rounded-lg border border-gray-100 dark:border-white/5">
+                    <p className="text-xs text-gray-900 dark:text-zinc-200 font-medium truncate bg-gray-100 dark:bg-white/10 p-2 rounded-lg border border-gray-200 dark:border-white/5">
                       {name}
                     </p>
                   )}
@@ -585,7 +585,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
             >
               <div className="flex items-center gap-2">
                 <Pin className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                <span>Pinned Messages ({pinnedList.length})</span>
+                <span>Pinned Messages ({pinnedList.length}/4)</span>
               </div>
               {isPinnedOpen ? (
                 <ChevronUp className="h-4 w-4 text-gray-500 dark:text-zinc-400" />

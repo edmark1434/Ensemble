@@ -138,27 +138,12 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
               {name}
             </h2>
           )}
-          <div className="flex items-center gap-2">
-            <p
-              className="truncate text-xs text-gray-500 dark:text-zinc-400"
-              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-            >
-              {statusLabel}
-            </p>
-            {isGroup && isCreatorSelf && getMemberLimit?.(selectedConversation) !== 1000 && (
-              <button 
-                onClick={(e) => { e.stopPropagation(); navigate("/credits-subscriptions"); }}
-                className="group relative inline-flex items-center justify-center gap-1 overflow-hidden rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 shadow-sm transition-all duration-500 hover:scale-105 hover:shadow-[0_0_15px_rgba(251,191,36,0.4)] dark:border-amber-600/80 dark:bg-transparent dark:text-amber-500 dark:hover:border-amber-500 dark:hover:text-amber-400 dark:hover:shadow-[0_0_15px_rgba(251,191,36,0.3)]"
-              >
-                <div 
-                  className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/20 dark:via-amber-400/20 to-transparent z-10"
-                  style={{ animation: 'passiveShine 3s ease-in-out infinite' }}
-                />
-                <Zap className="relative z-20 h-2.5 w-2.5 fill-amber-500/70 text-amber-500 dark:fill-amber-500/70 dark:text-amber-500 group-hover:dark:text-amber-400 group-hover:dark:fill-amber-400/70 transition-colors" />
-                <span className="relative z-20">Upgrade</span>
-              </button>
-            )}
-          </div>
+          <p
+            className="truncate text-xs text-gray-500 dark:text-zinc-400"
+            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+          >
+            {statusLabel}
+          </p>
           {isGroup && groupCall && (
             <div className="mt-2 flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 px-2.5 py-1.5">
               <span className="max-w-80 truncate text-[11px] text-green-200">
