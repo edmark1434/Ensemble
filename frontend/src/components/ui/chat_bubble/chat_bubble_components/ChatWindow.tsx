@@ -318,7 +318,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   return (
     <div ref={windowRef} className="flex h-[480px] w-[330px] flex-col overflow-hidden rounded-t-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 shadow-2xl sm:w-[360px]">
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 2px; }
         .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); }
@@ -808,9 +808,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       )}
 
       {mediaList.length > 0 && (
-        <div className="flex gap-2.5 overflow-x-auto border-t border-zinc-200 dark:border-white/10 px-3 py-3">
+        <div className="flex gap-2.5 overflow-x-auto custom-scrollbar border-t border-zinc-200 dark:border-white/10 px-3 py-3">
           {mediaList.map((media) => (
-            <div key={media.id} className="relative flex h-20 min-w-20 max-w-40 flex-shrink-0 text-[9px]">
+            <div key={media.id} className="relative flex h-[90px] min-w-[90px] max-w-[170px] flex-shrink-0 pt-2.5 pr-2.5 text-[9px]">
               <div className="flex w-full h-full items-center justify-center overflow-hidden rounded-lg border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/10">
                 {media.type === "file" ? (
                   <div className="flex w-36 items-center gap-2 px-2 text-zinc-700 dark:text-zinc-300">
@@ -833,12 +833,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </div>
               <button 
                 onClick={(e) => { e.stopPropagation(); removeMedia(media.id); }} 
-                className="absolute -right-2 -top-2 z-10 flex items-center justify-center rounded-full bg-zinc-200/50 p-1 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 shadow-sm"
+                className="absolute right-0 top-0 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-200/90 p-0 text-zinc-600 shadow-sm hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
               >
-                <X size={10} strokeWidth={2.5} />
+                <X size={12} strokeWidth={2.5} />
               </button>
             </div>
           ))}
+          {/* Spacer to ensure the last item's padding/button is fully visible when scrolled to the right end */}
+          <div className="w-1 flex-shrink-0" />
         </div>
       )}
       {typingCount > 0 && (
