@@ -267,7 +267,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                   type="button"
                   disabled={isUploadingGroupImage}
                   onClick={() => groupImageInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 rounded-full bg-blue-600 p-2 text-gray-900 dark:text-white ring-2 ring-white dark:ring-dark-surface hover:bg-blue-500 disabled:opacity-50"
+                  className="absolute bottom-0 right-0 rounded-full bg-blue-600 p-2 text-white ring-2 ring-white dark:ring-dark-surface hover:bg-blue-500 transition disabled:opacity-50"
                   title="Change group image"
                 >
                   <Camera className="h-3.5 w-3.5" />
@@ -348,11 +348,11 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                         type="text"
                         value={customNameInput}
                         onChange={(e) => setCustomNameInput(e.target.value)}
-                        className="flex-1 rounded-lg border border-blue-500/50 bg-black/40 px-2.5 py-1.5 text-xs text-gray-900 dark:text-white outline-none"
+                        className="flex-1 rounded-lg border border-gray-200 dark:border-blue-500/50 bg-white dark:bg-black/40 px-2.5 py-1.5 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50"
                       />
                       <button
                         onClick={handleSaveGroupName}
-                        className="p-1.5 rounded-lg bg-blue-600 text-gray-900 dark:text-white hover:bg-blue-500 transition"
+                        className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition"
                       >
                         <Check className="h-3.5 w-3.5" />
                       </button>
