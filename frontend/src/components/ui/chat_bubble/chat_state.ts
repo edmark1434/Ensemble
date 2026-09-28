@@ -702,13 +702,7 @@ function reconcileMessage(message: Message, isNewMessage = false) {
       }
 
       if (conv?.conversation_type === "direct") {
-        api.get(`/api/accounts/${targetId}/follow-status`)
-          .then(res => {
-            if (res.data && res.data.isFollowing && res.data.isFollowedBy) {
-              useChatState.setState({ activeFloatingId: targetId, isFloatingOpen: true });
-            }
-          })
-          .catch(err => console.error("Could not check follow status", err));
+        useChatState.setState({ activeFloatingId: targetId, isFloatingOpen: true });
       }
     }
 
@@ -1720,7 +1714,6 @@ const useChatState = create<ChatState>((set, get) => ({
     }));
     await get().openFloatingConversation({
       ...target,
-      id: conversationId,
       inbox_id: conversationId,
       avatarPayload: (inbox as Inbox & {
         avatarPayload?: Record<string, string>;
@@ -1732,7 +1725,6 @@ const useChatState = create<ChatState>((set, get) => ({
     const conversationId = String(target.inbox_id || target.id);
     const chatTarget = {
       ...target,
-      id: conversationId,
       inbox_id: conversationId,
     };
     set((state) => ({
@@ -1740,11 +1732,10 @@ const useChatState = create<ChatState>((set, get) => ({
         chatTarget,
         ...state.floatingWindows.filter(
           (window) =>
-            String(window.id) !== conversationId &&
-            String(window.inbox_id) !== conversationId
+            String(window.inbox_id || window.id) !== conversationId
         ),
       ].slice(0, 4),
-      activeFloatingId: conversationId,
+      activeFloatingId: target.id || conversationId,
       activeConversationId: conversationId,
       isFloatingOpen: true,
       unreadCounts: { ...state.unreadCounts, [conversationId]: 0 },
