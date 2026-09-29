@@ -147,6 +147,7 @@ interface ChatState {
     members: Array<{ account_id: string }>,
     member_limit?: number
   ) => Promise<Inbox>;
+  deleteConversation: (conversationId: string) => Promise<void>;
   createEngagement: (payload: {
     conversation_name?: string;
     members: Array<{ account_id: string }>;
@@ -1790,6 +1791,19 @@ const useChatState = create<ChatState>((set, get) => ({
       conversation_id: String(response.data._id),
     });
     return response.data;
+  },
+
+  deleteConversation: async (conversationId) => {
+    await api.delete(`/api/inbox/${conversationId}`);
+    set((state) => {
+      const newConversations = { ...state.conversations };
+      delete newConversations[conversationId];
+      return {
+        conversations: newConversations,
+        activeConversationId: state.activeConversationId === conversationId ? null : state.activeConversationId,
+        floatingWindows: state.floatingWindows.filter((w) => w.conversationId !== conversationId),
+      };
+    });
   },
 
   createEngagement: async (payload) => {

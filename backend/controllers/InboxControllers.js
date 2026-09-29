@@ -318,7 +318,20 @@ async function updateLimitController(req, res) {
     }
 }
 
+async function deleteConversationController(req, res) {
+    try {
+        const { deleteConversationServices } = require('../services/InboxServices');
+        const { accountId } = require('../utils/auth');
+        const result = await deleteConversationServices(req.params.id, accountId(req));
+        return res.status(200).json(result);
+    } catch (error) {
+        const { sendError } = require('../utils/response');
+        return sendError(res, error);
+    }
+}
+
 module.exports = {
+    deleteConversationController,
     updateLimitController,
     createInboxController,
     createGroupController,

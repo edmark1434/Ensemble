@@ -110,6 +110,7 @@ const InboxMain = () => {
     (state) => state.selectConversation
   );
   const createGroup = useChatState((state) => state.createGroup);
+  const deleteConversation = useChatState((state) => state.deleteConversation);
   const sendMessage = useChatState((state) => state.sendMessage);
   const replyMessage = useChatState((state) => state.replyMessage);
   const editMessage = useChatState((state) => state.editMessage);
@@ -1393,6 +1394,7 @@ const InboxMain = () => {
             onPreviewAttachment={(url: string, type = "image") =>
               setExpandedMedia({ url, type })
             }
+            deleteConversation={deleteConversation}
           />
         </div>
       </div>

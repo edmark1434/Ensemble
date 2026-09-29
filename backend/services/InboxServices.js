@@ -1801,7 +1801,24 @@ async function updateLimitServices(conversationId, limit, accountId) {
     return { success: true, member_limit: parsedLimit };
 }
 
+
+async function deleteConversationServices(conversationId, accountId) {
+    const inbox = await requireConversationMember(conversationId, accountId);
+    if (inbox.conversation_type !== 'group') {
+        throw new ChatServiceError('Only group chats can be deleted');
+    }
+    const actor = activeMember(inbox, accountId);
+    if (actor.role !== 'owner') {
+        throw new ChatServiceError('Only the owner can delete the group chat', 403);
+    }
+    
+    const { deleteInboxRepositories } = require('../repositories/InboxRepositories');
+    await deleteInboxRepositories(conversationId);
+    return { success: true };
+}
+
 module.exports = {
+    deleteConversationServices,
     updateLimitServices,
     ChatServiceError,
     createInboxServices,

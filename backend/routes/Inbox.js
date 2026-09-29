@@ -31,6 +31,7 @@ router.use(checkSession, requireAuth);
 router.get('/', getAllInboxesByAccountIdController);
 router.post('/', createInboxController);
 router.post('/group', createGroupController);
+router.delete('/:id', [checkSession, requireAuth], require('../controllers/InboxControllers').deleteConversationController);
 router.patch('/:id/limit', [checkSession, requireAuth], require('../controllers/InboxControllers').updateLimitController);
 router.post('/engagement', createEngagementChatController);
 router.post('/marketplace', createMarketplaceChatController);

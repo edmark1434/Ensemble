@@ -59,6 +59,7 @@ interface InboxSideDetailsProps {
   onPreviewAttachment?: (url: string, type?: string) => void;
   suggestedAccounts?: SuggestedAccount[];
   isOpen: boolean;
+  onDeleteConversation?: (conversationId: string) => Promise<void>;
 }
 
 export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
@@ -81,6 +82,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   onPreviewAttachment,
   suggestedAccounts = [],
   isOpen,
+  onDeleteConversation,
 }) => {
   const navigate = useNavigate();
   const isGroup = Boolean(
@@ -106,6 +108,8 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   const [memberSearchResults, setMemberSearchResults] = useState<SuggestedAccount[]>([]);
   const [isSearchingMembers, setIsSearchingMembers] = useState(false);
   const [isUploadingGroupImage, setIsUploadingGroupImage] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
   const groupImageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -301,9 +305,9 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
               {isGroup && (
                 <>
                   <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help transition-colors" />
-                  <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden w-52 rounded-lg bg-gray-800 dark:bg-zinc-800 p-2 text-center text-[11px] leading-tight text-white shadow-xl group-hover/tooltip:block z-50">
+                  <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden w-52 rounded-lg bg-white dark:bg-zinc-800 p-2 text-center text-[11px] leading-tight text-gray-700 dark:text-white shadow-xl border border-gray-100 dark:border-zinc-700 group-hover/tooltip:block z-50">
                     Your group chat limit permanently locks in the highest subscription tier you achieve, even if you downgrade later.
-                    <div className="absolute left-1/2 top-full -translate-x-1/2 -translate-y-1/2 border-4 border-transparent border-t-gray-800 dark:border-t-zinc-800" />
+                    <div className="absolute left-1/2 top-full -translate-x-1/2 -translate-y-1/2 border-4 border-transparent border-t-white dark:border-t-zinc-800" />
                   </div>
                 </>
               )}
@@ -783,6 +787,53 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                 Leave group chat
               </button>
             )}
+
+          {isGroup && currentMember?.role === "owner" && (
+            <div className="relative w-full">
+              {!showDeleteConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs font-semibold text-red-400 hover:bg-red-500/15"
+                >
+                  <X className="h-4 w-4" />
+                  Delete group chat
+                </button>
+              ) : (
+                <div className="flex flex-col gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3">
+                  <p className="text-center text-xs font-medium text-red-400">Are you sure you want to delete this group?</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="flex-1 rounded-lg bg-gray-100 dark:bg-white/10 p-2 text-xs font-medium text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-white/20"
+                      disabled={isDeletingGroup}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!onDeleteConversation) return;
+                        setIsDeletingGroup(true);
+                        try {
+                          await onDeleteConversation(selectedConversation._id);
+                        } finally {
+                          setIsDeletingGroup(false);
+                          setShowDeleteConfirm(false);
+                        }
+                      }}
+                      className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-red-500 p-2 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-50"
+                      disabled={isDeletingGroup}
+                    >
+                      {isDeletingGroup ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

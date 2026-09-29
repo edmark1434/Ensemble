@@ -156,6 +156,7 @@ export const InboxPanelPage = ({
         onUpdateGroupProfileImage={onUpdateGroupProfileImage}
         onJumpToMessage={onJumpToPinned}
         onPreviewAttachment={onPreviewAttachment}
+        onDeleteConversation={props.deleteConversation}
       />
     </div>
   );
