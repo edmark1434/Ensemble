@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { Users, X, Plus, Trash2 } from "lucide-react";
 import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
-import { chatAttachmentUrl } from "../inbox_dataset";
+import { chatAttachmentUrl } from "./inbox_upload_image";
 
 export interface SuggestedAccount {
   account_id: string;
