@@ -1234,12 +1234,6 @@ const InboxMain = () => {
             onCreateGroup={handleCreateGroup}
             suggestedAccounts={suggestedAccounts}
             isCollapsed={isSidebarCollapsed}
-          />
-          <InboxSearch
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            activeTab="direct"
-            isCollapsed={isSidebarCollapsed}
             onToggleCollapse={() => {
               setIsSidebarCollapsed((collapsed) => {
                 const next = !collapsed;
@@ -1247,6 +1241,12 @@ const InboxMain = () => {
                 return next;
               });
             }}
+          />
+          <InboxSearch
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            activeTab="direct"
+            isCollapsed={isSidebarCollapsed}
           />
           <div className="inbox-scroll-thin flex-1 overflow-y-auto">
             <Routes>
