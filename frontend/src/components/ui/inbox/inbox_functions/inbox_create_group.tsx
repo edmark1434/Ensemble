@@ -293,8 +293,9 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
 
           {/* Form Action Buttons */}
           {error && <p className="text-xs text-red-400">{error}</p>}
-          <div className="text-[11px] text-gray-500 dark:text-zinc-400 my-2">
-            <strong>Note:</strong> You cannot transfer ownership of the group chat once created, but you can assign members and admins later.
+          <div className="text-[11px] text-gray-500 dark:text-zinc-400 my-2 space-y-1.5">
+            <p><strong>Note:</strong> You cannot transfer ownership of the group chat once created, but you can assign members and admins later.</p>
+            <p><strong>Limit:</strong> Your group limit ({maxLimit}) is tied to your current subscription. If your subscription expires, existing members will never be kicked out, but you won't be able to add new members if you are above your new tier's limit.</p>
           </div>
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-200 dark:border-white/10">
             <button
