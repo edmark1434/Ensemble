@@ -224,6 +224,7 @@ export const Contracts: React.FC = () => {
   const formatMilestoneDeadline = (m: any) => {
     if (m.hours) return `${m.hours} Hours`;
     const hrs = Number(m.deadline);
+    if (!isNaN(hrs) && hrs <= 0) return 'Flexible';
     if (!isNaN(hrs) && hrs > 0 && hrs < 100000) {
       if (m.started_at) {
         const st = new Date(m.started_at);

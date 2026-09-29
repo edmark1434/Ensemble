@@ -181,6 +181,7 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                         {feed.length} updates • Deadline: {(() => {
                             if (!activeMilestone?.deadline) return 'N/A';
                             const hrs = Number(activeMilestone.deadline);
+                            if (!isNaN(hrs) && hrs <= 0) return 'Flexible';
                             if (!isNaN(hrs) && hrs > 0 && hrs < 100000) {
                                 if (activeMilestone.started_at) {
                                     const st = new Date(activeMilestone.started_at);
