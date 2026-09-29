@@ -119,7 +119,20 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
     });
   }, [suggestedAccounts, searchResults, searchTerm, selectedMembers]);
 
+  const maxLimit = useMemo(() => {
+    const sub = (user as any)?.subscriptiontype || (user as any)?.subscription_plan || (user as any)?.subscription_type || "";
+    const t = String(sub).toLowerCase();
+    if (t.includes("business") || t.includes("enterprise")) return 1000;
+    if (t.includes("premium")) return 50;
+    return 12;
+  }, [user]);
+
   const handleSelectMember = (account: SuggestedAccount) => {
+    if (selectedMembers.length >= maxLimit) {
+      setError(`Group chat limit of ${maxLimit} members reached.`);
+      return;
+    }
+    setError(null);
     setSelectedMembers((prev) => [...prev, account]);
     setSearchTerm("");
     setIsDropdownOpen(false);
@@ -248,8 +261,8 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
           {/* Selected Members Chips */}
           {selectedMembers.length > 0 && (
             <div>
-              <label className="block text-[11px] font-medium text-gray-500 dark:text-zinc-400 mb-1.5">
-                Selected Members ({selectedMembers.length})
+              <label className="block text-[11px] font-medium text-gray-500 dark:text-zinc-400 mb-1.5 flex justify-between items-center">
+                <span>Selected Members ({selectedMembers.length}/{maxLimit})</span>
               </label>
               <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto inbox-scroll-thin">
                 {selectedMembers.map((member) => (

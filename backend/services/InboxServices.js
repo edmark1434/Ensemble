@@ -275,6 +275,8 @@ function normalizeMembers(members, ownerId) {
     for (const member of members || []) {
         const accountId = String(member.account_id || member);
         if (!accountId || accountId === 'undefined') continue;
+        const existing = byAccountId.get(accountId);
+        if (existing?.role === 'owner') continue;
         byAccountId.set(accountId, {
             account_id: accountId,
             role: member.role === 'admin' ? 'admin' : 'member',
