@@ -385,6 +385,7 @@ async function createGroupServices(payload, accountId) {
     const result = await createInboxRepositories({
         conversation_name: conversationName,
         conversation_type: 'group',
+        member_limit: payload.member_limit ? parseInt(payload.member_limit, 10) : 12,
         members,
         pinned_messages: [],
         created_at: now,
@@ -1775,7 +1776,33 @@ async function updateInboxServices(inboxId, updateFields, accountId) {
     return await renameConversationServices(inboxId, conversationName, accountId);
 }
 
+
+async function updateLimitServices(conversationId, limit, accountId) {
+    const inbox = await requireConversationMember(conversationId, accountId);
+    if (inbox.conversation_type !== 'group') {
+        throw new ChatServiceError('Limit can only be updated for group chats');
+    }
+    const actor = activeMember(inbox, accountId);
+    if (actor.role !== 'owner') {
+        throw new ChatServiceError('Only the owner can update the member limit', 403);
+    }
+    
+    const parsedLimit = parseInt(limit, 10);
+    if (isNaN(parsedLimit) || parsedLimit < 12) {
+        throw new ChatServiceError('Invalid limit provided');
+    }
+
+    const { getDB } = require('../lib/MongoDb');
+    const db = getDB();
+    await db.collection('inbox').updateOne(
+        { _id: inbox._id },
+        { $set: { member_limit: parsedLimit } }
+    );
+    return { success: true, member_limit: parsedLimit };
+}
+
 module.exports = {
+    updateLimitServices,
     ChatServiceError,
     createInboxServices,
     createGroupServices,

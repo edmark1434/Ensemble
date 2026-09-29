@@ -14,7 +14,7 @@ export interface SuggestedAccount {
 
 interface InboxCreateGroupModalProps {
   onClose: () => void;
-  onCreateGroup: (groupData: { name: string; members: SuggestedAccount[] }) => Promise<void>;
+  onCreateGroup: (groupData: { name: string; members: SuggestedAccount[], limit?: number }) => Promise<void>;
   suggestedAccounts?: SuggestedAccount[];
 }
 
@@ -152,6 +152,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
       await onCreateGroup({
         name: groupName.trim(),
         members: selectedMembers,
+        limit: maxLimit,
       });
       onClose();
     } catch (submitError) {

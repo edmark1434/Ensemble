@@ -279,12 +279,30 @@ const InboxMain = () => {
       const ownerId = String(owner?.account_id || inbox.creator_id || currentUserId);
       const sub = (owner as any)?.subscriptiontype || profiles[ownerId]?.subscriptiontype || profiles[ownerId]?.subscription_plan || (ownerId === currentUserId ? subscriptionPlan || (user as any)?.subscriptiontype || (user as any)?.subscription_plan || (user as any)?.subscription_type : null);
       const type = String(sub || "").toLowerCase();
-      if (type.includes("business") || type.includes("enterprise")) return 1000;
-      if (type.includes("premium")) return 50;
-      return 12;
+      let currentTierLimit = 12;
+      if (type.includes("business") || type.includes("enterprise")) currentTierLimit = 1000;
+      else if (type.includes("premium")) currentTierLimit = 50;
+      return Math.max((inbox as any).member_limit || 0, currentTierLimit);
     },
     [profiles, currentUserId, user, subscriptionPlan]
   );
+
+  useEffect(() => {
+    if (selectedConversation && selectedConversation.conversation_type === "group") {
+      const owner = selectedConversation.members?.find((m) => m.role === "owner");
+      const ownerId = String(owner?.account_id || selectedConversation.creator_id || currentUserId);
+      
+      // Only the owner syncs the limit up
+      if (ownerId === currentUserId) {
+        const storedLimit = (selectedConversation as any).member_limit || 12;
+        const currentCalculatedLimit = getMemberLimit(selectedConversation) || 12;
+        if (currentCalculatedLimit > storedLimit) {
+          api.patch(`/api/inbox/${selectedConversation._id}/limit`, { limit: currentCalculatedLimit }).catch(console.error);
+          (selectedConversation as any).member_limit = currentCalculatedLimit; // Optimistic update
+        }
+      }
+    }
+  }, [selectedConversation, getMemberLimit, currentUserId]);
 
   const loadInbox = useCallback(async () => {
     setConversationError(null);
@@ -636,13 +654,16 @@ const InboxMain = () => {
   const handleCreateGroup = async ({
     name,
     members,
+    limit,
   }: {
     name: string;
     members: Array<{ account_id: string; name: string; avatar: string }>;
+    limit?: number;
   }) => {
     const group = await createGroup(
       name,
-      members.map((member) => ({ account_id: member.account_id }))
+      members.map((member) => ({ account_id: member.account_id })),
+      limit
     );
     await handleSelectConversation(group);
   };

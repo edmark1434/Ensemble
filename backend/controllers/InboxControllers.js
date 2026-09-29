@@ -306,7 +306,20 @@ async function getInboxByTwoAccountIdsController(req, res) {
     }
 }
 
+async function updateLimitController(req, res) {
+    try {
+        const { updateLimitServices } = require('../services/InboxServices');
+        const { accountId } = require('../utils/auth');
+        const result = await updateLimitServices(req.params.id, req.body.limit, accountId(req));
+        return res.status(200).json(result);
+    } catch (error) {
+        const { sendError } = require('../utils/response');
+        return sendError(res, error);
+    }
+}
+
 module.exports = {
+    updateLimitController,
     createInboxController,
     createGroupController,
     createEngagementChatController,

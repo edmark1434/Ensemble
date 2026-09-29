@@ -144,7 +144,8 @@ interface ChatState {
   removeFloatingWindow: (windowId: string) => void;
   createGroup: (
     name: string,
-    members: Array<{ account_id: string }>
+    members: Array<{ account_id: string }>,
+    member_limit?: number
   ) => Promise<Inbox>;
   createEngagement: (payload: {
     conversation_name?: string;
@@ -1775,10 +1776,11 @@ const useChatState = create<ChatState>((set, get) => ({
       };
     }),
 
-  createGroup: async (name, members) => {
+  createGroup: async (name, members, member_limit) => {
     const response = await api.post<Inbox>("/api/inbox/group", {
       conversation_name: name,
       members,
+      member_limit,
     });
     set((state) => ({
       conversations: upsertConversation(state.conversations, response.data),
