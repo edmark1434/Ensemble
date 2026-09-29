@@ -784,7 +784,7 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
 
         // 1. Verify the order exists, is Pending, and belongs to the freelancer
         const reqCheckQuery = `
-            SELECT gr.gig_request_id, gr.status, gt.gig_tier_id, gt.rate_credits, gt.no_of_revisions_max, gt.gig_id, gr.client_account_id, g.freelancer_account_id, g.title as gig_title
+            SELECT gr.gig_request_id, gr.status, gt.gig_tier_id, gt.rate_credits, gt.delivery_days, gt.no_of_revisions_max, gt.gig_id, gr.client_account_id, g.freelancer_account_id, g.title as gig_title
             FROM gig_requests gr
             JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
             JOIN gigs g ON gt.gig_id = g.gig_id
@@ -799,7 +799,7 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
             throw new Error('Gig order is not in Pending status');
         }
 
-        const { rate_credits, no_of_revisions_max, gig_id, client_account_id, freelancer_account_id: freelancerAccountId, gig_title } = reqCheck.rows[0];
+        const { rate_credits, delivery_days, no_of_revisions_max, gig_id, client_account_id, freelancer_account_id: freelancerAccountId, gig_title } = reqCheck.rows[0];
 
         const orderCredits = Number(rate_credits);
         if (!Number.isSafeInteger(orderCredits) || orderCredits <= 0) {
@@ -905,14 +905,23 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
         }
 
         const msQuery = `
-            INSERT INTO contract_milestones (contract_id, index, name, description, deadline, no_of_revisions_max, status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO contract_milestones (contract_id, index, name, description, deadline, no_of_revisions_max, status, started_at, credits)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         `;
+        const milestoneDeadlineHours = (Number(delivery_days) || 3) * 24;
+        const perMilestoneCredits = Math.floor(orderCredits / (milestones.length || 1));
         for (let i = 0; i < milestones.length; i++) {
             const m = milestones[i];
             await client.query(msQuery, [
-                contractId, m.index || i, m.name, m.description || '', 0, no_of_revisions_max || 0,
-                i === 0 ? 'active' : 'pending'
+                contractId, 
+                m.index || i, 
+                m.name, 
+                m.description || '', 
+                milestoneDeadlineHours, 
+                no_of_revisions_max || 0,
+                i === 0 ? 'active' : 'pending',
+                i === 0 ? new Date() : null,
+                perMilestoneCredits
             ]);
         }
 
