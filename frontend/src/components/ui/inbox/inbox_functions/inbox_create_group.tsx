@@ -23,7 +23,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
   onCreateGroup,
   suggestedAccounts = [],
 }) => {
-  const { user } = useGlobalState();
+  const { user, subscriptionPlan } = useGlobalState();
   const [groupName, setGroupName] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   
@@ -120,12 +120,12 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
   }, [suggestedAccounts, searchResults, searchTerm, selectedMembers]);
 
   const maxLimit = useMemo(() => {
-    const sub = (user as any)?.subscriptiontype || (user as any)?.subscription_plan || (user as any)?.subscription_type || "";
+    const sub = subscriptionPlan || (user as any)?.subscriptiontype || (user as any)?.subscription_plan || (user as any)?.subscription_type || "";
     const t = String(sub).toLowerCase();
     if (t.includes("business") || t.includes("enterprise")) return 1000;
     if (t.includes("premium")) return 50;
     return 12;
-  }, [user]);
+  }, [user, subscriptionPlan]);
 
   const handleSelectMember = (account: SuggestedAccount) => {
     if (selectedMembers.length >= maxLimit) {
@@ -293,6 +293,9 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
 
           {/* Form Action Buttons */}
           {error && <p className="text-xs text-red-400">{error}</p>}
+          <div className="text-[11px] text-gray-500 dark:text-zinc-400 my-2">
+            <strong>Note:</strong> You cannot transfer ownership of the group chat once created, but you can assign members and admins later.
+          </div>
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-200 dark:border-white/10">
             <button
               type="button"

@@ -116,6 +116,7 @@ async function fetchHeaderData(accountId: string): Promise<HeaderFetchData | nul
       let planName: "Free" | "Premium" | "Business" = "Free";
       if (planResult.status === 'fulfilled') {
         planName = (planResult.value.data?.planDetails?.plan_name as "Free" | "Premium" | "Business") || "Free";
+        useGlobalState.getState().setSubscriptionPlan(planName);
       }
 
       let verified = false;

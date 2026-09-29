@@ -73,7 +73,7 @@ interface ProfileIdentity {
 const InboxMain = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useGlobalState();
+  const { user, subscriptionPlan } = useGlobalState();
   const currentUserId = String(user?.account_id || "");
   const inboxList = useChatState((state) => state.conversations);
   const activeConversationId = useChatState(
@@ -277,13 +277,13 @@ const InboxMain = () => {
       if (inbox.conversation_type !== "group") return null;
       const owner = inbox.members?.find((m) => m.role === "owner");
       const ownerId = String(owner?.account_id || inbox.creator_id || currentUserId);
-      const sub = (owner as any)?.subscriptiontype || profiles[ownerId]?.subscriptiontype || profiles[ownerId]?.subscription_plan || (ownerId === currentUserId ? (user as any)?.subscriptiontype || (user as any)?.subscription_plan || (user as any)?.subscription_type : null);
+      const sub = (owner as any)?.subscriptiontype || profiles[ownerId]?.subscriptiontype || profiles[ownerId]?.subscription_plan || (ownerId === currentUserId ? subscriptionPlan || (user as any)?.subscriptiontype || (user as any)?.subscription_plan || (user as any)?.subscription_type : null);
       const type = String(sub || "").toLowerCase();
       if (type.includes("business") || type.includes("enterprise")) return 1000;
       if (type.includes("premium")) return 50;
       return 12;
     },
-    [profiles, currentUserId, user]
+    [profiles, currentUserId, user, subscriptionPlan]
   );
 
   const loadInbox = useCallback(async () => {

@@ -23,10 +23,12 @@ interface GlobalState {
   isVerificationModalOpen: boolean
   verificationModalMessage?: string
   isVerified: boolean
+  subscriptionPlan: string | null
 
   // Actions
   setIsSidebarCollapsed: (isCollapsed: boolean) => void
   setUser:            (user: any) => void
+  setSubscriptionPlan: (plan: string) => void
   setIsGuestMode:     (isGuestMode: boolean) => void
   setIsAuthenticated: (isAuthenticated: boolean) => void
   setIsLoading:       (isLoading: boolean) => void
@@ -52,9 +54,11 @@ const useGlobalState = create<GlobalState>((set) => ({
   isVerificationModalOpen: false,
   verificationModalMessage: undefined,
   isVerified: false,
+  subscriptionPlan: null,
 
   // Actions
   setIsSidebarCollapsed: (isCollapsed) => set({ isSidebarCollapsed: isCollapsed }),
+  setSubscriptionPlan: (plan: string) => set({ subscriptionPlan: plan }),
   setUser:            (user) => {
     localStorage.setItem('isGuestMode', 'false');
     const isVerified = user?.is_verified ?? user?.isVerified;
