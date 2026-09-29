@@ -21,6 +21,14 @@ const FAQ_ITEMS = [
     a: "When a client signs a project agreement, the milestone budget is securely deposited into an independent platform escrow hold. Funds are only transferred to the creative professional once the client explicitly reviews and approves the completed deliverable."
   },
   {
+    q: "What happens if a client does not respond to a milestone submission?",
+    a: "Clients have 5 calendar days for Job Contracts (3 days for Gig Contracts) to review submitted deliverables. If no approval, revision request, or dispute is opened within this window, the platform automatically approves the milestone and safely releases held escrow credits to the freelancer."
+  },
+  {
+    q: "What happens if a freelancer misses a milestone deadline?",
+    a: "If a deadline passes without a submission, the milestone enters Overdue status and both parties are notified. The system does not surprise-cancel; instead, the client has the option to grant a deadline extension or cancel the milestone to receive a 100% refund of the milestone escrow credits back to their account wallet."
+  },
+  {
     q: "Are my high-resolution raw video assets stored securely?",
     a: "Absolutely. All media content is completely isolated within encrypted, secure cloud containers using enterprise-grade AES-256 protocols at rest. Your creative intellectual property belongs entirely to you and remains safe from unauthorized access."
   },

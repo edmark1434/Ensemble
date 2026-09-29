@@ -223,14 +223,16 @@ async function acceptJobOffer(freelancerIds, contractId) {
                 if (i === 0) {
                     mCredits += remainingCredits;
                 }
+                const isFirstActive = (i === 0 && contractStatus === 'Active');
                 await client.query(`
                     INSERT INTO contract_milestones (
-                        contract_id, index, name, description, deadline, no_of_revisions_max, status, credits
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        contract_id, index, name, description, deadline, no_of_revisions_max, status, credits, started_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 `, [
                     contractId, m.index, m.name, m.description, m.duration_hrs || 0, m.no_of_revisions_max || 0,
-                    (i === 0 && contractStatus === 'Active') ? 'active' : 'pending',
-                    mCredits
+                    isFirstActive ? 'active' : 'pending',
+                    mCredits,
+                    isFirstActive ? new Date() : null,
                 ]);
             }
         }
