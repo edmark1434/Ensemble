@@ -313,7 +313,6 @@ async function updateLimitController(req, res) {
         const result = await updateLimitServices(req.params.id, req.body.limit, accountId(req));
         return res.status(200).json(result);
     } catch (error) {
-        const { sendError } = require('../utils/response');
         return sendError(res, error);
     }
 }
@@ -325,7 +324,6 @@ async function deleteConversationController(req, res) {
         const result = await deleteConversationServices(req.params.id, accountId(req));
         return res.status(200).json(result);
     } catch (error) {
-        const { sendError } = require('../utils/response');
         return sendError(res, error);
     }
 }
