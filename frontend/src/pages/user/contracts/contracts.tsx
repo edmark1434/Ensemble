@@ -221,6 +221,30 @@ export const Contracts: React.FC = () => {
   const [milestoneLoading, setMilestoneLoading] = useState(false);
   const { user } = useGlobalState();
 
+  const formatMilestoneDeadline = (m: any) => {
+    if (m.hours) return `${m.hours} Hours`;
+    const hrs = Number(m.deadline);
+    if (!isNaN(hrs) && hrs > 0 && hrs < 100000) {
+      if (m.started_at) {
+        const st = new Date(m.started_at);
+        if (!isNaN(st.getTime())) {
+          return new Date(st.getTime() + hrs * 3600000).toLocaleDateString();
+        }
+      }
+      if (hrs >= 24 && hrs % 24 === 0) {
+        return `${hrs / 24} Day${hrs / 24 > 1 ? 's' : ''} (${hrs} hrs)`;
+      }
+      return `${hrs} Hours`;
+    }
+    if (typeof m.deadline === 'string' && m.deadline.includes('-')) {
+      const d = new Date(m.deadline);
+      if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
+        return d.toLocaleDateString();
+      }
+    }
+    return m.deadline ? String(m.deadline) : 'N/A';
+  };
+
   const handleMilestoneAction = async (action: 'cancel' | 'approve' | 'extend' | 'revision', milestone: MilestoneItem, contractId: string) => {
     if (milestoneLoading) return;
     setMilestoneLoading(true);
@@ -241,7 +265,7 @@ export const Contracts: React.FC = () => {
             else if (rawStatus === 'overdue') uiStatus = 'Overdue';
             else if (rawStatus === 'stalled') uiStatus = 'Stalled';
             else if (rawStatus === 'abandoned') uiStatus = 'Abandoned';
-            return { id: m.id, name: m.name, revisions: parseInt(m.revisions,10)||0, deadline: m.hours?`${m.hours} Hours`:m.deadline?new Date(m.deadline).toLocaleDateString():'N/A', credits: m.credits||Math.floor((parseFloat(c.rate_credits)||0)/((arr.length)||1)), status: uiStatus, rawStatus };
+            return { id: m.id, name: m.name, revisions: parseInt(m.revisions,10)||0, deadline: formatMilestoneDeadline(m), credits: m.credits||Math.floor((parseFloat(c.rate_credits)||0)/((arr.length)||1)), status: uiStatus, rawStatus };
           });
           return { ...c, milestones: ms };
         });
@@ -283,7 +307,7 @@ export const Contracts: React.FC = () => {
                 id: m.id,
                 name: m.name,
                 revisions: parseInt(m.revisions, 10) || 0,
-                deadline: m.hours ? `${m.hours} Hours` : m.deadline ? new Date(m.deadline).toLocaleDateString() : 'N/A',
+                deadline: formatMilestoneDeadline(m),
                 credits: m.credits || Math.floor((parseFloat(c.rate_credits) || 0) / (arr.length || 1)),
                 status: uiStatus,
                 rawStatus,

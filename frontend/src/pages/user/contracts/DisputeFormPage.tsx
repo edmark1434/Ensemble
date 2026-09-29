@@ -42,7 +42,23 @@ export const DisputeFormPage: React.FC = () => {
               id: m.id,
               name: m.name,
               revisions: parseInt(m.revisions, 10) || 0,
-              deadline: m.hours ? `${m.hours} Hours` : m.deadline ? new Date(m.deadline).toLocaleDateString() : 'N/A',
+              deadline: (() => {
+                if (m.hours) return `${m.hours} Hours`;
+                const hrs = Number(m.deadline);
+                if (!isNaN(hrs) && hrs > 0 && hrs < 100000) {
+                  if (m.started_at) {
+                    const st = new Date(m.started_at);
+                    if (!isNaN(st.getTime())) return new Date(st.getTime() + hrs * 3600000).toLocaleDateString();
+                  }
+                  if (hrs >= 24 && hrs % 24 === 0) return `${hrs / 24} Days (${hrs} hrs)`;
+                  return `${hrs} Hours`;
+                }
+                if (typeof m.deadline === 'string' && m.deadline.includes('-')) {
+                  const d = new Date(m.deadline);
+                  if (!isNaN(d.getTime()) && d.getFullYear() > 1970) return d.toLocaleDateString();
+                }
+                return m.deadline ? String(m.deadline) : 'N/A';
+              })(),
               credits: m.credits || Math.floor((parseFloat(c.rate_credits) || 0) / (arr.length || 1)),
               status: m.status === 'completed' || m.status === 'approved' ? "Claimed" : m.status === 'active' || m.status === 'submitted_for_review' ? "In Progress" : "Locked"
             }));

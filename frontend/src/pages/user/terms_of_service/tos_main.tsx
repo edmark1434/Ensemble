@@ -33,7 +33,11 @@ export const TosMain: React.FC = () => {
     fetchTerms();
   }, [fetchTerms]);
 
-  const filteredTerms = useMemo(() => tosList.filter(t => t.terms_type === activeTab), [tosList, activeTab]);
+  const filteredTerms = useMemo(() => {
+    return tosList
+      .filter((t) => t.terms_type === activeTab)
+      .filter((t) => !t.terms_title?.includes('(Proposal Copy)') && !t.terms_title?.startsWith('Gig Custom Terms'));
+  }, [tosList, activeTab]);
 
   useEffect(() => {
     if (filteredTerms.length > 0) {
