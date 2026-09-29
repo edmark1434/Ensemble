@@ -3,7 +3,7 @@ import type { AxiosError } from 'axios';
 import { useInboxUploadMedia, InboxUploadMediaButton, InboxUploadMediaPreview } from '@/components/ui/inbox/inbox_functions/inbox_upload_image';
 import api from '@/lib/axios';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
-import { AlertCircle, CheckCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, Shield } from 'lucide-react';
 import { showErrorToast } from '@/components/utility/toast';
 
 interface MilestoneSubmission {
@@ -115,19 +115,31 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
 
     if (!action) {
         return (
-            <div className="flex items-center gap-3">
-                <button 
-                    onClick={() => setAction(isOutOfRevisions ? 'buy_revision' : 'revise')}
-                    className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 px-5 py-3 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2"
-                >
-                    <AlertCircle className="h-4 w-4" /> {isOutOfRevisions ? 'Purchase Revision' : 'Ask to Revise'}
-                </button>
-                <button 
-                    onClick={() => setAction('approve')}
-                    className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-3 rounded-xl text-sm font-bold transition shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
-                >
-                    <CheckCircle className="h-4 w-4" /> Approve Milestone
-                </button>
+            <div className="space-y-3">
+                <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-xs text-blue-700 dark:text-blue-300 flex items-start gap-2.5">
+                    <Clock className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5 leading-relaxed">
+                        <span className="font-bold">Milestone Review & Escrow Policy:</span>
+                        <p className="text-[11px] text-gray-600 dark:text-zinc-300">
+                            You have 5 days to review this submission. If no revision or approval is submitted within this window, the milestone will automatically pass and escrow funds will be released to the freelancer.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={() => setAction(isOutOfRevisions ? 'buy_revision' : 'revise')}
+                        className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 px-5 py-3 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2"
+                    >
+                        <AlertCircle className="h-4 w-4" /> {isOutOfRevisions ? 'Purchase Revision' : 'Ask to Revise'}
+                    </button>
+                    <button 
+                        onClick={() => setAction('approve')}
+                        className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-3 rounded-xl text-sm font-bold transition shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
+                    >
+                        <CheckCircle className="h-4 w-4" /> Approve Milestone
+                    </button>
+                </div>
             </div>
         );
     }

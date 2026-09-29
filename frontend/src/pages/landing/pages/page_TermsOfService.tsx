@@ -150,8 +150,23 @@ const PageTermsOfService: React.FC = () => {
             </section>
 
             <section id="payment" className="tos-section">
-              <h2>6. Payment and Credits</h2>
-              <p>Certain features may require payment. All fees are stated in US Dollars and are non-refundable unless otherwise specified. Ensemble Credits purchased on the Platform have no cash value and cannot be exchanged for fiat currency.</p>
+              <h2>6. Payment, Escrow, and Milestone Policy</h2>
+              <p>Certain features require payment using platform credits. Ensemble Credits purchased on the Platform have no direct cash value and cannot be exchanged for fiat currency outside of official cashout procedures.</p>
+              
+              <ul className="tos-list">
+                <li>
+                  <ShieldCheck size={16} color="#3b82f6" /> 
+                  <span><strong>Escrow Protection:</strong> When a contract is established, milestone funds are deposited into an independent platform escrow wallet. Escrow funds are only released to the creative professional upon milestone approval or automatic passage.</span>
+                </li>
+                <li>
+                  <ShieldCheck size={16} color="#3b82f6" /> 
+                  <span><strong>Review Window & Auto-Approval:</strong> Clients have 5 calendar days for Job Contracts (3 days for Gig Contracts) to review submitted deliverables. If no review, revision request, or dispute is submitted within this window, the milestone is automatically approved and escrow credits are released to the freelancer.</span>
+                </li>
+                <li>
+                  <ShieldCheck size={16} color="#3b82f6" /> 
+                  <span><strong>Overdue Deliverables & Cancellation:</strong> Freelancers are required to submit milestone deliverables before the agreed deadline. If a milestone becomes overdue without submission, the client may grant a deadline extension or cancel the milestone to receive an immediate 100% credit refund.</span>
+                </li>
+              </ul>
             </section>
 
             <section id="termination" className="tos-section">

@@ -26,15 +26,16 @@ import useGlobalState from "@/lib/global_state";
 
 export type ContractType = "Job" | "Gig";
 export type ContractStatus = "Active" | "Waiting" | "Done" | "Cancelled";
-export type MilestoneStatus = "Claimed" | "In Progress" | "Locked";
+export type MilestoneStatus = "Claimed" | "In Progress" | "Locked" | "Overdue" | "Stalled" | "Abandoned" | "Under Review";
 
 export interface MilestoneItem {
-  id: number;
+  id: string;
   name: string;
   revisions: number;
   deadline: string;
   credits: number;
   status: MilestoneStatus;
+  rawStatus?: string;
 }
 
 export interface DetailedContract {
@@ -215,7 +216,50 @@ export const Contracts: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
   const [contracts, setContracts] = useState<DetailedContract[]>([]);
   const [selectedContract, setSelectedContract] = useState<DetailedContract | null>(null);
+  const [milestoneAction, setMilestoneAction] = useState<{ type: string; milestoneId: string; milestoneName: string } | null>(null);
+  const [extensionDays, setExtensionDays] = useState<number>(3);
+  const [milestoneLoading, setMilestoneLoading] = useState(false);
   const { user } = useGlobalState();
+
+  const handleMilestoneAction = async (action: 'cancel' | 'approve' | 'extend' | 'revision', milestone: MilestoneItem, contractId: string) => {
+    if (milestoneLoading) return;
+    setMilestoneLoading(true);
+    try {
+      const body = action === 'extend' ? { extensionDays } : {};
+      await api.post(`/api/contracts/${contractId}/milestones/${milestone.id}/${action}`, body);
+      // Refresh contracts after action
+      const res = await api.get('/api/contracts');
+      if (res.data.success) {
+        // Re-map using the same mapping logic inline
+        const remapped = res.data.data.map((c: any) => {
+          const ms = (c.milestones || []).filter(Boolean).map((m: any, _i: number, arr: any[]) => {
+            const rawStatus: string = (m.status || '').toLowerCase();
+            let uiStatus: MilestoneStatus = 'Locked';
+            if (['completed','approved','auto_approved'].includes(rawStatus)) uiStatus = 'Claimed';
+            else if (rawStatus === 'active') uiStatus = 'In Progress';
+            else if (['under_review','revision_requested'].includes(rawStatus)) uiStatus = 'Under Review';
+            else if (rawStatus === 'overdue') uiStatus = 'Overdue';
+            else if (rawStatus === 'stalled') uiStatus = 'Stalled';
+            else if (rawStatus === 'abandoned') uiStatus = 'Abandoned';
+            return { id: m.id, name: m.name, revisions: parseInt(m.revisions,10)||0, deadline: m.hours?`${m.hours} Hours`:m.deadline?new Date(m.deadline).toLocaleDateString():'N/A', credits: m.credits||Math.floor((parseFloat(c.rate_credits)||0)/((arr.length)||1)), status: uiStatus, rawStatus };
+          });
+          return { ...c, milestones: ms };
+        });
+        setContracts(remapped.filter((c: any) => ['Active','Waiting','Done','Closed'].includes(c.status)));
+        // Update selected contract if open
+        if (selectedContract) {
+          const updated = remapped.find((c: any) => c.contract_id === selectedContract.id || c.id === selectedContract.id);
+          if (updated) setSelectedContract((prev) => prev ? { ...prev, milestones: updated.milestones } : prev);
+        }
+      }
+      setMilestoneAction(null);
+    } catch (err: any) {
+      console.error(`Milestone ${action} failed:`, err);
+      alert(err?.response?.data?.message || `Failed to ${action} milestone. Please try again.`);
+    } finally {
+      setMilestoneLoading(false);
+    }
+  };
 
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
@@ -226,14 +270,25 @@ export const Contracts: React.FC = () => {
         const res = await api.get('/api/contracts');
         if (res.data.success) {
           const mappedContracts = res.data.data.map((c: any) => {
-            const mappedMilestones = (c.milestones || []).filter(Boolean).map((m: any, idx: number, arr: any[]) => ({
-              id: m.id,
-              name: m.name,
-              revisions: parseInt(m.revisions, 10) || 0,
-              deadline: m.hours ? `${m.hours} Hours` : m.deadline ? new Date(m.deadline).toLocaleDateString() : 'N/A',
-              credits: m.credits || Math.floor((parseFloat(c.rate_credits) || 0) / (arr.length || 1)),
-              status: m.status === 'completed' || m.status === 'approved' ? "Claimed" : m.status === 'active' || m.status === 'submitted_for_review' ? "In Progress" : "Locked"
-            }));
+            const mappedMilestones = (c.milestones || []).filter(Boolean).map((m: any, idx: number, arr: any[]) => {
+              const rawStatus: string = (m.status || '').toLowerCase();
+              let uiStatus: MilestoneStatus = 'Locked';
+              if (rawStatus === 'completed' || rawStatus === 'approved' || rawStatus === 'auto_approved') uiStatus = 'Claimed';
+              else if (rawStatus === 'active') uiStatus = 'In Progress';
+              else if (rawStatus === 'under_review' || rawStatus === 'revision_requested') uiStatus = 'Under Review';
+              else if (rawStatus === 'overdue') uiStatus = 'Overdue';
+              else if (rawStatus === 'stalled') uiStatus = 'Stalled';
+              else if (rawStatus === 'abandoned') uiStatus = 'Abandoned';
+              return {
+                id: m.id,
+                name: m.name,
+                revisions: parseInt(m.revisions, 10) || 0,
+                deadline: m.hours ? `${m.hours} Hours` : m.deadline ? new Date(m.deadline).toLocaleDateString() : 'N/A',
+                credits: m.credits || Math.floor((parseFloat(c.rate_credits) || 0) / (arr.length || 1)),
+                status: uiStatus,
+                rawStatus,
+              };
+            });
 
             const allMilestonesDone = mappedMilestones.length > 0 && mappedMilestones.every((m: any) => m.status === 'Claimed');
             
@@ -732,19 +787,31 @@ export const Contracts: React.FC = () => {
                         <th className="px-3 py-2 text-center uppercase font-normal">Revs</th>
                         <th className="px-3 py-2 text-center uppercase font-normal">Deadline</th>
                         <th className="px-3 py-2 text-right uppercase font-normal">Credits</th>
+                        {user?.account_id === selectedContract.clientAccountId && selectedContract.status === 'Active' && (
+                          <th className="px-3 py-2 text-right uppercase font-normal">Actions</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/30 text-gray-600 dark:text-zinc-300">
                       {selectedContract.milestones.map((m, index) => {
-                        const isClaimed = m.status === "Claimed";
-                        const isInProgress = m.status === "In Progress";
+                        const isClient = user?.account_id === selectedContract.clientAccountId;
+                        const isOverdue = m.status === 'Overdue' || m.status === 'Stalled' || m.status === 'Abandoned';
+                        const isUnderReview = m.status === 'Under Review';
+                        const statusColor =
+                          m.status === 'Claimed'      ? 'text-emerald-500' :
+                          m.status === 'In Progress'  ? 'text-amber-400' :
+                          m.status === 'Under Review' ? 'text-blue-400' :
+                          m.status === 'Overdue'      ? 'text-rose-400' :
+                          m.status === 'Stalled'      ? 'text-orange-400' :
+                          m.status === 'Abandoned'    ? 'text-red-600' :
+                          'text-gray-500 dark:text-zinc-500';
 
                         return (
                           <tr key={m.id} className="hover:bg-white/5 transition-colors">
                             <td className="px-3 py-2 text-center text-gray-500 dark:text-zinc-500">{index + 1}</td>
                             <td className="px-3 py-2 font-medium text-gray-700 dark:text-zinc-200">{m.name}</td>
                             <td className="px-3 py-2 text-center">
-                              <span className="uppercase tracking-widest text-[8px] text-gray-500 dark:text-zinc-400">
+                              <span className={`uppercase tracking-widest text-[8px] font-bold ${statusColor}`}>
                                 {m.status}
                               </span>
                             </td>
@@ -756,6 +823,24 @@ export const Contracts: React.FC = () => {
                                 <span>{m.credits.toLocaleString()}</span>
                               </div>
                             </td>
+                            {isClient && selectedContract.status === 'Active' && (
+                              <td className="px-3 py-2 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  {isUnderReview && (
+                                    <>
+                                      <button onClick={() => handleMilestoneAction('approve', m, selectedContract.id)} disabled={milestoneLoading} className="rounded px-2 py-0.5 text-[9px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500/20 transition disabled:opacity-50">✓ Approve</button>
+                                      <button onClick={() => handleMilestoneAction('revision', m, selectedContract.id)} disabled={milestoneLoading} className="rounded px-2 py-0.5 text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition disabled:opacity-50">↩ Revise</button>
+                                    </>
+                                  )}
+                                  {isOverdue && (
+                                    <>
+                                      <button onClick={() => setMilestoneAction({ type: 'extend', milestoneId: String(m.id), milestoneName: m.name })} disabled={milestoneLoading} className="rounded px-2 py-0.5 text-[9px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition disabled:opacity-50">↗ Extend</button>
+                                      <button onClick={() => setMilestoneAction({ type: 'cancel', milestoneId: String(m.id), milestoneName: m.name })} disabled={milestoneLoading} className="rounded px-2 py-0.5 text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition disabled:opacity-50">✕ Cancel</button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
@@ -779,25 +864,51 @@ export const Contracts: React.FC = () => {
                 </div>
               </div>
 
-              {/* V. PLATFORM AGREEMENT */}
+              {/* V. PLATFORM & MILESTONE POLICY */}
               <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-zinc-800">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-zinc-100">
-                    V. Platform Agreement
+                    V. Platform Escrow & Milestone Policy
                   </h3>
+                  <span className="text-[10px] font-mono text-blue-500 font-semibold uppercase tracking-wider">
+                    Binding Terms
+                  </span>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-3">
-                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                     <span className="text-sm font-mono text-gray-700 dark:text-zinc-300">Client Agreed to the Freelancer's Terms of Service</span>
+
+                <div className="grid gap-3 sm:grid-cols-2 text-xs">
+                  <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02] p-3 space-y-1.5">
+                    <div className="flex items-center gap-2 font-bold text-gray-900 dark:text-zinc-100">
+                      <Clock className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Review Window & Inaction Rule</span>
+                    </div>
+                    <p className="text-[11px] text-gray-600 dark:text-zinc-400 leading-relaxed font-sans">
+                      Clients have <strong>{selectedContract.contractType === 'Gig' ? '3 days' : '5 days'}</strong> to review submitted milestones. If no review, revision request, or dispute is submitted within this window, the milestone <strong>automatically approves</strong> and held escrow credits are released to the freelancer.
+                    </p>
                   </div>
-                  <div className="flex items-center gap-3">
-                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                     <span className="text-sm font-mono text-gray-700 dark:text-zinc-300">Freelancer Accepts the Contract</span>
+
+                  <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02] p-3 space-y-1.5">
+                    <div className="flex items-center gap-2 font-bold text-gray-900 dark:text-zinc-100">
+                      <Shield className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Overdue & Refund Policy</span>
+                    </div>
+                    <p className="text-[11px] text-gray-600 dark:text-zinc-400 leading-relaxed font-sans">
+                      If the freelancer misses the agreed milestone deadline without submission, the client holds the right to <strong>extend the deadline</strong> or <strong>cancel the milestone for a 100% credit refund</strong> to their wallet.
+                    </p>
                   </div>
-                  <div className="flex items-center gap-3">
-                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                     <span className="text-sm font-mono text-gray-700 dark:text-zinc-300">Both Party Accepts the Platform Terms and Policy</span>
+                </div>
+
+                <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-white/5">
+                  <div className="flex items-center gap-2.5">
+                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                     <span className="text-xs font-mono text-gray-700 dark:text-zinc-300">Client Agreed to the Freelancer's Terms of Service</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                     <span className="text-xs font-mono text-gray-700 dark:text-zinc-300">Freelancer Accepts Contract Milestones & Delivery Schedule</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                     <span className="text-xs font-mono text-gray-700 dark:text-zinc-300">Both Parties Agree to Ensemble Escrow Protection & Inaction Policies</span>
                   </div>
                 </div>
               </div>
@@ -840,6 +951,37 @@ export const Contracts: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Milestone Confirm Modal */}
+      {milestoneAction && selectedContract && (
+        <div className="fixed inset-0 z-[199999] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in font-['Plus_Jakarta_Sans']">
+          <div className="w-full max-w-sm rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0f1115] p-6 shadow-2xl space-y-4">
+            {milestoneAction.type === 'cancel' ? (
+              <>
+                <h3 className="text-base font-bold text-rose-500">Cancel Milestone & Refund</h3>
+                <p className="text-sm text-gray-600 dark:text-zinc-300">Are you sure you want to cancel <strong>"{milestoneAction.milestoneName}"</strong>? The milestone credits will be refunded to your wallet. This cannot be undone.</p>
+                <div className="flex gap-3 justify-end pt-2">
+                  <button onClick={() => setMilestoneAction(null)} className="rounded-xl border border-gray-200 dark:border-white/15 px-4 py-2 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 transition">Keep Contract</button>
+                  <button onClick={() => handleMilestoneAction('cancel', { id: milestoneAction.milestoneId, name: milestoneAction.milestoneName } as any, selectedContract.id)} disabled={milestoneLoading} className="rounded-xl bg-rose-500 px-4 py-2 text-xs font-bold text-white hover:bg-rose-600 transition disabled:opacity-50">{milestoneLoading ? 'Processing...' : 'Yes, Cancel & Refund'}</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-base font-bold text-blue-400">Extend Deadline</h3>
+                <p className="text-sm text-gray-600 dark:text-zinc-300">How many additional days do you want to give for <strong>"{milestoneAction.milestoneName}"</strong>?</p>
+                <div className="flex items-center gap-3">
+                  <input type="number" min={1} max={90} value={extensionDays} onChange={e => setExtensionDays(Number(e.target.value))} className="w-24 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <span className="text-sm text-gray-500 dark:text-zinc-400">days</span>
+                </div>
+                <div className="flex gap-3 justify-end pt-2">
+                  <button onClick={() => setMilestoneAction(null)} className="rounded-xl border border-gray-200 dark:border-white/15 px-4 py-2 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 transition">Cancel</button>
+                  <button onClick={() => handleMilestoneAction('extend', { id: milestoneAction.milestoneId, name: milestoneAction.milestoneName } as any, selectedContract.id)} disabled={milestoneLoading || extensionDays < 1} className="rounded-xl bg-blue-500 px-4 py-2 text-xs font-bold text-white hover:bg-blue-600 transition disabled:opacity-50">{milestoneLoading ? 'Processing...' : `Extend by ${extensionDays} day${extensionDays !== 1 ? 's' : ''}`}</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

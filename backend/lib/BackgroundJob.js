@@ -27,6 +27,13 @@ const { reconcileCashoutsServices } = require('../services/CashoutServices');
 const { cleanupExpiredOnboardingAvatars } = require('../services/OnboardingServices');
 const { reconcileDiditVerificationSessionsServices } = require('../services/AccountVerificationServices');
 const { reconcileOverdueTeamTasksServices } = require('../services/TeamTaskServices');
+const {
+    reconcileOverdueMilestonesServices,
+    reconcileStalledMilestonesServices,
+    reconcileAbandonedMilestonesServices,
+    reconcileAutoApprovalServices,
+    reconcileMilestoneRemindersServices,
+} = require('../services/MilestoneServices');
 
 const config = {
     auth: {
@@ -299,6 +306,10 @@ let isSubscriptionJobRunning = false;
 let isCashoutJobRunning = false;
 let isVerificationJobRunning = false;
 let isTeamTaskDeadlineJobRunning = false;
+let isMilestoneOverdueJobRunning = false;
+let isMilestoneStalledJobRunning = false;
+let isMilestoneAutoApproveJobRunning = false;
+let isMilestoneReminderJobRunning = false;
 
 function startPaymentReconciliationJob() {
 
@@ -422,6 +433,73 @@ function startPaymentReconciliationJob() {
             await reconcileUnassignedDisputesServices();
         } catch (err) {
             console.error("Dispute auto-assign reconciliation failed:", err.message);
+        }
+    });
+
+    // ── Milestone: flag overdue + send approaching-deadline reminders ──────
+    // Job 1: Overdue detector — every hour at :00
+    cron.schedule("0 * * * *", async () => {
+        if (isMilestoneOverdueJobRunning) return;
+        isMilestoneOverdueJobRunning = true;
+        try {
+            const result = await reconcileOverdueMilestonesServices();
+            if (result.flagged) console.log(`Milestone overdue: flagged ${result.flagged}`);
+        } catch (err) {
+            console.error("Milestone overdue reconciliation failed:", err.message);
+        } finally {
+            isMilestoneOverdueJobRunning = false;
+        }
+    });
+
+    // Job 2: Stalled escalator — every hour at :15
+    cron.schedule("15 * * * *", async () => {
+        if (isMilestoneStalledJobRunning) return;
+        isMilestoneStalledJobRunning = true;
+        try {
+            const result = await reconcileStalledMilestonesServices();
+            if (result.escalated) console.log(`Milestone stalled: escalated ${result.escalated}`);
+        } catch (err) {
+            console.error("Milestone stalled escalation failed:", err.message);
+        } finally {
+            isMilestoneStalledJobRunning = false;
+        }
+    });
+
+    // Job 3: Auto-approve resolver — every hour at :30
+    cron.schedule("30 * * * *", async () => {
+        if (isMilestoneAutoApproveJobRunning) return;
+        isMilestoneAutoApproveJobRunning = true;
+        try {
+            const result = await reconcileAutoApprovalServices();
+            if (result.approved) console.log(`Milestone auto-approve: released ${result.approved}`);
+        } catch (err) {
+            console.error("Milestone auto-approval failed:", err.message);
+        } finally {
+            isMilestoneAutoApproveJobRunning = false;
+        }
+    });
+
+    // Job 4: Reminder sender — every hour at :45
+    cron.schedule("45 * * * *", async () => {
+        if (isMilestoneReminderJobRunning) return;
+        isMilestoneReminderJobRunning = true;
+        try {
+            const result = await reconcileMilestoneRemindersServices();
+            if (result.reminded) console.log(`Milestone reminders: sent ${result.reminded}`);
+        } catch (err) {
+            console.error("Milestone reminder dispatch failed:", err.message);
+        } finally {
+            isMilestoneReminderJobRunning = false;
+        }
+    });
+
+    // Job 5: Abandoned marker — daily at 02:30 AM
+    cron.schedule("30 2 * * *", async () => {
+        try {
+            const result = await reconcileAbandonedMilestonesServices();
+            if (result.abandoned) console.log(`Milestone abandoned: marked ${result.abandoned}`);
+        } catch (err) {
+            console.error("Milestone abandoned marking failed:", err.message);
         }
     });
 
