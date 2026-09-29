@@ -389,7 +389,27 @@ async function createGroupServices(payload, accountId) {
         updated_at: now,
         deleted_at: null,
     });
+
+    const actorName = await actorDisplayName(ownerId);
+    const insertedId = await createMessageRepositories({
+        conversation_id: String(result.insertedId),
+        sender_id: String(ownerId),
+        message_type: 'system',
+        message_content: `${actorName} created the group chat.`,
+        message_id_reply: null,
+        attachments: [],
+        links: [],
+        message_react: [],
+        read_by: [{ account_id: String(ownerId), read_at: now }],
+        is_edited: false,
+        is_deleted: false,
+        created_at: now,
+        updated_at: now,
+    });
+
     const inbox = await getInboxByIdRepositories(result.insertedId);
+    inbox.membership_event_message = await getMessageByIdRepositories(insertedId);
+
     await persistChatNotifications({
         inbox,
         actorId: ownerId,
@@ -940,7 +960,32 @@ async function pinMessageServices(conversationId, messageId, accountId) {
 
 async function unpinMessageServices(conversationId, messageId, accountId) {
     await requireConversationMember(conversationId, accountId);
-    return await unpinMessageRepositories(conversationId, messageId);
+    const updatedInbox = await unpinMessageRepositories(conversationId, messageId);
+
+    const message = await getMessageByIdRepositories(messageId);
+    const actorName = await actorDisplayName(accountId);
+    const isVideo = message?.attachments?.some(a => a.attachment_type === "video");
+    const fallbackText = isVideo ? "video" : message?.attachments?.length ? "photo" : "message";
+    const now = new Date();
+    
+    const insertedId = await createMessageRepositories({
+        conversation_id: String(conversationId),
+        sender_id: String(accountId),
+        message_type: 'system',
+        message_content: `${actorName} unpinned a ${fallbackText}.`,
+        message_id_reply: null,
+        attachments: [],
+        links: [],
+        message_react: [],
+        read_by: [{ account_id: String(accountId), read_at: now }],
+        is_edited: false,
+        is_deleted: false,
+        created_at: now,
+        updated_at: now,
+    });
+    
+    updatedInbox.membership_event_message = await getMessageByIdRepositories(insertedId);
+    return updatedInbox;
 }
 
 async function editMessageServices(messageId, messageContent, accountId) {

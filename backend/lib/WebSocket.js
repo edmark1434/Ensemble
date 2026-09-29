@@ -300,6 +300,9 @@ async function initSocket(httpServer) {
           pinned_messages: inbox.pinned_messages,
           message_id: String(payload.message_id),
         });
+        if (inbox.membership_event_message) {
+          io.to(String(inbox._id)).emit('newMessage', inbox.membership_event_message);
+        }
         acknowledge(callback, inbox);
       } catch (error) {
         rejectEvent(socket, 'messageUnpin', callback, error);

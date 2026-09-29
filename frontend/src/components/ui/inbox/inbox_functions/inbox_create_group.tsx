@@ -2,6 +2,8 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { Users, X, Plus, Trash2 } from "lucide-react";
 import api from "@/lib/axios";
+import useGlobalState from "@/lib/global_state";
+import { chatAttachmentUrl } from "../inbox_dataset";
 
 export interface SuggestedAccount {
   account_id: string;
@@ -21,9 +23,35 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
   onCreateGroup,
   suggestedAccounts = [],
 }) => {
+  const { user } = useGlobalState();
   const [groupName, setGroupName] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedMembers, setSelectedMembers] = useState<SuggestedAccount[]>([]);
+  
+  const currentUser: SuggestedAccount | null = useMemo(() => {
+    if (!user) return null;
+    return {
+      account_id: String(user.account_id),
+      name: user.display_name || user.handle || "You",
+      username: `@${user.handle || ""}`,
+      avatar: chatAttachmentUrl(user.avatar_preset_url || user.profile_picture_url || ""),
+    };
+  }, [user]);
+
+  const [selectedMembers, setSelectedMembers] = useState<SuggestedAccount[]>(
+    currentUser ? [currentUser] : []
+  );
+
+  useEffect(() => {
+    if (currentUser) {
+      setSelectedMembers((prev) => {
+        if (!prev.some((m) => m.account_id === currentUser.account_id)) {
+          return [currentUser, ...prev];
+        }
+        return prev;
+      });
+    }
+  }, [currentUser]);
+
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,21 +75,23 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
         const cloudfront = String(
           import.meta.env.VITE_CLOUDFRONT_URL || ""
         ).replace(/\/$/, "");
-        const accounts = (response.data?.data || []).map((account: any) => {
-          const avatarPath = account.avatar_preset_url || "";
-          return {
-            account_id: String(account.account_id),
-            name: account.display_name || account.handle,
-            username: `@${account.handle}`,
-            avatar: avatarPath
-              ? /^https?:\/\//i.test(avatarPath)
-                ? avatarPath
-                : `${cloudfront}/${String(avatarPath).replace(/^\/+/, "")}`
-              : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                  account.display_name || account.handle
-                )}&background=6366f1&color=fff`,
-          };
-        });
+        const accounts = (response.data?.data || [])
+          .map((account: any) => {
+            const avatarPath = account.avatar_preset_url || "";
+            return {
+              account_id: String(account.account_id),
+              name: account.display_name || account.handle,
+              username: `@${account.handle}`,
+              avatar: avatarPath
+                ? /^https?:\/\//i.test(avatarPath)
+                  ? avatarPath
+                  : `${cloudfront}/${String(avatarPath).replace(/^\/+/, "")}`
+                : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                    account.display_name || account.handle
+                  )}&background=6366f1&color=fff`,
+            };
+          })
+          .filter((a: any) => !currentUser || a.account_id !== currentUser.account_id);
         if (!cancelled) setSearchResults(accounts);
       } catch {
         if (!cancelled) setSearchResults([]);
@@ -96,6 +126,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
   };
 
   const handleRemoveMember = (accountId: string) => {
+    if (currentUser && accountId === currentUser.account_id) return;
     setSelectedMembers((prev) => prev.filter((m) => m.account_id !== accountId));
   };
 
@@ -232,13 +263,15 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
                       className="h-5 w-5 rounded-full object-cover"
                     />
                     <span>{member.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveMember(member.account_id)}
-                      className="ml-0.5 hover:text-red-400 transition"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
+                    {currentUser && member.account_id !== currentUser.account_id && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMember(member.account_id)}
+                        className="ml-0.5 hover:text-red-400 transition"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
                   </span>
                 ))}
               </div>
