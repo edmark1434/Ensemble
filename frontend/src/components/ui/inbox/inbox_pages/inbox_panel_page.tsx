@@ -52,6 +52,7 @@ export const InboxPanelPage = ({
   showDetails,
   onShowDetailsChange,
   onPreviewAttachment,
+  deleteConversation,
 }: any) => {
 
   if (!selectedConversation) {
@@ -156,7 +157,7 @@ export const InboxPanelPage = ({
         onUpdateGroupProfileImage={onUpdateGroupProfileImage}
         onJumpToMessage={onJumpToPinned}
         onPreviewAttachment={onPreviewAttachment}
-        onDeleteConversation={props.deleteConversation}
+        onDeleteConversation={deleteConversation}
       />
     </div>
   );
