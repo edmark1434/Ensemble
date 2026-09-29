@@ -28,7 +28,7 @@ export const InboxTab: React.FC<InboxTabProps> = ({
     <>
       <div
         className={`flex items-center border-b border-gray-200 dark:border-white/10 flex-shrink-0 bg-white dark:bg-dark-surface ${
-          isCollapsed ? "flex-col py-2 gap-2" : ""
+          isCollapsed ? "flex-col py-2 gap-2" : "px-2 gap-1"
         }`}
       >
         {/* Collapse toggle — left of Direct Messages */}
@@ -37,7 +37,7 @@ export const InboxTab: React.FC<InboxTabProps> = ({
             onClick={onToggleCollapse}
             title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
             className={`text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition flex-shrink-0 ${
-              isCollapsed ? "p-3 rounded-xl" : "p-2.5 ml-1"
+              isCollapsed ? "p-3 rounded-xl" : "p-2.5 rounded-xl"
             }`}
           >
             {isCollapsed ? (
