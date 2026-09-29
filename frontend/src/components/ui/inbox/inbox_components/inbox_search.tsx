@@ -49,7 +49,7 @@ export const InboxSearch: React.FC<InboxSearchProps> = ({
           className="p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10 transition flex-shrink-0"
         >
           {isCollapsed ? (
-            <PanelLeftOpen className="h-4 w-4 text-blue-400" />
+            <PanelLeftOpen className="h-4 w-4" />
           ) : (
             <PanelLeftClose className="h-4 w-4" />
           )}

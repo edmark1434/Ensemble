@@ -36,7 +36,7 @@ export const InboxTab: React.FC<InboxTabProps> = ({
             isCollapsed
               ? `p-3 rounded-xl ${
                   !isMarketplace
-                    ? "bg-blue-500/20 text-blue-400"
+                    ? "bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400"
                     : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5"
                 }`
               : `flex-1 py-3 text-sm font-medium ${
@@ -58,7 +58,7 @@ export const InboxTab: React.FC<InboxTabProps> = ({
             isCollapsed
               ? `p-3 rounded-xl ${
                   isMarketplace
-                    ? "bg-blue-500/20 text-blue-400"
+                    ? "bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400"
                     : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5"
                 }`
               : `flex-1 py-3 text-sm font-medium ${
@@ -81,7 +81,7 @@ export const InboxTab: React.FC<InboxTabProps> = ({
             isCollapsed ? "p-3" : "p-2 ml-1"
           }`}
         >
-          <UserPlus className="h-4 w-4 text-blue-400 flex-shrink-0" />
+          <UserPlus className="h-4 w-4 flex-shrink-0" />
         </button>
       </div>
 

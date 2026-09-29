@@ -291,9 +291,19 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
             <button
               type="submit"
               disabled={!groupName.trim() || selectedMembers.length === 0 || isSubmitting}
-              className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-medium text-gray-900 dark:text-white shadow-lg shadow-blue-500/20 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-blue-500/20 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
-              {isSubmitting ? "Creating..." : "Create Group"}
+              {isSubmitting ? (
+                <>
+                  <span className="h-4 w-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Users className="h-4 w-4" />
+                  Create Group
+                </>
+              )}
             </button>
           </div>
         </form>
