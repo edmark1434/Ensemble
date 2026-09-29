@@ -43,6 +43,7 @@ import {
   scrollToRepliedMessage,
 } from "./inbox_functions/inbox_reply_message";
 import { InboxReportModal } from "./inbox_functions/inbox_report_message";
+import { InboxCreateGroupModal } from "./inbox_functions/inbox_create_group";
 import {
   InboxEditedBadge,
 } from "./inbox_functions/inbox_edit_message";
@@ -149,6 +150,7 @@ const InboxMain = () => {
   // Left Sidebar Compact Collapse State (Switches to icon-only w-20 strip)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showChatDetails, setShowChatDetails] = useState(false);
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
 
   // Expanded Image Modal State
   const [expandedMedia, setExpandedMedia] = useState<{ url: string; type: string } | null>(null);
@@ -1247,6 +1249,7 @@ const InboxMain = () => {
             onSearchChange={setSearchQuery}
             activeTab="direct"
             isCollapsed={isSidebarCollapsed}
+            onCreateGroup={() => setShowCreateGroupModal(true)}
           />
           <div className="inbox-scroll-thin flex-1 overflow-y-auto">
             <Routes>
@@ -1410,6 +1413,17 @@ const InboxMain = () => {
           messageToReport={reportModalMessage}
           onClose={() => setReportModalMessage(null)}
           onSubmitReport={handleReportSubmit}
+        />
+      )}
+
+      {showCreateGroupModal && (
+        <InboxCreateGroupModal
+          onClose={() => setShowCreateGroupModal(false)}
+          onCreateGroup={async (data) => {
+            await handleCreateGroup(data);
+            setShowCreateGroupModal(false);
+          }}
+          suggestedAccounts={suggestedAccounts}
         />
       )}
     </div>

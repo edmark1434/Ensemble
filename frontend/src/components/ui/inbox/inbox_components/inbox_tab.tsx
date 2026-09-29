@@ -1,6 +1,6 @@
 // src/components/ui/inbox/inbox_components/inbox_tab.tsx
 import React, { useState } from "react";
-import { Users, Briefcase, UserPlus, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Users, Briefcase, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { InboxCreateGroupModal } from "../inbox_functions/inbox_create_group";
 import type { SuggestedAccount } from "../inbox_functions/inbox_create_group";
@@ -28,28 +28,23 @@ export const InboxTab: React.FC<InboxTabProps> = ({
     <>
       <div
         className={`flex items-center border-b border-gray-200 dark:border-white/10 flex-shrink-0 bg-white dark:bg-dark-surface ${
-          isCollapsed ? "flex-col py-2 gap-2" : "px-1"
+          isCollapsed ? "flex-col py-2 gap-2" : ""
         }`}
       >
         {/* Collapse toggle — left of Direct Messages */}
-        {onToggleCollapse && !isCollapsed && (
+        {onToggleCollapse && (
           <button
             onClick={onToggleCollapse}
-            title="Collapse Sidebar"
-            className="p-2.5 rounded-xl text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition flex-shrink-0"
+            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            className={`text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition flex-shrink-0 ${
+              isCollapsed ? "p-3 rounded-xl" : "p-2.5 ml-1"
+            }`}
           >
-            <PanelLeftClose className="h-4 w-4" />
-          </button>
-        )}
-
-        {/* Collapsed: show expand button */}
-        {onToggleCollapse && isCollapsed && (
-          <button
-            onClick={onToggleCollapse}
-            title="Expand Sidebar"
-            className="p-3 rounded-xl text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition flex-shrink-0"
-          >
-            <PanelLeftOpen className="h-4 w-4" />
+            {isCollapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
           </button>
         )}
 
@@ -95,17 +90,6 @@ export const InboxTab: React.FC<InboxTabProps> = ({
         >
           <Briefcase className="h-4 w-4 flex-shrink-0" />
           {!isCollapsed && <span>Marketplace</span>}
-        </button>
-
-        {/* Create Group Quick Button — far right */}
-        <button
-          onClick={() => setIsModalOpen(true)}
-          title="Create Group Chat"
-          className={`rounded-xl text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition flex-shrink-0 ${
-            isCollapsed ? "p-3" : "p-2.5 mr-1"
-          }`}
-        >
-          <UserPlus className="h-4 w-4 flex-shrink-0" />
         </button>
       </div>
 
