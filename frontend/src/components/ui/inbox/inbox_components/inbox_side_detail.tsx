@@ -21,6 +21,7 @@ import {
   Plus,
   Loader2,
   Zap,
+  HelpCircle,
 } from "lucide-react";
 import type {
   Inbox,
@@ -289,13 +290,24 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           </div>
           <h2 className="text-base font-bold text-gray-900 dark:text-white mb-0.5">{name}</h2>
           <div className="flex items-center justify-center gap-2">
-            <p className="text-xs text-gray-500 dark:text-zinc-400">
-              {isGroup 
-                ? (getMemberLimit && getMemberLimit(selectedConversation)) 
-                  ? `${activeMembers.length}/${getMemberLimit(selectedConversation)} members` 
-                  : `${activeMembers.length} members` 
-                : "Active now"}
-            </p>
+            <div className="flex items-center gap-1 group/tooltip relative">
+              <p className="text-xs text-gray-500 dark:text-zinc-400">
+                {isGroup 
+                  ? (getMemberLimit && getMemberLimit(selectedConversation)) 
+                    ? `${activeMembers.length}/${getMemberLimit(selectedConversation)} members` 
+                    : `${activeMembers.length} members` 
+                  : "Active now"}
+              </p>
+              {isGroup && (
+                <>
+                  <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help transition-colors" />
+                  <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden w-52 rounded-lg bg-gray-800 dark:bg-zinc-800 p-2 text-center text-[11px] leading-tight text-white shadow-xl group-hover/tooltip:block z-50">
+                    Your group chat limit permanently locks in the highest subscription tier you achieve, even if you downgrade later.
+                    <div className="absolute left-1/2 top-full -translate-x-1/2 -translate-y-1/2 border-4 border-transparent border-t-gray-800 dark:border-t-zinc-800" />
+                  </div>
+                </>
+              )}
+            </div>
             {isGroup && isCreatorSelf && getMemberLimit?.(selectedConversation) !== 1000 && (
               <button 
                 onClick={() => navigate("/credits-subscriptions")}
