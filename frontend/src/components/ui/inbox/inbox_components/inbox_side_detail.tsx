@@ -1,6 +1,7 @@
 // src/components/ui/inbox/inbox_functions/inbox_side_details.tsx
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-hot-toast";
 import {
   X,
   User,
@@ -85,6 +86,9 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   onDeleteConversation,
 }) => {
   const navigate = useNavigate();
+
+  if (!selectedConversation) return null;
+
   const isGroup = Boolean(
     selectedConversation.is_group ||
       selectedConversation.conversation_type === "group"
@@ -818,6 +822,10 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                         setIsDeletingGroup(true);
                         try {
                           await onDeleteConversation(selectedConversation._id);
+                          toast.success("Group chat deleted successfully");
+                          onClose();
+                        } catch {
+                          toast.error("Failed to delete group chat");
                         } finally {
                           setIsDeletingGroup(false);
                           setShowDeleteConfirm(false);

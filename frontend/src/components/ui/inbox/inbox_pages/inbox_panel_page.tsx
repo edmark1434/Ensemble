@@ -57,7 +57,7 @@ export const InboxPanelPage = ({
 
   if (!selectedConversation) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-zinc-500">
+      <div className="flex-1 flex items-center justify-center bg-white dark:bg-dark-surface text-gray-500 dark:text-zinc-500">
         Select a conversation to start messaging
       </div>
     );
