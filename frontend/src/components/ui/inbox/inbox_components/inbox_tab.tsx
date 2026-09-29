@@ -28,7 +28,7 @@ export const InboxTab: React.FC<InboxTabProps> = ({
     <>
       <div
         className={`flex items-center border-b border-gray-200 dark:border-white/10 flex-shrink-0 bg-white dark:bg-dark-surface ${
-          isCollapsed ? "flex-col py-2 gap-2" : "px-2 gap-1"
+          isCollapsed ? "flex-col py-2 gap-2" : ""
         }`}
       >
         {/* Collapse toggle — left of Direct Messages */}
