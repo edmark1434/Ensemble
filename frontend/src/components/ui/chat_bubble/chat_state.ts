@@ -1795,15 +1795,18 @@ const useChatState = create<ChatState>((set, get) => ({
 
   deleteConversation: async (conversationId) => {
     await api.delete(`/api/inbox/${conversationId}`);
-    set((state) => {
-      const newConversations = { ...state.conversations };
-      delete newConversations[conversationId];
-      return {
-        conversations: newConversations,
-        activeConversationId: state.activeConversationId === conversationId ? null : state.activeConversationId,
-        floatingWindows: state.floatingWindows.filter((w) => w.conversationId !== conversationId),
-      };
-    });
+    set((state) => ({
+      conversations: state.conversations.filter(
+        (c) => String(c._id) !== String(conversationId)
+      ),
+      activeConversationId:
+        state.activeConversationId === conversationId
+          ? null
+          : state.activeConversationId,
+      floatingWindows: state.floatingWindows.filter(
+        (w) => w.conversationId !== conversationId
+      ),
+    }));
   },
 
   createEngagement: async (payload) => {
