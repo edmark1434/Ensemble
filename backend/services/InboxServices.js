@@ -1635,6 +1635,7 @@ async function enrichInboxesWithMemberProfiles(inboxes, actorIds = []) {
             a.account_id, 
             COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), a.display_name, a.handle) AS display_name,
             a.handle, 
+            p.name AS subscriptiontype,
             COALESCE(
                 f.path,
                 (
@@ -1649,6 +1650,8 @@ async function enrichInboxesWithMemberProfiles(inboxes, actorIds = []) {
          FROM accounts a
          LEFT JOIN users u ON a.account_id = u.account_id
          LEFT JOIN files f ON a.avatar_file_id = f.file_id
+         LEFT JOIN subscriptions s ON u.user_id = s.user_id
+         LEFT JOIN plans p ON s.plan_id = p.plan_id
          WHERE a.account_id = ANY($1::uuid[])`,
         [memberAccountIds]
     );
@@ -1667,6 +1670,7 @@ async function enrichInboxesWithMemberProfiles(inboxes, actorIds = []) {
                     name: acc.display_name || acc.handle,
                     username: acc.handle,
                     avatar_preset_url: acc.avatar_preset_url || null,
+                    subscriptiontype: acc.subscriptiontype || null,
                 };
             });
         }
