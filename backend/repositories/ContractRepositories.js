@@ -399,7 +399,7 @@ async function getContractsByUserId(accountIds) {
             (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = j.client_account_id LIMIT 1) as client_rating,
             (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = p.freelancer_account_id LIMIT 1) as freelancer_rating,
             COALESCE(
-                (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'credits', cm.credits)) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
+                (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'started_at', cm.started_at, 'credits', cm.credits)) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
                 (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max, 'status', 'Locked')) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id)
             ) as milestones
         FROM contracts c
@@ -444,7 +444,7 @@ async function getContractsByUserId(accountIds) {
             (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as client_rating,
             (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as freelancer_rating,
             COALESCE(
-                (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'credits', cm.credits)) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
+                (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'started_at', cm.started_at, 'credits', cm.credits)) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
                 '[]'::json
             ) as milestones
         FROM contracts c

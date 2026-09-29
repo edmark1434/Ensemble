@@ -199,7 +199,8 @@ async function getDashboardTasks(accountId) {
                     'status', cm.status,
                     'credits', cm.credits,
                     'revisions_max', cm.no_of_revisions_max,
-                    'deadline', cm.deadline
+                    'deadline', cm.deadline,
+                    'started_at', cm.started_at
                 ) ORDER BY cm.index ASC)
                 FROM contract_milestones cm 
                 WHERE cm.contract_id = c.contract_id
@@ -244,7 +245,8 @@ async function getDashboardTasks(accountId) {
                     'status', cm.status,
                     'credits', cm.credits,
                     'revisions_max', cm.no_of_revisions_max,
-                    'deadline', cm.deadline
+                    'deadline', cm.deadline,
+                    'started_at', cm.started_at
                 ) ORDER BY cm.index ASC)
                 FROM contract_milestones cm 
                 WHERE cm.contract_id = c.contract_id
@@ -308,6 +310,7 @@ async function getTaskById(contractId, accountId) {
                         'credits', cm.credits,
                         'revisions_max', cm.no_of_revisions_max,
                         'deadline', cm.deadline,
+                        'started_at', cm.started_at,
                         'submissions', (
                             SELECT json_agg(
                                 json_build_object(
@@ -364,6 +367,7 @@ async function getTaskById(contractId, accountId) {
                         'credits', cm.credits,
                         'revisions_max', cm.no_of_revisions_max,
                         'deadline', cm.deadline,
+                        'started_at', cm.started_at,
                         'submissions', (
                             SELECT json_agg(
                                 json_build_object(
