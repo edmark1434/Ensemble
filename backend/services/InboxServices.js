@@ -1029,6 +1029,23 @@ async function renameConversationServices(conversationId, conversationName, acco
     await updateInboxRepositories(conversationId, {
         $set: { conversation_name: name, updated_at: new Date() },
     });
+        const actorName = await actorDisplayName(accountId);
+    const now = new Date();
+    await createMessageRepositories({
+        conversation_id: String(conversationId),
+        sender_id: String(accountId),
+        message_type: 'system',
+        message_content: `${actorName} renamed the group chat to "${name}".`,
+        message_id_reply: null,
+        attachments: [],
+        links: [],
+        message_react: [],
+        read_by: [{ account_id: String(accountId), read_at: now }],
+        is_edited: false,
+        is_deleted: false,
+        created_at: now,
+        updated_at: now,
+    });
     return await getInboxByIdRepositories(conversationId);
 }
 
@@ -1164,6 +1181,27 @@ async function updateGroupMemberServices(conversationId, targetAccountId, payloa
                 requestedStatus === 'left'
                     ? `${memberName} left the group chat.`
                     : `${memberName} was removed from the group chat.`,
+            message_id_reply: null,
+            attachments: [],
+            links: [],
+            message_react: [],
+            read_by: [{ account_id: String(accountId), read_at: now }],
+            is_edited: false,
+            is_deleted: false,
+            deleted_at: null,
+            created_at: now,
+            updated_at: now,
+        });
+        membershipEventMessage = await getMessageByIdRepositories(insertedId);
+    } else if (!existing || (existing.status !== 'active' && requestedStatus === 'active')) {
+        const memberName = await actorDisplayName(targetId);
+        const actorName = await actorDisplayName(accountId);
+        const now = new Date();
+        const insertedId = await createMessageRepositories({
+            conversation_id: String(conversationId),
+            sender_id: String(accountId),
+            message_type: 'system',
+            message_content: `${actorName} added ${memberName} to the group chat.`,
             message_id_reply: null,
             attachments: [],
             links: [],

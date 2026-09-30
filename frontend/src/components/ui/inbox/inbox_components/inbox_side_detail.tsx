@@ -113,6 +113,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   const [isSearchingMembers, setIsSearchingMembers] = useState(false);
   const [isUploadingGroupImage, setIsUploadingGroupImage] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [memberToAdd, setMemberToAdd] = useState<SuggestedAccount | null>(null);
   const [isDeletingGroup, setIsDeletingGroup] = useState(false);
   const groupImageInputRef = useRef<HTMLInputElement>(null);
 
@@ -249,9 +250,9 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
       }`}
       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
     >
-      <div className="w-72 md:w-80 flex flex-col h-full">
+      <div className="w-72 md:w-80 flex flex-col min-h-full">
         {/* Header Close Bar */}
-        <div className="flex items-center justify-between px-4 h-[73px] border-b border-gray-200 dark:border-white/10 sticky top-0 bg-white dark:bg-dark-surface/95 backdrop-blur-sm z-10">
+        <div className="flex items-center justify-between px-4 h-[73px] shrink-0 border-b border-gray-200 dark:border-white/10 sticky top-0 bg-white dark:bg-dark-surface/95 backdrop-blur-sm z-10">
           <h3 className="text-sm font-semibold text-gray-600 dark:text-zinc-300">Chat Details</h3>
           <button
             onClick={onClose}
@@ -262,7 +263,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
         </div>
 
         {/* Main Profile / Group Info Header */}
-        <div className="flex flex-col items-center p-6 border-b border-gray-200 dark:border-white/10 text-center">
+        <div className="flex flex-col items-center p-6 shrink-0 border-b border-gray-200 dark:border-white/10 text-center">
           <div className="relative mb-3">
             <img
               src={avatar}
@@ -488,17 +489,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                             key={account.account_id}
                             type="button"
                             disabled={Boolean(isActive)}
-                            onClick={() =>
-                              void runMemberAction(async () => {
-                                const updated = await onUpdateMember!(
-                                  account.account_id,
-                                  { role: "member", status: "active" }
-                                );
-                                setMemberSearch("");
-                                setMemberSearchResults([]);
-                                return updated;
-                              })
-                            }
+                            onClick={() => setMemberToAdd(account)}
                             className="flex w-full items-center gap-2 rounded-lg p-2 text-left hover:bg-gray-100 dark:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             <img src={account.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
@@ -843,7 +834,46 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
             </div>
           )}
         </div>
-      </div>
+        </div>
+      {/* Add Member Confirmation Modal */}
+      {memberToAdd && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white dark:bg-dark-surface p-6 shadow-xl border border-gray-100 dark:border-white/10 animate-fade-in-up">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Add Member</h3>
+            <p className="text-sm text-gray-600 dark:text-zinc-300 mb-6">
+              Are you sure you want to add <strong className="text-gray-900 dark:text-white">{memberToAdd.username}</strong> to this group chat?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setMemberToAdd(null)}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void runMemberAction(async () => {
+                    if (!onUpdateMember) return;
+                    const updated = await onUpdateMember(
+                      memberToAdd.account_id,
+                      { role: "member", status: "active" }
+                    );
+                    setMemberSearch("");
+                    setMemberSearchResults([]);
+                    setMemberToAdd(null);
+                    return updated;
+                  });
+                }}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

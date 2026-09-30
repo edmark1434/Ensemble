@@ -466,17 +466,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   (item) => String(item._id) === String(message.message_id_reply)
                 )
               : undefined;
+
+            if (message.message_type === 'system') {
+              return (
+                <div key={message._id} className="flex flex-col items-center justify-center my-4 w-full">
+                  <span className="text-xs font-medium text-gray-500 dark:text-zinc-400 bg-gray-100 dark:bg-white/5 px-3 py-1 rounded-full text-center max-w-[80%]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                    {message.message_content}
+                  </span>
+                </div>
+              );
+            }
+
             return (
               <div
                 key={message._id}
-                className={`group flex flex-col ${isMe ? "items-end" : "items-start"}`}
+                className={`group flex flex-col min-w-0 ${isMe ? "items-end" : "items-start"}`}
               >
                 {!hasRestrictedMessageTools && pinnedIds.has(String(message._id)) && (
                   <span className="mb-1 flex items-center gap-1 text-[9px] font-medium text-yellow-600 dark:text-yellow-400">
                     <Pin size={10} className="fill-yellow-600/20 dark:fill-yellow-400/20" /> Pinned
                   </span>
                 )}
-                <div className={`flex max-w-[100%] items-end gap-1.5 ${isMe ? "flex-row-reverse" : ""}`}>
+                <div className={`flex max-w-[100%] min-w-0 items-end gap-1.5 ${isMe ? "flex-row-reverse" : ""}`}>
                   {!isMe && (
                     <div className="flex-shrink-0 w-6 h-6 rounded-full overflow-hidden bg-zinc-200 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-sm mt-auto mb-1">
                       {(() => {
@@ -502,7 +513,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </div>
                   )}
                   <div
-                    className={`relative max-w-[85%] break-words rounded-2xl px-3 py-2 leading-relaxed shadow-sm ${
+                    className={`relative max-w-[85%] min-w-0 break-words rounded-2xl px-3 py-2 leading-relaxed shadow-sm ${
                       isMe
                         ? "rounded-br-[4px] bg-blue-600 text-white"
                         : "rounded-bl-[4px] border border-zinc-200 bg-zinc-100 text-zinc-900 dark:border-white/5 dark:bg-[#1f2230] dark:text-zinc-200"

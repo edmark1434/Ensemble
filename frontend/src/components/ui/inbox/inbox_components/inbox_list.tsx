@@ -51,7 +51,7 @@ export const InboxList: React.FC<InboxListProps> = ({
     }
 
     return (
-      <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-surface p-2 space-y-1 animate-pulse">
+      <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-surface px-2 pt-3 pb-2 space-y-1 animate-pulse">
         {[...Array(6)].map((_, i) => (
           <div
             key={i}
@@ -105,7 +105,7 @@ export const InboxList: React.FC<InboxListProps> = ({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-surface inbox-scroll-thin">
+    <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-surface inbox-scroll-thin pt-3">
       {conversations.map((inbox) => {
         const viewerAccountId = String(
           inbox.viewer_account_id || currentAccountId || ""
@@ -116,14 +116,28 @@ export const InboxList: React.FC<InboxListProps> = ({
         const readableLastMessage = inbox.last_message
           ?.replace(/^(?:\[video-call:(?:missed|ended)\]|\[meeting:(?:requested|ended):[^\]]+\]|\[zoom-call:(?:started|ended):[^\]]+\])\s*/, "")
           ?.replace(/^\[project-invite:[^\]]+\]\s*/, "Project invitation: ");
+
+        const isSystemMessage = readableLastMessage && (
+          readableLastMessage.includes("created the group chat.") ||
+          readableLastMessage.includes("pinned a ") ||
+          readableLastMessage.includes("unpinned a ") ||
+          readableLastMessage.includes("renamed the group chat") ||
+          readableLastMessage.includes("changed the group photo.") ||
+          readableLastMessage.includes("left the group chat.") ||
+          readableLastMessage.includes("was removed from the group chat.") ||
+          (readableLastMessage.includes("added ") && readableLastMessage.includes(" to the group chat."))
+        );
+
         const lastMessage = readableLastMessage
-          ? `${
-              String(inbox.last_message_sender_id) ===
-              viewerAccountId
-                ? "You"
-                : getAccountName?.(String(inbox.last_message_sender_id)) ||
-                  getConversationName(inbox)
-            }: ${readableLastMessage}`
+          ? isSystemMessage
+            ? readableLastMessage
+            : `${
+                String(inbox.last_message_sender_id) ===
+                viewerAccountId
+                  ? "You"
+                  : getAccountName?.(String(inbox.last_message_sender_id)) ||
+                    getConversationName(inbox)
+              }: ${readableLastMessage}`
           : "No messages yet";
         const time = formatTime(inbox.last_message_time || inbox.updated_at);
         const unreadCount = inbox.unread_count || 0;
@@ -179,37 +193,41 @@ export const InboxList: React.FC<InboxListProps> = ({
 
             {!isCollapsed && (
               <>
-                <div className="flex-1 text-left min-w-0">
-                  {name.startsWith("User ") && name.length === 13 ? (
-                    <div className="h-4 w-24 bg-gray-200 dark:bg-zinc-700 animate-pulse rounded mb-1" />
-                  ) : (
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <div className="flex justify-between items-baseline mb-0.5">
+                    {name.startsWith("User ") && name.length === 13 ? (
+                      <div className="h-4 w-24 bg-gray-200 dark:bg-zinc-700 animate-pulse rounded" />
+                    ) : (
+                      <p
+                        className="font-medium text-gray-900 dark:text-white truncate text-sm mr-2 text-left"
+                        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                      >
+                        {name}
+                      </p>
+                    )}
                     <p
-                      className="font-medium text-gray-900 dark:text-white truncate text-sm"
+                      className="text-[10px] text-gray-500 dark:text-zinc-500 flex-shrink-0"
                       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
-                      {name}
+                      {time}
                     </p>
-                  )}
-                  <p
-                    className="text-xs text-gray-500 dark:text-zinc-500 truncate"
-                    style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                  >
-                    {lastMessage}
-                  </p>
-                </div>
-
-                <div className="text-right flex-shrink-0">
-                  <p
-                    className="text-[10px] text-gray-500 dark:text-zinc-500"
-                    style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                  >
-                    {time}
-                  </p>
-                  {unreadCount > 0 && (
-                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-blue-500 text-[10px] font-medium text-gray-900 dark:text-white px-1 mt-1">
-                      {unreadCount > 99 ? "99+" : unreadCount}
-                    </span>
-                  )}
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <p
+                      className="text-xs text-gray-500 dark:text-zinc-500 truncate mr-2 text-left"
+                      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                    >
+                      {lastMessage}
+                    </p>
+                    {unreadCount > 0 ? (
+                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-blue-500 text-[10px] font-medium text-white px-1 flex-shrink-0">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    ) : (
+                      <div className="min-w-[18px] h-[18px] flex-shrink-0"></div>
+                    )}
+                  </div>
                 </div>
               </>
             )}
