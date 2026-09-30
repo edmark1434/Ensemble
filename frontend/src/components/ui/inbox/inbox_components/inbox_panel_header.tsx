@@ -190,7 +190,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-1">
-        <button className="rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white transition">
+        <button className="rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white dark:hover:text-white transition">
           <Share2 className="h-5 w-5" />
         </button>
         {!hasRestrictedMessageTools && (
@@ -206,7 +206,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
               )
             }
             title={canCall ? "Request a meeting" : "No other member is available to meet"}
-            className="rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white transition disabled:opacity-40"
+            className="rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white dark:hover:text-white transition disabled:opacity-40"
           >
             <Video className="h-5 w-5" />
           </button>
@@ -214,7 +214,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
         <button
           onClick={onToggleDetails}
           title="Chat Details"
-          className="rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white transition"
+          className="rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white dark:hover:text-white transition"
         >
           <MoreVertical className="h-5 w-5" />
         </button>

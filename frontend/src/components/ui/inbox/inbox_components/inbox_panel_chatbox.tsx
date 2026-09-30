@@ -105,7 +105,7 @@ uploadLimitMB = 250,
           </div>
           <button
             onClick={cancelReply}
-            className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition"
+            className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white dark:hover:text-white transition"
           >
             <X className="h-4 w-4" />
           </button>
@@ -144,7 +144,7 @@ uploadLimitMB = 250,
           <button
             type="button"
             onClick={() => setShowEmojiPicker((open) => !open)}
-            className="absolute bottom-2.5 right-3 text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
+            className="absolute bottom-2.5 right-3 text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white dark:hover:text-white"
             aria-label="Choose emoji"
           >
             <Smile className="h-5 w-5" />

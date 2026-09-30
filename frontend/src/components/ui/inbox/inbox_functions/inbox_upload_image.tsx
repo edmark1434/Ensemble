@@ -180,7 +180,7 @@ export const InboxUploadMediaButton: React.FC<InboxUploadMediaButtonProps> = ({
         className={`rounded-xl p-2.5 transition flex-shrink-0 ${
           disabled
             ? "text-gray-500 dark:text-zinc-400 cursor-not-allowed"
-            : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white"
+            : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white dark:hover:text-white"
         }`}
       >
         <Paperclip className="h-5 w-5" />

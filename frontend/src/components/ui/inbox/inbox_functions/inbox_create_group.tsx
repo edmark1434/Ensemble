@@ -31,17 +31,25 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
     if (!user) return null;
     const avatarPath = user.avatar_preset_url || user.profile_picture_url || user.profile_picture || "";
     const cloudfront = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/$/, "");
+    const presetMatch = avatarPath.match(/p\d+\.png$/i);
+    let finalAvatar = "";
+    if (presetMatch) {
+      finalAvatar = `/profile_presets/${presetMatch[0]}`;
+    } else if (avatarPath) {
+      finalAvatar = /^https?:\/\//i.test(avatarPath)
+        ? avatarPath
+        : `${cloudfront}/${String(avatarPath).replace(/^\/+/, "")}`;
+    } else {
+      finalAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+        user.display_name || user.handle || "You"
+      )}&background=6366f1&color=fff`;
+    }
+
     return {
       account_id: String(user.account_id),
       name: user.display_name || user.handle || "You",
       username: `@${user.handle || ""}`,
-      avatar: avatarPath
-        ? /^https?:\/\//i.test(avatarPath)
-          ? avatarPath
-          : `${cloudfront}/${String(avatarPath).replace(/^\/+/, "")}`
-        : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-            user.display_name || user.handle || "You"
-          )}&background=6366f1&color=fff`,
+      avatar: finalAvatar,
     };
   }, [user]);
 
@@ -86,17 +94,25 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
         const accounts = (response.data?.data || [])
           .map((account: any) => {
             const avatarPath = account.avatar_preset_url || "";
+            const presetMatch = avatarPath.match(/p\d+\.png$/i);
+            let finalAvatar = "";
+            if (presetMatch) {
+              finalAvatar = `/profile_presets/${presetMatch[0]}`;
+            } else if (avatarPath) {
+              finalAvatar = /^https?:\/\//i.test(avatarPath)
+                ? avatarPath
+                : `${cloudfront}/${String(avatarPath).replace(/^\/+/, "")}`;
+            } else {
+              finalAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                account.display_name || account.handle
+              )}&background=6366f1&color=fff`;
+            }
+
             return {
               account_id: String(account.account_id),
               name: account.display_name || account.handle,
               username: `@${account.handle}`,
-              avatar: avatarPath
-                ? /^https?:\/\//i.test(avatarPath)
-                  ? avatarPath
-                  : `${cloudfront}/${String(avatarPath).replace(/^\/+/, "")}`
-                : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    account.display_name || account.handle
-                  )}&background=6366f1&color=fff`,
+              avatar: finalAvatar,
             };
           })
           .filter((a: any) => !currentUser || a.account_id !== currentUser.account_id);
@@ -192,7 +208,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="rounded-full p-1 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white transition"
+            className="rounded-full p-1 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white dark:hover:text-white transition"
           >
             <X className="h-5 w-5" />
           </button>
@@ -310,7 +326,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl px-4 py-2 text-sm text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white transition"
+              className="rounded-xl px-4 py-2 text-sm text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white dark:hover:text-white transition"
             >
               Cancel
             </button>

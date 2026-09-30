@@ -1125,7 +1125,7 @@ const InboxMain = () => {
                     setActiveEmojiPickerId(isPickerOpen ? null : message._id);
                     setActiveMenuId(null);
                   }}
-                  className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white transition"
+                  className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white dark:hover:text-white transition"
                 >
                   <Smile className="h-4 w-4" />
                 </button>
@@ -1142,7 +1142,7 @@ const InboxMain = () => {
               <button
                 onClick={() => handleReply(message)}
                 title="Reply"
-                className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white transition"
+                className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white dark:hover:text-white transition"
               >
                 <Reply className="h-4 w-4" />
               </button>
@@ -1153,7 +1153,7 @@ const InboxMain = () => {
                     setActiveMenuId(isMenuOpen ? null : message._id);
                     setActiveEmojiPickerId(null);
                   }}
-                  className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white transition"
+                  className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white dark:hover:text-white transition"
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </button>

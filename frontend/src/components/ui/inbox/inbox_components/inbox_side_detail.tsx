@@ -256,7 +256,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           <h3 className="text-sm font-semibold text-gray-600 dark:text-zinc-300">Chat Details</h3>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition"
+            className="p-1.5 rounded-full text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition"
           >
             <X className="h-4 w-4" />
           </button>
@@ -350,7 +350,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                     navigate(`/profile/${otherMember.account_id}`);
                   }
                 }}
-                className="flex flex-col items-center gap-1.5 text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition group"
+                className="flex flex-col items-center gap-1.5 text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white transition group"
               >
                 <div className="p-3 rounded-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 group-hover:bg-blue-500 group-hover:border-blue-500 transition">
                   <User className="h-5 w-5" />
@@ -374,7 +374,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
             <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
               <button
                 onClick={() => setIsCustomizeOpen((prev) => !prev)}
-                className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
+                className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
               >
                 <span>Customize Chat</span>
                 {isCustomizeOpen ? (
@@ -429,7 +429,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
             <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
               <div
                 onClick={() => setIsMembersOpen((prev) => !prev)}
-                className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
+                className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
               >
                 <button type="button" className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-blue-400" />
@@ -599,7 +599,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
             <button
               onClick={() => setIsPinnedOpen((prev) => !prev)}
-              className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
+              className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
             >
               <div className="flex items-center gap-2">
                 <Pin className="h-4 w-4 text-gray-500 dark:text-gray-400" />
@@ -643,7 +643,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
             <button
               onClick={() => setIsLinksOpen((prev) => !prev)}
-              className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
+              className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
             >
               <div className="flex items-center gap-2">
                 <LinkIcon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
@@ -674,7 +674,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                       <span className="text-blue-400 group-hover:underline truncate max-w-[85%]">
                         {item.url}
                       </span>
-                      <ExternalLink className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-500 group-hover:text-gray-900 dark:text-white flex-shrink-0" />
+                      <ExternalLink className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-500 group-hover:text-gray-900 dark:text-white dark:group-hover:text-white dark:hover:text-white flex-shrink-0" />
                     </a>
                   ))
                 )}
@@ -686,7 +686,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
             <button
               onClick={() => setIsAttachmentsOpen((prev) => !prev)}
-              className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
+              className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
             >
               <div className="flex items-center gap-2">
                 <Paperclip className="h-4 w-4 text-gray-500 dark:text-gray-400" />
