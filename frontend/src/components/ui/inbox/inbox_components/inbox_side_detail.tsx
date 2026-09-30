@@ -150,9 +150,9 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   const creatorId = selectedConversation.creator_id || owner?.account_id || currentUserId;
   const isCreatorSelf = creatorId === currentUserId;
   const memberList: Members[] = selectedConversation.members || [];
-  const activeMembers = memberList.filter(
-    (member) => !["left", "removed"].includes(member.status || "active")
-  );
+  const activeMembers = memberList.filter( (member) => !['left', 'removed'].includes(member.status || 'active') );
+  const memberLimit = getMemberLimit ? getMemberLimit(selectedConversation) : null;
+  const isLimitReached = memberLimit !== null && activeMembers.length >= memberLimit;
   const currentMember = memberList.find(
     (member) => String(member.account_id) === currentUserId
   );
@@ -488,7 +488,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                           <button
                             key={account.account_id}
                             type="button"
-                            disabled={Boolean(isActive)}
+                            disabled={Boolean(isActive) || isLimitReached} title={isLimitReached ? "Maximum members reached" : ""}
                             onClick={() => setMemberToAdd(account)}
                             className="flex w-full items-center gap-2 rounded-lg p-2 text-left hover:bg-gray-100 dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                           >
@@ -540,15 +540,16 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                           {canManageMembers && member.role !== "owner" && (
                             <>
                               {isInactive ? (
-                                <button
-                                  title="Re-add member"
-                                  onClick={() =>
-                                    onUpdateMember &&
-                                    void runMemberAction(() =>
-                                      onUpdateMember(memberId, { status: "active" })
-                                    )
-                                  }
-                                  className="p-1 text-emerald-400 hover:bg-gray-100 dark:hover:bg-white/10"
+                                  <button
+                                    title={isLimitReached ? "Maximum members reached" : "Re-add member"}
+                                    disabled={isLimitReached}
+                                    onClick={() =>
+                                      onUpdateMember &&
+                                      void runMemberAction(() =>
+                                        onUpdateMember(memberId, { status: "active" })
+                                      )
+                                    }
+                                    className="p-1 text-emerald-400 hover:bg-gray-100 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   <UserPlus className="h-3.5 w-3.5" />
                                 </button>
@@ -877,5 +878,10 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
     </div>
   );
 };
+
+
+
+
+
 
 
