@@ -1222,7 +1222,7 @@ const InboxMain = () => {
   };
 
   return (
-    <div className="w-full h-screen bg-gray-50 dark:bg-dark-base flex flex-col overflow-hidden">
+    <div className="w-full h-full bg-gray-50 dark:bg-dark-base flex flex-col overflow-hidden">
       <UserHeader pageTitle="Inbox" />
 
       <div className="w-full flex-1 min-h-0 overflow-hidden flex border-t border-gray-200 dark:border-white/10 relative">
@@ -1305,7 +1305,7 @@ const InboxMain = () => {
         </div>
 
         {/* Main Panel Page */}
-        <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden relative">
+        <div className="flex-1 flex flex-col h-full min-h-0 min-w-0 overflow-hidden relative">
           <InboxPanelPage
             selectedConversation={selectedConversation}
             getConversationName={getConversationName}
@@ -1330,7 +1330,7 @@ const InboxMain = () => {
             setMessageInput={handleMessageInputChange}
             handleSendMessage={handleSendMessage}
             isSending={isSending}
-            typingCount={typingAccounts.length}
+            typingNames={typingAccounts.map(id => profiles[id]?.name || "Someone")}
             replyToMessage={replyToMessage}
             editingMessage={editingMessage}
             cancelReply={() => {

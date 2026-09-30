@@ -28,7 +28,7 @@ export const InboxPanelPage = ({
   setMessageInput,
   handleSendMessage,
   isSending,
-  typingCount,
+  typingNames,
   replyToMessage,
   editingMessage,
   cancelReply,
@@ -122,7 +122,7 @@ export const InboxPanelPage = ({
             setMessageInput={setMessageInput}
             handleSendMessage={handleSendMessage}
             isSending={isSending}
-            typingCount={typingCount}
+            typingNames={typingNames}
             replyToMessage={replyToMessage}
             editingMessage={editingMessage}
             cancelReply={cancelReply}
