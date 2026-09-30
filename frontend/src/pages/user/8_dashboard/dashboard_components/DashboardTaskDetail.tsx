@@ -127,12 +127,10 @@ export const DashboardTaskDetail = () => {
     let computedStatus = task.contract_status;
     if (computedStatus === 'Active') computedStatus = 'Ongoing';
     if (computedStatus === 'Waiting' || computedStatus === 'Pending Signature') computedStatus = 'Waiting';
-    if (allMilestonesDone) {
-        if (myReview && theirReview) {
-            computedStatus = 'Completed';
-        } else {
-            computedStatus = 'Done';
-        }
+    if (task.contract_status === 'Completed' || (allMilestonesDone && myReview && theirReview)) {
+        computedStatus = 'Completed';
+    } else if (allMilestonesDone) {
+        computedStatus = 'Done';
     }
 
     const statusBadgeColor = 
@@ -303,6 +301,7 @@ export const DashboardTaskDetail = () => {
                                 isFreelancer={isFreelancer} 
                                 onRefreshTask={applyTaskUpdate}
                                 canReviewContract={allMilestonesDone && !myReview}
+                                myReview={myReview}
                                 onOpenReviewModal={() => setIsReviewModalOpen(true)}
                             />
                         ) : (

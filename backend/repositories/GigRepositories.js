@@ -187,7 +187,7 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
                 JOIN gig_contracts gc ON r.contract_id = gc.contract_id
                 JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
                 JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
             ) as "clientRating",
             (
                 SELECT COUNT(r.rating_id)
@@ -195,7 +195,7 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
                 JOIN gig_contracts gc ON r.contract_id = gc.contract_id
                 JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
                 JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
             ) as "ratingCount",
             a.display_name as "postedBy",
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
@@ -310,7 +310,7 @@ async function getSavedGigsRepository(accountId) {
                 JOIN gig_contracts gc ON r.contract_id = gc.contract_id
                 JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
                 JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
             ) as "clientRating",
             (
                 SELECT COUNT(r.rating_id)
@@ -318,7 +318,7 @@ async function getSavedGigsRepository(accountId) {
                 JOIN gig_contracts gc ON r.contract_id = gc.contract_id
                 JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
                 JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
             ) as "ratingCount",
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
             (SELECT json_agg(f.path) FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id) as gallery,
@@ -526,7 +526,7 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
                 JOIN gig_contracts gc ON r.contract_id = gc.contract_id
                 JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
                 JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
             ) as "clientRating",
             (
                 SELECT COUNT(r.rating_id)
@@ -534,7 +534,7 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
                 JOIN gig_contracts gc ON r.contract_id = gc.contract_id
                 JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
                 JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
             ) as "ratingCount",
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
             (SELECT json_agg(f.path) FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index > 0) as gallery,
@@ -567,16 +567,16 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
                       'stars', r.stars_out_of_five,
                       'feedback', r.feedback,
                       'createdAt', r.created_at,
-                      'reviewerName', a.display_name,
+                      'reviewerName', client_acc.display_name,
                       'reviewerAvatar', f.path
                   ))
                   FROM ratings r
-                  JOIN accounts a ON r.account_id = a.account_id
-                  LEFT JOIN files f ON a.avatar_file_id = f.file_id
                   JOIN gig_contracts gc ON r.contract_id = gc.contract_id
                   JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+                  JOIN accounts client_acc ON gr.client_account_id = client_acc.account_id
+                  LEFT JOIN files f ON client_acc.avatar_file_id = f.file_id
                   JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-                  WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+                  WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
               ) as reviews,
             g.freelancer_account_id = ANY($4::uuid[]) as "isOwnGig",
             g.freelancer_account_id = ANY($3::uuid[]) as "canManageGig",

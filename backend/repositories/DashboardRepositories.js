@@ -206,8 +206,8 @@ async function getDashboardTasks(accountId) {
                 FROM contract_milestones cm 
                 WHERE cm.contract_id = c.contract_id
             ) as milestones,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = j.client_account_id LIMIT 1) as client_rating,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = p.freelancer_account_id LIMIT 1) as freelancer_rating
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = p.freelancer_account_id LIMIT 1) as client_rating,
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = j.client_account_id LIMIT 1) as freelancer_rating
         FROM contracts c
         JOIN job_contracts jc ON c.contract_id = jc.contract_id
         JOIN proposals p ON jc.proposal_id = p.proposal_id
@@ -253,8 +253,8 @@ async function getDashboardTasks(accountId) {
                 FROM contract_milestones cm 
                 WHERE cm.contract_id = c.contract_id
             ) as milestones,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as client_rating,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as freelancer_rating
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as client_rating,
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as freelancer_rating
         FROM contracts c
         JOIN gig_contracts gc ON c.contract_id = gc.contract_id
         JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
@@ -332,8 +332,8 @@ async function getTaskById(contractId, accountId) {
                 FROM contract_milestones cm 
                 WHERE cm.contract_id = c.contract_id
             ) as milestones,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = j.client_account_id LIMIT 1) as client_rating,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = p.freelancer_account_id LIMIT 1) as freelancer_rating
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = p.freelancer_account_id LIMIT 1) as client_rating,
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = j.client_account_id LIMIT 1) as freelancer_rating
         FROM contracts c
         JOIN job_contracts jc ON c.contract_id = jc.contract_id
         JOIN proposals p ON jc.proposal_id = p.proposal_id
@@ -390,8 +390,8 @@ async function getTaskById(contractId, accountId) {
                 FROM contract_milestones cm 
                 WHERE cm.contract_id = c.contract_id
             ) as milestones,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as client_rating,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as freelancer_rating
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as client_rating,
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as freelancer_rating
         FROM contracts c
         JOIN gig_contracts gc ON c.contract_id = gc.contract_id
         JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
@@ -815,29 +815,67 @@ async function submitContractReview(contractId, accountId, stars, feedback) {
     try {
         await client.query('BEGIN');
         
-        const query = `
-            INSERT INTO ratings (contract_id, account_id, stars_out_of_five, feedback)
-            VALUES ($1, $2, $3, $4)
-            RETURNING *
-        `;
-        const result = await client.query(query, [contractId, accountId, stars, feedback]);
-        const rating = result.rows[0];
+        // Identify contract participants and caller's role
+        const permissions = await getContractPermissions(contractId, accountId, client);
+        if (!permissions) {
+            throw new Error('Contract not found or unauthorized');
+        }
 
-        // Check if both parties have reviewed
+        const clientAccId = permissions.participants?.client_account_id;
+        const freeAccId = permissions.participants?.freelancer_account_id;
+        const isClient = permissions.userRole?.effectiveRole === 'client' || String(clientAccId) === String(accountId);
+        const isFreelancer = permissions.userRole?.effectiveRole === 'freelancer' || String(freeAccId) === String(accountId);
+
+        if (!isClient && !isFreelancer) {
+            throw new Error('You are not authorized to review this contract.');
+        }
+
+        // Target of review: if reviewer is client, target is freelancer; if reviewer is freelancer, target is client
+        const targetAccountId = isClient ? freeAccId : clientAccId;
+
+        // Upsert into ratings
+        const existingRating = await client.query(
+            `SELECT rating_id FROM ratings WHERE contract_id = $1 AND account_id = $2 LIMIT 1`,
+            [contractId, targetAccountId]
+        );
+
+        let rating;
+        if (existingRating.rows.length > 0) {
+            const updateRes = await client.query(
+                `UPDATE ratings 
+                 SET stars_out_of_five = $1, feedback = $2, updated_at = NOW() 
+                 WHERE rating_id = $3 
+                 RETURNING *`,
+                [stars, feedback, existingRating.rows[0].rating_id]
+            );
+            rating = updateRes.rows[0];
+        } else {
+            const insertRes = await client.query(
+                `INSERT INTO ratings (contract_id, account_id, stars_out_of_five, feedback)
+                 VALUES ($1, $2, $3, $4)
+                 RETURNING *`,
+                [contractId, targetAccountId, stars, feedback]
+            );
+            rating = insertRes.rows[0];
+        }
+
+        // Check if both parties have reviewed (count distinct target account IDs in ratings)
         const allRatings = await client.query(
-            `SELECT account_id FROM ratings WHERE contract_id = $1`,
+            `SELECT DISTINCT account_id FROM ratings WHERE contract_id = $1`,
             [contractId]
         );
 
+        let contractCompleted = false;
         if (allRatings.rows.length >= 2) {
             await client.query(
-                `UPDATE contracts SET status = 'Completed' WHERE contract_id = $1 AND LOWER(status) = 'done'`,
+                `UPDATE contracts SET status = 'Completed' WHERE contract_id = $1`,
                 [contractId]
             );
+            contractCompleted = true;
         }
 
         await client.query('COMMIT');
-        return rating;
+        return { rating, contractCompleted, targetAccountId, isClient, isFreelancer };
     } catch (error) {
         await client.query('ROLLBACK');
         throw error;

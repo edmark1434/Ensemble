@@ -352,9 +352,81 @@ async function buyRevisionServices({ accountId, contractId, milestoneId, payload
     };
 }
 
+async function reviewContractServices({ contractId, accountId, rating, feedback }) {
+    const normalizedContractId = requireUuid(contractId, 'contract ID');
+    const actorId = requireUuid(accountId, 'account ID');
+
+    const numRating = Number(rating);
+    if (!Number.isInteger(numRating) || numRating < 1 || numRating > 5) {
+        throw new DashboardActionError('Rating must be an integer between 1 and 5');
+    }
+
+    const trimmedFeedback = String(feedback || '').trim();
+    if (!trimmedFeedback) {
+        throw new DashboardActionError('Feedback cannot be empty');
+    }
+    if (trimmedFeedback.length > 5000) {
+        throw new DashboardActionError('Feedback must be 5,000 characters or fewer');
+    }
+
+    const reviewResult = await DashboardRepositories.submitContractReview(
+        normalizedContractId,
+        actorId,
+        numRating,
+        trimmedFeedback
+    );
+
+    const task = await DashboardRepositories.getTaskById(normalizedContractId, actorId);
+
+    const io = safeIo();
+    if (io && task) {
+        const clientAccId = String(task.client_account_id);
+        const freeAccId = String(task.freelancer_account_id);
+        const targetAccId = String(reviewResult.targetAccountId);
+
+        const rooms = new Set([clientAccId, freeAccId, actorId].filter(Boolean));
+        let broadcaster = io;
+        for (const room of rooms) {
+            broadcaster = broadcaster.to(room);
+        }
+        broadcaster.emit('dashboardTaskUpdated', {
+            contract_id: normalizedContractId,
+            task,
+            action: 'contract_reviewed',
+            actor_account_id: actorId,
+            contract_status: task.contract_status,
+            contract_completed: reviewResult.contractCompleted,
+            emitted_at: new Date().toISOString(),
+        });
+
+        try {
+            const reviewerName = reviewResult.isClient ? task.client_name : task.freelancer_name;
+            const notif = await createNotificationServices({
+                message: `${reviewerName || 'A user'} left you a ${numRating}-star review for "${task.job_title || 'contract'}".`,
+                is_read: false,
+                reference_table: 'ratings',
+                reference_prefix: 'CONTRACT_REVIEW',
+                reference_path: `/profile/${targetAccId}`,
+                reference_id: reviewResult.rating.rating_id,
+                account_id: targetAccId,
+            });
+            io.to(targetAccId).emit('notification', notif);
+        } catch (notifErr) {
+            console.error('Unable to create review notification:', notifErr.message);
+        }
+    }
+
+    return {
+        review: reviewResult.rating,
+        contractCompleted: reviewResult.contractCompleted,
+        task,
+    };
+}
+
 module.exports = {
     DashboardActionError,
     submitMilestoneServices,
     reviewMilestoneServices,
     buyRevisionServices,
+    reviewContractServices,
 };

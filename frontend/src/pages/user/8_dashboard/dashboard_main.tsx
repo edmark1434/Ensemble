@@ -126,13 +126,14 @@ const DashboardMain = () => {
     };
 
     const computeCompleted = (t: DashboardTask) => {
+        if (t.contract_status === 'Completed') return true;
         const allMilestonesDone = t.milestones?.length > 0 && t.milestones.every((m: any) => m.status === 'completed' || m.status === 'approved');
         const isFreelancer = t.user_role?.effective_role
             ? t.user_role.effective_role === 'freelancer'
             : t.freelancer_account_id === user?.account_id;
         const myReview = isFreelancer ? t.freelancer_rating : t.client_rating;
         const theirReview = isFreelancer ? t.client_rating : t.freelancer_rating;
-        return allMilestonesDone && myReview && theirReview;
+        return Boolean(allMilestonesDone && myReview && theirReview);
     };
 
     const myTasks = tasks.filter(t => (t.user_role?.effective_role === 'freelancer' || (t.freelancer_account_id === user?.account_id && t.user_role?.effective_role !== 'client')) && !computeCompleted(t));
