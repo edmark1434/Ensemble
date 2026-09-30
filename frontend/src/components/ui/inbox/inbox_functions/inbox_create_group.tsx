@@ -29,11 +29,19 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
   
   const currentUser: SuggestedAccount | null = useMemo(() => {
     if (!user) return null;
+    const avatarPath = user.avatar_preset_url || user.profile_picture_url || user.profile_picture || "";
+    const cloudfront = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/$/, "");
     return {
       account_id: String(user.account_id),
       name: user.display_name || user.handle || "You",
       username: `@${user.handle || ""}`,
-      avatar: chatAttachmentUrl(user.avatar_preset_url || user.profile_picture_url || ""),
+      avatar: avatarPath
+        ? /^https?:\/\//i.test(avatarPath)
+          ? avatarPath
+          : `${cloudfront}/${String(avatarPath).replace(/^\/+/, "")}`
+        : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+            user.display_name || user.handle || "You"
+          )}&background=6366f1&color=fff`,
     };
   }, [user]);
 
@@ -184,7 +192,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="rounded-full p-1 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white transition"
+            className="rounded-full p-1 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white transition"
           >
             <X className="h-5 w-5" />
           </button>
@@ -232,7 +240,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
                     key={account.account_id}
                     type="button"
                     onClick={() => handleSelectMember(account)}
-                    className="flex w-full items-center gap-2.5 rounded-lg p-2 text-left hover:bg-gray-100 dark:bg-white/10 transition"
+                    className="flex w-full items-center gap-2.5 rounded-lg p-2 text-left hover:bg-gray-100 dark:hover:bg-white/10 transition"
                   >
                     <img
                       src={account.avatar}
@@ -302,7 +310,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl px-4 py-2 text-sm text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:bg-white/5 hover:text-gray-900 dark:text-white transition"
+              className="rounded-xl px-4 py-2 text-sm text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white transition"
             >
               Cancel
             </button>

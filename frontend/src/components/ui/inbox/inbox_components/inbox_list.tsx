@@ -154,7 +154,7 @@ export const InboxList: React.FC<InboxListProps> = ({
             key={inbox._id}
             onClick={() => onSelectConversation(inbox)}
             title={isCollapsed ? name : undefined}
-            className={`w-full flex items-center gap-3 hover:bg-gray-50 dark:bg-white/5 transition-all duration-200 ${
+            className={`w-full flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-white/10 transition-all duration-200 ${
               isCollapsed ? "p-3 justify-center" : "p-4"
             } ${
               isActive

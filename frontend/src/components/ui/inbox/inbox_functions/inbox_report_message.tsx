@@ -79,7 +79,7 @@ export const InboxReportModal: React.FC<InboxReportModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white transition"
+            className="rounded-full p-1 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white transition"
           >
             <X className="h-4 w-4" />
           </button>
@@ -151,7 +151,7 @@ export const InboxReportModal: React.FC<InboxReportModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-xl px-4 py-2 text-xs font-medium text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:bg-white/5 transition"
+                className="rounded-xl px-4 py-2 text-xs font-medium text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/10 transition"
               >
                 Cancel
               </button>
