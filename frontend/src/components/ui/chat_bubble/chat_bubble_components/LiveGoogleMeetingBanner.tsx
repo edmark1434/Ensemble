@@ -43,20 +43,20 @@ export default function LiveGoogleMeetingBanner({ call, compact = false }: { cal
   const isScheduled = call.status === "scheduled" && call.scheduled_at;
 
   return (
-    <div className={`flex items-center gap-3 border-b border-green-500/20 bg-green-500/10 ${compact ? "px-3 py-2" : "px-4 py-2.5"}`}>
+    <div className={`flex items-center gap-3 border-b border-green-500/20 bg-green-500/15 dark:bg-green-500/10 ${compact ? "px-3 py-2" : "px-4 py-2.5"}`}>
       <div className="relative flex-shrink-0">
         <img src={avatarUrl(call.requester_avatar, name)} alt={name} className={`${compact ? "h-8 w-8" : "h-9 w-9"} rounded-full object-cover`} />
-        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#102119] bg-green-400" />
+        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white dark:border-[#102119] bg-green-400" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className={`${compact ? "text-[11px]" : "text-xs"} truncate font-semibold text-green-100`}>
+        <p className={`${compact ? "text-[11px]" : "text-xs"} truncate font-semibold text-green-900 dark:text-green-100`}>
           {isScheduled
             ? `${name} scheduled a meeting`
             : participantCount
               ? `${name} is in the meeting`
               : `${name} requested an instant meeting`}
         </p>
-        <p className="mt-0.5 flex items-center gap-1.5 text-[10px] text-green-300/80">
+        <p className="mt-0.5 flex items-center gap-1.5 text-[10px] text-green-700 dark:text-green-300/80">
           <Video className="h-3 w-3" />
           {isScheduled ? (
             <span>{new Date(call.scheduled_at!).toLocaleString()}</span>
@@ -73,10 +73,11 @@ export default function LiveGoogleMeetingBanner({ call, compact = false }: { cal
         <ExternalLink className="h-3 w-3" /> Join meeting
       </button>
       {isOrganizer && (
-        <button type="button" onClick={() => void endMeeting(call)} className="rounded-md bg-red-500/15 px-2.5 py-1.5 text-[10px] font-semibold text-red-300 hover:bg-red-500/25">
+        <button type="button" onClick={() => void endMeeting(call)} className="rounded-md bg-red-500/15 px-2.5 py-1.5 text-[10px] font-semibold text-red-600 dark:text-red-300 hover:bg-red-500/25">
           End
         </button>
       )}
     </div>
   );
 }
+

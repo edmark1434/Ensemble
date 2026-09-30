@@ -1,5 +1,13 @@
 import axios from "axios";
 import { API_BASE_URL } from "./api";
+import useGlobalState from "./global_state";
+import { showErrorToast } from "@/components/utility/toast";
+
+const ACCOUNT_RESTRICTION_CODES = new Set([
+  "ACCOUNT_BANNED",
+  "ACCOUNT_LOCKED",
+  "ACCOUNT_DELETED",
+]);
 
 let csrfToken: string | null = null;
 let csrfRequest: Promise<string> | null = null;
@@ -61,6 +69,21 @@ api.interceptors.response.use(
     },
     async (err) => {
         const originalRequest = err.config;
+
+        const restrictionCode = err?.response?.data?.code;
+        if (restrictionCode === "ACCOUNT_SUSPENDED") {
+            showErrorToast(err.response?.data?.message || "Your account is suspended. You can view your account and notifications. Actions are turned off until this is lifted.");
+            return Promise.reject(err);
+        }
+
+        if (ACCOUNT_RESTRICTION_CODES.has(restrictionCode)) {
+            window.dispatchEvent(new CustomEvent("ensemble:account-restricted", {
+                detail: err.response.data,
+            }));
+            useGlobalState.getState().clearUser();
+            useGlobalState.getState().setIsAuthenticated(false);
+            return Promise.reject(err);
+        }
 
         if (err?.response?.status === 401 && !originalRequest?._retry) {
             originalRequest._retry = true;

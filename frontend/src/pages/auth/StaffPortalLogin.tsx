@@ -9,6 +9,11 @@ import {
   STAFF_LOGIN_PATH,
   getStaffHomePath,
 } from '@/lib/staffRoutes';
+import {
+  AccountRestrictionCard,
+  standingFromPayload,
+  type AccountStanding,
+} from '@/components/ui/AccountStanding';
 
 type PortalKind = 'admin' | 'staff';
 
@@ -78,6 +83,7 @@ export default function StaffPortalLogin({ portal }: StaffPortalLoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [restriction, setRestriction] = useState<AccountStanding | null>(null);
 
   useEffect(() => {
     if (user?.type !== 'Staff' || !user?.role) {
@@ -112,6 +118,7 @@ export default function StaffPortalLogin({ portal }: StaffPortalLoginProps) {
     }
 
     setError('');
+    setRestriction(null);
     setLoading(true);
 
     try {
@@ -149,6 +156,11 @@ export default function StaffPortalLogin({ portal }: StaffPortalLoginProps) {
       navigate(config.redirectPath(role), { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err)) {
+        const standing = standingFromPayload(err.response?.data);
+        if (standing) {
+          setRestriction(standing);
+          return;
+        }
         setError(err.response?.data?.message || 'An error occurred. Please try again.');
       } else {
         setError('An error occurred. Please try again.');
@@ -203,6 +215,16 @@ export default function StaffPortalLogin({ portal }: StaffPortalLoginProps) {
 
           <h1 className="text-3xl font-bold tracking-tight text-white">{config.title}</h1>
           <p className="mt-2 text-sm leading-relaxed text-zinc-400">{config.subtitle}</p>
+
+          {restriction ? (
+            <div className="mt-6">
+              <AccountRestrictionCard
+                standing={restriction}
+                actionLabel="Use a different account"
+                onAction={() => setRestriction(null)}
+              />
+            </div>
+          ) : null}
 
           <div className="mt-8 space-y-5">
             <label className="block">

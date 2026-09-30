@@ -164,7 +164,11 @@ const PageTermsOfService: React.FC = () => {
                 </li>
                 <li>
                   <ShieldCheck size={16} color="#3b82f6" /> 
-                  <span><strong>Overdue Deliverables & Cancellation:</strong> Freelancers are required to submit milestone deliverables before the agreed deadline. If a milestone becomes overdue without submission, the client may grant a deadline extension or cancel the milestone to receive an immediate 100% credit refund.</span>
+                  <span><strong>Overdue Deliverables &amp; Cancellation:</strong> Freelancers are required to submit milestone deliverables before the agreed deadline. If a milestone becomes overdue without submission, the client may grant a deadline extension or cancel the milestone to receive an immediate 100% credit refund.</span>
+                </li>
+                <li>
+                  <ShieldCheck size={16} color="#3b82f6" /> 
+                  <span><strong>Mutual Contract Cancellation:</strong> Either the client or the freelancer may initiate a formal Mutual Cancellation Request for an active contract. The counterparty has seventy-two (72) hours to accept or decline. If no response is received within 72 hours, the cancellation is automatically approved by the platform. Upon cancellation, all credits held in escrow for unapproved or unfinished milestones are refunded in full to the client's account wallet, while earnings for previously completed and approved milestones remain with the freelancer. If a request is declined, either party may escalate the contract to Dispute Resolution.</span>
                 </li>
               </ul>
             </section>

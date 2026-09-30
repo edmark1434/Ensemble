@@ -74,7 +74,7 @@ export const ClientReviewCardActions: React.FC<ReviewCardActionsProps> = ({
         try {
             const uploadPromises = mediaList.map(async (media) => {
                 const { key } = await uploadFileWithIntent(media.file, 'documents');
-                return `https://s3.amazonaws.com/your-bucket-name/${key}`;
+                return key;
             });
 
             const uploadedUrls = await Promise.all(uploadPromises);

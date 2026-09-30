@@ -14,6 +14,7 @@ const {
     updateGigController,
     deleteGigController,
     acceptGigOrderController,
+    confirmGigOrderContractController,
     rejectGigOrderController,
     editGigOrderController,
     withdrawGigOrderController,
@@ -64,6 +65,9 @@ router.put('/orders/:orderId/withdraw', withdrawGigOrderController);
 
 // POST /api/gigs/orders/:orderId/accept
 router.post('/orders/:orderId/accept', acceptGigOrderController);
+
+// POST /api/gigs/orders/:orderId/confirm-contract
+router.post('/orders/:orderId/confirm-contract', confirmGigOrderContractController);
 
 // POST /api/gigs/orders/:orderId/reject
 router.post('/orders/:orderId/reject', rejectGigOrderController);

@@ -244,6 +244,15 @@ async function registerUser(signupPayload = {}, options = {}) {
         }
         // Fetch full user credentials for OAuth existing user
         const userCredentials = await getEmailandPasswordHashByEmail(emailAddress.toLowerCase());
+        const { getAccountAccess } = require('../lib/AccountRestriction');
+        const access = userCredentials?.account_id
+            ? await getAccountAccess(userCredentials.account_id)
+            : null;
+        if (access?.blocked) {
+            const error = new ServiceError(access.message, 403, access);
+            error.code = access.code;
+            throw error;
+        }
         return {
             success: true,
             message: 'User already exists with this email',
@@ -253,7 +262,8 @@ async function registerUser(signupPayload = {}, options = {}) {
                 username: userCredentials.handle,
                 account_id: userCredentials.account_id,
                 displayName: userCredentials.display_name,
-                type: userCredentials.type
+                type: userCredentials.type,
+                restriction: access,
             }
         };
     }
@@ -455,7 +465,18 @@ async function LoginUserOrEmail(loginIdentifier, password, context = {}) {
         throw new ServiceError('Invalid Credentials. Attempts remaining: ' + (MAX_ATTEMPTS - attempts), 400);
     }
 
-    // Successful login → reset attempts
+    // Successful password check. Banned, suspended, and locked accounts must not receive a session.
+    const { getAccountAccess } = require('../lib/AccountRestriction');
+    if (credentials.account_id) {
+        const access = await getAccountAccess(credentials.account_id);
+        if (access.blocked) {
+            const error = new ServiceError(access.message, 403, access);
+            error.code = access.code;
+            throw error;
+        }
+        credentials.restriction = access;
+    }
+
     await redisClient.del(attemptsKey);
     await redisClient.del(lockoutMetaKey);
     return credentials;

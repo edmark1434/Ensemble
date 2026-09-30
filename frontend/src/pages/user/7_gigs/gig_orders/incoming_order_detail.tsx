@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Loader2, ArrowLeft, XCircle, CheckCircle, Star, User, ExternalLink, Send, Calendar, Clock, Image as ImageIcon, Video, FileText, PlayCircle, UserCheck, UserMinus, MessageSquare } from "lucide-react";
+import { Loader2, ArrowLeft, XCircle, CheckCircle, Star, User, ExternalLink, Send, Calendar, Clock, Image as ImageIcon, Video, FileText, PlayCircle, MessageSquare } from "lucide-react";
 import api from "@/lib/axios";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
-import useChatState, { upsertConversation, upsertMessage } from "@/components/ui/chat_bubble/chat_state";
+
 
 export const IncomingOrderDetail = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -20,9 +20,6 @@ export const IncomingOrderDetail = () => {
   const [rejectReason, setRejectReason] = useState("");
   const [isAcceptModalOpen, setIsAcceptModalOpen] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [isShortlistModalOpen, setIsShortlistModalOpen] = useState(false);
-  const [shortlistMessage, setShortlistMessage] = useState("");
-  const [isUnshortlistModalOpen, setIsUnshortlistModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleReject = async () => {
@@ -42,74 +39,13 @@ export const IncomingOrderDetail = () => {
     setIsProcessing(true);
     try {
         await api.post(`/api/gigs/orders/${order.id}/accept`);
-        navigate('/contracts');
-    } catch(e) {
-        showErrorToast("Failed to accept order");
+        showSuccessToast("Gig order accepted! The client has been notified to confirm and fund the contract.");
+        setIsAcceptModalOpen(false);
+        setOrder((prev: any) => prev ? { ...prev, status: 'Accepted' } : null);
+    } catch(e: any) {
+        showErrorToast(e?.response?.data?.message || "Failed to accept order");
+    } finally {
         setIsProcessing(false);
-    }
-  };
-
-  const handleShortlist = async () => {
-    if (!shortlistMessage.trim()) return showErrorToast("Please enter a message for the applicant");
-    setIsProcessing(true);
-    try {
-      const res = await api.post(`/api/gigs/orders/${order.id}/shortlist`, {
-        message: shortlistMessage.trim(),
-        shortlistMessage: shortlistMessage.trim(),
-      });
-      showSuccessToast("Order added to shortlist and message sent to chat");
-      setIsShortlistModalOpen(false);
-      setOrder((prev: any) => prev ? { ...prev, status: 'Shortlisted' } : null);
-
-      const conversation = res.data?.conversation;
-      const initialMessage = res.data?.initialMessage;
-      const convId = conversation?._id || conversation?.inbox_id;
-      if (convId) {
-        if (conversation) {
-          useChatState.setState((state) => ({
-            conversations: upsertConversation(state.conversations, conversation),
-          }));
-        }
-        if (initialMessage) {
-          useChatState.setState((state) => ({
-            messagesByConversation: {
-              ...state.messagesByConversation,
-              [String(convId)]: upsertMessage(
-                state.messagesByConversation[String(convId)] || [],
-                initialMessage
-              ),
-            },
-          }));
-        }
-        void useChatState.getState().openFloatingConversation({
-          id: String(convId),
-          inbox_id: String(convId),
-          account_id: String(order.client_account_id || ""),
-          name: order.client_name || "Client",
-          avatarUrl: order.client_avatar || undefined,
-          conversationType: conversation?.conversation_type || "marketplace_gig",
-          listingType: "gig",
-          listingTitle: order.gig_title || "Gig order",
-        });
-      }
-    } catch(e: any) {
-      showErrorToast(e?.response?.data?.message || "Failed to shortlist order");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleUnshortlist = async () => {
-    setIsProcessing(true);
-    try {
-      await api.post(`/api/gigs/orders/${order.id}/unshortlist`);
-      showSuccessToast("Order removed from shortlist");
-      setIsUnshortlistModalOpen(false);
-      setOrder((prev: any) => prev ? { ...prev, status: 'Pending' } : null);
-    } catch(e: any) {
-      showErrorToast(e?.response?.data?.message || "Failed to unshortlist order");
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -225,9 +161,10 @@ export const IncomingOrderDetail = () => {
                   <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Target Gig Post</span>
                       <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${
-                          order.status === 'Accepted' || order.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                          order.status === 'In Contract' || order.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                          order.status === 'Accepted' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
                           order.status === 'Rejected' || order.status === 'Cancelled' ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' :
-                          order.status === 'Shortlisted' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
+                          order.status === 'Shortlisted' ? 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20' :
                           'bg-yellow-50 text-yellow-600 border-yellow-200 dark:bg-yellow-500/10 dark:text-amber-500 dark:text-amber-400 dark:border-yellow-500/20'
                       }`}>
                           {order.status || 'Pending'}
@@ -305,43 +242,39 @@ export const IncomingOrderDetail = () => {
                       <button onClick={() => setIsRejectModalOpen(true)} className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2">
                           <XCircle className="w-4 h-4" /> Reject Order
                       </button>
-                      <button 
-                        onClick={() => {
-                          setShortlistMessage(`Hi ${order.client_name || ''}! I've shortlisted your order. Let's discuss the project requirements and get started.`);
-                          setIsShortlistModalOpen(true);
-                        }} 
-                        disabled={isProcessing} 
-                        className="px-5 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition flex items-center gap-2 disabled:opacity-50"
-                      >
-                          <UserCheck className="w-4 h-4" /> Shortlist
-                      </button>
                       <button onClick={() => setIsAcceptModalOpen(true)} className="px-5 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition flex items-center gap-2">
-                          <CheckCircle className="w-4 h-4" /> Review & Accept
+                          <CheckCircle className="w-4 h-4" /> Review &amp; Accept
                       </button>
                     </div>
                   </div>
               )}
 
-              {order.status === 'Shortlisted' && (
-                  <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm flex items-center justify-between mt-6">
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-400">Status: <span className="text-blue-500 dark:text-blue-400 font-bold">Shortlisted</span></span>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button onClick={() => setIsRejectModalOpen(true)} className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2">
-                          <XCircle className="w-4 h-4" /> Reject Order
+              {(order.status === 'Accepted' && !order.contract_id) && (
+                  <div className="p-5 rounded-3xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-500/5 shadow-sm mt-6 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Status: <span className="text-emerald-600 dark:text-emerald-400 font-bold">Accepted — Awaiting Client Confirmation</span></span>
+                      <button onClick={() => void openMarketplaceConversation({ contextType: 'gig_order', contextId: order.id, navigate })} className="px-4 py-2 rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-200 text-xs font-bold hover:bg-gray-100 dark:hover:bg-white/10 transition flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4 text-blue-400" /> Chat with Client
                       </button>
-                      <button onClick={() => void openMarketplaceConversation({ contextType: 'gig_order', contextId: order.id, navigate })} className="px-5 py-2.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-200 text-xs font-bold hover:bg-gray-200 dark:hover:bg-white/10 transition flex items-center gap-2">
-                          <MessageSquare className="w-4 h-4 text-blue-400" /> Chat
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
+                      You have accepted this order. The client has been notified to provide final confirmation and fund the contract in escrow. Once confirmed, the contract will officially begin.
+                    </p>
+                  </div>
+              )}
+
+              {(order.status === 'In Contract' || order.contract_id) && (
+                  <div className="p-5 rounded-3xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-500/5 shadow-sm flex items-center justify-between mt-6">
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Status: <span className="text-emerald-600 dark:text-emerald-400 font-bold">Contract Active</span></span>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => void openMarketplaceConversation({ contextType: 'gig_order', contextId: order.id, navigate })} className="px-4 py-2 rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-200 text-xs font-bold hover:bg-gray-100 dark:hover:bg-white/10 transition flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4 text-blue-400" /> Chat
                       </button>
-                      <button 
-                        onClick={() => setIsUnshortlistModalOpen(true)} 
-                        disabled={isProcessing} 
-                        className="px-5 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-500/20 transition flex items-center gap-2 disabled:opacity-50"
-                      >
-                          <UserMinus className="w-4 h-4" /> Unshortlist
-                      </button>
-                      <button onClick={() => setIsAcceptModalOpen(true)} className="px-5 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition flex items-center gap-2">
-                          <CheckCircle className="w-4 h-4" /> Review & Accept
-                      </button>
+                      {order.contract_id && (
+                        <button onClick={() => navigate(`/contracts/${order.contract_id}`)} className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4" /> View Active Contract
+                        </button>
+                      )}
                     </div>
                   </div>
               )}
@@ -456,7 +389,9 @@ export const IncomingOrderDetail = () => {
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
         <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-3xl p-6 w-full max-w-md shadow-xl">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Accept Gig Order</h3>
-          <p className="text-xs text-gray-500 mb-4">By accepting this order, a contract will be automatically generated with the milestones specified in this tier.</p>
+          <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+            By accepting this order, the client will be notified to review the terms and provide final confirmation to fund the contract in escrow.
+          </p>
           
           <label className="flex items-start gap-3 p-4 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer group">
             <div className="relative flex items-center justify-center mt-0.5">
@@ -466,80 +401,20 @@ export const IncomingOrderDetail = () => {
             </div>
             <div>
               <p className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-emerald-500 transition-colors">I agree to the platform terms</p>
-              <p className="text-[10px] text-gray-500 mt-1">I commit to delivering the requested work according to the milestones and deadlines.</p>
+              <p className="text-[10px] text-gray-500 mt-1">I commit to delivering the requested work according to the milestones and deadlines upon client confirmation.</p>
             </div>
           </label>
 
           <div className="flex items-center justify-end gap-3 mt-6">
             <button onClick={() => setIsAcceptModalOpen(false)} className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">Cancel</button>
             <button disabled={!agreedToTerms || isProcessing} onClick={handleAccept} className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-2">
-              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Accept & Start
+              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Accept Order
             </button>
           </div>
         </div>
       </div>
     )}
 
-    {/* Shortlist Modal */}
-    {isShortlistModalOpen && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-3xl p-6 w-full max-w-md shadow-xl">
-          <div className="flex items-center gap-2 text-blue-500 mb-2">
-            <UserCheck className="w-5 h-5" />
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Shortlist Gig Order</h3>
-          </div>
-          <p className="text-xs text-gray-500 mb-3">
-            Add this order to your shortlist. Enter an initial message that will be sent directly to the client in the floating chat conversation.
-          </p>
-          <textarea
-            className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3 text-xs text-gray-900 dark:text-white resize-y outline-none focus:border-blue-500 transition-colors"
-            rows={4}
-            placeholder="Type your message to the client..."
-            value={shortlistMessage}
-            onChange={(e) => setShortlistMessage(e.target.value)}
-          />
-          <div className="flex items-center justify-end gap-3 mt-4">
-            <button onClick={() => setIsShortlistModalOpen(false)} className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">
-              Cancel
-            </button>
-            <button 
-              disabled={isProcessing || !shortlistMessage.trim()} 
-              onClick={handleShortlist} 
-              className="px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-2"
-            >
-              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send & Shortlist
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
-
-    {/* Unshortlist Confirm Modal */}
-    {isUnshortlistModalOpen && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-3xl p-6 w-full max-w-md shadow-xl">
-          <div className="flex items-center gap-2 text-amber-500 mb-2">
-            <UserMinus className="w-5 h-5" />
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Remove from Shortlist</h3>
-          </div>
-          <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-            Are you sure you want to remove <strong className="text-gray-900 dark:text-white">{order.client_name}</strong>'s order from the shortlist? The order will return to Pending and the client will be notified.
-          </p>
-          <div className="flex items-center justify-end gap-3 mt-4">
-            <button onClick={() => setIsUnshortlistModalOpen(false)} className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">
-              Cancel
-            </button>
-            <button 
-              disabled={isProcessing} 
-              onClick={handleUnshortlist} 
-              className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-2"
-            >
-              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserMinus className="w-4 h-4" />} Confirm Unshortlist
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
 
     {/* Expanded Media Modal */}
     {expandedMedia && (

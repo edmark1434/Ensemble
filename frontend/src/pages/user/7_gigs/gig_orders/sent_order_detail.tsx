@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Loader2, ArrowLeft, XCircle, Star, User, ExternalLink, Send, Calendar, Clock, Image as ImageIcon, Video, FileText, PlayCircle, MessageSquare } from "lucide-react";
+import { Loader2, ArrowLeft, XCircle, Star, User, ExternalLink, Send, Calendar, Clock, Image as ImageIcon, Video, FileText, PlayCircle, MessageSquare, CheckCircle, CheckCircle2 } from "lucide-react";
 import api from "@/lib/axios";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
-import { showErrorToast } from "@/components/utility/toast";
+import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 
 export const SentOrderDetail = () => {
@@ -17,6 +17,46 @@ export const SentOrderDetail = () => {
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
   const [expandedMedia, setExpandedMedia] = useState<{ url: string, type: 'image' | 'video' | 'doc' } | null>(null);
+
+  // Final contract confirmation states
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [isConfirmingContract, setIsConfirmingContract] = useState(false);
+  const [agreedToContractTerms, setAgreedToContractTerms] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  useEffect(() => {
+    api.get("/api/accounts/wallet", { params: { type: "account_wallets" } })
+      .then(res => {
+        setWalletBalance(res.data?.wallet?.balance_credits ?? 0);
+      })
+      .catch(err => {
+        console.error("Failed to fetch wallet:", err);
+      });
+  }, []);
+
+  const handleConfirmContract = async () => {
+    if (!agreedToContractTerms) {
+      return showErrorToast("You must agree to the platform terms and authorize the escrow deposit.");
+    }
+    if (walletBalance !== null && walletBalance < (order?.price || 0)) {
+      return showErrorToast("Insufficient wallet credits. Please top up your wallet.");
+    }
+    setIsConfirmingContract(true);
+    try {
+      const res = await api.post(`/api/gigs/orders/${order.id}/confirm-contract`);
+      showSuccessToast("Contract confirmed and funded successfully! Starting contract...");
+      setShowConfirmModal(false);
+      if (res.data?.contractId) {
+        navigate(`/contracts/${res.data.contractId}`);
+      } else {
+        navigate('/contracts');
+      }
+    } catch (err: any) {
+      console.error("Failed to confirm contract:", err);
+      showErrorToast(err?.response?.data?.message || "Failed to confirm contract.");
+      setIsConfirmingContract(false);
+    }
+  };
 
   const handleWithdraw = async () => {
     setIsWithdrawing(true);
@@ -142,9 +182,10 @@ export const SentOrderDetail = () => {
                   <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Target Gig Post</span>
                       <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${
-                          order.status === 'Accepted' || order.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                          order.status === 'In Contract' || order.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                          order.status === 'Accepted' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
                           order.status === 'Rejected' || order.status === 'Cancelled' ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' :
-                          order.status === 'Shortlisted' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
+                          order.status === 'Shortlisted' ? 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20' :
                           'bg-yellow-50 text-yellow-600 border-yellow-200 dark:bg-yellow-500/10 dark:text-amber-500 dark:text-amber-400 dark:border-yellow-500/20'
                       }`}>
                           {order.status || 'Pending'}
@@ -217,44 +258,185 @@ export const SentOrderDetail = () => {
               </div>
               
               {/* CONTROLS */}
-              <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm flex items-center justify-between mt-6">
-                <span className="text-xs font-bold text-gray-700 dark:text-gray-400">Current Status: <span className={`font-bold ${order.status === 'Shortlisted' ? 'text-blue-500 dark:text-blue-400' : 'text-amber-500 dark:text-amber-400'}`}>{order.status || 'Pending'}</span></span>
-                {order.status === 'Pending' && (
+              {order.status === 'Pending' && (
+                <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm flex items-center justify-between mt-6">
+                  <span className="text-xs font-bold text-gray-700 dark:text-gray-400">Current Status: <span className="text-amber-500 dark:text-amber-400 font-bold">{order.status || 'Pending'}</span></span>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => navigate(`/gigs/services/${order.gig_id}/order?edit=${order.id}`)} className="px-5 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg> Edit Order
+                    </button>
+                    <button 
+                      disabled={isWithdrawing}
+                      onClick={() => setShowWithdrawConfirm(true)}
+                      className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <XCircle className="w-4 h-4" /> Cancel Order
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {order.status === 'Shortlisted' && (
+                <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm flex items-center justify-between mt-6">
+                  <span className="text-xs font-bold text-gray-700 dark:text-gray-400">Current Status: <span className="text-blue-500 dark:text-blue-400 font-bold">Shortlisted</span></span>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => void openMarketplaceConversation({
+                        contextType: 'gig_order',
+                        contextId: order.id,
+                        navigate,
+                      })}
+                      className="px-5 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition flex items-center gap-2"
+                    >
+                      <MessageSquare className="w-4 h-4" /> Open Discussion Chat
+                    </button>
+                    <button 
+                      disabled={isWithdrawing}
+                      onClick={() => setShowWithdrawConfirm(true)}
+                      className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <XCircle className="w-4 h-4" /> Cancel Order
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* FINAL CONFIRMATION & ESCROW FUNDING CARD */}
+              {order.status === 'Accepted' && !order.contract_id && (
+                <div className="p-6 rounded-3xl border border-emerald-200 dark:border-emerald-500/20 bg-white dark:bg-dark-surface shadow-sm mt-6 space-y-5">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-white/5">
                     <div className="flex items-center gap-3">
-                      <button onClick={() => navigate(`/gigs/services/${order.gig_id}/order?edit=${order.id}`)} className="px-5 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition flex items-center gap-2">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg> Edit Order
-                      </button>
-                      <button 
-                        disabled={isWithdrawing}
-                        onClick={() => setShowWithdrawConfirm(true)}
-                        className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2 disabled:opacity-50"
-                      >
-                        <XCircle className="w-4 h-4" /> Cancel Order
-                      </button>
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500">
+                        <CheckCircle2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900 dark:text-white">Freelancer Accepted Your Order!</h3>
+                        <p className="text-xs text-gray-500 dark:text-zinc-400">Review terms, verify your wallet balance, and authorize escrow funding to start the contract.</p>
+                      </div>
                     </div>
-                )}
-                {order.status === 'Shortlisted' && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 self-start md:self-auto">
                       <button 
                         onClick={() => void openMarketplaceConversation({
                           contextType: 'gig_order',
                           contextId: order.id,
                           navigate,
                         })}
-                        className="px-5 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition flex items-center gap-2"
+                        className="px-4 py-2 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-zinc-200 text-xs font-bold transition flex items-center gap-2"
                       >
-                        <MessageSquare className="w-4 h-4" /> Open Discussion Chat
+                        <MessageSquare className="w-4 h-4 text-blue-400" /> Chat with Freelancer
                       </button>
                       <button 
                         disabled={isWithdrawing}
                         onClick={() => setShowWithdrawConfirm(true)}
-                        className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2 disabled:opacity-50"
+                        className="px-3.5 py-2 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-1.5 disabled:opacity-50"
                       >
-                        <XCircle className="w-4 h-4" /> Cancel Order
+                        <XCircle className="w-4 h-4" /> Cancel
                       </button>
                     </div>
-                )}
-              </div>
+                  </div>
+
+                  {/* Financial Breakdown */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 space-y-1">
+                      <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider">Required Escrow Funding</span>
+                      <div className="flex items-center gap-2 text-amber-500 dark:text-amber-400">
+                        <CreditIcon className="w-5 h-5 text-amber-500" />
+                        <span className="text-xl font-black">{order.price?.toLocaleString()}</span>
+                        <span className="text-xs font-medium text-gray-500">Credits</span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 dark:text-zinc-400">Credits are safely held in platform escrow and only released upon milestone delivery approvals.</p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 space-y-1">
+                      <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider">Your Available Balance</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CreditIcon className="w-5 h-5 text-amber-500" />
+                          <span className={`text-xl font-black ${walletBalance !== null && walletBalance >= (order.price || 0) ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                            {walletBalance !== null ? walletBalance.toLocaleString() : '...'}
+                          </span>
+                          <span className="text-xs font-medium text-gray-500">Credits</span>
+                        </div>
+                        {walletBalance !== null && walletBalance < (order.price || 0) && (
+                          <button 
+                            onClick={() => navigate('/wallet')} 
+                            className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold transition shadow-sm"
+                          >
+                            Top Up Wallet
+                          </button>
+                        )}
+                      </div>
+                      {walletBalance !== null && walletBalance < (order.price || 0) ? (
+                        <p className="text-[11px] text-red-500 dark:text-red-400 font-semibold">Insufficient credits. You need {((order.price || 0) - walletBalance).toLocaleString()} more credits.</p>
+                      ) : (
+                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">Sufficient balance available for contract escrow.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Terms of Service Checkbox */}
+                  <label className="flex items-start gap-3 p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer group">
+                    <div className="relative flex items-center justify-center mt-0.5">
+                      <input 
+                        type="checkbox" 
+                        className="peer sr-only" 
+                        checked={agreedToContractTerms} 
+                        onChange={(e) => setAgreedToContractTerms(e.target.checked)} 
+                      />
+                      <div className="w-5 h-5 rounded border-2 border-gray-300 dark:border-gray-600 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-colors"></div>
+                      <CheckCircle className="w-3 h-3 text-white absolute inset-0 m-auto opacity-0 peer-checked:opacity-100 transition-opacity" strokeWidth={4} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-900 dark:text-white group-hover:text-emerald-500 transition-colors">
+                        I agree to the platform Terms of Service and authorize escrow deduction
+                      </p>
+                      <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">
+                        By confirming, {order.price?.toLocaleString()} credits will be held in platform escrow and the contract will begin immediately with the agreed milestones.
+                      </p>
+                    </div>
+                  </label>
+
+                  <div className="flex items-center justify-end gap-3 pt-2">
+                    <button
+                      disabled={!agreedToContractTerms || (walletBalance !== null && walletBalance < (order.price || 0)) || isConfirmingContract}
+                      onClick={() => setShowConfirmModal(true)}
+                      className="px-6 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {isConfirmingContract ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Confirm & Start Contract
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ACTIVE CONTRACT CARD */}
+              {(order.status === 'In Contract' || order.contract_id) && (
+                <div className="p-5 rounded-3xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-500/5 shadow-sm flex items-center justify-between mt-6">
+                  <div>
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Status: <span className="text-emerald-600 dark:text-emerald-400 font-bold">Contract Active</span></span>
+                    <p className="text-xs text-gray-500 mt-1">This gig order has been confirmed and the contract is currently active.</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => void openMarketplaceConversation({
+                        contextType: 'gig_order',
+                        contextId: order.id,
+                        navigate,
+                      })}
+                      className="px-4 py-2.5 rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-zinc-200 text-xs font-bold transition flex items-center gap-2"
+                    >
+                      <MessageSquare className="w-4 h-4 text-blue-400" /> Chat
+                    </button>
+                    {order.contract_id && (
+                      <button 
+                        onClick={() => navigate(`/contracts/${order.contract_id}`)}
+                        className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition flex items-center gap-2 shadow-sm"
+                      >
+                        <CheckCircle className="w-4 h-4" /> View Active Contract
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
           </div>
 
           <div className="lg:col-span-5 space-y-4">
@@ -389,6 +571,56 @@ export const SentOrderDetail = () => {
               >
                 {isWithdrawing ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 {isWithdrawing ? 'Withdrawing...' : 'Withdraw'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Contract Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md p-6 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl animate-in fade-in zoom-in-95 duration-200 space-y-4">
+            <div className="flex items-center gap-3 text-emerald-500">
+              <CheckCircle2 className="w-6 h-6" />
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Confirm & Start Contract</h3>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+              You are about to start an active contract for <strong className="text-gray-900 dark:text-white">{order.gig_title}</strong> with <strong className="text-gray-900 dark:text-white">{order.freelancer_name}</strong>.
+            </p>
+            <div className="p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 space-y-2 text-xs">
+              <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                <span>Contract Tier:</span>
+                <span className="font-bold text-gray-900 dark:text-white">{order.tier_title}</span>
+              </div>
+              <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                <span>Escrow Hold Amount:</span>
+                <span className="font-bold text-amber-500 dark:text-amber-400 flex items-center gap-1">
+                  <CreditIcon className="w-4 h-4" /> {order.price?.toLocaleString()} credits
+                </span>
+              </div>
+              <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                <span>Remaining Balance After:</span>
+                <span className="font-bold text-gray-900 dark:text-white flex items-center gap-1">
+                  <CreditIcon className="w-4 h-4 text-amber-500" /> {((walletBalance ?? 0) - (order.price || 0)).toLocaleString()} credits
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-3 w-full pt-2">
+              <button 
+                onClick={() => setShowConfirmModal(false)}
+                disabled={isConfirmingContract}
+                className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 font-bold text-xs hover:bg-gray-50 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
+              >
+                Go Back
+              </button>
+              <button 
+                onClick={handleConfirmContract}
+                disabled={isConfirmingContract}
+                className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-emerald-500/20"
+              >
+                {isConfirmingContract ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                {isConfirmingContract ? 'Processing...' : 'Authorize & Start'}
               </button>
             </div>
           </div>

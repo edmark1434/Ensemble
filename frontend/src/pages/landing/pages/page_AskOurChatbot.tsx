@@ -201,8 +201,11 @@ const PageAskOurChatbot: React.FC = () => {
                 <img src="/ensemble_lg.svg" alt="" />
               </div>
               <div className="ensemble-message-bubble ensemble-typing">
-                <span /><span /><span /><em>Joeds AI is searching Ensemble documentation</em>
-              </div>
+                  <div className="ensemble-typing-dots">
+                    <span /><span /><span />
+                  </div>
+                  <em>Joeds AI is searching Ensemble documentation</em>
+                </div>
             </div>
           )}
           <div ref={endRef} />
@@ -291,17 +294,21 @@ const PageAskOurChatbot: React.FC = () => {
         .ensemble-message-avatar { position: relative; display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 32px; border: 1px solid ${theme === 'dark' ? "#25293a" : "#e2e8f0"}; border-radius: 9px; background: ${theme === 'dark' ? "#111522" : "#f1f5f9"}; color: #60a5fa; }
         .ensemble-message-avatar img { width: 20px; height: 20px; object-fit: contain; filter: ${theme === 'dark' ? 'none' : 'invert(1)'}; opacity: ${theme === 'dark' ? '1' : '0.7'}; }
         .ensemble-message-row.is-user .ensemble-message-avatar { color: ${theme === 'dark' ? "#ffffff" : "#111827"}; }
-        .ensemble-message-avatar.is-thinking img { animation: ensemble-logo-pulse 1.4s ease-in-out infinite; }
-        .ensemble-message-avatar.is-thinking::after { position: absolute; inset: -4px; border: 1px solid transparent; border-top-color: #60a5fa; border-right-color: rgba(96,165,250,.25); border-radius: 11px; content: ""; animation: ensemble-logo-orbit 1.2s linear infinite; }
+        .ensemble-message-avatar.is-thinking { animation: ensemble-avatar-glow 2s infinite ease-in-out; border-color: rgba(59, 130, 246, 0.4); }
+          .ensemble-message-avatar.is-thinking img { animation: ensemble-logo-pulse 1.4s ease-in-out infinite; }
+        
         
         .ensemble-message-bubble { max-width: min(74%, 650px); padding: 12px 15px; border: 1px solid ${theme === 'dark' ? "#25293a" : "#e2e8f0"}; border-radius: 4px 13px 13px; background: ${theme === 'dark' ? "#151925" : "#f8fafc"}; color: ${theme === 'dark' ? "#d8dee9" : "#334155"}; font-size: 13px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
         .ensemble-message-row.is-user .ensemble-message-bubble { border-color: #2563eb; border-radius: 13px 4px 13px 13px; background: #2563eb; color: #ffffff; }
-        .ensemble-message-bubble.is-error { border-color: rgba(248,113,113,.3); background: rgba(127,29,29,.25); color: #fecaca; }
+        .ensemble-message-bubble.is-error { border-color: ${theme === "dark" ? "rgba(248,113,113,.3)" : "rgba(239,68,68,.4)"}; background: ${theme === "dark" ? "rgba(127,29,29,.25)" : "rgba(254,226,226,1)"}; color: ${theme === "dark" ? "#fecaca" : "#991b1b"}; }
         
-        .ensemble-typing { display: flex; align-items: center; gap: 4px; color: ${theme === 'dark' ? "#8b95a7" : "#64748b"}; }
-        .ensemble-typing span { width: 5px; height: 5px; border-radius: 50%; background: #60a5fa; animation: ensemble-bounce 1.15s infinite ease-in-out; }
-        .ensemble-typing span:nth-child(2) { animation-delay: .12s; } .ensemble-typing span:nth-child(3) { animation-delay: .24s; }
-        .ensemble-typing em { margin-left: 7px; font-style: normal; font-size: 11px; }
+        .ensemble-typing { display: flex; align-items: center; gap: 8px; color: ${theme === 'dark' ? "#94a3b8" : "#475569"}; }
+        .ensemble-typing-dots { display: flex; gap: 4px; align-items: center; background: ${theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}; padding: 5px 8px; border-radius: 8px; }
+          .ensemble-typing-dots span { width: 5px; height: 5px; border-radius: 50%; background: #3b82f6; animation: ensemble-bounce 1.4s infinite ease-in-out; }
+        .ensemble-typing-dots span:nth-child(1) { animation-delay: 0s; }
+          .ensemble-typing-dots span:nth-child(2) { animation-delay: .15s; }
+          .ensemble-typing-dots span:nth-child(3) { animation-delay: .3s; }
+        .ensemble-typing em { font-style: normal; font-size: 12px; font-weight: 500; letter-spacing: 0.2px; }
         
         .ensemble-composer { display: flex; align-items: flex-end; gap: 10px; margin: 0 24px; padding: 10px; border: 1px solid ${theme === 'dark' ? "#262a3b" : "#e2e8f0"}; border-radius: 13px; background: ${theme === 'dark' ? "#121214" : "#f1f5f9"}; transition: border-color .2s ease; }
         .ensemble-composer:focus-within { border-color: #3b82f6; }
@@ -317,18 +324,30 @@ const PageAskOurChatbot: React.FC = () => {
         .ensemble-inline-link { display: inline-flex; align-items: center; gap: 3px; margin: 0 2px; color: #60a5fa; font-weight: 600; text-decoration: underline; text-decoration-color: rgba(96,165,250,.45); text-underline-offset: 3px; }
         .ensemble-inline-link:hover { color: #93c5fd; }
         
-        @keyframes ensemble-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-3px); opacity: 1; } }
+        @keyframes ensemble-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .3; } 30% { transform: translateY(-3px); opacity: 1; } }
+          @keyframes ensemble-avatar-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } 50% { box-shadow: 0 0 12px 0 rgba(59, 130, 246, 0.35); } }
         @keyframes ensemble-logo-pulse { 0%, 100% { transform: scale(.88); opacity: .65; } 50% { transform: scale(1.08); opacity: 1; } }
-        @keyframes ensemble-logo-orbit { to { transform: rotate(360deg); } }
+        
         @media (max-width: 820px) { .ensemble-chat-page { padding: 24px 18px 32px; } .ensemble-chat-intro { margin-top: 22px; } .ensemble-chat-workspace { grid-template-columns: 1fr; height: 720px; max-height: calc(100vh - 120px); } .ensemble-chat-sidebar { gap: 16px; padding: 18px; border-right: 0; border-bottom: 1px solid ${theme === 'dark' ? "#1e2130" : "#e5e7eb"}; } .ensemble-sidebar-section { order: 3; } .ensemble-quick-list { display: flex; overflow-x: auto; padding-bottom: 2px; } .ensemble-quick-list button { min-width: 210px; border-color: ${theme === 'dark' ? "#202435" : "#e2e8f0"}; background: ${theme === 'dark' ? "#0d101b" : "#f8fafc"}; } .ensemble-sidebar-note { display: none; } .ensemble-conversation { min-height: 560px; } }
         @media (max-width: 520px) { .ensemble-chat-page { padding: 18px 12px 24px; } .ensemble-chat-intro h1 { font-size: 30px; } .ensemble-chat-intro p { padding: 0 14px; font-size: 13px; } .ensemble-chat-workspace { border-radius: 14px; } .ensemble-message-log { padding: 20px 14px; } .ensemble-message-bubble { max-width: 84%; } .ensemble-conversation-header { padding: 0 15px; } .ensemble-conversation-header button { font-size: 0; } .ensemble-conversation-header button svg { margin: 0; } .ensemble-composer { margin: 0 12px; } .ensemble-chat-disclaimer { margin-inline: 14px; } }
-        @media (prefers-reduced-motion: reduce) { .ensemble-typing span, .ensemble-message-avatar.is-thinking img, .ensemble-message-avatar.is-thinking::after { animation: none; } * { scroll-behavior: auto !important; } }
+        @media (prefers-reduced-motion: reduce) { .ensemble-typing span, .ensemble-message-avatar.is-thinking img, .ensemble-message-avatar.is-thinking { animation: none; } * { scroll-behavior: auto !important; } }
       `}</style>
     </main>
   );
 };
 
 export default PageAskOurChatbot;
+
+
+function parseMarkdownBold(text: string) {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((chunk, i) => {
+    if (chunk.startsWith('**') && chunk.endsWith('**') && chunk.length >= 4) {
+      return <strong key={i} className="font-bold text-gray-900 dark:text-gray-100">{chunk.slice(2, -2)}</strong>;
+    }
+    return chunk;
+  });
+}
 
 function InlineAnswer({ text, links }: { text: string; links: VerifiedLink[] }) {
   const linkMap = new Map(links.map((link) => [`[[${link.id}]]`, link]));
@@ -337,9 +356,9 @@ function InlineAnswer({ text, links }: { text: string; links: VerifiedLink[] }) 
     <div>
       {parts.map((part, index) => {
         const link = linkMap.get(part);
-        if (!link) return <React.Fragment key={`${index}-${part.slice(0, 12)}`}>{part}</React.Fragment>;
+        if (!link) return <React.Fragment key={index + '-' + part.slice(0, 12)}>{parseMarkdownBold(part)}</React.Fragment>;
         return (
-          <a key={`${link.id}-${index}`} href={link.url} target="_blank" rel="noreferrer" className="ensemble-inline-link">
+          <a key={link.id + '-' + index} href={link.url} target="_blank" rel="noreferrer" className="ensemble-inline-link">
             {link.label}<ExternalLink size={11} aria-hidden="true" />
           </a>
         );
@@ -347,3 +366,4 @@ function InlineAnswer({ text, links }: { text: string; links: VerifiedLink[] }) 
     </div>
   );
 }
+

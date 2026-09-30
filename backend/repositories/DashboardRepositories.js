@@ -787,6 +787,15 @@ async function recordMilestoneAction({
                 [contractId]
             );
 
+            await client.query(
+                `UPDATE gig_requests
+                 SET status = 'Completed', updated_at = NOW()
+                 WHERE gig_request_id IN (
+                     SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1
+                 )`,
+                [contractId]
+            );
+
             contractCompletion = {
                 isCompleted: true,
                 contractId,
@@ -869,6 +878,11 @@ async function submitContractReview(contractId, accountId, stars, feedback) {
         if (allRatings.rows.length >= 2) {
             await client.query(
                 `UPDATE contracts SET status = 'Completed' WHERE contract_id = $1`,
+                [contractId]
+            );
+            await client.query(
+                `UPDATE gig_requests SET status = 'Completed', updated_at = NOW()
+                 WHERE gig_request_id IN (SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1)`,
                 [contractId]
             );
             contractCompleted = true;
