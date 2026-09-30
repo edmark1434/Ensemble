@@ -1021,10 +1021,11 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
 
       <SkillsEditModal
         isOpen={isSkillsModalOpen}
-        onClose={() => setIsSkillsModalOpen(false)}
+        onClose={() => !isSavingSkills && setIsSkillsModalOpen(false)}
         currentSkills={userDetails?.skills || []}
         onSave={saveSkillsCuration}
         availableSkillsList={availableSkills}
+        isSaving={isSavingSkills}
       />
     </div>
   );
