@@ -118,9 +118,18 @@ const Projects: React.FC = () => {
           name: editProjectName,
           thumbnail: `https://placehold.co/400x225/1e2130/4a6fa5?text=${encodeURIComponent(editProjectName)}`
         } : p);
-      setPersonalProjects(updateProjectList);
-      setSharedProjects(updateProjectList);
-      setRecentProjects(updateProjectList);
+      
+      const nextPersonal = updateProjectList(personalProjects);
+      const nextShared = updateProjectList(sharedProjects);
+      const nextRecent = updateProjectList(recentProjects);
+      
+      setPersonalProjects(nextPersonal);
+      setSharedProjects(nextShared);
+      setRecentProjects(nextRecent);
+      
+      sessionStorage.setItem('ensemble_projects_data', JSON.stringify({
+        personal: nextPersonal, shared: nextShared, recent: nextRecent
+      }));
     } catch (err) {
       console.error("Failed to rename project", err);
     } finally {

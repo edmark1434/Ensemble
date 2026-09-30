@@ -406,6 +406,14 @@ export function useCollabDoc(
               return;
             }
 
+            const currentStoreName = useStore.getState().projectName;
+            if (isProjectTarget && currentStoreName && snapshot.projectName !== undefined && currentStoreName !== snapshot.projectName) {
+              schema.doc.transact(() => {
+                schema.meta.set("projectName", currentStoreName);
+              }, localOrigin);
+              snapshot.projectName = currentStoreName;
+            }
+
             useStore.setState({
               markers: snapshot.markers,
               ...(isProjectTarget && snapshot.projectName !== undefined ? { projectName: snapshot.projectName } : {}),
@@ -443,7 +451,12 @@ export function useCollabDoc(
     return () => {
       cancelled = true;
       undoManager.off("stack-item-popped", handleUndoRedo);
-      if (undoReconcileTimer) clearTimeout(undoReconcileTimer);
+      if (undoReconcileTimer) {
+        clearTimeout(undoReconcileTimer);
+        reconcileTargetToDb(target, schema);
+        reconcileSceneNamesToBlocks(target, schema, userId);
+        reconcileBlockNameToProjectScene(target, schema, userId);
+      }
       teardownMirrorIn?.();
       teardownMirrorOutStateManager?.();
       teardownMirrorOutStore?.();
@@ -452,10 +465,6 @@ export function useCollabDoc(
       teardownTimelineWatch?.();
       if (timelineResyncInterval) clearInterval(timelineResyncInterval);
       if (activeSessionId !== null) endSession(activeSessionId);
-
-      reconcileTargetToDb(target, schema);
-      reconcileSceneNamesToBlocks(target, schema, userId);
-      reconcileBlockNameToProjectScene(target, schema, userId);
 
       useStore.getState().setCollabSchema(null, null);
       undoManager.destroy();
