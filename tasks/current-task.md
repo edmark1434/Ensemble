@@ -1,24 +1,35 @@
-# Current Task — Suspended Accounts Stay Signed In
+# Current Task — Mutual Cancellation of Contract & Platform Terms Policy
 
-Suspended accounts, including Google sign-in, can still use Ensemble. The suspension stays highly visible and a notification is sent. Banned and locked accounts remain blocked.
-
-## Acceptance Criteria
-
-- [x] Suspended is not a login or session block. Banned, locked, and deleted accounts still are.
-- [x] Google sign-in for an existing suspended account creates a session and returns the suspension on the user.
-- [x] A persistent amber notice stays on screen while the account is suspended.
-- [x] Suspending an account, including the automatic warning limit, creates an in-app notification and broadcasts it.
-
-# Previous Task — Enforce Suspend, Ban, and Violation Notices
-
-Make account suspend and ban actually stop platform access, and show a highly visible notice for banned, suspended, locked, and warned accounts.
+Allow both clients and freelancers to initiate mutual cancellation on active or waiting contracts with industry-standard escrow safeguards, a 72-hour auto-approval countdown, and full transparency in the Platform Terms of Service.
 
 ## Acceptance Criteria
 
-- [x] Login, refresh, session, JWT, and Socket.IO reject accounts whose status is Banned, Suspended, or Locked, and clear the existing session.
-- [x] Login and staff/admin sign-in show a large restriction notice with active violations.
-- [x] An in-app full-screen notice appears when a live session is rejected.
-- [x] Active accounts with open violations see a sticky warning banner.
+- [x] **Database Migration**: Added append-only migration `1821500000000_175-create-contract-cancellation-requests.js` creating table `contract_cancellation_requests` with status checks, timestamps, reason, message, auto_cancel_at (72 hours), and response metadata.
+- [x] **Backend Repositories & Services**:
+  - `createCancellationRequestRepository`: Creates request, sets `auto_cancel_at = NOW() + INTERVAL '72 hours'`, enforces single pending request per contract.
+  - `getActiveCancellationRequestByContract`: Retrieves pending request with contract context and initiator name.
+  - `respondCancellationRequestRepository`: Handles 'accept' (cancels contract and refunds unfinished milestones) and 'decline' (with decline reason).
+  - `withdrawCancellationRequestRepository`: Allows initiator to withdraw request before response.
+  - `reconcileExpiredCancellationRequestsServices`: Cron job auto-approves requests past 72h window and refunds escrow.
+  - Realtime Socket.IO events (`cancellation_request_updated`) and in-app notifications dispatched to both participants.
+- [x] **Backend Controllers & Routes**:
+  - `GET /api/contracts/:contractId/cancellation-request`
+  - `POST /api/contracts/:contractId/cancellation-request`
+  - `POST /api/contracts/:contractId/cancellation-request/:requestId/respond`
+  - `POST /api/contracts/:contractId/cancellation-request/:requestId/withdraw`
+- [x] **Platform Terms of Service Integration**:
+  - Updated `page_TermsOfService.tsx` (Section 6: Mutual Contract Cancellation & Escrow Policy).
+  - Updated `TermsModal.tsx` (Section 6: Mutual Contract Cancellation & Escrow Policy).
+- [x] **Frontend Contract Experience (`contracts.tsx`)**:
+  - Display prominent "Mutual Contract Cancellation Requested" banner with 72h auto-resolution countdown and escrow refund breakdown.
+  - Initiator view provides a "Withdraw Request" action.
+  - Recipient view provides "Accept Cancellation & Refund Escrow" and "Decline Request" (with decline reason modal).
+  - "Request Cancellation" button available to both clients and freelancers in the contract view footer when no cancellation is pending.
+  - Added "Mutual Cancellation Policy" card in Section V (Platform Escrow & Milestone Policy).
+  - Realtime synchronization via Socket.IO `cancellation_request_updated` and `notification` listeners.
+- [x] **Verification**:
+  - `node --check` passed for all modified backend files.
+  - `npm run build` passed with zero errors in `frontend`.
 # Current Task — Gigs Final Confirmation before Deduction of Credits
 
 Transition Gig order acceptance and contract funding from the previous unilateral deduction by the freelancer to a mutual two-step handshake:

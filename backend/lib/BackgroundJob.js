@@ -33,6 +33,7 @@ const {
     reconcileAbandonedMilestonesServices,
     reconcileAutoApprovalServices,
     reconcileMilestoneRemindersServices,
+    reconcileExpiredCancellationRequestsServices,
 } = require('../services/MilestoneServices');
 
 const config = {
@@ -500,6 +501,21 @@ function startPaymentReconciliationJob() {
             if (result.abandoned) console.log(`Milestone abandoned: marked ${result.abandoned}`);
         } catch (err) {
             console.error("Milestone abandoned marking failed:", err.message);
+        }
+    });
+
+    // Job 6: Expired cancellation auto-approval — runs every 10 minutes
+    let isCancellationAutoApproveRunning = false;
+    cron.schedule("*/10 * * * *", async () => {
+        if (isCancellationAutoApproveRunning) return;
+        isCancellationAutoApproveRunning = true;
+        try {
+            const result = await reconcileExpiredCancellationRequestsServices();
+            if (result.processed) console.log(`Contract cancellation auto-approval: processed ${result.processed}`);
+        } catch (err) {
+            console.error("Contract cancellation auto-approval failed:", err.message);
+        } finally {
+            isCancellationAutoApproveRunning = false;
         }
     });
 

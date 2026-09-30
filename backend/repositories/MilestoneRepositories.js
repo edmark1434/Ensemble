@@ -1001,6 +1001,192 @@ async function getMilestoneWithParties(milestoneId) {
     return res.rows[0] || null;
 }
 
+// ─── Mutual Contract Cancellation Requests ──────────────────────────────────
+
+async function createCancellationRequestRepository({
+    contractId,
+    initiatorAccountId,
+    recipientAccountId,
+    initiatorRole,
+    reason,
+    message,
+    autoCancelHours = 72,
+}) {
+    const existing = await pool.query(
+        `SELECT request_id FROM contract_cancellation_requests
+         WHERE contract_id = $1 AND status = 'pending'
+         LIMIT 1`,
+        [contractId]
+    );
+    if (existing.rows.length > 0) {
+        const err = new Error('A cancellation request is already pending for this contract.');
+        err.statusCode = 409;
+        throw err;
+    }
+
+    const res = await pool.query(
+        `INSERT INTO contract_cancellation_requests
+            (contract_id, initiator_account_id, recipient_account_id, initiator_role, reason, message, auto_cancel_at)
+         VALUES
+            ($1, $2, $3, $4, $5, $6, NOW() + ($7 || ' hours')::interval)
+         RETURNING *`,
+        [contractId, initiatorAccountId, recipientAccountId, initiatorRole, reason, message, String(autoCancelHours)]
+    );
+    return res.rows[0];
+}
+
+async function getActiveCancellationRequestByContract(contractId) {
+    const res = await pool.query(
+        `SELECT cr.*,
+                init_a.display_name AS initiator_name,
+                init_a.handle AS initiator_handle,
+                (SELECT path FROM files WHERE file_id = init_a.avatar_file_id LIMIT 1) AS initiator_avatar,
+                recip_a.display_name AS recipient_name,
+                recip_a.handle AS recipient_handle,
+                (SELECT path FROM files WHERE file_id = recip_a.avatar_file_id LIMIT 1) AS recipient_avatar
+         FROM contract_cancellation_requests cr
+         JOIN accounts init_a ON cr.initiator_account_id = init_a.account_id
+         JOIN accounts recip_a ON cr.recipient_account_id = recip_a.account_id
+         WHERE cr.contract_id = $1 AND cr.status = 'pending'
+         ORDER BY cr.created_at DESC
+         LIMIT 1`,
+        [contractId]
+    );
+    return res.rows[0] || null;
+}
+
+async function respondCancellationRequestRepository({
+    requestId,
+    contractId,
+    callerAccountId,
+    action,
+    declineReason = null,
+}) {
+    const reqRes = await pool.query(
+        `SELECT * FROM contract_cancellation_requests
+         WHERE request_id = $1 AND contract_id = $2
+         FOR UPDATE`,
+        [requestId, contractId]
+    );
+    if (reqRes.rows.length === 0) {
+        const err = new Error('Cancellation request not found');
+        err.statusCode = 404;
+        throw err;
+    }
+
+    const request = reqRes.rows[0];
+    if (request.status !== 'pending') {
+        const err = new Error(`Cancellation request is already ${request.status}`);
+        err.statusCode = 400;
+        throw err;
+    }
+
+    if (String(request.recipient_account_id) !== String(callerAccountId)) {
+        const err = new Error('You are not authorized to respond to this cancellation request');
+        err.statusCode = 403;
+        throw err;
+    }
+
+    if (action === 'accept') {
+        await pool.query(
+            `UPDATE contract_cancellation_requests
+             SET status = 'accepted', responded_at = NOW()
+             WHERE request_id = $1`,
+            [requestId]
+        );
+        return { action: 'accepted', request };
+    } else if (action === 'decline') {
+        await pool.query(
+            `UPDATE contract_cancellation_requests
+             SET status = 'declined', decline_reason = $2, responded_at = NOW()
+             WHERE request_id = $1`,
+            [requestId, declineReason || 'Declined by recipient']
+        );
+        return { action: 'declined', request: { ...request, status: 'declined', decline_reason: declineReason } };
+    } else {
+        const err = new Error('Invalid action. Must be accept or decline');
+        err.statusCode = 400;
+        throw err;
+    }
+}
+
+async function withdrawCancellationRequestRepository({
+    requestId,
+    contractId,
+    callerAccountId,
+}) {
+    const reqRes = await pool.query(
+        `SELECT * FROM contract_cancellation_requests
+         WHERE request_id = $1 AND contract_id = $2
+         FOR UPDATE`,
+        [requestId, contractId]
+    );
+    if (reqRes.rows.length === 0) {
+        const err = new Error('Cancellation request not found');
+        err.statusCode = 404;
+        throw err;
+    }
+
+    const request = reqRes.rows[0];
+    if (request.status !== 'pending') {
+        const err = new Error(`Cancellation request is already ${request.status}`);
+        err.statusCode = 400;
+        throw err;
+    }
+
+    if (String(request.initiator_account_id) !== String(callerAccountId)) {
+        const err = new Error('Only the initiator can withdraw this cancellation request');
+        err.statusCode = 403;
+        throw err;
+    }
+
+    await pool.query(
+        `UPDATE contract_cancellation_requests
+         SET status = 'withdrawn', responded_at = NOW()
+         WHERE request_id = $1`,
+        [requestId]
+    );
+    return { ...request, status: 'withdrawn' };
+}
+
+async function getExpiredPendingCancellationRequests() {
+    const res = await pool.query(
+        `SELECT cr.*,
+                c.status AS contract_status,
+                COALESCE(jc_info.client_account_id, gc_info.client_account_id) AS client_account_id,
+                COALESCE(jc_info.freelancer_account_id, gc_info.freelancer_account_id) AS freelancer_account_id,
+                COALESCE(jc_info.title, gc_info.title, 'Contract') AS contract_title
+         FROM contract_cancellation_requests cr
+         JOIN contracts c ON cr.contract_id = c.contract_id
+         LEFT JOIN (
+             SELECT jc.contract_id, j.client_account_id, p.freelancer_account_id, j.title
+             FROM job_contracts jc
+             JOIN proposals p ON jc.proposal_id = p.proposal_id
+             JOIN jobs j ON p.job_id = j.job_id
+         ) jc_info ON c.contract_id = jc_info.contract_id
+         LEFT JOIN (
+             SELECT gc.contract_id, gr.client_account_id, g.freelancer_account_id, g.title
+             FROM gig_contracts gc
+             JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+             JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+             JOIN gigs g ON gt.gig_id = g.gig_id
+         ) gc_info ON c.contract_id = gc_info.contract_id
+         WHERE cr.status = 'pending'
+           AND cr.auto_cancel_at <= NOW()
+           AND c.status IN ('Active', 'Waiting')`
+    );
+    return res.rows;
+}
+
+async function autoApproveCancellationRequest(requestId) {
+    await pool.query(
+        `UPDATE contract_cancellation_requests
+         SET status = 'auto_approved', responded_at = NOW()
+         WHERE request_id = $1 AND status = 'pending'`,
+        [requestId]
+    );
+}
+
 module.exports = {
     // Cron queries
     getActiveMilestonesNowOverdue,
@@ -1021,4 +1207,12 @@ module.exports = {
     approveMilestoneSubmit,
     requestMilestoneRevision,
     getMilestoneWithParties,
+    // Mutual Cancellation queries
+    createCancellationRequestRepository,
+    getActiveCancellationRequestByContract,
+    respondCancellationRequestRepository,
+    withdrawCancellationRequestRepository,
+    getExpiredPendingCancellationRequests,
+    autoApproveCancellationRequest,
 };
+

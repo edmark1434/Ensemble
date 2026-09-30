@@ -28,6 +28,12 @@ const {
     approveMilestoneSubmit,
     requestMilestoneRevision,
     getMilestoneWithParties,
+    createCancellationRequestRepository,
+    getActiveCancellationRequestByContract,
+    respondCancellationRequestRepository,
+    withdrawCancellationRequestRepository,
+    getExpiredPendingCancellationRequests,
+    autoApproveCancellationRequest,
 } = require('../repositories/MilestoneRepositories');
 
 const { createNotification } = require('../repositories/NotificationRepositories');
@@ -447,6 +453,217 @@ async function requestRevisionService(milestoneId, callerAccountId, revisionNote
     return result;
 }
 
+// ─── Mutual Contract Cancellation Services ──────────────────────────────────
+
+/**
+ * Initiates a mutual contract cancellation request.
+ * Either client or freelancer can request cancellation.
+ */
+async function requestContractCancellationService({ contractId, callerAccountId, reason, message, autoCancelHours = 72 }) {
+    if (!reason || !message) {
+        throw Object.assign(new Error('Reason and message are required'), { statusCode: 400 });
+    }
+
+    const { getContractWithParties } = require('../repositories/ContractRepositories');
+    const contract = await getContractWithParties(contractId);
+    if (!contract) {
+        throw Object.assign(new Error('Contract not found'), { statusCode: 404 });
+    }
+
+    if (!['Active', 'Waiting'].includes(contract.status)) {
+        throw Object.assign(new Error(`Contract cannot be cancelled in status: ${contract.status}`), { statusCode: 400 });
+    }
+
+    const isClient = String(contract.client_account_id) === String(callerAccountId);
+    const isFreelancer = String(contract.freelancer_account_id) === String(callerAccountId);
+    if (!isClient && !isFreelancer) {
+        throw Object.assign(new Error('You are not authorized to cancel this contract'), { statusCode: 403 });
+    }
+
+    const initiatorRole = isClient ? 'client' : 'freelancer';
+    const recipientAccountId = isClient ? contract.freelancer_account_id : contract.client_account_id;
+
+    const request = await createCancellationRequestRepository({
+        contractId,
+        initiatorAccountId: callerAccountId,
+        recipientAccountId,
+        initiatorRole,
+        reason,
+        message,
+        autoCancelHours,
+    });
+
+    // Notify the recipient
+    const recipientTitle = isClient ? 'Freelancer' : 'Client';
+    const initiatorTitle = isClient ? 'Client' : 'Freelancer';
+    await notify({
+        accountId: recipientAccountId,
+        message: `${initiatorTitle} has requested mutual cancellation for "${contract.contract_title}". Please review and respond within ${autoCancelHours} hours.`,
+        referencePrefix: 'CANCELLATION_REQUESTED',
+        referencePath: `/contracts/${contractId}`,
+        referenceId: contractId,
+    });
+
+    const io = getIo();
+    if (io) {
+        io.to([`contract_${contractId}`, String(contract.client_account_id), String(contract.freelancer_account_id)]).emit('cancellation_request_updated', request);
+    }
+
+    return request;
+}
+
+async function getActiveCancellationRequestService(contractId, callerAccountId) {
+    const { getContractWithParties } = require('../repositories/ContractRepositories');
+    const contract = await getContractWithParties(contractId);
+    if (!contract) {
+        throw Object.assign(new Error('Contract not found'), { statusCode: 404 });
+    }
+
+    const isClient = String(contract.client_account_id) === String(callerAccountId);
+    const isFreelancer = String(contract.freelancer_account_id) === String(callerAccountId);
+    if (!isClient && !isFreelancer) {
+        throw Object.assign(new Error('Unauthorized'), { statusCode: 403 });
+    }
+
+    return await getActiveCancellationRequestByContract(contractId);
+}
+
+async function respondContractCancellationService({ contractId, requestId, callerAccountId, action, declineReason }) {
+    const { getContractWithParties } = require('../repositories/ContractRepositories');
+    const contract = await getContractWithParties(contractId);
+    if (!contract) {
+        throw Object.assign(new Error('Contract not found'), { statusCode: 404 });
+    }
+
+    const isClient = String(contract.client_account_id) === String(callerAccountId);
+    const isFreelancer = String(contract.freelancer_account_id) === String(callerAccountId);
+    if (!isClient && !isFreelancer) {
+        throw Object.assign(new Error('Unauthorized'), { statusCode: 403 });
+    }
+
+    const result = await respondCancellationRequestRepository({
+        requestId,
+        contractId,
+        callerAccountId,
+        action,
+        declineReason,
+    });
+
+    if (action === 'accept') {
+        const cancelResult = await cancelContractAndRefundUnfinishedMilestones({
+            contractId,
+            clientAccountId: contract.client_account_id,
+            freelancerAccountId: contract.freelancer_account_id,
+        });
+
+        await notifyBoth({
+            clientAccountId: contract.client_account_id,
+            freelancerAccountId: contract.freelancer_account_id,
+            clientMessage: cancelResult.isPartial
+                ? `Mutual cancellation approved for "${contract.contract_title}". ${cancelResult.refundedCredits} credits for unfinished milestones were refunded to your wallet.`
+                : `Mutual cancellation approved for "${contract.contract_title}". All ${cancelResult.refundedCredits} escrow credits were refunded to your wallet.`,
+            freelancerMessage: cancelResult.isPartial
+                ? `Mutual cancellation approved for "${contract.contract_title}". You retained payment for completed milestones. Unfinished milestone escrow was refunded.`
+                : `Mutual cancellation approved for "${contract.contract_title}". The contract has ended.`,
+            referencePrefix: 'CANCELLATION_ACCEPTED',
+            contractId,
+            milestoneId: null,
+        });
+
+        const io = getIo();
+        if (io) {
+            io.to([`contract_${contractId}`, String(contract.client_account_id), String(contract.freelancer_account_id)]).emit('cancellation_request_updated', { action: 'accepted', cancelResult });
+        }
+        return { success: true, action: 'accepted', cancelResult };
+    } else {
+        const otherAccountId = isClient ? contract.freelancer_account_id : contract.client_account_id;
+        await notify({
+            accountId: otherAccountId,
+            message: `The mutual cancellation request for "${contract.contract_title}" was declined. Reason: "${declineReason || 'Declined'}". The contract remains active.`,
+            referencePrefix: 'CANCELLATION_DECLINED',
+            referencePath: `/contracts/${contractId}`,
+            referenceId: contractId,
+        });
+
+        const io = getIo();
+        if (io) {
+            io.to([`contract_${contractId}`, String(contract.client_account_id), String(contract.freelancer_account_id)]).emit('cancellation_request_updated', { action: 'declined', reason: declineReason });
+        }
+        return { success: true, action: 'declined' };
+    }
+}
+
+async function withdrawContractCancellationService({ contractId, requestId, callerAccountId }) {
+    const { getContractWithParties } = require('../repositories/ContractRepositories');
+    const contract = await getContractWithParties(contractId);
+    if (!contract) {
+        throw Object.assign(new Error('Contract not found'), { statusCode: 404 });
+    }
+
+    const withdrawn = await withdrawCancellationRequestRepository({
+        requestId,
+        contractId,
+        callerAccountId,
+    });
+
+    const isClient = String(contract.client_account_id) === String(callerAccountId);
+    const recipientAccountId = isClient ? contract.freelancer_account_id : contract.client_account_id;
+
+    await notify({
+        accountId: recipientAccountId,
+        message: `The mutual cancellation request for "${contract.contract_title}" was withdrawn. The contract remains active.`,
+        referencePrefix: 'CANCELLATION_WITHDRAWN',
+        referencePath: `/contracts/${contractId}`,
+        referenceId: contractId,
+    });
+
+    const io = getIo();
+    if (io) {
+        io.to([`contract_${contractId}`, String(contract.client_account_id), String(contract.freelancer_account_id)]).emit('cancellation_request_updated', { action: 'withdrawn' });
+    }
+
+    return withdrawn;
+}
+
+/**
+ * Cron worker: Auto-approves cancellation requests older than 72 hours where recipient never responded.
+ */
+async function reconcileExpiredCancellationRequestsServices() {
+    const expired = await getExpiredPendingCancellationRequests();
+    if (!expired.length) return { processed: 0 };
+
+    let processed = 0;
+    for (const req of expired) {
+        try {
+            await autoApproveCancellationRequest(req.request_id);
+            const cancelResult = await cancelContractAndRefundUnfinishedMilestones({
+                contractId: req.contract_id,
+                clientAccountId: req.client_account_id,
+                freelancerAccountId: req.freelancer_account_id,
+            });
+
+            await notifyBoth({
+                clientAccountId: req.client_account_id,
+                freelancerAccountId: req.freelancer_account_id,
+                clientMessage: `Contract "${req.contract_title}" was automatically cancelled because the recipient did not respond within 72 hours. ${cancelResult.refundedCredits} credits were refunded to your wallet.`,
+                freelancerMessage: `Contract "${req.contract_title}" was automatically cancelled because no response was received within 72 hours. Earned milestone payments were retained.`,
+                referencePrefix: 'CANCELLATION_AUTO_APPROVED',
+                contractId: req.contract_id,
+                milestoneId: null,
+            });
+
+            const io = getIo();
+            if (io) {
+                io.to([`contract_${req.contract_id}`, String(req.client_account_id), String(req.freelancer_account_id)]).emit('cancellation_request_updated', { action: 'auto_approved', cancelResult });
+            }
+            processed++;
+        } catch (err) {
+            console.error(`Error auto-approving cancellation request ${req.request_id}:`, err);
+        }
+    }
+    return { processed };
+}
+
 module.exports = {
     // Cron services
     reconcileOverdueMilestonesServices,
@@ -454,6 +671,7 @@ module.exports = {
     reconcileAbandonedMilestonesServices,
     reconcileAutoApprovalServices,
     reconcileMilestoneRemindersServices,
+    reconcileExpiredCancellationRequestsServices,
     // Controller services
     cancelMilestoneService,
     cancelContractService,
@@ -461,4 +679,9 @@ module.exports = {
     extendContractDeadlineService,
     approveMilestoneService,
     requestRevisionService,
+    // Mutual Cancellation services
+    requestContractCancellationService,
+    getActiveCancellationRequestService,
+    respondContractCancellationService,
+    withdrawContractCancellationService,
 };

@@ -21,7 +21,13 @@ router.post('/:contractId/dispute', requireAuth, ContractControllers.createContr
 // Extend contract deadline (Client action)
 router.post('/:contractId/extend', requireAuth, ContractControllers.extendContractDeadlineController);
 
-// Cancel contract and refund unfinished milestones (Client action)
+// Cancel contract and refund unfinished milestones (Direct/Legacy action)
 router.post('/:contractId/cancel', requireAuth, ContractControllers.cancelContractController);
+
+// Mutual Cancellation Requests (Client & Freelancer)
+router.get('/:contractId/cancellation-request', requireAuth, ContractControllers.getCancellationRequestController);
+router.post('/:contractId/cancellation-request', requireAuth, ContractControllers.createCancellationRequestController);
+router.post('/:contractId/cancellation-request/:requestId/respond', requireAuth, ContractControllers.respondCancellationRequestController);
+router.post('/:contractId/cancellation-request/:requestId/withdraw', requireAuth, ContractControllers.withdrawCancellationRequestController);
 
 module.exports = router;
