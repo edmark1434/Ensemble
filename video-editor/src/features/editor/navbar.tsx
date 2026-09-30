@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { patchProject } from "@/features/editor/control-item/common/composition-controls";
 import { Button } from "@/components/ui/button";
 import { dispatch } from "@designcombo/events";
 import { HISTORY_UNDO, HISTORY_REDO, DESIGN_RESIZE } from "@designcombo/state";
@@ -84,12 +85,20 @@ export default function Navbar({
     undoManager?.redo();
   };
 
-  const commitTitle = () => {
+  const commitTitle = async () => {
     if (title.trim() === "") {
       setTitle(projectName);
       return;
     }
+    const previous = projectName;
     setProjectName(title);
+    try {
+      await patchProject(projectId, { name: title });
+    } catch (err) {
+      console.error("Failed to save project name from navbar", err);
+      setProjectName(previous);
+      setTitle(previous);
+    }
   };
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
