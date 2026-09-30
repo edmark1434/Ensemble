@@ -1226,12 +1226,20 @@ function bindSocketListeners() {
     toast("The meeting has ended.");
   });
   socket.on("googleMeetingUpdated", (event: GoogleMeetingEvent) => {
-    useChatState.setState((state) => ({
-      googleMeetingsByConversation: {
-        ...state.googleMeetingsByConversation,
-        [String(event.conversation_id)]: event,
-      },
-    }));
+      if (event.status === "ended") {
+        useChatState.setState((state) => {
+          const meetings = { ...state.googleMeetingsByConversation };
+          delete meetings[String(event.conversation_id)];
+          return { googleMeetingsByConversation: meetings };
+        });
+      } else {
+        useChatState.setState((state) => ({
+          googleMeetingsByConversation: {
+            ...state.googleMeetingsByConversation,
+            [String(event.conversation_id)]: event,
+          },
+        }));
+      }
     const activeCall = useChatState.getState().activeCall;
     if (activeCall?.provider !== "google-meet" || activeCall.callId !== String(event.meeting_id)) return;
     useChatState.setState({
@@ -1771,7 +1779,7 @@ const useChatState = create<ChatState>((set, get) => ({
           .catch(() => null);
         set((state) => {
           const meetings = { ...state.googleMeetingsByConversation };
-          if (activeGoogleMeeting) meetings[id] = activeGoogleMeeting;
+          if (activeGoogleMeeting && activeGoogleMeeting.status !== "ended") meetings[id] = activeGoogleMeeting;
           else delete meetings[id];
           return { googleMeetingsByConversation: meetings };
         });
@@ -2586,3 +2594,4 @@ useChatState.subscribe((state, prevState) => {
     );
   }
 });
+
