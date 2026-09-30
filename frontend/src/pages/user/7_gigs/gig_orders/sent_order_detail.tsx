@@ -25,7 +25,7 @@ export const SentOrderDetail = () => {
         navigate('/gigs/orders/sent');
     } catch (err) {
         console.error("Failed to withdraw:", err);
-        showErrorToast("Failed to withdraw order.");
+        showErrorToast("Failed to cancel order.");
         setIsWithdrawing(false);
     }
   };
@@ -229,7 +229,7 @@ export const SentOrderDetail = () => {
                         onClick={() => setShowWithdrawConfirm(true)}
                         className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2 disabled:opacity-50"
                       >
-                        <XCircle className="w-4 h-4" /> Withdraw Order
+                        <XCircle className="w-4 h-4" /> Cancel Order
                       </button>
                     </div>
                 )}
@@ -250,7 +250,7 @@ export const SentOrderDetail = () => {
                         onClick={() => setShowWithdrawConfirm(true)}
                         className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2 disabled:opacity-50"
                       >
-                        <XCircle className="w-4 h-4" /> Withdraw Order
+                        <XCircle className="w-4 h-4" /> Cancel Order
                       </button>
                     </div>
                 )}
@@ -370,7 +370,7 @@ export const SentOrderDetail = () => {
       {showWithdrawConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm p-6 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Withdraw Order</h3>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Cancel Order</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">
               Are you sure you want to withdraw this pending order? This action cannot be undone.
             </p>
