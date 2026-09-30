@@ -29,7 +29,7 @@ function displayStatus(normalized) {
 // Suspended accounts may sign in and read. Every write is blocked until the
 // allowed actions are chosen. Do not treat this as the final action list.
 const SUSPENDED_ACTION_MESSAGE =
-  'Your account is suspended. You can still sign in and look around, but you cannot perform actions right now.';
+  'Your account is suspended. You can view your account and notifications. Actions are turned off until this is lifted.';
 
 function blockMessage(normalized) {
   if (normalized === 'banned') {
@@ -171,6 +171,9 @@ async function rejectRestrictedAccount(req, res) {
 const SUSPENDED_WRITE_ALLOWLIST = [
   /\/api\/users\/logout(?:\?|$)/,
   /\/api\/users\/refresh-token(?:\?|$)/,
+  // Own-account notification reads stay available so the bell stays in sync.
+  /\/api\/notifications\/read-all(?:\?|$)/,
+  /\/api\/notifications\/[^/]+\/read(?:\?|$)/,
 ];
 
 function suspendedWriteAllowed(req) {

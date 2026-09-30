@@ -72,7 +72,7 @@ api.interceptors.response.use(
 
         const restrictionCode = err?.response?.data?.code;
         if (restrictionCode === "ACCOUNT_SUSPENDED") {
-            showErrorToast(err.response?.data?.message || "Your account is suspended and cannot perform actions right now.");
+            showErrorToast(err.response?.data?.message || "Your account is suspended. You can view your account and notifications. Actions are turned off until this is lifted.");
             return Promise.reject(err);
         }
 

@@ -9,7 +9,7 @@ async function notifyAccountSuspended(accountId) {
     is_read: false,
     reference_table: 'accounts',
     reference_prefix: 'SUSPEND',
-    reference_path: '/home',
+    reference_path: '/notifications',
     reference_id: accountId,
   });
 

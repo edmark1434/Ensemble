@@ -132,13 +132,16 @@ async function initSocket(httpServer) {
     socket.use((packet, next) => {
       if (!socket.data.suspended) return next();
       const eventName = String(packet[0] || '');
-      if (eventName === 'disconnect') return next();
+      // Viewing and acknowledging their own notifications stays available.
+      if (eventName === 'disconnect' || eventName === 'markMessageAsRead' || eventName === 'markAllNotificationsAsRead') {
+        return next();
+      }
       const ack = packet[packet.length - 1];
       if (typeof ack === 'function') {
         ack({
           success: false,
           code: 'ACCOUNT_SUSPENDED',
-          message: 'Your account is suspended. You can still sign in and look around, but you cannot perform actions right now.',
+          message: 'Your account is suspended. You can view your account and notifications. Actions are turned off until this is lifted.',
         });
       }
     });

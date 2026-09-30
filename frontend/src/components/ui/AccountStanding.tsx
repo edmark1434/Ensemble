@@ -148,6 +148,43 @@ export function AccountStandingNotice({
   );
 }
 
+function SuspensionBanner({
+  standing,
+  onOpenNotifications,
+}: {
+  standing: AccountStanding;
+  onOpenNotifications: () => void;
+}) {
+  return (
+    <div className="pointer-events-none fixed inset-x-0 top-20 z-[80] flex justify-center px-4">
+      <div
+        role="status"
+        className="pointer-events-auto flex w-full max-w-3xl items-start gap-3 rounded-2xl border border-amber-500/25 bg-white/70 px-4 py-3 text-zinc-900 shadow-lg backdrop-blur-md dark:border-white/10 dark:bg-[#080a12]/70 dark:text-zinc-100"
+      >
+        <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">Your account is suspended</p>
+          <p className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+            {standing.message || 'You can view your account and notifications. Actions are turned off until this is lifted.'}
+          </p>
+          {(standing.violations || []).length ? (
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+              {(standing.violations || []).slice(0, 2).map((violation) => violation.type).filter(Boolean).join(' · ')}
+            </p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={onOpenNotifications}
+          className="shrink-0 rounded-xl border border-black/10 bg-white/60 px-3 py-2 text-xs font-semibold text-zinc-900 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+        >
+          Notifications
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AccountBlockedScreen({
   standing,
   onSignIn,
@@ -240,9 +277,7 @@ export function AccountRestrictionHost() {
   return (
     <>
       {suspended && warning ? (
-        <div className="sticky top-0 z-[80] border-b-4 border-amber-950 bg-amber-400 px-4 py-4 text-zinc-950 sm:px-8">
-          <AccountStandingNotice standing={warning} />
-        </div>
+        <SuspensionBanner standing={warning} onOpenNotifications={() => navigate('/notifications')} />
       ) : null}
       {showWarning && warning ? (
         <div className="sticky top-0 z-[80] px-3 py-3 sm:px-6">
