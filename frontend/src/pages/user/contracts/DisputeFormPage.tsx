@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, Loader2, ChevronDown, ArrowLeft } from "lucide-react";
 import useGlobalState from "@/lib/global_state";
@@ -24,10 +24,13 @@ interface DetailedContract {
 export const DisputeFormPage: React.FC = () => {
   const { user, theme } = useGlobalState();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [activeContracts, setActiveContracts] = useState<DetailedContract[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [selectedContractId, setSelectedContractId] = useState("");
+  const paramContractId = searchParams.get('contractId') || (location.state as any)?.contractId || "";
+  const [selectedContractId, setSelectedContractId] = useState(paramContractId);
   const [reason, setReason] = useState("");
   const [details, setDetails] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -85,7 +88,7 @@ export const DisputeFormPage: React.FC = () => {
             };
           });
           
-          const validStatuses = ["Active", "Waiting"];
+          const validStatuses = ["Active", "Waiting", "Done", "Closed", "Cancelled"];
           const filteredContracts = mappedContracts.filter((c: any) => validStatuses.includes(c.status));
           setActiveContracts(filteredContracts);
         }

@@ -25,8 +25,8 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import useGlobalState from "@/lib/global_state";
 
 export type ContractType = "Job" | "Gig";
-export type ContractStatus = "Active" | "Waiting" | "Done" | "Cancelled";
-export type MilestoneStatus = "Claimed" | "In Progress" | "Locked" | "Overdue" | "Stalled" | "Abandoned" | "Under Review";
+export type ContractStatus = "Active" | "Waiting" | "Done" | "Cancelled" | "Closed";
+export type MilestoneStatus = "Claimed" | "In Progress" | "Locked" | "Overdue" | "Stalled" | "Abandoned" | "Under Review" | "Cancelled";
 
 export interface MilestoneItem {
   id: string;
@@ -266,11 +266,12 @@ export const Contracts: React.FC = () => {
             else if (rawStatus === 'overdue') uiStatus = 'Overdue';
             else if (rawStatus === 'stalled') uiStatus = 'Stalled';
             else if (rawStatus === 'abandoned') uiStatus = 'Abandoned';
+            else if (rawStatus === 'cancelled') uiStatus = 'Cancelled';
             return { id: m.id, name: m.name, revisions: parseInt(m.revisions,10)||0, deadline: formatMilestoneDeadline(m), credits: m.credits||Math.floor((parseFloat(c.rate_credits)||0)/((arr.length)||1)), status: uiStatus, rawStatus };
           });
           return { ...c, milestones: ms };
         });
-        setContracts(remapped.filter((c: any) => ['Active','Waiting','Done','Closed'].includes(c.status)));
+        setContracts(remapped.filter((c: any) => ['Active','Waiting','Done','Closed','Cancelled'].includes(c.status)));
         // Update selected contract if open
         if (selectedContract) {
           const updated = remapped.find((c: any) => c.contract_id === selectedContract.id || c.id === selectedContract.id);
@@ -304,6 +305,7 @@ export const Contracts: React.FC = () => {
               else if (rawStatus === 'overdue') uiStatus = 'Overdue';
               else if (rawStatus === 'stalled') uiStatus = 'Stalled';
               else if (rawStatus === 'abandoned') uiStatus = 'Abandoned';
+              else if (rawStatus === 'cancelled') uiStatus = 'Cancelled';
               return {
                 id: m.id,
                 name: m.name,
@@ -361,7 +363,7 @@ export const Contracts: React.FC = () => {
           };
           });
           
-          const validStatuses = ["Active", "Waiting", "Done", "Closed"];
+          const validStatuses = ["Active", "Waiting", "Done", "Closed", "Cancelled"];
           const filteredContracts = mappedContracts.filter((c: DetailedContract) => validStatuses.includes(c.status));
           setContracts(filteredContracts);
 
@@ -405,6 +407,7 @@ export const Contracts: React.FC = () => {
     if (status === 'Active') color = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
     else if (status === 'Waiting') color = 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20';
     else if (status === 'Closed' || status === 'Done') color = 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20';
+    else if (status === 'Cancelled') color = 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20';
 
     return (
       <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${color}`}>
@@ -829,6 +832,7 @@ export const Contracts: React.FC = () => {
                           m.status === 'Overdue'      ? 'text-rose-400' :
                           m.status === 'Stalled'      ? 'text-orange-400' :
                           m.status === 'Abandoned'    ? 'text-red-600' :
+                          m.status === 'Cancelled'    ? 'text-zinc-400 dark:text-zinc-500 line-through' :
                           'text-gray-500 dark:text-zinc-500';
 
                         return (
@@ -941,9 +945,21 @@ export const Contracts: React.FC = () => {
 
             {/* Footer */}
             <div className="flex items-center justify-between border-t border-gray-100 dark:border-white/5 bg-gray-100 dark:bg-[#0a0c10] px-6 py-4">
-              <span className="text-xs text-gray-500 dark:text-zinc-500 hidden sm:block">
-                Press ESC or click close to exit
-              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigate(`/contracts/dispute-form?contractId=${selectedContract.id}`);
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs text-rose-500 hover:text-rose-400 font-semibold px-2.5 py-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 transition-colors"
+                >
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>Report / Dispute</span>
+                </button>
+                <span className="text-xs text-gray-500 dark:text-zinc-500 hidden md:block">
+                  Press ESC or click close to exit
+                </span>
+              </div>
               <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                 {selectedContract.status === 'Active' && (
                   user?.account_id === selectedContract.freelancerAccountId ? (

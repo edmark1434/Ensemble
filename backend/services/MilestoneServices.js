@@ -140,18 +140,26 @@ async function reconcileAbandonedMilestonesServices() {
     for (const m of milestones) {
         try {
             await markMilestoneAbandoned(m.contract_milestone_id);
+            // Automatically refund remaining escrow to the client
+            const refundResult = await cancelMilestoneAndRefund({
+                milestoneId:         m.contract_milestone_id,
+                clientAccountId:     m.client_account_id,
+                freelancerAccountId: m.freelancer_account_id,
+            });
+
+            const creditsRefunded = refundResult?.refundedCredits || m.credits || 0;
             await notifyBoth({
                 clientAccountId:     m.client_account_id,
                 freelancerAccountId: m.freelancer_account_id,
-                clientMessage:       `Contract milestone "${m.milestone_name}" has been abandoned after 30 days of inactivity. Open a dispute or contact support to resolve.`,
-                freelancerMessage:   `Contract milestone "${m.milestone_name}" has been abandoned after 30 days of inactivity. Contact your client or open a dispute.`,
+                clientMessage:       `Milestone "${m.milestone_name}" was abandoned due to extended inactivity. ${creditsRefunded} credits were automatically refunded to your wallet.`,
+                freelancerMessage:   `Milestone "${m.milestone_name}" was cancelled due to inactivity. Unearned escrow funds have been refunded to the client.`,
                 referencePrefix: 'MILESTONE_ABANDONED',
                 contractId:  m.contract_id,
                 milestoneId: m.contract_milestone_id,
             });
             abandoned++;
         } catch (err) {
-            console.error(`Abandoned marking failed for milestone ${m.contract_milestone_id}:`, err.message);
+            console.error(`Abandoned refund failed for milestone ${m.contract_milestone_id}:`, err.message);
         }
     }
 
