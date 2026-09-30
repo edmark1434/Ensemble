@@ -218,12 +218,53 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                     <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                         isCompleted ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
                         isSubmittedForReview ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                        activeMilestone.status === 'overdue' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                        activeMilestone.status === 'stalled' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' :
+                        activeMilestone.status === 'abandoned' ? 'bg-red-600/20 text-red-500 border border-red-600/30' :
+                        activeMilestone.status === 'cancelled' ? 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30' :
                         'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
                     }`}>
                         {activeMilestone.status.replace(/_/g, ' ')}
                     </div>
                 </div>
             </div>
+
+            {/* Status Action / Alert Banner for Overdue / Stalled / Abandoned Milestones */}
+            {(activeMilestone.status === 'overdue' || activeMilestone.status === 'stalled' || activeMilestone.status === 'abandoned') && (
+                <div className={`px-4 py-2.5 text-xs flex items-center justify-between border-b ${
+                    activeMilestone.status === 'overdue'
+                        ? 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
+                        : 'bg-orange-500/10 border-orange-500/20 text-orange-600 dark:text-orange-400'
+                }`}>
+                    <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>
+                            {isFreelancer
+                                ? (activeMilestone.status === 'overdue'
+                                    ? 'This milestone is past due. Submit your work or request an extension from your client to avoid cancellation.'
+                                    : 'This milestone is stalled. Your client may cancel and reclaim escrow at any time.')
+                                : (activeMilestone.status === 'overdue'
+                                    ? 'Milestone deadline has passed. You can extend the deadline or manage actions in contracts.'
+                                    : 'Milestone is stalled due to no submission. You can cancel to reclaim your escrow funds.')}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-3 text-[11px]">
+                        <a
+                            href={`/contracts/${task?.contract_id || ''}`}
+                            className="underline font-bold hover:opacity-80"
+                        >
+                            Contracts &rarr;
+                        </a>
+                        <span className="opacity-40">•</span>
+                        <a
+                            href={`/contracts/dispute-form?contractId=${task?.contract_id || ''}`}
+                            className="underline font-bold text-rose-600 dark:text-rose-400 hover:opacity-80"
+                        >
+                            Dispute
+                        </a>
+                    </div>
+                </div>
+            )}
 
             {/* Feed Scroll Area */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 inbox-scroll-thin">

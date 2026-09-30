@@ -1,42 +1,31 @@
-# Current Task — Milestone Business Logic & In-App Notifications
+# Current Task — Multi-Milestone Partial Completion & Inactivity Abandonment Plan
 
-Implement balanced real-world milestone business logic for Jobs and Gigs:
-- Inactivity / non-response handling for milestone submissions (auto-approval after 5 days for jobs, 3 days for gigs with credit release to freelancer).
-- Overdue milestone tracking with client-initiated actions (Cancel & Refund, Extend Deadline, Approve, Revision Request) rather than surprise auto-cancellation.
-- In-app notifications and real-time Socket.IO alerts for both clients and freelancers across all milestone status events.
+Implement production-ready partial milestone completion and abandonment lifecycle for Jobs and Gigs (Upwork/Fiverr benchmark):
+- Preserve Milestone 1 payments to freelancer (already approved, irrevocable).
+- Enable 1-click escrow refund for overdue/stalled/abandoned Milestone 2 directly to client account wallet.
+- Automated abandonment cron refund after inactivity threshold.
+- Fix contract visibility in `contracts.tsx` for cancelled/partially-completed contracts.
+- Ensure terminal contract status reflects partial completion (`Closed` with partial metrics) instead of vanishing.
 
-## Implementation Objective
-1. **Database Schema & Migrations**:
-   - Add `started_at` and `overdue_at` timestamps to `contract_milestones` to track active milestone progress and deadlines.
-   - Index `(status, started_at)` and `(status, overdue_at)` for high-performance cron sweeps.
-2. **Repository & Transactional Operations (`MilestoneRepositories.js`)**:
-   - Lock milestones and escrow/account wallets with `FOR UPDATE`.
-   - Implement `autoApproveMilestoneSubmit`: debit freelancer escrow wallet, credit freelancer account wallet, record `credit_transactions` ('Escrow Release' referencing `contract_milestones`), activate next milestone, mark contract done if complete.
-   - Implement `cancelMilestoneAndRefund`: debit freelancer escrow wallet, credit client account wallet (refund), mark milestone `cancelled` and cancel contract if all non-completed milestones are cancelled.
-   - Implement `extendMilestoneDeadline`: extend hours and clear overdue flags.
-   - Implement `approveMilestoneSubmit` and `requestMilestoneRevision` with revision quota tracking.
-3. **Business Logic & Background Crons (`MilestoneServices.js` & `BackgroundJob.js`)**:
-   - Overdue Detector (runs hourly at `:00`): flags milestones past deadline as `overdue` and notifies both parties.
-   - Stalled Escalator (runs hourly at `:15`): escalates overdue milestones without submission after 7 days to `stalled`.
-   - Auto-Approve Resolver (runs hourly at `:30`): auto-approves submissions left under review for 5 days (job) / 3 days (gig).
-   - Milestone Reminders (runs hourly at `:45`): sends 48h deadline warnings to freelancers and 2-day auto-approve warnings to clients.
-   - Abandoned Marker (runs daily at 02:30): marks contracts abandoned after 30 days of inactivity.
-4. **API Routes & Controllers (`Milestone.js` & `MilestoneControllers.js`)**:
-   - Endpoints under `/api/contracts/:contractId/milestones`: `POST /:milestoneId/cancel`, `POST /:milestoneId/extend`, `POST /:milestoneId/approve`, `POST /:milestoneId/revision`.
-5. **Contract Lifecycle Integration (`ContractRepositories.js`)**:
-   - Set `started_at = NOW()` on the first milestone when a contract is accepted and becomes `active`.
-6. **Frontend Contracts View (`contracts.tsx`)**:
-   - Status mapping supporting `Claimed`, `In Progress`, `Under Review`, `Overdue`, `Stalled`, `Abandoned`.
-   - Distinct color-coded badges for all milestone states.
-   - Client action buttons (`Approve`, `Revise`, `Extend`, `Cancel`) with confirmation modal for actions.
+## Implementation Objectives
+1. **Backend Automation & Repositories (`MilestoneRepositories.js` & `MilestoneServices.js`)**:
+   - Enhance `cancelMilestoneAndRefund` to check if $\ge 1$ milestone was already completed: set contract status to `Closed` (Partial) instead of `Cancelled`.
+   - Update `reconcileAbandonedMilestonesServices` to trigger automatic escrow refund to the client if a milestone is abandoned after threshold.
+2. **Frontend Contract History & Tab Visibility (`contracts.tsx`)**:
+   - Fix `validStatuses` to include `Cancelled` and ensure cancelled/closed contracts render under the "Archived" tab.
+   - Display financial and deliverable breakdown (e.g., "1 of 2 Milestones Paid (500 CR) • 1 Refunded (500 CR)").
+3. **Dashboard Activity Feed Alerting (`MilestoneActivityFeed.tsx`)**:
+   - Provide client quick-action banners when viewing an overdue or stalled milestone.
+4. **Verification**:
+   - Frontend `npm run build` verification.
+   - Flow and transaction integrity verification.
 
-## Acceptance Criteria
-- [x] Migration created and executed (`1813200000000_171-add-milestone-deadline-tracking.js`).
-- [x] `backend/repositories/MilestoneRepositories.js` handles transactions and cron queries.
-- [x] `backend/services/MilestoneServices.js` implements business rules, notification dispatches, and socket emits.
-- [x] `backend/controllers/MilestoneControllers.js` and `backend/routes/Milestone.js` registered in `Api.js`.
-- [x] `backend/lib/BackgroundJob.js` schedules 5 recurring cron tasks with concurrency locks.
-- [x] `backend/repositories/ContractRepositories.js` initializes `started_at` on contract acceptance.
-- [x] `frontend/src/pages/user/contracts/contracts.tsx` includes action controls, status badges, and confirmation dialogs.
-- [x] Backend syntax checks pass.
-- [x] Frontend compiles cleanly with `npm run build`.
+- [x] Automated refund occurs on milestone abandonment.
+- [x] Dynamic timeline scaling: Gigs and short deadlines (<= 72h) scale to 2-day stalled and 4-day abandonment; Jobs scale to 5-day stalled and 10-day abandonment.
+- [x] Deadlines <= 48h receive 50% midpoint warnings instead of premature reminders.
+- [x] Direct dispute and reporting shortcuts added to contract agreement modal and dashboard activity banner.
+- [x] Dispute form preselects contract via URL query param and allows disputing active, closed, or cancelled contracts.
+- [x] Contracts with 1 completed milestone and 1 cancelled milestone close as `Closed` with partial completion indicator.
+- [x] Cancelled and closed contracts remain visible under the "Archived" contracts tab.
+- [x] Freelancer keeps Milestone 1 earnings; Client receives 100% refund for unsubmitted Milestone 2.
+- [x] Build passes cleanly with zero errors.
