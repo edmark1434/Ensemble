@@ -24,6 +24,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import useGlobalState from "@/lib/global_state";
+import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
 
 export type ContractType = "Job" | "Gig";
 export type ContractStatus = "Active" | "Waiting" | "Done" | "Cancelled" | "Closed";
@@ -411,7 +412,7 @@ export const Contracts: React.FC = () => {
         reason: cancellationReason,
         message: cancellationMessage.trim() || undefined
       });
-      alert(res.data?.message || 'Mutual cancellation requested. The other party has 72 hours to respond.');
+      showSuccessToast(res.data?.message || 'Mutual cancellation requested. The other party has 72 hours to respond.');
       setCancellationModalOpen(false);
       setCancellationReason("Mutual agreement to end project");
       setCancellationMessage("");
@@ -419,7 +420,7 @@ export const Contracts: React.FC = () => {
       await fetchCancellationRequest(selectedContract.id);
     } catch (err: any) {
       console.error("Failed to submit cancellation request:", err);
-      alert(err?.response?.data?.message || 'Failed to submit cancellation request.');
+      showErrorToast(err?.response?.data?.message || 'Failed to submit cancellation request.');
     } finally {
       setSubmittingCancellation(false);
     }
@@ -437,12 +438,12 @@ export const Contracts: React.FC = () => {
       const res = await api.post(`/api/contracts/${selectedContract.id}/cancellation-request/${activeCancellation.request_id}/respond`, {
         action: 'accept'
       });
-      alert(res.data?.message || 'Mutual cancellation accepted. Unfinished escrow has been refunded.');
+      showSuccessToast(res.data?.message || 'Mutual cancellation accepted. Unfinished escrow has been refunded.');
       await fetchContracts();
       await fetchCancellationRequest(selectedContract.id);
     } catch (err: any) {
       console.error("Failed to accept cancellation:", err);
-      alert(err?.response?.data?.message || 'Failed to accept cancellation.');
+      showErrorToast(err?.response?.data?.message || 'Failed to accept cancellation.');
     } finally {
       setActionLoading(false);
     }
@@ -456,14 +457,14 @@ export const Contracts: React.FC = () => {
         action: 'decline',
         declineReason: declineReason.trim() || undefined
       });
-      alert(res.data?.message || 'Cancellation request declined. The contract remains active.');
+      showSuccessToast(res.data?.message || 'Cancellation request declined. The contract remains active.');
       setDeclineModalOpen(false);
       setDeclineReason("");
       await fetchContracts();
       await fetchCancellationRequest(selectedContract.id);
     } catch (err: any) {
       console.error("Failed to decline cancellation:", err);
-      alert(err?.response?.data?.message || 'Failed to decline cancellation.');
+      showErrorToast(err?.response?.data?.message || 'Failed to decline cancellation.');
     } finally {
       setActionLoading(false);
     }
@@ -477,12 +478,12 @@ export const Contracts: React.FC = () => {
     setActionLoading(true);
     try {
       const res = await api.post(`/api/contracts/${selectedContract.id}/cancellation-request/${activeCancellation.request_id}/withdraw`);
-      alert(res.data?.message || 'Cancellation request withdrawn.');
+      showSuccessToast(res.data?.message || 'Cancellation request withdrawn.');
       await fetchContracts();
       await fetchCancellationRequest(selectedContract.id);
     } catch (err: any) {
       console.error("Failed to withdraw cancellation request:", err);
-      alert(err?.response?.data?.message || 'Failed to withdraw cancellation request.');
+      showErrorToast(err?.response?.data?.message || 'Failed to withdraw cancellation request.');
     } finally {
       setActionLoading(false);
     }
@@ -503,11 +504,20 @@ export const Contracts: React.FC = () => {
         ? `/api/contracts/${contractId}/extend`
         : `/api/contracts/${contractId}/milestones/${milestone.id}/${action}`;
       await api.post(url, body);
+      showSuccessToast(
+        action === 'extend'
+          ? `Milestone deadline extended by ${extensionDays} days`
+          : action === 'cancel'
+          ? 'Milestone cancelled and escrow refunded to your wallet.'
+          : action === 'approve'
+          ? 'Milestone approved and credits released.'
+          : 'Milestone revision requested.'
+      );
       await fetchContracts();
       setMilestoneAction(null);
     } catch (err: any) {
       console.error(`Milestone ${action} failed:`, err);
-      alert(err?.response?.data?.message || `Failed to ${action} milestone. Please try again.`);
+      showErrorToast(err?.response?.data?.message || `Failed to ${action} milestone. Please try again.`);
     } finally {
       setMilestoneLoading(false);
     }
