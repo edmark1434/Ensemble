@@ -391,7 +391,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                     {!isEditingName && (
                       <button
                         onClick={() => setIsEditingName(true)}
-                        className="p-1 text-blue-400 hover:text-blue-300 transition"
+                        className="p-1 text-blue-400 hover:text-blue-600 dark:text-blue-300 transition"
                         title="Edit Group Name"
                       >
                         <Pencil className="h-3.5 w-3.5" />
@@ -710,7 +710,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                     {attachments.map((a, i) => (
                       <div
                         key={a.attachment_id || i}
-                        className="aspect-square rounded-lg overflow-hidden bg-black/40 border border-gray-200 dark:border-white/10 relative group"
+                        className="aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-black/40 border border-gray-200 dark:border-white/10 relative group"
                       >
                         {a.attachment_type === "file" ? (
                           <a
@@ -719,7 +719,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                             )}
                             target="_blank"
                             rel="noreferrer"
-                            className="flex h-full w-full items-center justify-center p-2 text-center text-[9px] text-blue-300"
+                            className="flex h-full w-full items-center justify-center p-2 text-center text-[9px] text-blue-600 dark:text-blue-300"
                           >
                             {a.attachment_name || "Attachment"}
                           </a>
@@ -877,3 +877,5 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
     </div>
   );
 };
+
+

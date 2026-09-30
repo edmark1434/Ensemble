@@ -167,6 +167,19 @@ const InboxMain = () => {
   const previousMessageCountRef = useRef(0);
 
   // Custom Hooks
+  
+  const getUploadLimit = useCallback(
+    (): number => {
+      const sub = profiles[currentUserId]?.subscriptiontype || profiles[currentUserId]?.subscription_plan || subscriptionPlan || (user as any)?.subscriptiontype || (user as any)?.subscription_plan || (user as any)?.subscription_type;
+      const type = String(sub || "").toLowerCase();
+            
+      if (type.includes("business") || type.includes("enterprise")) return 700;
+      if (type.includes("premium")) return 250;
+      return 50; // free limit
+    },
+    [profiles, currentUserId, user, subscriptionPlan]
+  );
+
   const {
     mediaList,
     fileInputRef,
@@ -174,7 +187,7 @@ const InboxMain = () => {
     handleFileChange,
     removeMedia,
     clearMedia,
-  } = useInboxUploadMedia(3);
+  } = useInboxUploadMedia(3, getUploadLimit());
 
   const pinnedMessages = useMemo(
     () => selectedConversation?.pinned_messages || [],
@@ -289,6 +302,7 @@ const InboxMain = () => {
     },
     [profiles, currentUserId, user, subscriptionPlan]
   );
+
 
   useEffect(() => {
     if (selectedConversation && selectedConversation.conversation_type === "group") {
@@ -982,7 +996,7 @@ const InboxMain = () => {
                               href={attachmentUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="flex w-full items-center gap-2 p-3 text-xs text-blue-200"
+                              className={`flex w-full items-center gap-2 p-3 text-xs ${isSender ? "text-white" : "text-blue-600 dark:text-blue-400"}`}
                             >
                               <FileText className="h-5 w-5 flex-shrink-0" />
                               <span className="truncate">
@@ -1307,8 +1321,9 @@ const InboxMain = () => {
         {/* Main Panel Page */}
         <div className="flex-1 flex flex-col h-full min-h-0 min-w-0 overflow-hidden relative">
           <InboxPanelPage
-            selectedConversation={selectedConversation}
-            getConversationName={getConversationName}
+uploadLimitMB={getUploadLimit()}
+selectedConversation={selectedConversation}
+getConversationName={getConversationName}
             getMemberLimit={getMemberLimit}
             getAvatar={getAvatar}
             messages={messages}
@@ -1431,3 +1446,4 @@ const InboxMain = () => {
 };
 
 export default InboxMain;
+
