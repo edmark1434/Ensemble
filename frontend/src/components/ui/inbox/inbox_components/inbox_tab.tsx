@@ -56,12 +56,12 @@ export const InboxTab: React.FC<InboxTabProps> = ({
               ? `justify-center p-3 rounded-xl gap-0 ${
                   !isMarketplace
                     ? "bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400"
-                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10"
                 }`
               : `flex-1 py-3 justify-center text-sm font-medium gap-2 border-b-2 ${
                   !isMarketplace
                     ? "text-gray-900 dark:text-white border-blue-500"
-                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5 border-transparent"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 border-transparent"
                 }`
           }`}
           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
@@ -84,12 +84,12 @@ export const InboxTab: React.FC<InboxTabProps> = ({
               ? `justify-center p-3 rounded-xl gap-0 ${
                   isMarketplace
                     ? "bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400"
-                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10"
                 }`
               : `flex-1 py-3 justify-center text-sm font-medium gap-2 border-b-2 ${
                   isMarketplace
                     ? "text-gray-900 dark:text-white border-blue-500"
-                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5 border-transparent"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 border-transparent"
                 }`
           }`}
           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}

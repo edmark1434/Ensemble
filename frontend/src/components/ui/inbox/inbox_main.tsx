@@ -1125,7 +1125,7 @@ const InboxMain = () => {
                     setActiveEmojiPickerId(isPickerOpen ? null : message._id);
                     setActiveMenuId(null);
                   }}
-                  className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white transition"
+                  className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white dark:hover:text-white transition"
                 >
                   <Smile className="h-4 w-4" />
                 </button>
@@ -1142,7 +1142,7 @@ const InboxMain = () => {
               <button
                 onClick={() => handleReply(message)}
                 title="Reply"
-                className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white transition"
+                className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white dark:hover:text-white transition"
               >
                 <Reply className="h-4 w-4" />
               </button>
@@ -1153,7 +1153,7 @@ const InboxMain = () => {
                     setActiveMenuId(isMenuOpen ? null : message._id);
                     setActiveEmojiPickerId(null);
                   }}
-                  className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white transition"
+                  className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white dark:hover:text-white transition"
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
@@ -1174,7 +1174,7 @@ const InboxMain = () => {
                             setActiveMenuId(null);
                             textareaRef.current?.focus();
                           }}
-                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-gray-100 dark:bg-white/10"
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-gray-100 dark:hover:bg-white/10"
                         >
                           <Pencil className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
                           Edit
@@ -1199,7 +1199,7 @@ const InboxMain = () => {
                         }
                         setActiveMenuId(null);
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-gray-100 dark:bg-white/10"
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-gray-100 dark:hover:bg-white/10"
                     >
                       {pinned ? (
                         <>
@@ -1219,7 +1219,7 @@ const InboxMain = () => {
                           setReportModalMessage(message);
                           setActiveMenuId(null);
                         }}
-                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-gray-100 dark:bg-white/10"
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-gray-100 dark:hover:bg-white/10"
                       >
                         <Flag className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
                         Report

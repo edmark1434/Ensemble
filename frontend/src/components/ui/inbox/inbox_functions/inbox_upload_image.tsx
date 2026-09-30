@@ -23,7 +23,14 @@ export interface ChatAttachmentPayload {
 }
 
 export const chatAttachmentUrl = (attachmentKey: string): string => {
+  if (!attachmentKey) return "";
   if (/^(?:https?:|blob:|data:)/i.test(attachmentKey)) return attachmentKey;
+  
+  const presetMatch = attachmentKey.match(/p\d+\.png$/i);
+  if (presetMatch) {
+    return `/profile_presets/${presetMatch[0]}`;
+  }
+
   const base = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/$/, "");
   return base ? `${base}/${attachmentKey.replace(/^\/+/, "")}` : attachmentKey;
 };
@@ -180,7 +187,7 @@ export const InboxUploadMediaButton: React.FC<InboxUploadMediaButtonProps> = ({
         className={`rounded-xl p-2.5 transition flex-shrink-0 ${
           disabled
             ? "text-gray-500 dark:text-zinc-400 cursor-not-allowed"
-            : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+            : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white dark:hover:text-white"
         }`}
       >
         <Paperclip className="h-5 w-5" />

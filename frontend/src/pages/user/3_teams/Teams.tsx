@@ -7,6 +7,19 @@ import UserHeader from "@/components/nav/user_header";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import EditTeamModal from "./team_modals/EditTeamModal";
 
+interface CreateTeamValues {
+  name: string;
+  handle: string;
+  tagline: string;
+  description: string;
+  visibility: "Public" | "Private";
+  joinPolicy: "Open" | "Approval";
+  category: string;
+  website: string;
+  location: string;
+  photo: File;
+}
+
 interface Team {
   team_id: string;
   display_name: string;
@@ -20,39 +33,50 @@ interface Team {
   is_business_verified?: boolean;
 }
 
-interface CreateTeamValues {
-  name: string;
-  handle: string;
-  tagline: string;
-  description: string;
-  visibility: "Public" | "Private";
-  photo: File;
-}
-
-const cloudfrontUrl = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(
-  /\/$/,
-  "",
+const TeamCardSkeleton = () => (
+  <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 animate-pulse">
+    <div className="h-24 w-full bg-gray-200 dark:bg-zinc-700/50" />
+    <div className="p-4">
+      <div className="flex justify-between gap-3">
+        <div className="flex-1">
+          <div className="h-4 w-1/2 bg-gray-200 dark:bg-zinc-700/50 rounded mb-2" />
+          <div className="h-3 w-1/3 bg-gray-200 dark:bg-zinc-700/50 rounded" />
+        </div>
+        <div className="h-5 w-16 bg-gray-200 dark:bg-zinc-700/50 rounded-full" />
+      </div>
+      <div className="mt-3 h-3 w-full bg-gray-200 dark:bg-zinc-700/50 rounded" />
+      <div className="mt-1.5 h-3 w-2/3 bg-gray-200 dark:bg-zinc-700/50 rounded" />
+    </div>
+  </div>
 );
-
-function getImageUrl(path?: string) {
-  if (!path) return "";
-  if (/^https?:\/\//i.test(path)) return path;
-  return `${cloudfrontUrl}/${path.replace(/^\/+/, "")}`;
-}
 
 export default function Teams() {
   const navigate = useNavigate();
   const [teams, setTeams] = useState<Team[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [isBrowseMode, setIsBrowseMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
+
   const [createProgress, setCreateProgress] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
-  const hasLoadedTeams = useRef(false);
+
+  const getImageUrl = (path?: string) => {
+    if (!path) return "";
+    if (path.startsWith("http://") || path.startsWith("https://")) return path;
+    const cloudfrontUrl = (import.meta.env.VITE_CLOUDFRONT_URL || "").replace(
+      /\/$/,
+      "",
+    );
+    return `${cloudfrontUrl}/${path.replace(/^\//, "")}`;
+  };
 
   const loadTeams = useCallback(async (showLoading = false) => {
     if (showLoading) setIsLoading(true);
@@ -75,14 +99,7 @@ export default function Teams() {
   }, [debouncedSearchTerm, isBrowseMode]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
-    return () => window.clearTimeout(timer);
-  }, [searchTerm]);
-
-  useEffect(() => {
-    const showLoading = !hasLoadedTeams.current;
-    hasLoadedTeams.current = true;
-    void loadTeams(showLoading);
+    void loadTeams(true);
   }, [loadTeams]);
 
   const createTeam = async ({ photo, ...teamValues }: CreateTeamValues) => {
@@ -108,9 +125,10 @@ export default function Teams() {
         avatarUploadIntentId: uploaded.uploadIntentId,
       });
 
-      showSuccessToast("Team created");
+      const createdTeam = teamResponse.data.data;
+      showSuccessToast("Team created successfully");
       setIsCreateModalOpen(false);
-      const createdTeam = teamResponse.data.data as Team;
+
       setTeams((current) =>
         isBrowseMode || debouncedSearchTerm
           ? current
@@ -131,11 +149,16 @@ export default function Teams() {
     setIsSaving(true);
 
     try {
-      await api.post("/api/teams/join-by-code", {
+      const response = await api.post("/api/teams/join-by-code", {
         code: joinCode.trim(),
       });
 
-      showSuccessToast("Team joined or request submitted");
+      if (response.data?.data?.status === "Pending") {
+        showSuccessToast("Join Request Sent, Wait for Approval");
+      } else {
+        showSuccessToast("Team joined successfully");
+      }
+      
       setIsJoinModalOpen(false);
       setJoinCode("");
       if (isBrowseMode) setIsBrowseMode(false);
@@ -146,6 +169,67 @@ export default function Teams() {
       setIsSaving(false);
     }
   };
+
+  const renderTeamCard = (team: Team) => (
+    <article
+      key={team.team_id}
+      onClick={() => navigate(`/teams/${team.team_id}`)}
+      className="group cursor-pointer overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent transition hover:scale-[1.02] hover:border-white/20"
+    >
+      <div className="relative h-24 overflow-hidden bg-dark-surface">
+        {team.avatar_path ? (
+          <img
+            src={getImageUrl(team.avatar_path)}
+            alt={team.display_name}
+            className="h-full w-full object-cover transition group-hover:scale-110"
+          />
+        ) : (
+          <div className="grid h-full place-items-center text-3xl text-gray-900 dark:text-white/30">
+            {team.display_name.slice(0, 2).toUpperCase()}
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-dark-base via-transparent to-transparent" />
+      </div>
+
+      <div className="p-4">
+        <div className="flex justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+              {team.display_name}
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-zinc-500">
+              @{team.handle} A {team.member_count} members
+            </p>
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-1.5">
+            {team.visibility === "Private" && (
+              <span className="h-fit rounded-full border border-amber-200 dark:border-amber-400/25 bg-amber-100 dark:bg-amber-500/15 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-300">
+                Private
+              </span>
+            )}
+            {team.current_user_status === "Pending" && ( <span className="h-fit rounded-full border border-yellow-200 dark:border-yellow-400/25 bg-yellow-100 dark:bg-yellow-500/15 px-2 py-0.5 text-xs text-yellow-600 dark:text-yellow-500"> Pending Approval </span> )} {team.current_user_role && (
+              <span className="h-fit rounded-full bg-blue-100 dark:bg-blue-500/20 px-2 py-0.5 text-xs text-blue-600 dark:text-blue-400">
+                {team.current_user_role}
+              </span>
+            )}
+            {team.is_business_verified && (
+              <span className="h-fit rounded-full bg-emerald-100 dark:bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-600 dark:text-emerald-300">
+                Business verified
+              </span>
+            )}
+          </div>
+        </div>
+
+        <p className="mt-2 line-clamp-2 text-xs text-gray-500 dark:text-zinc-400">
+          {team.description || "No description"}
+        </p>
+      </div>
+    </article>
+  );
+
+  const activeTeams = teams.filter(t => t.current_user_status !== "Pending");
+  const pendingTeams = teams.filter(t => t.current_user_status === "Pending");
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
@@ -169,8 +253,10 @@ export default function Teams() {
           </button>
 
           <button
-            onClick={() => setIsBrowseMode((current) => !current)}
-            className="flex cursor-pointer items-center gap-2 rounded-full border border-gray-200 bg-white px-5 py-2.5 text-sm text-gray-900 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 hover:shadow-md active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:border-white/15 dark:bg-white/5 dark:text-white dark:shadow-none dark:hover:border-blue-400/70 dark:hover:bg-blue-500/15 dark:hover:text-blue-200"
+            onClick={() => {
+              setIsBrowseMode(!isBrowseMode);
+            }}
+            className="flex cursor-pointer items-center gap-2 rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-zinc-300 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-300 hover:bg-gray-50 dark:hover:border-white/20 dark:hover:bg-white/5 hover:shadow-md active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-dark-base"
           >
             {isBrowseMode ? (
               <X className="h-4 w-4" />
@@ -199,76 +285,47 @@ export default function Teams() {
           </label>
         </div>
 
-        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-          {isBrowseMode ? "Browse Teams" : "My Teams"}
-        </h2>
-
         {isLoading ? (
-          <div className="p-8 text-gray-500 dark:text-zinc-400">Loading Teams...</div>
-        ) : teams.length === 0 ? (
-          <div className="rounded-xl border border-gray-200 dark:border-white/10 p-12 text-center text-gray-500 dark:text-zinc-400">
-            No Teams found.
-          </div>
+          <>
+            <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+              {isBrowseMode ? "Browse Teams" : "My Teams"}
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3, 4, 5, 6].map((i) => <TeamCardSkeleton key={i} />)}
+            </div>
+          </>
+        ) : isBrowseMode ? (
+          <>
+            <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Browse Teams</h2>
+            {teams.length === 0 ? (
+              <div className="rounded-xl border border-gray-200 dark:border-white/10 p-12 text-center text-gray-500 dark:text-zinc-400">
+                No Teams found.
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {teams.map(renderTeamCard)}
+              </div>
+            )}
+          </>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {teams.map((team) => (
-              <article
-                key={team.team_id}
-                onClick={() => navigate(`/teams/${team.team_id}`)}
-                className="group cursor-pointer overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent transition hover:scale-[1.02] hover:border-white/20"
-              >
-                <div className="relative h-24 overflow-hidden bg-dark-surface">
-                  {team.avatar_path ? (
-                    <img
-                      src={getImageUrl(team.avatar_path)}
-                      alt={team.display_name}
-                      className="h-full w-full object-cover transition group-hover:scale-110"
-                    />
-                  ) : (
-                    <div className="grid h-full place-items-center text-3xl text-gray-900 dark:text-white/30">
-                      {team.display_name.slice(0, 2).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-dark-base via-transparent to-transparent" />
+          <>
+            <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">My Teams</h2>
+            {activeTeams.length === 0 ? ( <div className="rounded-xl border border-gray-200 dark:border-white/10 p-12 text-center text-gray-500 dark:text-zinc-400"> {pendingTeams.length > 0 ? "You have no active Teams." : "No Teams found."} </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">
+                {activeTeams.map(renderTeamCard)}
+              </div>
+            )}
+
+            {pendingTeams.length > 0 && (
+              <>
+                <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white mt-8">Pending Groups</h2>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {pendingTeams.map(renderTeamCard)}
                 </div>
-
-                <div className="p-4">
-                  <div className="flex justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {team.display_name}
-                      </h3>
-                      <p className="text-xs text-gray-500 dark:text-zinc-500">
-                        @{team.handle} · {team.member_count} members
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap justify-end gap-1.5">
-                      {team.visibility === "Private" && (
-                        <span className="h-fit rounded-full border border-amber-400/25 bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300">
-                          Private
-                        </span>
-                      )}
-                      {team.current_user_role && (
-                        <span className="h-fit rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
-                          {team.current_user_role}
-                        </span>
-                      )}
-                      {team.is_business_verified && (
-                        <span className="h-fit rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
-                          Business verified
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <p className="mt-2 line-clamp-2 text-xs text-gray-500 dark:text-zinc-400">
-                    {team.description || "No description"}
-                  </p>
-                </div>
-              </article>
-            ))}
-          </div>
+              </>
+            )}
+          </>
         )}
       </main>
 
@@ -336,3 +393,8 @@ function getApiError(error: unknown, fallback: string) {
 
   return fallback;
 }
+
+
+
+
+
