@@ -1029,7 +1029,7 @@ async function createCancellationRequestRepository({
             (contract_id, initiator_account_id, recipient_account_id, initiator_role, reason, message, auto_cancel_at)
          VALUES
             ($1, $2, $3, $4, $5, $6, NOW() + ($7 || ' hours')::interval)
-         RETURNING *`,
+         RETURNING *, initiator_account_id AS initiated_by`,
         [contractId, initiatorAccountId, recipientAccountId, initiatorRole, reason, message, String(autoCancelHours)]
     );
     return res.rows[0];
@@ -1038,6 +1038,7 @@ async function createCancellationRequestRepository({
 async function getActiveCancellationRequestByContract(contractId) {
     const res = await pool.query(
         `SELECT cr.*,
+                cr.initiator_account_id AS initiated_by,
                 init_a.display_name AS initiator_name,
                 init_a.handle AS initiator_handle,
                 (SELECT path FROM files WHERE file_id = init_a.avatar_file_id LIMIT 1) AS initiator_avatar,
