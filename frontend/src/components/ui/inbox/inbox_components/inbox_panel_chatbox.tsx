@@ -14,7 +14,7 @@ interface InboxPanelChatboxProps {
   setMessageInput: (val: string) => void;
   handleSendMessage: () => void;
   isSending?: boolean;
-  typingCount?: number;
+  typingNames?: string[];
   replyToMessage: Message | null;
   editingMessage: Message | null;
   cancelReply: () => void;
@@ -31,7 +31,7 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
   setMessageInput,
   handleSendMessage,
   isSending = false,
-  typingCount = 0,
+  typingNames = [],
   replyToMessage,
   editingMessage,
   cancelReply,
@@ -41,6 +41,7 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
   handleFileChange,
   removeMedia,
   textareaRef,
+uploadLimitMB = 250,
 }) => {
   const canSend = messageInput.trim().length > 0 || mediaList.length > 0;
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -67,11 +68,19 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
     el.style.height = `${Math.min(el.scrollHeight, 288)}px`;
   }, [messageInput, textareaRef]);
 
+  const formatTypingIndicator = () => {
+    if (typingNames.length === 0) return null;
+    if (typingNames.length === 1) return `${typingNames[0]} is typing...`;
+    if (typingNames.length === 2) return `${typingNames[0]} and ${typingNames[1]} are typing...`;
+    if (typingNames.length === 3) return `${typingNames[0]}, ${typingNames[1]}, and ${typingNames[2]} are typing...`;
+    return `${typingNames.length} people are typing...`;
+  };
+
   return (
     <div className="border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface flex-shrink-0">
-      {typingCount > 0 && (
+      {typingNames.length > 0 && (
         <div className="px-4 pt-2 text-xs text-gray-500 dark:text-zinc-500">
-          {typingCount === 1 ? "Someone is typing..." : `${typingCount} people are typing...`}
+          {formatTypingIndicator()}
         </div>
       )}
       {(replyToMessage || editingMessage) && (
@@ -104,7 +113,7 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
       )}
 
       {/* Renders horizontal preview row for up to 3 attachments */}
-      <InboxUploadMediaPreview mediaList={mediaList} onRemove={removeMedia} />
+      <InboxUploadMediaPreview mediaList={mediaList} onRemove={removeMedia} batchLimitMB={uploadLimitMB} />
 
       <div className="p-4 flex items-end gap-2">
         <div className="flex-1 relative flex items-end">
@@ -158,7 +167,7 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
 
         <button
           onClick={handleSendMessage}
-          className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 p-2.5 text-gray-900 dark:text-white transition hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+          className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 p-2.5 text-white transition hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
           disabled={!canSend || isSending}
         >
           <Send className="h-5 w-5" />

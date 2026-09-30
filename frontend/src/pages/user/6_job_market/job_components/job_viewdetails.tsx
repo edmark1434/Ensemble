@@ -262,7 +262,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                 selectedJob.hasProposed ? (
                   <button
                     onClick={() => navigate(`/jobs/proposals/sent/${selectedJob.myProposalId}`)}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 py-3 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 transition active:scale-[0.98]"
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 py-3 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/20 transition active:scale-[0.98]"
                   >
                     <FileText className="h-3.5 w-3.5" /> View your Proposal
                   </button>

@@ -200,8 +200,10 @@ const CommentNode = ({
   onEdit: (commentId: string, comment: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
   onLike: (commentId: string) => Promise<void>;
-  identities: Record<string, { name: string; avatar: string }>;
+  identities: Record<string, { name: string; avatar: string; accountId?: string | null }>;
 }) => {
+  const navigate = useNavigate();
+  const user = useGlobalState((state) => state.user);
   const [replying, setReplying] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(comment.comment);
@@ -209,18 +211,66 @@ const CommentNode = ({
   const isAuthor = sameUser(comment.user_id, currentUserId);
   const isLiked = comment.likes?.some((like) => sameUser(like.user_id, currentUserId));
 
+  const authorIdentity = identities[String(comment.user_id)];
+  const targetAccountId = (isAuthor ? (user?.account_id || user?.accountId) : null)
+    || authorIdentity?.accountId
+    || comment.author_identity?.account_id
+    || (comment.author_identity as any)?.accountId
+    || (typeof comment.user_id === "string" && (comment.user_id as string).length > 10 ? comment.user_id : undefined);
+
+  const handleAuthorClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isAuthor) {
+      navigate("/profile");
+      return;
+    }
+    if (targetAccountId) {
+      navigate(`/profile/${encodeURIComponent(String(targetAccountId))}`);
+    }
+  };
+
   return (
     <div className={comment.depth ? "ml-5 border-l border-gray-200 dark:border-white/10 pl-4" : ""}>
       <div className="mt-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.03] p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
-            <img src={identities[String(comment.user_id)]?.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
+            {targetAccountId || isAuthor ? (
+              <button
+                type="button"
+                onClick={handleAuthorClick}
+                className="flex-shrink-0 cursor-pointer transition hover:opacity-80"
+              >
+                <img
+                  src={authorIdentity?.avatar}
+                  alt={authorIdentity?.name || "Forum member"}
+                  className="h-8 w-8 rounded-full object-cover"
+                />
+              </button>
+            ) : (
+              <img
+                src={authorIdentity?.avatar}
+                alt={authorIdentity?.name || "Forum member"}
+                className="h-8 w-8 rounded-full object-cover"
+              />
+            )}
             <div>
-            <p className="text-xs font-medium text-gray-600 dark:text-zinc-300">{identities[String(comment.user_id)]?.name || "Forum member"}</p>
-            <p className="text-[11px] text-zinc-600">
-              {new Date(comment.created_at).toLocaleString()}
-              {comment.is_edited ? " (edited)" : ""}
-            </p>
+              {targetAccountId || isAuthor ? (
+                <button
+                  type="button"
+                  onClick={handleAuthorClick}
+                  className="text-xs font-medium text-gray-600 dark:text-zinc-300 hover:underline cursor-pointer text-left block"
+                >
+                  {authorIdentity?.name || "Forum member"}
+                </button>
+              ) : (
+                <p className="text-xs font-medium text-gray-600 dark:text-zinc-300">
+                  {authorIdentity?.name || "Forum member"}
+                </p>
+              )}
+              <p className="text-[11px] text-zinc-600">
+                {new Date(comment.created_at).toLocaleString()}
+                {comment.is_edited ? " (edited)" : ""}
+              </p>
             </div>
           </div>
           {isAuthor && !comment.deleted_at && (
@@ -334,7 +384,7 @@ const ExpandDiscussion = () => {
   const [editingPost, setEditingPost] = useState(false);
   const [deletingPost, setDeletingPost] = useState(false);
   const [reportingPost, setReportingPost] = useState(false);
-  const [identities, setIdentities] = useState<Record<string, { name: string; avatar: string }>>({});
+  const [identities, setIdentities] = useState<Record<string, { name: string; avatar: string; accountId?: string | null }>>({});
   useForumRealtime((event) => setDiscussion((current) => {
     if (!current) return current;
     return reconcileForumDiscussions([current], event)[0] || null;
@@ -358,14 +408,19 @@ const ExpandDiscussion = () => {
           ...(nextDiscussion.comments || []).map((comment) => comment.user_id),
         ])];
         const detailsResponse = await api.post("/api/users/list-of-details", { userIds });
-        const nextIdentities: Record<string, { name: string; avatar: string }> = {};
+        const nextIdentities: Record<string, { name: string; avatar: string; accountId?: string | null }> = {};
         for (const details of detailsResponse.data?.usersList || []) {
           nextIdentities[String(details.user_id)] = identityFromDetails(details);
         }
         if (currentUserId) {
-          const current = nextIdentities[String(currentUserId)] || { name: "You", avatar: "" };
+          const current = nextIdentities[String(currentUserId)] || {
+            name: "You",
+            avatar: "",
+            accountId: user?.account_id || user?.accountId || null,
+          };
           nextIdentities[String(currentUserId)] = {
             ...current,
+            accountId: current.accountId || user?.account_id || user?.accountId || null,
             avatar: await loadCurrentForumAvatar(current.avatar),
           };
         }
@@ -594,10 +649,58 @@ const ExpandDiscussion = () => {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs text-blue-400">{group?.group_name || "Forum"}</p>
-              <div className="mt-1 flex items-center gap-2">
-                <img src={identities[String(discussion.user_id)]?.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
-                <p className="text-xs text-gray-500 dark:text-zinc-500">{identities[String(discussion.user_id)]?.name || "Forum member"}</p>
-              </div>
+              {(() => {
+                const discussionAuthorAccountId = (isAuthor ? (user?.account_id || user?.accountId) : null)
+                  || identities[String(discussion.user_id)]?.accountId
+                  || (discussion as any).author_identity?.account_id
+                  || (discussion as any).author_identity?.accountId
+                  || (typeof discussion.user_id === "string" && (discussion.user_id as string).length > 10 ? discussion.user_id : undefined);
+
+                const handleDiscussionAuthorClick = (e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  if (isAuthor) {
+                    navigate("/profile");
+                    return;
+                  }
+                  if (discussionAuthorAccountId) {
+                    navigate(`/profile/${encodeURIComponent(String(discussionAuthorAccountId))}`);
+                  }
+                };
+
+                const discussionAuthorIdentity = identities[String(discussion.user_id)];
+
+                return (
+                  <div className="mt-1 flex items-center gap-2">
+                    {discussionAuthorAccountId || isAuthor ? (
+                      <button
+                        type="button"
+                        onClick={handleDiscussionAuthorClick}
+                        className="flex items-center gap-2 text-left cursor-pointer group transition"
+                      >
+                        <img
+                          src={discussionAuthorIdentity?.avatar}
+                          alt=""
+                          className="h-7 w-7 rounded-full object-cover ring-1 ring-white/10 group-hover:opacity-80"
+                        />
+                        <span className="text-xs text-gray-500 dark:text-zinc-500 group-hover:underline group-hover:text-gray-900 dark:group-hover:text-white">
+                          {discussionAuthorIdentity?.name || "Forum member"}
+                        </span>
+                      </button>
+                    ) : (
+                      <>
+                        <img
+                          src={discussionAuthorIdentity?.avatar}
+                          alt=""
+                          className="h-7 w-7 rounded-full object-cover ring-1 ring-white/10"
+                        />
+                        <p className="text-xs text-gray-500 dark:text-zinc-500">
+                          {discussionAuthorIdentity?.name || "Forum member"}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             {isAuthor ? (
               <div className="relative">

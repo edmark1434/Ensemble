@@ -2,6 +2,8 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { Users, X, Plus, Trash2 } from "lucide-react";
 import api from "@/lib/axios";
+import useGlobalState from "@/lib/global_state";
+import { chatAttachmentUrl } from "./inbox_upload_image";
 
 export interface SuggestedAccount {
   account_id: string;
@@ -12,7 +14,7 @@ export interface SuggestedAccount {
 
 interface InboxCreateGroupModalProps {
   onClose: () => void;
-  onCreateGroup: (groupData: { name: string; members: SuggestedAccount[] }) => Promise<void>;
+  onCreateGroup: (groupData: { name: string; members: SuggestedAccount[], limit?: number }) => Promise<void>;
   suggestedAccounts?: SuggestedAccount[];
 }
 
@@ -21,9 +23,35 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
   onCreateGroup,
   suggestedAccounts = [],
 }) => {
+  const { user, subscriptionPlan } = useGlobalState();
   const [groupName, setGroupName] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedMembers, setSelectedMembers] = useState<SuggestedAccount[]>([]);
+  
+  const currentUser: SuggestedAccount | null = useMemo(() => {
+    if (!user) return null;
+    return {
+      account_id: String(user.account_id),
+      name: user.display_name || user.handle || "You",
+      username: `@${user.handle || ""}`,
+      avatar: chatAttachmentUrl(user.avatar_preset_url || user.profile_picture_url || ""),
+    };
+  }, [user]);
+
+  const [selectedMembers, setSelectedMembers] = useState<SuggestedAccount[]>(
+    currentUser ? [currentUser] : []
+  );
+
+  useEffect(() => {
+    if (currentUser) {
+      setSelectedMembers((prev) => {
+        if (!prev.some((m) => m.account_id === currentUser.account_id)) {
+          return [currentUser, ...prev];
+        }
+        return prev;
+      });
+    }
+  }, [currentUser]);
+
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,21 +75,23 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
         const cloudfront = String(
           import.meta.env.VITE_CLOUDFRONT_URL || ""
         ).replace(/\/$/, "");
-        const accounts = (response.data?.data || []).map((account: any) => {
-          const avatarPath = account.avatar_preset_url || "";
-          return {
-            account_id: String(account.account_id),
-            name: account.display_name || account.handle,
-            username: `@${account.handle}`,
-            avatar: avatarPath
-              ? /^https?:\/\//i.test(avatarPath)
-                ? avatarPath
-                : `${cloudfront}/${String(avatarPath).replace(/^\/+/, "")}`
-              : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                  account.display_name || account.handle
-                )}&background=6366f1&color=fff`,
-          };
-        });
+        const accounts = (response.data?.data || [])
+          .map((account: any) => {
+            const avatarPath = account.avatar_preset_url || "";
+            return {
+              account_id: String(account.account_id),
+              name: account.display_name || account.handle,
+              username: `@${account.handle}`,
+              avatar: avatarPath
+                ? /^https?:\/\//i.test(avatarPath)
+                  ? avatarPath
+                  : `${cloudfront}/${String(avatarPath).replace(/^\/+/, "")}`
+                : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                    account.display_name || account.handle
+                  )}&background=6366f1&color=fff`,
+            };
+          })
+          .filter((a: any) => !currentUser || a.account_id !== currentUser.account_id);
         if (!cancelled) setSearchResults(accounts);
       } catch {
         if (!cancelled) setSearchResults([]);
@@ -89,13 +119,27 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
     });
   }, [suggestedAccounts, searchResults, searchTerm, selectedMembers]);
 
+  const maxLimit = useMemo(() => {
+    const sub = subscriptionPlan || (user as any)?.subscriptiontype || (user as any)?.subscription_plan || (user as any)?.subscription_type || "";
+    const t = String(sub).toLowerCase();
+    if (t.includes("business") || t.includes("enterprise")) return 1000;
+    if (t.includes("premium")) return 50;
+    return 12;
+  }, [user, subscriptionPlan]);
+
   const handleSelectMember = (account: SuggestedAccount) => {
+    if (selectedMembers.length >= maxLimit) {
+      setError(`Group chat limit of ${maxLimit} members reached.`);
+      return;
+    }
+    setError(null);
     setSelectedMembers((prev) => [...prev, account]);
     setSearchTerm("");
     setIsDropdownOpen(false);
   };
 
   const handleRemoveMember = (accountId: string) => {
+    if (currentUser && accountId === currentUser.account_id) return;
     setSelectedMembers((prev) => prev.filter((m) => m.account_id !== accountId));
   };
 
@@ -108,6 +152,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
       await onCreateGroup({
         name: groupName.trim(),
         members: selectedMembers,
+        limit: maxLimit,
       });
       onClose();
     } catch (submitError) {
@@ -126,7 +171,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-base p-6 shadow-2xl text-gray-900 dark:text-white"
+        className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base p-6 shadow-2xl text-gray-900 dark:text-white"
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
         {/* Modal Header */}
@@ -217,14 +262,14 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
           {/* Selected Members Chips */}
           {selectedMembers.length > 0 && (
             <div>
-              <label className="block text-[11px] font-medium text-gray-500 dark:text-zinc-400 mb-1.5">
-                Selected Members ({selectedMembers.length})
+              <label className="block text-[11px] font-medium text-gray-500 dark:text-zinc-400 mb-1.5 flex justify-between items-center">
+                <span>Selected Members ({selectedMembers.length}/{maxLimit})</span>
               </label>
               <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto inbox-scroll-thin">
                 {selectedMembers.map((member) => (
                   <span
                     key={member.account_id}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 border border-blue-500/30 pl-1 pr-2.5 py-1 text-xs text-blue-300"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-500/15 border border-blue-200 dark:border-blue-500/30 pl-1 pr-2.5 py-1 text-xs text-blue-700 dark:text-blue-300"
                   >
                     <img
                       src={member.avatar}
@@ -232,13 +277,15 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
                       className="h-5 w-5 rounded-full object-cover"
                     />
                     <span>{member.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveMember(member.account_id)}
-                      className="ml-0.5 hover:text-red-400 transition"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
+                    {currentUser && member.account_id !== currentUser.account_id && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMember(member.account_id)}
+                        className="ml-0.5 hover:text-red-400 transition"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
                   </span>
                 ))}
               </div>
@@ -247,6 +294,10 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
 
           {/* Form Action Buttons */}
           {error && <p className="text-xs text-red-400">{error}</p>}
+          <div className="text-[11px] text-gray-500 dark:text-zinc-400 my-2 space-y-1.5">
+            <p><strong>Note:</strong> You cannot transfer ownership of the group chat once created, but you can assign members and admins later.</p>
+            <p><strong>Limit:</strong> Your group limit ({maxLimit}) is tied to your current subscription. If your subscription expires, existing members will never be kicked out, but you won't be able to add new members if you are above your new tier's limit.</p>
+          </div>
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-200 dark:border-white/10">
             <button
               type="button"
@@ -258,9 +309,19 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
             <button
               type="submit"
               disabled={!groupName.trim() || selectedMembers.length === 0 || isSubmitting}
-              className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-medium text-gray-900 dark:text-white shadow-lg shadow-blue-500/20 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-blue-500/20 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
-              {isSubmitting ? "Creating..." : "Create Group"}
+              {isSubmitting ? (
+                <>
+                  <span className="h-4 w-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Users className="h-4 w-4" />
+                  Create Group
+                </>
+              )}
             </button>
           </div>
         </form>

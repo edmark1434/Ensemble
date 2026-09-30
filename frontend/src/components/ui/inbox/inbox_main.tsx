@@ -43,6 +43,7 @@ import {
   scrollToRepliedMessage,
 } from "./inbox_functions/inbox_reply_message";
 import { InboxReportModal } from "./inbox_functions/inbox_report_message";
+import { InboxCreateGroupModal } from "./inbox_functions/inbox_create_group";
 import {
   InboxEditedBadge,
 } from "./inbox_functions/inbox_edit_message";
@@ -66,12 +67,14 @@ interface ProfileIdentity {
   name?: string;
   username?: string;
   avatar_preset_url?: string;
+  avatar_url?: string;
+  subscriptiontype?: string;
 }
 
 const InboxMain = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useGlobalState();
+  const { user, subscriptionPlan } = useGlobalState();
   const currentUserId = String(user?.account_id || "");
   const inboxList = useChatState((state) => state.conversations);
   const activeConversationId = useChatState(
@@ -108,6 +111,7 @@ const InboxMain = () => {
     (state) => state.selectConversation
   );
   const createGroup = useChatState((state) => state.createGroup);
+  const deleteConversation = useChatState((state) => state.deleteConversation);
   const sendMessage = useChatState((state) => state.sendMessage);
   const replyMessage = useChatState((state) => state.replyMessage);
   const editMessage = useChatState((state) => state.editMessage);
@@ -146,6 +150,7 @@ const InboxMain = () => {
   // Left Sidebar Compact Collapse State (Switches to icon-only w-20 strip)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showChatDetails, setShowChatDetails] = useState(false);
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
 
   // Expanded Image Modal State
   const [expandedMedia, setExpandedMedia] = useState<{ url: string; type: string } | null>(null);
@@ -162,6 +167,19 @@ const InboxMain = () => {
   const previousMessageCountRef = useRef(0);
 
   // Custom Hooks
+  
+  const getUploadLimit = useCallback(
+    (): number => {
+      const sub = profiles[currentUserId]?.subscriptiontype || profiles[currentUserId]?.subscription_plan || subscriptionPlan || (user as any)?.subscriptiontype || (user as any)?.subscription_plan || (user as any)?.subscription_type;
+      const type = String(sub || "").toLowerCase();
+            
+      if (type.includes("business") || type.includes("enterprise")) return 700;
+      if (type.includes("premium")) return 250;
+      return 50; // free limit
+    },
+    [profiles, currentUserId, user, subscriptionPlan]
+  );
+
   const {
     mediaList,
     fileInputRef,
@@ -169,7 +187,7 @@ const InboxMain = () => {
     handleFileChange,
     removeMedia,
     clearMedia,
-  } = useInboxUploadMedia(3);
+  } = useInboxUploadMedia(3, getUploadLimit());
 
   const pinnedMessages = useMemo(
     () => selectedConversation?.pinned_messages || [],
@@ -269,6 +287,39 @@ const InboxMain = () => {
     },
     [currentUserId, getConversationName, profiles, user]
   );
+
+  const getMemberLimit = useCallback(
+    (inbox: Inbox): number | null => {
+      if (inbox.conversation_type !== "group") return null;
+      const owner = inbox.members?.find((m) => m.role === "owner");
+      const ownerId = String(owner?.account_id || inbox.creator_id || currentUserId);
+      const sub = (owner as any)?.subscriptiontype || profiles[ownerId]?.subscriptiontype || profiles[ownerId]?.subscription_plan || (ownerId === currentUserId ? subscriptionPlan || (user as any)?.subscriptiontype || (user as any)?.subscription_plan || (user as any)?.subscription_type : null);
+      const type = String(sub || "").toLowerCase();
+      let currentTierLimit = 12;
+      if (type.includes("business") || type.includes("enterprise")) currentTierLimit = 1000;
+      else if (type.includes("premium")) currentTierLimit = 50;
+      return Math.max((inbox as any).member_limit || 0, currentTierLimit);
+    },
+    [profiles, currentUserId, user, subscriptionPlan]
+  );
+
+
+  useEffect(() => {
+    if (selectedConversation && selectedConversation.conversation_type === "group") {
+      const owner = selectedConversation.members?.find((m) => m.role === "owner");
+      const ownerId = String(owner?.account_id || selectedConversation.creator_id || currentUserId);
+      
+      // Only the owner syncs the limit up
+      if (ownerId === currentUserId) {
+        const storedLimit = (selectedConversation as any).member_limit || 12;
+        const currentCalculatedLimit = getMemberLimit(selectedConversation) || 12;
+        if (currentCalculatedLimit > storedLimit) {
+          api.patch(`/api/inbox/${selectedConversation._id}/limit`, { limit: currentCalculatedLimit }).catch(console.error);
+          (selectedConversation as any).member_limit = currentCalculatedLimit; // Optimistic update
+        }
+      }
+    }
+  }, [selectedConversation, getMemberLimit, currentUserId]);
 
   const loadInbox = useCallback(async () => {
     setConversationError(null);
@@ -620,13 +671,16 @@ const InboxMain = () => {
   const handleCreateGroup = async ({
     name,
     members,
+    limit,
   }: {
     name: string;
     members: Array<{ account_id: string; name: string; avatar: string }>;
+    limit?: number;
   }) => {
     const group = await createGroup(
       name,
-      members.map((member) => ({ account_id: member.account_id }))
+      members.map((member) => ({ account_id: member.account_id })),
+      limit
     );
     await handleSelectConversation(group);
   };
@@ -880,11 +934,11 @@ const InboxMain = () => {
               )}
               {pinned && !hasRestrictedMessageTools && (
                 <div
-                  className={`flex items-center gap-1 text-[11px] font-medium text-yellow-400 mb-1 ${
+                  className={`flex items-center gap-1 text-[11px] font-medium text-yellow-600 dark:text-yellow-400 mb-1 ${
                     isSender ? "self-end" : "self-start"
                   }`}
                 >
-                  <Pin className="h-3 w-3 fill-yellow-400/20 text-yellow-400" />
+                  <Pin className="h-3 w-3 fill-yellow-600/20 text-yellow-600 dark:fill-yellow-400/20 dark:text-yellow-400" />
                   <span>Pinned Message</span>
                 </div>
               )}
@@ -935,14 +989,14 @@ const InboxMain = () => {
                               type: a.attachment_type,
                             })
                           }
-                          className="relative min-h-20 w-full rounded-xl overflow-hidden bg-black/40 border border-gray-200 dark:border-white/10 flex items-center justify-center cursor-pointer hover:opacity-90 transition"
+                          className="relative min-h-20 w-full rounded-xl overflow-hidden flex items-center justify-center cursor-pointer hover:opacity-95 transition group shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/5"
                         >
                           {isFile ? (
                             <a
                               href={attachmentUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="flex w-full items-center gap-2 p-3 text-xs text-blue-200"
+                              className={`flex w-full items-center gap-2 p-3 text-xs ${isSender ? "text-white" : "text-blue-600 dark:text-blue-400"}`}
                             >
                               <FileText className="h-5 w-5 flex-shrink-0" />
                               <span className="truncate">
@@ -1122,12 +1176,12 @@ const InboxMain = () => {
                           }}
                           className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-gray-100 dark:bg-white/10"
                         >
-                          <Pencil className="h-3.5 w-3.5 text-emerald-400" />
+                          <Pencil className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
                           Edit
                         </button>
                         <button
                           onClick={() => handleUnsend(message._id)}
-                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-red-400 hover:bg-red-500/10"
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-red-500 hover:bg-red-500/10"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                           Unsend
@@ -1149,12 +1203,12 @@ const InboxMain = () => {
                     >
                       {pinned ? (
                         <>
-                          <PinOff className="h-3.5 w-3.5 text-yellow-400" />
+                          <PinOff className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
                           Unpin
                         </>
                       ) : (
                         <>
-                          <Pin className="h-3.5 w-3.5 text-yellow-400" />
+                          <Pin className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
                           Pin
                         </>
                       )}
@@ -1165,9 +1219,9 @@ const InboxMain = () => {
                           setReportModalMessage(message);
                           setActiveMenuId(null);
                         }}
-                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:bg-white/10"
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-gray-100 dark:bg-white/10"
                       >
-                        <Flag className="h-3.5 w-3.5 text-red-400" />
+                        <Flag className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
                         Report
                       </button>
                     )}
@@ -1182,7 +1236,7 @@ const InboxMain = () => {
   };
 
   return (
-    <div className="w-full h-screen bg-gray-50 dark:bg-dark-base flex flex-col overflow-hidden">
+    <div className="w-full h-full bg-gray-50 dark:bg-dark-base flex flex-col overflow-hidden">
       <UserHeader pageTitle="Inbox" />
 
       <div className="w-full flex-1 min-h-0 overflow-hidden flex border-t border-gray-200 dark:border-white/10 relative">
@@ -1196,12 +1250,6 @@ const InboxMain = () => {
             onCreateGroup={handleCreateGroup}
             suggestedAccounts={suggestedAccounts}
             isCollapsed={isSidebarCollapsed}
-          />
-          <InboxSearch
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            activeTab="direct"
-            isCollapsed={isSidebarCollapsed}
             onToggleCollapse={() => {
               setIsSidebarCollapsed((collapsed) => {
                 const next = !collapsed;
@@ -1209,6 +1257,13 @@ const InboxMain = () => {
                 return next;
               });
             }}
+          />
+          <InboxSearch
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            activeTab="direct"
+            isCollapsed={isSidebarCollapsed}
+            onCreateGroup={() => setShowCreateGroupModal(true)}
           />
           <div className="inbox-scroll-thin flex-1 overflow-y-auto">
             <Routes>
@@ -1264,10 +1319,12 @@ const InboxMain = () => {
         </div>
 
         {/* Main Panel Page */}
-        <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden relative">
+        <div className="flex-1 flex flex-col h-full min-h-0 min-w-0 overflow-hidden relative">
           <InboxPanelPage
-            selectedConversation={selectedConversation}
-            getConversationName={getConversationName}
+uploadLimitMB={getUploadLimit()}
+selectedConversation={selectedConversation}
+getConversationName={getConversationName}
+            getMemberLimit={getMemberLimit}
             getAvatar={getAvatar}
             messages={messages}
             visibleMessages={visibleMessages}
@@ -1288,7 +1345,7 @@ const InboxMain = () => {
             setMessageInput={handleMessageInputChange}
             handleSendMessage={handleSendMessage}
             isSending={isSending}
-            typingCount={typingAccounts.length}
+            typingNames={typingAccounts.map(id => profiles[id]?.name || "Someone")}
             replyToMessage={replyToMessage}
             editingMessage={editingMessage}
             cancelReply={() => {
@@ -1316,12 +1373,13 @@ const InboxMain = () => {
                 : profiles[accountId]?.name || `User ${accountId.slice(0, 8)}`
             }
             getMemberAvatar={(accountId: string) => {
-              const avatar = profiles[accountId]?.avatar_preset_url;
-              return avatar && /^https?:\/\//i.test(avatar)
-                ? avatar
-                : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    profiles[accountId]?.name || accountId.slice(0, 8)
-                  )}&background=6366f1&color=fff`;
+              const avatar = accountId === currentActorId 
+                ? (user?.avatar_preset_url || user?.avatar_url) 
+                : (profiles[accountId]?.avatar_preset_url || profiles[accountId]?.avatar_url);
+              if (avatar) return chatAttachmentUrl(avatar);
+              return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  accountId === currentActorId ? "You" : (profiles[accountId]?.name || accountId.slice(0, 8))
+                )}&background=6366f1&color=fff`;
             }}
             suggestedAccounts={suggestedAccounts}
             onUpdateMember={(
@@ -1354,6 +1412,7 @@ const InboxMain = () => {
             onPreviewAttachment={(url: string, type = "image") =>
               setExpandedMedia({ url, type })
             }
+            deleteConversation={deleteConversation}
           />
         </div>
       </div>
@@ -1371,8 +1430,20 @@ const InboxMain = () => {
           onSubmitReport={handleReportSubmit}
         />
       )}
+
+      {showCreateGroupModal && (
+        <InboxCreateGroupModal
+          onClose={() => setShowCreateGroupModal(false)}
+          onCreateGroup={async (data) => {
+            await handleCreateGroup(data);
+            setShowCreateGroupModal(false);
+          }}
+          suggestedAccounts={suggestedAccounts}
+        />
+      )}
     </div>
   );
 };
 
 export default InboxMain;
+

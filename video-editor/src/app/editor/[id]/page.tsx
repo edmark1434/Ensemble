@@ -56,6 +56,7 @@ export default async function EditorPage({
       "project_members.role",
       "projects.width",
       "projects.height",
+      "projects.name",
       "users.first_name",
     ])
     .executeTakeFirst();
@@ -64,6 +65,8 @@ export default async function EditorPage({
     notFound();
   }
 
+  console.log("[EditorPage] DB returned name:", JSON.stringify(membership.name), "for project:", id);
+
   return (
     <Editor
       id={id}
@@ -71,6 +74,7 @@ export default async function EditorPage({
       userName={membership.first_name}
       width={membership.width}
       height={membership.height}
+      projectName={membership.name}
       role={membership.role}
     />
   );

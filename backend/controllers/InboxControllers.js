@@ -306,7 +306,29 @@ async function getInboxByTwoAccountIdsController(req, res) {
     }
 }
 
+async function updateLimitController(req, res) {
+    try {
+        const { updateLimitServices } = require('../services/InboxServices');
+        const result = await updateLimitServices(req.params.id, req.body.limit, accountId(req));
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function deleteConversationController(req, res) {
+    try {
+        const { deleteConversationServices } = require('../services/InboxServices');
+        const result = await deleteConversationServices(req.params.id, accountId(req));
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
 module.exports = {
+    deleteConversationController,
+    updateLimitController,
     createInboxController,
     createGroupController,
     createEngagementChatController,

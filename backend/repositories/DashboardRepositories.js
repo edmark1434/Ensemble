@@ -199,13 +199,15 @@ async function getDashboardTasks(accountId) {
                     'status', cm.status,
                     'credits', cm.credits,
                     'revisions_max', cm.no_of_revisions_max,
-                    'deadline', cm.deadline
+                    'deadline', cm.deadline,
+                    'deadline_at', cm.deadline_at,
+                    'started_at', cm.started_at
                 ) ORDER BY cm.index ASC)
                 FROM contract_milestones cm 
                 WHERE cm.contract_id = c.contract_id
             ) as milestones,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = j.client_account_id LIMIT 1) as client_rating,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = p.freelancer_account_id LIMIT 1) as freelancer_rating
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = p.freelancer_account_id LIMIT 1) as client_rating,
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = j.client_account_id LIMIT 1) as freelancer_rating
         FROM contracts c
         JOIN job_contracts jc ON c.contract_id = jc.contract_id
         JOIN proposals p ON jc.proposal_id = p.proposal_id
@@ -244,13 +246,15 @@ async function getDashboardTasks(accountId) {
                     'status', cm.status,
                     'credits', cm.credits,
                     'revisions_max', cm.no_of_revisions_max,
-                    'deadline', cm.deadline
+                    'deadline', cm.deadline,
+                    'deadline_at', cm.deadline_at,
+                    'started_at', cm.started_at
                 ) ORDER BY cm.index ASC)
                 FROM contract_milestones cm 
                 WHERE cm.contract_id = c.contract_id
             ) as milestones,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as client_rating,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as freelancer_rating
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as client_rating,
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as freelancer_rating
         FROM contracts c
         JOIN gig_contracts gc ON c.contract_id = gc.contract_id
         JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
@@ -308,6 +312,8 @@ async function getTaskById(contractId, accountId) {
                         'credits', cm.credits,
                         'revisions_max', cm.no_of_revisions_max,
                         'deadline', cm.deadline,
+                        'deadline_at', cm.deadline_at,
+                        'started_at', cm.started_at,
                         'submissions', (
                             SELECT json_agg(
                                 json_build_object(
@@ -326,8 +332,8 @@ async function getTaskById(contractId, accountId) {
                 FROM contract_milestones cm 
                 WHERE cm.contract_id = c.contract_id
             ) as milestones,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = j.client_account_id LIMIT 1) as client_rating,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = p.freelancer_account_id LIMIT 1) as freelancer_rating
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = p.freelancer_account_id LIMIT 1) as client_rating,
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = j.client_account_id LIMIT 1) as freelancer_rating
         FROM contracts c
         JOIN job_contracts jc ON c.contract_id = jc.contract_id
         JOIN proposals p ON jc.proposal_id = p.proposal_id
@@ -364,6 +370,8 @@ async function getTaskById(contractId, accountId) {
                         'credits', cm.credits,
                         'revisions_max', cm.no_of_revisions_max,
                         'deadline', cm.deadline,
+                        'deadline_at', cm.deadline_at,
+                        'started_at', cm.started_at,
                         'submissions', (
                             SELECT json_agg(
                                 json_build_object(
@@ -382,8 +390,8 @@ async function getTaskById(contractId, accountId) {
                 FROM contract_milestones cm 
                 WHERE cm.contract_id = c.contract_id
             ) as milestones,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as client_rating,
-            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as freelancer_rating
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as client_rating,
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as freelancer_rating
         FROM contracts c
         JOIN gig_contracts gc ON c.contract_id = gc.contract_id
         JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
@@ -468,7 +476,7 @@ async function recordMilestoneAction({
     try {
         await client.query('BEGIN');
         const milestoneResult = await client.query(
-            `SELECT contract_milestone_id, name, status, index
+            `SELECT contract_milestone_id, name, status, index, credits
              FROM contract_milestones
              WHERE contract_milestone_id = $1 AND contract_id = $2
              FOR UPDATE`,
@@ -537,7 +545,9 @@ async function recordMilestoneAction({
         if (unlockNext) {
             await client.query(
                 `UPDATE contract_milestones
-                 SET status = 'active'
+                 SET status = 'active',
+                     started_at = COALESCE(started_at, NOW()),
+                     deadline_at = CASE WHEN deadline > 0 THEN NOW() + (deadline * interval '1 hour') ELSE NULL END
                  WHERE contract_milestone_id = (
                     SELECT contract_milestone_id
                     FROM contract_milestones
@@ -549,17 +559,22 @@ async function recordMilestoneAction({
             );
         }
 
+        let milestoneRelease = null;
         let contractCompletion = null;
         if (releaseOnContractCompletion && milestoneStatus === 'completed') {
-            const remainingResult = await client.query(
-                `SELECT COUNT(*)::integer AS remaining
-                 FROM contract_milestones
-                 WHERE contract_id = $1
-                   AND LOWER(status) <> 'completed'`,
-                [contractId]
-            );
+            const milestoneCredits = Number(milestone.credits);
+            if (Number.isSafeInteger(milestoneCredits) && milestoneCredits > 0) {
+                const existingReleaseResult = await client.query(
+                    `SELECT credit_transaction_id
+                     FROM credit_transactions
+                     WHERE type = 'Escrow Release'
+                       AND reference_table = 'contract_milestones'
+                       AND reference_id = $1
+                     LIMIT 1`,
+                    [milestoneId]
+                );
 
-            if (Number(remainingResult.rows[0].remaining) === 0) {
+                if (existingReleaseResult.rows.length === 0) {
                 const contractResult = await client.query(
                     `SELECT contract_id, contract_type, status, rate_credits
                      FROM contracts
@@ -602,27 +617,6 @@ async function recordMilestoneAction({
                     throw error;
                 }
 
-                const releaseCredits = Number(contract.rate_credits);
-                if (!Number.isSafeInteger(releaseCredits) || releaseCredits <= 0) {
-                    const error = new Error('Contract has an invalid release amount');
-                    error.statusCode = 409;
-                    throw error;
-                }
-
-                const existingReleaseResult = await client.query(
-                    `SELECT credit_transaction_id
-                     FROM credit_transactions
-                     WHERE type = 'Escrow Release'
-                       AND reference_table = 'contracts'
-                       AND reference_id = $1
-                     LIMIT 1`,
-                    [contractId]
-                );
-                if (existingReleaseResult.rows.length > 0) {
-                    const error = new Error('Contract funds have already been released');
-                    error.statusCode = 409;
-                    throw error;
-                }
 
                 const walletsResult = await client.query(
                     `SELECT w.wallet_id, w.type, w.status, w.balance_credits
@@ -651,31 +645,37 @@ async function recordMilestoneAction({
                     throw error;
                 }
 
-                const heldResult = await client.query(
-                    `SELECT COALESCE(SUM(ct.amount_credits), 0)::integer AS held_credits
-                     FROM credit_transactions ct
-                     WHERE ct.type = 'Escrow Hold'
-                       AND ct.destination_wallet_id = $1
-                       AND (
-                           (
-                               ct.reference_table = 'contracts'
-                               AND ct.reference_id = $2
-                           ) OR (
-                               ct.reference_table = 'contract_milestone_revisions'
-                               AND EXISTS (
-                                   SELECT 1
-                                   FROM contract_milestones cm
-                                   WHERE cm.contract_milestone_id = ct.reference_id
-                                     AND cm.contract_id = $2
-                               )
-                           )
-                       )`,
-                    [escrowWallet.wallet_id, contractId]
-                );
-                if (Number(heldResult.rows[0].held_credits) < releaseCredits) {
-                    const error = new Error('Contract escrow funding is incomplete');
+                if (Number(escrowWallet.balance_credits) < milestoneCredits) {
+                    const error = new Error('Contract escrow balance is insufficient for release');
                     error.statusCode = 409;
                     throw error;
+                }
+
+                // Begin Fee Calculation
+                const feeId = contract.contract_type === 'gig' ? 'fee-gig' : 'fee-job';
+                const { getFeeSettingById, calculatePercentFeeAmount } = require('../lib/PlatformFeeSettings');
+                const feeSetting = await getFeeSettingById(feeId);
+                const percent = Number(feeSetting?.percent) || 0;
+                const flatFee = Number(feeSetting?.flatFee) || 0;
+                const feeCredits = calculatePercentFeeAmount(milestoneCredits, percent, flatFee);
+                const freelancerCredits = milestoneCredits - feeCredits;
+
+                let platformWallet = null;
+                if (feeCredits > 0) {
+                    const pwRes = await client.query(`
+                        SELECT wallet_id, status 
+                        FROM wallets 
+                        WHERE type = 'platform wallets' AND status = 'active' 
+                        ORDER BY created_at ASC
+                        LIMIT 1
+                        FOR UPDATE
+                    `);
+                    platformWallet = pwRes.rows[0];
+                    if (!platformWallet) {
+                        const error = new Error('Platform wallet is unavailable for fee processing');
+                        error.statusCode = 409;
+                        throw error;
+                    }
                 }
 
                 const debitResult = await client.query(
@@ -684,7 +684,7 @@ async function recordMilestoneAction({
                      WHERE wallet_id = $2
                        AND balance_credits >= $1
                      RETURNING balance_credits`,
-                    [releaseCredits, escrowWallet.wallet_id]
+                    [milestoneCredits, escrowWallet.wallet_id]
                 );
                 if (debitResult.rows.length === 0) {
                     const error = new Error('Contract escrow balance is insufficient for release');
@@ -697,68 +697,111 @@ async function recordMilestoneAction({
                      SET balance_credits = balance_credits + $1
                      WHERE wallet_id = $2
                      RETURNING balance_credits`,
-                    [releaseCredits, accountWallet.wallet_id]
+                    [freelancerCredits, accountWallet.wallet_id]
                 );
+
+                let feeTransaction = null;
+                if (feeCredits > 0) {
+                    await client.query(`
+                        UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2
+                    `, [feeCredits, platformWallet.wallet_id]);
+
+                    const feeRes = await client.query(`
+                        INSERT INTO credit_transactions (
+                            type, amount_credits, status,
+                            source_wallet_id, destination_wallet_id,
+                            reference_table, reference_id
+                        ) VALUES ('Fee', $1, 'completed', $2, $3, 'contract_milestones', $4)
+                        RETURNING credit_transaction_id
+                    `, [feeCredits, escrowWallet.wallet_id, platformWallet.wallet_id, milestoneId]);
+                    feeTransaction = feeRes.rows[0];
+                }
+
                 const transactionResult = await client.query(
                     `INSERT INTO credit_transactions (
                         type, amount_credits, status,
                         source_wallet_id, destination_wallet_id,
-                        reference_table, reference_id
+                        reference_table, reference_id, fee_transaction_id
                      )
                      VALUES (
                         'Escrow Release', $1, 'completed',
-                        $2, $3, 'contracts', $4
+                        $2, $3, 'contract_milestones', $4, $5
                      )
                      RETURNING *`,
                     [
-                        releaseCredits,
+                        freelancerCredits,
                         escrowWallet.wallet_id,
                         accountWallet.wallet_id,
-                        contractId,
+                        milestoneId,
+                        feeTransaction?.credit_transaction_id || null
                     ]
                 );
+                
+                const notificationMsg = feeCredits > 0 
+                    ? `${freelancerCredits} credits for milestone "${milestone.name}" were released to your account wallet (after ${feeCredits} credits platform fee).`
+                    : `${freelancerCredits} credits for milestone "${milestone.name}" were released to your account wallet.`;
+
                 const notificationResult = await client.query(
                     `INSERT INTO notifications (
                         message, is_read, reference_table, reference_prefix,
                         reference_path, reference_id, account_id
                      )
                      VALUES (
-                        $1, false, 'credit_transactions', 'CONTRACT_FUNDS_RELEASED',
+                        $1, false, 'credit_transactions', 'MILESTONE_FUNDS_RELEASED',
                         $2, $3, $4
                      )
                      RETURNING *`,
                     [
-                        `${releaseCredits} credits for "${participants.listing_title}" were released to your account wallet.`,
+                        notificationMsg,
                         `/dashboard/tasks/${contractId}`,
                         transactionResult.rows[0].credit_transaction_id,
                         participants.freelancer_account_id,
                     ]
                 );
 
-                await client.query(
-                    `UPDATE contracts
-                     SET status = 'Done'
-                     WHERE contract_id = $1`,
-                    [contractId]
-                );
-
-                contractCompletion = {
+                milestoneRelease = {
                     transaction: transactionResult.rows[0],
                     notification: notificationResult.rows[0],
                     freelancerAccountId: participants.freelancer_account_id,
-                    releasedCredits: releaseCredits,
+                    releasedCredits: freelancerCredits,
+                    feeCredits,
                     accountBalanceCredits: Number(creditResult.rows[0].balance_credits),
                     escrowBalanceCredits: Number(debitResult.rows[0].balance_credits),
                 };
             }
         }
 
-        await client.query('COMMIT');
-        return {
-            submission: submissionResult.rows[0],
-            milestone,
-            contractCompletion,
-        };
+        const remainingResult = await client.query(
+            `SELECT COUNT(*)::integer AS remaining
+             FROM contract_milestones
+             WHERE contract_id = $1
+               AND LOWER(status) NOT IN ('completed', 'cancelled', 'abandoned')`,
+            [contractId]
+        );
+
+        if (Number(remainingResult.rows[0].remaining) === 0) {
+            await client.query(
+                `UPDATE contracts
+                 SET status = 'Done'
+                 WHERE contract_id = $1`,
+                [contractId]
+            );
+
+            contractCompletion = {
+                isCompleted: true,
+                contractId,
+                milestoneRelease,
+            };
+        }
+    }
+
+    await client.query('COMMIT');
+    return {
+        submission: submissionResult.rows[0],
+        milestone,
+        milestoneRelease,
+        contractCompletion,
+    };
     } catch (error) {
         await client.query('ROLLBACK');
         throw error;
@@ -772,29 +815,67 @@ async function submitContractReview(contractId, accountId, stars, feedback) {
     try {
         await client.query('BEGIN');
         
-        const query = `
-            INSERT INTO ratings (contract_id, account_id, stars_out_of_five, feedback)
-            VALUES ($1, $2, $3, $4)
-            RETURNING *
-        `;
-        const result = await client.query(query, [contractId, accountId, stars, feedback]);
-        const rating = result.rows[0];
+        // Identify contract participants and caller's role
+        const permissions = await getContractPermissions(contractId, accountId, client);
+        if (!permissions) {
+            throw new Error('Contract not found or unauthorized');
+        }
 
-        // Check if both parties have reviewed
+        const clientAccId = permissions.participants?.client_account_id;
+        const freeAccId = permissions.participants?.freelancer_account_id;
+        const isClient = permissions.userRole?.effectiveRole === 'client' || String(clientAccId) === String(accountId);
+        const isFreelancer = permissions.userRole?.effectiveRole === 'freelancer' || String(freeAccId) === String(accountId);
+
+        if (!isClient && !isFreelancer) {
+            throw new Error('You are not authorized to review this contract.');
+        }
+
+        // Target of review: if reviewer is client, target is freelancer; if reviewer is freelancer, target is client
+        const targetAccountId = isClient ? freeAccId : clientAccId;
+
+        // Upsert into ratings
+        const existingRating = await client.query(
+            `SELECT rating_id FROM ratings WHERE contract_id = $1 AND account_id = $2 LIMIT 1`,
+            [contractId, targetAccountId]
+        );
+
+        let rating;
+        if (existingRating.rows.length > 0) {
+            const updateRes = await client.query(
+                `UPDATE ratings 
+                 SET stars_out_of_five = $1, feedback = $2, updated_at = NOW() 
+                 WHERE rating_id = $3 
+                 RETURNING *`,
+                [stars, feedback, existingRating.rows[0].rating_id]
+            );
+            rating = updateRes.rows[0];
+        } else {
+            const insertRes = await client.query(
+                `INSERT INTO ratings (contract_id, account_id, stars_out_of_five, feedback)
+                 VALUES ($1, $2, $3, $4)
+                 RETURNING *`,
+                [contractId, targetAccountId, stars, feedback]
+            );
+            rating = insertRes.rows[0];
+        }
+
+        // Check if both parties have reviewed (count distinct target account IDs in ratings)
         const allRatings = await client.query(
-            `SELECT account_id FROM ratings WHERE contract_id = $1`,
+            `SELECT DISTINCT account_id FROM ratings WHERE contract_id = $1`,
             [contractId]
         );
 
+        let contractCompleted = false;
         if (allRatings.rows.length >= 2) {
             await client.query(
-                `UPDATE contracts SET status = 'Completed' WHERE contract_id = $1 AND LOWER(status) = 'done'`,
+                `UPDATE contracts SET status = 'Completed' WHERE contract_id = $1`,
                 [contractId]
             );
+            contractCompleted = true;
         }
 
         await client.query('COMMIT');
-        return rating;
+        return { rating, contractCompleted, targetAccountId, isClient, isFreelancer };
     } catch (error) {
         await client.query('ROLLBACK');
         throw error;

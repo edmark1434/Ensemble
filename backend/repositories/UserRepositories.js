@@ -40,12 +40,18 @@ async function getNameByUserId(userId) {
 
 async function getUserByListofIdsRepositories(userIds) { 
     try {
-        const {rows} = await pool.query(`SELECT json_agg(user_data) as users_list FROM (SELECT user_id,first_name, last_name,f.path FROM users
-            inner join accounts as a on users.account_id = a.account_id
-            inner join files as f on a.avatar_file_id = f.file_id
-            WHERE user_id = ANY($1)) as user_data`, [userIds]);
-        return rows[0].users_list || [];
-    }catch (err) {
+        if (!Array.isArray(userIds) || userIds.length === 0) {
+            return [];
+        }
+        const stringIds = userIds.map(String);
+        const {rows} = await pool.query(`SELECT json_agg(user_data) as users_list FROM (
+            SELECT users.user_id, a.account_id, users.first_name, users.last_name, f.path FROM users
+            INNER JOIN accounts AS a ON users.account_id = a.account_id
+            LEFT JOIN files AS f ON a.avatar_file_id = f.file_id
+            WHERE users.user_id::text = ANY($1::text[]) OR a.account_id::text = ANY($1::text[])
+        ) as user_data`, [stringIds]);
+        return rows[0]?.users_list || [];
+    } catch (err) {
         console.error(`Error fetching users with ids ${userIds}:`, err);
         throw err;
     }
@@ -53,16 +59,17 @@ async function getUserByListofIdsRepositories(userIds) {
 
 async function getPublicForumUserIdentities(userIds = []) {
     const uniqueUserIds = [...new Set(userIds.map(String))]
-        .filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))
+        .filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) || /^\d+$/.test(id))
         .slice(0, 500);
     if (uniqueUserIds.length === 0) return [];
 
     const { rows } = await pool.query(`
         WITH requested_ids AS (
-            SELECT UNNEST($1::uuid[]) AS requested_id
+            SELECT UNNEST($1::text[]) AS requested_id
         )
         SELECT
             requested_ids.requested_id AS user_id,
+            a.account_id,
             COALESCE(NULLIF(a.display_name, ''), NULLIF(CONCAT_WS(' ', u.first_name, u.last_name), ''), a.handle, 'Forum member') AS display_name,
             a.handle,
             f.path AS avatar_preset_url,
@@ -70,8 +77,8 @@ async function getPublicForumUserIdentities(userIds = []) {
             COALESCE(p.name, 'Free') AS subscription_plan
         FROM requested_ids
         INNER JOIN users u
-            ON u.user_id = requested_ids.requested_id
-            OR u.account_id = requested_ids.requested_id
+            ON u.user_id::text = requested_ids.requested_id
+            OR u.account_id::text = requested_ids.requested_id
         INNER JOIN accounts a ON a.account_id = u.account_id
         LEFT JOIN files f ON f.file_id = a.avatar_file_id
         LEFT JOIN verifications v ON v.account_id = a.account_id

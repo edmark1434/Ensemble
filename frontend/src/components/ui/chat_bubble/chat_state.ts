@@ -144,8 +144,10 @@ interface ChatState {
   removeFloatingWindow: (windowId: string) => void;
   createGroup: (
     name: string,
-    members: Array<{ account_id: string }>
+    members: Array<{ account_id: string }>,
+    member_limit?: number
   ) => Promise<Inbox>;
+  deleteConversation: (conversationId: string) => Promise<void>;
   createEngagement: (payload: {
     conversation_name?: string;
     members: Array<{ account_id: string }>;
@@ -660,10 +662,11 @@ function reconcileMessage(message: Message, isNewMessage = false) {
       let targetId = conversationId;
 
       if (!alreadyFloating && conv) {
-        let targetName = conv.title || "User";
-        let targetAvatar = conv.profile_image || undefined;
+        let targetName = conv.conversation_name || conv.title || "Group Chat";
+        let targetAvatar = conv.conversation_image_key || conv.profile_image || undefined;
         
         if (conv.conversation_type === "direct") {
+          targetName = "User";
           const other = (conv.members || []).find((m: any) => String(m.account_id) !== authenticatedAccountId);
           if (other) {
             targetName = other.name || other.username || targetName;
@@ -701,14 +704,8 @@ function reconcileMessage(message: Message, isNewMessage = false) {
          if (existing) targetId = String(existing.id);
       }
 
-      if (conv?.conversation_type === "direct") {
-        api.get(`/api/accounts/${targetId}/follow-status`)
-          .then(res => {
-            if (res.data && res.data.isFollowing && res.data.isFollowedBy) {
-              useChatState.setState({ activeFloatingId: targetId, isFloatingOpen: true });
-            }
-          })
-          .catch(err => console.error("Could not check follow status", err));
+      if (conv?.conversation_type === "direct" || conv?.conversation_type === "group") {
+        useChatState.setState({ activeFloatingId: targetId, isFloatingOpen: true });
       }
     }
 
@@ -1720,7 +1717,6 @@ const useChatState = create<ChatState>((set, get) => ({
     }));
     await get().openFloatingConversation({
       ...target,
-      id: conversationId,
       inbox_id: conversationId,
       avatarPayload: (inbox as Inbox & {
         avatarPayload?: Record<string, string>;
@@ -1732,7 +1728,6 @@ const useChatState = create<ChatState>((set, get) => ({
     const conversationId = String(target.inbox_id || target.id);
     const chatTarget = {
       ...target,
-      id: conversationId,
       inbox_id: conversationId,
     };
     set((state) => ({
@@ -1740,11 +1735,10 @@ const useChatState = create<ChatState>((set, get) => ({
         chatTarget,
         ...state.floatingWindows.filter(
           (window) =>
-            String(window.id) !== conversationId &&
-            String(window.inbox_id) !== conversationId
+            String(window.inbox_id || window.id) !== conversationId
         ),
       ].slice(0, 4),
-      activeFloatingId: conversationId,
+      activeFloatingId: target.id || conversationId,
       activeConversationId: conversationId,
       isFloatingOpen: true,
       unreadCounts: { ...state.unreadCounts, [conversationId]: 0 },
@@ -1783,10 +1777,11 @@ const useChatState = create<ChatState>((set, get) => ({
       };
     }),
 
-  createGroup: async (name, members) => {
+  createGroup: async (name, members, member_limit) => {
     const response = await api.post<Inbox>("/api/inbox/group", {
       conversation_name: name,
       members,
+      member_limit,
     });
     set((state) => ({
       conversations: upsertConversation(state.conversations, response.data),
@@ -1796,6 +1791,22 @@ const useChatState = create<ChatState>((set, get) => ({
       conversation_id: String(response.data._id),
     });
     return response.data;
+  },
+
+  deleteConversation: async (conversationId) => {
+    await api.delete(`/api/inbox/${conversationId}`);
+    set((state) => ({
+      conversations: state.conversations.filter(
+        (c) => String(c._id) !== String(conversationId)
+      ),
+      activeConversationId:
+        state.activeConversationId === conversationId
+          ? null
+          : state.activeConversationId,
+      floatingWindows: state.floatingWindows.filter(
+        (w) => w.conversationId !== conversationId
+      ),
+    }));
   },
 
   createEngagement: async (payload) => {
@@ -1990,10 +2001,14 @@ const useChatState = create<ChatState>((set, get) => ({
   },
 
   pinMessage: async (conversationId, messageId, unpin = false) => {
-    await emitWithAck(unpin ? "unpinMessage" : "pinMessage", {
-      conversation_id: String(conversationId),
-      message_id: String(messageId),
-    });
+    try {
+      await emitWithAck(unpin ? "unpinMessage" : "pinMessage", {
+        conversation_id: String(conversationId),
+        message_id: String(messageId),
+      });
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to pin message");
+    }
   },
 
   renameConversation: async (conversationId, conversationName) => {

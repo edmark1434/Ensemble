@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { patchProject } from "@/features/editor/control-item/common/composition-controls";
 import { Button } from "@/components/ui/button";
 import { dispatch } from "@designcombo/events";
 import { HISTORY_UNDO, HISTORY_REDO, DESIGN_RESIZE } from "@designcombo/state";
@@ -84,12 +85,20 @@ export default function Navbar({
     undoManager?.redo();
   };
 
-  const commitTitle = () => {
+  const commitTitle = async () => {
     if (title.trim() === "") {
       setTitle(projectName);
       return;
     }
+    const previous = projectName;
     setProjectName(title);
+    try {
+      await patchProject(projectId, { name: title });
+    } catch (err) {
+      console.error("Failed to save project name from navbar", err);
+      setProjectName(previous);
+      setTitle(previous);
+    }
   };
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -153,7 +162,7 @@ export default function Navbar({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-48 ml-2 mt-1 z-[100]">
             <DropdownMenuItem asChild className="cursor-pointer">
-              <a href={process.env.NEXT_PUBLIC_MAIN_APP_URL ? `${process.env.NEXT_PUBLIC_MAIN_APP_URL}/projects` : 'http://localhost:5173/projects'}>
+              <a href={process.env.MAIN_APP_URL ? `${process.env.MAIN_APP_URL}/projects` : 'https://ensemble.software/projects'}>
                 Return to Projects
               </a>
             </DropdownMenuItem>

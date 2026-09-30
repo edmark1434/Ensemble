@@ -1,5 +1,7 @@
 // src/components/ui/inbox/inbox_functions/inbox_side_details.tsx
 import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-hot-toast";
 import {
   X,
   User,
@@ -18,6 +20,9 @@ import {
   LogOut,
   Camera,
   Plus,
+  Loader2,
+  Zap,
+  HelpCircle,
 } from "lucide-react";
 import type {
   Inbox,
@@ -36,6 +41,7 @@ import { MarketplaceContextCard } from "./marketplace_context_card";
 interface InboxSideDetailsProps {
   selectedConversation: Inbox;
   getConversationName: (inbox: Inbox) => string;
+  getMemberLimit?: (inbox: Inbox) => number | null;
   getAvatar: (inbox: Inbox) => string;
   messages: Message[];
   pinnedMessages?: PinnedMessage[];
@@ -54,11 +60,13 @@ interface InboxSideDetailsProps {
   onPreviewAttachment?: (url: string, type?: string) => void;
   suggestedAccounts?: SuggestedAccount[];
   isOpen: boolean;
+  onDeleteConversation?: (conversationId: string) => Promise<void>;
 }
 
 export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   selectedConversation,
   getConversationName,
+  getMemberLimit,
   getAvatar,
   messages,
   pinnedMessages = [],
@@ -75,7 +83,12 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   onPreviewAttachment,
   suggestedAccounts = [],
   isOpen,
+  onDeleteConversation,
 }) => {
+  const navigate = useNavigate();
+
+  if (!selectedConversation) return null;
+
   const isGroup = Boolean(
     selectedConversation.is_group ||
       selectedConversation.conversation_type === "group"
@@ -99,6 +112,9 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   const [memberSearchResults, setMemberSearchResults] = useState<SuggestedAccount[]>([]);
   const [isSearchingMembers, setIsSearchingMembers] = useState(false);
   const [isUploadingGroupImage, setIsUploadingGroupImage] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [memberToAdd, setMemberToAdd] = useState<SuggestedAccount | null>(null);
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
   const groupImageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -234,9 +250,9 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
       }`}
       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
     >
-      <div className="w-72 md:w-80 flex flex-col h-full">
+      <div className="w-72 md:w-80 flex flex-col min-h-full">
         {/* Header Close Bar */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/10 sticky top-0 bg-white dark:bg-dark-surface/95 backdrop-blur-sm z-10">
+        <div className="flex items-center justify-between px-4 h-[73px] shrink-0 border-b border-gray-200 dark:border-white/10 sticky top-0 bg-white dark:bg-dark-surface/95 backdrop-blur-sm z-10">
           <h3 className="text-sm font-semibold text-gray-600 dark:text-zinc-300">Chat Details</h3>
           <button
             onClick={onClose}
@@ -247,7 +263,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
         </div>
 
         {/* Main Profile / Group Info Header */}
-        <div className="flex flex-col items-center p-6 border-b border-gray-200 dark:border-white/10 text-center">
+        <div className="flex flex-col items-center p-6 shrink-0 border-b border-gray-200 dark:border-white/10 text-center">
           <div className="relative mb-3">
             <img
               src={avatar}
@@ -267,10 +283,14 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                   type="button"
                   disabled={isUploadingGroupImage}
                   onClick={() => groupImageInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 rounded-full bg-blue-600 p-2 text-gray-900 dark:text-white ring-2 ring-white dark:ring-dark-surface hover:bg-blue-500 disabled:opacity-50"
+                  className="absolute bottom-0 right-0 rounded-full bg-blue-600 p-2 text-white ring-2 ring-white dark:ring-dark-surface hover:bg-blue-500 transition disabled:opacity-80"
                   title="Change group image"
                 >
-                  <Camera className="h-3.5 w-3.5" />
+                  {isUploadingGroupImage ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Camera className="h-3.5 w-3.5" />
+                  )}
                 </button>
               </>
             ) : (
@@ -278,12 +298,42 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
             )}
           </div>
           <h2 className="text-base font-bold text-gray-900 dark:text-white mb-0.5">{name}</h2>
-          <p className="text-xs text-gray-500 dark:text-zinc-400">
-            {isGroup ? `${activeMembers.length} members` : "Active now"}
-          </p>
+          <div className="flex items-center justify-center gap-2">
+            <div className="flex items-center gap-1 group/tooltip relative">
+              <p className="text-xs text-gray-500 dark:text-zinc-400">
+                {isGroup 
+                  ? (getMemberLimit && getMemberLimit(selectedConversation)) 
+                    ? `${activeMembers.length}/${getMemberLimit(selectedConversation)} members` 
+                    : `${activeMembers.length} members` 
+                  : "Active now"}
+              </p>
+              {isGroup && (
+                <>
+                  <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help transition-colors" />
+                  <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden w-52 rounded-lg bg-white dark:bg-zinc-800 p-2 text-center text-[11px] leading-tight text-gray-700 dark:text-white shadow-xl border border-gray-100 dark:border-zinc-700 group-hover/tooltip:block z-50">
+                    Your group chat limit permanently locks in the highest subscription tier you achieve, even if you downgrade later.
+                    <div className="absolute left-1/2 top-full -translate-x-1/2 -translate-y-1/2 border-4 border-transparent border-t-white dark:border-t-zinc-800" />
+                  </div>
+                </>
+              )}
+            </div>
+            {isGroup && isCreatorSelf && getMemberLimit?.(selectedConversation) !== 1000 && (
+              <button 
+                onClick={() => navigate("/credits-subscriptions")}
+                className="group relative inline-flex items-center justify-center gap-1 overflow-hidden rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 shadow-sm transition-all duration-500 hover:scale-105 hover:shadow-[0_0_15px_rgba(251,191,36,0.4)] dark:border-amber-600/80 dark:bg-transparent dark:text-amber-500 dark:hover:border-amber-500 dark:hover:text-amber-400 dark:hover:shadow-[0_0_15px_rgba(251,191,36,0.3)]"
+              >
+                <div 
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/20 dark:via-amber-400/20 to-transparent z-10"
+                  style={{ animation: 'passiveShine 3s ease-in-out infinite' }}
+                />
+                <Zap className="relative z-20 h-2.5 w-2.5 fill-amber-500/70 text-amber-500 dark:fill-amber-500/70 dark:text-amber-500 group-hover:dark:text-amber-400 group-hover:dark:fill-amber-400/70 transition-colors" />
+                <span className="relative z-20">Upgrade</span>
+              </button>
+            )}
+          </div>
 
           {isGroup && (
-            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 px-3 py-1 text-[11px] text-yellow-400">
+            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 px-3 py-1 text-[11px] text-yellow-600 dark:text-yellow-400">
               <Crown className="h-3 w-3" />
               <span>Created by {isCreatorSelf ? "You" : "Admin"}</span>
             </div>
@@ -292,13 +342,20 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           {!isGroup && (
             <div className="mt-5 flex justify-center">
               <button
-                onClick={() => console.log("Navigate to user profile")}
+                onClick={() => {
+                  const otherMember = selectedConversation.members?.find(
+                    (m) => String(m.account_id) !== String(currentUserId)
+                  );
+                  if (otherMember?.account_id) {
+                    navigate(`/profile/${otherMember.account_id}`);
+                  }
+                }}
                 className="flex flex-col items-center gap-1.5 text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition group"
               >
                 <div className="p-3 rounded-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 group-hover:bg-blue-500 group-hover:border-blue-500 transition">
                   <User className="h-5 w-5" />
                 </div>
-                <span className="text-xs font-medium">Profile</span>
+                <span className="text-xs font-medium">View Profile</span>
               </button>
             </div>
           )}
@@ -334,7 +391,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                     {!isEditingName && (
                       <button
                         onClick={() => setIsEditingName(true)}
-                        className="p-1 text-blue-400 hover:text-blue-300 transition"
+                        className="p-1 text-blue-400 hover:text-blue-600 dark:text-blue-300 transition"
                         title="Edit Group Name"
                       >
                         <Pencil className="h-3.5 w-3.5" />
@@ -348,17 +405,17 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                         type="text"
                         value={customNameInput}
                         onChange={(e) => setCustomNameInput(e.target.value)}
-                        className="flex-1 rounded-lg border border-blue-500/50 bg-black/40 px-2.5 py-1.5 text-xs text-gray-900 dark:text-white outline-none"
+                        className="flex-1 rounded-lg border border-gray-200 dark:border-blue-500/50 bg-white dark:bg-black/40 px-2.5 py-1.5 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50"
                       />
                       <button
                         onClick={handleSaveGroupName}
-                        className="p-1.5 rounded-lg bg-blue-600 text-gray-900 dark:text-white hover:bg-blue-500 transition"
+                        className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition"
                       >
                         <Check className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ) : (
-                    <p className="text-xs text-gray-900 dark:text-zinc-200 font-medium truncate bg-black/20 p-2 rounded-lg border border-gray-100 dark:border-white/5">
+                    <p className="text-xs text-gray-900 dark:text-zinc-200 font-medium truncate bg-gray-100 dark:bg-white/10 p-2 rounded-lg border border-gray-200 dark:border-white/5">
                       {name}
                     </p>
                   )}
@@ -376,7 +433,10 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
               >
                 <button type="button" className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-blue-400" />
-                  <span>Members ({activeMembers.length})</span>
+                  <span>
+                    Members ({activeMembers.length}
+                    {getMemberLimit && getMemberLimit(selectedConversation) ? `/${getMemberLimit(selectedConversation)}` : ""})
+                  </span>
                 </button>
                 <div className="flex items-center gap-1">
                   {isActiveMember && (
@@ -429,17 +489,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                             key={account.account_id}
                             type="button"
                             disabled={Boolean(isActive)}
-                            onClick={() =>
-                              void runMemberAction(async () => {
-                                const updated = await onUpdateMember!(
-                                  account.account_id,
-                                  { role: "member", status: "active" }
-                                );
-                                setMemberSearch("");
-                                setMemberSearchResults([]);
-                                return updated;
-                              })
-                            }
+                            onClick={() => setMemberToAdd(account)}
                             className="flex w-full items-center gap-2 rounded-lg p-2 text-left hover:bg-gray-100 dark:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             <img src={account.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
@@ -552,8 +602,8 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
               className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5 transition"
             >
               <div className="flex items-center gap-2">
-                <Pin className="h-4 w-4 text-yellow-400" />
-                <span>Pinned Messages ({pinnedList.length})</span>
+                <Pin className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                <span>Pinned Messages ({pinnedList.length}/25)</span>
               </div>
               {isPinnedOpen ? (
                 <ChevronUp className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
@@ -573,12 +623,12 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                     <div
                       key={msg._id}
                       onClick={() => onJumpToMessage?.(msg._id)}
-                      className="p-2 rounded-lg bg-black/20 border border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:bg-white/5 transition cursor-pointer text-xs"
+                      className="p-2 rounded-lg bg-gray-100 dark:bg-black/20 border border-gray-200 dark:border-white/5 hover:bg-gray-200 dark:hover:bg-white/5 transition cursor-pointer text-xs"
                     >
                       <p className="text-gray-900 dark:text-zinc-200 line-clamp-2">
                         {msg.message_content || "[Attachment]"}
                       </p>
-                      <span className="text-[10px] text-yellow-400/80 mt-1 block">
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 block">
                         Click to jump
                       </span>
                     </div>
@@ -596,7 +646,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
               className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5 transition"
             >
               <div className="flex items-center gap-2">
-                <LinkIcon className="h-4 w-4 text-emerald-400" />
+                <LinkIcon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                 <span>Shared Links ({extractedLinks.length})</span>
               </div>
               {isLinksOpen ? (
@@ -639,7 +689,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
               className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5 transition"
             >
               <div className="flex items-center gap-2">
-                <Paperclip className="h-4 w-4 text-blue-400" />
+                <Paperclip className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                 <span>Attachments ({attachments.length})</span>
               </div>
               {isAttachmentsOpen ? (
@@ -660,7 +710,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                     {attachments.map((a, i) => (
                       <div
                         key={a.attachment_id || i}
-                        className="aspect-square rounded-lg overflow-hidden bg-black/40 border border-gray-200 dark:border-white/10 relative group"
+                        className="aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-black/40 border border-gray-200 dark:border-white/10 relative group"
                       >
                         {a.attachment_type === "file" ? (
                           <a
@@ -669,7 +719,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                             )}
                             target="_blank"
                             rel="noreferrer"
-                            className="flex h-full w-full items-center justify-center p-2 text-center text-[9px] text-blue-300"
+                            className="flex h-full w-full items-center justify-center p-2 text-center text-[9px] text-blue-600 dark:text-blue-300"
                           >
                             {a.attachment_name || "Attachment"}
                           </a>
@@ -732,8 +782,100 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                 Leave group chat
               </button>
             )}
+
+          {isGroup && currentMember?.role === "owner" && (
+            <div className="relative w-full">
+              {!showDeleteConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs font-semibold text-red-400 hover:bg-red-500/15"
+                >
+                  <X className="h-4 w-4" />
+                  Delete group chat
+                </button>
+              ) : (
+                <div className="flex flex-col gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3">
+                  <p className="text-center text-xs font-medium text-red-400">Are you sure you want to delete this group?</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="flex-1 rounded-lg bg-gray-100 dark:bg-white/10 p-2 text-xs font-medium text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-white/20"
+                      disabled={isDeletingGroup}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!onDeleteConversation) return;
+                        setIsDeletingGroup(true);
+                        try {
+                          await onDeleteConversation(selectedConversation._id);
+                          toast.success("Group chat deleted successfully");
+                          onClose();
+                        } catch {
+                          toast.error("Failed to delete group chat");
+                        } finally {
+                          setIsDeletingGroup(false);
+                          setShowDeleteConfirm(false);
+                        }
+                      }}
+                      className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-red-500 p-2 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-50"
+                      disabled={isDeletingGroup}
+                    >
+                      {isDeletingGroup ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      </div>
+        </div>
+      {/* Add Member Confirmation Modal */}
+      {memberToAdd && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white dark:bg-dark-surface p-6 shadow-xl border border-gray-100 dark:border-white/10 animate-fade-in-up">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Add Member</h3>
+            <p className="text-sm text-gray-600 dark:text-zinc-300 mb-6">
+              Are you sure you want to add <strong className="text-gray-900 dark:text-white">{memberToAdd.username}</strong> to this group chat?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setMemberToAdd(null)}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void runMemberAction(async () => {
+                    if (!onUpdateMember) return;
+                    const updated = await onUpdateMember(
+                      memberToAdd.account_id,
+                      { role: "member", status: "active" }
+                    );
+                    setMemberSearch("");
+                    setMemberSearchResults([]);
+                    setMemberToAdd(null);
+                    return updated;
+                  });
+                }}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+

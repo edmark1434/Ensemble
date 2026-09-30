@@ -55,6 +55,7 @@ type ForumTag = {
 
 type PublicForumIdentity = {
   user_id: string;
+  account_id?: string | null;
   display_name: string;
   handle?: string | null;
   avatar_preset_url?: string | null;
@@ -568,7 +569,7 @@ const CommentItem = ({
 }: { 
   comment: Comment;
   postId: string;
-  membersDetails: Record<number, { name: string; avatar: string }>;
+  membersDetails: Record<number | string, { name: string; avatar: string; accountId?: string | null }>;
   onLike: (postId: string, commentId: string) => void;
   onReply: (postId: string, commentId: string, authorName: string, authorId: number) => void;
   onEditComment: (postId: string, commentId: string, newText: string) => void;
@@ -589,6 +590,8 @@ const CommentItem = ({
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
 }) => {
+  const navigate = useNavigate();
+  const user = useGlobalState((state) => state.user);
   // Initialize showChildren based on isCollapsed - collapsed by default
   const [showChildren, setShowChildren] = useState(!isCollapsed);
   const [isEditing, setIsEditing] = useState(false);
@@ -596,17 +599,30 @@ const CommentItem = ({
   const [showCommentMenu, setShowCommentMenu] = useState(false);
   
   // Get comment author
-  let commentAuthor;
+  let commentAuthor: { name: string; avatar: string; accountId?: string | null };
   if (comment.user_id === currentUserId) {
-    commentAuthor = { name: currentUserName, avatar: currentUserAvatar };
+    commentAuthor = {
+      name: currentUserName,
+      avatar: currentUserAvatar,
+      accountId: user?.account_id || user?.accountId || null,
+    };
   } else if (membersDetails[comment.user_id]) {
     commentAuthor = membersDetails[comment.user_id];
   } else {
-    commentAuthor = { name: `User ${comment.user_id}`, avatar: `https://i.pravatar.cc/150?u=${comment.user_id}` };
+    commentAuthor = {
+      name: `User ${comment.user_id}`,
+      avatar: `https://i.pravatar.cc/150?u=${comment.user_id}`,
+      accountId: comment.author_identity?.account_id || null,
+    };
   }
   
   const isLiked = comment.likes?.some(like => like.user_id === currentUserId) || false;
   const isAuthor = comment.user_id === currentUserId;
+  const targetAccountId = (isAuthor ? (user?.account_id || user?.accountId) : null)
+    || commentAuthor.accountId
+    || comment.author_identity?.account_id
+    || (comment.author_identity as any)?.accountId
+    || (typeof comment.user_id === "string" && (comment.user_id as string).length > 10 ? comment.user_id : undefined);
   const hasChildren = comment.children && comment.children.length > 0;
   const childCount = comment.children?.length || 0;
   const depth = comment.depth || 0;
@@ -652,15 +668,45 @@ const CommentItem = ({
   return (
     <div className={`${depthClass} mt-2 ${!isLastInThread ? "border-l-2 border-gray-200 dark:border-white/10 ml-2 pl-2" : ""}`}>
       <div className="flex gap-3 py-2">
-        <img
-          src={commentAuthor.avatar}
-          alt={commentAuthor.name}
-          className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20 flex-shrink-0"
-        />
+        {targetAccountId ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/profile/${encodeURIComponent(targetAccountId)}`);
+            }}
+            className="flex-shrink-0 cursor-pointer transition hover:opacity-80"
+          >
+            <img
+              src={commentAuthor.avatar}
+              alt={commentAuthor.name}
+              className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20"
+            />
+          </button>
+        ) : (
+          <img
+            src={commentAuthor.avatar}
+            alt={commentAuthor.name}
+            className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20 flex-shrink-0"
+          />
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">{commentAuthor.name}</p>
+              {targetAccountId ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/profile/${encodeURIComponent(targetAccountId)}`);
+                  }}
+                  className="text-sm font-medium text-gray-900 dark:text-white hover:underline cursor-pointer text-left"
+                >
+                  {commentAuthor.name}
+                </button>
+              ) : (
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{commentAuthor.name}</p>
+              )}
               <span className="text-xs text-gray-500 dark:text-zinc-500">{getTimeAgo(comment.created_at)}</span>
               {comment.is_edited && (
                 <span className="text-[10px] text-zinc-600">(edited)</span>
@@ -924,11 +970,37 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
   return (
     <div key={post.id} className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
       <div className="flex gap-3">
-        <img src={post.authorAvatar} alt={post.author} className="h-10 w-10 rounded-full object-cover ring-2 ring-white/20" />
+        {post.authorAccountId ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/profile/${encodeURIComponent(post.authorAccountId)}`);
+            }}
+            className="shrink-0 cursor-pointer transition hover:opacity-80"
+          >
+            <img src={post.authorAvatar} alt={post.author} className="h-10 w-10 rounded-full object-cover ring-2 ring-white/20" />
+          </button>
+        ) : (
+          <img src={post.authorAvatar} alt={post.author} className="h-10 w-10 rounded-full object-cover ring-2 ring-white/20" />
+        )}
         <div className="flex-1">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">{post.author}</p>
+              {post.authorAccountId ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/profile/${encodeURIComponent(post.authorAccountId)}`);
+                  }}
+                  className="text-sm font-medium text-gray-900 dark:text-white hover:underline cursor-pointer text-left"
+                >
+                  {post.author}
+                </button>
+              ) : (
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{post.author}</p>
+              )}
               <span className="text-xs text-gray-500 dark:text-zinc-500">{post.ago}</span>
               {showGroupName && group && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-400">
@@ -1145,7 +1217,7 @@ const Forums = () => {
   const [groupDiscussions, setGroupDiscussions] = useState<Post[]>([]);
   const [myDiscussionPosts, setMyDiscussionPosts] = useState<Post[]>([]);
   const [savedDiscussions, setSavedDiscussions] = useState<Post[]>([]);
-  const [membersDetailsMap, setMembersDetailsMap] = useState<Record<number, { name: string; avatar: string; isVerified?: boolean; subscriptionPlan?: string }>>({});
+  const [membersDetailsMap, setMembersDetailsMap] = useState<Record<number | string, { name: string; avatar: string; accountId?: string | null; isVerified?: boolean; subscriptionPlan?: string }>>({});
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1294,7 +1366,7 @@ const Forums = () => {
       setNextCursor(response.data.pagination.nextCursor);
       setHasMore(response.data.pagination.hasMore);
 
-      const identities: Record<number, { name: string; avatar: string }> = {};
+      const identities: Record<number | string, { name: string; avatar: string; accountId?: string | null; isVerified?: boolean; subscriptionPlan?: string }> = {};
       for (const post of page) {
         if (post.author_identity) {
           identities[post.user_id] = identityFromDetails(post.author_identity);
@@ -1412,20 +1484,29 @@ const Forums = () => {
 
     return posts.map((post, index) => {
       // Get user details from membersDetailsMap
-      let authorName, authorAvatar, authorIsVerified = false, authorSubscriptionPlan = "Free";
+      let authorName, authorAvatar, authorAccountId, authorIsVerified = false, authorSubscriptionPlan = "Free";
       if (post.user_id === currentUserId) {
         authorName = currentUserName;
         authorAvatar = currentUserAvatar;
+        authorAccountId = user?.account_id || user?.accountId;
         authorIsVerified = useGlobalState.getState().isVerified || user?.is_verified || false;
         authorSubscriptionPlan = user?.subscription_plan || "Free";
       } else if (membersDetailsMap[post.user_id]) {
         authorName = membersDetailsMap[post.user_id].name;
         authorAvatar = membersDetailsMap[post.user_id].avatar;
+        authorAccountId = membersDetailsMap[post.user_id].accountId;
         authorIsVerified = membersDetailsMap[post.user_id].isVerified || false;
         authorSubscriptionPlan = membersDetailsMap[post.user_id].subscriptionPlan || "Free";
       } else {
         authorName = "Forum member";
         authorAvatar = DEFAULT_AVATAR;
+        authorAccountId = post.author_identity?.account_id || (post.author_identity as any)?.accountId;
+      }
+      if (!authorAccountId && post.author_identity?.account_id) {
+        authorAccountId = post.author_identity.account_id;
+      }
+      if (!authorAccountId && typeof post.user_id === "string" && (post.user_id as string).length > 10) {
+        authorAccountId = post.user_id;
       }
       
       const isLiked = post.likes?.some(like => like.user_id === currentUserId) || false;
@@ -1437,6 +1518,7 @@ const Forums = () => {
         id: post._id || String(index),
         author: authorName,
         authorAvatar: authorAvatar,
+        authorAccountId,
         authorIsVerified,
         authorSubscriptionPlan,
         excerpt: post.content,
@@ -2043,13 +2125,39 @@ const Forums = () => {
     return (
       <div key={post.id} className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
         <div className="flex gap-3">
-          <img src={post.authorAvatar} alt={post.author} className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white/20" />
+          {post.authorAccountId ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/profile/${encodeURIComponent(post.authorAccountId)}`);
+              }}
+              className="shrink-0 cursor-pointer transition hover:opacity-80"
+            >
+              <img src={post.authorAvatar} alt={post.author} className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white/20" />
+            </button>
+          ) : (
+            <img src={post.authorAvatar} alt={post.author} className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white/20" />
+          )}
           <div className="flex-1">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{post.author}</p>
+                    {post.authorAccountId ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/profile/${encodeURIComponent(post.authorAccountId)}`);
+                        }}
+                        className="text-sm font-medium text-gray-900 dark:text-white hover:underline cursor-pointer text-left"
+                      >
+                        {post.author}
+                      </button>
+                    ) : (
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{post.author}</p>
+                    )}
                     {post.authorIsVerified && (
                       <img src="/icons/verification/lvl2_verified.png" alt="Verified" className="h-3.5 w-3.5 object-contain" title="Verified" />
                     )}

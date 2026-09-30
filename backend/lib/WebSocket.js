@@ -214,7 +214,8 @@ async function initSocket(httpServer) {
             if (notification) {
               io.to(String(recipientId)).emit('notification', notification);
             }
-            io.to(String(recipientId)).emit('conversationMessageNotification', messagePayload);
+            io.to(String(recipientId)).emit('newMessage', message);
+            io.to(String(recipientId)).emit('conversationMessageNotification', message);
           },
         });
         io.to(message.conversation_id).emit('newMessage', message);
@@ -234,6 +235,7 @@ async function initSocket(httpServer) {
             if (notification) {
               io.to(String(recipientId)).emit('notification', notification);
             }
+            io.to(String(recipientId)).emit('messageReplied', reply);
             io.to(String(recipientId)).emit('conversationMessageNotification', reply);
           },
         });
@@ -277,6 +279,9 @@ async function initSocket(httpServer) {
           pinned_messages: inbox.pinned_messages,
           message_id: String(payload.message_id),
         });
+        if (inbox.membership_event_message) {
+          io.to(String(inbox._id)).emit('newMessage', inbox.membership_event_message);
+        }
         acknowledge(callback, inbox);
       } catch (error) {
         rejectEvent(socket, 'messagePin', callback, error);
@@ -295,6 +300,9 @@ async function initSocket(httpServer) {
           pinned_messages: inbox.pinned_messages,
           message_id: String(payload.message_id),
         });
+        if (inbox.membership_event_message) {
+          io.to(String(inbox._id)).emit('newMessage', inbox.membership_event_message);
+        }
         acknowledge(callback, inbox);
       } catch (error) {
         rejectEvent(socket, 'messageUnpin', callback, error);
@@ -408,6 +416,12 @@ async function initSocket(httpServer) {
           payload.image_key,
           accountId
         );
+        if (inbox.membership_event_message) {
+          io.to(String(inbox._id)).emit(
+            'newMessage',
+            inbox.membership_event_message
+          );
+        }
         io.to(String(inbox._id)).emit('groupProfileImageUpdated', inbox);
         acknowledge(callback, inbox);
       } catch (error) {

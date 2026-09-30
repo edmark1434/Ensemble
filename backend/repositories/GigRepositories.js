@@ -187,7 +187,7 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
                 JOIN gig_contracts gc ON r.contract_id = gc.contract_id
                 JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
                 JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
             ) as "clientRating",
             (
                 SELECT COUNT(r.rating_id)
@@ -195,7 +195,7 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
                 JOIN gig_contracts gc ON r.contract_id = gc.contract_id
                 JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
                 JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
             ) as "ratingCount",
             a.display_name as "postedBy",
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
@@ -310,7 +310,7 @@ async function getSavedGigsRepository(accountId) {
                 JOIN gig_contracts gc ON r.contract_id = gc.contract_id
                 JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
                 JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
             ) as "clientRating",
             (
                 SELECT COUNT(r.rating_id)
@@ -318,7 +318,7 @@ async function getSavedGigsRepository(accountId) {
                 JOIN gig_contracts gc ON r.contract_id = gc.contract_id
                 JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
                 JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
             ) as "ratingCount",
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
             (SELECT json_agg(f.path) FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id) as gallery,
@@ -526,7 +526,7 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
                 JOIN gig_contracts gc ON r.contract_id = gc.contract_id
                 JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
                 JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
             ) as "clientRating",
             (
                 SELECT COUNT(r.rating_id)
@@ -534,7 +534,7 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
                 JOIN gig_contracts gc ON r.contract_id = gc.contract_id
                 JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
                 JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
             ) as "ratingCount",
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
             (SELECT json_agg(f.path) FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index > 0) as gallery,
@@ -567,16 +567,16 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
                       'stars', r.stars_out_of_five,
                       'feedback', r.feedback,
                       'createdAt', r.created_at,
-                      'reviewerName', a.display_name,
+                      'reviewerName', client_acc.display_name,
                       'reviewerAvatar', f.path
                   ))
                   FROM ratings r
-                  JOIN accounts a ON r.account_id = a.account_id
-                  LEFT JOIN files f ON a.avatar_file_id = f.file_id
                   JOIN gig_contracts gc ON r.contract_id = gc.contract_id
                   JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+                  JOIN accounts client_acc ON gr.client_account_id = client_acc.account_id
+                  LEFT JOIN files f ON client_acc.avatar_file_id = f.file_id
                   JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
-                  WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+                  WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
               ) as reviews,
             g.freelancer_account_id = ANY($4::uuid[]) as "isOwnGig",
             g.freelancer_account_id = ANY($3::uuid[]) as "canManageGig",
@@ -784,7 +784,7 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
 
         // 1. Verify the order exists, is Pending, and belongs to the freelancer
         const reqCheckQuery = `
-            SELECT gr.gig_request_id, gr.status, gt.gig_tier_id, gt.rate_credits, gt.no_of_revisions_max, gt.gig_id, gr.client_account_id, g.freelancer_account_id, g.title as gig_title
+            SELECT gr.gig_request_id, gr.status, gt.gig_tier_id, gt.rate_credits, gt.delivery_days, gt.no_of_revisions_max, gt.gig_id, gr.client_account_id, g.freelancer_account_id, g.title as gig_title
             FROM gig_requests gr
             JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
             JOIN gigs g ON gt.gig_id = g.gig_id
@@ -799,7 +799,7 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
             throw new Error('Gig order is not in Pending status');
         }
 
-        const { rate_credits, no_of_revisions_max, gig_id, client_account_id, freelancer_account_id: freelancerAccountId, gig_title } = reqCheck.rows[0];
+        const { rate_credits, delivery_days, no_of_revisions_max, gig_id, client_account_id, freelancer_account_id: freelancerAccountId, gig_title } = reqCheck.rows[0];
 
         const orderCredits = Number(rate_credits);
         if (!Number.isSafeInteger(orderCredits) || orderCredits <= 0) {
@@ -860,11 +860,15 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
             [orderId]
         );
 
+        const deliveryDays = Number(delivery_days) || 3;
+        const totalGigHours = deliveryDays * 24;
+        const gigContractDeadlineAt = new Date(Date.now() + totalGigHours * 3600 * 1000);
+
         // 3. Create the contract
         const contractRes = await client.query(
-            `INSERT INTO contracts (contract_type, payment_type, starts_at, rate_credits, revision_price_credits, status)
-             VALUES ($1, $2, NOW(), $3, $4, $5) RETURNING contract_id`,
-            ['gig', 'milestone', rate_credits, 50, 'Active']
+            `INSERT INTO contracts (contract_type, payment_type, starts_at, deadline_at, rate_credits, revision_price_credits, status)
+             VALUES ($1, $2, NOW(), $3, $4, $5, $6) RETURNING contract_id`,
+            ['gig', 'milestone', gigContractDeadlineAt, rate_credits, 50, 'Active']
         );
         const contractId = contractRes.rows[0].contract_id;
 
@@ -905,14 +909,45 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
         }
 
         const msQuery = `
-            INSERT INTO contract_milestones (contract_id, index, name, description, deadline, no_of_revisions_max, status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO contract_milestones (contract_id, index, name, description, deadline, no_of_revisions_max, status, started_at, deadline_at, credits)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         `;
+        const perMilestoneCredits = Math.floor(orderCredits / (milestones.length || 1));
+        const baseGigHours = Math.max(1, Math.floor(totalGigHours / (milestones.length || 1)));
+        let sumGigAllocated = 0;
+        const milestoneHoursList = [];
+
+        for (let i = 0; i < milestones.length; i++) {
+            let h;
+            if (i === milestones.length - 1) {
+                h = Math.max(1, totalGigHours - sumGigAllocated);
+            } else {
+                h = baseGigHours;
+            }
+            sumGigAllocated += h;
+            milestoneHoursList.push(h);
+        }
+
         for (let i = 0; i < milestones.length; i++) {
             const m = milestones[i];
+            const isFirst = i === 0;
+            const startedAt = isFirst ? new Date() : null;
+            const mDeadlineHours = milestoneHoursList[i];
+            let deadlineAt = null;
+            if (isFirst && mDeadlineHours > 0) {
+                deadlineAt = new Date(startedAt.getTime() + mDeadlineHours * 3600 * 1000);
+            }
             await client.query(msQuery, [
-                contractId, m.index || i, m.name, m.description || '', 0, no_of_revisions_max || 0,
-                i === 0 ? 'active' : 'pending'
+                contractId, 
+                m.index || i, 
+                m.name, 
+                m.description || '', 
+                mDeadlineHours, 
+                no_of_revisions_max || 0,
+                isFirst ? 'active' : 'pending',
+                startedAt,
+                deadlineAt,
+                perMilestoneCredits
             ]);
         }
 

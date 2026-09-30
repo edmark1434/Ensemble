@@ -75,7 +75,7 @@ export const OrderMilestonesStep: React.FC<OrderMilestonesProps> = ({
       <div className="p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
         <div>
           <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase">Total Escrow Bid</span>
-          <p className="text-sm font-extrabold text-yellow-500 flex items-center gap-1">
+          <p className="text-sm font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1">
             <CreditIcon className="h-4 w-4" /> {totalBid.toLocaleString()}
           </p>
         </div>
@@ -101,7 +101,7 @@ export const OrderMilestonesStep: React.FC<OrderMilestonesProps> = ({
               <div className="flex items-center gap-2">
                 <GripVertical className="h-4 w-4 text-gray-300 dark:text-zinc-600 cursor-grab active:cursor-grabbing" />
                 <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Layers className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500" /> Milestone {idx + 1} - <CreditIcon className="h-3 w-3 text-yellow-500" /> {milestonePayout.toLocaleString()} Credits
+                  <Layers className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500" /> Milestone {idx + 1} - <CreditIcon className="h-3 w-3 text-amber-500 dark:text-amber-400" /> {milestonePayout.toLocaleString()} Credits
                 </span>
               </div>
               {milestones.length > 1 && (

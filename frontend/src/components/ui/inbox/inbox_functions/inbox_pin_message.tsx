@@ -36,6 +36,7 @@ interface InboxPinnedBannerProps {
   messages: Message[];
   onUnpin: (messageId: string) => void;
   onJumpTo?: (messageId: string) => void;
+  onViewAllPins?: () => void;
 }
 
 export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
@@ -44,6 +45,7 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
   messages,
   onUnpin,
   onJumpTo,
+  onViewAllPins,
 }) => {
   const liveGoogleMeeting = useChatState(
     (state) => state.googleMeetingsByConversation[String(selectedConversation._id)]
@@ -110,34 +112,17 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
           )}
         </div>
       )}
-      {!hasRestrictedMessageTools && pinnedMessages.map((pin) => {
-        const msg = messages.find((m) => m._id === pin.message_id);
-        if (!msg) return null;
-
-        return (
-          <div
-            key={pin.message_id}
-            className="flex items-center justify-between gap-2 py-1 text-xs text-gray-600 dark:text-zinc-300"
-            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-          >
-            <button
-              type="button"
-              onClick={() => onJumpTo?.(pin.message_id)}
-              className="flex items-center gap-2 min-w-0 flex-1 text-left hover:text-gray-900 dark:text-white transition"
-            >
-              <Pin className="h-3.5 w-3.5 text-yellow-400 flex-shrink-0" />
-              <span className="truncate">{msg.message_content || "Photo"}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onUnpin(pin.message_id)}
-              className="rounded-full p-1 text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white transition flex-shrink-0"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        );
-      })}
+      {!hasRestrictedMessageTools && pinnedMessages.length > 0 && (
+        <button
+          type="button"
+          onClick={onViewAllPins}
+          className="flex w-full items-center gap-2 rounded-lg bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/20 px-3 py-2 text-xs font-semibold text-yellow-800 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-500/20 transition"
+          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+        >
+          <Pin className="h-4 w-4" />
+          <span>View All Pins ({pinnedMessages.length})</span>
+        </button>
+      )}
       </div>
     </div>
   );

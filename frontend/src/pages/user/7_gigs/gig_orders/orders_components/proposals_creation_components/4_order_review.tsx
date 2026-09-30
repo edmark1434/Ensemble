@@ -55,7 +55,7 @@ export const OrderReviewStep: React.FC<OrderReviewProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <div className="p-2.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
               <span className="text-gray-500 dark:text-zinc-500 block text-[10px]">Proposed Bid</span>
-              <span className="text-sm font-extrabold text-yellow-500 flex items-center gap-1">
+              <span className="text-sm font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1">
                 <CreditIcon className="h-4 w-4" /> {totalBid.toLocaleString()}
               </span>
             </div>
@@ -109,7 +109,7 @@ export const OrderReviewStep: React.FC<OrderReviewProps> = ({
                 <div className="flex justify-between items-center text-xs font-bold text-gray-900 dark:text-white">
                   <span className="text-gray-700 dark:text-zinc-300">Milestone {idx + 1}: {m.name}</span>
                   <span className="text-gray-700 dark:text-zinc-300 font-mono flex items-center gap-1">
-                    <CreditIcon className="h-3 w-3 text-yellow-500" /> {milestonePayout.toLocaleString()}
+                    <CreditIcon className="h-3 w-3 text-amber-500 dark:text-amber-400" /> {milestonePayout.toLocaleString()}
                   </span>
                 </div>
                 {m.description && <p className="text-[11px] text-gray-500 dark:text-zinc-400 break-all whitespace-pre-wrap">{m.description}</p>}

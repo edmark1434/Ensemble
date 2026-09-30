@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import toast from "react-hot-toast";
 import {
   FileText,
   Minus,
@@ -240,8 +241,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       setReplyTo(null);
       clearMedia();
       setTyping(conversationId, false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Unable to send chat message:", error);
+      toast.error(error?.message || error?.response?.data?.message || "Failed to send message");
     } finally {
       setIsSending(false);
     }
@@ -318,11 +320,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   return (
     <div ref={windowRef} className="flex h-[480px] w-[330px] flex-col overflow-hidden rounded-t-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 shadow-2xl sm:w-[360px]">
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 2px; }
-        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
         .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
       `}</style>
       <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-zinc-900 p-3 px-4">
@@ -442,8 +444,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         className="flex-1 space-y-2 overflow-y-auto custom-scrollbar bg-white dark:bg-zinc-950 p-3 text-[13px]"
       >
         {isLoading ? (
-          <div className="flex h-full items-center justify-center text-zinc-500">
-            Loading messages...
+          <div className="flex h-full items-center justify-center text-zinc-500 gap-2 flex-col">
+            <div className="flex gap-1 items-center">
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <span className="text-sm font-medium opacity-80 mt-1">Loading...</span>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-zinc-500">
@@ -459,19 +466,54 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   (item) => String(item._id) === String(message.message_id_reply)
                 )
               : undefined;
+
+            if (message.message_type === 'system') {
+              return (
+                <div key={message._id} className="flex flex-col items-center justify-center my-4 w-full">
+                  <span className="text-xs font-medium text-gray-500 dark:text-zinc-400 bg-gray-100 dark:bg-white/5 px-3 py-1 rounded-full text-center max-w-[80%]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                    {message.message_content}
+                  </span>
+                </div>
+              );
+            }
+
             return (
               <div
                 key={message._id}
-                className={`group flex flex-col ${isMe ? "items-end" : "items-start"}`}
+                className={`group flex flex-col min-w-0 ${isMe ? "items-end" : "items-start"}`}
               >
                 {!hasRestrictedMessageTools && pinnedIds.has(String(message._id)) && (
-                  <span className="mb-1 flex items-center gap-1 text-[9px] text-yellow-400">
-                    <Pin size={10} /> Pinned
+                  <span className="mb-1 flex items-center gap-1 text-[9px] font-medium text-yellow-600 dark:text-yellow-400">
+                    <Pin size={10} className="fill-yellow-600/20 dark:fill-yellow-400/20" /> Pinned
                   </span>
                 )}
-                <div className={`flex max-w-[90%] items-center gap-1 ${isMe ? "flex-row-reverse" : ""}`}>
+                <div className={`flex max-w-[100%] min-w-0 items-end gap-1.5 ${isMe ? "flex-row-reverse" : ""}`}>
+                  {!isMe && (
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full overflow-hidden bg-zinc-200 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-sm mt-auto mb-1">
+                      {(() => {
+                        const avatarKey = activeUser?.avatarPayload?.[String(message.sender_id)] || activeUser?.avatarUrl;
+                        return avatarKey ? (
+                          <img 
+                            src={chatAttachmentUrl(avatarKey)} 
+                            alt={message.author_name || "User"} 
+                            className="w-full h-full object-cover" 
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(message.author_name || "User")}&background=6366f1&color=fff&bold=true`;
+                            }}
+                          />
+                        ) : (
+                          <img 
+                            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(message.author_name || "User")}&background=6366f1&color=fff&bold=true`} 
+                            alt="User" 
+                            className="w-full h-full object-cover" 
+                          />
+                        );
+                      })()}
+                    </div>
+                  )}
                   <div
-                    className={`relative max-w-[85%] break-words rounded-2xl px-3 py-2 leading-relaxed shadow-sm ${
+                    className={`relative max-w-[85%] min-w-0 break-words rounded-2xl px-3 py-2 leading-relaxed shadow-sm ${
                       isMe
                         ? "rounded-br-[4px] bg-blue-600 text-white"
                         : "rounded-bl-[4px] border border-zinc-200 bg-zinc-100 text-zinc-900 dark:border-white/5 dark:bg-[#1f2230] dark:text-zinc-200"
@@ -574,9 +616,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                 href={url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="mt-1 flex items-center gap-2 rounded-lg bg-black/20 p-2 text-[10px]"
+                                className={`mt-1 flex items-center gap-2 rounded-lg p-2.5 text-xs transition-colors ${
+                                  isMe
+                                    ? "bg-white/20 text-white hover:bg-white/30"
+                                    : "bg-gray-100 dark:bg-black/40 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-black/60 border border-gray-200 dark:border-white/10"
+                                }`}
                               >
-                                <FileText size={15} />
+                                <FileText className={isMe ? "text-white" : "text-blue-600 dark:text-blue-400"} size={16} />
                                 <span className="truncate">
                                   {attachment.attachment_name || "Attachment"}
                                 </span>
@@ -779,30 +825,51 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       )}
 
       {mediaList.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto border-t border-zinc-200 dark:border-white/10 px-3 py-2">
+        <div className="flex flex-col border-t border-zinc-200 dark:border-white/10 bg-zinc-50/30 dark:bg-zinc-900/30">
+          <div className="flex items-center justify-between px-3 pt-2.5 pb-0.5">
+            <span className="text-[10px] font-medium text-zinc-500">Attached files</span>
+            <span className="text-[10px] font-medium text-zinc-500">
+              {(mediaList.reduce((sum, m) => sum + m.file.size, 0) / (1024 * 1024)).toFixed(1)}MB / 250MB
+            </span>
+          </div>
+          <div className="flex gap-2.5 overflow-x-auto custom-scrollbar px-3 pb-3 pt-1.5">
           {mediaList.map((media) => (
-            <div key={media.id} className="relative flex h-20 min-w-20 max-w-40 items-center justify-center overflow-hidden rounded-lg border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/10 text-[9px]">
-              {media.type === "file" ? (
-                <div className="flex w-36 items-center gap-2 px-2 text-zinc-700 dark:text-zinc-300">
-                  <FileText size={18} className="flex-shrink-0" />
-                  <span className="truncate">{media.file.name}</span>
+            <div key={media.id} className="relative flex h-[90px] min-w-[90px] max-w-[170px] flex-shrink-0 pt-2.5 pr-2.5 text-[9px]">
+              <div className="flex w-full h-full items-center justify-center overflow-hidden rounded-lg border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/10">
+                {media.type === "file" ? (
+                  <div className="flex w-36 items-center gap-2 px-2 text-zinc-700 dark:text-zinc-300">
+                    <FileText size={18} className="flex-shrink-0" />
+                    <span className="truncate">{media.file.name}</span>
+                  </div>
+                ) : media.type === "video" ? (
+                  <video
+                    src={media.previewUrl}
+                    muted
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <img
+                    src={media.previewUrl}
+                    alt={media.file.name}
+                    className="h-full w-full object-cover"
+                  />
+                )}
+                {/* Size Indicator Overlay */}
+                <div className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[7px] font-medium text-white backdrop-blur-md z-10 pointer-events-none">
+                  {(media.file.size / (1024 * 1024)).toFixed(1)}MB
                 </div>
-              ) : media.type === "video" ? (
-                <video
-                  src={media.previewUrl}
-                  muted
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <img
-                  src={media.previewUrl}
-                  alt={media.file.name}
-                  className="h-full w-full object-cover"
-                />
-              )}
-              <button onClick={() => removeMedia(media.id)} className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5"><X size={9} /></button>
+              </div>
+              <button 
+                onClick={(e) => { e.stopPropagation(); removeMedia(media.id); }} 
+                className="absolute right-0 top-0 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-200/90 p-0 text-zinc-600 shadow-sm hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              >
+                <X size={12} strokeWidth={2.5} />
+              </button>
             </div>
           ))}
+          {/* Spacer to ensure the last item's padding/button is fully visible when scrolled to the right end */}
+          <div className="w-3 flex-shrink-0" />
+          </div>
         </div>
       )}
       {typingCount > 0 && (

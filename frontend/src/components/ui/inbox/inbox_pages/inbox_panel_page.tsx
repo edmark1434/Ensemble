@@ -10,6 +10,7 @@ import { MarketplaceContextCard } from "../inbox_components/marketplace_context_
 export const InboxPanelPage = ({
   selectedConversation,
   getConversationName,
+  getMemberLimit,
   getAvatar,
   messages,
   visibleMessages,
@@ -27,7 +28,7 @@ export const InboxPanelPage = ({
   setMessageInput,
   handleSendMessage,
   isSending,
-  typingCount,
+  typingNames,
   replyToMessage,
   editingMessage,
   cancelReply,
@@ -40,7 +41,8 @@ export const InboxPanelPage = ({
   onUnpin,
   onJumpToPinned,
   textareaRef,
-  onUpdateGroupName,
+uploadLimitMB,
+onUpdateGroupName,
   currentUserId,
   getMemberName,
   getMemberAvatar,
@@ -51,11 +53,12 @@ export const InboxPanelPage = ({
   showDetails,
   onShowDetailsChange,
   onPreviewAttachment,
+  deleteConversation,
 }: any) => {
 
   if (!selectedConversation) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-zinc-500">
+      <div className="flex-1 flex items-center justify-center bg-white dark:bg-dark-surface text-gray-500 dark:text-zinc-500">
         Select a conversation to start messaging
       </div>
     );
@@ -76,6 +79,7 @@ export const InboxPanelPage = ({
         <InboxPanelHeader
           selectedConversation={selectedConversation}
           getConversationName={getConversationName}
+          getMemberLimit={getMemberLimit}
           getAvatar={getAvatar}
           onToggleDetails={() => onShowDetailsChange?.(!showDetails)}
         />
@@ -91,6 +95,7 @@ export const InboxPanelPage = ({
           messages={messages}
           onUnpin={onUnpin}
           onJumpTo={onJumpToPinned}
+          onViewAllPins={() => onShowDetailsChange?.(true)}
         />
 
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -118,7 +123,7 @@ export const InboxPanelPage = ({
             setMessageInput={setMessageInput}
             handleSendMessage={handleSendMessage}
             isSending={isSending}
-            typingCount={typingCount}
+            typingNames={typingNames}
             replyToMessage={replyToMessage}
             editingMessage={editingMessage}
             cancelReply={cancelReply}
@@ -128,7 +133,8 @@ export const InboxPanelPage = ({
             handleFileChange={handleFileChange}
             removeMedia={removeMedia}
             textareaRef={textareaRef}
-          />
+uploadLimitMB={uploadLimitMB}
+/>
           )}
         </div>
       </div>
@@ -138,6 +144,7 @@ export const InboxPanelPage = ({
         isOpen={showDetails}
         selectedConversation={selectedConversation}
         getConversationName={getConversationName}
+        getMemberLimit={getMemberLimit}
         getAvatar={getAvatar}
         messages={messages}
         pinnedMessages={pinnedMessages}
@@ -152,6 +159,7 @@ export const InboxPanelPage = ({
         onUpdateGroupProfileImage={onUpdateGroupProfileImage}
         onJumpToMessage={onJumpToPinned}
         onPreviewAttachment={onPreviewAttachment}
+        onDeleteConversation={deleteConversation}
       />
     </div>
   );

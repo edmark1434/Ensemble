@@ -39,7 +39,7 @@ async function sendJobOfferController(req, res) {
                         message: `@${clientHandle} Sent you a Contract Offer for ${title}`,
                         reference_table: 'contracts',
                         reference_prefix: 'offer_received',
-                        reference_path: `/jobs/proposals/sent/${proposalId}`,
+                        reference_path: `/jobs/proposals/sent/${proposalId}/offer/${contractId}`,
                         reference_id: contractId,
                         account_id: freelancer_account_id
                     });
@@ -231,10 +231,72 @@ async function createContractDisputeController(req, res) {
     }
 }
 
+async function extendContractDeadlineController(req, res) {
+    try {
+        const personalAccountId = req.user.account_id || req.user.accountId;
+        const { contractId } = req.params;
+        const { extensionDays } = req.body;
+
+        if (!contractId) {
+            return res.status(400).json({ success: false, message: 'Contract ID is required' });
+        }
+        if (!extensionDays || isNaN(Number(extensionDays))) {
+            return res.status(400).json({ success: false, message: 'extensionDays must be a number' });
+        }
+
+        const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
+        const { extendContractDeadlineService } = require('../services/MilestoneServices');
+        const result = await extendContractDeadlineService(contractId, actorIds[0], Number(extensionDays));
+
+        return res.status(200).json({
+            success: true,
+            message: `Contract deadline extended by ${extensionDays} day(s).`,
+            data: result,
+        });
+    } catch (err) {
+        console.error('extendContractDeadlineController error:', err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || 'Internal server error',
+        });
+    }
+}
+
+async function cancelContractController(req, res) {
+    try {
+        const personalAccountId = req.user.account_id || req.user.accountId;
+        const { contractId } = req.params;
+
+        if (!contractId) {
+            return res.status(400).json({ success: false, message: 'Contract ID is required' });
+        }
+
+        const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
+        const { cancelContractService } = require('../services/MilestoneServices');
+        const result = await cancelContractService(contractId, actorIds[0]);
+
+        return res.status(200).json({
+            success: true,
+            message: result.isPartial
+                ? `Contract closed. ${result.refundedCredits} credits for unfinished milestones were refunded to your wallet.`
+                : `Contract cancelled. ${result.refundedCredits} credits were refunded to your wallet.`,
+            data: result,
+        });
+    } catch (err) {
+        console.error('cancelContractController error:', err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || 'Internal server error',
+        });
+    }
+}
+
 module.exports = {
     sendJobOfferController,
     acceptJobOfferController,
     rejectJobOfferController,
     getContractsController,
-    createContractDisputeController
+    createContractDisputeController,
+    extendContractDeadlineController,
+    cancelContractController,
 };

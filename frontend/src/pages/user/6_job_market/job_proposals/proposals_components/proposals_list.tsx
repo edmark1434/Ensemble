@@ -25,6 +25,7 @@ export interface ProposalItemData {
   jobId: string;
   contractId?: string;
   jobTitle: string;
+  jobBanner?: string;
   partyName: string;
   clientAccountId?: string;
   freelancerAccountId?: string;
@@ -44,6 +45,8 @@ export interface ProposalItemData {
   tosContent: string;
   tosTitle?: string;
   tosDescription?: string;
+  totalApplicants?: number;
+  avgBid?: number;
   submittedAt: string;
   submittedAgo?: string;
   jobPostedAt?: string;
@@ -123,7 +126,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
       <div
         className={
           viewType === "grid"
-            ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+            ? "grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4"
             : "space-y-3.5"
         }
       >
@@ -146,8 +149,9 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
     switch (status) {
       case "Accepted":
       case "Hired":
-        return "bg-emerald-100 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
       case "Approved":
+      case "approved":
+        return "bg-emerald-100 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
       case "Shortlisted":
         return "bg-blue-100 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400";
       case "Rejected":
@@ -163,7 +167,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
       transition={{ duration: 0.3, ease: "easeInOut" }}
       className={
         viewType === "grid"
-          ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+          ? "grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4"
           : "space-y-3.5"
       }
     >
@@ -291,8 +295,8 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                   <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
                     PROPOSED BID
                   </span>
-                  <div className="flex items-center gap-1.5 text-yellow-500">
-                    <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
+                  <div className="flex items-center gap-1.5 text-amber-500 dark:text-amber-400">
+                    <CreditIcon className="h-5 w-5 text-amber-500 dark:text-amber-400 shrink-0" />
                     <span className="text-lg font-black tracking-tight">
                       {item.bidAmount.toLocaleString()}
                     </span>

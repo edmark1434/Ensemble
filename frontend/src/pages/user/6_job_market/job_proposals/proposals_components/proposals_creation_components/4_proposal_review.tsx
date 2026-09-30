@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, Layers, FileText, Percent, RefreshCcw, Send, Edit2 } from "lucide-react";
+import { Check, Layers, FileText, Percent, RefreshCcw, Send, Edit2, Clock, HelpCircle } from "lucide-react";
 import { JobRichText } from "../../../job_components/JobRichText";
 import type { Job } from "../../../job_components/job_lists";
 import type { Milestone } from "./3_proposal_milestones";
@@ -34,6 +34,7 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
   const count = milestones.length || 1;
   const milestonePayout = Math.floor(totalBid / count);
   const overageRateBonus = Math.floor(milestonePayout * (additionalWorkRate / 100));
+  const totalHours = milestones.reduce((sum, m) => sum + (Number(m.hours) || 0), 0);
 
   return (
     <div className="space-y-5 text-left">
@@ -41,6 +42,19 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
         <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-0.5">Review Proposal Application</h2>
         <p className="text-xs text-gray-500 dark:text-zinc-400">Review all proposed terms and milestone schedules before submitting.</p>
       </div>
+
+      {job && (
+        <div className="p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02] text-xs">
+          <div className="flex justify-between items-center mb-1">
+            <span className="font-bold text-gray-900 dark:text-white text-sm">Target: {job.title}</span>
+            <span className="font-mono text-gray-600 dark:text-zinc-400 font-semibold">{job.postedBy}</span>
+          </div>
+          <div className="flex justify-between items-center text-gray-500 dark:text-zinc-500 text-[10.5px] uppercase tracking-wider font-bold">
+             <span>Budget: {job.priceRange} Credits</span>
+             <span>Timeline: {job.timeline}</span>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3.5 text-xs">
         {/* 01. Cover Pitch & Financials */}
@@ -52,18 +66,45 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-2.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
-              <span className="text-gray-500 dark:text-zinc-500 block text-[10px]">Proposed Bid</span>
-              <span className="text-sm font-extrabold text-yellow-500 flex items-center gap-1">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
+              <span className="text-gray-500 dark:text-zinc-500 block text-[10px] mb-1">Proposed Bid</span>
+              <span className="text-sm font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1">
                 <CreditIcon className="h-4 w-4" /> {totalBid.toLocaleString()}
+              </span>
+              <span className="text-[10px] text-gray-500 dark:text-zinc-500 mt-1 block">
+                You earn <strong className="text-gray-600 dark:text-zinc-400">{(Math.floor(totalBid * 0.9)).toLocaleString()}</strong> (-10% platform fee)
               </span>
             </div>
 
-            <div className="p-2.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
-              <span className="text-gray-500 dark:text-zinc-500 block text-[10px]">Additional Work Rate</span>
+            <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
+              <div className="flex items-center gap-1 mb-1">
+                <span className="text-gray-500 dark:text-zinc-500 block text-[10px]">Additional Work Rate</span>
+                <div className="relative group/tooltip flex items-center">
+                  <HelpCircle className="h-3 w-3 text-gray-400 dark:text-zinc-500 cursor-help" />
+                  <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover/tooltip:block w-40 p-2 bg-white dark:bg-black text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-white/10 text-[9px] rounded-lg shadow-xl z-10 text-center leading-relaxed">
+                    The standard 10% platform fee applies to all extra funds charged through the platform.
+                  </div>
+                </div>
+              </div>
               <span className="text-sm font-extrabold text-gray-700 dark:text-zinc-300 flex items-center gap-1">
-                <Percent className="h-3.5 w-3.5" /> +{additionalWorkRate}% / Revision Pass
+                +{additionalWorkRate}% / Extra Pass
+              </span>
+              <div className="text-[10px] text-gray-500 dark:text-zinc-500 mt-1 space-y-0.5">
+                <div>Charge <strong className="text-amber-500 dark:text-amber-400">+{overageRateBonus.toLocaleString()}</strong> / extra pass</div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[9px] text-gray-600 dark:text-zinc-400 font-bold">Earn {(Math.floor(overageRateBonus * 0.9)).toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
+              <span className="text-gray-500 dark:text-zinc-500 block text-[10px] mb-1">Total Estimated Hours</span>
+              <span className="text-sm font-extrabold text-gray-700 dark:text-zinc-300 flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" /> {totalHours} hrs
+              </span>
+              <span className="text-[10px] text-gray-500 dark:text-zinc-500 mt-1 block">
+                Within client timeline max ({job?.timeline || "N/A"})
               </span>
             </div>
           </div>
@@ -108,9 +149,12 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
               <div key={m.id} className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] space-y-1">
                 <div className="flex justify-between items-center text-xs font-bold text-gray-900 dark:text-white">
                   <span className="text-gray-700 dark:text-zinc-300">Milestone {idx + 1}: {m.name}</span>
-                  <span className="text-gray-700 dark:text-zinc-300 font-mono flex items-center gap-1">
-                    <CreditIcon className="h-3 w-3 text-yellow-500" /> {milestonePayout.toLocaleString()}
-                  </span>
+                  <div className="flex flex-col items-end">
+                    <span className="text-gray-700 dark:text-zinc-300 font-mono flex items-center gap-1">
+                      <CreditIcon className="h-3 w-3 text-amber-500 dark:text-amber-400" /> {milestonePayout.toLocaleString()}
+                    </span>
+                    <span className="text-[9px] text-gray-600 dark:text-zinc-400">Net: {(Math.floor(milestonePayout * 0.9)).toLocaleString()}</span>
+                  </div>
                 </div>
                 {m.description && <p className="text-[11px] text-gray-500 dark:text-zinc-400 break-all whitespace-pre-wrap">{m.description}</p>}
                 <div className="flex gap-4 text-[10px] text-gray-500 dark:text-zinc-500 pt-1">

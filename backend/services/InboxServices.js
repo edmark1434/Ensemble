@@ -275,6 +275,8 @@ function normalizeMembers(members, ownerId) {
     for (const member of members || []) {
         const accountId = String(member.account_id || member);
         if (!accountId || accountId === 'undefined') continue;
+        const existing = byAccountId.get(accountId);
+        if (existing?.role === 'owner') continue;
         byAccountId.set(accountId, {
             account_id: accountId,
             role: member.role === 'admin' ? 'admin' : 'member',
@@ -383,13 +385,34 @@ async function createGroupServices(payload, accountId) {
     const result = await createInboxRepositories({
         conversation_name: conversationName,
         conversation_type: 'group',
+        member_limit: payload.member_limit ? parseInt(payload.member_limit, 10) : 12,
         members,
         pinned_messages: [],
         created_at: now,
         updated_at: now,
         deleted_at: null,
     });
+
+    const actorName = await actorDisplayName(ownerId);
+    const insertedId = await createMessageRepositories({
+        conversation_id: String(result.insertedId),
+        sender_id: String(ownerId),
+        message_type: 'system',
+        message_content: `${actorName} created the group chat.`,
+        message_id_reply: null,
+        attachments: [],
+        links: [],
+        message_react: [],
+        read_by: [{ account_id: String(ownerId), read_at: now }],
+        is_edited: false,
+        is_deleted: false,
+        created_at: now,
+        updated_at: now,
+    });
+
     const inbox = await getInboxByIdRepositories(result.insertedId);
+    inbox.membership_event_message = await getMessageByIdRepositories(insertedId);
+
     await persistChatNotifications({
         inbox,
         actorId: ownerId,
@@ -900,17 +923,72 @@ async function pinMessageServices(conversationId, messageId, accountId) {
     ) {
         throw new ChatServiceError('Message not found in this conversation', 404);
     }
+    const currentlyPinned = inbox.pinned_messages || [];
+    if (
+        currentlyPinned.length >= 25 &&
+        !currentlyPinned.some(p => String(p.message_id) === String(messageId))
+    ) {
+        throw new ChatServiceError('Maximum of 25 pinned messages allowed.', 400);
+    }
     const actorAccountId = await resolveConversationActorAccountId(inbox, accountId);
-    return await pinMessageRepositories(conversationId, {
+    const updatedInbox = await pinMessageRepositories(conversationId, {
         message_id: String(messageId),
         pinned_by: actorAccountId,
         pinned_at: new Date(),
     });
+
+    const actorName = await actorDisplayName(accountId);
+    const isVideo = message.attachments?.some(a => a.attachment_type === "video");
+    const fallbackText = isVideo ? "Video" : message.attachments?.length ? "Photo" : "Message";
+    const now = new Date();
+    const insertedId = await createMessageRepositories({
+        conversation_id: String(conversationId),
+        sender_id: String(accountId),
+        message_type: 'system',
+        message_content: `${actorName} pinned a ${fallbackText.toLowerCase()}.`,
+        message_id_reply: null,
+        attachments: [],
+        links: [],
+        message_react: [],
+        read_by: [{ account_id: String(accountId), read_at: now }],
+        is_edited: false,
+        is_deleted: false,
+        created_at: now,
+        updated_at: now,
+    });
+    
+    updatedInbox.membership_event_message = await getMessageByIdRepositories(insertedId);
+    return updatedInbox;
 }
 
 async function unpinMessageServices(conversationId, messageId, accountId) {
     await requireConversationMember(conversationId, accountId);
-    return await unpinMessageRepositories(conversationId, messageId);
+    const updatedInbox = await unpinMessageRepositories(conversationId, messageId);
+
+    const message = await getMessageByIdRepositories(messageId);
+    const actorName = await actorDisplayName(accountId);
+    const isVideo = message?.attachments?.some(a => a.attachment_type === "video");
+    const fallbackText = isVideo ? "video" : message?.attachments?.length ? "photo" : "message";
+    const now = new Date();
+    
+    const insertedId = await createMessageRepositories({
+        conversation_id: String(conversationId),
+        sender_id: String(accountId),
+        message_type: 'system',
+        message_content: `${actorName} unpinned a ${fallbackText}.`,
+        message_id_reply: null,
+        attachments: [],
+        links: [],
+        message_react: [],
+        read_by: [{ account_id: String(accountId), read_at: now }],
+        is_edited: false,
+        is_deleted: false,
+        created_at: now,
+        updated_at: now,
+    });
+    
+    updatedInbox.membership_event_message = await getMessageByIdRepositories(insertedId);
+    return updatedInbox;
 }
 
 async function editMessageServices(messageId, messageContent, accountId) {
@@ -930,6 +1008,8 @@ async function deleteMessageServices(messageId, accountId) {
     if (String(message.sender_id) !== actorAccountId) {
         throw new ChatServiceError('You can only delete your own messages', 403);
     }
+    // Automatically unpin the message if it is deleted
+    await unpinMessageRepositories(message.conversation_id, messageId);
     return await deleteMessageRepositories(messageId);
 }
 
@@ -948,6 +1028,23 @@ async function renameConversationServices(conversationId, conversationName, acco
     }
     await updateInboxRepositories(conversationId, {
         $set: { conversation_name: name, updated_at: new Date() },
+    });
+        const actorName = await actorDisplayName(accountId);
+    const now = new Date();
+    await createMessageRepositories({
+        conversation_id: String(conversationId),
+        sender_id: String(accountId),
+        message_type: 'system',
+        message_content: `${actorName} renamed the group chat to "${name}".`,
+        message_id_reply: null,
+        attachments: [],
+        links: [],
+        message_react: [],
+        read_by: [{ account_id: String(accountId), read_at: now }],
+        is_edited: false,
+        is_deleted: false,
+        created_at: now,
+        updated_at: now,
     });
     return await getInboxByIdRepositories(conversationId);
 }
@@ -976,7 +1073,29 @@ async function updateGroupProfileImageServices(conversationId, imageKey, account
             conversation_image_url: '',
         },
     });
-    return await getInboxByIdRepositories(conversationId);
+
+    const updatedInbox = await getInboxByIdRepositories(conversationId);
+    
+    const actorName = await actorDisplayName(accountId);
+    const now = new Date();
+    const insertedId = await createMessageRepositories({
+        conversation_id: String(conversationId),
+        sender_id: String(accountId),
+        message_type: 'system',
+        message_content: `${actorName} changed the group photo.`,
+        message_id_reply: null,
+        attachments: [],
+        links: [],
+        message_react: [],
+        read_by: [{ account_id: String(accountId), read_at: now }],
+        is_edited: false,
+        is_deleted: false,
+        created_at: now,
+        updated_at: now,
+    });
+    
+    updatedInbox.membership_event_message = await getMessageByIdRepositories(insertedId);
+    return updatedInbox;
 }
 
 async function updateGroupMemberServices(conversationId, targetAccountId, payload, accountId) {
@@ -1062,6 +1181,27 @@ async function updateGroupMemberServices(conversationId, targetAccountId, payloa
                 requestedStatus === 'left'
                     ? `${memberName} left the group chat.`
                     : `${memberName} was removed from the group chat.`,
+            message_id_reply: null,
+            attachments: [],
+            links: [],
+            message_react: [],
+            read_by: [{ account_id: String(accountId), read_at: now }],
+            is_edited: false,
+            is_deleted: false,
+            deleted_at: null,
+            created_at: now,
+            updated_at: now,
+        });
+        membershipEventMessage = await getMessageByIdRepositories(insertedId);
+    } else if (!existing || (existing.status !== 'active' && requestedStatus === 'active')) {
+        const memberName = await actorDisplayName(targetId);
+        const actorName = await actorDisplayName(accountId);
+        const now = new Date();
+        const insertedId = await createMessageRepositories({
+            conversation_id: String(conversationId),
+            sender_id: String(accountId),
+            message_type: 'system',
+            message_content: `${actorName} added ${memberName} to the group chat.`,
             message_id_reply: null,
             attachments: [],
             links: [],
@@ -1536,6 +1676,7 @@ async function enrichInboxesWithMemberProfiles(inboxes, actorIds = []) {
             a.account_id, 
             COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), a.display_name, a.handle) AS display_name,
             a.handle, 
+            p.name AS subscriptiontype,
             COALESCE(
                 f.path,
                 (
@@ -1550,6 +1691,8 @@ async function enrichInboxesWithMemberProfiles(inboxes, actorIds = []) {
          FROM accounts a
          LEFT JOIN users u ON a.account_id = u.account_id
          LEFT JOIN files f ON a.avatar_file_id = f.file_id
+         LEFT JOIN subscriptions s ON u.user_id = s.user_id
+         LEFT JOIN plans p ON s.plan_id = p.plan_id
          WHERE a.account_id = ANY($1::uuid[])`,
         [memberAccountIds]
     );
@@ -1568,6 +1711,7 @@ async function enrichInboxesWithMemberProfiles(inboxes, actorIds = []) {
                     name: acc.display_name || acc.handle,
                     username: acc.handle,
                     avatar_preset_url: acc.avatar_preset_url || null,
+                    subscriptiontype: acc.subscriptiontype || null,
                 };
             });
         }
@@ -1670,7 +1814,50 @@ async function updateInboxServices(inboxId, updateFields, accountId) {
     return await renameConversationServices(inboxId, conversationName, accountId);
 }
 
+
+async function updateLimitServices(conversationId, limit, accountId) {
+    const inbox = await requireConversationMember(conversationId, accountId);
+    if (inbox.conversation_type !== 'group') {
+        throw new ChatServiceError('Limit can only be updated for group chats');
+    }
+    const actor = activeMember(inbox, accountId);
+    if (actor.role !== 'owner') {
+        throw new ChatServiceError('Only the owner can update the member limit', 403);
+    }
+    
+    const parsedLimit = parseInt(limit, 10);
+    if (isNaN(parsedLimit) || parsedLimit < 12) {
+        throw new ChatServiceError('Invalid limit provided');
+    }
+
+    const { getDB } = require('../lib/MongoDb');
+    const db = getDB();
+    await db.collection('inbox').updateOne(
+        { _id: inbox._id },
+        { $set: { member_limit: parsedLimit } }
+    );
+    return { success: true, member_limit: parsedLimit };
+}
+
+
+async function deleteConversationServices(conversationId, accountId) {
+    const inbox = await requireConversationMember(conversationId, accountId);
+    if (inbox.conversation_type !== 'group') {
+        throw new ChatServiceError('Only group chats can be deleted');
+    }
+    const actor = activeMember(inbox, accountId);
+    if (actor.role !== 'owner') {
+        throw new ChatServiceError('Only the owner can delete the group chat', 403);
+    }
+    
+    const { deleteInboxRepositories } = require('../repositories/InboxRepositories');
+    await deleteInboxRepositories(conversationId);
+    return { success: true };
+}
+
 module.exports = {
+    deleteConversationServices,
+    updateLimitServices,
     ChatServiceError,
     createInboxServices,
     createGroupServices,

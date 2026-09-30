@@ -197,7 +197,7 @@ export const ProposalsSelectJobPage: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2 text-xs pt-2">
                   <div className="flex-1 min-w-0 p-2.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5">
                     <span className="text-[9px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Budget Range</span>
-                    <span className="font-extrabold text-yellow-500 flex items-center gap-1 text-xs mt-0.5">
+                    <span className="font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1 text-xs mt-0.5">
                       <CreditIcon className="h-3.5 w-3.5 shrink-0" /> {job.priceRange}
                     </span>
                   </div>

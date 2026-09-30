@@ -60,12 +60,10 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                 let computedStatus = task.contract_status;
                 if (computedStatus === 'Active') computedStatus = 'Ongoing';
                 if (computedStatus === 'Waiting' || computedStatus === 'Pending Signature') computedStatus = 'Waiting';
-                if (allMilestonesDone) {
-                    if (myReview && theirReview) {
-                        computedStatus = 'Completed';
-                    } else {
-                        computedStatus = 'Done';
-                    }
+                if (task.contract_status === 'Completed' || (allMilestonesDone && myReview && theirReview)) {
+                    computedStatus = 'Completed';
+                } else if (allMilestonesDone) {
+                    computedStatus = 'Done';
                 }
 
                 const statusBadgeColor = 

@@ -139,7 +139,7 @@ export const IncomingOrderDetail = () => {
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-1">
                           <Star className="w-3.5 h-3.5 fill-yellow-500 text-yellow-500" />
-                          <span className="text-yellow-500 font-bold">5.0</span>
+                          <span className="text-amber-500 dark:text-amber-400 font-bold">5.0</span>
                           <span>•</span>
                           <span>Freelancer Rating</span>
                       </div>
@@ -158,7 +158,7 @@ export const IncomingOrderDetail = () => {
                       <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${
                           order.status === 'Accepted' || order.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
                           order.status === 'Rejected' || order.status === 'Cancelled' ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' :
-                          'bg-yellow-50 text-yellow-600 border-yellow-200 dark:bg-yellow-500/10 dark:text-yellow-500 dark:border-yellow-500/20'
+                          'bg-yellow-50 text-yellow-600 border-yellow-200 dark:bg-yellow-500/10 dark:text-amber-500 dark:text-amber-400 dark:border-yellow-500/20'
                       }`}>
                           {order.status || 'Pending'}
                       </span>
@@ -193,7 +193,7 @@ export const IncomingOrderDetail = () => {
                             <span className="flex items-center gap-1 font-bold text-gray-700 dark:text-gray-300 text-sm"><Calendar className="w-4 h-4" /> Ordered Tier:</span>
                             <span className="text-gray-900 dark:text-white font-bold text-sm flex items-center gap-2">
                                 {order.tier_title}
-                                <span className="text-yellow-500 font-bold flex items-center gap-1 bg-yellow-500/10 px-2 py-1 rounded-full text-[11px]">
+                                <span className="text-amber-500 dark:text-amber-400 font-bold flex items-center gap-1 bg-yellow-500/10 px-2 py-1 rounded-full text-[11px]">
                                     <CreditIcon className="w-4 h-4" /> {order.price?.toLocaleString()}
                                 </span>
                             </span>
@@ -209,7 +209,7 @@ export const IncomingOrderDetail = () => {
               <div className="grid grid-cols-3 gap-3">
                   <div className="p-3 rounded-xl bg-white dark:bg-white/5 flex flex-col border border-gray-100 dark:border-white/5">
                       <span className="text-[10px] font-bold text-gray-500 uppercase mb-1">TIER PRICE</span>
-                      <span className="text-yellow-500 font-black text-lg flex items-center gap-1"><CreditIcon className="w-5 h-5" /> {order.price?.toLocaleString()}</span>
+                      <span className="text-amber-500 dark:text-amber-400 font-black text-lg flex items-center gap-1"><CreditIcon className="w-5 h-5" /> {order.price?.toLocaleString()}</span>
                   </div>
                   <div className="p-3 rounded-xl bg-white dark:bg-white/5 flex flex-col border border-gray-100 dark:border-white/5">
                       <span className="text-[10px] font-bold text-gray-500 uppercase mb-1">ADDITIONAL RATE</span>
@@ -230,7 +230,7 @@ export const IncomingOrderDetail = () => {
               
               {order.status === 'Pending' && (
                   <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm flex items-center justify-between mt-6">
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-400">Status: <span className="text-yellow-500 font-bold">Pending Approval</span></span>
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-400">Status: <span className="text-amber-500 dark:text-amber-400 font-bold">Pending Approval</span></span>
                     <div className="flex gap-3">
                       <button onClick={() => setIsRejectModalOpen(true)} className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2">
                           <XCircle className="w-4 h-4" /> Reject Order
