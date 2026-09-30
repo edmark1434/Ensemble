@@ -408,7 +408,9 @@ export function useCollabDoc(
             }
 
             const currentStoreName = initialProjectName || useStore.getState().projectName;
+            console.log("useCollabDoc DB Sync Check:", { initialProjectName, storeName: useStore.getState().projectName, snapshotName: snapshot.projectName, isProjectTarget });
             if (isProjectTarget && currentStoreName && snapshot.projectName !== undefined && currentStoreName !== snapshot.projectName) {
+              console.log("useCollabDoc: Overwriting stale Collab Doc name", snapshot.projectName, "with DB name", currentStoreName);
               schema.doc.transact(() => {
                 schema.meta.set("projectName", currentStoreName);
               }, localOrigin);
@@ -431,10 +433,6 @@ export function useCollabDoc(
             syncGuard.isApplyingRemote = false;
           }
         }
-
-        reconcileTargetToDb(target, schema);
-        reconcileSceneNamesToBlocks(target, schema, userId);
-        reconcileBlockNameToProjectScene(target, schema, userId);
 
         undoManager.clear();
         if (cancelled) return;
