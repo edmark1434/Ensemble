@@ -204,17 +204,17 @@ export default function Teams() {
 
           <div className="flex flex-wrap justify-end gap-1.5">
             {team.visibility === "Private" && (
-              <span className="h-fit rounded-full border border-amber-400/25 bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300">
+              <span className="h-fit rounded-full border border-amber-200 dark:border-amber-400/25 bg-amber-100 dark:bg-amber-500/15 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-300">
                 Private
               </span>
             )}
-            {team.current_user_status === "Pending" && ( <span className="h-fit rounded-full border border-yellow-400/25 bg-yellow-500/15 px-2 py-0.5 text-xs text-yellow-500"> Pending Approval </span> )} {team.current_user_role && (
-              <span className="h-fit rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+            {team.current_user_status === "Pending" && ( <span className="h-fit rounded-full border border-yellow-200 dark:border-yellow-400/25 bg-yellow-100 dark:bg-yellow-500/15 px-2 py-0.5 text-xs text-yellow-600 dark:text-yellow-500"> Pending Approval </span> )} {team.current_user_role && (
+              <span className="h-fit rounded-full bg-blue-100 dark:bg-blue-500/20 px-2 py-0.5 text-xs text-blue-600 dark:text-blue-400">
                 {team.current_user_role}
               </span>
             )}
             {team.is_business_verified && (
-              <span className="h-fit rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
+              <span className="h-fit rounded-full bg-emerald-100 dark:bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-600 dark:text-emerald-300">
                 Business verified
               </span>
             )}
@@ -310,10 +310,7 @@ export default function Teams() {
         ) : (
           <>
             <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">My Teams</h2>
-            {activeTeams.length === 0 ? (
-              <div className="rounded-xl border border-gray-200 dark:border-white/10 p-12 text-center text-gray-500 dark:text-zinc-400">
-                No Teams found.
-              </div>
+            {activeTeams.length === 0 ? ( <div className="rounded-xl border border-gray-200 dark:border-white/10 p-12 text-center text-gray-500 dark:text-zinc-400"> {pendingTeams.length > 0 ? "You have no active Teams." : "No Teams found."} </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">
                 {activeTeams.map(renderTeamCard)}
@@ -396,6 +393,8 @@ function getApiError(error: unknown, fallback: string) {
 
   return fallback;
 }
+
+
 
 
 
