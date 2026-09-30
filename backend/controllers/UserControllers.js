@@ -86,16 +86,21 @@ async function signup(req, res) {
     try {
         const result = await registerUser(req.body);
         const statusCode = result.user ? 201 : 200;
+        const credentials = { ...(result.credentials || {}) };
+        const restriction = credentials.restriction || null;
+        delete credentials.restriction;
         await Promise.all([
-            setupRefreshTokenCookie(res, result.credentials),
-            createSessionIdCookie(res, result.credentials)
+            setupRefreshTokenCookie(res, credentials),
+            createSessionIdCookie(res, credentials)
         ]);
-        const accessToken = await AccessTokens(result.credentials);
+        const accessToken = await AccessTokens(credentials);
         setAccessTokenCookie(res, accessToken);
+        const publicCredentials = { ...credentials, restriction };
         return res.status(statusCode).json({
             success: result.success,
             message: result.message || 'User and account created successfully',
-            result: result.credentials,
+            credentials: publicCredentials,
+            result: publicCredentials,
         });
         
     } catch (err) {
@@ -103,6 +108,8 @@ async function signup(req, res) {
             return res.status(err.statusCode).json({
                 success: false,
                 message: err.message,
+                code: err.code || err.details?.code || null,
+                restriction: err.details?.blocked ? err.details : null,
             });
         }
 

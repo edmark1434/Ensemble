@@ -13,6 +13,7 @@ export type AccountViolation = {
 export type AccountStanding = {
   status?: string | null;
   blocked?: boolean;
+  suspended?: boolean;
   code?: string | null;
   message?: string | null;
   violations?: AccountViolation[];
@@ -20,7 +21,6 @@ export type AccountStanding = {
 
 const BLOCKING_CODES = new Set([
   'ACCOUNT_BANNED',
-  'ACCOUNT_SUSPENDED',
   'ACCOUNT_LOCKED',
   'ACCOUNT_DELETED',
 ]);
@@ -129,7 +129,7 @@ export function AccountStandingNotice({
             </span>
             {!compact ? (
               <p className="text-lg font-bold leading-tight">
-                {standing.blocked
+                {standing.blocked || standing.suspended || standing.code === 'ACCOUNT_SUSPENDED'
                   ? `Your account is ${tone.label.toLowerCase()}`
                   : 'Your account has active violations'}
               </p>
@@ -228,10 +228,22 @@ export function AccountRestrictionHost() {
   }, []);
 
   const warning = user?.restriction as AccountStanding | undefined;
-  const showWarning = Boolean(warning && !warning.blocked && (warning.violations || []).length);
+  const suspended = Boolean(
+    warning &&
+      !warning.blocked &&
+      (warning.suspended ||
+        warning.code === 'ACCOUNT_SUSPENDED' ||
+        String(warning.status || '').toLowerCase() === 'suspended')
+  );
+  const showWarning = Boolean(!suspended && warning && !warning.blocked && (warning.violations || []).length);
 
   return (
     <>
+      {suspended && warning ? (
+        <div className="sticky top-0 z-[80] border-b-4 border-amber-950 bg-amber-400 px-4 py-4 text-zinc-950 sm:px-8">
+          <AccountStandingNotice standing={warning} />
+        </div>
+      ) : null}
       {showWarning && warning ? (
         <div className="sticky top-0 z-[80] px-3 py-3 sm:px-6">
           <AccountStandingNotice

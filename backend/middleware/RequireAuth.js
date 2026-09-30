@@ -1,6 +1,6 @@
 // Middleware to require authentication for protected routes
 const jwt = require('jsonwebtoken');
-const { rejectRestrictedAccount } = require('../lib/AccountRestriction');
+const { rejectRestrictedAccount, rejectSuspendedWrite } = require('../lib/AccountRestriction');
 // Extract token from HttpOnly access token cookie.
 function extractAccessToken(req) {
     return req.cookies?.accessToken || null;
@@ -35,6 +35,7 @@ async function requireAuth(req, res, next) {
 
     req.user = decoded;
     if (await rejectRestrictedAccount(req, res)) return;
+    if (rejectSuspendedWrite(req, res)) return;
     return next();
 }
 

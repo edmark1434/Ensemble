@@ -332,6 +332,13 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
     },
   });
 
+  try {
+    const { notifyAccountSuspended } = require('../services/AccountStandingServices');
+    await notifyAccountSuspended(accountId);
+  } catch (notifyErr) {
+    console.error('Failed to notify auto-suspended account:', notifyErr);
+  }
+
   return { suspended: true, activeCount, max, previousStatus };
 }
 

@@ -9,7 +9,7 @@ import axios from "axios";
 import useGlobalState from "@/lib/global_state";
 import { API_BASE_URL } from "@/lib/api";
 import { Eye, EyeOff } from "lucide-react";
-import { AccountStandingNotice, standingFromPayload, type AccountStanding } from "@/components/ui/AccountStanding";
+import { standingFromPayload, type AccountStanding } from "@/components/ui/AccountStanding";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -270,9 +270,74 @@ function PrimaryBtn({ children, onClick, loading = false, fullWidth = false }: {
   );
 }
 
+function LoginBlockedNotice({
+  standing,
+  onUseAnother,
+}: {
+  standing: AccountStanding;
+  onUseAnother: () => void;
+}) {
+  const banned = standing.code === 'ACCOUNT_BANNED' || String(standing.status || '').toLowerCase() === 'banned';
+  const title = banned ? 'This account is banned' : `This account is ${String(standing.status || 'restricted').toLowerCase()}`;
+  const detail = banned
+    ? 'You cannot sign in. A banned account is not allowed to log in to Ensemble.'
+    : standing.message || 'You cannot sign in with this account.';
+  return (
+    <div
+      role="alert"
+      style={{
+        marginBottom: 24,
+        padding: 18,
+        borderRadius: 16,
+        background: banned ? '#be123c' : '#18181b',
+        color: '#ffffff',
+        border: '2px solid #fecdd3',
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.4 }}>
+        {banned ? 'BANNED' : 'CANNOT SIGN IN'}
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2, marginTop: 8 }}>{title}</div>
+      <p style={{ fontSize: 14, lineHeight: 1.5, marginTop: 8 }}>{detail}</p>
+      {(standing.violations || []).length ? (
+        <ul style={{ marginTop: 12, padding: 0, listStyle: 'none' }}>
+          {(standing.violations || []).map((violation, index) => (
+            <li
+              key={`${violation.type || 'violation'}-${index}`}
+              style={{ background: 'rgba(0,0,0,0.25)', borderRadius: 12, padding: '10px 12px', marginTop: 8 }}
+            >
+              <strong>
+                {violation.type || 'Violation'}
+                {Number(violation.points) > 0 ? ` · ${violation.points} pts` : ''}
+              </strong>
+              {violation.reason ? <div style={{ marginTop: 4 }}>{violation.reason}</div> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <button
+        type="button"
+        onClick={onUseAnother}
+        style={{
+          marginTop: 14,
+          background: '#ffffff',
+          color: '#881337',
+          border: 'none',
+          borderRadius: 12,
+          padding: '10px 14px',
+          fontWeight: 700,
+          cursor: 'pointer',
+        }}
+      >
+        Use a different account
+      </button>
+    </div>
+  );
+}
+
 // ─── Google button ────────────────────────────────────────────────────────────
-function GoogleBtn() {
-  const handleGoogleSignIn = useGoogleAuth();
+function GoogleBtn({ onRestricted }: { onRestricted?: (standing: AccountStanding) => void }) {
+  const handleGoogleSignIn = useGoogleAuth(onRestricted);
   return (
     <button
       onClick={handleGoogleSignIn}
@@ -399,6 +464,15 @@ export default function LoginPage({
   useEffect(() => {
     const timer = setTimeout(() => setPageLoaded(true), 50);
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const onRestricted = (event: Event) => {
+      const standing = standingFromPayload((event as CustomEvent).detail);
+      if (standing?.blocked) setRestriction(standing);
+    };
+    window.addEventListener('ensemble:account-restricted', onRestricted);
+    return () => window.removeEventListener('ensemble:account-restricted', onRestricted);
   }, []);
 
   const validate = () => {
@@ -633,10 +707,8 @@ export default function LoginPage({
             Sign in to continue to Ensemble.
           </p>
 
-          {restriction ? (
-            <div style={{ marginBottom: 24 }}>
-              <AccountStandingNotice standing={restriction} />
-            </div>
+          {restriction?.blocked ? (
+            <LoginBlockedNotice standing={restriction} onUseAnother={() => setRestriction(null)} />
           ) : null}
 
           {/* Form */}
@@ -723,7 +795,7 @@ export default function LoginPage({
           </p>
 
           <Divider />
-          <GoogleBtn />
+          <GoogleBtn onRestricted={setRestriction} />
         </div>
 
         {/* ── Right: Dynamic Video Player Layout Panel ── */}

@@ -26,12 +26,17 @@ function displayStatus(normalized) {
   return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Active';
 }
 
+// Suspended accounts may sign in and read. Every write is blocked until the
+// allowed actions are chosen. Do not treat this as the final action list.
+const SUSPENDED_ACTION_MESSAGE =
+  'Your account is suspended. You can still sign in and look around, but you cannot perform actions right now.';
+
 function blockMessage(normalized) {
   if (normalized === 'banned') {
     return 'This account is banned. You cannot sign in or use Ensemble.';
   }
   if (normalized === 'suspended') {
-    return 'This account is suspended. You cannot sign in or use Ensemble until it is unsuspended.';
+    return SUSPENDED_ACTION_MESSAGE;
   }
   if (normalized === 'locked') {
     return 'This account is locked. You cannot sign in until an administrator unlocks it.';
@@ -80,6 +85,7 @@ async function getAccountAccess(accountId) {
     return {
       status: 'Active',
       blocked: false,
+      suspended: false,
       code: null,
       message: null,
       violations: [],
@@ -98,6 +104,7 @@ async function getAccountAccess(accountId) {
     return {
       status: displayStatus(normalized),
       blocked: true,
+      suspended: false,
       code: BLOCKING_CODES.deleted,
       message: blockMessage(normalized),
       violations,
@@ -105,12 +112,14 @@ async function getAccountAccess(accountId) {
   }
 
   const normalized = normalizeAccountStatus(row.status);
-  const blocked = normalized === 'banned' || normalized === 'suspended' || normalized === 'locked';
+  const suspended = normalized === 'suspended';
+  const blocked = normalized === 'banned' || normalized === 'locked';
   return {
     status: displayStatus(normalized),
     blocked,
-    code: blocked ? BLOCKING_CODES[normalized] : null,
-    message: blocked ? blockMessage(normalized) : null,
+    suspended,
+    code: blocked ? BLOCKING_CODES[normalized] : suspended ? BLOCKING_CODES.suspended : null,
+    message: blocked || suspended ? blockMessage(normalized) : null,
     violations,
   };
 }
@@ -127,7 +136,8 @@ async function clearAuthSession(req, res) {
 }
 
 /**
- * Reject the request when the authenticated account is banned, suspended, locked, or deleted.
+ * Reject the request when the authenticated account is banned, locked, or deleted.
+ * Suspended accounts stay signed in; the client shows a persistent notice instead.
  * Returns true when a response has already been sent.
  */
 async function rejectRestrictedAccount(req, res) {
@@ -158,8 +168,40 @@ async function rejectRestrictedAccount(req, res) {
   return true;
 }
 
+const SUSPENDED_WRITE_ALLOWLIST = [
+  /\/api\/users\/logout(?:\?|$)/,
+  /\/api\/users\/refresh-token(?:\?|$)/,
+];
+
+function suspendedWriteAllowed(req) {
+  const method = String(req.method || 'GET').toUpperCase();
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return true;
+  const url = String(req.originalUrl || req.url || '');
+  return SUSPENDED_WRITE_ALLOWLIST.some((pattern) => pattern.test(url));
+}
+
+/**
+ * Block creates, updates, and deletes for a suspended account.
+ * Reads stay open. Logout and token refresh stay open so the session can continue.
+ * Later, replace this blanket block with the specific actions a suspended account may perform.
+ * Returns true when a response has already been sent.
+ */
+function rejectSuspendedWrite(req, res) {
+  if (!req.accountAccess?.suspended) return false;
+  if (suspendedWriteAllowed(req)) return false;
+  res.status(403).json({
+    success: false,
+    code: 'ACCOUNT_SUSPENDED',
+    message: SUSPENDED_ACTION_MESSAGE,
+    restriction: req.accountAccess,
+  });
+  return true;
+}
+
 module.exports = {
+  SUSPENDED_ACTION_MESSAGE,
   getAccountAccess,
   rejectRestrictedAccount,
+  rejectSuspendedWrite,
   clearAuthSession,
 };

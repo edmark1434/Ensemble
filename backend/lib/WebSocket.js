@@ -117,6 +117,7 @@ async function initSocket(httpServer) {
         return next(new Error(access.message));
       }
       socket.user = decoded;
+      socket.data.suspended = Boolean(access.suspended);
       return next();
     } catch (_error) {
       return next(new Error('Authentication error: Invalid or expired token.'));
@@ -125,6 +126,22 @@ async function initSocket(httpServer) {
 
   io.on('connection', async (socket) => {
     const accountId = String(socket.user.account_id);
+
+    // Suspended accounts stay connected for notices, but client actions are dropped.
+    // Later, allow specific events here instead of blocking every action.
+    socket.use((packet, next) => {
+      if (!socket.data.suspended) return next();
+      const eventName = String(packet[0] || '');
+      if (eventName === 'disconnect') return next();
+      const ack = packet[packet.length - 1];
+      if (typeof ack === 'function') {
+        ack({
+          success: false,
+          code: 'ACCOUNT_SUSPENDED',
+          message: 'Your account is suspended. You can still sign in and look around, but you cannot perform actions right now.',
+        });
+      }
+    });
     const becameOnline = addOnlineSocket(accountId, socket.id);
 
     // Join the personal account room and every team account this user may actively manage.

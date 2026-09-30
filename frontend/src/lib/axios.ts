@@ -1,10 +1,10 @@
 import axios from "axios";
 import { API_BASE_URL } from "./api";
 import useGlobalState from "./global_state";
+import { showErrorToast } from "@/components/utility/toast";
 
 const ACCOUNT_RESTRICTION_CODES = new Set([
   "ACCOUNT_BANNED",
-  "ACCOUNT_SUSPENDED",
   "ACCOUNT_LOCKED",
   "ACCOUNT_DELETED",
 ]);
@@ -71,6 +71,11 @@ api.interceptors.response.use(
         const originalRequest = err.config;
 
         const restrictionCode = err?.response?.data?.code;
+        if (restrictionCode === "ACCOUNT_SUSPENDED") {
+            showErrorToast(err.response?.data?.message || "Your account is suspended and cannot perform actions right now.");
+            return Promise.reject(err);
+        }
+
         if (ACCOUNT_RESTRICTION_CODES.has(restrictionCode)) {
             window.dispatchEvent(new CustomEvent("ensemble:account-restricted", {
                 detail: err.response.data,

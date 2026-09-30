@@ -244,6 +244,15 @@ async function registerUser(signupPayload = {}, options = {}) {
         }
         // Fetch full user credentials for OAuth existing user
         const userCredentials = await getEmailandPasswordHashByEmail(emailAddress.toLowerCase());
+        const { getAccountAccess } = require('../lib/AccountRestriction');
+        const access = userCredentials?.account_id
+            ? await getAccountAccess(userCredentials.account_id)
+            : null;
+        if (access?.blocked) {
+            const error = new ServiceError(access.message, 403, access);
+            error.code = access.code;
+            throw error;
+        }
         return {
             success: true,
             message: 'User already exists with this email',
@@ -253,7 +262,8 @@ async function registerUser(signupPayload = {}, options = {}) {
                 username: userCredentials.handle,
                 account_id: userCredentials.account_id,
                 displayName: userCredentials.display_name,
-                type: userCredentials.type
+                type: userCredentials.type,
+                restriction: access,
             }
         };
     }
