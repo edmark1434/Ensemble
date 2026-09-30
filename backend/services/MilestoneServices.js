@@ -44,15 +44,28 @@ const { getIo } = require('../lib/WebSocket');
 /**
  * Send an in-app notification and immediately push it via Socket.IO.
  */
-async function notify({ accountId, message, referencePrefix, referencePath, referenceId, referenceTable = 'contract_milestones' }) {
+async function notify({ accountId, message, referencePrefix, referencePath, referenceId, referenceTable }) {
+    let resolvedReferenceId = referenceId;
+    if (!resolvedReferenceId && referencePath) {
+        const uuidMatch = String(referencePath).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+        if (uuidMatch) {
+            resolvedReferenceId = uuidMatch[0];
+        }
+    }
+    if (!resolvedReferenceId) {
+        resolvedReferenceId = accountId;
+    }
+
+    const resolvedTable = referenceTable || (referencePath?.includes('/contracts') && (!referenceId || referenceId === resolvedReferenceId) ? 'contracts' : 'contract_milestones');
+
     const notification = await createNotification({
         account_id: accountId,
         message,
         is_read: false,
-        reference_table: referenceTable,
+        reference_table: resolvedTable,
         reference_prefix: referencePrefix,
         reference_path: referencePath,
-        reference_id: referenceId,
+        reference_id: resolvedReferenceId,
     });
 
     const io = getIo();
@@ -66,11 +79,14 @@ async function notify({ accountId, message, referencePrefix, referencePath, refe
 /**
  * Notify both client and freelancer with different messages.
  */
-async function notifyBoth({ clientAccountId, freelancerAccountId, clientMessage, freelancerMessage, referencePrefix, contractId, milestoneId }) {
+async function notifyBoth({ clientAccountId, freelancerAccountId, clientMessage, freelancerMessage, referencePrefix, contractId, milestoneId, referenceTable }) {
     const path = `/contracts/${contractId}`;
+    const resolvedReferenceId = milestoneId || contractId;
+    const resolvedTable = referenceTable || (milestoneId ? 'contract_milestones' : 'contracts');
+
     await Promise.all([
-        notify({ accountId: clientAccountId,     message: clientMessage,     referencePrefix, referencePath: path, referenceId: milestoneId }),
-        notify({ accountId: freelancerAccountId, message: freelancerMessage, referencePrefix, referencePath: path, referenceId: milestoneId }),
+        notify({ accountId: clientAccountId,     message: clientMessage,     referencePrefix, referencePath: path, referenceId: resolvedReferenceId, referenceTable: resolvedTable }),
+        notify({ accountId: freelancerAccountId, message: freelancerMessage, referencePrefix, referencePath: path, referenceId: resolvedReferenceId, referenceTable: resolvedTable }),
     ]);
 }
 
@@ -299,6 +315,22 @@ async function cancelMilestoneService(milestoneId, callerAccountId) {
         milestoneId: milestone.contract_milestone_id,
     });
 
+    const io = getIo();
+    if (io) {
+        if (result.refundedCredits > 0) {
+            io.to(String(milestone.client_account_id)).emit('walletBalanceUpdated', {
+                balance_credits: result.newClientBalance,
+                wallet_type: 'account wallets',
+                transaction_id: result.transactionId,
+            });
+        }
+        io.to([`contract_${milestone.contract_id}`, String(milestone.client_account_id), String(milestone.freelancer_account_id)]).emit('milestone_status_updated', {
+            contractId: milestone.contract_id,
+            milestoneId,
+            status: 'cancelled',
+        });
+    }
+
     return result;
 }
 
@@ -340,7 +372,23 @@ async function cancelContractService(contractId, callerAccountId) {
         referencePrefix: isPartial ? 'CONTRACT_CLOSED' : 'CONTRACT_CANCELLED',
         contractId: contract.contract_id,
         milestoneId: null,
+        referenceTable: 'contracts',
     });
+
+    const io = getIo();
+    if (io) {
+        if (result.refundedCredits > 0) {
+            io.to(String(contract.client_account_id)).emit('walletBalanceUpdated', {
+                balance_credits: result.newClientBalance,
+                wallet_type: 'account wallets',
+                transaction_id: result.transactionId,
+            });
+        }
+        io.to([`contract_${contractId}`, String(contract.client_account_id), String(contract.freelancer_account_id)]).emit('contract_status_updated', {
+            contractId,
+            status: result.contractStatus,
+        });
+    }
 
     return result;
 }
@@ -502,6 +550,7 @@ async function requestContractCancellationService({ contractId, callerAccountId,
         referencePrefix: 'CANCELLATION_REQUESTED',
         referencePath: `/contracts/${contractId}`,
         referenceId: contractId,
+        referenceTable: 'contracts',
     });
 
     const io = getIo();
@@ -568,10 +617,22 @@ async function respondContractCancellationService({ contractId, requestId, calle
             referencePrefix: 'CANCELLATION_ACCEPTED',
             contractId,
             milestoneId: null,
+            referenceTable: 'contracts',
         });
 
         const io = getIo();
         if (io) {
+            if (cancelResult.refundedCredits > 0) {
+                io.to(String(contract.client_account_id)).emit('walletBalanceUpdated', {
+                    balance_credits: cancelResult.newClientBalance,
+                    wallet_type: 'account wallets',
+                    transaction_id: cancelResult.transactionId,
+                });
+            }
+            io.to([`contract_${contractId}`, String(contract.client_account_id), String(contract.freelancer_account_id)]).emit('contract_status_updated', {
+                contractId,
+                status: cancelResult.contractStatus,
+            });
             io.to([`contract_${contractId}`, String(contract.client_account_id), String(contract.freelancer_account_id)]).emit('cancellation_request_updated', { action: 'accepted', cancelResult });
         }
         return { success: true, action: 'accepted', cancelResult };
@@ -583,6 +644,7 @@ async function respondContractCancellationService({ contractId, requestId, calle
             referencePrefix: 'CANCELLATION_DECLINED',
             referencePath: `/contracts/${contractId}`,
             referenceId: contractId,
+            referenceTable: 'contracts',
         });
 
         const io = getIo();
@@ -615,6 +677,7 @@ async function withdrawContractCancellationService({ contractId, requestId, call
         referencePrefix: 'CANCELLATION_WITHDRAWN',
         referencePath: `/contracts/${contractId}`,
         referenceId: contractId,
+        referenceTable: 'contracts',
     });
 
     const io = getIo();
@@ -650,10 +713,22 @@ async function reconcileExpiredCancellationRequestsServices() {
                 referencePrefix: 'CANCELLATION_AUTO_APPROVED',
                 contractId: req.contract_id,
                 milestoneId: null,
+                referenceTable: 'contracts',
             });
 
             const io = getIo();
             if (io) {
+                if (cancelResult.refundedCredits > 0) {
+                    io.to(String(req.client_account_id)).emit('walletBalanceUpdated', {
+                        balance_credits: cancelResult.newClientBalance,
+                        wallet_type: 'account wallets',
+                        transaction_id: cancelResult.transactionId,
+                    });
+                }
+                io.to([`contract_${req.contract_id}`, String(req.client_account_id), String(req.freelancer_account_id)]).emit('contract_status_updated', {
+                    contractId: req.contract_id,
+                    status: cancelResult.contractStatus,
+                });
                 io.to([`contract_${req.contract_id}`, String(req.client_account_id), String(req.freelancer_account_id)]).emit('cancellation_request_updated', { action: 'auto_approved', cancelResult });
             }
             processed++;

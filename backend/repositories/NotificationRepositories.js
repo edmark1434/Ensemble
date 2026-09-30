@@ -25,6 +25,20 @@ async function createNotification(notification) {
             accountId = accountResult.rows[0].account_id;
         }
 
+        // Defensive resolution for reference_id: must not be null due to database NOT NULL constraint
+        let referenceId = notification.reference_id;
+        if (!referenceId && notification.reference_path) {
+            const uuidMatch = String(notification.reference_path).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+            if (uuidMatch) {
+                referenceId = uuidMatch[0];
+            }
+        }
+        if (!referenceId) {
+            referenceId = accountId;
+        }
+
+        const referenceTable = notification.reference_table || (notification.reference_path?.includes('/contracts') ? 'contracts' : 'accounts');
+
         const query = `
             INSERT INTO notifications (
                 message,
@@ -42,10 +56,10 @@ async function createNotification(notification) {
         const values = [
             notification.message,
             notification.is_read ?? false,
-            notification.reference_table,
+            referenceTable,
             notification.reference_prefix,
             notification.reference_path ?? null,
-            notification.reference_id,
+            referenceId,
             accountId,
         ];
 
