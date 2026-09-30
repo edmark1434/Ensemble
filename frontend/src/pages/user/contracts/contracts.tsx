@@ -33,7 +33,9 @@ export type MilestoneStatus = "Claimed" | "In Progress" | "Locked" | "Overdue" |
 export interface CancellationRequest {
   request_id: string;
   contract_id: string;
-  initiated_by: string;
+  initiator_account_id?: string;
+  recipient_account_id?: string;
+  initiated_by?: string;
   initiator_role: 'client' | 'freelancer';
   initiator_name?: string;
   reason: string;
@@ -251,6 +253,20 @@ export const Contracts: React.FC = () => {
   const [declineReason, setDeclineReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
+  const myAccountId = String(user?.account_id || (user as any)?.accountId || (user as any)?.id || '').trim();
+  const isCancellationInitiator = Boolean(
+    activeCancellation && (
+      (myAccountId && (
+        String(activeCancellation.initiator_account_id || '') === myAccountId ||
+        String(activeCancellation.initiated_by || '') === myAccountId
+      )) ||
+      (selectedContract && myAccountId && (
+        (activeCancellation.initiator_role === 'client' && String(selectedContract.clientAccountId) === myAccountId) ||
+        (activeCancellation.initiator_role === 'freelancer' && String(selectedContract.freelancerAccountId) === myAccountId)
+      ))
+    )
+  );
+
   const formatRemainingTime = (targetIso?: string) => {
     if (!targetIso) return '';
     const diff = new Date(targetIso).getTime() - Date.now();
@@ -428,6 +444,10 @@ export const Contracts: React.FC = () => {
 
   const handleAcceptCancellation = async () => {
     if (!selectedContract || !activeCancellation || actionLoading) return;
+    if (isCancellationInitiator) {
+      showErrorToast("You cannot accept your own cancellation request. You may only withdraw it.");
+      return;
+    }
     const confirmed = window.confirm(
       "Are you sure you want to accept mutual cancellation? Held escrow for uncompleted milestones will be refunded to the client. Completed milestone earnings are retained by the freelancer. This action is final."
     );
@@ -451,6 +471,10 @@ export const Contracts: React.FC = () => {
 
   const handleDeclineCancellation = async () => {
     if (!selectedContract || !activeCancellation || actionLoading) return;
+    if (isCancellationInitiator) {
+      showErrorToast("You cannot decline your own cancellation request.");
+      return;
+    }
     setActionLoading(true);
     try {
       const res = await api.post(`/api/contracts/${selectedContract.id}/cancellation-request/${activeCancellation.request_id}/respond`, {
@@ -472,6 +496,10 @@ export const Contracts: React.FC = () => {
 
   const handleWithdrawCancellation = async () => {
     if (!selectedContract || !activeCancellation || actionLoading) return;
+    if (!isCancellationInitiator) {
+      showErrorToast("Only the party who initiated the cancellation request can withdraw it.");
+      return;
+    }
     const confirmed = window.confirm("Are you sure you want to withdraw your cancellation request? The contract will remain active.");
     if (!confirmed) return;
 
@@ -901,7 +929,7 @@ export const Contracts: React.FC = () => {
                           </span>
                         </div>
                         <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mt-0.5">
-                          {user?.account_id === activeCancellation.initiated_by
+                          {isCancellationInitiator
                             ? `You requested mutual cancellation. The other party has 72 hours to respond.`
                             : `${activeCancellation.initiator_name || (activeCancellation.initiator_role === 'client' ? 'Client' : 'Freelancer')} requested to cancel this contract mutually.`
                           }
@@ -959,14 +987,14 @@ export const Contracts: React.FC = () => {
 
                   {/* Action Buttons */}
                   <div className="flex items-center justify-end gap-3 pt-1">
-                    {user?.account_id === activeCancellation.initiated_by ? (
+                    {isCancellationInitiator ? (
                       <button
                         type="button"
                         onClick={handleWithdrawCancellation}
                         disabled={actionLoading}
                         className="rounded-xl border border-gray-300 dark:border-white/20 bg-white dark:bg-white/10 px-4 py-2 text-xs font-semibold text-gray-800 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/20 transition disabled:opacity-50"
                       >
-                        {actionLoading ? 'Processing...' : 'Withdraw Request'}
+                        {actionLoading ? 'Processing...' : 'Undo / Withdraw Request'}
                       </button>
                     ) : (
                       <>
