@@ -1,6 +1,5 @@
 import { spring } from "remotion";
 import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
-import {getCharTiming} from "@/features/editor/player/animated/text-animated-types/char-timing";
 
 const GreatThinkersAnimationOut = ({
   char,
@@ -26,13 +25,9 @@ const GreatThinkersAnimationOut = ({
   };
 }) => {
   const exitStart = durationInFrames - animationTextOutFrames;
-  const { delay } = getCharTiming({
-    index,
-    textLength,
-    windowFrames: animationTextOutFrames,
-    fps
-  });
-  const progress = frame - (exitStart + delay);
+  const delayPerChar = animationTextOutFrames / textLength;
+  const charExitStart = exitStart + index * delayPerChar;
+  const progress = frame - charExitStart;
 
   const opacity = spring({
     frame: progress,

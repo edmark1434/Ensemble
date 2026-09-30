@@ -1,6 +1,5 @@
 import { interpolate, spring } from "remotion";
 import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
-import {getCharTiming} from "@/features/editor/player/animated/text-animated-types/char-timing";
 
 const MadeWithLoveAnimationIn = ({
   char,
@@ -23,12 +22,9 @@ const MadeWithLoveAnimationIn = ({
     fillStyle: React.CSSProperties;
   };
 }) => {
-  const { delay, charDuration } = getCharTiming({
-    index,
-    textLength,
-    windowFrames: animationTextInFrames,
-    fps
-  });
+  const totalDuration = animationTextInFrames;
+  const delayFactor = totalDuration / textLength;
+  const delay = index * delayFactor; // Calculate delay for each letter
 
   const translateY = spring({
     frame: frame - delay,
@@ -40,7 +36,7 @@ const MadeWithLoveAnimationIn = ({
 
   const opacity = interpolate(
     frame - delay,
-    [0, charDuration],
+    [0, totalDuration / 2], // Complete opacity ramp-up within half the duration
     [0, 1],
     {
       extrapolateRight: "clamp",

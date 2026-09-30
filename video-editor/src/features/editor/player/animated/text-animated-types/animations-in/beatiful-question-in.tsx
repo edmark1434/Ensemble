@@ -1,6 +1,5 @@
 import { interpolate, spring } from "remotion";
 import { AnimatedChar } from "../animated-char";
-import {getCharTiming} from "@/features/editor/player/animated/text-animated-types/char-timing";
 
 const BeatifulQuestionAnimationIn = ({
   char,
@@ -23,12 +22,9 @@ const BeatifulQuestionAnimationIn = ({
     fillStyle: React.CSSProperties;
   };
 }) => {
-  const { delay, charDuration } = getCharTiming({
-    index,
-    textLength,
-    windowFrames: animationTextInFrames,
-    fps
-  });
+  const totalDuration = animationTextInFrames;
+  const delayFactor = totalDuration / textLength;
+  const delay = index * delayFactor;
 
   const translateY = spring({
     frame: frame - delay,
@@ -38,7 +34,7 @@ const BeatifulQuestionAnimationIn = ({
     config: { damping: 10 }
   });
 
-  const opacity = interpolate(frame - delay, [0, charDuration], [0, 1], {
+  const opacity = interpolate(frame - delay, [0, totalDuration / 2], [0, 1], {
     extrapolateRight: "clamp",
     extrapolateLeft: "clamp"
   });

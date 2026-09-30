@@ -12,20 +12,6 @@ export const getFileFromUrl = async (url: string) => {
   return file;
 };
 
-const fileCache = new Map<string, Promise<File>>();
-
-export function getFileFromUrlCached(url: string): Promise<File> {
-  let p = fileCache.get(url);
-  if (!p) {
-    p = getFileFromUrl(url).catch((e) => {
-      fileCache.delete(url);
-      throw e;
-    });
-    fileCache.set(url, p);
-  }
-  return p;
-}
-
 export const fileToBlob = async (file: File) => {
   const blob = await new Response(file.stream()).blob();
   return blob;

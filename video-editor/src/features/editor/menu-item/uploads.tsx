@@ -35,7 +35,6 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import {millisecondsToHHMMSS} from "@/features/editor/utils/format";
 
 // Mirrors buildNormalizedImagePayload in Images.tsx
 const buildNormalizedImagePayload = (image: any) => {
@@ -79,8 +78,12 @@ const buildNormalizedVideoPayload = (video: any) => {
   };
 };
 
-const formatDuration = (seconds: number) =>
-  millisecondsToHHMMSS(Math.floor(seconds) * 1000);
+const formatDuration = (seconds: number) => {
+  const rounded = Math.round(seconds);
+  const min = Math.floor(rounded / 60);
+  const sec = rounded % 60;
+  return `${min}:${sec.toString().padStart(2, "0")}`;
+};
 
 // Our own uploads don't come with a Pexels-style static thumbnail, so we
 // generate a poster frame client-side. This is what feeds
@@ -100,11 +103,6 @@ const extractVideoThumbnailFromUrl = (src: string): Promise<string> => {
     const timeout = setTimeout(() => finish(""), 8000);
     const finish = (result: string) => {
       clearTimeout(timeout);
-      video.onloadeddata = null;
-      video.onseeked = null;
-      video.onerror = null;
-      video.removeAttribute("src");
-      video.load(); // aborts any in-flight download
       resolve(result);
     };
 
@@ -246,11 +244,6 @@ const probeVideoUrlDimensions = (
     const timeout = setTimeout(() => finish(null), 8000);
     const finish = (result: { width: number; height: number; duration: number } | null) => {
       clearTimeout(timeout);
-      video.onloadeddata = null;
-      video.onseeked = null;
-      video.onerror = null;
-      video.removeAttribute("src");
-      video.load(); // aborts any in-flight download
       resolve(result);
     };
 
@@ -464,14 +457,10 @@ const UploadVideoItem = ({
         height: dbHeight || probe.videoHeight,
         duration: dbDuration ?? (Number.isFinite(probe.duration) ? probe.duration : 0)
       });
-      probe.removeAttribute("src");
-      probe.load();
     };
     probe.src = videoSrc;
     return () => {
       probe.onloadedmetadata = null;
-      probe.removeAttribute("src");
-      probe.load();
     };
   }, [videoSrc, dbWidth, dbHeight, dbDuration]);
 
@@ -528,7 +517,7 @@ const UploadVideoItem = ({
         ))}
       {isReady && meta?.duration ? (
         <div className="absolute bottom-3 right-2 bg-secondary/90 text-secondary-foreground/90 text-xs px-1 py-0.5 rounded">
-          {formatDuration(meta.duration)}
+          {Math.round(meta.duration)}s
         </div>
       ) : null}
     </div>

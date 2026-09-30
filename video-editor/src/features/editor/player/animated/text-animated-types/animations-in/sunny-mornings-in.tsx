@@ -1,6 +1,5 @@
 import { interpolate, spring } from "remotion";
 import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
-import {getCharTiming} from "@/features/editor/player/animated/text-animated-types/char-timing";
 
 const SunnyMorningsAnimationIn = ({
   char,
@@ -23,12 +22,9 @@ const SunnyMorningsAnimationIn = ({
     fillStyle: React.CSSProperties;
   };
 }) => {
-  const { delay, charDuration } = getCharTiming({
-    index,
-    textLength,
-    windowFrames: animationTextInFrames,
-    fps
-  });
+  const totalDuration = animationTextInFrames;
+  const delayFactor = totalDuration / (textLength + 1);
+  const delay = index * delayFactor;
 
   const scale = spring({
     frame: frame - delay,
@@ -40,7 +36,7 @@ const SunnyMorningsAnimationIn = ({
 
   const opacity = interpolate(
     frame - delay,
-    [0, charDuration],
+    [0, totalDuration / 2], // Ensure opacity fades in within half the duration
     [0, 1],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
   );

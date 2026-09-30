@@ -10,32 +10,40 @@ import {
 } from "@/features/editor/player/styles";
 
 export default function TypeWriterIn({
-  frame,
-  text,
-  details,
-  animationTextInFrames
-}: {
+                                       frame,
+                                       text,
+                                       details,
+                                       animationTextInFrames
+                                     }: {
   frame: number;
   text: string;
   details: ITextDetails;
   animationTextInFrames: number;
 }) {
-  const visibleCharacters = Math.max(
-    0,
-    Math.min(
-      text.length,
-      Math.floor(
-        interpolate(frame, [0, animationTextInFrames], [0, text.length], {
-          extrapolateRight: "clamp"
-        })
-      )
-    )
+  const visibleCharacters = Math.floor(
+    interpolate(frame, [0, animationTextInFrames], [0, text.length], {
+      extrapolateRight: "clamp"
+    })
   );
 
-  const visibleText = useMemo(
-    () => text.slice(0, visibleCharacters),
-    [visibleCharacters, text]
-  );
+  const visibleText = useMemo(() => {
+    let count = 0;
+    return text
+      .split(" ")
+      .map((word) => {
+        if (count + word.length <= visibleCharacters) {
+          count += word.length + 1;
+          return word;
+        }
+        if (count < visibleCharacters) {
+          const partialWord = word.slice(0, visibleCharacters - count);
+          count = visibleCharacters;
+          return partialWord;
+        }
+        return "";
+      })
+      .join(" ");
+  }, [visibleCharacters, text]);
 
   const letterSpacingPx = parseFloat(details.letterSpacing as any) || 0;
 
@@ -107,7 +115,7 @@ export default function TypeWriterIn({
             <span>
               {line.length > 0 && (
                 <AnimatedChar
-                  char={line.replace(/ /g, "\u00A0")}
+                  char={line}
                   animationStyle={{}}
                   isGradient={lineColorStyle.isGradient}
                   shadowStrokeStyle={lineColorStyle.shadowStrokeStyle}

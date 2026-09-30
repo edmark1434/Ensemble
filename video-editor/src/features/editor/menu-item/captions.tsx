@@ -32,13 +32,7 @@ export const Captions = () => {
     Record<string, ITrackItem[]>
   >({});
   const [mediaTrackItems, setMediaTrackItems] = useState<ITrackItem[]>([]);
-
-  const [generatingMedia, setGeneratingMedia] = useState<string | undefined>();
-  const isGenerating = generatingMedia !== undefined;
-  const generatingLabel = selectMediaItems.find(
-    (i) => i.value === generatingMedia
-  )?.label;
-
+  const [isGenerating, setIsGenerating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -65,7 +59,7 @@ export const Captions = () => {
   };
 
   const createCaptions = async (selectedMedia: string) => {
-    setGeneratingMedia(selectedMedia);
+    setIsGenerating(true);
     setErrorMessage(null);
     try {
       const trackItem = mediaTrackItems.find(
@@ -126,7 +120,7 @@ export const Captions = () => {
       console.error("Error generating captions:", error);
       setErrorMessage(error.message || "Failed to generate captions.");
     } finally {
-      setGeneratingMedia(undefined);
+      setIsGenerating(false);
     }
   };
 
@@ -163,8 +157,7 @@ export const Captions = () => {
           onSelectChange={handleSelectChange}
           captionTrackItemsMap={captionTrackItemsMap}
           createCaptions={createCaptions}
-          generatingMedia={generatingMedia}
-          generatingLabel={generatingLabel}
+          isGenerating={isGenerating}
           errorMessage={errorMessage}
           estimatedMs={estimatedMs}
           elapsedMs={elapsedMs}
@@ -180,8 +173,7 @@ const MediaSection = ({
   onSelectChange,
   captionTrackItemsMap,
   createCaptions,
-  generatingMedia,
-  generatingLabel,
+  isGenerating,
   errorMessage,
   estimatedMs,
   elapsedMs,
@@ -191,8 +183,7 @@ const MediaSection = ({
   onSelectChange: (value: string) => void;
   captionTrackItemsMap: Record<string, ITrackItem[]>;
   createCaptions: (selectedMedia: string) => void;
-  generatingMedia: string | undefined;
-  generatingLabel: string | undefined;
+  isGenerating: boolean;
   errorMessage: string | null;
   estimatedMs: number;
   elapsedMs: number;
@@ -225,12 +216,7 @@ const MediaSection = ({
         <div className="w-full h-full px-4 pb-4 flex flex-col items-center justify-center">
           <MediaWithNoCaptions
             createCaptions={() => createCaptions(selectedMedia)}
-            isGenerating={generatingMedia === selectedMedia}
-            blockedBy={
-              generatingMedia && generatingMedia !== selectedMedia
-                ? generatingLabel ?? "Another media"
-                : undefined
-            }
+            isGenerating={isGenerating}
             estimatedMs={estimatedMs}
             elapsedMs={elapsedMs}
           />
@@ -263,13 +249,11 @@ const EmptyMediaTrackItems = () => (
 const MediaWithNoCaptions = ({
   createCaptions,
   isGenerating,
-  blockedBy,
   estimatedMs,
   elapsedMs
 }: {
   createCaptions: () => void;
   isGenerating: boolean;
-  blockedBy?: string;
   estimatedMs: number;
   elapsedMs: number;
 }) => (
@@ -282,7 +266,7 @@ const MediaWithNoCaptions = ({
       onClick={createCaptions}
       variant="default"
       className="w-fit"
-      disabled={isGenerating || !!blockedBy}
+      disabled={isGenerating}
     >
       {isGenerating ? (
         <>
@@ -293,15 +277,8 @@ const MediaWithNoCaptions = ({
         "Generate"
       )}
     </Button>
-    <div className="text-center text-xs text-muted-foreground text-pretty">
-      {blockedBy ? (
-        <>
-          <span className="text-primary text-pretty">{blockedBy}</span> is still
-          generating captions. Please wait.
-        </>
-      ) : (
-        `Estimated time: ${millisecondsToHHMMSS(estimatedMs)}`
-      )}
+    <div className="text-center text-xs text-muted-foreground">
+      {`Estimated time: ${millisecondsToHHMMSS(estimatedMs)}`}
     </div>
   </div>
 );
@@ -405,30 +382,25 @@ const groupCaptionItems = (trackItemsMap: ITrackItemsMap) => {
   return groupBy(captionTrackItems, "metadata.sourceUrl");
 };
 
-async function transcribeMedia(mediaUrl: string, _targetLanguage: string) {
-  const submitRes = await fetch("/api/transcribe", {
+async function transcribeMedia(mediaUrl: string, targetLanguage: string) {
+  const transcribeResponse = await fetch("/api/transcribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url: mediaUrl })
+    body: JSON.stringify({ url: mediaUrl, targetLanguage })
   });
-  const submitBody = await submitRes.json().catch(() => ({}));
-  if (!submitRes.ok || !submitBody.id) {
-    throw new Error(
-      submitBody.message || `Failed to start transcription (${submitRes.status}). Try again.`
-    );
+
+  const body = await transcribeResponse
+    .json()
+    .catch(() => ({ message: "Failed to transcribe media." }));
+
+  if (!transcribeResponse.ok) {
+    if (body.message === "No speech detected in the media.") {
+      return null; // sentinel: not an error, just nothing to caption
+    }
+    throw new Error(body.message || "Failed to transcribe media.");
   }
 
-  while (true) {
-    await new Promise((r) => setTimeout(r, 2000));
-    const res = await fetch(`/api/transcribe/${submitBody.id}`);
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(body.message || `Failed to check transcription (${res.status}). Try again.`);
-    }
-    if (body.status === "completed") return body.data;
-    if (body.status === "empty") return null;
-    if (body.status === "error") throw new Error(body.message || "Transcription failed. Try again.");
-  }
+  return body.transcribe.data; // { results: { main: { words: [] } } }
 }
 
 // async function fetchJsonFromUrl(url: string) {

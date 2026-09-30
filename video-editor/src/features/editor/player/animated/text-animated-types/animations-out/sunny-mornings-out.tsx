@@ -1,6 +1,5 @@
 import { interpolate, spring } from "remotion";
 import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
-import {getCharTiming} from "@/features/editor/player/animated/text-animated-types/char-timing";
 
 const SunnyMorningsAnimationOut = ({
   char,
@@ -26,13 +25,10 @@ const SunnyMorningsAnimationOut = ({
   };
 }) => {
   const exitStart = durationInFrames - animationTextOutFrames;
-  const { delay, charDuration } = getCharTiming({
-    index,
-    textLength,
-    windowFrames: animationTextOutFrames,
-    fps
-  });
-  const progress = frame - (exitStart + delay);
+  const delayPerChar = animationTextOutFrames / textLength;
+
+  const charExitStart = exitStart + index * delayPerChar;
+  const progress = frame - charExitStart;
 
   const scale = spring({
     frame: progress,
@@ -42,7 +38,7 @@ const SunnyMorningsAnimationOut = ({
     config: { mass: 1, damping: 10 }
   });
 
-  const opacity = interpolate(progress, [0, charDuration], [1, 0], {
+  const opacity = interpolate(progress, [0, delayPerChar], [1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp"
   });

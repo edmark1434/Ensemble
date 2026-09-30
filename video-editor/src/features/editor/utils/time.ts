@@ -47,11 +47,11 @@ export const getCurrentTime = () => {
   const currentTimeElement = document.getElementById("video-current-time");
   const currentTimeSeconds = currentTimeElement
     ? Number.parseFloat(
-      currentTimeElement.getAttribute("data-current-time") ?? "0"
-    )
+        currentTimeElement.getAttribute("data-current-time") ?? "0"
+      )
     : 0;
-  if (!Number.isFinite(currentTimeSeconds) || currentTimeSeconds < 0) return 0;
-  return currentTimeSeconds * 1000;
+  const currentTimeMiliseconds = currentTimeSeconds * 1000;
+  return currentTimeMiliseconds;
 };
 
 /**

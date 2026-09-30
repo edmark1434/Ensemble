@@ -1,6 +1,5 @@
 import { spring } from "remotion";
 import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
-import {getCharTiming} from "@/features/editor/player/animated/text-animated-types/char-timing";
 
 const DominoDreamsAnimationOut = ({
   char,
@@ -25,14 +24,11 @@ const DominoDreamsAnimationOut = ({
     fillStyle: React.CSSProperties;
   };
 }) => {
+  const exitDuration = animationTextOutFrames;
+  const delayPerChar = exitDuration / textLength;
   const exitStart = durationInFrames - animationTextOutFrames;
-  const { delay } = getCharTiming({
-    index,
-    textLength,
-    windowFrames: animationTextOutFrames,
-    fps
-  });
-  const progress = frame - (exitStart + delay);
+  const charExitStart = exitStart + index * delayPerChar;
+  const progress = frame - charExitStart;
 
   const rotateY = spring({
     frame: progress,

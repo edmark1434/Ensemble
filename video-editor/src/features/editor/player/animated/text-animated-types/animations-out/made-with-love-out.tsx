@@ -1,6 +1,5 @@
 import { interpolate, spring } from "remotion";
 import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
-import {getCharTiming} from "@/features/editor/player/animated/text-animated-types/char-timing";
 
 const MadeWithLoveAnimationOut = ({
   char,
@@ -26,13 +25,9 @@ const MadeWithLoveAnimationOut = ({
   };
 }) => {
   const exitStart = durationInFrames - animationTextOutFrames;
-  const { delay, charDuration } = getCharTiming({
-    index,
-    textLength,
-    windowFrames: animationTextOutFrames,
-    fps
-  });
-  const progress = frame - (exitStart + delay);
+  const delayPerChar = animationTextOutFrames / textLength;
+  const charExitStart = exitStart + index * delayPerChar;
+  const progress = frame - charExitStart;
 
   const translateY = spring({
     frame: progress,
@@ -42,10 +37,15 @@ const MadeWithLoveAnimationOut = ({
     config: { damping: 20, stiffness: 120 }
   });
 
-  const opacity = interpolate(progress, [0, charDuration], [1, 0], {
-    extrapolateRight: "clamp",
-    extrapolateLeft: "clamp"
-  });
+  const opacity = interpolate(
+    progress,
+    [0, delayPerChar], // Frames for opacity fade-out
+    [1, 0],
+    {
+      extrapolateRight: "clamp",
+      extrapolateLeft: "clamp"
+    }
+  );
 
   return (
     <AnimatedChar

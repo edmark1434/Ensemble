@@ -1,7 +1,5 @@
 // app/auth-error/page.tsx
 
-import {RedirectCountdown} from "@/components/redirect-countdown";
-
 export default function AuthErrorPage() {
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-background">
@@ -10,7 +8,6 @@ export default function AuthErrorPage() {
         <p className="mt-2 text-sm text-muted-foreground">
           Your session may have expired. Please return to the dashboard and try again.
         </p>
-        <RedirectCountdown url={process.env.MAIN_APP_URL} />
       </div>
     </div>
   );

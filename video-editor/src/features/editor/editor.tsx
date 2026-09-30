@@ -52,7 +52,6 @@ import {RightPanelContent} from "@/features/editor/right-panel-content";
 import {canEditWithRole, EditorRole} from "@/features/editor/types/editor-role";
 import {useEditorRole} from "@/features/editor/hooks/use-editor-role";
 import {ViewOnlyProvider} from "@/features/editor/hooks/use-view-only";
-import {useProjectFonts} from "@/features/editor/hooks/use-project-fonts";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -559,7 +558,6 @@ const Editor = ({ id, userId, userName, width, height, role }: {
   const viewOnly = !canEdit; // kept as `viewOnly` since ScenePlayer / useKeyboardShortcuts already take this name
 
   useTimelineEvents();
-  useProjectFonts();
 
   const { setCompactFonts, setFonts } = useDataState();
 
