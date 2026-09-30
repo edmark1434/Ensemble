@@ -15,9 +15,11 @@ const { pool } = require('../lib/Database');
 const AUTO_APPROVE_DAYS_JOB  = 5;   // Days after submission before auto-approve (job contracts)
 const AUTO_APPROVE_DAYS_GIG  = 3;   // Days after submission before auto-approve (gig contracts)
 const REVIEW_REMINDER_DAY    = 3;   // Day to send "auto-approves in 2 days" reminder
-const STALLED_DAYS           = 7;   // Days overdue before escalating to stalled
-const ABANDONED_DAYS         = 30;  // Days overdue before marking abandoned
-const DEADLINE_REMINDER_HRS  = 48;  // Hours before deadline to warn freelancer
+const STALLED_DAYS_JOB       = 5;   // Days overdue before stalled (standard jobs)
+const STALLED_DAYS_GIG       = 2;   // Days overdue before stalled (gigs / short deadlines <= 72h)
+const ABANDONED_DAYS_JOB     = 10;  // Days overdue before auto-abandonment refund (standard jobs)
+const ABANDONED_DAYS_GIG     = 4;   // Days overdue before auto-abandonment refund (gigs / short deadlines <= 72h)
+const DEADLINE_REMINDER_HRS  = 48;  // Hours before deadline to warn freelancer (standard jobs)
 
 // ─── Cron: Overdue Detector ───────────────────────────────────────────────────
 
@@ -114,12 +116,17 @@ async function getOverdueMilestonesNowStalled() {
         ) gc_info ON c.contract_id = gc_info.contract_id
         WHERE cm.status = 'overdue'
           AND cm.overdue_at IS NOT NULL
-          AND NOW() > cm.overdue_at + ($1 || ' days')::interval
+          AND NOW() > cm.overdue_at + (
+              CASE
+                  WHEN c.contract_type = 'gig' OR cm.deadline <= 72 THEN ($1 || ' days')::interval
+                  ELSE ($2 || ' days')::interval
+              END
+          )
           AND NOT EXISTS (
               SELECT 1 FROM milestone_submits ms
               WHERE ms.contract_milestone_id = cm.contract_milestone_id
           )
-    `, [STALLED_DAYS]);
+    `, [STALLED_DAYS_GIG, STALLED_DAYS_JOB]);
     return res.rows;
 }
 
@@ -142,6 +149,7 @@ async function getStalledMilestonesNowAbandoned() {
         SELECT
             cm.contract_milestone_id,
             cm.name          AS milestone_name,
+            cm.credits,
             cm.contract_id,
             COALESCE(jc_info.client_account_id,  gc_info.client_account_id)  AS client_account_id,
             COALESCE(jc_info.freelancer_account_id, gc_info.freelancer_account_id) AS freelancer_account_id,
@@ -163,8 +171,13 @@ async function getStalledMilestonesNowAbandoned() {
         ) gc_info ON c.contract_id = gc_info.contract_id
         WHERE cm.status = 'stalled'
           AND cm.overdue_at IS NOT NULL
-          AND NOW() > cm.overdue_at + ($1 || ' days')::interval
-    `, [ABANDONED_DAYS]);
+          AND NOW() > cm.overdue_at + (
+              CASE
+                  WHEN c.contract_type = 'gig' OR cm.deadline <= 72 THEN ($1 || ' days')::interval
+                  ELSE ($2 || ' days')::interval
+              END
+          )
+    `, [ABANDONED_DAYS_GIG, ABANDONED_DAYS_JOB]);
     return res.rows;
 }
 
@@ -371,7 +384,12 @@ async function getApproachingDeadlineMilestones() {
         WHERE cm.status = 'active'
           AND cm.started_at IS NOT NULL
           AND cm.overdue_at IS NULL
-          AND NOW() > cm.started_at + ((cm.deadline - $1) * interval '1 hour')
+          AND NOW() > cm.started_at + (
+              CASE
+                  WHEN cm.deadline <= 48 THEN (cm.deadline * 0.5 * interval '1 hour')
+                  ELSE ((cm.deadline - $1) * interval '1 hour')
+              END
+          )
           AND NOW() < cm.started_at + (cm.deadline * interval '1 hour')
           AND NOT EXISTS (
               SELECT 1 FROM notifications n
@@ -510,17 +528,25 @@ async function cancelMilestoneAndRefund({ milestoneId, clientAccountId, freelanc
             WHERE contract_milestone_id = $1
         `, [milestoneId]);
 
-        // 7. If all non-completed milestones are now cancelled → mark contract Cancelled
-        const remainingRes = await client.query(`
-            SELECT COUNT(*) AS cnt FROM contract_milestones
+        // 7. If all non-completed milestones are now cancelled → mark contract Closed (if partially completed) or Cancelled
+        const countsRes = await client.query(`
+            SELECT 
+                COUNT(*) FILTER (WHERE status NOT IN ('completed', 'cancelled', 'abandoned')) AS remaining_cnt,
+                COUNT(*) FILTER (WHERE status = 'completed') AS completed_cnt
+            FROM contract_milestones
             WHERE contract_id = $1
-              AND status NOT IN ('completed', 'cancelled', 'abandoned')
         `, [contract_id]);
 
-        let contractCancelled = false;
-        if (parseInt(remainingRes.rows[0].cnt, 10) === 0) {
-            await client.query(`UPDATE contracts SET status = 'Cancelled' WHERE contract_id = $1`, [contract_id]);
-            contractCancelled = true;
+        let contractClosed = false;
+        let contractStatus = null;
+        const remainingCnt = parseInt(countsRes.rows[0].remaining_cnt, 10);
+        const completedCnt = parseInt(countsRes.rows[0].completed_cnt, 10);
+
+        if (remainingCnt === 0) {
+            // If at least one milestone was completed, the contract was partially fulfilled
+            contractStatus = completedCnt > 0 ? 'Closed' : 'Cancelled';
+            await client.query(`UPDATE contracts SET status = $1 WHERE contract_id = $2`, [contractStatus, contract_id]);
+            contractClosed = true;
         }
 
         await client.query('COMMIT');
@@ -528,7 +554,10 @@ async function cancelMilestoneAndRefund({ milestoneId, clientAccountId, freelanc
             transactionId: txRes.rows[0].credit_transaction_id,
             refundedCredits: milestoneCredits,
             newClientBalance: Number(refundRes.rows[0].balance_credits),
-            contractCancelled,
+            contractCancelled: contractStatus === 'Cancelled',
+            contractClosed,
+            contractStatus,
+            isPartial: completedCnt > 0,
         };
     } catch (err) {
         await client.query('ROLLBACK');
