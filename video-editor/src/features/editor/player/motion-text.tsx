@@ -67,7 +67,7 @@ const TextLayer: React.FC<{
           : {}),
         pointerEvents: "none",
         userSelect: "none",
-        whiteSpace: "pre-line",
+        whiteSpace: "pre-wrap",
         width: "100%",
         display: "flex",
         alignItems: "center",

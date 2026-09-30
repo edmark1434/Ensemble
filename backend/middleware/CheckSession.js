@@ -1,5 +1,6 @@
 const redisClient = require('../lib/Redis');
 const { getSectionValue } = require('../repositories/AdminSettingsRepositories');
+const { rejectRestrictedAccount, rejectSuspendedWrite } = require('../lib/AccountRestriction');
 
 async function checkSession(req,res,next){
     const sessionId = req.cookies?.sessionId;
@@ -18,6 +19,8 @@ async function checkSession(req,res,next){
     }
     try {
         req.session = JSON.parse(sessionData);
+        if (await rejectRestrictedAccount(req, res)) return;
+        if (rejectSuspendedWrite(req, res)) return;
         // Refresh session expiration asynchronously
         getSectionValue('platform')
             .then((platform) => {

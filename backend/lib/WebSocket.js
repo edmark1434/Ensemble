@@ -92,7 +92,7 @@ async function initSocket(httpServer) {
     },
   });
   
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     try {
       const cookieHeader = socket.handshake.headers.cookie;
       if (!cookieHeader) {
@@ -111,7 +111,13 @@ async function initSocket(httpServer) {
       if (!decoded.account_id) {
         return next(new Error('Authentication error: Invalid account token.'));
       }
+      const { getAccountAccess } = require('./AccountRestriction');
+      const access = await getAccountAccess(decoded.account_id);
+      if (access.blocked) {
+        return next(new Error(access.message));
+      }
       socket.user = decoded;
+      socket.data.suspended = Boolean(access.suspended);
       return next();
     } catch (_error) {
       return next(new Error('Authentication error: Invalid or expired token.'));
@@ -120,6 +126,25 @@ async function initSocket(httpServer) {
 
   io.on('connection', async (socket) => {
     const accountId = String(socket.user.account_id);
+
+    // Suspended accounts stay connected for notices, but client actions are dropped.
+    // Later, allow specific events here instead of blocking every action.
+    socket.use((packet, next) => {
+      if (!socket.data.suspended) return next();
+      const eventName = String(packet[0] || '');
+      // Viewing and acknowledging their own notifications stays available.
+      if (eventName === 'disconnect' || eventName === 'markMessageAsRead' || eventName === 'markAllNotificationsAsRead') {
+        return next();
+      }
+      const ack = packet[packet.length - 1];
+      if (typeof ack === 'function') {
+        ack({
+          success: false,
+          code: 'ACCOUNT_SUSPENDED',
+          message: 'Your account is suspended. You can view your account and notifications. Actions are turned off until this is lifted.',
+        });
+      }
+    });
     const becameOnline = addOnlineSocket(accountId, socket.id);
 
     // Join the personal account room and every team account this user may actively manage.

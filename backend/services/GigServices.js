@@ -1,7 +1,9 @@
 // backend/services/GigServices.js
 const {
     shortlistGigOrderRepository,
-    unshortlistGigOrderRepository
+    unshortlistGigOrderRepository,
+    acceptGigOrderRepository,
+    confirmGigOrderContractRepository
 } = require('../repositories/GigRepositories');
 const { createNotificationServices } = require('./NotificationServices');
 const { getIo } = require('../lib/WebSocket');
@@ -118,7 +120,64 @@ async function unshortlistGigOrderService(orderId, actorIds) {
     return result.order;
 }
 
+async function acceptGigOrderService(orderId, actorIds) {
+    const result = await acceptGigOrderRepository(orderId, actorIds);
+    try {
+        const notif = await createNotificationServices({
+            account_id: result.client_account_id,
+            message: `Your gig order for '${result.gig_title}' has been accepted by the freelancer! Please review and confirm to start the contract.`,
+            reference_table: 'gig_requests',
+            reference_prefix: 'accepted',
+            reference_path: `/gigs/orders/sent/${orderId}`,
+            reference_id: orderId
+        });
+        const io = getIo();
+        if (io) {
+            io.to(String(result.client_account_id)).emit('notification', notif);
+        }
+    } catch (notifErr) {
+        console.error('Error sending gig accept notification:', notifErr);
+    }
+    return result;
+}
+
+async function confirmGigOrderContractService(orderId, actorIds) {
+    const result = await confirmGigOrderContractRepository(orderId, actorIds);
+    const { contractId, gig_title, freelancer_account_id, client_account_id } = result;
+
+    try {
+        const io = getIo();
+        const clientNotif = await createNotificationServices({
+            account_id: client_account_id,
+            message: `Your gig order contract for '${gig_title}' has started successfully.`,
+            reference_table: 'contracts',
+            reference_prefix: 'CON',
+            reference_path: `/contracts/${contractId}`,
+            reference_id: contractId
+        });
+        const freelancerNotif = await createNotificationServices({
+            account_id: freelancer_account_id,
+            message: `The client confirmed and funded your gig order for '${gig_title}'. The contract is now active!`,
+            reference_table: 'contracts',
+            reference_prefix: 'CON',
+            reference_path: `/contracts/${contractId}`,
+            reference_id: contractId
+        });
+
+        if (io) {
+            if (client_account_id) io.to(String(client_account_id)).emit('notification', clientNotif);
+            if (freelancer_account_id) io.to(String(freelancer_account_id)).emit('notification', freelancerNotif);
+        }
+    } catch (notifErr) {
+        console.error('Error sending contract start notifications:', notifErr);
+    }
+
+    return { contractId };
+}
+
 module.exports = {
     shortlistGigOrderService,
-    unshortlistGigOrderService
+    unshortlistGigOrderService,
+    acceptGigOrderService,
+    confirmGigOrderContractService
 };

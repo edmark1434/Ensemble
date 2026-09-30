@@ -9,6 +9,7 @@ import axios from "axios";
 import useGlobalState from "@/lib/global_state";
 import { API_BASE_URL } from "@/lib/api";
 import { Eye, EyeOff } from "lucide-react";
+import { AccountRestrictionCard, standingFromPayload, type AccountStanding } from "@/components/ui/AccountStanding";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -269,9 +270,23 @@ function PrimaryBtn({ children, onClick, loading = false, fullWidth = false }: {
   );
 }
 
+function LoginBlockedNotice({
+  standing,
+  onUseAnother,
+}: {
+  standing: AccountStanding;
+  onUseAnother: () => void;
+}) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <AccountRestrictionCard standing={standing} actionLabel="Use a different account" onAction={onUseAnother} />
+    </div>
+  );
+}
+
 // ─── Google button ────────────────────────────────────────────────────────────
-function GoogleBtn() {
-  const handleGoogleSignIn = useGoogleAuth();
+function GoogleBtn({ onRestricted }: { onRestricted?: (standing: AccountStanding) => void }) {
+  const handleGoogleSignIn = useGoogleAuth(onRestricted);
   return (
     <button
       onClick={handleGoogleSignIn}
@@ -341,6 +356,7 @@ export default function LoginPage({
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading]   = useState(false);
   const [errors, setErrors]     = useState<LoginErrors>({});
+  const [restriction, setRestriction] = useState<AccountStanding | null>(null);
   const [pageLoaded, setPageLoaded] = useState(false);
   const { setUser, setIsAuthenticated, setSignUpData, theme } = useGlobalState();
   const navigate = useNavigate();
@@ -399,6 +415,15 @@ export default function LoginPage({
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    const onRestricted = (event: Event) => {
+      const standing = standingFromPayload((event as CustomEvent).detail);
+      if (standing?.blocked) setRestriction(standing);
+    };
+    window.addEventListener('ensemble:account-restricted', onRestricted);
+    return () => window.removeEventListener('ensemble:account-restricted', onRestricted);
+  }, []);
+
   const validate = () => {
     const e: LoginErrors = {};
     if (!email)    e.email    = "Email or Username is required.";
@@ -410,6 +435,7 @@ export default function LoginPage({
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
     setErrors({});
+    setRestriction(null);
     setLoading(true);
     try{
       const result = await axios.post(
@@ -439,6 +465,11 @@ export default function LoginPage({
     }catch(err){
       setLoading(false);
       if (axios.isAxiosError(err)) {
+        const standing = standingFromPayload(err.response?.data);
+        if (standing) {
+          setRestriction(standing);
+          return;
+        }
         setErrors({ password: err.response?.data?.message || "An error occurred. Please try again." });
       } else {
         setErrors({ password: "An error occurred. Please try again." });
@@ -625,6 +656,10 @@ export default function LoginPage({
             Sign in to continue to Ensemble.
           </p>
 
+          {restriction?.blocked ? (
+            <LoginBlockedNotice standing={restriction} onUseAnother={() => setRestriction(null)} />
+          ) : null}
+
           {/* Form */}
           <div className="fade-in-up delay-500" onKeyDown={handleKeyDown}>
             <Input
@@ -709,7 +744,7 @@ export default function LoginPage({
           </p>
 
           <Divider />
-          <GoogleBtn />
+          <GoogleBtn onRestricted={setRestriction} />
         </div>
 
         {/* ── Right: Dynamic Video Player Layout Panel ── */}

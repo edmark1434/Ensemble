@@ -69,6 +69,14 @@ async function patchAdminAccountStatus(req, res) {
     }
     assertStatusActionAllowed(req.session, action);
     const data = await updateAccountStatus(accountId, action, staffIdFromSession(req.session));
+    if (data.status === 'Suspended' && String(data.previousStatus || '').toLowerCase() !== 'suspended') {
+      try {
+        const { notifyAccountSuspended } = require('../services/AccountStandingServices');
+        await notifyAccountSuspended(accountId);
+      } catch (notifyErr) {
+        console.error('Failed to notify suspended account:', notifyErr);
+      }
+    }
     res.status(200).json({ success: true, data, message: `Account set to ${data.status}` });
   } catch (err) {
     console.error('Error updating account status:', err);

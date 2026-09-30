@@ -22,6 +22,7 @@ const {
     resetPasswordWithToken
 } = require('../services/UserServices');
 const { getUserOnboardingStep } = require('../repositories/UserRepositories');
+const { getAccountAccess, clearAuthSession } = require('../lib/AccountRestriction');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const redis = require('../lib/Redis');
@@ -85,16 +86,21 @@ async function signup(req, res) {
     try {
         const result = await registerUser(req.body);
         const statusCode = result.user ? 201 : 200;
+        const credentials = { ...(result.credentials || {}) };
+        const restriction = credentials.restriction || null;
+        delete credentials.restriction;
         await Promise.all([
-            setupRefreshTokenCookie(res, result.credentials),
-            createSessionIdCookie(res, result.credentials)
+            setupRefreshTokenCookie(res, credentials),
+            createSessionIdCookie(res, credentials)
         ]);
-        const accessToken = await AccessTokens(result.credentials);
+        const accessToken = await AccessTokens(credentials);
         setAccessTokenCookie(res, accessToken);
+        const publicCredentials = { ...credentials, restriction };
         return res.status(statusCode).json({
             success: result.success,
             message: result.message || 'User and account created successfully',
-            result: result.credentials,
+            credentials: publicCredentials,
+            result: publicCredentials,
         });
         
     } catch (err) {
@@ -102,6 +108,8 @@ async function signup(req, res) {
             return res.status(err.statusCode).json({
                 success: false,
                 message: err.message,
+                code: err.code || err.details?.code || null,
+                restriction: err.details?.blocked ? err.details : null,
             });
         }
 
@@ -198,6 +206,8 @@ async function loginCredentials(req, res) {
             }
         }
 
+        const restriction = credentials.restriction || null;
+        delete credentials.restriction;
         credentials.email = credentials.email_address; // Ensure email is included in the credentials for token generation
         delete credentials.email_address; // Remove redundant email_address field
         delete credentials.password_hash; // Ensure password hash is not included in the access token payload
@@ -244,6 +254,7 @@ async function loginCredentials(req, res) {
                 avatar_file_id: credentials.avatar_file_id,
                 avatar_preset_url: credentials.avatar_preset_url,
                 is_verified: credentials.is_verified,
+                restriction,
             },
         });
     } catch (err) {
@@ -251,6 +262,8 @@ async function loginCredentials(req, res) {
             return res.status(err.statusCode).json({
                 success: false,
                 message: err.message,
+                code: err.code || err.details?.code || null,
+                restriction: err.details?.blocked ? err.details : null,
                 details: err.details || null,
             });
         }
@@ -304,6 +317,17 @@ async function refreshToken(req, res) {
             return res.status(401).json({
                 success: false,
                 message: 'User not found for the provided refresh token',
+            });
+        }
+
+        const access = await getAccountAccess(credentials.account_id);
+        if (access.blocked) {
+            await clearAuthSession(req, res);
+            return res.status(403).json({
+                success: false,
+                code: access.code,
+                message: access.message,
+                restriction: access,
             });
         }
 
@@ -416,9 +440,21 @@ async function getCurrentUser(req, res) {
             }
         }
     }
+    let responseUser = sessionUser;
+    if (sessionUser && (sessionUser.account_id || sessionUser.accountId)) {
+        const accountId = sessionUser.account_id || sessionUser.accountId;
+        try {
+            responseUser = {
+                ...sessionUser,
+                restriction: await getAccountAccess(accountId),
+            };
+        } catch (err) {
+            console.error('Error loading account standing:', err);
+        }
+    }
     res.status(200).json({
         success: true,
-        user: sessionUser,
+        user: responseUser,
     });
 }
 
