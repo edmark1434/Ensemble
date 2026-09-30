@@ -92,7 +92,7 @@ async function initSocket(httpServer) {
     },
   });
   
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     try {
       const cookieHeader = socket.handshake.headers.cookie;
       if (!cookieHeader) {
@@ -110,6 +110,11 @@ async function initSocket(httpServer) {
       );
       if (!decoded.account_id) {
         return next(new Error('Authentication error: Invalid account token.'));
+      }
+      const { getAccountAccess } = require('./AccountRestriction');
+      const access = await getAccountAccess(decoded.account_id);
+      if (access.blocked) {
+        return next(new Error(access.message));
       }
       socket.user = decoded;
       return next();

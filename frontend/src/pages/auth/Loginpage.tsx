@@ -9,6 +9,7 @@ import axios from "axios";
 import useGlobalState from "@/lib/global_state";
 import { API_BASE_URL } from "@/lib/api";
 import { Eye, EyeOff } from "lucide-react";
+import { AccountStandingNotice, standingFromPayload, type AccountStanding } from "@/components/ui/AccountStanding";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -341,6 +342,7 @@ export default function LoginPage({
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading]   = useState(false);
   const [errors, setErrors]     = useState<LoginErrors>({});
+  const [restriction, setRestriction] = useState<AccountStanding | null>(null);
   const [pageLoaded, setPageLoaded] = useState(false);
   const { setUser, setIsAuthenticated, setSignUpData, theme } = useGlobalState();
   const navigate = useNavigate();
@@ -410,6 +412,7 @@ export default function LoginPage({
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
     setErrors({});
+    setRestriction(null);
     setLoading(true);
     try{
       const result = await axios.post(
@@ -439,6 +442,11 @@ export default function LoginPage({
     }catch(err){
       setLoading(false);
       if (axios.isAxiosError(err)) {
+        const standing = standingFromPayload(err.response?.data);
+        if (standing) {
+          setRestriction(standing);
+          return;
+        }
         setErrors({ password: err.response?.data?.message || "An error occurred. Please try again." });
       } else {
         setErrors({ password: "An error occurred. Please try again." });
@@ -624,6 +632,12 @@ export default function LoginPage({
           <p className="fade-in-up delay-400" style={{ color: T.muted, fontSize: 14, marginBottom: 32, fontFamily: T.fontBody }}>
             Sign in to continue to Ensemble.
           </p>
+
+          {restriction ? (
+            <div style={{ marginBottom: 24 }}>
+              <AccountStandingNotice standing={restriction} />
+            </div>
+          ) : null}
 
           {/* Form */}
           <div className="fade-in-up delay-500" onKeyDown={handleKeyDown}>

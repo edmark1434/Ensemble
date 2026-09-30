@@ -455,7 +455,18 @@ async function LoginUserOrEmail(loginIdentifier, password, context = {}) {
         throw new ServiceError('Invalid Credentials. Attempts remaining: ' + (MAX_ATTEMPTS - attempts), 400);
     }
 
-    // Successful login → reset attempts
+    // Successful password check. Banned, suspended, and locked accounts must not receive a session.
+    const { getAccountAccess } = require('../lib/AccountRestriction');
+    if (credentials.account_id) {
+        const access = await getAccountAccess(credentials.account_id);
+        if (access.blocked) {
+            const error = new ServiceError(access.message, 403, access);
+            error.code = access.code;
+            throw error;
+        }
+        credentials.restriction = access;
+    }
+
     await redisClient.del(attemptsKey);
     await redisClient.del(lockoutMetaKey);
     return credentials;

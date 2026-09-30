@@ -1,96 +1,10 @@
-# Current Task — Implement Unshortlist & Notify if Unshortlisted for Jobs and Gigs
+# Current Task — Enforce Suspend, Ban, and Violation Notices
 
-Implement the ability for clients/creators to unshortlist an applicant (revert status from 'Shortlisted' back to 'Pending') across Job proposals and Gig orders, and send in-app and real-time Socket.IO notifications to the applicant when unshortlisted.
+Make account suspend and ban actually stop platform access, and show a highly visible notice for banned, suspended, locked, and warned accounts.
 
-## Implementation Objectives
-- [x] **Job Proposal Unshortlisting & Notification (Backend)**:
-  - In `backend/controllers/JobControllers.js` (`updateProposalStatusController`), inspect proposal status prior to update.
-  - If previous status was `'Shortlisted'` and new status is `'Pending'`, generate notification:
-    - Message: `Your proposal on ${title} has been removed from the shortlist.`
-    - Reference table: `'proposals'`, prefix: `'unshortlisted'`, reference path: `/jobs/proposals/sent/${proposalId}`.
-    - Dispatch real-time Socket.IO notification to `freelancer_account_id`.
-  - Also ensure `rejectReason` is properly cleared/handled when reverting to `'Pending'`.
-- [x] **Job Proposal Unshortlist UI (Frontend)**:
-  - In `frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author.tsx`:
-    - Add "Unshortlist" action button in the action bar when `proposal.status === "Shortlisted"`.
-    - Add unshortlist confirmation modal with prompt confirming status reversal to 'Pending' and notification dispatch.
-    - On confirmation, send `PUT /api/jobs/proposals/:proposalId/status` with `{ status: "Pending" }`.
-    - Update local state and display success toast `"Applicant removed from shortlist"`.
-- [x] **Gig Order Shortlist & Unshortlist (Backend)**:
-  - In `backend/repositories/GigRepositories.js`:
-    - Add `shortlistGigOrderRepository(orderId, freelancerAccountIds)` to transition from `'Pending'` to `'Shortlisted'`.
-    - Add `unshortlistGigOrderRepository(orderId, freelancerAccountIds)` to transition from `'Shortlisted'` to `'Pending'`.
-    - Update `acceptGigOrderRepository` and `rejectGigOrderRepository` to allow accepting/rejecting orders that are in `'Shortlisted'` status as well as `'Pending'`.
-  - In `backend/services/GigServices.js`:
-    - Create service functions `shortlistGigOrderService` and `unshortlistGigOrderService`.
-    - Handle notification generation (`createNotificationServices`) and real-time Socket.IO emission to `client_account_id`.
-      - Shortlist message: `Your gig order for '${gig_title}' has been shortlisted by the freelancer.`
-      - Unshortlist message: `Your gig order for '${gig_title}' has been removed from the shortlist.`
-  - In `backend/controllers/GigControllers.js`:
-    - Add `shortlistGigOrderController` and `unshortlistGigOrderController`.
-  - In `backend/routes/Gig.js`:
-    - Mount `POST /orders/:orderId/shortlist` and `POST /orders/:orderId/unshortlist`.
-- [x] **Gig Order Shortlist & Unshortlist UI (Frontend)**:
-  - In `frontend/src/pages/user/7_gigs/gig_orders/incoming_order_detail.tsx`:
-    - When `order.status === 'Pending'`, provide "Shortlist" button.
-    - When `order.status === 'Shortlisted'`, show "Shortlisted" status, "Unshortlist" button, and "Open Discussion Chat" button alongside "Reject" and "Review & Accept".
-  - In `frontend/src/pages/user/7_gigs/gig_orders/sent_order_detail.tsx`:
-    - When `order.status === 'Shortlisted'`, display shortlisted badge and "Open Discussion Chat" button.
-- [x] **Shortlist Modal Initial Inbox Message (Jobs & Gigs)**:
-  - In `backend/services/JobServices.js` (`updateProposalStatusServices`):
-    - When `status === 'Shortlisted'` and `options.initialMessage` is provided, automatically create or fetch the marketplace chat conversation via `createMarketplaceChatServices`.
-    - Immediately insert the message via `createMessageServices` and broadcast `newMessage` and `conversationMessageNotification` to both applicant and client in real time.
-  - In `backend/controllers/JobControllers.js` (`updateProposalStatusController`):
-    - Extract `initialMessage` from `req.body.message`, `req.body.shortlistMessage`, or fallback reason and forward to `updateProposalStatusServices`.
-  - In `backend/services/GigServices.js` (`shortlistGigOrderService`):
-    - Create/fetch marketplace chat conversation and post initial message when provided during gig shortlisting.
-  - In `backend/controllers/GigControllers.js` (`shortlistGigOrderController`):
-    - Extract `initialMessage` and pass into `shortlistGigOrderService`.
-  - In `frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author.tsx`:
-    - Added loading state `isShortlisting` to avoid duplicate sends.
-    - Updated `handleConfirmShortlist` to pass `message`, `shortlistMessage`, and `rejection_reason` to the API.
-    - Added toast feedback: `"Candidate shortlisted and message sent to chat"`.
-- [x] **Notifications & Floating Chat on Shortlist (Applicants & Hirer)**:
-  - In `backend/repositories/JobRepositories.js`:
-    - Updated `updateProposalStatusRepositories` to return `j.title as job_title` and `j.client_account_id`.
-  - In `backend/services/JobServices.js` & `backend/services/GigServices.js`:
-    - On shortlisting with an initial message, emit `conversationCreated` to both participants to ensure synced inbox state.
-    - Emit `openFloatingChat` socket event to the recipient (`freelancer_account_id` for jobs, `client_account_id` for gigs) with conversation ID, inbox, and initial message.
-    - Return `conversation: chatResult.inbox` from services.
-  - In `backend/controllers/JobControllers.js` & `backend/controllers/GigControllers.js`:
-    - Return `conversation: updated.conversation || null` in the JSON response to the hirer/creator.
-  - In `frontend/src/components/ui/chat_bubble/chat_state.ts`:
-    - Bound `socket.on("openFloatingChat")` to automatically upsert conversation and call `openFloatingConversation`.
-    - Updated `reconcileMessage` to support marketplace conversations (`marketplace_job`, `marketplace_gig`) and automatically open floating chat for incoming messages.
-    - Updated `openFloatingConversation` to load missing conversation details directly if not yet in state.
-  - In `frontend/src/components/nav/user_header.tsx`:
-    - Added instant toast notification when a `notification` socket event arrives so users receive immediate visual feedback.
-  - In `frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author.tsx`:
-    - In `handleConfirmShortlist`, immediately open the hirer's floating chat window to the created marketplace conversation with the applicant.
-  - In `frontend/src/pages/user/7_gigs/gig_orders/incoming_order_detail.tsx`:
-    - In `handleShortlist`, open floating chat if conversation is returned from the API.
-- [x] **Instant Floating Chat Opening with Message**:
-  - In `backend/services/JobServices.js` & `backend/services/GigServices.js`:
-    - Track `createdMessage` and return `initialMessage: createdMessage` alongside `conversation`.
-  - In `backend/controllers/JobControllers.js` & `backend/controllers/GigControllers.js`:
-    - Return `initialMessage` in API responses for both job proposals and gig orders.
-  - In `frontend/src/components/ui/chat_bubble/chat_state.ts`:
-    - Exported `upsertMessage` and `upsertConversation`.
-    - Extended `loadConversation(conversationId, force?: boolean)` to allow force-reloading messages, ensuring new shortlist messages are retrieved without cache blockage.
-    - Updated `openFloatingConversation` to dispatch custom window event `chat:open-window` and invoke `loadConversation(conversationId, true)`.
-    - Handled `initialMessage` directly in `socket.on("openFloatingChat")` for instant receipt on the recipient's side.
-  - In `frontend/src/components/ui/chat_bubble/chat_main.tsx`:
-    - Added listener for `chat:open-window` to immediately remove IDs from `dismissedIds` and add them to `openIds`.
-    - Updated `activeUser` effect to eliminate `setTimeout(0)` race conditions and reliably track conversation and applicant IDs.
-    - Ensured `openWindows` includes `activeUser` synchronously even if `recentChats` is still recalculating.
-  - In `frontend/src/components/ui/Layout.tsx`:
-    - Extended `recentChats` to extract recipient details (name, avatar, `account_id`) for non-group marketplace conversations (`marketplace_job`, `marketplace_gig`).
-    - Matched `activeChatUser` by `chat.id`, `chat.inbox_id`, or `chat.account_id`.
-  - In `frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author.tsx` & `incoming_order_detail.tsx`:
-    - Directly upsert `conversation` and `initialMessage` into `useChatState` upon shortlisting so the chat window displays the message instantly without waiting for network or socket lag.
-    - Added Shortlist and Unshortlist modals to Gig incoming order details matching the Job proposal flow.
-- [x] **Verification**:
-  - Run `node --check` on modified backend files.
-  - Run `npm run build` in `frontend/`.
+## Acceptance Criteria
 
-
+- [x] Login, refresh, session, JWT, and Socket.IO reject accounts whose status is Banned, Suspended, or Locked, and clear the existing session.
+- [x] Login and staff/admin sign-in show a large restriction notice with active violations.
+- [x] An in-app full-screen notice appears when a live session is rejected.
+- [x] Active accounts with open violations see a sticky warning banner.
