@@ -20,7 +20,7 @@ export const InboxSearch: React.FC<InboxSearchProps> = ({
   if (isCollapsed) return null;
 
   return (
-    <div className="p-3 border-b border-gray-200 dark:border-white/10 flex-shrink-0 bg-white dark:bg-dark-surface flex items-center gap-2">
+    <div className="px-3 pt-5 pb-3 border-b border-gray-200 dark:border-white/10 flex-shrink-0 bg-white dark:bg-dark-surface flex items-center gap-2">
       <div className="relative flex-1">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-zinc-500" />
         <input
