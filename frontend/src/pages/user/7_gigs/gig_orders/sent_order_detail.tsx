@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Loader2, ArrowLeft, XCircle, Star, User, ExternalLink, Send, Calendar, Clock, Image as ImageIcon, Video, FileText, PlayCircle } from "lucide-react";
+import { Loader2, ArrowLeft, XCircle, Star, User, ExternalLink, Send, Calendar, Clock, Image as ImageIcon, Video, FileText, PlayCircle, MessageSquare } from "lucide-react";
 import api from "@/lib/axios";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
 import { showErrorToast } from "@/components/utility/toast";
+import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 
 export const SentOrderDetail = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -24,7 +25,7 @@ export const SentOrderDetail = () => {
         navigate('/gigs/orders/sent');
     } catch (err) {
         console.error("Failed to withdraw:", err);
-        showErrorToast("Failed to withdraw order.");
+        showErrorToast("Failed to cancel order.");
         setIsWithdrawing(false);
     }
   };
@@ -143,6 +144,7 @@ export const SentOrderDetail = () => {
                       <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${
                           order.status === 'Accepted' || order.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
                           order.status === 'Rejected' || order.status === 'Cancelled' ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' :
+                          order.status === 'Shortlisted' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
                           'bg-yellow-50 text-yellow-600 border-yellow-200 dark:bg-yellow-500/10 dark:text-amber-500 dark:text-amber-400 dark:border-yellow-500/20'
                       }`}>
                           {order.status || 'Pending'}
@@ -216,7 +218,7 @@ export const SentOrderDetail = () => {
               
               {/* CONTROLS */}
               <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm flex items-center justify-between mt-6">
-                <span className="text-xs font-bold text-gray-700 dark:text-gray-400">Current Status: <span className="text-amber-500 dark:text-amber-400 font-bold">{order.status || 'Pending'}</span></span>
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-400">Current Status: <span className={`font-bold ${order.status === 'Shortlisted' ? 'text-blue-500 dark:text-blue-400' : 'text-amber-500 dark:text-amber-400'}`}>{order.status || 'Pending'}</span></span>
                 {order.status === 'Pending' && (
                     <div className="flex items-center gap-3">
                       <button onClick={() => navigate(`/gigs/services/${order.gig_id}/order?edit=${order.id}`)} className="px-5 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition flex items-center gap-2">
@@ -227,7 +229,28 @@ export const SentOrderDetail = () => {
                         onClick={() => setShowWithdrawConfirm(true)}
                         className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2 disabled:opacity-50"
                       >
-                        <XCircle className="w-4 h-4" /> Withdraw Order
+                        <XCircle className="w-4 h-4" /> Cancel Order
+                      </button>
+                    </div>
+                )}
+                {order.status === 'Shortlisted' && (
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => void openMarketplaceConversation({
+                          contextType: 'gig_order',
+                          contextId: order.id,
+                          navigate,
+                        })}
+                        className="px-5 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition flex items-center gap-2"
+                      >
+                        <MessageSquare className="w-4 h-4" /> Open Discussion Chat
+                      </button>
+                      <button 
+                        disabled={isWithdrawing}
+                        onClick={() => setShowWithdrawConfirm(true)}
+                        className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2 disabled:opacity-50"
+                      >
+                        <XCircle className="w-4 h-4" /> Cancel Order
                       </button>
                     </div>
                 )}
@@ -347,7 +370,7 @@ export const SentOrderDetail = () => {
       {showWithdrawConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm p-6 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Withdraw Order</h3>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Cancel Order</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">
               Are you sure you want to withdraw this pending order? This action cannot be undone.
             </p>

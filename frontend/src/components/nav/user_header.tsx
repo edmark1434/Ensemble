@@ -11,6 +11,7 @@ import UserLogoutModal from "./user_logout_modal";
 import socket from "@/lib/socket";
 import useChatState from "@/components/ui/chat_bubble/chat_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import toast from "react-hot-toast";
 
 interface UserHeaderProps {
   pageTitle: string;
@@ -344,6 +345,14 @@ useEffect(() => {
 
       if (exists) {
         return prev;
+      }
+
+      // Display visual toast alert
+      if (notification.message) {
+        toast(notification.message, {
+          icon: '🔔',
+          duration: 4500,
+        });
       }
 
       // Play notification sound

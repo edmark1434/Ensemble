@@ -795,8 +795,8 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
         if (reqCheck.rows.length === 0) {
             throw new Error('Gig order not found or unauthorized');
         }
-        if (reqCheck.rows[0].status !== 'Pending') {
-            throw new Error('Gig order is not in Pending status');
+        if (reqCheck.rows[0].status !== 'Pending' && reqCheck.rows[0].status !== 'Shortlisted') {
+            throw new Error('Gig order is not in Pending or Shortlisted status');
         }
 
         const { rate_credits, delivery_days, no_of_revisions_max, gig_id, client_account_id, freelancer_account_id: freelancerAccountId, gig_title } = reqCheck.rows[0];
@@ -996,8 +996,8 @@ async function rejectGigOrderRepository(orderId, freelancerAccountIds, reason) {
         if (reqCheck.rows.length === 0) {
             throw new Error('Gig order not found or unauthorized');
         }
-        if (reqCheck.rows[0].status !== 'Pending') {
-            throw new Error('Gig order is not in Pending status');
+        if (reqCheck.rows[0].status !== 'Pending' && reqCheck.rows[0].status !== 'Shortlisted') {
+            throw new Error('Gig order is not in Pending or Shortlisted status');
         }
         const { client_account_id, gig_title } = reqCheck.rows[0];
 
@@ -1087,16 +1087,98 @@ async function withdrawGigOrderRepository(orderId, accountIds) {
          SET status = 'Withdrawn', updated_at = NOW()
          WHERE gig_request_id = $1
            AND client_account_id = ANY($2::uuid[])
-           AND status = 'Pending'
+           AND status IN ('Pending', 'Shortlisted')
          RETURNING gig_request_id`,
         [orderId, accountIds]
     );
     if (!result.rows.length) {
-        const error = new Error('Pending gig order not found or unauthorized');
+        const error = new Error('Pending or shortlisted gig order not found or unauthorized');
         error.statusCode = 404;
         throw error;
     }
     return true;
+}
+
+async function shortlistGigOrderRepository(orderId, freelancerAccountIds) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const reqCheckQuery = `
+            SELECT gr.gig_request_id, gr.status, gr.client_account_id, g.freelancer_account_id, g.title as gig_title
+            FROM gig_requests gr
+            JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+            JOIN gigs g ON gt.gig_id = g.gig_id
+            WHERE gr.gig_request_id = $1 AND g.freelancer_account_id = ANY($2::uuid[])
+            FOR UPDATE OF gr
+        `;
+        const reqCheck = await client.query(reqCheckQuery, [orderId, freelancerAccountIds]);
+        if (reqCheck.rows.length === 0) {
+            throw new Error('Gig order not found or unauthorized');
+        }
+        if (reqCheck.rows[0].status !== 'Pending') {
+            throw new Error('Only pending gig orders can be shortlisted');
+        }
+
+        const updateRes = await client.query(
+            "UPDATE gig_requests SET status = 'Shortlisted', updated_at = NOW() WHERE gig_request_id = $1 RETURNING *",
+            [orderId]
+        );
+
+        await client.query('COMMIT');
+        return {
+            order: updateRes.rows[0],
+            client_account_id: reqCheck.rows[0].client_account_id,
+            gig_title: reqCheck.rows[0].gig_title
+        };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error in shortlistGigOrderRepository:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+async function unshortlistGigOrderRepository(orderId, freelancerAccountIds) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const reqCheckQuery = `
+            SELECT gr.gig_request_id, gr.status, gr.client_account_id, g.freelancer_account_id, g.title as gig_title
+            FROM gig_requests gr
+            JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+            JOIN gigs g ON gt.gig_id = g.gig_id
+            WHERE gr.gig_request_id = $1 AND g.freelancer_account_id = ANY($2::uuid[])
+            FOR UPDATE OF gr
+        `;
+        const reqCheck = await client.query(reqCheckQuery, [orderId, freelancerAccountIds]);
+        if (reqCheck.rows.length === 0) {
+            throw new Error('Gig order not found or unauthorized');
+        }
+        if (reqCheck.rows[0].status !== 'Shortlisted') {
+            throw new Error('Only shortlisted gig orders can be unshortlisted');
+        }
+
+        const updateRes = await client.query(
+            "UPDATE gig_requests SET status = 'Pending', updated_at = NOW() WHERE gig_request_id = $1 RETURNING *",
+            [orderId]
+        );
+
+        await client.query('COMMIT');
+        return {
+            order: updateRes.rows[0],
+            client_account_id: reqCheck.rows[0].client_account_id,
+            gig_title: reqCheck.rows[0].gig_title
+        };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error in unshortlistGigOrderRepository:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
 }
 
 module.exports = {
@@ -1114,5 +1196,7 @@ module.exports = {
     deleteGigRepository,
     acceptGigOrderRepository,
     rejectGigOrderRepository,
-    withdrawGigOrderRepository
+    withdrawGigOrderRepository,
+    shortlistGigOrderRepository,
+    unshortlistGigOrderRepository
 };

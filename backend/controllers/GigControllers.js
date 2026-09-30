@@ -25,6 +25,7 @@ const {
 const { pool } = require('../lib/Database');
 const { getIo } = require('../lib/WebSocket');
 const { createNotificationServices } = require('../services/NotificationServices');
+const { shortlistGigOrderService, unshortlistGigOrderService } = require('../services/GigServices');
 
 function sendControllerError(res, error, fallbackMessage) {
     if (error instanceof MarketplaceActorError || error.statusCode) {
@@ -317,6 +318,52 @@ async function withdrawGigOrderController(req, res) {
     }
 }
 
+async function shortlistGigOrderController(req, res) {
+    try {
+        const freelancer_account_id = req.user?.account_id;
+        const orderId = req.params.orderId;
+
+        if (!freelancer_account_id) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        const actorIds = await getAuthorizedActorAccountIds(freelancer_account_id);
+        const initialMessage = (req.body.message || req.body.shortlistMessage || '').trim();
+        const order = await shortlistGigOrderService(orderId, actorIds, {
+            actorAccountId: freelancer_account_id,
+            initialMessage: initialMessage || null
+        });
+        res.status(200).json({ 
+            success: true, 
+            message: 'Gig order shortlisted successfully', 
+            data: order, 
+            conversation: order.conversation || null,
+            initialMessage: order.initialMessage || null 
+        });
+    } catch (error) {
+        console.error("Error in shortlistGigOrderController:", error);
+        res.status(500).json({ success: false, message: error.message || 'Failed to shortlist gig order' });
+    }
+}
+
+async function unshortlistGigOrderController(req, res) {
+    try {
+        const freelancer_account_id = req.user?.account_id;
+        const orderId = req.params.orderId;
+
+        if (!freelancer_account_id) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        const actorIds = await getAuthorizedActorAccountIds(freelancer_account_id);
+        const order = await unshortlistGigOrderService(orderId, actorIds);
+        res.status(200).json({ success: true, message: 'Gig order removed from shortlist successfully', data: order });
+    } catch (error) {
+        console.error("Error in unshortlistGigOrderController:", error);
+        res.status(500).json({ success: false, message: error.message || 'Failed to unshortlist gig order' });
+    }
+}
+
 module.exports = {
     updateGigController,
     createGigController,
@@ -332,5 +379,7 @@ module.exports = {
     deleteGigController,
     acceptGigOrderController,
     rejectGigOrderController,
-    withdrawGigOrderController
+    withdrawGigOrderController,
+    shortlistGigOrderController,
+    unshortlistGigOrderController
 };

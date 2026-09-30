@@ -206,32 +206,62 @@ async function updateProposalStatusController(req, res) {
     try {
         const accountId = req.user?.account_id;
         const { proposalId } = req.params;
-        const { status, rejectReason } = req.body;
+        const { status, rejectReason, rejection_reason } = req.body;
         if (!accountId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
         const actorIds = await getAuthorizedActorAccountIds(accountId);
-        const updated = await JobServices.updateProposalStatusServices(proposalId, actorIds, status, rejectReason);
+
+        const propBefore = await pool.query(`
+            SELECT p.status, p.freelancer_account_id, j.title, p.job_id 
+            FROM proposals p 
+            JOIN jobs j ON p.job_id = j.job_id 
+            WHERE p.proposal_id = $1
+        `, [proposalId]);
+        const prevStatus = propBefore.rows[0]?.status;
+
+        const effectiveReason = rejectReason || rejection_reason || null;
+        const initialMessage = (req.body.message || req.body.shortlistMessage || (status === 'Shortlisted' ? effectiveReason : null) || '').trim();
+        const updated = await JobServices.updateProposalStatusServices(
+            proposalId, 
+            actorIds, 
+            status, 
+            effectiveReason,
+            {
+                actorAccountId: accountId,
+                initialMessage
+            }
+        );
 
         try {
-            if (status === 'Shortlisted' || status === 'Rejected' || status === 'Approved') {
-                const propQ = await pool.query(`
-                    SELECT p.freelancer_account_id, j.title, p.job_id 
-                    FROM proposals p 
-                    JOIN jobs j ON p.job_id = j.job_id 
-                    WHERE p.proposal_id = $1
-                `, [proposalId]);
-                
-                if (propQ.rows[0]) {
-                    const { freelancer_account_id, title } = propQ.rows[0];
-                    let message = `Your proposal on ${title} has been ${status}`;
-                    if (status === 'Shortlisted') {
-                        message = `Your proposal on ${title} has been shortlisted.`;
-                    }
-                    
+            if (propBefore.rows[0]) {
+                const { freelancer_account_id, title } = propBefore.rows[0];
+                let shouldNotify = false;
+                let message = `Your proposal on ${title} has been ${status}`;
+                let prefix = (status || '').toLowerCase();
+
+                if (status === 'Shortlisted') {
+                    shouldNotify = true;
+                    message = `Your proposal on ${title} has been shortlisted.`;
+                    prefix = 'shortlisted';
+                } else if (prevStatus === 'Shortlisted' && status === 'Pending') {
+                    shouldNotify = true;
+                    message = `Your proposal on ${title} has been removed from the shortlist.`;
+                    prefix = 'unshortlisted';
+                } else if (status === 'Rejected') {
+                    shouldNotify = true;
+                    message = `Your proposal on ${title} has been rejected.`;
+                    prefix = 'rejected';
+                } else if (status === 'Accepted' || status === 'Approved') {
+                    shouldNotify = true;
+                    message = `Your proposal on ${title} has been accepted.`;
+                    prefix = 'accepted';
+                }
+
+                if (shouldNotify) {
                     const notif = await createNotificationServices({
                         message,
                         reference_table: 'proposals',
-                        reference_prefix: status.toLowerCase(),
+                        reference_prefix: prefix,
                         reference_path: `/jobs/proposals/sent/${proposalId}`,
                         reference_id: proposalId,
                         account_id: freelancer_account_id
@@ -244,7 +274,13 @@ async function updateProposalStatusController(req, res) {
             console.error('Error sending proposal status notification:', notifErr);
         }
 
-        res.status(200).json({ success: true, data: updated, message: 'Status updated.' });
+        res.status(200).json({ 
+            success: true, 
+            data: updated, 
+            conversation: updated.conversation || null, 
+            initialMessage: updated.initialMessage || null,
+            message: 'Status updated.' 
+        });
     } catch (err) {
         console.error('Error in updateProposalStatusController:', err);
         res.status(400).json({ success: false, message: err.message || 'Internal Server Error' });
