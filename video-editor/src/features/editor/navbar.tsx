@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { patchProject } from "@/features/editor/control-item/common/composition-controls";
 import { Button } from "@/components/ui/button";
 import { dispatch } from "@designcombo/events";
 import { HISTORY_UNDO, HISTORY_REDO, DESIGN_RESIZE } from "@designcombo/state";
@@ -50,14 +49,14 @@ import {
 import ShareModal from "@/components/share-modal";
 
 export default function Navbar({
-  user,
-  stateManager,
-  undoManager,
-  viewOnly,
-  saveStatus,
-  compactStatus,
-  onForceSave
-}: {
+                                 user,
+                                 stateManager,
+                                 undoManager,
+                                 viewOnly,
+                                 saveStatus,
+                                 compactStatus,
+                                 onForceSave
+                               }: {
   user: unknown | null;
   stateManager: StateManager;
   undoManager?: Y.UndoManager;
@@ -85,20 +84,12 @@ export default function Navbar({
     undoManager?.redo();
   };
 
-  const commitTitle = async () => {
+  const commitTitle = () => {
     if (title.trim() === "") {
       setTitle(projectName);
       return;
     }
-    const previous = projectName;
     setProjectName(title);
-    try {
-      await patchProject(projectId, { name: title });
-    } catch (err) {
-      console.error("Failed to save project name from navbar", err);
-      setProjectName(previous);
-      setTitle(previous);
-    }
   };
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -414,12 +405,12 @@ const ResizeVideo = () => {
 };
 
 const ResizeOption = ({
-  label,
-  icon,
-  value,
-  description,
-  handleResize
-}: ResizeOptionProps & { handleResize: (payload: ResizeValue) => void }) => {
+                        label,
+                        icon,
+                        value,
+                        description,
+                        handleResize
+                      }: ResizeOptionProps & { handleResize: (payload: ResizeValue) => void }) => {
   const Icon = Icons[icon as "text"];
   return (
     <div

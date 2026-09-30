@@ -13,9 +13,9 @@ import { db } from "@/lib/db";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function EditorPage({
-  params,
-  searchParams,
-}: {
+                                           params,
+                                           searchParams,
+                                         }: {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ width?: string; height?: string }>;
 }) {
@@ -56,7 +56,6 @@ export default async function EditorPage({
       "project_members.role",
       "projects.width",
       "projects.height",
-      "projects.name",
       "users.first_name",
     ])
     .executeTakeFirst();
@@ -65,8 +64,6 @@ export default async function EditorPage({
     notFound();
   }
 
-  console.log("[EditorPage] DB returned name:", JSON.stringify(membership.name), "for project:", id);
-
   return (
     <Editor
       id={id}
@@ -74,7 +71,6 @@ export default async function EditorPage({
       userName={membership.first_name}
       width={membership.width}
       height={membership.height}
-      projectName={membership.name}
       role={membership.role}
     />
   );

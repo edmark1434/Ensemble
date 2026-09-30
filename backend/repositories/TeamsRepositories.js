@@ -78,7 +78,7 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
     WHERE t.deleted_at IS NULL
       AND ($2='' OR a.display_name ILIKE '%'||$2||'%' OR a.handle ILIKE '%'||$2||'%')
       AND (
-        ($3::boolean = TRUE AND mine.status = 'Active')
+        ($3::boolean = TRUE AND mine.status IN ('Active', 'Pending'))
         OR ($3::boolean = FALSE AND t.visibility = 'Public')
       )
     GROUP BY t.team_id,a.account_id,f.path,v.is_verified,mine.role,mine.status ORDER BY a.display_name LIMIT $4 OFFSET $5`, [accountId,q,mine,limit,offset])).rows;
@@ -333,3 +333,4 @@ async function getTeamInbox(teamId){return TeamInbox.findOne({team_id:String(tea
 async function createTeamInbox(team,members){const now=new Date();const result=await TeamInbox.insertOne({team_id:String(team.team_id),team_account_id:String(team.account_id),conversation_name:team.display_name,conversation_type:'group',conversation_image_key:team.avatar_path||null,members:members.map(m=>({account_id:String(m.account_id),role:m.role==='Owner'?'owner':'member',status:'active',joined_at:now})),pinned_messages:[],created_at:now,updated_at:now,deleted_at:null});return TeamInbox.findOne({_id:result.insertedId});}
 async function syncTeamInboxMembers(teamId,members){const inbox=await getTeamInbox(teamId);if(!inbox)return null;const active=new Map(members.map(m=>[String(m.account_id),m])),now=new Date();const merged=(inbox.members||[]).map(m=>active.has(String(m.account_id))?{...m,status:'active',role:active.get(String(m.account_id)).role==='Owner'?'owner':'member'}:{...m,status:'removed',left_at:now});for(const m of members)if(!merged.some(x=>String(x.account_id)===String(m.account_id)))merged.push({account_id:String(m.account_id),role:m.role==='Owner'?'owner':'member',status:'active',joined_at:now});await TeamInbox.updateOne({_id:inbox._id},{$set:{members:merged,updated_at:now}});return TeamInbox.findOne({_id:inbox._id});}
 module.exports={createTeam,getUserId,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers};
+

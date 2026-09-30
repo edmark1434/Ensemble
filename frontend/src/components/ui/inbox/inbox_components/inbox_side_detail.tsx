@@ -150,9 +150,9 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   const creatorId = selectedConversation.creator_id || owner?.account_id || currentUserId;
   const isCreatorSelf = creatorId === currentUserId;
   const memberList: Members[] = selectedConversation.members || [];
-  const activeMembers = memberList.filter(
-    (member) => !["left", "removed"].includes(member.status || "active")
-  );
+  const activeMembers = memberList.filter( (member) => !['left', 'removed'].includes(member.status || 'active') );
+  const memberLimit = getMemberLimit ? getMemberLimit(selectedConversation) : null;
+  const isLimitReached = memberLimit !== null && activeMembers.length >= memberLimit;
   const currentMember = memberList.find(
     (member) => String(member.account_id) === currentUserId
   );
@@ -256,7 +256,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           <h3 className="text-sm font-semibold text-gray-600 dark:text-zinc-300">Chat Details</h3>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10 transition"
+            className="p-1.5 rounded-full text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition"
           >
             <X className="h-4 w-4" />
           </button>
@@ -350,7 +350,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                     navigate(`/profile/${otherMember.account_id}`);
                   }
                 }}
-                className="flex flex-col items-center gap-1.5 text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition group"
+                className="flex flex-col items-center gap-1.5 text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white transition group"
               >
                 <div className="p-3 rounded-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 group-hover:bg-blue-500 group-hover:border-blue-500 transition">
                   <User className="h-5 w-5" />
@@ -374,7 +374,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
             <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
               <button
                 onClick={() => setIsCustomizeOpen((prev) => !prev)}
-                className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5 transition"
+                className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
               >
                 <span>Customize Chat</span>
                 {isCustomizeOpen ? (
@@ -429,7 +429,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
             <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
               <div
                 onClick={() => setIsMembersOpen((prev) => !prev)}
-                className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5 transition"
+                className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
               >
                 <button type="button" className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-blue-400" />
@@ -447,7 +447,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                         setShowMemberSearch((open) => !open);
                         setIsMembersOpen(true);
                       }}
-                      className="rounded-full p-1 text-blue-400 hover:bg-gray-100 dark:bg-white/10"
+                      className="rounded-full p-1 text-blue-400 hover:bg-gray-100 dark:hover:bg-white/10"
                       title="Add members"
                     >
                       <Plus className="h-4 w-4" />
@@ -488,9 +488,9 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                           <button
                             key={account.account_id}
                             type="button"
-                            disabled={Boolean(isActive)}
+                            disabled={Boolean(isActive) || isLimitReached} title={isLimitReached ? "Maximum members reached" : ""}
                             onClick={() => setMemberToAdd(account)}
-                            className="flex w-full items-center gap-2 rounded-lg p-2 text-left hover:bg-gray-100 dark:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="flex w-full items-center gap-2 rounded-lg p-2 text-left hover:bg-gray-100 dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             <img src={account.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
                             <span className="min-w-0 flex-1">
@@ -519,7 +519,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                     return (
                       <div
                         key={memberId}
-                        className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:bg-white/5 transition text-xs"
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-white/10 transition text-xs"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <img
@@ -540,15 +540,16 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                           {canManageMembers && member.role !== "owner" && (
                             <>
                               {isInactive ? (
-                                <button
-                                  title="Re-add member"
-                                  onClick={() =>
-                                    onUpdateMember &&
-                                    void runMemberAction(() =>
-                                      onUpdateMember(memberId, { status: "active" })
-                                    )
-                                  }
-                                  className="p-1 text-emerald-400 hover:bg-gray-100 dark:bg-white/10"
+                                  <button
+                                    title={isLimitReached ? "Maximum members reached" : "Re-add member"}
+                                    disabled={isLimitReached}
+                                    onClick={() =>
+                                      onUpdateMember &&
+                                      void runMemberAction(() =>
+                                        onUpdateMember(memberId, { status: "active" })
+                                      )
+                                    }
+                                    className="p-1 text-emerald-400 hover:bg-gray-100 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   <UserPlus className="h-3.5 w-3.5" />
                                 </button>
@@ -577,7 +578,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                                       onRemoveMember &&
                                       void runMemberAction(() => onRemoveMember(memberId))
                                     }
-                                    className="p-1 text-red-400 hover:bg-gray-100 dark:bg-white/10"
+                                    className="p-1 text-red-400 hover:bg-gray-100 dark:hover:bg-white/10"
                                   >
                                     <UserMinus className="h-3.5 w-3.5" />
                                   </button>
@@ -599,7 +600,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
             <button
               onClick={() => setIsPinnedOpen((prev) => !prev)}
-              className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5 transition"
+              className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
             >
               <div className="flex items-center gap-2">
                 <Pin className="h-4 w-4 text-gray-500 dark:text-gray-400" />
@@ -643,7 +644,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
             <button
               onClick={() => setIsLinksOpen((prev) => !prev)}
-              className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5 transition"
+              className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
             >
               <div className="flex items-center gap-2">
                 <LinkIcon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
@@ -669,12 +670,12 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                       href={item.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between p-2 rounded-lg bg-black/20 border border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:bg-white/5 transition text-xs group"
+                      className="flex items-center justify-between p-2 rounded-lg bg-black/20 border border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/10 transition text-xs group"
                     >
                       <span className="text-blue-400 group-hover:underline truncate max-w-[85%]">
                         {item.url}
                       </span>
-                      <ExternalLink className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-500 group-hover:text-gray-900 dark:text-white flex-shrink-0" />
+                      <ExternalLink className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-500 group-hover:text-gray-900 dark:text-white dark:group-hover:text-white dark:hover:text-white flex-shrink-0" />
                     </a>
                   ))
                 )}
@@ -686,7 +687,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           <div className="rounded-xl overflow-hidden bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
             <button
               onClick={() => setIsAttachmentsOpen((prev) => !prev)}
-              className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5 transition"
+              className="w-full flex items-center justify-between p-3 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
             >
               <div className="flex items-center gap-2">
                 <Paperclip className="h-4 w-4 text-gray-500 dark:text-gray-400" />
@@ -877,5 +878,10 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
     </div>
   );
 };
+
+
+
+
+
 
 

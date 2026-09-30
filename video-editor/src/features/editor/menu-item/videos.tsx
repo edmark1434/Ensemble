@@ -14,6 +14,7 @@ import { ImageLoading } from "@/components/ui/image-loading";
 import {getCurrentTime} from "@/features/editor/utils/time";
 import useStore from "../store/use-store";
 import {useMasonryRows} from "@/features/editor/hooks/use-masonry-rows";
+import { millisecondsToHHMMSS } from "../utils/format";
 
 // Shared by both click-to-add and drag-to-add: scales the raw video
 // dimensions to fit the canvas and centers left/top accordingly.
@@ -248,10 +249,10 @@ export const Videos = () => {
 };
 
 const VideoItem = ({
-  handleAddVideo,
-  video,
-  shouldDisplayPreview
-}: {
+                     handleAddVideo,
+                     video,
+                     shouldDisplayPreview
+                   }: {
   handleAddVideo: (payload: Partial<IVideo>) => void;
   video: Partial<IVideo>;
   shouldDisplayPreview: boolean;
@@ -312,7 +313,7 @@ const VideoItem = ({
         {/* Duration badge */}
         {(video.details as any)?.duration && (
           <div className="absolute bottom-3 right-2 bg-secondary/90 text-secondary-foreground/90 text-xs px-1 py-0.5 rounded">
-            {Math.round((video.details as any).duration)}s
+            {millisecondsToHHMMSS(Math.floor((video.details as any).duration) * 1000)}
           </div>
         )}
       </div>

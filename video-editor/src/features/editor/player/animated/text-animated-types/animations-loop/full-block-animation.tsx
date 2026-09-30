@@ -32,13 +32,13 @@ export interface FullBlockAnimationProps {
  * stack, whatever. This is what makes the block move as one rigid body.
  */
 export function renderBlockContent({
-                                     lines,
-                                     lineStarts,
-                                     lineHeightPx,
-                                     verticalOffset,
-                                     details,
-                                     getColorStyle,
-                                   }: FullBlockAnimationProps) {
+  lines,
+  lineStarts,
+  lineHeightPx,
+  verticalOffset,
+  details,
+  getColorStyle,
+}: FullBlockAnimationProps) {
   const alignItems =
     details.textAlign === "left" ? "flex-start" : details.textAlign === "right" ? "flex-end" : "center";
 
@@ -47,7 +47,7 @@ export function renderBlockContent({
       {lines.map((line, rowIndex) => {
         const colorStyle = getColorStyle(lineStarts[rowIndex], verticalOffset + rowIndex * lineHeightPx);
         return (
-          <div key={rowIndex}>
+          <div key={rowIndex} style={{ whiteSpace: "pre" }}>
             <AnimatedChar
               char={line}
               animationStyle={{}}

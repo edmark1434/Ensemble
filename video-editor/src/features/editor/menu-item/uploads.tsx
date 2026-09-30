@@ -35,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import {millisecondsToHHMMSS} from "@/features/editor/utils/format";
 
 // Mirrors buildNormalizedImagePayload in Images.tsx
 const buildNormalizedImagePayload = (image: any) => {
@@ -78,12 +79,8 @@ const buildNormalizedVideoPayload = (video: any) => {
   };
 };
 
-const formatDuration = (seconds: number) => {
-  const rounded = Math.round(seconds);
-  const min = Math.floor(rounded / 60);
-  const sec = rounded % 60;
-  return `${min}:${sec.toString().padStart(2, "0")}`;
-};
+const formatDuration = (seconds: number) =>
+  millisecondsToHHMMSS(Math.floor(seconds) * 1000);
 
 // Our own uploads don't come with a Pexels-style static thumbnail, so we
 // generate a poster frame client-side. This is what feeds
@@ -103,6 +100,11 @@ const extractVideoThumbnailFromUrl = (src: string): Promise<string> => {
     const timeout = setTimeout(() => finish(""), 8000);
     const finish = (result: string) => {
       clearTimeout(timeout);
+      video.onloadeddata = null;
+      video.onseeked = null;
+      video.onerror = null;
+      video.removeAttribute("src");
+      video.load(); // aborts any in-flight download
       resolve(result);
     };
 
@@ -244,6 +246,11 @@ const probeVideoUrlDimensions = (
     const timeout = setTimeout(() => finish(null), 8000);
     const finish = (result: { width: number; height: number; duration: number } | null) => {
       clearTimeout(timeout);
+      video.onloadeddata = null;
+      video.onseeked = null;
+      video.onerror = null;
+      video.removeAttribute("src");
+      video.load(); // aborts any in-flight download
       resolve(result);
     };
 
@@ -269,10 +276,10 @@ const MIN_ROW_HEIGHT = 120;
 const MAX_ROW_HEIGHT = 999999;
 
 const UploadImageItem = ({
-  item,
-  onAdd,
-  shouldDisplayPreview
-}: {
+                           item,
+                           onAdd,
+                           shouldDisplayPreview
+                         }: {
   item: any;
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
@@ -398,10 +405,10 @@ const UploadImageItem = ({
 };
 
 const UploadVideoItem = ({
-  item,
-  onAdd,
-  shouldDisplayPreview
-}: {
+                           item,
+                           onAdd,
+                           shouldDisplayPreview
+                         }: {
   item: any;
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
@@ -457,10 +464,14 @@ const UploadVideoItem = ({
         height: dbHeight || probe.videoHeight,
         duration: dbDuration ?? (Number.isFinite(probe.duration) ? probe.duration : 0)
       });
+      probe.removeAttribute("src");
+      probe.load();
     };
     probe.src = videoSrc;
     return () => {
       probe.onloadedmetadata = null;
+      probe.removeAttribute("src");
+      probe.load();
     };
   }, [videoSrc, dbWidth, dbHeight, dbDuration]);
 
@@ -517,7 +528,7 @@ const UploadVideoItem = ({
         ))}
       {isReady && meta?.duration ? (
         <div className="absolute bottom-3 right-2 bg-secondary/90 text-secondary-foreground/90 text-xs px-1 py-0.5 rounded">
-          {Math.round(meta.duration)}s
+          {formatDuration(meta.duration)}
         </div>
       ) : null}
     </div>
@@ -561,12 +572,12 @@ const UploadVideoItem = ({
 };
 
 const UploadAudioItem = ({
-  item,
-  onAdd,
-  playingId,
-  setPlayingId,
-  shouldDisplayPreview
-}: {
+                           item,
+                           onAdd,
+                           playingId,
+                           setPlayingId,
+                           shouldDisplayPreview
+                         }: {
   item: any;
   onAdd: (payload: any) => void;
   playingId: string | null;
@@ -728,10 +739,10 @@ const UploadAudioItem = ({
 // Mirrors Images.tsx's body exactly: own containerRef + ResizeObserver +
 // useMasonryRows, not shared with any other tab.
 const UploadImagesGrid = ({
-  items,
-  onAdd,
-  shouldDisplayPreview
-}: {
+                            items,
+                            onAdd,
+                            shouldDisplayPreview
+                          }: {
   items: any[];
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
@@ -787,10 +798,10 @@ const UploadImagesGrid = ({
 
 // Mirrors Videos.tsx's body exactly.
 const UploadVideosGrid = ({
-  items,
-  onAdd,
-  shouldDisplayPreview
-}: {
+                            items,
+                            onAdd,
+                            shouldDisplayPreview
+                          }: {
   items: any[];
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;

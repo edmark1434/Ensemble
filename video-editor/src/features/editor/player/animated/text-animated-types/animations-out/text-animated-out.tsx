@@ -1,5 +1,6 @@
 import { spring } from "remotion";
 import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
+import {getCharTiming} from "@/features/editor/player/animated/text-animated-types/char-timing";
 
 const AnimatedTextOut = ({
   char,
@@ -25,10 +26,16 @@ const AnimatedTextOut = ({
   };
 }) => {
   const startExitFrame = durationInFrames - animationTextOutFrames;
-  const delay = (index / textLength) * (durationInFrames - startExitFrame);
+  const { delay } = getCharTiming({
+    index,
+    textLength,
+    windowFrames: animationTextOutFrames,
+    fps
+  });
+  const progress = frame - (startExitFrame + delay);
 
   const opacity = spring({
-    frame: frame - startExitFrame - delay,
+    frame: progress,
     fps,
     from: 1,
     to: 0,
@@ -36,7 +43,7 @@ const AnimatedTextOut = ({
   });
 
   const y = spring({
-    frame: frame - startExitFrame - delay,
+    frame: progress,
     fps,
     from: 0,
     to: 50,
@@ -44,7 +51,7 @@ const AnimatedTextOut = ({
   });
 
   const rotate = spring({
-    frame: frame - startExitFrame - delay,
+    frame: progress,
     fps,
     from: 0,
     to: 180,

@@ -80,7 +80,7 @@ export const InboxPanelViewMessage: React.FC<InboxPanelViewMessageProps> = ({
               type="button"
               disabled={loadingOlder}
               onClick={onLoadOlder}
-              className="mx-auto mb-3 rounded-full border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-4 py-1.5 text-xs text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:bg-white/10 disabled:opacity-50"
+              className="mx-auto mb-3 rounded-full border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-4 py-1.5 text-xs text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 disabled:opacity-50"
             >
               {loadingOlder ? "Loading..." : "Load older messages"}
             </button>
