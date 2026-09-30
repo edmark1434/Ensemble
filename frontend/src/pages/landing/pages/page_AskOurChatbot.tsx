@@ -296,7 +296,7 @@ const PageAskOurChatbot: React.FC = () => {
         
         .ensemble-message-bubble { max-width: min(74%, 650px); padding: 12px 15px; border: 1px solid ${theme === 'dark' ? "#25293a" : "#e2e8f0"}; border-radius: 4px 13px 13px; background: ${theme === 'dark' ? "#151925" : "#f8fafc"}; color: ${theme === 'dark' ? "#d8dee9" : "#334155"}; font-size: 13px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
         .ensemble-message-row.is-user .ensemble-message-bubble { border-color: #2563eb; border-radius: 13px 4px 13px 13px; background: #2563eb; color: #ffffff; }
-        .ensemble-message-bubble.is-error { border-color: rgba(248,113,113,.3); background: rgba(127,29,29,.25); color: #fecaca; }
+        .ensemble-message-bubble.is-error { border-color: ${theme === "dark" ? "rgba(248,113,113,.3)" : "rgba(239,68,68,.4)"}; background: ${theme === "dark" ? "rgba(127,29,29,.25)" : "rgba(254,226,226,1)"}; color: ${theme === "dark" ? "#fecaca" : "#991b1b"}; }
         
         .ensemble-typing { display: flex; align-items: center; gap: 4px; color: ${theme === 'dark' ? "#8b95a7" : "#64748b"}; }
         .ensemble-typing span { width: 5px; height: 5px; border-radius: 50%; background: #60a5fa; animation: ensemble-bounce 1.15s infinite ease-in-out; }
@@ -330,6 +330,17 @@ const PageAskOurChatbot: React.FC = () => {
 
 export default PageAskOurChatbot;
 
+
+function parseMarkdownBold(text: string) {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((chunk, i) => {
+    if (chunk.startsWith('**') && chunk.endsWith('**') && chunk.length >= 4) {
+      return <strong key={i} className="font-bold text-gray-900 dark:text-gray-100">{chunk.slice(2, -2)}</strong>;
+    }
+    return chunk;
+  });
+}
+
 function InlineAnswer({ text, links }: { text: string; links: VerifiedLink[] }) {
   const linkMap = new Map(links.map((link) => [`[[${link.id}]]`, link]));
   const parts = text.split(/(\[\[LINK_\d+\]\])/g);
@@ -337,9 +348,9 @@ function InlineAnswer({ text, links }: { text: string; links: VerifiedLink[] }) 
     <div>
       {parts.map((part, index) => {
         const link = linkMap.get(part);
-        if (!link) return <React.Fragment key={`${index}-${part.slice(0, 12)}`}>{part}</React.Fragment>;
+        if (!link) return <React.Fragment key={index + '-' + part.slice(0, 12)}>{parseMarkdownBold(part)}</React.Fragment>;
         return (
-          <a key={`${link.id}-${index}`} href={link.url} target="_blank" rel="noreferrer" className="ensemble-inline-link">
+          <a key={link.id + '-' + index} href={link.url} target="_blank" rel="noreferrer" className="ensemble-inline-link">
             {link.label}<ExternalLink size={11} aria-hidden="true" />
           </a>
         );
