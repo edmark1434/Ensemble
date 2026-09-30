@@ -98,6 +98,27 @@ const Projects: React.FC = () => {
   const [sortMethod, setSortMethod] = useState<"none" | "az" | "size">("none");
   const [openTeamFolderId, setOpenTeamFolderId] = useState<number | null>(null);
 
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editProjectName, setEditProjectName] = useState<string>("");
+
+  const handleRenameProject = async (projectId: string) => {
+    if (!editProjectName.trim()) {
+      setEditingProjectId(null);
+      return;
+    }
+    try {
+      await api.put(`/api/projects/${projectId}`, { name: editProjectName });
+      const updateProjectList = (projects: Project[]) => 
+        projects.map(p => p.id === projectId ? { ...p, name: editProjectName } : p);
+      setPersonalProjects(updateProjectList);
+      setSharedProjects(updateProjectList);
+      setRecentProjects(updateProjectList);
+    } catch (err) {
+      console.error("Failed to rename project", err);
+    }
+    setEditingProjectId(null);
+  };
+
   const cachedData = sessionStorage.getItem('ensemble_projects_data');
   const parsedCache = cachedData ? JSON.parse(cachedData) : null;
 
@@ -267,21 +288,47 @@ const Projects: React.FC = () => {
           </div>
         )}
 
-        <button 
-          className="absolute right-3 top-3 rounded-full bg-black/50 p-1.5 text-zinc-400 transition hover:text-white backdrop-blur-sm"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <MoreVertical className="h-3.5 w-3.5" />
-        </button>
       </div>
 
       <div className="p-4">
         {isRefreshing ? (
           <div className="mb-2 h-4 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
         ) : (
-          <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white truncate">
-            {project.name}
-          </h3>
+          <div className="flex items-center gap-2 mb-2">
+            <button 
+              className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingProjectId(project.id);
+                setEditProjectName(project.name);
+              }}
+              title="Rename Project"
+            >
+              <Edit className="h-3.5 w-3.5" />
+            </button>
+            {editingProjectId === project.id ? (
+              <input
+                autoFocus
+                type="text"
+                value={editProjectName}
+                onChange={(e) => setEditProjectName(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleRenameProject(project.id);
+                  } else if (e.key === 'Escape') {
+                    setEditingProjectId(null);
+                  }
+                }}
+                onBlur={() => handleRenameProject(project.id)}
+                className="flex-1 min-w-0 bg-transparent border-b border-blue-500 text-sm font-semibold text-gray-900 dark:text-white outline-none"
+              />
+            ) : (
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                {project.name}
+              </h3>
+            )}
+          </div>
         )}
 
         {/* Progress Bar for Contract Projects */}
@@ -332,18 +379,14 @@ const Projects: React.FC = () => {
         )}
 
         <div className="mt-3 flex items-center gap-2 border-t border-gray-100 dark:border-white/10 pt-3">
+          {/* 
           <button 
             className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
             onClick={(e) => e.stopPropagation()}
           >
             <Share2 className="h-3.5 w-3.5" />
           </button>
-          <button 
-            className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Edit className="h-3.5 w-3.5" />
-          </button>
+          */}
         </div>
       </div>
 
@@ -377,7 +420,39 @@ const Projects: React.FC = () => {
         {isRefreshing ? (
           <div className="h-4 w-1/3 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
         ) : (
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{project.name}</h3>
+          <div className="flex items-center gap-2">
+            <button 
+              className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingProjectId(project.id);
+                setEditProjectName(project.name);
+              }}
+              title="Rename Project"
+            >
+              <Edit className="h-3.5 w-3.5" />
+            </button>
+            {editingProjectId === project.id ? (
+              <input
+                autoFocus
+                type="text"
+                value={editProjectName}
+                onChange={(e) => setEditProjectName(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleRenameProject(project.id);
+                  } else if (e.key === 'Escape') {
+                    setEditingProjectId(null);
+                  }
+                }}
+                onBlur={() => handleRenameProject(project.id)}
+                className="flex-1 min-w-0 bg-transparent border-b border-blue-500 text-sm font-semibold text-gray-900 dark:text-white outline-none"
+              />
+            ) : (
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{project.name}</h3>
+            )}
+          </div>
         )}
         <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-zinc-500">
           <div className="flex items-center gap-1">
@@ -417,18 +492,14 @@ const Projects: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-1">
+        {/*
         <button 
           className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
           onClick={(e) => e.stopPropagation()}
         >
           <Share2 className="h-3.5 w-3.5" />
         </button>
-        <button 
-          className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Edit className="h-3.5 w-3.5" />
-        </button>
+        */}
       </div>
     </div>
   );
