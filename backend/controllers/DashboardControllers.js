@@ -3,6 +3,7 @@ const {
     submitMilestoneServices,
     reviewMilestoneServices,
     buyRevisionServices,
+    reviewContractServices,
 } = require('../services/DashboardServices');
 
 async function getTasks(req, res) {
@@ -97,21 +98,20 @@ async function reviewContract(req, res) {
             return res.status(401).json({ success: false, message: 'Unauthorized' });
         }
 
-        if (!rating || rating < 1 || rating > 5) {
-            return res.status(400).json({ success: false, message: 'Invalid rating. Must be between 1 and 5.' });
-        }
+        const result = await reviewContractServices({
+            contractId,
+            accountId,
+            rating,
+            feedback,
+        });
 
-        const task = await DashboardRepositories.getTaskById(contractId, accountId);
-        if (!task) {
-            return res.status(404).json({ success: false, message: 'Task not found or unauthorized' });
-        }
-
-        const review = await DashboardRepositories.submitContractReview(contractId, accountId, rating, feedback || '');
-
-        return res.status(200).json({ success: true, review });
+        return res.status(200).json({ success: true, ...result });
     } catch (error) {
         console.error("Error in reviewContract:", error);
-        res.status(500).json({ success: false, message: "Internal server error" });
+        return res.status(error.statusCode || 500).json({
+            success: false,
+            message: error.statusCode ? error.message : "Internal server error"
+        });
     }
 }
 

@@ -64,6 +64,7 @@ interface Props {
     isFreelancer: boolean;
     onRefreshTask: (task?: unknown) => void;
     canReviewContract?: boolean;
+    myReview?: any;
     onOpenReviewModal?: () => void;
 }
 
@@ -130,6 +131,7 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
     isFreelancer,
     onRefreshTask,
     canReviewContract,
+    myReview,
     onOpenReviewModal,
 }) => {
     // Sort submissions ascending (oldest first) for chronological chat feed
@@ -891,14 +893,19 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
                             <CheckCircle2 className="w-5 h-5" />
                             This milestone is complete.
                         </div>
-                        {canReviewContract && onOpenReviewModal && (
+                        {canReviewContract && onOpenReviewModal ? (
                             <button
                                 onClick={onOpenReviewModal}
                                 className="mt-3 text-sm font-semibold px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-[0_0_15px_rgba(37,99,235,0.3)] inline-block"
                             >
                                 Review {isFreelancer ? 'Client' : 'Freelancer'}
                             </button>
-                        )}
+                        ) : myReview ? (
+                            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold border border-emerald-500/20">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                You have reviewed the {isFreelancer ? 'client' : 'freelancer'}
+                            </div>
+                        ) : null}
                     </div>
                 ) : isFreelancer ? (
                     <MilestoneSubmissionForm

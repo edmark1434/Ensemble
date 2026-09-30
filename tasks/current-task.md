@@ -1,49 +1,28 @@
-# Current Task — Contract-Centric Deadlines, Escrow Partial Refunds & Submission Dispute Protection
+# Current Task — Fix Contract Review Submission, Status Transition, and Profile Performance Tab Display
 
-Transition to a contract-centric deadline and milestone escrow model: dynamic division of job/gig delivery timeframes across milestones, pausing overdue countdowns while submissions are under review, buffering contract deadlines on delayed reviews, contract cancellation with partial escrow refunds (completed milestones retained by freelancer, unfinished milestones refunded to client), and robust protections against fraudulent submissions.
+Resolve the review bug where submitting a client/freelancer review leaves the "Review" button visible and keeps contract status as 'Done' instead of 'Completed', and ensure submitted reviews display under the user profile's Performance tab (under "As Freelancer" for reviews received when working as freelancer, and under "As a Client" for reviews received when hiring as client).
+
+## Root Causes Identified
+1. **Inverted Review Query Subqueries**:
+   - In `DashboardRepositories.js` (`getDashboardTasks` and `getTaskById`) and `ContractRepositories.js` (`getContractsByUserId`), `client_rating` queried `r.account_id = client_account_id` and `freelancer_rating` queried `r.account_id = freelancer_account_id`.
+   - In PostgreSQL, `ratings.account_id` is the reviewee (the account receiving the review).
+   - The review submitted by the client targets the freelancer (`r.account_id = freelancer_account_id`).
+   - The review submitted by the freelancer targets the client (`r.account_id = client_account_id`).
+   - The inverted queries resulted in `myReview` remaining `null` on the dashboard, so the button remained visible and the status remained 'Done'.
+2. **Review Recipient ID in `submitContractReview`**:
+   - `submitContractReview` previously inserted `req.user.account_id` (the reviewer) into `ratings.account_id` instead of the reviewee/target account ID (`client_account_id` or `freelancer_account_id`).
+   - Consequently, queries on the reviewee's profile found 0 reviews.
+3. **Status Override in Frontend**:
+   - In `DashboardTaskDetail.tsx` and `DashboardTaskList.tsx`, `computedStatus` actively downgraded `task.contract_status === 'Completed'` back to `'Done'` if reviews were not yet loaded.
+4. **Missing Service Layer and Realtime Broadcast**:
+   - `DashboardControllers.reviewContract` called repository directly without a service or realtime Socket.IO broadcast (`dashboardTaskUpdated`), preventing real-time synchronization between client and freelancer browser tabs.
 
 ## Implementation Objectives
-1. **Contract-Centric Overdue & Delivery Timer**:
-   - `getActiveMilestonesNowOverdue`: Checks `NOW() > COALESCE(c.deadline_at, cm.deadline_at)` and explicitly pauses overdue checks when a submission is under review (`NOT EXISTS (SELECT 1 FROM milestone_submits WHERE status = 'under_review')`).
-   - Late review compensation: When activating subsequent milestones in `autoApproveMilestoneSubmit` and `approveMilestoneSubmit`, buffers `contracts.deadline_at = GREATEST(deadline_at, NOW() + (next_milestone_deadline * 1 hour))` so client review delays never compromise subsequent milestones.
-2. **Contract-Level Deadline Extension**:
-   - Migration `1821300000000_173-add-deadline-at-to-contracts.js` applied.
-   - `extendContractDeadline` extends `contracts.deadline_at` and pushes active/overdue milestones together.
-   - `POST /api/contracts/:contractId/extend` exposed and integrated into client contract modal.
-3. **Contract Cancellation & Partial Escrow Refund**:
-   - `cancelContractAndRefundUnfinishedMilestones` repository method added:
-     - Retains earned credits for completed milestones in the freelancer's wallet.
-     - Sums uncompleted milestone credits in escrow and refunds 100% back to the client's wallet.
-     - Marks uncompleted milestones as `cancelled` and sets contract status to `Closed` (if partially completed) or `Cancelled` (if 0 completed).
-   - `cancelContractService` and `cancelContractController` mounted on `POST /api/contracts/:contractId/cancel`.
-   - Client modal in `contracts.tsx` provides "Cancel Contract" with real-time financial breakdown (completed credits kept vs unfinished escrow refunded).
-4. **Milestone Submission Dispute & Fraud Protection**:
-   - "Dispute This Submission" integrated across `ClientReviewPanel.tsx`, `MilestoneActivityFeed.tsx`, and `contracts.tsx`.
-   - `DisputeFormPage.tsx` accepts contested milestone ID, displays milestone details banner, and preselects `"Milestone Submission Conflict"` reason.
-5. **Milestone Client Chat & In-Card Deliverable Review Controls**:
-   - Backend `CLIENT_STATUSES` updated to support `client_message` alongside `approval` and `revision_request`.
-   - `submitMilestoneServices` and `reviewMilestoneServices` permit continuous chatting and progress updates even while a deliverable is `submitted_for_review` without resetting review state.
-   - Review controls (Policy, Ask to Revise, Approve Milestone, Buy Revision, Dispute) are placed **inside the submitted review card** on the `Submissions for Review` tab, with compact, well-proportioned buttons and text.
-   - In the `Submissions for Review` tab, each deliverable card includes an expandable dropdown displaying the client's review request/feedback, remarks, and attached files.
-   - The bottom interaction panel is dedicated to a clean, compact milestone chat composer for both clients and freelancers, allowing immediate follow-ups and continuous discussion without blocking either user.
-6. **Milestone-Level Immediate Escrow Release**:
-   - Refactored `DashboardRepositories.recordMilestoneAction` so that approving any milestone (`milestoneStatus === 'completed'`) immediately debits that milestone's credits (`cm.credits`) from the freelancer's escrow wallet and credits the freelancer's account wallet (deducting the configured platform fee to the platform wallet).
-   - Fixed broken platform wallet query (`SELECT wallet_id, status FROM wallets WHERE type = 'platform wallets' AND status = 'active'`).
-   - Contract status is set to `'Done'` when all milestones are completed (`remaining === 0`).
-   - `DashboardServices.reviewMilestoneServices` emits `walletBalanceUpdated`, `escrowBalanceUpdated`, and `notification` Socket.IO events to the freelancer upon every milestone approval.
-   - Executed retroactive escrow release for milestone `4ad868a1-669a-47e8-84c7-44f6fc6f2f02` (5,520 credits).
-7. **Verification**:
-   - All backend syntax checks (`node --check`) pass with 0 errors.
-   - Frontend production build (`npm run build`) succeeds cleanly with 0 errors.
-
-- [x] Contract deadline governs overall project overdue status; countdown pauses during milestone review.
-- [x] Client review delay buffers subsequent milestone deadlines upon approval.
-- [x] Contract-level deadline extension shifts contract and active milestone together.
-- [x] Whole contract cancellation with partial refund implemented (`POST /api/contracts/:contractId/cancel`).
-- [x] Completed milestones are retained by freelancer; unfinished milestones are refunded to client.
-- [x] Dispute shortcuts available on all submission review touchpoints to protect against bad submissions.
-- [x] Review controls are positioned compactly inside the submitted review card on the Submissions tab.
-- [x] In-card expandable dropdown displays client review request, revision feedback, and attached files.
-- [x] Both freelancer and client can chat in the milestone chat at all times (before, during, and after review).
-- [x] Individual milestone approval immediately releases milestone credits from escrow to account wallet.
-- [x] All backend syntax checks and frontend builds pass cleanly.
+- [x] Fix `submitContractReview` in `DashboardRepositories.js` to target the counterparty account ID, perform upsert, and update `contracts.status = 'Completed'` when both parties have reviewed.
+- [x] Fix `client_rating` and `freelancer_rating` subqueries in `DashboardRepositories.js` (`getDashboardTasks`, `getTaskById`) and `ContractRepositories.js` (`getContractsByUserId`).
+- [x] Fix gig review queries in `GigRepositories.js` to match `ratings.account_id = g.freelancer_account_id`.
+- [x] Implement `reviewContractServices` in `DashboardServices.js` with validation, notification, and Socket.IO broadcast (`dashboardTaskUpdated` & `notification`).
+- [x] Update `DashboardControllers.reviewContract` to call `reviewContractServices`.
+- [x] Enhance `ProfileRepositories.getProfileReviewsByAccountId` to support affiliated accounts and proper fallback display names.
+- [x] Update frontend components (`DashboardTaskDetail.tsx`, `DashboardTaskList.tsx`, `dashboard_main.tsx`, `MilestoneActivityFeed.tsx`) to respect `'Completed'` status, hide the review button once reviewed, and display review confirmation.
+- [x] Verify frontend build and backend syntax checks.

@@ -382,9 +382,9 @@ export const Contracts: React.FC = () => {
             const allMilestonesDone = mappedMilestones.length > 0 && mappedMilestones.every((m: any) => m.status === 'Claimed');
             
             let derivedStatus = c.status;
-            if (derivedStatus === 'Completed') derivedStatus = 'Closed';
-            
-            if (allMilestonesDone) {
+            if (derivedStatus === 'Completed') {
+              derivedStatus = 'Closed';
+            } else if (allMilestonesDone) {
               if (c.client_rating && c.freelancer_rating) {
                 derivedStatus = 'Closed';
               } else {
