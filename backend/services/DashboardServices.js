@@ -235,28 +235,28 @@ async function reviewMilestoneServices({ accountId, contractId, milestoneId, pay
         action: input.status,
     });
 
-    if (result.contractCompletion) {
-        const completion = result.contractCompletion;
+    const activeRelease = result.milestoneRelease || (result.contractCompletion?.milestoneRelease || null);
+    if (activeRelease) {
         const io = safeIo();
         if (io) {
-            io.to(String(completion.freelancerAccountId)).emit(
+            io.to(String(activeRelease.freelancerAccountId)).emit(
                 'notification',
-                completion.notification
+                activeRelease.notification
             );
-            io.to(String(completion.freelancerAccountId)).emit(
+            io.to(String(activeRelease.freelancerAccountId)).emit(
                 'walletBalanceUpdated',
                 {
-                    balance_credits: completion.accountBalanceCredits,
+                    balance_credits: activeRelease.accountBalanceCredits,
                     wallet_type: 'account wallets',
-                    transaction_id: completion.transaction.credit_transaction_id,
+                    transaction_id: activeRelease.transaction.credit_transaction_id,
                 }
             );
-            io.to(String(completion.freelancerAccountId)).emit(
+            io.to(String(activeRelease.freelancerAccountId)).emit(
                 'escrowBalanceUpdated',
                 {
-                    balance_credits: completion.escrowBalanceCredits,
+                    balance_credits: activeRelease.escrowBalanceCredits,
                     wallet_type: 'escrow wallets',
-                    transaction_id: completion.transaction.credit_transaction_id,
+                    transaction_id: activeRelease.transaction.credit_transaction_id,
                 }
             );
         }
@@ -265,12 +265,24 @@ async function reviewMilestoneServices({ accountId, contractId, milestoneId, pay
     return {
         submission: result.submission,
         task: updatedTask,
-        contract_completion: result.contractCompletion
+        milestone_release: activeRelease
             ? {
-                released_credits: result.contractCompletion.releasedCredits,
-                transaction_id: result.contractCompletion.transaction.credit_transaction_id,
+                released_credits: activeRelease.releasedCredits,
+                transaction_id: activeRelease.transaction.credit_transaction_id,
             }
             : null,
+        contract_completion: result.contractCompletion
+            ? {
+                is_done: true,
+                released_credits: activeRelease ? activeRelease.releasedCredits : 0,
+                transaction_id: activeRelease ? activeRelease.transaction.credit_transaction_id : null,
+            }
+            : (activeRelease
+                ? {
+                    released_credits: activeRelease.releasedCredits,
+                    transaction_id: activeRelease.transaction.credit_transaction_id,
+                }
+                : null),
     };
 }
 

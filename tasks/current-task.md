@@ -26,7 +26,13 @@ Transition to a contract-centric deadline and milestone escrow model: dynamic di
    - Review controls (Policy, Ask to Revise, Approve Milestone, Buy Revision, Dispute) are placed **inside the submitted review card** on the `Submissions for Review` tab, with compact, well-proportioned buttons and text.
    - In the `Submissions for Review` tab, each deliverable card includes an expandable dropdown displaying the client's review request/feedback, remarks, and attached files.
    - The bottom interaction panel is dedicated to a clean, compact milestone chat composer for both clients and freelancers, allowing immediate follow-ups and continuous discussion without blocking either user.
-6. **Verification**:
+6. **Milestone-Level Immediate Escrow Release**:
+   - Refactored `DashboardRepositories.recordMilestoneAction` so that approving any milestone (`milestoneStatus === 'completed'`) immediately debits that milestone's credits (`cm.credits`) from the freelancer's escrow wallet and credits the freelancer's account wallet (deducting the configured platform fee to the platform wallet).
+   - Fixed broken platform wallet query (`SELECT wallet_id, status FROM wallets WHERE type = 'platform wallets' AND status = 'active'`).
+   - Contract status is set to `'Done'` when all milestones are completed (`remaining === 0`).
+   - `DashboardServices.reviewMilestoneServices` emits `walletBalanceUpdated`, `escrowBalanceUpdated`, and `notification` Socket.IO events to the freelancer upon every milestone approval.
+   - Executed retroactive escrow release for milestone `4ad868a1-669a-47e8-84c7-44f6fc6f2f02` (5,520 credits).
+7. **Verification**:
    - All backend syntax checks (`node --check`) pass with 0 errors.
    - Frontend production build (`npm run build`) succeeds cleanly with 0 errors.
 
@@ -39,4 +45,5 @@ Transition to a contract-centric deadline and milestone escrow model: dynamic di
 - [x] Review controls are positioned compactly inside the submitted review card on the Submissions tab.
 - [x] In-card expandable dropdown displays client review request, revision feedback, and attached files.
 - [x] Both freelancer and client can chat in the milestone chat at all times (before, during, and after review).
+- [x] Individual milestone approval immediately releases milestone credits from escrow to account wallet.
 - [x] All backend syntax checks and frontend builds pass cleanly.
