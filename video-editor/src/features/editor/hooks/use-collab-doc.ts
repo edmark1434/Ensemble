@@ -115,6 +115,7 @@ export function useCollabDoc(
   userId: string | undefined,
   userName: string | undefined,
   stateManager: StateManager,
+  initialProjectName?: string
 ): CollabDoc | null {
   const [collab, setCollab] = useState<CollabDoc | null>(null);
 
@@ -406,7 +407,7 @@ export function useCollabDoc(
               return;
             }
 
-            const currentStoreName = useStore.getState().projectName;
+            const currentStoreName = initialProjectName || useStore.getState().projectName;
             if (isProjectTarget && currentStoreName && snapshot.projectName !== undefined && currentStoreName !== snapshot.projectName) {
               schema.doc.transact(() => {
                 schema.meta.set("projectName", currentStoreName);

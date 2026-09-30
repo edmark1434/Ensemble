@@ -511,6 +511,7 @@ const Editor = ({ id, userId, userName, width, height, projectName, role }: {
     collabReady ? storeUserId : undefined,
     collabReady ? storeUserName : undefined,
     stateManager,
+    projectName
   );
 
   const resolvedRole = useEditorRole(projectId, activeSceneBlockId, storeUserId, role ?? null);
