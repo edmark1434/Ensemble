@@ -4,7 +4,7 @@ const { getIo } = require('../lib/WebSocket');
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const FREELANCER_STATUSES = new Set(['progress', 'submitted_for_review']);
-const CLIENT_STATUSES = new Set(['approval', 'revision_request']);
+const CLIENT_STATUSES = new Set(['approval', 'revision_request', 'client_message']);
 
 class DashboardActionError extends Error {
     constructor(message, statusCode = 400) {
@@ -76,12 +76,14 @@ async function notifyAndBroadcast({ task, actorId, recipientId, submission, mile
         submitted_for_review: `${actorName} requested a review for "${milestoneName}" in "${listingTitle}".`,
         revision_request: `${actorName} requested revisions for "${milestoneName}" in "${listingTitle}".`,
         approval: `${actorName} approved "${milestoneName}" in "${listingTitle}".`,
+        client_message: `${actorName} sent a message regarding "${milestoneName}" in "${listingTitle}".`,
     };
     const prefixes = {
         progress: 'MILESTONE_UPDATE',
         submitted_for_review: 'MILESTONE_REVIEW_REQUESTED',
         revision_request: 'MILESTONE_REVISION_REQUESTED',
         approval: 'MILESTONE_APPROVED',
+        client_message: 'MILESTONE_MESSAGE',
     };
     const isRecipientClient = String(recipientId) === String(task.client_account_id);
     const referencePath = isRecipientClient
@@ -156,13 +158,16 @@ async function submitMilestoneServices({ accountId, contractId, milestoneId, pay
         attachments: input.attachments,
         submissionStatus: input.status,
         milestoneStatus:
-            input.status === 'submitted_for_review' ? 'submitted_for_review' : 'active',
+            input.status === 'submitted_for_review' ? 'submitted_for_review' : null,
         allowedCurrentStatuses: [
             'active',
             'pending',
+            'submitted_for_review',
             'revision_requested',
             'revisions_requested',
             'in_progress',
+            'overdue',
+            'stalled',
         ],
     });
     const updatedTask = await DashboardRepositories.getTaskById(
@@ -193,16 +198,28 @@ async function reviewMilestoneServices({ accountId, contractId, milestoneId, pay
         throw new DashboardActionError('Only the client, team Project Leader, or team Owner/Admin can review milestone submissions', 403);
     }
 
+    const isClientMessage = input.status === 'client_message';
     const result = await DashboardRepositories.recordMilestoneAction({
         contractId: normalizedContractId,
         milestoneId: normalizedMilestoneId,
         message: input.message,
         attachments: input.attachments,
         submissionStatus: input.status,
-        milestoneStatus: input.status === 'approval' ? 'completed' : 'active',
-        unlockNext: input.status === 'approval',
-        releaseOnContractCompletion: input.status === 'approval',
-        allowedCurrentStatuses: ['submitted_for_review'],
+        milestoneStatus: isClientMessage ? null : (input.status === 'approval' ? 'completed' : 'active'),
+        unlockNext: !isClientMessage && input.status === 'approval',
+        releaseOnContractCompletion: !isClientMessage && input.status === 'approval',
+        allowedCurrentStatuses: isClientMessage
+            ? [
+                'active',
+                'pending',
+                'submitted_for_review',
+                'revision_requested',
+                'revisions_requested',
+                'in_progress',
+                'overdue',
+                'stalled',
+            ]
+            : ['submitted_for_review'],
     });
     const updatedTask = await DashboardRepositories.getTaskById(
         normalizedContractId,

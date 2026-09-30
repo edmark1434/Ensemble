@@ -860,11 +860,15 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
             [orderId]
         );
 
+        const deliveryDays = Number(delivery_days) || 3;
+        const totalGigHours = deliveryDays * 24;
+        const gigContractDeadlineAt = new Date(Date.now() + totalGigHours * 3600 * 1000);
+
         // 3. Create the contract
         const contractRes = await client.query(
-            `INSERT INTO contracts (contract_type, payment_type, starts_at, rate_credits, revision_price_credits, status)
-             VALUES ($1, $2, NOW(), $3, $4, $5) RETURNING contract_id`,
-            ['gig', 'milestone', rate_credits, 50, 'Active']
+            `INSERT INTO contracts (contract_type, payment_type, starts_at, deadline_at, rate_credits, revision_price_credits, status)
+             VALUES ($1, $2, NOW(), $3, $4, $5, $6) RETURNING contract_id`,
+            ['gig', 'milestone', gigContractDeadlineAt, rate_credits, 50, 'Active']
         );
         const contractId = contractRes.rows[0].contract_id;
 
@@ -905,22 +909,44 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
         }
 
         const msQuery = `
-            INSERT INTO contract_milestones (contract_id, index, name, description, deadline, no_of_revisions_max, status, started_at, credits)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO contract_milestones (contract_id, index, name, description, deadline, no_of_revisions_max, status, started_at, deadline_at, credits)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         `;
-        const milestoneDeadlineHours = (Number(delivery_days) || 3) * 24;
         const perMilestoneCredits = Math.floor(orderCredits / (milestones.length || 1));
+        const baseGigHours = Math.max(1, Math.floor(totalGigHours / (milestones.length || 1)));
+        let sumGigAllocated = 0;
+        const milestoneHoursList = [];
+
+        for (let i = 0; i < milestones.length; i++) {
+            let h;
+            if (i === milestones.length - 1) {
+                h = Math.max(1, totalGigHours - sumGigAllocated);
+            } else {
+                h = baseGigHours;
+            }
+            sumGigAllocated += h;
+            milestoneHoursList.push(h);
+        }
+
         for (let i = 0; i < milestones.length; i++) {
             const m = milestones[i];
+            const isFirst = i === 0;
+            const startedAt = isFirst ? new Date() : null;
+            const mDeadlineHours = milestoneHoursList[i];
+            let deadlineAt = null;
+            if (isFirst && mDeadlineHours > 0) {
+                deadlineAt = new Date(startedAt.getTime() + mDeadlineHours * 3600 * 1000);
+            }
             await client.query(msQuery, [
                 contractId, 
                 m.index || i, 
                 m.name, 
                 m.description || '', 
-                milestoneDeadlineHours, 
+                mDeadlineHours, 
                 no_of_revisions_max || 0,
-                i === 0 ? 'active' : 'pending',
-                i === 0 ? new Date() : null,
+                isFirst ? 'active' : 'pending',
+                startedAt,
+                deadlineAt,
                 perMilestoneCredits
             ]);
         }

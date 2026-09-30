@@ -1,31 +1,42 @@
-# Current Task — Multi-Milestone Partial Completion & Inactivity Abandonment Plan
+# Current Task — Contract-Centric Deadlines, Escrow Partial Refunds & Submission Dispute Protection
 
-Implement production-ready partial milestone completion and abandonment lifecycle for Jobs and Gigs (Upwork/Fiverr benchmark):
-- Preserve Milestone 1 payments to freelancer (already approved, irrevocable).
-- Enable 1-click escrow refund for overdue/stalled/abandoned Milestone 2 directly to client account wallet.
-- Automated abandonment cron refund after inactivity threshold.
-- Fix contract visibility in `contracts.tsx` for cancelled/partially-completed contracts.
-- Ensure terminal contract status reflects partial completion (`Closed` with partial metrics) instead of vanishing.
+Transition to a contract-centric deadline and milestone escrow model: dynamic division of job/gig delivery timeframes across milestones, pausing overdue countdowns while submissions are under review, buffering contract deadlines on delayed reviews, contract cancellation with partial escrow refunds (completed milestones retained by freelancer, unfinished milestones refunded to client), and robust protections against fraudulent submissions.
 
 ## Implementation Objectives
-1. **Backend Automation & Repositories (`MilestoneRepositories.js` & `MilestoneServices.js`)**:
-   - Enhance `cancelMilestoneAndRefund` to check if $\ge 1$ milestone was already completed: set contract status to `Closed` (Partial) instead of `Cancelled`.
-   - Update `reconcileAbandonedMilestonesServices` to trigger automatic escrow refund to the client if a milestone is abandoned after threshold.
-2. **Frontend Contract History & Tab Visibility (`contracts.tsx`)**:
-   - Fix `validStatuses` to include `Cancelled` and ensure cancelled/closed contracts render under the "Archived" tab.
-   - Display financial and deliverable breakdown (e.g., "1 of 2 Milestones Paid (500 CR) • 1 Refunded (500 CR)").
-3. **Dashboard Activity Feed Alerting (`MilestoneActivityFeed.tsx`)**:
-   - Provide client quick-action banners when viewing an overdue or stalled milestone.
-4. **Verification**:
-   - Frontend `npm run build` verification.
-   - Flow and transaction integrity verification.
+1. **Contract-Centric Overdue & Delivery Timer**:
+   - `getActiveMilestonesNowOverdue`: Checks `NOW() > COALESCE(c.deadline_at, cm.deadline_at)` and explicitly pauses overdue checks when a submission is under review (`NOT EXISTS (SELECT 1 FROM milestone_submits WHERE status = 'under_review')`).
+   - Late review compensation: When activating subsequent milestones in `autoApproveMilestoneSubmit` and `approveMilestoneSubmit`, buffers `contracts.deadline_at = GREATEST(deadline_at, NOW() + (next_milestone_deadline * 1 hour))` so client review delays never compromise subsequent milestones.
+2. **Contract-Level Deadline Extension**:
+   - Migration `1821300000000_173-add-deadline-at-to-contracts.js` applied.
+   - `extendContractDeadline` extends `contracts.deadline_at` and pushes active/overdue milestones together.
+   - `POST /api/contracts/:contractId/extend` exposed and integrated into client contract modal.
+3. **Contract Cancellation & Partial Escrow Refund**:
+   - `cancelContractAndRefundUnfinishedMilestones` repository method added:
+     - Retains earned credits for completed milestones in the freelancer's wallet.
+     - Sums uncompleted milestone credits in escrow and refunds 100% back to the client's wallet.
+     - Marks uncompleted milestones as `cancelled` and sets contract status to `Closed` (if partially completed) or `Cancelled` (if 0 completed).
+   - `cancelContractService` and `cancelContractController` mounted on `POST /api/contracts/:contractId/cancel`.
+   - Client modal in `contracts.tsx` provides "Cancel Contract" with real-time financial breakdown (completed credits kept vs unfinished escrow refunded).
+4. **Milestone Submission Dispute & Fraud Protection**:
+   - "Dispute This Submission" integrated across `ClientReviewPanel.tsx`, `MilestoneActivityFeed.tsx`, and `contracts.tsx`.
+   - `DisputeFormPage.tsx` accepts contested milestone ID, displays milestone details banner, and preselects `"Milestone Submission Conflict"` reason.
+5. **Milestone Client Chat & In-Card Deliverable Review Controls**:
+   - Backend `CLIENT_STATUSES` updated to support `client_message` alongside `approval` and `revision_request`.
+   - `submitMilestoneServices` and `reviewMilestoneServices` permit continuous chatting and progress updates even while a deliverable is `submitted_for_review` without resetting review state.
+   - Review controls (Policy, Ask to Revise, Approve Milestone, Buy Revision, Dispute) are placed **inside the submitted review card** on the `Submissions for Review` tab, with compact, well-proportioned buttons and text.
+   - In the `Submissions for Review` tab, each deliverable card includes an expandable dropdown displaying the client's review request/feedback, remarks, and attached files.
+   - The bottom interaction panel is dedicated to a clean, compact milestone chat composer for both clients and freelancers, allowing immediate follow-ups and continuous discussion without blocking either user.
+6. **Verification**:
+   - All backend syntax checks (`node --check`) pass with 0 errors.
+   - Frontend production build (`npm run build`) succeeds cleanly with 0 errors.
 
-- [x] Automated refund occurs on milestone abandonment.
-- [x] Dynamic timeline scaling: Gigs and short deadlines (<= 72h) scale to 2-day stalled and 4-day abandonment; Jobs scale to 5-day stalled and 10-day abandonment.
-- [x] Deadlines <= 48h receive 50% midpoint warnings instead of premature reminders.
-- [x] Direct dispute and reporting shortcuts added to contract agreement modal and dashboard activity banner.
-- [x] Dispute form preselects contract via URL query param and allows disputing active, closed, or cancelled contracts.
-- [x] Contracts with 1 completed milestone and 1 cancelled milestone close as `Closed` with partial completion indicator.
-- [x] Cancelled and closed contracts remain visible under the "Archived" contracts tab.
-- [x] Freelancer keeps Milestone 1 earnings; Client receives 100% refund for unsubmitted Milestone 2.
-- [x] Build passes cleanly with zero errors.
+- [x] Contract deadline governs overall project overdue status; countdown pauses during milestone review.
+- [x] Client review delay buffers subsequent milestone deadlines upon approval.
+- [x] Contract-level deadline extension shifts contract and active milestone together.
+- [x] Whole contract cancellation with partial refund implemented (`POST /api/contracts/:contractId/cancel`).
+- [x] Completed milestones are retained by freelancer; unfinished milestones are refunded to client.
+- [x] Dispute shortcuts available on all submission review touchpoints to protect against bad submissions.
+- [x] Review controls are positioned compactly inside the submitted review card on the Submissions tab.
+- [x] In-card expandable dropdown displays client review request, revision feedback, and attached files.
+- [x] Both freelancer and client can chat in the milestone chat at all times (before, during, and after review).
+- [x] All backend syntax checks and frontend builds pass cleanly.

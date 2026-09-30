@@ -3,20 +3,23 @@ import type { AxiosError } from 'axios';
 import { useInboxUploadMedia, InboxUploadMediaButton, InboxUploadMediaPreview } from '@/components/ui/inbox/inbox_functions/inbox_upload_image';
 import api from '@/lib/axios';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
-import { AlertCircle, CheckCircle, Clock, Shield } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, Shield, Send, MessageSquare } from 'lucide-react';
 import { showErrorToast } from '@/components/utility/toast';
 
-interface MilestoneSubmission {
+export interface MilestoneSubmission {
     status?: string;
 }
 
-interface ActiveMilestone {
+export interface ActiveMilestone {
+    id?: string;
+    name?: string;
+    status?: string;
     submissions?: MilestoneSubmission[];
     revisions_max?: number;
     credits?: number;
 }
 
-interface DashboardTask {
+export interface DashboardTask {
     revision_price_credits?: number;
     user_role?: {
         effective_role?: string;
@@ -29,51 +32,71 @@ interface DashboardTask {
     };
 }
 
-interface Props {
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ClientReviewCardActions
+ * Renders directly INSIDE the submitted review card on "Submissions for Review"
+ * tab. Buttons and text are compact and styled to suit the card cleanly.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+interface ReviewCardActionsProps {
     contractId: string;
     milestoneId: string;
-    canReview: boolean;
-    onSuccess: (task?: unknown) => void;
     activeMilestone?: ActiveMilestone;
     task?: DashboardTask;
+    onSuccess: (task?: unknown) => void;
 }
 
-export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, canReview, onSuccess, activeMilestone, task }) => {
+export const ClientReviewCardActions: React.FC<ReviewCardActionsProps> = ({
+    contractId,
+    milestoneId,
+    activeMilestone,
+    task,
+    onSuccess,
+}) => {
     const [action, setAction] = useState<'approve' | 'revise' | 'buy_revision' | null>(null);
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [revisionPurchaseKey, setRevisionPurchaseKey] = useState<string | null>(null);
-    const { mediaList, removeMedia, openFilePicker, handleFileChange, fileInputRef } = useInboxUploadMedia(5);
+    const { mediaList, removeMedia, clearMedia, openFilePicker, handleFileChange, fileInputRef } =
+        useInboxUploadMedia(3);
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const usedRevisions =
+        activeMilestone?.submissions?.filter((s) => s.status === 'revision_request').length || 0;
+    const maxRevisions = activeMilestone?.revisions_max || 0;
+    const isOutOfRevisions = maxRevisions > 0 && usedRevisions >= maxRevisions;
+
+    const handleReviewSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!action) return;
+        if (!action || (action !== 'approve' && action !== 'revise')) return;
 
         setIsSubmitting(true);
         try {
-            // Upload all images sequentially and get their URLs
             const uploadPromises = mediaList.map(async (media) => {
-                const { key } = await uploadFileWithIntent(media.file, "documents");
-                
+                const { key } = await uploadFileWithIntent(media.file, 'documents');
                 return `https://s3.amazonaws.com/your-bucket-name/${key}`;
             });
 
             const uploadedUrls = await Promise.all(uploadPromises);
 
             const payload = {
-                message,
+                message: message.trim(),
                 attachments: uploadedUrls,
-                status: action === 'approve' ? 'approval' : 'revision_request'
+                status: action === 'approve' ? 'approval' : 'revision_request',
             };
 
-            const response = await api.post(`/api/dashboard/tasks/${contractId}/milestones/${milestoneId}/review`, payload);
-            
+            const response = await api.post(
+                `/api/dashboard/tasks/${contractId}/milestones/${milestoneId}/review`,
+                payload
+            );
+
             setMessage('');
+            clearMedia();
             setAction(null);
             onSuccess(response.data.task);
         } catch (error) {
-            console.error("Failed to submit review", error);
-            showErrorToast("Failed to submit review. Please try again.");
+            console.error('Failed to submit review', error);
+            showErrorToast('Failed to submit review. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
@@ -93,153 +116,333 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
             setAction(null);
             onSuccess(response.data.task);
         } catch (error: unknown) {
-            console.error("Failed to buy revision", error);
+            console.error('Failed to buy revision', error);
             const apiError = error as AxiosError<{ message?: string }>;
-            showErrorToast(apiError.response?.data?.message || "Failed to buy revision.");
+            showErrorToast(apiError.response?.data?.message || 'Failed to buy revision.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    if (!canReview) {
-        return (
-            <div className="text-center py-4 text-gray-500 dark:text-zinc-500 font-bold bg-gray-100 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10">
-                Waiting for the freelancer to submit work for review.
-            </div>
-        );
-    }
-
-    const usedRevisions = activeMilestone?.submissions?.filter((submission) => submission.status === 'revision_request').length || 0;
-    const maxRevisions = activeMilestone?.revisions_max || 0;
-    const isOutOfRevisions = usedRevisions >= maxRevisions;
-
-    if (!action) {
-        return (
-            <div className="space-y-3">
-                <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-xs text-blue-700 dark:text-blue-300 flex items-start gap-2.5">
-                    <Clock className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-                    <div className="space-y-0.5 leading-relaxed">
-                        <span className="font-bold">Milestone Review & Escrow Policy:</span>
-                        <p className="text-[11px] text-gray-600 dark:text-zinc-300">
-                            You have 5 days to review this submission. If no revision or approval is submitted within this window, the milestone will automatically pass and escrow funds will be released to the freelancer.
-                        </p>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                    <button 
-                        onClick={() => setAction(isOutOfRevisions ? 'buy_revision' : 'revise')}
-                        className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 px-5 py-3 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2"
-                    >
-                        <AlertCircle className="h-4 w-4" /> {isOutOfRevisions ? 'Purchase Revision' : 'Ask to Revise'}
-                    </button>
-                    <button 
-                        onClick={() => setAction('approve')}
-                        className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-3 rounded-xl text-sm font-bold transition shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
-                    >
-                        <CheckCircle className="h-4 w-4" /> Approve Milestone
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    if (action === 'buy_revision') {
-        const rate = task?.revision_price_credits || 0;
-        const total = rate;
-        const canBuyRevision = task?.user_role ? Boolean(task.user_role.can_buy_revision) : true;
-        
-        return (
-            <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-5 space-y-5">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-red-400 font-bold flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4" />
-                        Revision Limit Exceeded
-                    </h3>
-                    <button onClick={() => setAction(null)} className="text-xs text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white">Cancel</button>
-                </div>
-                
-                <p className="text-sm text-gray-700 dark:text-zinc-300 leading-relaxed">
-                    You have used all <b>{maxRevisions}</b> included revisions for this milestone. 
-                    You can purchase an additional revision to request more changes.
-                </p>
-
-                <div className="bg-white dark:bg-dark-base/50 rounded-lg border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none p-4 space-y-3">
-                    <div className="flex justify-between text-xs text-gray-500 dark:text-zinc-400">
-                        <span>Base Milestone Price:</span>
-                        <span className="text-gray-900 dark:text-white font-bold">{activeMilestone?.credits} Credits</span>
-                    </div>
-                    <div className="flex justify-between text-xs text-gray-500 dark:text-zinc-400">
-                        <span>Additional Revision Rate:</span>
-                        <span className="text-yellow-600 dark:text-yellow-500 font-bold">+{rate} Credits</span>
-                    </div>
-                    <div className="border-t border-gray-200 dark:border-white/10 pt-3 flex justify-between text-sm">
-                        <span className="font-bold text-gray-900 dark:text-white">Amount to Pay:</span>
-                        <span className="font-bold text-yellow-600 dark:text-yellow-500">{total} Credits</span>
-                    </div>
-                </div>
-
-                {!canBuyRevision && (
-                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-500 font-medium leading-relaxed">
-                        Only Team Owners and Admins can purchase additional revisions using Team funds. Please contact your team administrator.
-                    </div>
+    return (
+        <div className="mt-4 pt-3.5 border-t border-blue-500/20 bg-blue-500/[0.03] dark:bg-white/[0.02] rounded-xl p-3.5 space-y-3">
+            {/* Compact Policy & Escrow note */}
+            <div className="flex items-center justify-between text-[11px] text-blue-600 dark:text-blue-300">
+                <span className="flex items-center gap-1.5 font-medium">
+                    <Clock className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                    5 days review window • Auto-approves if no revision requested
+                </span>
+                {maxRevisions > 0 && (
+                    <span className="text-[10px] text-gray-500 dark:text-zinc-400">
+                        {Math.max(0, maxRevisions - usedRevisions)} revision(s) left
+                    </span>
                 )}
+            </div>
 
-                <div className="flex justify-end pt-2">
-                    <button 
-                        onClick={handleBuyRevision}
-                        disabled={isSubmitting || !canBuyRevision}
-                        className="bg-yellow-500 hover:bg-yellow-600 text-black px-6 py-2.5 rounded-lg text-sm font-bold transition shadow-lg shadow-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            {/* Default compact action buttons inside card */}
+            {action === null && (
+                <div className="flex items-center gap-2.5 pt-0.5">
+                    <button
+                        type="button"
+                        onClick={() => setAction(isOutOfRevisions ? 'buy_revision' : 'revise')}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold border border-red-500/30 bg-red-500/10 text-red-500 dark:text-red-400 hover:bg-red-500/20 transition"
                     >
-                        {isSubmitting ? 'Processing...' : 'Pay & Add Revision'}
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        {isOutOfRevisions ? 'Purchase Revision' : 'Ask to Revise'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setAction('approve')}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition"
+                    >
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        Approve Milestone
                     </button>
                 </div>
-            </div>
-        );
-    }
+            )}
+
+            {/* Inline Confirm Approval Form inside card */}
+            {action === 'approve' && (
+                <form onSubmit={handleReviewSubmit} className="space-y-2.5 pt-0.5">
+                    <div className="flex items-center justify-between text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                        <span className="flex items-center gap-1.5">
+                            <CheckCircle className="w-3.5 h-3.5" /> Confirm Milestone Approval
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setAction(null);
+                                setMessage('');
+                            }}
+                            className="text-[11px] text-gray-400 hover:underline font-normal"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+
+                    <textarea
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        placeholder="Optional remarks or feedback for the freelancer..."
+                        rows={2}
+                        className="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-dark-base p-2.5 text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-emerald-500/50 resize-none leading-relaxed"
+                        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                    />
+
+                    <div className="flex items-center justify-end gap-2">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setAction(null);
+                                setMessage('');
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5 transition"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="px-4 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition disabled:opacity-50"
+                        >
+                            {isSubmitting ? 'Approving...' : 'Confirm & Release'}
+                        </button>
+                    </div>
+                </form>
+            )}
+
+            {/* Inline Request Revision Form inside card */}
+            {action === 'revise' && (
+                <form onSubmit={handleReviewSubmit} className="space-y-2.5 pt-0.5">
+                    <div className="flex items-center justify-between text-xs font-bold text-red-500 dark:text-red-400">
+                        <span className="flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5" /> Request Revisions
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setAction(null);
+                                setMessage('');
+                            }}
+                            className="text-[11px] text-gray-400 hover:underline font-normal"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+
+                    <textarea
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        placeholder="Describe what needs to be changed in detail..."
+                        rows={2}
+                        required
+                        className="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-dark-base p-2.5 text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-red-500/50 resize-none leading-relaxed"
+                        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                    />
+
+                    <InboxUploadMediaPreview mediaList={mediaList} onRemove={removeMedia} />
+
+                    <div className="flex items-center justify-between">
+                        <InboxUploadMediaButton
+                            onClick={openFilePicker}
+                            fileInputRef={fileInputRef}
+                            onFileChange={handleFileChange}
+                            disabled={isSubmitting}
+                        />
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setAction(null);
+                                    setMessage('');
+                                }}
+                                className="px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5 transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={isSubmitting || !message.trim()}
+                                className="px-4 py-1.5 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-500 text-white shadow-sm transition disabled:opacity-50"
+                            >
+                                {isSubmitting ? 'Sending...' : 'Send Revision Request'}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            )}
+
+            {/* Inline Buy Revision Card inside card */}
+            {action === 'buy_revision' && (
+                <div className="space-y-3 pt-0.5">
+                    <div className="flex items-center justify-between text-xs font-bold text-red-500">
+                        <span className="flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5" /> Revision Limit Exceeded
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setAction(null)}
+                            className="text-[11px] text-gray-400 hover:underline font-normal"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+
+                    <p className="text-xs text-gray-600 dark:text-zinc-300">
+                        You have used all <b>{maxRevisions}</b> included revisions. You can purchase an additional
+                        revision for <b>{task?.revision_price_credits || 0} credits</b>.
+                    </p>
+
+                    <div className="flex justify-end gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setAction(null)}
+                            className="px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleBuyRevision}
+                            disabled={isSubmitting}
+                            className="px-4 py-1.5 rounded-lg text-xs font-bold bg-yellow-500 hover:bg-yellow-600 text-black shadow-sm disabled:opacity-50"
+                        >
+                            {isSubmitting ? 'Processing...' : `Pay ${task?.revision_price_credits || 0} Credits & Revise`}
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ClientReviewPanel (Client Milestone Chat Composer)
+ * Renders at the bottom of MilestoneActivityFeed for the client.
+ * Clean, compact, standard milestone chat composer so clients can chat anytime.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+interface Props {
+    contractId: string;
+    milestoneId: string;
+    canReview: boolean;
+    onSuccess: (task?: unknown) => void;
+    activeMilestone?: ActiveMilestone;
+    task?: DashboardTask;
+    onViewReviewTab?: () => void;
+}
+
+export const ClientReviewPanel: React.FC<Props> = ({
+    contractId,
+    milestoneId,
+    canReview,
+    onSuccess,
+    activeMilestone,
+    onViewReviewTab,
+}) => {
+    const [message, setMessage] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const { mediaList, removeMedia, clearMedia, openFilePicker, handleFileChange, fileInputRef } =
+        useInboxUploadMedia(5);
+
+    // Send chat message in milestone chat
+    const handleSendMessage = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmedMessage = message.trim();
+        if (!trimmedMessage && mediaList.length === 0) return;
+
+        setIsSubmitting(true);
+        try {
+            const uploadPromises = mediaList.map(async (media) => {
+                const { key } = await uploadFileWithIntent(media.file, 'documents');
+                return `https://s3.amazonaws.com/your-bucket-name/${key}`;
+            });
+
+            const uploadedUrls = await Promise.all(uploadPromises);
+
+            const payload = {
+                message: trimmedMessage,
+                attachments: uploadedUrls,
+                status: 'client_message',
+            };
+
+            const response = await api.post(
+                `/api/dashboard/tasks/${contractId}/milestones/${milestoneId}/review`,
+                payload
+            );
+
+            setMessage('');
+            clearMedia();
+            onSuccess(response.data.task);
+        } catch (error) {
+            console.error('Failed to send message', error);
+            showErrorToast('Failed to send message. Please try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="flex items-center justify-between mb-2">
-                <span className={`text-xs font-bold uppercase tracking-wider ${action === 'approve' ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {action === 'approve' ? 'Approve with Remark' : 'Request Revision'}
-                </span>
-                <button 
-                    type="button" 
-                    onClick={() => setAction(null)}
-                    className="text-[10px] text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
-                >
-                    Cancel
-                </button>
-            </div>
+        <form onSubmit={handleSendMessage} className="space-y-2.5">
+            {/* Slim contextual indicator */}
+            {canReview ? (
+                <div className="flex items-center justify-between px-1 text-[11px] text-blue-600 dark:text-blue-400 font-medium">
+                    <span className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5" />
+                        Deliverable submitted for review
+                    </span>
+                    {onViewReviewTab && (
+                        <button
+                            type="button"
+                            onClick={onViewReviewTab}
+                            className="font-bold underline text-blue-600 dark:text-blue-400 hover:opacity-80"
+                        >
+                            View & Review Deliverable &rarr;
+                        </button>
+                    )}
+                </div>
+            ) : (
+                activeMilestone?.status === 'overdue' && (
+                    <div className="flex items-center justify-between px-1 text-[11px] text-rose-500 font-medium">
+                        <span className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5" /> Milestone deadline has passed
+                        </span>
+                        <span className="text-[10px] text-gray-400 dark:text-zinc-500">
+                            Coordinate progress with freelancer below
+                        </span>
+                    </div>
+                )
+            )}
 
             <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder={action === 'approve' ? "Optional remark for the freelancer..." : "Describe what needs to be changed..."}
-                rows={3}
-                className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-dark-base/50 p-3.5 text-xs font-sans text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 transition focus:border-emerald-500/50 focus:outline-none resize-none leading-relaxed shadow-sm dark:shadow-none"
+                placeholder="Type your message to the freelancer..."
+                rows={2}
+                className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-dark-base/50 p-3 text-xs font-sans text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 transition focus:border-blue-500/50 focus:outline-none resize-none leading-relaxed shadow-sm dark:shadow-none"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                required={action === 'revise'}
+                required={mediaList.length === 0}
             />
-            
+
             <InboxUploadMediaPreview mediaList={mediaList} onRemove={removeMedia} />
 
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                    <InboxUploadMediaButton 
-                        onClick={openFilePicker} 
-                        fileInputRef={fileInputRef} 
-                        onFileChange={handleFileChange} 
-                        disabled={isSubmitting} 
+                    <InboxUploadMediaButton
+                        onClick={openFilePicker}
+                        fileInputRef={fileInputRef}
+                        onFileChange={handleFileChange}
+                        disabled={isSubmitting}
                     />
                 </div>
                 <button
                     type="submit"
-                    disabled={isSubmitting || (action === 'revise' && !message.trim())}
-                    className={`${action === 'approve' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20' : 'bg-red-500 hover:bg-red-600 shadow-red-500/20'} text-white px-5 py-2 rounded-lg text-xs font-bold transition shadow-lg`}
+                    disabled={isSubmitting || (!message.trim() && mediaList.length === 0)}
+                    className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-xs font-bold transition shadow-md shadow-blue-500/20 flex items-center gap-1.5"
                 >
-                    {isSubmitting ? 'Submitting...' : action === 'approve' ? 'Confirm Approval' : 'Send Revision Request'}
+                    <Send className="w-3.5 h-3.5" />
+                    {isSubmitting ? 'Sending...' : 'Send Message'}
                 </button>
             </div>
         </form>

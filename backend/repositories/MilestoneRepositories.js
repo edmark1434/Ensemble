@@ -35,6 +35,7 @@ async function getActiveMilestonesNowOverdue() {
             cm.credits,
             cm.deadline      AS deadline_hrs,
             cm.started_at,
+            cm.deadline_at,
             cm.contract_id,
             cm.index,
             c.contract_type,
@@ -65,7 +66,12 @@ async function getActiveMilestonesNowOverdue() {
         WHERE cm.status = 'active'
           AND cm.started_at IS NOT NULL
           AND cm.overdue_at IS NULL
-          AND NOW() > cm.started_at + (cm.deadline * interval '1 hour')
+          AND NOW() > COALESCE(c.deadline_at, cm.deadline_at, cm.started_at + (cm.deadline * interval '1 hour'))
+          AND NOT EXISTS (
+              SELECT 1 FROM milestone_submits ms
+              WHERE ms.contract_milestone_id = cm.contract_milestone_id
+                AND ms.status = 'under_review'
+          )
     `);
     return res.rows;
 }
@@ -317,12 +323,22 @@ async function autoApproveMilestoneSubmit({ milestoneSubmitId, milestoneId, cont
         // 8. Activate next pending milestone (if any)
         const nextRes = await client.query(`
             UPDATE contract_milestones
-            SET status = 'active', started_at = NOW()
+            SET status = 'active',
+                started_at = NOW(),
+                deadline_at = CASE WHEN deadline > 0 THEN NOW() + (deadline * interval '1 hour') ELSE NULL END
             WHERE contract_id = $1
               AND index = $2
               AND status = 'pending'
-            RETURNING contract_milestone_id, name
+            RETURNING contract_milestone_id, name, deadline_at, deadline
         `, [contractId, milestoneIndex + 1]);
+
+        if (nextRes.rows.length > 0 && nextRes.rows[0].deadline > 0) {
+            await client.query(`
+                UPDATE contracts
+                SET deadline_at = GREATEST(deadline_at, NOW() + ($2 * interval '1 hour'))
+                WHERE contract_id = $1
+            `, [contractId, nextRes.rows[0].deadline]);
+        }
 
         // 9. Check if all milestones completed → mark contract Done
         const pendingCount = await client.query(`
@@ -363,6 +379,7 @@ async function getApproachingDeadlineMilestones() {
             cm.name          AS milestone_name,
             cm.deadline      AS deadline_hrs,
             cm.started_at,
+            cm.deadline_at,
             cm.contract_id,
             COALESCE(jc_info.freelancer_account_id, gc_info.freelancer_account_id) AS freelancer_account_id,
             COALESCE(jc_info.title, gc_info.title, 'Your Contract') AS contract_title
@@ -384,13 +401,13 @@ async function getApproachingDeadlineMilestones() {
         WHERE cm.status = 'active'
           AND cm.started_at IS NOT NULL
           AND cm.overdue_at IS NULL
-          AND NOW() > cm.started_at + (
+          AND NOW() > (
               CASE
-                  WHEN cm.deadline <= 48 THEN (cm.deadline * 0.5 * interval '1 hour')
-                  ELSE ((cm.deadline - $1) * interval '1 hour')
+                  WHEN cm.deadline <= 48 THEN (cm.started_at + (cm.deadline * 0.5 * interval '1 hour'))
+                  ELSE (COALESCE(cm.deadline_at, cm.started_at + (cm.deadline * interval '1 hour')) - ($1 * interval '1 hour'))
               END
           )
-          AND NOW() < cm.started_at + (cm.deadline * interval '1 hour')
+          AND NOW() < COALESCE(cm.deadline_at, cm.started_at + (cm.deadline * interval '1 hour'))
           AND NOT EXISTS (
               SELECT 1 FROM notifications n
               WHERE n.reference_table = 'contract_milestones'
@@ -568,26 +585,203 @@ async function cancelMilestoneAndRefund({ milestoneId, clientAccountId, freelanc
 }
 
 /**
- * Client extends the deadline. No money moves.
+ * Client extends the contract deadline.
+ * Extends the overall contract deadline_at by extensionDays,
+ * and also extends any currently active, overdue, or stalled milestone(s) on this contract.
+ */
+async function extendContractDeadline({ contractId, extensionDays }) {
+    if (!extensionDays || extensionDays < 1 || extensionDays > 90) {
+        throw new Error('Extension must be between 1 and 90 days');
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Extend the contract's overall deadline_at
+        const contractRes = await client.query(`
+            UPDATE contracts
+            SET deadline_at = COALESCE(deadline_at, starts_at + interval '7 days', NOW()) + ($1 || ' days')::interval
+            WHERE contract_id = $2
+            RETURNING contract_id, deadline_at
+        `, [extensionDays, contractId]);
+
+        if (contractRes.rows.length === 0) {
+            throw new Error('Contract not found');
+        }
+
+        // 2. Extend any active, overdue, or stalled milestone(s) on this contract
+        const milestoneRes = await client.query(`
+            UPDATE contract_milestones
+            SET
+                deadline    = deadline + ($1 * 24),
+                deadline_at = COALESCE(deadline_at, started_at + (deadline * interval '1 hour'), NOW()) + ($1 || ' days')::interval,
+                overdue_at  = NULL,
+                status      = CASE WHEN status IN ('overdue', 'stalled') THEN 'active' ELSE status END
+            WHERE contract_id = $2
+              AND status IN ('active', 'overdue', 'stalled')
+            RETURNING contract_milestone_id, name, deadline, deadline_at, status
+        `, [extensionDays, contractId]);
+
+        await client.query('COMMIT');
+        return {
+            contract: contractRes.rows[0],
+            extendedMilestones: milestoneRes.rows,
+        };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+/**
+ * Client extends the deadline. Delegates to extending the overall contract deadline.
  */
 async function extendMilestoneDeadline({ milestoneId, clientAccountId, extensionDays }) {
     if (!extensionDays || extensionDays < 1 || extensionDays > 90) {
         throw new Error('Extension must be between 1 and 90 days');
     }
 
-    const res = await pool.query(`
-        UPDATE contract_milestones
-        SET
-            deadline   = deadline + ($1 * 24),
-            overdue_at = NULL,
-            status     = CASE WHEN status IN ('overdue', 'stalled') THEN 'active' ELSE status END
-        WHERE contract_milestone_id = $2
-          AND status IN ('active', 'overdue', 'stalled')
-        RETURNING contract_milestone_id, name, deadline, status
-    `, [extensionDays, milestoneId]);
+    const mRes = await pool.query('SELECT contract_id FROM contract_milestones WHERE contract_milestone_id = $1', [milestoneId]);
+    if (mRes.rows.length === 0) throw new Error('Milestone not eligible for deadline extension');
+    const contractId = mRes.rows[0].contract_id;
 
-    if (res.rows.length === 0) throw new Error('Milestone not eligible for deadline extension');
-    return res.rows[0];
+    const result = await extendContractDeadline({ contractId, extensionDays });
+    return result.extendedMilestones[0] || { contract_milestone_id: milestoneId, status: 'active' };
+}
+
+/**
+ * Client cancels the entire contract.
+ * Completed milestones remain with the freelancer.
+ * All unfinished/locked/active/overdue milestone funds in escrow are 100% refunded to the client.
+ */
+async function cancelContractAndRefundUnfinishedMilestones({ contractId, clientAccountId, freelancerAccountId }) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Lock contract
+        const contractRes = await client.query(`
+            SELECT contract_id, status, deadline_at
+            FROM contracts
+            WHERE contract_id = $1
+            FOR UPDATE
+        `, [contractId]);
+
+        if (contractRes.rows.length === 0) {
+            throw new Error('Contract not found');
+        }
+
+        // 2. Lock uncompleted milestones
+        const milestonesRes = await client.query(`
+            SELECT contract_milestone_id, status, credits
+            FROM contract_milestones
+            WHERE contract_id = $1
+              AND status NOT IN ('completed', 'cancelled', 'abandoned')
+            FOR UPDATE
+        `, [contractId]);
+
+        const completedCounts = await client.query(`
+            SELECT COUNT(*) AS completed_cnt
+            FROM contract_milestones
+            WHERE contract_id = $1 AND status = 'completed'
+        `, [contractId]);
+        const completedCnt = parseInt(completedCounts.rows[0].completed_cnt, 10);
+
+        if (milestonesRes.rows.length === 0) {
+            throw new Error('No uncompleted milestones to cancel or refund');
+        }
+
+        const refundableCredits = milestonesRes.rows.reduce((sum, m) => sum + Number(m.credits || 0), 0);
+
+        // 3. Get wallets
+        const walletsRes = await client.query(`
+            SELECT aw.account_id, w.wallet_id, w.type, w.balance_credits
+            FROM account_wallets aw
+            JOIN wallets w ON aw.wallet_id = w.wallet_id
+            WHERE aw.account_id = ANY($1::uuid[])
+              AND w.status = 'active'
+              AND w.type IN ('escrow wallets', 'account wallets')
+            FOR UPDATE OF w
+        `, [[clientAccountId, freelancerAccountId]]);
+
+        const freelancerEscrow = walletsRes.rows.find(
+            r => String(r.account_id) === String(freelancerAccountId) && r.type === 'escrow wallets'
+        );
+        const clientAccountWallet = walletsRes.rows.find(
+            r => String(r.account_id) === String(clientAccountId) && r.type === 'account wallets'
+        );
+
+        if (!freelancerEscrow) throw new Error('Freelancer escrow wallet not found');
+        if (!clientAccountWallet) throw new Error('Client account wallet not found');
+
+        let txId = null;
+        let newClientBalance = Number(clientAccountWallet.balance_credits);
+
+        if (refundableCredits > 0) {
+            if (freelancerEscrow.balance_credits < refundableCredits) {
+                throw new Error('Insufficient escrow balance for contract refund');
+            }
+
+            // Debit freelancer escrow
+            await client.query(`
+                UPDATE wallets SET balance_credits = balance_credits - $1
+                WHERE wallet_id = $2 AND balance_credits >= $1
+            `, [refundableCredits, freelancerEscrow.wallet_id]);
+
+            // Credit client account wallet
+            const refundRes = await client.query(`
+                UPDATE wallets SET balance_credits = balance_credits + $1
+                WHERE wallet_id = $2
+                RETURNING balance_credits
+            `, [refundableCredits, clientAccountWallet.wallet_id]);
+            newClientBalance = Number(refundRes.rows[0].balance_credits);
+
+            // Log transaction
+            const txRes = await client.query(`
+                INSERT INTO credit_transactions
+                    (type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id)
+                VALUES
+                    ('Escrow Release', $1, 'completed', $2, $3, 'contracts', $4)
+                RETURNING credit_transaction_id
+            `, [refundableCredits, freelancerEscrow.wallet_id, clientAccountWallet.wallet_id, contractId]);
+            txId = txRes.rows[0].credit_transaction_id;
+        }
+
+        // 4. Mark uncompleted milestones as cancelled
+        await client.query(`
+            UPDATE contract_milestones
+            SET status = 'cancelled'
+            WHERE contract_id = $1
+              AND status NOT IN ('completed', 'cancelled', 'abandoned')
+        `, [contractId]);
+
+        // 5. Update contract status: Closed if partial, Cancelled if 0 completed
+        const contractStatus = completedCnt > 0 ? 'Closed' : 'Cancelled';
+        await client.query(`
+            UPDATE contracts
+            SET status = $1
+            WHERE contract_id = $2
+        `, [contractStatus, contractId]);
+
+        await client.query('COMMIT');
+        return {
+            transactionId: txId,
+            refundedCredits: refundableCredits,
+            newClientBalance,
+            contractStatus,
+            isPartial: completedCnt > 0,
+            completedMilestonesCount: completedCnt,
+            cancelledMilestonesCount: milestonesRes.rows.length,
+        };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
 }
 
 /**
@@ -656,10 +850,21 @@ async function approveMilestoneSubmit({ milestoneId, contractId, milestoneIndex,
 
         // Activate next milestone
         const nextRes = await client.query(`
-            UPDATE contract_milestones SET status = 'active', started_at = NOW()
+            UPDATE contract_milestones
+            SET status = 'active',
+                started_at = NOW(),
+                deadline_at = CASE WHEN deadline > 0 THEN NOW() + (deadline * interval '1 hour') ELSE NULL END
             WHERE contract_id = $1 AND index = $2 AND status = 'pending'
-            RETURNING contract_milestone_id, name
+            RETURNING contract_milestone_id, name, deadline_at, deadline
         `, [contractId, milestoneIndex + 1]);
+
+        if (nextRes.rows.length > 0 && nextRes.rows[0].deadline > 0) {
+            await client.query(`
+                UPDATE contracts
+                SET deadline_at = GREATEST(deadline_at, NOW() + ($2 * interval '1 hour'))
+                WHERE contract_id = $1
+            `, [contractId, nextRes.rows[0].deadline]);
+        }
 
         // Check if contract is done
         const pendingCount = await client.query(`
@@ -740,6 +945,7 @@ async function getMilestoneWithParties(milestoneId) {
             cm.credits,
             cm.status,
             cm.deadline,
+            cm.deadline_at,
             cm.index,
             cm.contract_id,
             c.contract_type,
@@ -780,7 +986,9 @@ module.exports = {
     getSubmissionsNeedingReviewReminder,
     // Client action queries
     cancelMilestoneAndRefund,
+    cancelContractAndRefundUnfinishedMilestones,
     extendMilestoneDeadline,
+    extendContractDeadline,
     approveMilestoneSubmit,
     requestMilestoneRevision,
     getMilestoneWithParties,

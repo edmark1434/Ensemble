@@ -18,4 +18,10 @@ router.post('/:contractId/reject', requireAuth, ContractControllers.rejectJobOff
 // Submit a dispute for a contract
 router.post('/:contractId/dispute', requireAuth, ContractControllers.createContractDisputeController);
 
+// Extend contract deadline (Client action)
+router.post('/:contractId/extend', requireAuth, ContractControllers.extendContractDeadlineController);
+
+// Cancel contract and refund unfinished milestones (Client action)
+router.post('/:contractId/cancel', requireAuth, ContractControllers.cancelContractController);
+
 module.exports = router;

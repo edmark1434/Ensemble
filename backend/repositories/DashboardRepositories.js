@@ -200,6 +200,7 @@ async function getDashboardTasks(accountId) {
                     'credits', cm.credits,
                     'revisions_max', cm.no_of_revisions_max,
                     'deadline', cm.deadline,
+                    'deadline_at', cm.deadline_at,
                     'started_at', cm.started_at
                 ) ORDER BY cm.index ASC)
                 FROM contract_milestones cm 
@@ -246,6 +247,7 @@ async function getDashboardTasks(accountId) {
                     'credits', cm.credits,
                     'revisions_max', cm.no_of_revisions_max,
                     'deadline', cm.deadline,
+                    'deadline_at', cm.deadline_at,
                     'started_at', cm.started_at
                 ) ORDER BY cm.index ASC)
                 FROM contract_milestones cm 
@@ -310,6 +312,7 @@ async function getTaskById(contractId, accountId) {
                         'credits', cm.credits,
                         'revisions_max', cm.no_of_revisions_max,
                         'deadline', cm.deadline,
+                        'deadline_at', cm.deadline_at,
                         'started_at', cm.started_at,
                         'submissions', (
                             SELECT json_agg(
@@ -367,6 +370,7 @@ async function getTaskById(contractId, accountId) {
                         'credits', cm.credits,
                         'revisions_max', cm.no_of_revisions_max,
                         'deadline', cm.deadline,
+                        'deadline_at', cm.deadline_at,
                         'started_at', cm.started_at,
                         'submissions', (
                             SELECT json_agg(
@@ -541,7 +545,9 @@ async function recordMilestoneAction({
         if (unlockNext) {
             await client.query(
                 `UPDATE contract_milestones
-                 SET status = 'active'
+                 SET status = 'active',
+                     started_at = COALESCE(started_at, NOW()),
+                     deadline_at = CASE WHEN deadline > 0 THEN NOW() + (deadline * interval '1 hour') ELSE NULL END
                  WHERE contract_milestone_id = (
                     SELECT contract_milestone_id
                     FROM contract_milestones
