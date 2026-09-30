@@ -1,5 +1,7 @@
 import { generateId } from "@designcombo/timeline";
 import { ICaption, ICaptionWord } from "@designcombo/types";
+import useStore from "../store/use-store";
+
 
 interface Word {
   start: number;
@@ -27,6 +29,8 @@ export const generateCaption = (
     end: w.end * 1000
   }));
 
+  const { size } = useStore.getState();
+
   const baseDetails = {
     appearedColor: "#FFFFFF",
     activeColor: "#FFFFFF",
@@ -38,7 +42,7 @@ export const generateCaption = (
     borderRadius: 30,
     text: captionLine.text,
     fontSize: fontInfo.fontSize,
-    width: 1280,
+    width: size.width * 0.9,
     fontFamily: fontInfo.fontFamily,
     fontUrl: fontInfo.fontUrl,
     textAlign: "center",
