@@ -115,8 +115,18 @@ export function useCollabDoc(
   userId: string | undefined,
   userName: string | undefined,
   stateManager: StateManager,
+  dbProjectName?: string,
 ): CollabDoc | null {
   const [collab, setCollab] = useState<CollabDoc | null>(null);
+
+  // Read at load time only (via ref) so a prop change doesn't tear down and
+  // reconnect the doc.
+  const dbProjectNameRef = useRef(dbProjectName);
+  dbProjectNameRef.current = dbProjectName;
+  // The prop is the name as of page load. Apply it on the first project
+  // load only. After a project -> scene -> project round trip it could be
+  // staler than an in-editor rename.
+  const dbNameAppliedRef = useRef(false);
 
   useEffect(() => {
     if (!target || !rootProjectId || !userId) return;
@@ -420,6 +430,30 @@ export function useCollabDoc(
             }
           } finally {
             syncGuard.isApplyingRemote = false;
+          }
+        }
+
+        // The DB name wins on open: it may have been changed outside the
+        // editor (updateProject), which never touches the doc. Write it into
+        // the doc before reconcileTargetToDb below, otherwise that call would
+        // push the stale doc name back over the DB.
+        if (isProjectTarget && !dbNameAppliedRef.current) {
+          dbNameAppliedRef.current = true;
+          const dbName = dbProjectNameRef.current;
+          if (dbName !== undefined && schema.meta.get("projectName") !== dbName) {
+            // Local origin: persistence and the ws provider pick it up, and
+            // undoManager.clear() below keeps it off the undo stack.
+            schema.doc.transact(() => {
+              schema.meta.set("projectName", dbName);
+            }, localOrigin);
+            // Guarded so mirror-out-from-store doesn't write the same value
+            // into the doc a second time.
+            syncGuard.isApplyingRemote = true;
+            try {
+              useStore.setState({ projectName: dbName });
+            } finally {
+              syncGuard.isApplyingRemote = false;
+            }
           }
         }
 

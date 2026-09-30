@@ -47,16 +47,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import ShareModal from "@/components/share-modal";
+import {useViewOnly} from "@/features/editor/hooks/use-view-only";
 
 export default function Navbar({
-                                 user,
-                                 stateManager,
-                                 undoManager,
-                                 viewOnly,
-                                 saveStatus,
-                                 compactStatus,
-                                 onForceSave
-                               }: {
+  user,
+  stateManager,
+  undoManager,
+  viewOnly,
+  saveStatus,
+  compactStatus,
+  onForceSave
+}: {
   user: unknown | null;
   stateManager: StateManager;
   undoManager?: Y.UndoManager;
@@ -65,6 +66,7 @@ export default function Navbar({
   compactStatus?: "idle" | "compacting" | "error";
   onForceSave?: () => void;
 }) {
+  const isViewOnly = useViewOnly();
   const isLargeScreen = useIsLargeScreen();
   const isMediumScreen = useIsMediumScreen();
   const isSmallScreen = useIsSmallScreen();
@@ -255,15 +257,24 @@ export default function Navbar({
       <div className="flex h-13 items-center justify-center gap-2">
         {!isSmallScreen && (
           <div className=" pointer-events-auto flex h-8 items-center gap-2 rounded-md px-2.5">
-            <AutosizeInput
-              name="title"
-              value={title}
-              onChange={handleTitleChange}
-              onBlur={commitTitle}
-              onKeyDown={handleTitleKeyDown}
-              width={200}
-              inputClassName="h-9 text-sm font-semibold"
-            />
+            {isViewOnly ? (
+              <span
+                title={projectName}
+                className="max-w-[200px] truncate px-3 text-sm font-semibold"
+              >
+                {projectName}
+              </span>
+            ) : (
+              <AutosizeInput
+                name="title"
+                value={title}
+                onChange={handleTitleChange}
+                onBlur={commitTitle}
+                onKeyDown={handleTitleKeyDown}
+                width={200}
+                inputClassName="h-9 text-sm font-semibold"
+              />
+            )}
           </div>
         )}
       </div>
@@ -405,12 +416,12 @@ const ResizeVideo = () => {
 };
 
 const ResizeOption = ({
-                        label,
-                        icon,
-                        value,
-                        description,
-                        handleResize
-                      }: ResizeOptionProps & { handleResize: (payload: ResizeValue) => void }) => {
+  label,
+  icon,
+  value,
+  description,
+  handleResize
+}: ResizeOptionProps & { handleResize: (payload: ResizeValue) => void }) => {
   const Icon = Icons[icon as "text"];
   return (
     <div

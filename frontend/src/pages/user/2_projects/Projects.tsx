@@ -24,7 +24,7 @@ import {
     Loader2,
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
-import { useState, useEffect } from "react";
+import {useState, useEffect, useRef} from "react";
 import api from "@/lib/axios.ts";
 import { formatDistanceToNow } from "date-fns";
 
@@ -62,6 +62,9 @@ const contractProjects: Project[] = [];
 
 type TabType = "recent" | "personal" | "shared";
 type ViewType = "grid" | "compact";
+
+const canRenameProject = (project: Project) =>
+  project.role === "Owner" || project.role === "Editor";
 
 // Skeleton Components
 const ProjectCardSkeleton = ({ view = "grid" }: { view?: ViewType }) => (
@@ -103,20 +106,34 @@ const Projects: React.FC = () => {
   const [editProjectName, setEditProjectName] = useState<string>("");
   const [isRenamingProjectId, setIsRenamingProjectId] = useState<string | null>(null);
 
+  const renameInFlightRef = useRef(false);
+
   const handleRenameProject = async (projectId: string) => {
-    if (!editProjectName.trim()) {
+    if (renameInFlightRef.current) return;
+
+    const nextName = editProjectName.trim();
+    const project = recentProjects.find(p => p.id === projectId);
+
+    if (!project || !canRenameProject(project)) {
       setEditingProjectId(null);
       return;
     }
-    
+
+    // empty or unchanged: nothing to save
+    if (!nextName || nextName === project.name) {
+      setEditingProjectId(null);
+      return;
+    }
+
+    renameInFlightRef.current = true;
     setIsRenamingProjectId(projectId);
     try {
-      await api.put(`/api/projects/${projectId}`, { name: editProjectName });
-      const updateProjectList = (projects: Project[]) => 
-        projects.map(p => p.id === projectId ? { 
-          ...p, 
-          name: editProjectName,
-          thumbnail: `https://placehold.co/400x225/1e2130/4a6fa5?text=${encodeURIComponent(editProjectName)}`
+      await api.put(`/api/projects/${projectId}`, { name: nextName });
+      const updateProjectList = (projects: Project[]) =>
+        projects.map(p => p.id === projectId ? {
+          ...p,
+          name: nextName,
+          thumbnail: `https://placehold.co/400x225/1e2130/4a6fa5?text=${encodeURIComponent(nextName)}`
         } : p);
       
       const nextPersonal = updateProjectList(personalProjects);
@@ -133,6 +150,7 @@ const Projects: React.FC = () => {
     } catch (err) {
       console.error("Failed to rename project", err);
     } finally {
+      renameInFlightRef.current = false;
       setIsRenamingProjectId(null);
       setEditingProjectId(null);
     }
@@ -322,17 +340,19 @@ const Projects: React.FC = () => {
           <div className="mb-2 h-4 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
         ) : (
           <div className="flex items-center gap-2 mb-2">
-            <button 
-              className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white shrink-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditingProjectId(project.id);
-                setEditProjectName(project.name);
-              }}
-              title="Rename Project"
-            >
-              <Edit className="h-3.5 w-3.5" />
-            </button>
+            {canRenameProject(project) && (
+              <button
+                className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingProjectId(project.id);
+                  setEditProjectName(project.name);
+                }}
+                title="Rename Project"
+              >
+                <Edit className="h-3.5 w-3.5" />
+              </button>
+            )}
             {isRenamingProjectId === project.id ? (
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <Loader2 className="h-4 w-4 animate-spin text-blue-500" />

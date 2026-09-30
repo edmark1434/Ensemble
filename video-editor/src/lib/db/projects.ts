@@ -1,6 +1,7 @@
 // lib/db/projects.ts
 
 import { db } from "@/lib/db";
+import {setProjectNameInLiveRoom} from "@/lib/collab/live-rooms";
 
 const CURSOR_COLORS = ["#F97316", "#3B82F6", "#22C55E", "#EAB308", "#EC4899", "#8B5CF6"];
 
@@ -47,11 +48,13 @@ export async function updateProject({
   name,
   width,
   height,
+  pushToLiveRoom = false,
 }: {
   projectId: string;
   name?: string;
   width?: number;
   height?: number;
+  pushToLiveRoom?: boolean;
 }): Promise<void> {
   const updates: Record<string, unknown> = {};
   if (name !== undefined) updates.name = name;
@@ -67,4 +70,10 @@ export async function updateProject({
     .where("project_id", "=", projectId)
     .where("deleted_at", "is", null)
     .execute();
+
+  if (pushToLiveRoom && name !== undefined) {
+    await setProjectNameInLiveRoom(projectId, name).catch((err) =>
+      console.error("updateProject: failed to push name to live room", err),
+    );
+  }
 }

@@ -15,6 +15,7 @@ import {CollabTarget} from "@/features/editor/collab/collab-target";
 import {compactBlock, loadLatestBlockState, withBlockSnapshotLock} from "@/lib/collab/block-persistence-store";
 import { getEffectiveBlockRole } from "@/lib/db/block-members";
 import { canEditWithRole } from "@/features/editor/types/editor-role";
+import {liveRooms} from "@/lib/collab/live-rooms";
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
@@ -59,7 +60,7 @@ interface Room {
   snapshotIfDirty: () => Promise<void>;
 }
 
-const rooms = new Map<string, Promise<Room>>();
+const rooms = liveRooms as Map<string, Promise<Room>>;
 
 function broadcast(room: Room, message: Uint8Array, origin: WebSocket | null) {
   for (const client of room.clients.keys()) {

@@ -13,9 +13,9 @@ import { db } from "@/lib/db";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function EditorPage({
-                                           params,
-                                           searchParams,
-                                         }: {
+  params,
+  searchParams,
+}: {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ width?: string; height?: string }>;
 }) {
@@ -54,6 +54,7 @@ export default async function EditorPage({
     .where("project_members.deleted_at", "is", null)
     .select([
       "project_members.role",
+      "projects.name",
       "projects.width",
       "projects.height",
       "users.first_name",
@@ -69,6 +70,7 @@ export default async function EditorPage({
       id={id}
       userId={decoded.userId}
       userName={membership.first_name}
+      projectName={membership.name}
       width={membership.width}
       height={membership.height}
       role={membership.role}

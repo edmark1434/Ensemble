@@ -470,10 +470,11 @@ const Controls = ({ panelRef }: { panelRef: React.RefObject<HTMLDivElement | nul
   );
 };
 
-const Editor = ({ id, userId, userName, width, height, role }: {
+const Editor = ({ id, userId, userName, projectName, width, height, role }: {
   id?: string;
   userId?: string;
   userName?: string;
+  projectName?: string;
   width?: number;
   height?: number;
   role?: EditorRole;
@@ -485,11 +486,12 @@ const Editor = ({ id, userId, userName, width, height, role }: {
         userId,
         userName,
         projectId: id,
+        ...(projectName !== undefined ? { projectName } : {}),
         ...(width && height ? { size: { width, height } } : {}),
       });
     }
     setStoreSynced(true);
-  }, [id, userId, userName, width, height]);
+  }, [id, userId, userName, width, height, projectName]);
 
   const { userId: storeUserId, userName: storeUserName, projectId, activeSceneBlockId, activeSceneItemId } = useStore();
 
@@ -510,6 +512,7 @@ const Editor = ({ id, userId, userName, width, height, role }: {
     collabReady ? storeUserId : undefined,
     collabReady ? storeUserName : undefined,
     stateManager,
+    projectName,
   );
 
   const resolvedRole = useEditorRole(projectId, activeSceneBlockId, storeUserId, role ?? null);
