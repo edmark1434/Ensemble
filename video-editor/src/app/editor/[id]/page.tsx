@@ -65,6 +65,8 @@ export default async function EditorPage({
     notFound();
   }
 
+  console.log("[EditorPage] DB returned name:", JSON.stringify(membership.name), "for project:", id);
+
   return (
     <Editor
       id={id}

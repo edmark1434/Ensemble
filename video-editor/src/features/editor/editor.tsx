@@ -480,6 +480,7 @@ const Editor = ({ id, userId, userName, width, height, projectName, role }: {
 }) => {
   const [storeSynced, setStoreSynced] = useState(false);
   useEffect(() => {
+    console.log("[Editor] useEffect fired with projectName prop:", JSON.stringify(projectName));
     if (userId && id) {
       useStore.setState({
         userId,
@@ -488,6 +489,7 @@ const Editor = ({ id, userId, userName, width, height, projectName, role }: {
         ...(width && height ? { size: { width, height } } : {}),
         ...(projectName ? { projectName } : {}),
       });
+      console.log("[Editor] Store set to projectName:", JSON.stringify(useStore.getState().projectName));
     }
     setStoreSynced(true);
   }, [id, userId, userName, width, height, projectName]);
@@ -533,6 +535,24 @@ const Editor = ({ id, userId, userName, width, height, projectName, role }: {
   useEffect(() => {
     if (collab?.ready) hasSyncedOnceRef.current = true;
   }, [collab?.ready]);
+
+  // Once the collab doc is fully synced, force the DB-provided name to win.
+  // The Collab Doc's websocket memory may hold a stale name; the DB is the
+  // source of truth because the dashboard can rename projects independently.
+  useEffect(() => {
+    if (!collab?.ready || !projectName) return;
+    const store = useStore.getState();
+    if (store.projectName !== projectName) {
+      console.log("[Editor] Forcing DB name after collab ready:", projectName, "(was:", store.projectName + ")");
+      useStore.setState({ projectName });
+      // Also update the Collab Doc memory so it doesn't persist the stale name
+      if (store.collabSchema && store.collabOrigin) {
+        store.collabSchema.doc.transact(() => {
+          store.collabSchema!.meta.set("projectName", projectName);
+        }, store.collabOrigin);
+      }
+    }
+  }, [collab?.ready, projectName]);
 
   // Mirror into the shared store so components outside this tree (Header,
   // keyboard shortcuts) can tell whether it's safe to leave the scene,
