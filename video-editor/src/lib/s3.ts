@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import {S3Client, PutObjectCommand, GetObjectCommand} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const requireEnv = (name: string): string => {
@@ -47,11 +47,19 @@ export const getContentType = (fileName: string): string => {
 export const sanitizeFileName = (fileName: string): string =>
   fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
 
+export const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
 export const buildS3Key = (
   userId: string,
   fileId: string,
   fileName: string
-): string => `uploads/${userId}/${sanitizeFileName(fileName)}`;
+): string => `uploads/${userId}/${fileId}/${sanitizeFileName(fileName)}`;
+
+export const buildProxyKey = (
+  userId: string,
+  fileId: string,
+  baseName: string
+): string => `proxies/${userId}/${fileId}/${sanitizeFileName(baseName)}.mp4`;
 
 export const buildPublicUrl = (key: string): string => {
   if (process.env.AWS_S3_PUBLIC_URL) {
@@ -67,11 +75,18 @@ export const createPresignedPutUrl = async (
   const command = new PutObjectCommand({
     Bucket: S3_BUCKET_NAME,
     Key: key,
-    ContentType: contentType
+    ContentType: contentType,
+    CacheControl: IMMUTABLE_CACHE_CONTROL
   });
-
   return getSignedUrl(s3Client, command, { expiresIn: 300 });
 };
+
+export const createPresignedGetUrl = async (key: string): Promise<string> =>
+  getSignedUrl(
+    s3Client,
+    new GetObjectCommand({ Bucket: S3_BUCKET_NAME, Key: key }),
+    { expiresIn: 3600 }
+  );
 
 export const uploadBufferToS3 = async (
   key: string,
@@ -83,7 +98,8 @@ export const uploadBufferToS3 = async (
       Bucket: S3_BUCKET_NAME,
       Key: key,
       Body: body,
-      ContentType: contentType
+      ContentType: contentType,
+      CacheControl: IMMUTABLE_CACHE_CONTROL
     })
   );
 };

@@ -21,6 +21,7 @@ import {LayoutControls} from "@/features/editor/control-item/common/layout";
 import {CaptionDimensionsSync} from "@/features/editor/control-item/common/caption-dimensions-sync";
 import {Appearance} from "@/features/editor/control-item/common/appearance";
 import {useViewOnly} from "@/features/editor/hooks/use-view-only";
+import {fetchAllFontItems, getDefaultFont, itemToFonts} from "@/features/editor/utils/fetch-google-fonts";
 
 interface ITextControlProps {
   color: string;
@@ -81,6 +82,28 @@ const resolveFontFromDetails = (
   if (!matched) return undefined;
 
   return { ...matched, name: getStyleNameFromFontName(currentFont.postScriptName) };
+};
+
+const resolveGoogleFontFromDetails = async (
+  details: (ITrackItem & ICaption)["details"]
+): Promise<ICompactFont | undefined> => {
+  const postScriptName = details.fontFamily;
+  if (!postScriptName) return undefined;
+
+  const dash = postScriptName.lastIndexOf("-");
+  if (dash === -1) return undefined;
+  const familySlug = postScriptName.slice(0, dash);
+
+  const items = await fetchAllFontItems();
+  const item = items.find((i) => i.family.replace(/\s+/g, "") === familySlug);
+  if (!item) return undefined;
+
+  return {
+    family: item.family,
+    styles: itemToFonts(item),
+    default: getDefaultFont(item),
+    name: getStyleNameFromFontName(postScriptName)
+  };
 };
 
 const getPropertiesFromDetails = (
@@ -154,11 +177,22 @@ const BasicCaption = ({
 
   useEffect(() => {
     const resolved = resolveFontFromDetails(trackItem.details, fonts, compactFonts);
-    if (!resolved) return;
+    if (resolved) {
+      setSelectedFont(resolved);
+      setProperties(getPropertiesFromDetails(trackItem.details, resolved.family));
+      return;
+    }
 
-    setSelectedFont(resolved);
-    setProperties(getPropertiesFromDetails(trackItem.details, resolved.family));
-  }, [trackItem.details]);
+    let cancelled = false;
+    resolveGoogleFontFromDetails(trackItem.details).then((google) => {
+      if (cancelled || !google) return;
+      setSelectedFont(google);
+      setProperties(getPropertiesFromDetails(trackItem.details, google.family));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [trackItem.details, fonts, compactFonts]);
 
   const handleChangeFontStyle = async (font: IFont) => {
     const fontName = font.postScriptName;

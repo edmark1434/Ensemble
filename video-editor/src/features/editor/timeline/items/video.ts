@@ -13,7 +13,7 @@ import {
   calculateOffscreenSegments,
   calculateThumbnailSegmentLayout
 } from "../../utils/filmstrip";
-import { getFileFromUrl } from "../../utils/file";
+import {getFileFromUrlCached} from "../../utils/file";
 import { createMediaControls } from "../controls";
 
 // Type declaration for MP4Clip to avoid SSR issues
@@ -178,7 +178,7 @@ class Video extends Trimmable {
   }
 
   public async prepareAssets() {
-    const file = await getFileFromUrl(this.src);
+    const file = await getFileFromUrlCached(this.src);
     const stream = file.stream();
 
     // Dynamically import MP4Clip only on the client side
@@ -244,7 +244,7 @@ class Video extends Trimmable {
       img.crossOrigin = "anonymous";
 
       const isDataUri = fallbackThumbnail.startsWith("data:");
-      img.src = isDataUri ? fallbackThumbnail : `${fallbackThumbnail}?t=${Date.now()}`;
+      img.src = fallbackThumbnail;
 
       img.onload = () => {
         const canvas = document.createElement("canvas");
@@ -518,8 +518,7 @@ class Video extends Trimmable {
     this.isLoading = true;
     this.startLoadingAnimation();
     this.canvas?.requestRenderAll();
-    await this.initialize();
-    await this.prepareAssets();
+    await this.initialize(); // already calls prepareAssets()
     this.thumbnailCache.clearCacheButFallback();
     this.onScale();
   }

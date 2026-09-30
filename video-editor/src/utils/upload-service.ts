@@ -120,7 +120,10 @@ export async function processFileUpload(
 
     // Upload file with progress tracking
     await axios.put(uploadInfo.presignedUrl, file, {
-      headers: { "Content-Type": uploadInfo.contentType },
+      headers: {
+        "Content-Type": uploadInfo.contentType,
+        "Cache-Control": uploadInfo.cacheControl
+      },
       onUploadProgress: (progressEvent) => {
         const percent = Math.round(
           (progressEvent.loaded * 100) / (progressEvent.total || 1)

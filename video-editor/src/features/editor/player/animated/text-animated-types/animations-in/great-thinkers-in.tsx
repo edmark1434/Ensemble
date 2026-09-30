@@ -1,5 +1,6 @@
 import { spring } from "remotion";
 import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
+import {getCharTiming} from "@/features/editor/player/animated/text-animated-types/char-timing";
 
 const GetThinkersAnimationIn = ({
   char,
@@ -22,9 +23,12 @@ const GetThinkersAnimationIn = ({
     fillStyle: React.CSSProperties;
   };
 }) => {
-  const totalDuration = animationTextInFrames;
-  const delayFactor = totalDuration / textLength;
-  const delay = index * delayFactor;
+  const { delay } = getCharTiming({
+    index,
+    textLength,
+    windowFrames: animationTextInFrames,
+    fps
+  });
 
   const opacity = spring({
     frame: frame - delay,

@@ -18,6 +18,18 @@ const Player = () => {
     setPlayerRef(playerRef as React.RefObject<PlayerRef>);
   }, []);
 
+  useEffect(() => {
+    const p = playerRef.current;
+    if (!p) return;
+    const originalSeekTo = p.seekTo.bind(p);
+    p.seekTo = (frame: number) => {
+      if (!Number.isFinite(frame)) {
+        console.trace("seekTo called with non-finite frame:", frame);
+      }
+      return originalSeekTo(frame);
+    };
+  }, []);
+
   const safeDurationInFrames = (() => {
     const frames = Math.round((duration / 1000) * fps) + 1;
     return Number.isFinite(frames) && frames > 0 ? frames : 1;

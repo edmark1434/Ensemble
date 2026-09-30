@@ -6,7 +6,7 @@ import {
   buildPublicUrl,
   buildS3Key,
   createPresignedPutUrl,
-  getContentType
+  getContentType, IMMUTABLE_CACHE_CONTROL
 } from "@/lib/s3";
 import { resolveUniqueFileName } from "@/utils/resolve-unique-filename";
 
@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
         filePath,
         contentType,
         presignedUrl,
+        cacheControl: IMMUTABLE_CACHE_CONTROL,
         folder: "uploads",
         url: buildPublicUrl(filePath)
       });
