@@ -131,11 +131,7 @@ export default function Teams() {
     setIsSaving(true);
 
     try {
-      await api.post("/api/teams/join-by-code", {
-        code: joinCode.trim(),
-      });
-
-      showSuccessToast("Team joined or request submitted");
+      const response = await api.post("/api/teams/join-by-code", { code: joinCode.trim() }); if (response.data?.data?.status === "Pending") { showSuccessToast("Join Request Sent, Wait for Approval"); } else { showSuccessToast("Team joined successfully"); }
       setIsJoinModalOpen(false);
       setJoinCode("");
       if (isBrowseMode) setIsBrowseMode(false);
@@ -249,7 +245,7 @@ export default function Teams() {
                           Private
                         </span>
                       )}
-                      {team.current_user_role && (
+                      {team.current_user_status === "Pending" && ( <span className="h-fit rounded-full border border-yellow-400/25 bg-yellow-500/15 px-2 py-0.5 text-xs text-yellow-500"> Pending Approval </span> )} {team.current_user_role && (
                         <span className="h-fit rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
                           {team.current_user_role}
                         </span>
@@ -336,3 +332,5 @@ function getApiError(error: unknown, fallback: string) {
 
   return fallback;
 }
+
+

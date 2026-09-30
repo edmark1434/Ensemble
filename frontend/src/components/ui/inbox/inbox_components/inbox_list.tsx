@@ -206,7 +206,7 @@ export const InboxList: React.FC<InboxListProps> = ({
                       </p>
                     )}
                     <p
-                      className="text-[10px] text-gray-500 dark:text-zinc-500 flex-shrink-0"
+                      className="text-[10px] text-gray-500 dark:text-zinc-400 flex-shrink-0"
                       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
                       {time}
@@ -215,7 +215,7 @@ export const InboxList: React.FC<InboxListProps> = ({
                   
                   <div className="flex justify-between items-center">
                     <p
-                      className="text-xs text-gray-500 dark:text-zinc-500 truncate mr-2 text-left"
+                      className="text-xs text-gray-500 dark:text-zinc-400 truncate mr-2 text-left"
                       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
                       {lastMessage}
