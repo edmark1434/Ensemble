@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   XCircle,
   UserCheck,
+  UserMinus,
   MessageSquare,
   ExternalLink,
   ShieldAlert,
@@ -26,7 +27,7 @@ import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import { JobRichText } from "../../job_components/JobRichText";
 import { toast } from "react-hot-toast";
-import { showErrorToast } from "@/components/utility/toast";
+import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import { sampleIncomingProposals, sampleSentProposals } from "../proposals_datasets";
 import { sampleJobs } from "../../job_datasets";
 import type { ProposalItemData, ProposalStatus } from "../proposals_components/proposals_list";
@@ -34,6 +35,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
+import useChatState, { upsertConversation, upsertMessage } from "@/components/ui/chat_bubble/chat_state";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 import { Profile_Portfolio, type PortfolioItem } from "@/pages/user/7_profile/Displays/Body/Profile_Portfolio";
 import { Profile_Gallery } from "@/pages/user/7_profile/Displays/Body/Profile_Gallery";
@@ -54,6 +56,9 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   // Decision Modal States
   const [isShortlistModalOpen, setIsShortlistModalOpen] = useState(false);
   const [shortlistMessage, setShortlistMessage] = useState("");
+  const [isShortlisting, setIsShortlisting] = useState(false);
+  const [isUnshortlistModalOpen, setIsUnshortlistModalOpen] = useState(false);
+  const [isUnshortlisting, setIsUnshortlisting] = useState(false);
 
   const { updateProposalStatus } = useJobs();
 
@@ -176,11 +181,13 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
 
   const handleConfirmShortlist = async () => {
     if (!shortlistMessage.trim() || !proposal) return;
-    
+    setIsShortlisting(true);
     try {
       const res = await updateProposalStatus(proposal.id, { 
         status: "Shortlisted",
-        rejection_reason: shortlistMessage
+        message: shortlistMessage.trim(),
+        shortlistMessage: shortlistMessage.trim(),
+        rejection_reason: shortlistMessage.trim()
       });
       if (res && res.success) {
         setProposal((prev) =>
@@ -191,15 +198,98 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
               }
             : null
         );
-        console.log(`Shortlisted ${proposal.partyName} with message: "${shortlistMessage}"`);
+        showSuccessToast("Candidate shortlisted and message sent to chat");
         setIsShortlistModalOpen(false);
         setShortlistMessage("");
+
+        // Open floating chat of the hirer immediately
+        const conversation = res.conversation;
+        const initialMessage = res.initialMessage;
+        const convId = conversation?._id || conversation?.inbox_id;
+        if (convId) {
+          if (conversation) {
+            useChatState.setState((state) => ({
+              conversations: upsertConversation(state.conversations, conversation),
+            }));
+          }
+          if (initialMessage) {
+            useChatState.setState((state) => ({
+              messagesByConversation: {
+                ...state.messagesByConversation,
+                [String(convId)]: upsertMessage(
+                  state.messagesByConversation[String(convId)] || [],
+                  initialMessage
+                ),
+              },
+            }));
+          }
+          void useChatState.getState().openFloatingConversation({
+            id: String(convId),
+            inbox_id: String(convId),
+            account_id: String(proposal.freelancerAccountId || ""),
+            name: proposal.partyName || proposal.freelancerName || "Applicant",
+            avatarUrl: proposal.freelancerAvatar || undefined,
+            conversationType: conversation?.conversation_type || "marketplace_job",
+            listingType: "job",
+            listingTitle: proposal.jobTitle || targetJob?.title || "Job proposal",
+          });
+        } else {
+          void useChatState.getState().createMarketplace({
+            context_type: "job_proposal",
+            context_id: proposal.id,
+          }).then((inbox) => {
+            if (inbox?._id) {
+              void useChatState.getState().openFloatingConversation({
+                id: String(inbox._id),
+                inbox_id: String(inbox._id),
+                account_id: String(proposal.freelancerAccountId || ""),
+                name: proposal.partyName || proposal.freelancerName || "Applicant",
+                avatarUrl: proposal.freelancerAvatar || undefined,
+                conversationType: inbox.conversation_type || "marketplace_job",
+                listingType: "job",
+                listingTitle: proposal.jobTitle || targetJob?.title || "Job proposal",
+              });
+            }
+          }).catch((err) => console.error("Unable to open chat fallback:", err));
+        }
       } else {
         showErrorToast("Failed to shortlist applicant");
       }
     } catch (error) {
       console.error(error);
       showErrorToast("Error shortlisting applicant");
+    } finally {
+      setIsShortlisting(false);
+    }
+  };
+
+  const handleConfirmUnshortlist = async () => {
+    if (!proposal) return;
+    setIsUnshortlisting(true);
+    try {
+      const res = await updateProposalStatus(proposal.id, {
+        status: "Pending",
+        rejection_reason: null
+      });
+      if (res && res.success) {
+        setProposal((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "Pending",
+              }
+            : null
+        );
+        showSuccessToast("Applicant removed from shortlist");
+        setIsUnshortlistModalOpen(false);
+      } else {
+        showErrorToast("Failed to remove applicant from shortlist");
+      }
+    } catch (error) {
+      console.error(error);
+      showErrorToast("Error removing applicant from shortlist");
+    } finally {
+      setIsUnshortlisting(false);
     }
   };
 
@@ -789,7 +879,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                 </>
               )}
 
-              {/* Option 2: SHORTLISTED STATE -> Reject, Accept, or Chat */}
+              {/* Option 2: SHORTLISTED STATE -> Reject, Unshortlist, Chat, or Accept */}
               {proposal.status === "Shortlisted" && (
                 <>
                   {/* Expandable Reject Button */}
@@ -801,6 +891,18 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                     <span className="whitespace-nowrap max-w-[45px] transition-all duration-300 group-hover:max-w-[150px]">
                       <span className="inline group-hover:hidden">Reject</span>
                       <span className="hidden group-hover:inline">Reject Proposal</span>
+                    </span>
+                  </button>
+
+                  {/* Expandable Unshortlist Button */}
+                  <button
+                    onClick={() => setIsUnshortlistModalOpen(true)}
+                    className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-100 dark:bg-amber-500/10 px-3.5 py-2.5 text-xs font-bold text-amber-600 dark:text-amber-400 transition-all duration-300 hover:bg-amber-200 dark:hover:bg-amber-500/20 hover:shadow-lg hover:shadow-amber-500/10"
+                  >
+                    <UserMinus className="h-4 w-4 shrink-0" />
+                    <span className="whitespace-nowrap max-w-[65px] transition-all duration-300 group-hover:max-w-[170px]">
+                      <span className="inline group-hover:hidden">Unshortlist</span>
+                      <span className="hidden group-hover:inline">Remove from Shortlist</span>
                     </span>
                   </button>
 
@@ -895,10 +997,49 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                 </button>
                 <button
                   onClick={handleConfirmShortlist}
-                  disabled={!shortlistMessage.trim()}
-                  className="px-4 py-2 rounded-xl bg-blue-500 text-xs font-bold text-gray-900 dark:text-white hover:bg-blue-600 disabled:opacity-50 transition shadow-lg shadow-blue-500/20"
+                  disabled={!shortlistMessage.trim() || isShortlisting}
+                  className="px-4 py-2 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 disabled:opacity-50 transition shadow-lg shadow-blue-500/20 flex items-center gap-1.5"
                 >
-                  Send & Shortlist
+                  {isShortlisting ? "Sending & Shortlisting..." : "Send & Shortlist"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* UNSHORTLIST CONFIRM MODAL */}
+      <AnimatePresence>
+        {isUnshortlistModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-2xl space-y-4 text-left"
+            >
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <UserMinus className="h-4 w-4 text-amber-500" /> Remove from Shortlist
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-zinc-400">
+                  Are you sure you want to remove <strong className="text-gray-900 dark:text-white">{proposal.partyName}</strong> from the shortlist? Their proposal status will return to Pending and they will receive a notification.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setIsUnshortlistModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmUnshortlist}
+                  disabled={isUnshortlisting}
+                  className="px-4 py-2 rounded-xl bg-amber-500 text-xs font-bold text-white hover:bg-amber-600 disabled:opacity-50 transition shadow-lg shadow-amber-500/20 flex items-center gap-1.5"
+                >
+                  {isUnshortlisting ? "Removing..." : "Confirm Unshortlist"}
                 </button>
               </div>
             </motion.div>
