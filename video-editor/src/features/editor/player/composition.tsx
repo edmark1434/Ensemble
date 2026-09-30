@@ -215,6 +215,19 @@ const Composition = () => {
     return () => subscription.unsubscribe();
   }, [editableTextId]);
 
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    const bad: string[] = [];
+    const walk = (v: unknown, path: string, depth = 0) => {
+      if (depth > 5 || v == null) return;
+      if (typeof v === "number") { if (!Number.isFinite(v)) bad.push(`${path} = ${v}`); return; }
+      if (typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, `${path}.${k}`, depth + 1);
+    };
+    walk({ fps, size }, "store");
+    for (const [id, item] of Object.entries(trackItemsMap)) walk(item, `${item.type}:${id}`);
+    if (bad.length) console.error("[non-finite in store]", bad);
+  }, [trackItemsMap, fps, size]);
+
   return (
     <>
       <AbsoluteFill style={getBackgroundFillStyle(background.value)} />

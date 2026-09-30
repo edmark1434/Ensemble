@@ -6,6 +6,7 @@ import {
   Control
 } from "@designcombo/timeline";
 import { createResizeControls } from "../controls";
+import {resolveTimelineImageSrc} from "@/features/editor/utils/proxy-map";
 
 interface ImageProps extends ResizableProps {
   src: string;
@@ -137,7 +138,7 @@ class Image extends Resizable {
   }
 
   public loadImage() {
-    util.loadImage(this.src).then((img) => {
+    util.loadImage(resolveTimelineImageSrc(this.src)).then((img) => {
       const imgHeight = img.height;
       const rectHeight = this.height;
       const scaleY = rectHeight / imgHeight;

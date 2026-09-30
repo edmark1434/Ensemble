@@ -2,6 +2,7 @@
 
 import {connection, NextRequest, NextResponse} from "next/server";
 import { db } from "@/lib/db";
+import {enqueueProxy} from "@/lib/create-proxy";
 
 export async function POST(request: NextRequest) {
   await connection();
@@ -51,6 +52,10 @@ export async function POST(request: NextRequest) {
       })
       .returning("media_asset_id")
       .executeTakeFirstOrThrow();
+
+    if (/^(video|image|audio)\//.test(contentType)) {
+      enqueueProxy(mediaAsset.media_asset_id);
+    }
 
     return NextResponse.json({
       success: true,

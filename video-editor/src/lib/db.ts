@@ -19,6 +19,7 @@ interface MediaAssetsTable {
   original_file_id: string;
   proxy_file_id: string;
   thumbnail_file_id: string;
+  filmstrip_file_id: string | null;
   type: string;
   width: number | null;
   height: number | null;

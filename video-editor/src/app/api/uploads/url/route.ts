@@ -12,6 +12,7 @@ import { db } from "@/lib/db";
 import {probeAudioVideoDuration, probeImageDimensions, probeVideoMetadata} from "@/utils/media-probe";
 import { resolveUniqueFileName } from "@/utils/resolve-unique-filename";
 import {MAX_FILE_SIZE_BYTES} from "@/constants/upload-limits";
+import {enqueueProxy} from "@/lib/create-proxy";
 
 interface UrlEntry {
   url: string;
@@ -180,6 +181,10 @@ export async function POST(request: NextRequest) {
           })
           .returning("media_asset_id")
           .executeTakeFirstOrThrow();
+
+        if (/^(video|image|audio)\//.test(contentType)) {
+          enqueueProxy(mediaAsset.media_asset_id);
+        }
 
         return {
           fileName,

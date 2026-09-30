@@ -2,6 +2,9 @@ import { useEffect, useRef } from "react";
 import Composition from "./composition";
 import { Player as RemotionPlayer, PlayerRef } from "@remotion/player";
 import useStore from "../store/use-store";
+import {installMediaNetDebug} from "@/features/editor/utils/debug-media-net";
+
+if (process.env.NODE_ENV !== "production") installMediaNetDebug();
 
 const CHECKERBOARD_STYLE: React.CSSProperties = {
   backgroundImage:
@@ -19,15 +22,27 @@ const Player = () => {
   }, []);
 
   useEffect(() => {
-    const p = playerRef.current;
-    if (!p) return;
-    const originalSeekTo = p.seekTo.bind(p);
+    const p = playerRef.current as any;
+    if (!p || p.__seekGuarded) return;
+    const original = p.seekTo.bind(p);
     p.seekTo = (frame: number) => {
       if (!Number.isFinite(frame)) {
-        console.trace("seekTo called with non-finite frame:", frame);
+        console.error("[player] dropped seekTo(non-finite):", frame, new Error().stack);
+        return; // don't forward NaN
       }
-      return originalSeekTo(frame);
+      return original(frame);
     };
+    p.__seekGuarded = true;
+  }); // no dep array on purpose: re-applies if the ref object is replaced
+
+  useEffect(() => {
+    const p = playerRef.current;
+    if (!p) return;
+    const onFrame = (e: { detail: { frame: number } }) => {
+      if (!Number.isFinite(e.detail.frame)) console.error("[player] non-finite frame", e.detail.frame);
+    };
+    p.addEventListener("frameupdate", onFrame);
+    return () => p.removeEventListener("frameupdate", onFrame);
   }, []);
 
   const safeDurationInFrames = (() => {
@@ -38,6 +53,7 @@ const Player = () => {
   return (
     <div className="h-full w-full" style={CHECKERBOARD_STYLE}>
       <RemotionPlayer
+        // browserMediaControlsBehavior={{ mode: "do-nothing" }}
         acknowledgeRemotionLicense
         ref={playerRef}
         component={Composition}

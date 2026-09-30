@@ -11,6 +11,7 @@ import {
 } from "@remotion/media-utils";
 import { IMetadata, ITrim } from "@designcombo/types";
 import { createAudioControls } from "../controls";
+import {loadWaveformData} from "@/features/editor/utils/waveform";
 
 const MAX_CANVAS_WIDTH = 12000; // Keep canvas size reasonable
 const CANVAS_SAFE_DRAWING = 2000;
@@ -109,7 +110,7 @@ class Audio extends Trimmable {
   }
 
   private async initialize() {
-    const audioData = await getAudioData(this.src);
+    const audioData = await loadWaveformData(this.src);
     this.barData = audioData;
     this.bars = this.getBars(0, 0) as any;
     this.isLoading = false;
