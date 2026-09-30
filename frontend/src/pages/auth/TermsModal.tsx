@@ -37,7 +37,10 @@ const TermsModal: React.FC<ModalProps> = ({ isOpen, onClose, onAccept }) => {
           You retain ownership of any content you upload. By submitting content, you grant Ensemble a license to host and display it as necessary to provide the service.</p>
 
           <p style={textStyle}><strong>5. Payment and Credits</strong><br />
-          All payments are processed securely. Virtual credits are non-refundable and have no cash value.</p>
+          All payments are processed securely. Virtual credits are non-refundable and have no direct cash value outside official platform cashout procedures.</p>
+
+          <p style={textStyle}><strong>6. Mutual Contract Cancellation &amp; Escrow Policy</strong><br />
+          Either the client or the freelancer may request mutual contract cancellation. The recipient has 72 hours to accept or decline before the request is automatically approved. Upon cancellation, unearned escrow credits for unfinished milestones are refunded to the client, while earned milestone payments remain with the freelancer.</p>
         </div>
 
         {/* Footer */}

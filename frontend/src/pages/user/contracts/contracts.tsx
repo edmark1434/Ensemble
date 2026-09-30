@@ -1,8 +1,9 @@
 import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
 // src/pages/user/contracts/contracts.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "@/lib/axios";
+import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
 import {
   Shield,
@@ -27,6 +28,23 @@ import useGlobalState from "@/lib/global_state";
 export type ContractType = "Job" | "Gig";
 export type ContractStatus = "Active" | "Waiting" | "Done" | "Cancelled" | "Closed";
 export type MilestoneStatus = "Claimed" | "In Progress" | "Locked" | "Overdue" | "Stalled" | "Abandoned" | "Under Review" | "Cancelled";
+
+export interface CancellationRequest {
+  request_id: string;
+  contract_id: string;
+  initiated_by: string;
+  initiator_role: 'client' | 'freelancer';
+  initiator_name?: string;
+  reason: string;
+  message: string | null;
+  status: 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'auto_cancelled';
+  auto_cancel_at: string;
+  response_message: string | null;
+  responded_by: string | null;
+  responded_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface MilestoneItem {
   id: string;
@@ -222,6 +240,30 @@ export const Contracts: React.FC = () => {
   const [milestoneLoading, setMilestoneLoading] = useState(false);
   const { user } = useGlobalState();
 
+  // Mutual Cancellation state
+  const [activeCancellation, setActiveCancellation] = useState<CancellationRequest | null>(null);
+  const [cancellationModalOpen, setCancellationModalOpen] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState("Mutual agreement to end project");
+  const [cancellationMessage, setCancellationMessage] = useState("");
+  const [submittingCancellation, setSubmittingCancellation] = useState(false);
+  const [declineModalOpen, setDeclineModalOpen] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const formatRemainingTime = (targetIso?: string) => {
+    if (!targetIso) return '';
+    const diff = new Date(targetIso).getTime() - Date.now();
+    if (diff <= 0) return 'Expiring now (pending auto-approval)';
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    if (hours >= 24) {
+      const days = Math.floor(hours / 24);
+      const remHours = hours % 24;
+      return `${days}d ${remHours}h remaining`;
+    }
+    return `${hours}h ${minutes}m remaining`;
+  };
+
   const formatMilestoneDeadline = (m: any) => {
     if (m.deadline_at) {
       const d = new Date(m.deadline_at);
@@ -253,53 +295,205 @@ export const Contracts: React.FC = () => {
     return m.deadline ? String(m.deadline) : 'N/A';
   };
 
-  const handleContractCancel = async (contractId: string) => {
-    if (milestoneLoading) return;
-    setMilestoneLoading(true);
-    try {
-      const cancelRes = await api.post(`/api/contracts/${contractId}/cancel`);
-      alert(cancelRes.data?.message || 'Contract cancelled and unfinished milestones refunded.');
-      const res = await api.get('/api/contracts');
-      if (res.data.success) {
-        const remapped = res.data.data.map((c: any) => {
-          const ms = (c.milestones || []).filter(Boolean).map((m: any, _i: number, arr: any[]) => {
-            const rawStatus: string = (m.status || '').toLowerCase();
-            let uiStatus: MilestoneStatus = 'Locked';
-            if (['completed','approved','auto_approved'].includes(rawStatus)) uiStatus = 'Claimed';
-            else if (rawStatus === 'active') uiStatus = 'In Progress';
-            else if (['under_review','revision_requested'].includes(rawStatus)) uiStatus = 'Under Review';
-            else if (rawStatus === 'overdue') uiStatus = 'Overdue';
-            else if (rawStatus === 'stalled') uiStatus = 'Stalled';
-            else if (rawStatus === 'abandoned') uiStatus = 'Abandoned';
-            else if (rawStatus === 'cancelled') uiStatus = 'Cancelled';
-            return { id: m.id, name: m.name, revisions: parseInt(m.revisions,10)||0, deadline: formatMilestoneDeadline(m), deadline_at: m.deadline_at, credits: m.credits||Math.floor((parseFloat(c.rate_credits)||0)/((arr.length)||1)), status: uiStatus, rawStatus };
-          });
-          return { ...c, milestones: ms };
-        });
-        setContracts(remapped.filter((c: any) => ['Active','Waiting','Done','Closed','Cancelled'].includes(c.status)));
-        if (selectedContract) {
-          const updated = remapped.find((c: any) => c.contract_id === selectedContract.id || c.id === selectedContract.id);
-          if (updated) setSelectedContract((prev) => prev ? {
-            ...prev,
-            status: updated.status,
-            milestones: updated.milestones,
-            dueDate: updated.deadline_at || updated.job_deadline || prev.dueDate
-          } : prev);
+  const mapBackendContracts = useCallback((data: any[]): DetailedContract[] => {
+    return data.map((c: any) => {
+      const mappedMilestones = (c.milestones || []).filter(Boolean).map((m: any, _idx: number, arr: any[]) => {
+        const rawStatus: string = (m.status || '').toLowerCase();
+        let uiStatus: MilestoneStatus = 'Locked';
+        if (['completed', 'approved', 'auto_approved'].includes(rawStatus)) uiStatus = 'Claimed';
+        else if (rawStatus === 'active') uiStatus = 'In Progress';
+        else if (['under_review', 'revision_requested'].includes(rawStatus)) uiStatus = 'Under Review';
+        else if (rawStatus === 'overdue') uiStatus = 'Overdue';
+        else if (rawStatus === 'stalled') uiStatus = 'Stalled';
+        else if (rawStatus === 'abandoned') uiStatus = 'Abandoned';
+        else if (rawStatus === 'cancelled') uiStatus = 'Cancelled';
+        return {
+          id: m.id,
+          name: m.name,
+          revisions: parseInt(m.revisions, 10) || 0,
+          deadline: formatMilestoneDeadline(m),
+          deadline_at: m.deadline_at,
+          credits: m.credits || Math.floor((parseFloat(c.rate_credits) || 0) / (arr.length || 1)),
+          status: uiStatus,
+          rawStatus,
+        };
+      });
+
+      const allMilestonesDone = mappedMilestones.length > 0 && mappedMilestones.every((m: any) => m.status === 'Claimed');
+      
+      let derivedStatus = c.status;
+      if (derivedStatus === 'Completed') {
+        derivedStatus = 'Closed';
+      } else if (allMilestonesDone) {
+        if (c.client_rating && c.freelancer_rating) {
+          derivedStatus = 'Closed';
+        } else {
+          derivedStatus = 'Done';
         }
       }
-      setMilestoneAction(null);
-    } catch (err: any) {
-      console.error('Contract cancellation failed:', err);
-      alert(err?.response?.data?.message || 'Failed to cancel contract. Please try again.');
+
+      return {
+        id: c.contract_id,
+        title: c.job_title || c.contract_type,
+        contractType: c.contract_type === 'job' ? 'Job' : 'Gig',
+        clientName: c.client_name || c.client_handle,
+        freelancerName: c.freelancer_name || c.freelancer_handle,
+        clientAccountId: c.client_account_id,
+        freelancerAccountId: c.freelancer_account_id,
+        clientAvatar: c.client_avatar 
+          ? `${import.meta.env.VITE_CLOUDFRONT_URL}${c.client_avatar.startsWith('/') ? '' : '/'}${c.client_avatar}` 
+          : undefined,
+        freelancerAvatar: c.freelancer_avatar
+          ? `${import.meta.env.VITE_CLOUDFRONT_URL}${c.freelancer_avatar.startsWith('/') ? '' : '/'}${c.freelancer_avatar}` 
+          : undefined,
+        status: derivedStatus,
+        isArchived: derivedStatus === 'Closed' || derivedStatus === 'Cancelled',
+        jobId: c.job_id,
+        dateCreated: c.created_at,
+        dateStarted: c.starts_at || undefined,
+        dueDate: c.job_deadline || undefined,
+        clientRange: (c.rate_credits_min && c.rate_credits_max) 
+          ? `${parseFloat(c.rate_credits_min).toLocaleString()} ~ ${parseFloat(c.rate_credits_max).toLocaleString()}` 
+          : "Fixed Price",
+        totalValueCredits: parseFloat(c.rate_credits) || 0,
+        platformFeePercent: 10,
+        jobDescription: c.job_description || "No description provided.",
+        addOnRate: c.additional_work_rate ? `+${c.additional_work_rate}% / Revision` : "N/A",
+        freelancerTosTitle: c.terms_title || "Standard Terms",
+        freelancerTosContent: c.terms_content || "Standard terms apply.",
+        milestones: mappedMilestones
+      };
+    });
+  }, []);
+
+  const fetchContracts = useCallback(async () => {
+    try {
+      const res = await api.get('/api/contracts');
+      if (res.data?.success) {
+        const mapped = mapBackendContracts(res.data.data);
+        const validStatuses = ["Active", "Waiting", "Done", "Closed", "Cancelled"];
+        const filtered = mapped.filter((c: DetailedContract) => validStatuses.includes(c.status));
+        setContracts(filtered);
+
+        setSelectedContract((prev) => {
+          if (!prev) return null;
+          const updated = mapped.find((c: DetailedContract) => c.id === prev.id);
+          return updated || prev;
+        });
+
+        return mapped;
+      }
+    } catch (err) {
+      console.error("Failed to fetch contracts:", err);
     } finally {
-      setMilestoneLoading(false);
+      setLoading(false);
+    }
+    return [];
+  }, [mapBackendContracts]);
+
+  const fetchCancellationRequest = useCallback(async (contractId: string) => {
+    try {
+      const res = await api.get(`/api/contracts/${contractId}/cancellation-request`);
+      if (res.data?.success) {
+        setActiveCancellation(res.data.data || null);
+      }
+    } catch (err) {
+      console.error("Failed to fetch cancellation request:", err);
+      setActiveCancellation(null);
+    }
+  }, []);
+
+  const handleSubmitCancellationRequest = async () => {
+    if (!selectedContract || submittingCancellation) return;
+    setSubmittingCancellation(true);
+    try {
+      const res = await api.post(`/api/contracts/${selectedContract.id}/cancellation-request`, {
+        reason: cancellationReason,
+        message: cancellationMessage.trim() || undefined
+      });
+      alert(res.data?.message || 'Mutual cancellation requested. The other party has 72 hours to respond.');
+      setCancellationModalOpen(false);
+      setCancellationReason("Mutual agreement to end project");
+      setCancellationMessage("");
+      await fetchContracts();
+      await fetchCancellationRequest(selectedContract.id);
+    } catch (err: any) {
+      console.error("Failed to submit cancellation request:", err);
+      alert(err?.response?.data?.message || 'Failed to submit cancellation request.');
+    } finally {
+      setSubmittingCancellation(false);
+    }
+  };
+
+  const handleAcceptCancellation = async () => {
+    if (!selectedContract || !activeCancellation || actionLoading) return;
+    const confirmed = window.confirm(
+      "Are you sure you want to accept mutual cancellation? Held escrow for uncompleted milestones will be refunded to the client. Completed milestone earnings are retained by the freelancer. This action is final."
+    );
+    if (!confirmed) return;
+
+    setActionLoading(true);
+    try {
+      const res = await api.post(`/api/contracts/${selectedContract.id}/cancellation-request/${activeCancellation.request_id}/respond`, {
+        action: 'accept'
+      });
+      alert(res.data?.message || 'Mutual cancellation accepted. Unfinished escrow has been refunded.');
+      await fetchContracts();
+      await fetchCancellationRequest(selectedContract.id);
+    } catch (err: any) {
+      console.error("Failed to accept cancellation:", err);
+      alert(err?.response?.data?.message || 'Failed to accept cancellation.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeclineCancellation = async () => {
+    if (!selectedContract || !activeCancellation || actionLoading) return;
+    setActionLoading(true);
+    try {
+      const res = await api.post(`/api/contracts/${selectedContract.id}/cancellation-request/${activeCancellation.request_id}/respond`, {
+        action: 'decline',
+        declineReason: declineReason.trim() || undefined
+      });
+      alert(res.data?.message || 'Cancellation request declined. The contract remains active.');
+      setDeclineModalOpen(false);
+      setDeclineReason("");
+      await fetchContracts();
+      await fetchCancellationRequest(selectedContract.id);
+    } catch (err: any) {
+      console.error("Failed to decline cancellation:", err);
+      alert(err?.response?.data?.message || 'Failed to decline cancellation.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleWithdrawCancellation = async () => {
+    if (!selectedContract || !activeCancellation || actionLoading) return;
+    const confirmed = window.confirm("Are you sure you want to withdraw your cancellation request? The contract will remain active.");
+    if (!confirmed) return;
+
+    setActionLoading(true);
+    try {
+      const res = await api.post(`/api/contracts/${selectedContract.id}/cancellation-request/${activeCancellation.request_id}/withdraw`);
+      alert(res.data?.message || 'Cancellation request withdrawn.');
+      await fetchContracts();
+      await fetchCancellationRequest(selectedContract.id);
+    } catch (err: any) {
+      console.error("Failed to withdraw cancellation request:", err);
+      alert(err?.response?.data?.message || 'Failed to withdraw cancellation request.');
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleMilestoneAction = async (action: 'cancel' | 'approve' | 'extend' | 'revision', milestone: MilestoneItem, contractId: string) => {
     if (milestoneLoading) return;
     if (action === 'cancel' && !milestone.id) {
-      await handleContractCancel(contractId);
+      setCancellationReason("Mutual agreement to end project");
+      setCancellationMessage("");
+      setCancellationModalOpen(true);
       return;
     }
     setMilestoneLoading(true);
@@ -309,36 +503,7 @@ export const Contracts: React.FC = () => {
         ? `/api/contracts/${contractId}/extend`
         : `/api/contracts/${contractId}/milestones/${milestone.id}/${action}`;
       await api.post(url, body);
-      // Refresh contracts after action
-      const res = await api.get('/api/contracts');
-      if (res.data.success) {
-        // Re-map using the same mapping logic inline
-        const remapped = res.data.data.map((c: any) => {
-          const ms = (c.milestones || []).filter(Boolean).map((m: any, _i: number, arr: any[]) => {
-            const rawStatus: string = (m.status || '').toLowerCase();
-            let uiStatus: MilestoneStatus = 'Locked';
-            if (['completed','approved','auto_approved'].includes(rawStatus)) uiStatus = 'Claimed';
-            else if (rawStatus === 'active') uiStatus = 'In Progress';
-            else if (['under_review','revision_requested'].includes(rawStatus)) uiStatus = 'Under Review';
-            else if (rawStatus === 'overdue') uiStatus = 'Overdue';
-            else if (rawStatus === 'stalled') uiStatus = 'Stalled';
-            else if (rawStatus === 'abandoned') uiStatus = 'Abandoned';
-            else if (rawStatus === 'cancelled') uiStatus = 'Cancelled';
-            return { id: m.id, name: m.name, revisions: parseInt(m.revisions,10)||0, deadline: formatMilestoneDeadline(m), deadline_at: m.deadline_at, credits: m.credits||Math.floor((parseFloat(c.rate_credits)||0)/((arr.length)||1)), status: uiStatus, rawStatus };
-          });
-          return { ...c, milestones: ms };
-        });
-        setContracts(remapped.filter((c: any) => ['Active','Waiting','Done','Closed','Cancelled'].includes(c.status)));
-        // Update selected contract if open
-        if (selectedContract) {
-          const updated = remapped.find((c: any) => c.contract_id === selectedContract.id || c.id === selectedContract.id);
-          if (updated) setSelectedContract((prev) => prev ? {
-            ...prev,
-            milestones: updated.milestones,
-            dueDate: updated.deadline_at || updated.job_deadline || prev.dueDate
-          } : prev);
-        }
-      }
+      await fetchContracts();
       setMilestoneAction(null);
     } catch (err: any) {
       console.error(`Milestone ${action} failed:`, err);
@@ -352,100 +517,42 @@ export const Contracts: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchContracts = async () => {
-      try {
-        const res = await api.get('/api/contracts');
-        if (res.data.success) {
-          const mappedContracts = res.data.data.map((c: any) => {
-            const mappedMilestones = (c.milestones || []).filter(Boolean).map((m: any, idx: number, arr: any[]) => {
-              const rawStatus: string = (m.status || '').toLowerCase();
-              let uiStatus: MilestoneStatus = 'Locked';
-              if (rawStatus === 'completed' || rawStatus === 'approved' || rawStatus === 'auto_approved') uiStatus = 'Claimed';
-              else if (rawStatus === 'active') uiStatus = 'In Progress';
-              else if (rawStatus === 'under_review' || rawStatus === 'revision_requested') uiStatus = 'Under Review';
-              else if (rawStatus === 'overdue') uiStatus = 'Overdue';
-              else if (rawStatus === 'stalled') uiStatus = 'Stalled';
-              else if (rawStatus === 'abandoned') uiStatus = 'Abandoned';
-              else if (rawStatus === 'cancelled') uiStatus = 'Cancelled';
-              return {
-                id: m.id,
-                name: m.name,
-                revisions: parseInt(m.revisions, 10) || 0,
-                deadline: formatMilestoneDeadline(m),
-                deadline_at: m.deadline_at,
-                credits: m.credits || Math.floor((parseFloat(c.rate_credits) || 0) / (arr.length || 1)),
-                status: uiStatus,
-                rawStatus,
-              };
-            });
+    const init = async () => {
+      const mapped = await fetchContracts();
+      if (id && mapped.length > 0) {
+        const found = mapped.find((c: DetailedContract) => c.id === id);
+        if (found) setSelectedContract(found);
+      }
+    };
+    init();
+  }, [id, fetchContracts]);
 
-            const allMilestonesDone = mappedMilestones.length > 0 && mappedMilestones.every((m: any) => m.status === 'Claimed');
-            
-            let derivedStatus = c.status;
-            if (derivedStatus === 'Completed') {
-              derivedStatus = 'Closed';
-            } else if (allMilestonesDone) {
-              if (c.client_rating && c.freelancer_rating) {
-                derivedStatus = 'Closed';
-              } else {
-                derivedStatus = 'Done';
-              }
-            }
+  // Fetch active cancellation request whenever selectedContract changes
+  useEffect(() => {
+    if (selectedContract?.id) {
+      fetchCancellationRequest(selectedContract.id);
+    } else {
+      setActiveCancellation(null);
+    }
+  }, [selectedContract?.id, fetchCancellationRequest]);
 
-            return {
-            id: c.contract_id,
-            title: c.job_title || c.contract_type,
-            contractType: c.contract_type === 'job' ? 'Job' : 'Gig',
-            clientName: c.client_name || c.client_handle,
-            freelancerName: c.freelancer_name || c.freelancer_handle,
-            clientAccountId: c.client_account_id,
-            freelancerAccountId: c.freelancer_account_id,
-            clientAvatar: c.client_avatar 
-              ? `${import.meta.env.VITE_CLOUDFRONT_URL}${c.client_avatar.startsWith('/') ? '' : '/'}${c.client_avatar}` 
-              : undefined,
-            freelancerAvatar: c.freelancer_avatar
-              ? `${import.meta.env.VITE_CLOUDFRONT_URL}${c.freelancer_avatar.startsWith('/') ? '' : '/'}${c.freelancer_avatar}` 
-              : undefined,
-            status: derivedStatus,
-            isArchived: derivedStatus === 'Closed' || derivedStatus === 'Cancelled',
-            jobId: c.job_id,
-            dateCreated: c.created_at,
-            dateStarted: c.starts_at || undefined,
-            dueDate: c.job_deadline || undefined,
-            clientRange: (c.rate_credits_min && c.rate_credits_max) 
-              ? `${parseFloat(c.rate_credits_min).toLocaleString()} ~ ${parseFloat(c.rate_credits_max).toLocaleString()}` 
-              : "Fixed Price",
-            totalValueCredits: parseFloat(c.rate_credits) || 0,
-            platformFeePercent: 10,
-            jobDescription: c.job_description || "No description provided.",
-            addOnRate: c.additional_work_rate ? `+${c.additional_work_rate}% / Revision` : "N/A",
-            freelancerTosTitle: c.terms_title || "Standard Terms",
-            freelancerTosContent: c.terms_content || "Standard terms apply.",
-            milestones: mappedMilestones
-          };
-          });
-          
-          const validStatuses = ["Active", "Waiting", "Done", "Closed", "Cancelled"];
-          const filteredContracts = mappedContracts.filter((c: DetailedContract) => validStatuses.includes(c.status));
-          setContracts(filteredContracts);
-
-          // Auto-select contract if ID in URL
-          if (id) {
-            const contract = mappedContracts.find((c: DetailedContract) => c.id === id);
-            if (contract) {
-              setSelectedContract(contract);
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Failed to fetch contracts:", err);
-      } finally {
-        setLoading(false);
+  // Realtime updates via Socket.IO
+  useEffect(() => {
+    const handleUpdate = () => {
+      fetchContracts();
+      if (selectedContract?.id) {
+        fetchCancellationRequest(selectedContract.id);
       }
     };
 
-    fetchContracts();
-  }, [id]);
+    socket.on('cancellation_request_updated', handleUpdate);
+    socket.on('notification', handleUpdate);
+
+    return () => {
+      socket.off('cancellation_request_updated', handleUpdate);
+      socket.off('notification', handleUpdate);
+    };
+  }, [fetchContracts, selectedContract?.id, fetchCancellationRequest]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -766,6 +873,118 @@ export const Contracts: React.FC = () => {
 
             {/* Scrollable Formal Contract Body */}
             <div className="p-6 md:p-8 space-y-8 max-h-[78vh] overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-[#0f1115]">
+              {/* MUTUAL CANCELLATION REQUEST BANNER */}
+              {activeCancellation && activeCancellation.status === 'pending' && (
+                <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 dark:bg-amber-950/20 p-5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-500 shrink-0">
+                        <Clock className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                            Mutual Contract Cancellation Requested
+                          </h4>
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                            Pending Response
+                          </span>
+                        </div>
+                        <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mt-0.5">
+                          {user?.account_id === activeCancellation.initiated_by
+                            ? `You requested mutual cancellation. The other party has 72 hours to respond.`
+                            : `${activeCancellation.initiator_name || (activeCancellation.initiator_role === 'client' ? 'Client' : 'Freelancer')} requested to cancel this contract mutually.`
+                          }
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-left sm:text-right shrink-0">
+                      <span className="text-[11px] font-mono font-semibold text-amber-700 dark:text-amber-300 block">
+                        Auto-resolves: {new Date(activeCancellation.auto_cancel_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
+                        ⏱ {formatRemainingTime(activeCancellation.auto_cancel_at)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Reason & Message */}
+                  <div className="rounded-xl border border-amber-500/20 bg-white/70 dark:bg-black/20 p-3.5 space-y-2 text-xs">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <span className="text-[10px] uppercase font-mono tracking-wider text-gray-500 dark:text-zinc-400 block">Stated Reason</span>
+                        <span className="font-semibold text-gray-900 dark:text-zinc-100">{activeCancellation.reason}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] uppercase font-mono tracking-wider text-gray-500 dark:text-zinc-400 block">Initiated By</span>
+                        <span className="font-semibold text-gray-900 dark:text-zinc-100">
+                          {activeCancellation.initiator_name || (activeCancellation.initiator_role === 'client' ? 'Client' : 'Freelancer')} ({activeCancellation.initiator_role})
+                        </span>
+                      </div>
+                    </div>
+                    {activeCancellation.message && (
+                      <div className="pt-2 border-t border-amber-500/10">
+                        <span className="text-[10px] uppercase font-mono tracking-wider text-gray-500 dark:text-zinc-400 block">Message</span>
+                        <p className="text-gray-700 dark:text-zinc-300 italic whitespace-pre-wrap">{activeCancellation.message}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Escrow disposition preview */}
+                  <div className="rounded-xl bg-gray-50 dark:bg-white/5 p-3 text-xs space-y-1.5 border border-gray-200 dark:border-white/10">
+                    <div className="flex justify-between text-gray-600 dark:text-zinc-400">
+                      <span>Completed milestones (kept by freelancer):</span>
+                      <span className="font-semibold text-emerald-500">
+                        {selectedContract.milestones.filter(m => m.status === 'Claimed').reduce((acc, m) => acc + (m.credits || 0), 0).toLocaleString()} Credits
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-gray-600 dark:text-zinc-400 border-t border-gray-200 dark:border-white/10 pt-1">
+                      <span>Unfinished escrow (refunded to client):</span>
+                      <span className="font-bold text-rose-500">
+                        {selectedContract.milestones.filter(m => m.status !== 'Claimed' && m.status !== 'Cancelled').reduce((acc, m) => acc + (m.credits || 0), 0).toLocaleString()} Credits
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center justify-end gap-3 pt-1">
+                    {user?.account_id === activeCancellation.initiated_by ? (
+                      <button
+                        type="button"
+                        onClick={handleWithdrawCancellation}
+                        disabled={actionLoading}
+                        className="rounded-xl border border-gray-300 dark:border-white/20 bg-white dark:bg-white/10 px-4 py-2 text-xs font-semibold text-gray-800 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/20 transition disabled:opacity-50"
+                      >
+                        {actionLoading ? 'Processing...' : 'Withdraw Request'}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeclineReason('');
+                            setDeclineModalOpen(true);
+                          }}
+                          disabled={actionLoading}
+                          className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 transition disabled:opacity-50"
+                        >
+                          Decline Request
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAcceptCancellation}
+                          disabled={actionLoading}
+                          className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50"
+                        >
+                          {actionLoading ? 'Processing...' : 'Accept Cancellation & Refund Escrow'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Header Title & Financial Summary */}
               <div className="text-center space-y-2 border-b border-gray-200 dark:border-zinc-800 pb-5">
                 <div className="flex justify-center mb-2">
@@ -968,7 +1187,7 @@ export const Contracts: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 text-xs">
+                <div className="grid gap-3 sm:grid-cols-3 text-xs">
                   <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02] p-3 space-y-1.5">
                     <div className="flex items-center gap-2 font-bold text-gray-900 dark:text-zinc-100">
                       <Clock className="w-3.5 h-3.5 text-blue-500" />
@@ -988,6 +1207,16 @@ export const Contracts: React.FC = () => {
                       If the freelancer misses the agreed milestone deadline without submission, the client holds the right to <strong>extend the deadline</strong> or <strong>cancel the milestone for a 100% credit refund</strong> to their wallet.
                     </p>
                   </div>
+
+                  <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02] p-3 space-y-1.5">
+                    <div className="flex items-center gap-2 font-bold text-gray-900 dark:text-zinc-100">
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Mutual Cancellation Policy</span>
+                    </div>
+                    <p className="text-[11px] text-gray-600 dark:text-zinc-400 leading-relaxed font-sans">
+                      Either party may request mutual contract cancellation. The recipient has <strong>72 hours</strong> to accept or decline. Unanswered requests auto-approve. Completed milestones stay with the freelancer, and unfinished escrow is refunded to the client.
+                    </p>
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-white/5">
@@ -1001,7 +1230,7 @@ export const Contracts: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2.5">
                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                     <span className="text-xs font-mono text-gray-700 dark:text-zinc-300">Both Parties Agree to Ensemble Escrow Protection & Inaction Policies</span>
+                     <span className="text-xs font-mono text-gray-700 dark:text-zinc-300">Both Parties Agree to Ensemble Escrow Protection, Inaction, & 72h Mutual Cancellation Policies</span>
                   </div>
                 </div>
               </div>
@@ -1024,41 +1253,69 @@ export const Contracts: React.FC = () => {
                   Press ESC or click close to exit
                 </span>
               </div>
-              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-                {selectedContract.status === 'Active' && (
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap">
+                {(selectedContract.status === 'Active' || selectedContract.status === 'Waiting') && (
                   user?.account_id === selectedContract.freelancerAccountId ? (
-                    <button
-                      onClick={() => navigate(`/dashboard/tasks/${selectedContract.id}`)}
-                      className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-                      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                    >
-                      View Tasks
-                    </button>
+                    <>
+                      {selectedContract.status === 'Active' && (
+                        <button
+                          onClick={() => navigate(`/dashboard/tasks/${selectedContract.id}`)}
+                          className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                        >
+                          View Tasks
+                        </button>
+                      )}
+                      {!activeCancellation && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCancellationReason("Mutual agreement to end project");
+                            setCancellationMessage("");
+                            setCancellationModalOpen(true);
+                          }}
+                          className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-4 py-2 text-xs font-semibold text-rose-500 hover:bg-rose-500/20 transition-colors"
+                          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                        >
+                          Request Cancellation
+                        </button>
+                      )}
+                    </>
                   ) : (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => setMilestoneAction({ type: 'extend', milestoneId: '', milestoneName: selectedContract.title })}
-                        className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors"
-                        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                      >
-                        Extend Contract
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMilestoneAction({ type: 'cancel', milestoneId: '', milestoneName: selectedContract.title })}
-                        className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-4 py-2 text-xs font-semibold text-rose-500 hover:bg-rose-500/20 transition-colors"
-                        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                      >
-                        Cancel Contract
-                      </button>
-                      <button
-                        onClick={() => navigate(`/dashboard/review/${selectedContract.id}`)}
-                        className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors"
-                        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                      >
-                        Review Updates
-                      </button>
+                      {selectedContract.status === 'Active' && (
+                        <button
+                          type="button"
+                          onClick={() => setMilestoneAction({ type: 'extend', milestoneId: '', milestoneName: selectedContract.title })}
+                          className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors"
+                          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                        >
+                          Extend Contract
+                        </button>
+                      )}
+                      {!activeCancellation && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCancellationReason("Mutual agreement to end project");
+                            setCancellationMessage("");
+                            setCancellationModalOpen(true);
+                          }}
+                          className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-4 py-2 text-xs font-semibold text-rose-500 hover:bg-rose-500/20 transition-colors"
+                          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                        >
+                          Request Cancellation
+                        </button>
+                      )}
+                      {selectedContract.status === 'Active' && (
+                        <button
+                          onClick={() => navigate(`/dashboard/review/${selectedContract.id}`)}
+                          className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors"
+                          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                        >
+                          Review Updates
+                        </button>
+                      )}
                     </>
                   )
                 )}
@@ -1085,21 +1342,21 @@ export const Contracts: React.FC = () => {
             {milestoneAction.type === 'cancel' ? (
               <>
                 <h3 className="text-base font-bold text-rose-500">
-                  {milestoneAction.milestoneId ? 'Cancel Milestone & Refund' : 'Cancel Contract & Partial Refund'}
+                  {milestoneAction.milestoneId ? 'Cancel Milestone & Refund' : 'Request Contract Cancellation'}
                 </h3>
                 <div className="text-sm text-gray-600 dark:text-zinc-300 space-y-2">
                   {milestoneAction.milestoneId ? (
                     <p>Are you sure you want to cancel <strong>"{milestoneAction.milestoneName}"</strong>? The milestone credits will be refunded to your wallet. This cannot be undone.</p>
                   ) : (
                     <>
-                      <p>Are you sure you want to cancel the contract for <strong>"{selectedContract.title}"</strong>?</p>
+                      <p>To cancel the entire contract for <strong>"{selectedContract.title}"</strong>, a mutual cancellation request will be submitted with 72 hours for the other party to respond.</p>
                       <div className="rounded-lg bg-gray-50 dark:bg-white/5 p-3 text-xs space-y-1.5 border border-gray-200 dark:border-white/10">
                         <div className="flex justify-between text-gray-600 dark:text-zinc-400">
                           <span>Completed milestones (kept by freelancer):</span>
                           <span className="font-semibold text-emerald-500">{selectedContract.milestones.filter(m => m.status === 'Claimed').reduce((acc, m) => acc + (m.credits || 0), 0).toLocaleString()} Credits</span>
                         </div>
                         <div className="flex justify-between text-gray-600 dark:text-zinc-400 border-t border-gray-200 dark:border-white/10 pt-1">
-                          <span>Unfinished escrow (refunded to you):</span>
+                          <span>Unfinished escrow (refunded to client):</span>
                           <span className="font-bold text-rose-500">{selectedContract.milestones.filter(m => m.status !== 'Claimed' && m.status !== 'Cancelled').reduce((acc, m) => acc + (m.credits || 0), 0).toLocaleString()} Credits</span>
                         </div>
                       </div>
@@ -1110,11 +1367,16 @@ export const Contracts: React.FC = () => {
                   <button onClick={() => setMilestoneAction(null)} className="rounded-xl border border-gray-200 dark:border-white/15 px-4 py-2 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 transition">Keep Contract</button>
                   <button onClick={() => {
                     if (!milestoneAction.milestoneId) {
-                      handleContractCancel(selectedContract.id);
+                      setMilestoneAction(null);
+                      setCancellationReason("Mutual agreement to end project");
+                      setCancellationMessage("");
+                      setCancellationModalOpen(true);
                     } else {
                       handleMilestoneAction('cancel', { id: milestoneAction.milestoneId, name: milestoneAction.milestoneName } as any, selectedContract.id);
                     }
-                  }} disabled={milestoneLoading} className="rounded-xl bg-rose-500 px-4 py-2 text-xs font-bold text-white hover:bg-rose-600 transition disabled:opacity-50">{milestoneLoading ? 'Processing...' : 'Yes, Cancel & Refund'}</button>
+                  }} disabled={milestoneLoading} className="rounded-xl bg-rose-500 px-4 py-2 text-xs font-bold text-white hover:bg-rose-600 transition disabled:opacity-50">
+                    {milestoneAction.milestoneId ? (milestoneLoading ? 'Processing...' : 'Yes, Cancel & Refund') : 'Proceed to Request'}
+                  </button>
                 </div>
               </>
             ) : (
@@ -1133,6 +1395,169 @@ export const Contracts: React.FC = () => {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Mutual Cancellation Request Modal */}
+      {cancellationModalOpen && selectedContract && (
+        <div className="fixed inset-0 z-[199999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in font-['Plus_Jakarta_Sans']">
+          <div className="w-full max-w-lg rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0f1115] p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-rose-500" />
+                <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                  Request Mutual Contract Cancellation
+                </h3>
+              </div>
+              <button
+                onClick={() => setCancellationModalOpen(false)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/10 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs text-gray-600 dark:text-zinc-300">
+              <p>
+                You are requesting to mutually end the contract for <strong>"{selectedContract.title}"</strong>. The other party will have <strong>72 hours</strong> to review and accept or decline.
+              </p>
+
+              {/* Reason Select */}
+              <div className="space-y-1.5">
+                <label className="font-semibold text-gray-800 dark:text-zinc-200 block">
+                  Reason for Cancellation <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={cancellationReason}
+                  onChange={(e) => setCancellationReason(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-2 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="Mutual agreement to end project">Mutual agreement to end project</option>
+                  <option value="Scope or technical requirements changed">Scope or technical requirements changed</option>
+                  <option value="Unresponsive or lack of communication">Unresponsive or lack of communication</option>
+                  <option value="Unable to meet milestone schedule / deadlines">Unable to meet milestone schedule / deadlines</option>
+                  <option value="Quality or expectations mismatch">Quality or expectations mismatch</option>
+                  <option value="Personal emergency / Scheduling conflict">Personal emergency / Scheduling conflict</option>
+                  <option value="Other">Other reason</option>
+                </select>
+              </div>
+
+              {/* Optional Message */}
+              <div className="space-y-1.5">
+                <label className="font-semibold text-gray-800 dark:text-zinc-200 block">
+                  Additional Details / Notes for Other Party
+                </label>
+                <textarea
+                  rows={3}
+                  value={cancellationMessage}
+                  onChange={(e) => setCancellationMessage(e.target.value)}
+                  placeholder="Explain why you are requesting cancellation and any specific handover notes..."
+                  className="w-full rounded-xl border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-3 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+
+              {/* Escrow & Policy Box */}
+              <div className="rounded-xl bg-gray-50 dark:bg-white/5 p-3.5 space-y-2 border border-gray-200 dark:border-white/10">
+                <div className="flex items-center gap-1.5 text-blue-500 font-bold">
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>Platform Policy & Escrow Disposition (TOS Section 6)</span>
+                </div>
+                <div className="space-y-1 text-[11px] text-gray-500 dark:text-zinc-400">
+                  <div className="flex justify-between">
+                    <span>Completed milestone payout:</span>
+                    <span className="font-semibold text-emerald-500">
+                      {selectedContract.milestones.filter(m => m.status === 'Claimed').reduce((acc, m) => acc + (m.credits || 0), 0).toLocaleString()} Credits (kept by freelancer)
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 dark:border-white/10 pt-1">
+                    <span>Unfinished escrow refund:</span>
+                    <span className="font-bold text-rose-500">
+                      {selectedContract.milestones.filter(m => m.status !== 'Claimed' && m.status !== 'Cancelled').reduce((acc, m) => acc + (m.credits || 0), 0).toLocaleString()} Credits (returned to client)
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-gray-500 dark:text-zinc-500 pt-1 border-t border-gray-200 dark:border-white/10">
+                  ⏳ If the recipient does not respond within 72 hours, the platform will automatically approve this cancellation and refund unfinished escrow.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-200 dark:border-white/10">
+              <button
+                type="button"
+                onClick={() => setCancellationModalOpen(false)}
+                className="rounded-xl border border-gray-200 dark:border-white/15 px-4 py-2 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitCancellationRequest}
+                disabled={submittingCancellation || !cancellationReason.trim()}
+                className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 transition disabled:opacity-50"
+              >
+                {submittingCancellation ? 'Submitting...' : 'Send Cancellation Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Decline Cancellation Modal */}
+      {declineModalOpen && activeCancellation && (
+        <div className="fixed inset-0 z-[199999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in font-['Plus_Jakarta_Sans']">
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0f1115] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-500" />
+                <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                  Decline Cancellation Request
+                </h3>
+              </div>
+              <button
+                onClick={() => setDeclineModalOpen(false)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/10 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-gray-600 dark:text-zinc-300">
+              <p>
+                Declining this request will keep the contract active and resume normal milestone obligations. Please state your reason for declining so the other party understands your position.
+              </p>
+              <div className="space-y-1.5">
+                <label className="font-semibold text-gray-800 dark:text-zinc-200 block">
+                  Reason for Declining (Optional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={declineReason}
+                  onChange={(e) => setDeclineReason(e.target.value)}
+                  placeholder="e.g. Work is already completed and ready for submission..."
+                  className="w-full rounded-xl border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-3 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-200 dark:border-white/10">
+              <button
+                type="button"
+                onClick={() => setDeclineModalOpen(false)}
+                className="rounded-xl border border-gray-200 dark:border-white/15 px-4 py-2 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 transition"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={handleDeclineCancellation}
+                disabled={actionLoading}
+                className="rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white hover:bg-amber-700 transition disabled:opacity-50"
+              >
+                {actionLoading ? 'Declining...' : 'Confirm Decline'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -291,6 +291,128 @@ async function cancelContractController(req, res) {
     }
 }
 
+async function createCancellationRequestController(req, res) {
+    try {
+        const personalAccountId = req.user.account_id || req.user.accountId;
+        const { contractId } = req.params;
+        const { reason, message, autoCancelHours } = req.body;
+
+        if (!contractId) {
+            return res.status(400).json({ success: false, message: 'Contract ID is required' });
+        }
+        if (!reason || !message) {
+            return res.status(400).json({ success: false, message: 'Reason and message are required' });
+        }
+
+        const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
+        const { requestContractCancellationService } = require('../services/MilestoneServices');
+        const request = await requestContractCancellationService({
+            contractId,
+            callerAccountId: actorIds[0],
+            reason,
+            message,
+            autoCancelHours: autoCancelHours ? Number(autoCancelHours) : 72,
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: 'Mutual cancellation request submitted successfully. The counterparty has 72 hours to respond.',
+            data: request,
+        });
+    } catch (err) {
+        console.error('createCancellationRequestController error:', err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || 'Internal server error',
+        });
+    }
+}
+
+async function getCancellationRequestController(req, res) {
+    try {
+        const personalAccountId = req.user.account_id || req.user.accountId;
+        const { contractId } = req.params;
+
+        const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
+        const { getActiveCancellationRequestService } = require('../services/MilestoneServices');
+        const request = await getActiveCancellationRequestService(contractId, actorIds[0]);
+
+        return res.status(200).json({
+            success: true,
+            data: request,
+        });
+    } catch (err) {
+        console.error('getCancellationRequestController error:', err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || 'Internal server error',
+        });
+    }
+}
+
+async function respondCancellationRequestController(req, res) {
+    try {
+        const personalAccountId = req.user.account_id || req.user.accountId;
+        const { contractId, requestId } = req.params;
+        const { action, declineReason } = req.body;
+
+        if (!['accept', 'decline'].includes(action)) {
+            return res.status(400).json({ success: false, message: 'Action must be "accept" or "decline"' });
+        }
+
+        const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
+        const { respondContractCancellationService } = require('../services/MilestoneServices');
+        const result = await respondContractCancellationService({
+            contractId,
+            requestId,
+            callerAccountId: actorIds[0],
+            action,
+            declineReason,
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: action === 'accept'
+                ? 'Cancellation request accepted. The contract has ended and escrow has been settled.'
+                : 'Cancellation request declined. The contract remains active.',
+            data: result,
+        });
+    } catch (err) {
+        console.error('respondCancellationRequestController error:', err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || 'Internal server error',
+        });
+    }
+}
+
+async function withdrawCancellationRequestController(req, res) {
+    try {
+        const personalAccountId = req.user.account_id || req.user.accountId;
+        const { contractId, requestId } = req.params;
+
+        const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
+        const { withdrawContractCancellationService } = require('../services/MilestoneServices');
+        const result = await withdrawContractCancellationService({
+            contractId,
+            requestId,
+            callerAccountId: actorIds[0],
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Cancellation request withdrawn successfully.',
+            data: result,
+        });
+    } catch (err) {
+        console.error('withdrawCancellationRequestController error:', err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || 'Internal server error',
+        });
+    }
+}
+
 module.exports = {
     sendJobOfferController,
     acceptJobOfferController,
@@ -299,4 +421,8 @@ module.exports = {
     createContractDisputeController,
     extendContractDeadlineController,
     cancelContractController,
+    createCancellationRequestController,
+    getCancellationRequestController,
+    respondCancellationRequestController,
+    withdrawCancellationRequestController,
 };
