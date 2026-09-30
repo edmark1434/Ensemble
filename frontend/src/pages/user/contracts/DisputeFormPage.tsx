@@ -19,6 +19,7 @@ interface DetailedContract {
   clientAvatar?: string;
   freelancerAvatar?: string;
   totalValueCredits: number;
+  milestones?: any[];
 }
 
 export const DisputeFormPage: React.FC = () => {
@@ -30,8 +31,9 @@ export const DisputeFormPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const paramContractId = searchParams.get('contractId') || (location.state as any)?.contractId || "";
+  const paramMilestoneId = searchParams.get('milestoneId') || (location.state as any)?.milestoneId || "";
   const [selectedContractId, setSelectedContractId] = useState(paramContractId);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState(paramMilestoneId ? "Milestone Submission Conflict" : "");
   const [details, setDetails] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -45,21 +47,26 @@ export const DisputeFormPage: React.FC = () => {
               id: m.id,
               name: m.name,
               revisions: parseInt(m.revisions, 10) || 0,
+              deadline_at: m.deadline_at,
               deadline: (() => {
+                if (m.deadline_at) {
+                  const d = new Date(m.deadline_at);
+                  if (!isNaN(d.getTime())) return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                }
                 if (m.hours) return `${m.hours} Hours`;
                 const hrs = Number(m.deadline);
                 if (!isNaN(hrs) && hrs <= 0) return 'Flexible';
                 if (!isNaN(hrs) && hrs > 0 && hrs < 100000) {
                   if (m.started_at) {
                     const st = new Date(m.started_at);
-                    if (!isNaN(st.getTime())) return new Date(st.getTime() + hrs * 3600000).toLocaleDateString();
+                    if (!isNaN(st.getTime())) return new Date(st.getTime() + hrs * 3600000).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
                   }
                   if (hrs >= 24 && hrs % 24 === 0) return `${hrs / 24} Days (${hrs} hrs)`;
                   return `${hrs} Hours`;
                 }
                 if (typeof m.deadline === 'string' && m.deadline.includes('-')) {
                   const d = new Date(m.deadline);
-                  if (!isNaN(d.getTime()) && d.getFullYear() > 1970) return d.toLocaleDateString();
+                  if (!isNaN(d.getTime()) && d.getFullYear() > 1970) return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
                 }
                 return m.deadline ? String(m.deadline) : 'N/A';
               })(),
@@ -85,6 +92,7 @@ export const DisputeFormPage: React.FC = () => {
                 : undefined,
               status: derivedStatus,
               totalValueCredits: parseFloat(c.rate_credits) || 0,
+              milestones: mappedMilestones,
             };
           });
           
@@ -103,6 +111,7 @@ export const DisputeFormPage: React.FC = () => {
   }, []);
 
   const selectedContract = activeContracts.find(c => c.id === selectedContractId);
+  const contestedMilestone = selectedContract?.milestones?.find((m: any) => String(m.id) === String(paramMilestoneId));
   
   let opponentName = "Unknown";
   let opponentAvatar = "";
@@ -128,9 +137,13 @@ export const DisputeFormPage: React.FC = () => {
     setIsSubmitting(true);
     
     try {
+      const formattedDetails = contestedMilestone
+        ? `[Contested Milestone: ${contestedMilestone.name} (#${contestedMilestone.id})]\n\n${details}`
+        : (paramMilestoneId ? `[Contested Milestone ID: #${paramMilestoneId}]\n\n${details}` : details);
+
       const res = await api.post(`/api/contracts/${selectedContractId}/dispute`, {
         reason,
-        details,
+        details: formattedDetails,
       });
       if (res.data?.success) {
         toast.success("Dispute submitted to Moderators for review.");
@@ -259,6 +272,16 @@ export const DisputeFormPage: React.FC = () => {
                           </div>
                         </div>
                       </div>
+
+                      {contestedMilestone && (
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-500 dark:text-red-400">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 shrink-0" />
+                            <span>Disputing Milestone Submission: <strong>{contestedMilestone.name}</strong></span>
+                          </div>
+                          <span className="font-semibold">{contestedMilestone.credits?.toLocaleString()} Credits</span>
+                        </div>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -272,6 +295,7 @@ export const DisputeFormPage: React.FC = () => {
                       className="w-full appearance-none rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 transition-all"
                     >
                       <option className="bg-white dark:bg-[#1E1E24]" value="" disabled>Select a reason...</option>
+                      <option className="bg-white dark:bg-[#1E1E24]" value="Milestone Submission Conflict">Milestone Submission Conflict</option>
                       <option className="bg-white dark:bg-[#1E1E24]" value="Non-delivery of work">Non-delivery of work</option>
                       <option className="bg-white dark:bg-[#1E1E24]" value="Unresponsive">Unresponsive / Poor Communication</option>
                       <option className="bg-white dark:bg-[#1E1E24]" value="Quality below expectations">Quality below expectations</option>

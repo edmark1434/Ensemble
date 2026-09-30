@@ -200,6 +200,7 @@ async function getDashboardTasks(accountId) {
                     'credits', cm.credits,
                     'revisions_max', cm.no_of_revisions_max,
                     'deadline', cm.deadline,
+                    'deadline_at', cm.deadline_at,
                     'started_at', cm.started_at
                 ) ORDER BY cm.index ASC)
                 FROM contract_milestones cm 
@@ -246,6 +247,7 @@ async function getDashboardTasks(accountId) {
                     'credits', cm.credits,
                     'revisions_max', cm.no_of_revisions_max,
                     'deadline', cm.deadline,
+                    'deadline_at', cm.deadline_at,
                     'started_at', cm.started_at
                 ) ORDER BY cm.index ASC)
                 FROM contract_milestones cm 
@@ -310,6 +312,7 @@ async function getTaskById(contractId, accountId) {
                         'credits', cm.credits,
                         'revisions_max', cm.no_of_revisions_max,
                         'deadline', cm.deadline,
+                        'deadline_at', cm.deadline_at,
                         'started_at', cm.started_at,
                         'submissions', (
                             SELECT json_agg(
@@ -367,6 +370,7 @@ async function getTaskById(contractId, accountId) {
                         'credits', cm.credits,
                         'revisions_max', cm.no_of_revisions_max,
                         'deadline', cm.deadline,
+                        'deadline_at', cm.deadline_at,
                         'started_at', cm.started_at,
                         'submissions', (
                             SELECT json_agg(
@@ -472,7 +476,7 @@ async function recordMilestoneAction({
     try {
         await client.query('BEGIN');
         const milestoneResult = await client.query(
-            `SELECT contract_milestone_id, name, status, index
+            `SELECT contract_milestone_id, name, status, index, credits
              FROM contract_milestones
              WHERE contract_milestone_id = $1 AND contract_id = $2
              FOR UPDATE`,
@@ -541,7 +545,9 @@ async function recordMilestoneAction({
         if (unlockNext) {
             await client.query(
                 `UPDATE contract_milestones
-                 SET status = 'active'
+                 SET status = 'active',
+                     started_at = COALESCE(started_at, NOW()),
+                     deadline_at = CASE WHEN deadline > 0 THEN NOW() + (deadline * interval '1 hour') ELSE NULL END
                  WHERE contract_milestone_id = (
                     SELECT contract_milestone_id
                     FROM contract_milestones
@@ -553,17 +559,22 @@ async function recordMilestoneAction({
             );
         }
 
+        let milestoneRelease = null;
         let contractCompletion = null;
         if (releaseOnContractCompletion && milestoneStatus === 'completed') {
-            const remainingResult = await client.query(
-                `SELECT COUNT(*)::integer AS remaining
-                 FROM contract_milestones
-                 WHERE contract_id = $1
-                   AND LOWER(status) <> 'completed'`,
-                [contractId]
-            );
+            const milestoneCredits = Number(milestone.credits);
+            if (Number.isSafeInteger(milestoneCredits) && milestoneCredits > 0) {
+                const existingReleaseResult = await client.query(
+                    `SELECT credit_transaction_id
+                     FROM credit_transactions
+                     WHERE type = 'Escrow Release'
+                       AND reference_table = 'contract_milestones'
+                       AND reference_id = $1
+                     LIMIT 1`,
+                    [milestoneId]
+                );
 
-            if (Number(remainingResult.rows[0].remaining) === 0) {
+                if (existingReleaseResult.rows.length === 0) {
                 const contractResult = await client.query(
                     `SELECT contract_id, contract_type, status, rate_credits
                      FROM contracts
@@ -606,27 +617,6 @@ async function recordMilestoneAction({
                     throw error;
                 }
 
-                const releaseCredits = Number(contract.rate_credits);
-                if (!Number.isSafeInteger(releaseCredits) || releaseCredits <= 0) {
-                    const error = new Error('Contract has an invalid release amount');
-                    error.statusCode = 409;
-                    throw error;
-                }
-
-                const existingReleaseResult = await client.query(
-                    `SELECT credit_transaction_id
-                     FROM credit_transactions
-                     WHERE type = 'Escrow Release'
-                       AND reference_table = 'contracts'
-                       AND reference_id = $1
-                     LIMIT 1`,
-                    [contractId]
-                );
-                if (existingReleaseResult.rows.length > 0) {
-                    const error = new Error('Contract funds have already been released');
-                    error.statusCode = 409;
-                    throw error;
-                }
 
                 const walletsResult = await client.query(
                     `SELECT w.wallet_id, w.type, w.status, w.balance_credits
@@ -655,29 +645,8 @@ async function recordMilestoneAction({
                     throw error;
                 }
 
-                const heldResult = await client.query(
-                    `SELECT COALESCE(SUM(ct.amount_credits), 0)::integer AS held_credits
-                     FROM credit_transactions ct
-                     WHERE ct.type = 'Escrow Hold'
-                       AND ct.destination_wallet_id = $1
-                       AND (
-                           (
-                               ct.reference_table = 'contracts'
-                               AND ct.reference_id = $2
-                           ) OR (
-                               ct.reference_table = 'contract_milestone_revisions'
-                               AND EXISTS (
-                                   SELECT 1
-                                   FROM contract_milestones cm
-                                   WHERE cm.contract_milestone_id = ct.reference_id
-                                     AND cm.contract_id = $2
-                               )
-                           )
-                       )`,
-                    [escrowWallet.wallet_id, contractId]
-                );
-                if (Number(heldResult.rows[0].held_credits) < releaseCredits) {
-                    const error = new Error('Contract escrow funding is incomplete');
+                if (Number(escrowWallet.balance_credits) < milestoneCredits) {
+                    const error = new Error('Contract escrow balance is insufficient for release');
                     error.statusCode = 409;
                     throw error;
                 }
@@ -688,20 +657,21 @@ async function recordMilestoneAction({
                 const feeSetting = await getFeeSettingById(feeId);
                 const percent = Number(feeSetting?.percent) || 0;
                 const flatFee = Number(feeSetting?.flatFee) || 0;
-                const feeCredits = calculatePercentFeeAmount(releaseCredits, percent, flatFee);
-                const freelancerCredits = releaseCredits - feeCredits;
+                const feeCredits = calculatePercentFeeAmount(milestoneCredits, percent, flatFee);
+                const freelancerCredits = milestoneCredits - feeCredits;
 
                 let platformWallet = null;
                 if (feeCredits > 0) {
                     const pwRes = await client.query(`
-                        SELECT w.wallet_id, w.status 
-                        FROM platform_wallets pw 
-                        JOIN wallets w ON w.wallet_id = pw.wallet_id 
-                        WHERE pw.type = 'Primary Platform Wallet' 
-                        FOR UPDATE OF w
+                        SELECT wallet_id, status 
+                        FROM wallets 
+                        WHERE type = 'platform wallets' AND status = 'active' 
+                        ORDER BY created_at ASC
+                        LIMIT 1
+                        FOR UPDATE
                     `);
                     platformWallet = pwRes.rows[0];
-                    if (!platformWallet || platformWallet.status !== 'active') {
+                    if (!platformWallet) {
                         const error = new Error('Platform wallet is unavailable for fee processing');
                         error.statusCode = 409;
                         throw error;
@@ -714,7 +684,7 @@ async function recordMilestoneAction({
                      WHERE wallet_id = $2
                        AND balance_credits >= $1
                      RETURNING balance_credits`,
-                    [releaseCredits, escrowWallet.wallet_id]
+                    [milestoneCredits, escrowWallet.wallet_id]
                 );
                 if (debitResult.rows.length === 0) {
                     const error = new Error('Contract escrow balance is insufficient for release');
@@ -741,9 +711,9 @@ async function recordMilestoneAction({
                             type, amount_credits, status,
                             source_wallet_id, destination_wallet_id,
                             reference_table, reference_id
-                        ) VALUES ('Fee', $1, 'completed', $2, $3, 'contracts', $4)
+                        ) VALUES ('Fee', $1, 'completed', $2, $3, 'contract_milestones', $4)
                         RETURNING credit_transaction_id
-                    `, [feeCredits, escrowWallet.wallet_id, platformWallet.wallet_id, contractId]);
+                    `, [feeCredits, escrowWallet.wallet_id, platformWallet.wallet_id, milestoneId]);
                     feeTransaction = feeRes.rows[0];
                 }
 
@@ -755,21 +725,21 @@ async function recordMilestoneAction({
                      )
                      VALUES (
                         'Escrow Release', $1, 'completed',
-                        $2, $3, 'contracts', $4, $5
+                        $2, $3, 'contract_milestones', $4, $5
                      )
                      RETURNING *`,
                     [
                         freelancerCredits,
                         escrowWallet.wallet_id,
                         accountWallet.wallet_id,
-                        contractId,
+                        milestoneId,
                         feeTransaction?.credit_transaction_id || null
                     ]
                 );
                 
                 const notificationMsg = feeCredits > 0 
-                    ? `${freelancerCredits} credits for "${participants.listing_title}" were released to your account wallet (after ${feeCredits} credits platform fee).`
-                    : `${freelancerCredits} credits for "${participants.listing_title}" were released to your account wallet.`;
+                    ? `${freelancerCredits} credits for milestone "${milestone.name}" were released to your account wallet (after ${feeCredits} credits platform fee).`
+                    : `${freelancerCredits} credits for milestone "${milestone.name}" were released to your account wallet.`;
 
                 const notificationResult = await client.query(
                     `INSERT INTO notifications (
@@ -777,7 +747,7 @@ async function recordMilestoneAction({
                         reference_path, reference_id, account_id
                      )
                      VALUES (
-                        $1, false, 'credit_transactions', 'CONTRACT_FUNDS_RELEASED',
+                        $1, false, 'credit_transactions', 'MILESTONE_FUNDS_RELEASED',
                         $2, $3, $4
                      )
                      RETURNING *`,
@@ -789,30 +759,49 @@ async function recordMilestoneAction({
                     ]
                 );
 
-                await client.query(
-                    `UPDATE contracts
-                     SET status = 'Done'
-                     WHERE contract_id = $1`,
-                    [contractId]
-                );
-
-                contractCompletion = {
+                milestoneRelease = {
                     transaction: transactionResult.rows[0],
                     notification: notificationResult.rows[0],
                     freelancerAccountId: participants.freelancer_account_id,
                     releasedCredits: freelancerCredits,
+                    feeCredits,
                     accountBalanceCredits: Number(creditResult.rows[0].balance_credits),
                     escrowBalanceCredits: Number(debitResult.rows[0].balance_credits),
                 };
             }
         }
 
-        await client.query('COMMIT');
-        return {
-            submission: submissionResult.rows[0],
-            milestone,
-            contractCompletion,
-        };
+        const remainingResult = await client.query(
+            `SELECT COUNT(*)::integer AS remaining
+             FROM contract_milestones
+             WHERE contract_id = $1
+               AND LOWER(status) NOT IN ('completed', 'cancelled', 'abandoned')`,
+            [contractId]
+        );
+
+        if (Number(remainingResult.rows[0].remaining) === 0) {
+            await client.query(
+                `UPDATE contracts
+                 SET status = 'Done'
+                 WHERE contract_id = $1`,
+                [contractId]
+            );
+
+            contractCompletion = {
+                isCompleted: true,
+                contractId,
+                milestoneRelease,
+            };
+        }
+    }
+
+    await client.query('COMMIT');
+    return {
+        submission: submissionResult.rows[0],
+        milestone,
+        milestoneRelease,
+        contractCompletion,
+    };
     } catch (error) {
         await client.query('ROLLBACK');
         throw error;
