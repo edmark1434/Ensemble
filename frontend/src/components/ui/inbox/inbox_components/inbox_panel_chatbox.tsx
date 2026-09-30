@@ -41,6 +41,7 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
   handleFileChange,
   removeMedia,
   textareaRef,
+uploadLimitMB = 250,
 }) => {
   const canSend = messageInput.trim().length > 0 || mediaList.length > 0;
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -112,7 +113,7 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
       )}
 
       {/* Renders horizontal preview row for up to 3 attachments */}
-      <InboxUploadMediaPreview mediaList={mediaList} onRemove={removeMedia} />
+      <InboxUploadMediaPreview mediaList={mediaList} onRemove={removeMedia} batchLimitMB={uploadLimitMB} />
 
       <div className="p-4 flex items-end gap-2">
         <div className="flex-1 relative flex items-end">

@@ -191,7 +191,7 @@ async function generateStandaloneUploadUrl(folder, filename, contentType, cacheC
             uploadUrl,
             key,
             expiresIn: URL_EXPIRY,
-            maxFileSize: uploadPolicy.maxFileSize,
+            maxFileSize: dynamicMaxFileSize,
             allowedTypes: uploadPolicy.allowedTypes,
             allowedFolders: ALLOWED_FOLDERS
         };

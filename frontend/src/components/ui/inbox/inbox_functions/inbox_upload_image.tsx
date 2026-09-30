@@ -1,6 +1,6 @@
 // src/components/ui/inbox/inbox_functions/inbox_upload_image.tsx
 import React, { useRef, useState, useCallback } from "react";
-import { X, Paperclip, Film, FileText } from "lucide-react";
+import { X, Paperclip, Film, FileText, HelpCircle } from "lucide-react";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import { showErrorToast } from "@/components/utility/toast";
 
@@ -51,7 +51,7 @@ interface UseInboxUploadMediaReturn {
   clearMedia: () => void;
 }
 
-export const useInboxUploadMedia = (maxFiles = 3): UseInboxUploadMediaReturn => {
+export const useInboxUploadMedia = (maxFiles = 3, batchLimitMB = 250): UseInboxUploadMediaReturn => {
   const [mediaList, setMediaList] = useState<UploadedMedia[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -74,7 +74,7 @@ export const useInboxUploadMedia = (maxFiles = 3): UseInboxUploadMediaReturn => 
 
       // Calculate current total size of existing media
       const MB = 1024 * 1024;
-      const BATCH_LIMIT_MB = 250;
+      const BATCH_LIMIT_MB = batchLimitMB;
       let accumulatedSize = mediaList.reduce((sum, media) => sum + media.file.size, 0);
 
       const validFiles: File[] = [];
@@ -197,6 +197,7 @@ interface InboxUploadMediaPreviewProps {
 export const InboxUploadMediaPreview: React.FC<InboxUploadMediaPreviewProps> = ({
   mediaList = [],
   onRemove,
+  batchLimitMB = 250,
 }) => {
   if (!mediaList || mediaList.length === 0) return null;
 
@@ -204,9 +205,20 @@ export const InboxUploadMediaPreview: React.FC<InboxUploadMediaPreviewProps> = (
     <div className="flex flex-col border-b border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-[#1a1b23]/50">
       <div className="flex items-center justify-between px-4 pt-3 pb-1">
         <span className="text-xs font-medium text-gray-500 dark:text-zinc-400">Attached files</span>
-        <span className="text-xs font-medium text-gray-500 dark:text-zinc-400">
-          {(mediaList.reduce((sum, m) => sum + m.file.size, 0) / (1024 * 1024)).toFixed(1)}MB / 250MB
-        </span>
+        <div className="flex items-center gap-1.5 relative group">
+          <span className="text-xs font-medium text-gray-500 dark:text-zinc-400">
+            {(mediaList.reduce((sum, m) => sum + m.file.size, 0) / (1024 * 1024)).toFixed(1)}MB / {batchLimitMB}MB
+          </span>
+          <HelpCircle className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500 cursor-help" />
+          <div className="absolute right-0 bottom-full mb-1 hidden group-hover:block w-40 p-2 bg-white dark:bg-black text-gray-900 dark:text-white text-xs rounded-lg shadow-lg z-[100] border border-gray-700 dark:border-white/10 pointer-events-none">
+            <p className="mb-1 font-semibold opacity-90">Your Upload Limits</p>
+            <ul className="space-y-0.5 opacity-80">
+              <li>Free: 50MB</li>
+              <li>Premium: 250MB</li>
+              <li>Business/Ent: 700MB</li>
+            </ul>
+          </div>
+        </div>
       </div>
       <div className="px-4 pb-3 flex gap-3 overflow-x-auto flex-shrink-0 inbox-scroll-thin">
         {mediaList.map((media) => (

@@ -616,9 +616,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                 href={url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="mt-1 flex items-center gap-2 rounded-lg bg-black/20 p-2 text-[10px]"
+                                className={`mt-1 flex items-center gap-2 rounded-lg p-2.5 text-xs transition-colors ${
+                                  isMe
+                                    ? "bg-white/20 text-white hover:bg-white/30"
+                                    : "bg-gray-100 dark:bg-black/40 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-black/60 border border-gray-200 dark:border-white/10"
+                                }`}
                               >
-                                <FileText size={15} />
+                                <FileText className={isMe ? "text-white" : "text-blue-600 dark:text-blue-400"} size={16} />
                                 <span className="truncate">
                                   {attachment.attachment_name || "Attachment"}
                                 </span>

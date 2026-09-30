@@ -41,7 +41,8 @@ export const InboxPanelPage = ({
   onUnpin,
   onJumpToPinned,
   textareaRef,
-  onUpdateGroupName,
+uploadLimitMB,
+onUpdateGroupName,
   currentUserId,
   getMemberName,
   getMemberAvatar,
@@ -132,7 +133,8 @@ export const InboxPanelPage = ({
             handleFileChange={handleFileChange}
             removeMedia={removeMedia}
             textareaRef={textareaRef}
-          />
+uploadLimitMB={uploadLimitMB}
+/>
           )}
         </div>
       </div>
