@@ -18,7 +18,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import { GigRichText } from "../../gig_components/GigRichText";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 
-export type OrderStatus = "Pending" | "Shortlisted" | "Accepted" | "Rejected";
+export type OrderStatus = "Pending" | "Shortlisted" | "Accepted" | "In Contract" | "Rejected";
 
 export interface OrderItemData {
   id: string;
@@ -138,14 +138,18 @@ export const OrdersList: React.FC<OrdersListProps> = ({
 
   const renderStatusBadge = (status: OrderStatus | string) => {
     switch (status) {
+      case "In Contract":
+      case "Completed":
+        return "bg-emerald-100 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
       case "Accepted":
       case "Hired":
       case "Approved":
       case "approved":
-        return "bg-emerald-100 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
-      case "Shortlisted":
         return "bg-blue-100 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400";
+      case "Shortlisted":
+        return "bg-purple-100 dark:bg-purple-500/10 border-purple-200 dark:border-purple-500/30 text-purple-600 dark:text-purple-400";
       case "Rejected":
+      case "Cancelled":
         return "bg-red-100 dark:bg-red-500/10 border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400";
       default:
         return "bg-yellow-100 dark:bg-yellow-500/10 border-yellow-200 dark:border-yellow-500/30 text-yellow-600 dark:text-yellow-400";
@@ -246,6 +250,36 @@ export const OrdersList: React.FC<OrdersListProps> = ({
                     </span>
 
                     <div className="flex items-center gap-2">
+                      {/* Confirm & Fund button for sent accepted orders */}
+                      {item.type === "sent" && item.status === "Accepted" && !item.contractId && (
+                        <button
+                          type="button"
+                          title="Confirm & Start Contract"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/gigs/orders/sent/${item.id}`);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-sm shadow-emerald-500/20 transition-colors"
+                        >
+                          Confirm & Fund
+                        </button>
+                      )}
+
+                      {/* View Contract button for active contract */}
+                      {item.contractId && (
+                        <button
+                          type="button"
+                          title="View Contract"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/contracts/${item.contractId}`);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-sm shadow-blue-500/20 transition-colors"
+                        >
+                          View Contract
+                        </button>
+                      )}
+
                       {/* Chat Button for Shortlisted Candidates */}
                       {item.status === "Shortlisted" && (
                         <button

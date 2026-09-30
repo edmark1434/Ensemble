@@ -18,7 +18,7 @@ import { showErrorToast } from "@/components/utility/toast";
 const ORDER_WIZARD_STEPS = [
   { id: 1, label: "Order Details" },
   { id: 2, label: "Questions" },
-  { id: 3, label: "Review & Pay" },
+  { id: 3, label: "Review & Submit" },
 ];
 
 const OrderCreateHeader = ({ currentSlide, onReturn }: { currentSlide: number; onReturn: () => void }) => {
@@ -551,7 +551,7 @@ const GigOrderPage: React.FC = () => {
                   <motion.div key="step-3" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="space-y-6">
                     <div>
                       <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Review & Confirm</h2>
-                      <p className="text-xs text-gray-500 dark:text-zinc-400">Please review your order details before making a payment.</p>
+                      <p className="text-xs text-gray-500 dark:text-zinc-400">Please review your order details before sending a request to the freelancer. Credits are only deducted after the freelancer accepts and you confirm.</p>
                     </div>
 
                     <div className="flex gap-4 p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10">
@@ -607,7 +607,7 @@ const GigOrderPage: React.FC = () => {
                           />
                         </div>
                         <span className="text-sm text-gray-600 dark:text-zinc-400 group-hover:text-gray-900 dark:group-hover:text-zinc-200 transition-colors">
-                          I agree to the <strong className="font-semibold text-gray-800 dark:text-zinc-300">Platform Terms & Conditions</strong> and acknowledge that credits will be held in escrow upon acceptance.
+                          I agree to the <strong className="font-semibold text-gray-800 dark:text-zinc-300">Platform Terms &amp; Conditions</strong> and acknowledge that credits will be held in escrow only after the freelancer accepts and I confirm the contract.
                         </span>
                       </label>
                     </div>
@@ -621,7 +621,7 @@ const GigOrderPage: React.FC = () => {
                         disabled={isProcessing || !agreedToFreelancerTerms || !agreedToPlatformTerms}
                         className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-50 flex justify-center items-center gap-2"
                       >
-                        {isProcessing ? "Processing..." : editOrderId ? "Save Changes" : "Pay with Credits"}
+                        {isProcessing ? "Processing..." : editOrderId ? "Save Changes" : "Request to Order"}
                       </button>
                     </div>
                   </motion.div>
