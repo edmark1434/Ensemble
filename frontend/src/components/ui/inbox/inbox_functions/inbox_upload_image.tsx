@@ -23,7 +23,14 @@ export interface ChatAttachmentPayload {
 }
 
 export const chatAttachmentUrl = (attachmentKey: string): string => {
+  if (!attachmentKey) return "";
   if (/^(?:https?:|blob:|data:)/i.test(attachmentKey)) return attachmentKey;
+  
+  const presetMatch = attachmentKey.match(/p\d+\.png$/i);
+  if (presetMatch) {
+    return `/profile_presets/${presetMatch[0]}`;
+  }
+
   const base = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/$/, "");
   return base ? `${base}/${attachmentKey.replace(/^\/+/, "")}` : attachmentKey;
 };
