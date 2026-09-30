@@ -9,6 +9,7 @@ import {
     Clock,
     ChevronDown,
     ChevronUp,
+    Film,
 } from 'lucide-react';
 import { MilestoneSubmissionForm } from './MilestoneSubmissionForm';
 import { ClientReviewPanel, ClientReviewCardActions } from './ClientReviewPanel';
@@ -105,6 +106,116 @@ const isImageAttachment = (url: string) => {
     } catch {
         return /\.(?:avif|gif|jpe?g|png|svg|webp)$/i.test(url.split(/[?#]/, 1)[0]);
     }
+};
+
+const isVideoAttachment = (url: string) => {
+    try {
+        return /\.(?:mp4|webm|mov|m4v|ogg)$/i.test(new URL(url).pathname);
+    } catch {
+        return /\.(?:mp4|webm|mov|m4v|ogg)$/i.test(url.split(/[?#]/, 1)[0]);
+    }
+};
+
+const isAudioAttachment = (url: string) => {
+    try {
+        return /\.(?:mp3|wav|ogg|m4a)$/i.test(new URL(url).pathname);
+    } catch {
+        return /\.(?:mp3|wav|ogg|m4a)$/i.test(url.split(/[?#]/, 1)[0]);
+    }
+};
+
+const AttachmentItem: React.FC<{ url: string; index: number; compact?: boolean }> = ({
+    url,
+    index,
+    compact = false,
+}) => {
+    const resolvedUrl = resolveAttachmentUrl(url);
+    if (!resolvedUrl) return null;
+
+    if (isImageAttachment(resolvedUrl)) {
+        return (
+            <a
+                key={`att-${index}`}
+                href={resolvedUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={`group relative flex items-center justify-center overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/30 transition hover:border-blue-500/50 ${
+                    compact ? 'min-h-20' : 'min-h-24'
+                }`}
+            >
+                <img
+                    src={resolvedUrl}
+                    alt="Attachment"
+                    className={`block h-auto w-auto max-w-full object-contain opacity-90 transition group-hover:opacity-100 ${
+                        compact ? 'max-h-40' : 'max-h-[32rem]'
+                    }`}
+                />
+            </a>
+        );
+    }
+
+    if (isVideoAttachment(resolvedUrl)) {
+        return (
+            <div
+                key={`att-${index}`}
+                className="group relative flex flex-col items-center justify-center overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/30 p-2 transition hover:border-blue-500/50 col-span-2"
+            >
+                <video
+                    src={resolvedUrl}
+                    controls
+                    preload="metadata"
+                    className={`w-full rounded-lg bg-black object-contain ${
+                        compact ? 'max-h-44' : 'max-h-72'
+                    }`}
+                />
+                <a
+                    href={resolvedUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 text-[11px] text-zinc-400 hover:text-white flex items-center gap-1"
+                >
+                    <Film className="h-3 w-3" />
+                    <span>Open Video</span>
+                </a>
+            </div>
+        );
+    }
+
+    if (isAudioAttachment(resolvedUrl)) {
+        return (
+            <div
+                key={`att-${index}`}
+                className="group relative flex flex-col items-center justify-center overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/30 p-3 transition hover:border-blue-500/50 col-span-2"
+            >
+                <audio src={resolvedUrl} controls className="w-full max-w-xs" />
+                <a
+                    href={resolvedUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 text-[11px] text-zinc-400 hover:text-white"
+                >
+                    Open Audio
+                </a>
+            </div>
+        );
+    }
+
+    return (
+        <a
+            key={`att-${index}`}
+            href={resolvedUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={`group relative flex flex-col items-center justify-center overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/30 transition hover:border-blue-500/50 p-3 text-center ${
+                compact ? 'min-h-20' : 'min-h-24'
+            }`}
+        >
+            <FileText className="mb-1.5 h-6 w-6 text-gray-400 dark:text-zinc-400 group-hover:text-blue-500 transition" />
+            <span className="text-[11px] font-semibold text-gray-600 dark:text-zinc-300">
+                View Document
+            </span>
+        </a>
+    );
 };
 
 const formatRelativeTime = (dateString: string) => {
@@ -523,34 +634,13 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
 
                                                 {item.attachments && item.attachments.length > 0 && (
                                                     <div className="mt-4 grid grid-cols-2 gap-2">
-                                                        {item.attachments.map((attachmentUrl, i) => {
-                                                            const resolvedUrl = resolveAttachmentUrl(attachmentUrl);
-
-                                                            return (
-                                                                <a
-                                                                    key={`${item.id}-attachment-${i}`}
-                                                                    href={resolvedUrl}
-                                                                    target="_blank"
-                                                                    rel="noreferrer"
-                                                                    className="group relative flex min-h-24 max-w-full items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30 transition hover:border-white/30"
-                                                                >
-                                                                    {isImageAttachment(resolvedUrl) ? (
-                                                                        <img
-                                                                            src={resolvedUrl}
-                                                                            alt="Attachment"
-                                                                            className="block h-auto max-h-[32rem] w-auto max-w-full object-contain opacity-80 transition group-hover:opacity-100"
-                                                                        />
-                                                                    ) : (
-                                                                        <div className="flex flex-col items-center">
-                                                                            <FileText className="mb-1 h-6 w-6 text-zinc-400" />
-                                                                            <span className="text-[10px] text-zinc-400">
-                                                                                View File
-                                                                            </span>
-                                                                        </div>
-                                                                    )}
-                                                                </a>
-                                                            );
-                                                        })}
+                                                        {item.attachments.map((attachmentUrl, i) => (
+                                                            <AttachmentItem
+                                                                key={`${item.id}-attachment-${i}`}
+                                                                url={attachmentUrl}
+                                                                index={i}
+                                                            />
+                                                        ))}
                                                     </div>
                                                 )}
 
@@ -661,33 +751,13 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
                                                 Deliverable Files ({sub.attachments.length})
                                             </span>
                                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                                                {sub.attachments.map((attachmentUrl, i) => {
-                                                    const resolvedUrl = resolveAttachmentUrl(attachmentUrl);
-                                                    return (
-                                                        <a
-                                                            key={`${sub.id}-attachment-${i}`}
-                                                            href={resolvedUrl}
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            className="group relative flex min-h-24 max-w-full items-center justify-center overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/30 transition hover:border-blue-500/50"
-                                                        >
-                                                            {isImageAttachment(resolvedUrl) ? (
-                                                                <img
-                                                                    src={resolvedUrl}
-                                                                    alt="Attachment"
-                                                                    className="block h-auto max-h-[32rem] w-auto max-w-full object-contain opacity-90 transition group-hover:opacity-100"
-                                                                />
-                                                            ) : (
-                                                                <div className="flex flex-col items-center p-3 text-center">
-                                                                    <FileText className="mb-1.5 h-6 w-6 text-gray-400 dark:text-zinc-400 group-hover:text-blue-500 transition" />
-                                                                    <span className="text-[11px] font-semibold text-gray-600 dark:text-zinc-300">
-                                                                        View Document
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                        </a>
-                                                    );
-                                                })}
+                                                {sub.attachments.map((attachmentUrl, i) => (
+                                                    <AttachmentItem
+                                                        key={`${sub.id}-attachment-${i}`}
+                                                        url={attachmentUrl}
+                                                        index={i}
+                                                    />
+                                                ))}
                                             </div>
                                         </div>
                                     )}
@@ -811,34 +881,14 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
                                                                             {rev.attachments.length})
                                                                         </span>
                                                                         <div className="grid grid-cols-2 gap-2">
-                                                                            {rev.attachments.map((attachmentUrl, i) => {
-                                                                                const resolvedUrl =
-                                                                                    resolveAttachmentUrl(attachmentUrl);
-                                                                                return (
-                                                                                    <a
-                                                                                        key={`rev-att-${i}`}
-                                                                                        href={resolvedUrl}
-                                                                                        target="_blank"
-                                                                                        rel="noreferrer"
-                                                                                        className="group relative flex min-h-20 max-w-full items-center justify-center overflow-hidden rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-black/30 transition hover:border-red-500/40"
-                                                                                    >
-                                                                                        {isImageAttachment(resolvedUrl) ? (
-                                                                                            <img
-                                                                                                src={resolvedUrl}
-                                                                                                alt="Attachment"
-                                                                                                className="block h-auto max-h-40 w-auto max-w-full object-contain opacity-90 transition group-hover:opacity-100"
-                                                                                            />
-                                                                                        ) : (
-                                                                                            <div className="flex flex-col items-center p-2 text-center">
-                                                                                                <FileText className="mb-1 h-5 w-5 text-gray-400 group-hover:text-red-500 transition" />
-                                                                                                <span className="text-[10px] font-semibold text-gray-600 dark:text-zinc-300">
-                                                                                                    View File
-                                                                                                </span>
-                                                                                            </div>
-                                                                                        )}
-                                                                                    </a>
-                                                                                );
-                                                                            })}
+                                                                            {rev.attachments.map((attachmentUrl, i) => (
+                                                                                <AttachmentItem
+                                                                                    key={`rev-att-${i}`}
+                                                                                    url={attachmentUrl}
+                                                                                    index={i}
+                                                                                    compact
+                                                                                />
+                                                                            ))}
                                                                         </div>
                                                                     </div>
                                                                 )}
