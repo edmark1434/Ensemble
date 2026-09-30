@@ -57,7 +57,7 @@ async function getProposalByIdServices(proposalId, accountIds) {
     return await JobRepositories.getProposalByIdRepositories(proposalId, accountIds);
 }
 
-async function updateProposalStatusServices(proposalId, accountIds, status, rejectReason) {
+async function updateProposalStatusServices(proposalId, accountIds, status, rejectReason, options = {}) {
     const allowedStatuses = ['Pending', 'Shortlisted', 'Rejected', 'Accepted'];
     if (!allowedStatuses.includes(status)) {
         throw new Error('Invalid status.');
@@ -66,7 +66,81 @@ async function updateProposalStatusServices(proposalId, accountIds, status, reje
     if (!updated) {
         throw new Error('Proposal not found or you do not have permission.');
     }
-    return updated;
+
+    let chatResult = null;
+    let createdMessage = null;
+
+    if (status === 'Shortlisted' && options.initialMessage && options.actorAccountId) {
+        try {
+            const { createMarketplaceChatServices, createMessageServices } = require('./InboxServices');
+            const { getIo } = require('../lib/WebSocket');
+            const io = getIo();
+
+            chatResult = await createMarketplaceChatServices(
+                {
+                    context_type: 'job_proposal',
+                    context_id: String(proposalId),
+                },
+                options.actorAccountId,
+                {
+                    onNotification: (recipientId, notification) => {
+                        if (io && notification) io.to(String(recipientId)).emit('notification', notification);
+                    },
+                    onConversationCreated: (recipientId, inbox) => {
+                        if (io && inbox) io.to(String(recipientId)).emit('conversationCreated', inbox);
+                    },
+                }
+            );
+
+            if (chatResult?.inbox?._id) {
+                const messageDoc = await createMessageServices(
+                    {
+                        conversation_id: String(chatResult.inbox._id),
+                        message_content: options.initialMessage.trim(),
+                    },
+                    options.actorAccountId,
+                    {
+                        onNotification: (recipientId, notification) => {
+                            if (io && notification) {
+                                io.to(String(recipientId)).emit('notification', notification);
+                            }
+                        },
+                    }
+                );
+                createdMessage = messageDoc;
+
+                if (io) {
+                    const convId = String(chatResult.inbox._id);
+                    // Ensure both members receive conversationCreated with latest inbox
+                    if (updated.freelancer_account_id) {
+                        io.to(String(updated.freelancer_account_id)).emit('conversationCreated', chatResult.inbox);
+                    }
+                    io.to(String(options.actorAccountId)).emit('conversationCreated', chatResult.inbox);
+
+                    io.to(convId).emit('newMessage', messageDoc);
+                    if (updated.freelancer_account_id) {
+                        io.to(String(updated.freelancer_account_id)).emit('newMessage', messageDoc);
+                        io.to(String(updated.freelancer_account_id)).emit('conversationMessageNotification', messageDoc);
+                        // Trigger opening the floating chat on the applicant's side
+                        io.to(String(updated.freelancer_account_id)).emit('openFloatingChat', {
+                            conversation_id: convId,
+                            inbox: chatResult.inbox,
+                            initialMessage: messageDoc,
+                        });
+                    }
+                    io.to(String(options.actorAccountId)).emit('newMessage', messageDoc);
+                }
+            }
+        } catch (msgErr) {
+            console.error('Error creating marketplace conversation or sending shortlist initial message:', msgErr);
+        }
+    }
+
+    return {
+        ...updated,
+        conversation: chatResult?.inbox || null,
+        initialMessage: createdMessage || null,
+    };
 }
 
 async function getTermsOfServiceServices(type = 'jobs') {

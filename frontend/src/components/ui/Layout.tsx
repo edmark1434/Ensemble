@@ -75,6 +75,15 @@ const Layout = () => {
           targetId = currentUserId;
           targetAccountId = currentUserId;
         }
+      } else if (conv.conversation_type !== "group") {
+        const other = (conv.members || []).find(
+          (m: any) => String(m.account_id) !== currentUserId
+        );
+        if (other) {
+          targetName = conv.conversation_name || other.name || other.username || conv.listing_title || "User";
+          targetAvatar = other.avatar_preset_url || targetAvatar;
+          targetAccountId = String(other.account_id);
+        }
       }
 
       if (!targetName) {
@@ -114,10 +123,14 @@ const Layout = () => {
     recentChats.find(
       (chat) =>
         String(chat.id) === String(activeFloatingId) ||
-        String(chat.inbox_id) === String(activeFloatingId)
+        String(chat.inbox_id) === String(activeFloatingId) ||
+        (chat.account_id && String(chat.account_id) === String(activeFloatingId))
     ) ||
     floatingWindows.find(
-      (chat) => String(chat.id) === String(activeFloatingId)
+      (chat) =>
+        String(chat.id) === String(activeFloatingId) ||
+        String(chat.inbox_id) === String(activeFloatingId) ||
+        (chat.account_id && String(chat.account_id) === String(activeFloatingId))
     ) ||
     null;
 

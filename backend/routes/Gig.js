@@ -16,7 +16,9 @@ const {
     acceptGigOrderController,
     rejectGigOrderController,
     editGigOrderController,
-    withdrawGigOrderController
+    withdrawGigOrderController,
+    shortlistGigOrderController,
+    unshortlistGigOrderController
 } = require('../controllers/GigControllers');
 const requireAuth = require('../middleware/RequireAuth');
 const requireCompletedOnboarding = require('../middleware/RequireCompletedOnboarding');
@@ -65,6 +67,12 @@ router.post('/orders/:orderId/accept', acceptGigOrderController);
 
 // POST /api/gigs/orders/:orderId/reject
 router.post('/orders/:orderId/reject', rejectGigOrderController);
+
+// POST /api/gigs/orders/:orderId/shortlist
+router.post('/orders/:orderId/shortlist', shortlistGigOrderController);
+
+// POST /api/gigs/orders/:orderId/unshortlist
+router.post('/orders/:orderId/unshortlist', unshortlistGigOrderController);
 
 // POST /api/gigs
 router.post('/', requireVerifiedAccount, createGigController);

@@ -41,35 +41,70 @@ export const ChatMain: React.FC<ChatMainProps> = ({
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!activeUser) return;
-    const targetKey = String(activeUser.inbox_id || activeUser.id);
-    setDismissedIds((current) => {
-      if (!current.has(targetKey)) return current;
-      const next = new Set(current);
-      next.delete(targetKey);
-      return next;
-    });
-    const timer = window.setTimeout(() => {
-      setOpenIds((current) => {
-        if (current.has(String(activeUser.id))) return current;
-        const next = new Set(current);
-        next.add(String(activeUser.id));
-        if (activeUser.inbox_id) next.add(String(activeUser.inbox_id));
+    const handleOpenWindow = (event: Event) => {
+      const detail = (event as CustomEvent<any>).detail;
+      const convId = typeof detail === "string" ? detail : detail?.conversationId;
+      const targetId = typeof detail === "object" ? detail?.targetId : null;
+      if (!convId) return;
+
+      const keys = [String(convId)];
+      if (targetId) keys.push(String(targetId));
+
+      setDismissedIds((prev) => {
+        const next = new Set(prev);
+        keys.forEach((k) => next.delete(k));
         return next;
       });
-    }, 0);
-    return () => window.clearTimeout(timer);
+
+      setOpenIds((prev) => {
+        const next = new Set(prev);
+        keys.forEach((k) => next.add(k));
+        return next;
+      });
+    };
+
+    window.addEventListener("chat:open-window", handleOpenWindow);
+    return () => window.removeEventListener("chat:open-window", handleOpenWindow);
+  }, []);
+
+  useEffect(() => {
+    if (!activeUser) return;
+    const targetKey = String(activeUser.inbox_id || activeUser.id);
+    const altKey = String(activeUser.id);
+    setDismissedIds((current) => {
+      const next = new Set(current);
+      next.delete(targetKey);
+      next.delete(altKey);
+      return next;
+    });
+    setOpenIds((current) => {
+      const next = new Set(current);
+      next.add(targetKey);
+      if (activeUser.inbox_id) next.add(String(activeUser.inbox_id));
+      if (activeUser.id) next.add(String(activeUser.id));
+      return next;
+    });
   }, [activeUser?.id, activeUser?.inbox_id]);
 
-  const openWindows = useMemo(
-    () =>
-      recentChats.filter(
-        (chat) =>
-          openIds.has(String(chat.id)) ||
-          (chat.inbox_id && openIds.has(String(chat.inbox_id)))
-      ),
-    [openIds, recentChats]
-  );
+  const openWindows = useMemo(() => {
+    const list = recentChats.filter(
+      (chat) =>
+        openIds.has(String(chat.id)) ||
+        (chat.inbox_id && openIds.has(String(chat.inbox_id)))
+    );
+    if (
+      activeUser &&
+      (openIds.has(String(activeUser.id)) || (activeUser.inbox_id && openIds.has(String(activeUser.inbox_id))))
+    ) {
+      const activeKey = String(activeUser.inbox_id || activeUser.id);
+      const exists = list.some((c) => String(c.inbox_id || c.id) === activeKey);
+      if (!exists) {
+        list.push(activeUser);
+      }
+    }
+    return list;
+  }, [openIds, recentChats, activeUser]);
+
   const minimizedWindows = useMemo(
     () =>
       recentChats

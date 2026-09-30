@@ -136,7 +136,7 @@ interface ChatState {
   initialize: (accountId: string) => void;
   reset: () => void;
   fetchConversations: () => Promise<void>;
-  loadConversation: (conversationId: string) => Promise<void>;
+  loadConversation: (conversationId: string, force?: boolean) => Promise<void>;
   selectConversation: (conversationId: string) => Promise<void>;
   openDirectChat: (target: ChatTarget) => Promise<void>;
   openFloatingConversation: (target: ChatTarget) => Promise<void>;
@@ -574,7 +574,7 @@ const messagePreview = (message: Message) =>
       : `Sent ${message.attachments.length} attachments`
     : "");
 
-function upsertMessage(messages: Message[], incoming: Message): Message[] {
+export function upsertMessage(messages: Message[], incoming: Message): Message[] {
   const incomingId = String(incoming._id);
   const existingIndex = messages.findIndex(
     (message) => String(message._id) === incomingId
@@ -589,7 +589,7 @@ function upsertMessage(messages: Message[], incoming: Message): Message[] {
   return next;
 }
 
-function upsertConversation(
+export function upsertConversation(
   conversations: Inbox[],
   incoming: Inbox
 ): Inbox[] {
@@ -661,11 +661,11 @@ function reconcileMessage(message: Message, isNewMessage = false) {
       const alreadyFloating = newFloatingWindows.some(fw => String(fw.inbox_id || fw.id) === conversationId);
       let targetId = conversationId;
 
-      if (!alreadyFloating && conv) {
-        let targetName = conv.conversation_name || conv.title || "Group Chat";
-        let targetAvatar = conv.conversation_image_key || conv.profile_image || undefined;
+      if (!alreadyFloating) {
+        let targetName = conv?.conversation_name || conv?.listing_title || (conv?.conversation_type === "group" ? "Group Chat" : "Discussion");
+        let targetAvatar = conv?.conversation_image_key ? chatMediaUrl(conv.conversation_image_key) : conv?.profile_image || undefined;
         
-        if (conv.conversation_type === "direct") {
+        if (conv?.conversation_type === "direct") {
           targetName = "User";
           const other = (conv.members || []).find((m: any) => String(m.account_id) !== authenticatedAccountId);
           if (other) {
@@ -687,24 +687,60 @@ function reconcileMessage(message: Message, isNewMessage = false) {
               }).catch(() => {});
             }
           }
+        } else if (conv?.conversation_type?.startsWith("marketplace") || conv?.conversation_type === "marketplace") {
+          const other = (conv.members || []).find((m: any) => String(m.account_id) !== authenticatedAccountId);
+          if (other) {
+            targetName = other.name || other.username || conv.conversation_name || conv.listing_title || "Discussion";
+            targetAvatar = other.avatar_preset_url || targetAvatar;
+            targetId = String(other.account_id);
+          }
         }
+
         newFloatingWindows.push({
           id: targetId,
           inbox_id: conversationId,
           name: targetName,
           avatarUrl: targetAvatar,
+          conversationType: conv?.conversation_type,
+          listingType: conv?.listing_type,
+          listingTitle: conv?.listing_title,
         });
         
         // Fetch conversation history so the new window isn't empty
         setTimeout(() => {
           useChatState.getState().loadConversation(conversationId).catch(() => {});
+          if (!conv) {
+            api.get<{ inbox: Inbox }>(`/api/inbox/conversation/${conversationId}`).then(res => {
+              if (res.data?.inbox) {
+                useChatState.setState(s => ({
+                  conversations: upsertConversation(s.conversations, res.data.inbox),
+                  floatingWindows: s.floatingWindows.map(fw =>
+                    String(fw.inbox_id || fw.id) === conversationId
+                      ? {
+                          ...fw,
+                          name: res.data.inbox.conversation_name || res.data.inbox.listing_title || fw.name,
+                          avatarUrl: res.data.inbox.conversation_image_key ? chatMediaUrl(res.data.inbox.conversation_image_key) : fw.avatarUrl,
+                          conversationType: res.data.inbox.conversation_type,
+                        }
+                      : fw
+                  )
+                }));
+              }
+            }).catch(() => {});
+          }
         }, 100);
       } else if (alreadyFloating) {
          const existing = newFloatingWindows.find(fw => String(fw.inbox_id || fw.id) === conversationId);
          if (existing) targetId = String(existing.id);
       }
 
-      if (conv?.conversation_type === "direct" || conv?.conversation_type === "group") {
+      if (
+        conv?.conversation_type === "direct" || 
+        conv?.conversation_type === "group" ||
+        conv?.conversation_type?.startsWith("marketplace") ||
+        conv?.conversation_type === "marketplace" ||
+        !conv
+      ) {
         useChatState.setState({ activeFloatingId: targetId, isFloatingOpen: true });
       }
     }
@@ -899,6 +935,84 @@ function bindSocketListeners() {
       conversation_id: String(conversation._id),
     });
   });
+  socket.on(
+    "openFloatingChat",
+    async (payload: {
+      conversation_id: string;
+      inbox?: Inbox;
+      initialMessage?: Message;
+    }) => {
+      const convId = String(payload?.conversation_id || payload?.inbox?._id || "");
+      if (!convId) return;
+
+      if (payload.inbox) {
+        useChatState.setState((state) => ({
+          conversations: upsertConversation(state.conversations, payload.inbox!),
+        }));
+      }
+
+      if (payload.initialMessage) {
+        useChatState.setState((state) => ({
+          messagesByConversation: {
+            ...state.messagesByConversation,
+            [convId]: upsertMessage(
+              state.messagesByConversation[convId] || [],
+              payload.initialMessage!
+            ),
+          },
+        }));
+      }
+
+      let inbox =
+        payload.inbox ||
+        useChatState
+          .getState()
+          .conversations.find((c) => String(c._id) === convId);
+
+      if (!inbox) {
+        try {
+          const res = await api.get<{ Inbox?: Inbox; inbox?: Inbox }>(
+            `/api/inbox/conversation/${convId}`
+          );
+          const fetchedInbox = res.data?.Inbox || res.data?.inbox;
+          if (fetchedInbox) {
+            inbox = fetchedInbox;
+            useChatState.setState((s) => ({
+              conversations: upsertConversation(s.conversations, fetchedInbox),
+            }));
+          }
+        } catch {}
+      }
+
+      let targetName =
+        inbox?.conversation_name || inbox?.listing_title || "Discussion";
+      let targetAvatar =
+        inbox?.conversation_image_key ? chatMediaUrl(inbox.conversation_image_key) : undefined;
+      let targetAccountId: string | undefined = undefined;
+
+      if (inbox?.members) {
+        const other = inbox.members.find(
+          (m: any) => String(m.account_id) !== authenticatedAccountId
+        );
+        if (other) {
+          targetName = other.name || other.username || targetName;
+          targetAvatar = other.avatar_preset_url || targetAvatar;
+          targetAccountId = String(other.account_id);
+        }
+      }
+
+      await useChatState.getState().openFloatingConversation({
+        id: convId,
+        inbox_id: convId,
+        account_id: targetAccountId,
+        name: targetName,
+        avatarUrl: targetAvatar,
+        conversationType: inbox?.conversation_type || "marketplace_job",
+        listingType: inbox?.listing_type || "job",
+        listingTitle: inbox?.listing_title,
+      });
+    }
+  );
   socket.on(
     "conversationRenamed",
     ({
@@ -1617,11 +1731,16 @@ const useChatState = create<ChatState>((set, get) => ({
     return conversationsRequest;
   },
 
-  loadConversation: async (conversationId) => {
+  loadConversation: async (conversationId, force = false) => {
     const id = String(conversationId);
-    if (loadedConversationIds.has(id)) return;
-    const existingRequest = messageRequests.get(id);
-    if (existingRequest) return existingRequest;
+    if (force) {
+      loadedConversationIds.delete(id);
+      messageRequests.delete(id);
+    } else {
+      if (loadedConversationIds.has(id)) return;
+      const existingRequest = messageRequests.get(id);
+      if (existingRequest) return existingRequest;
+    }
 
     const request = (async () => {
       set((state) => ({
@@ -1728,6 +1847,7 @@ const useChatState = create<ChatState>((set, get) => ({
     const conversationId = String(target.inbox_id || target.id);
     const chatTarget = {
       ...target,
+      id: target.id || conversationId,
       inbox_id: conversationId,
     };
     set((state) => ({
@@ -1743,8 +1863,35 @@ const useChatState = create<ChatState>((set, get) => ({
       isFloatingOpen: true,
       unreadCounts: { ...state.unreadCounts, [conversationId]: 0 },
     }));
-    await get().loadConversation(conversationId);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("chat:open-window", {
+          detail: {
+            conversationId,
+            targetId: String(target.id || conversationId),
+            target: chatTarget,
+          },
+        })
+      );
+    }
+
+    await get().loadConversation(conversationId, true);
     get().markConversationRead(conversationId);
+
+    if (!get().conversations.some((c) => String(c._id) === conversationId)) {
+      try {
+        const res = await api.get<{ Inbox?: Inbox; inbox?: Inbox }>(
+          `/api/inbox/conversation/${conversationId}`
+        );
+        const fetchedInbox = res.data?.Inbox || res.data?.inbox;
+        if (fetchedInbox) {
+          set((s) => ({
+            conversations: upsertConversation(s.conversations, fetchedInbox),
+          }));
+        }
+      } catch {}
+    }
   },
 
   closeFloatingChat: () =>

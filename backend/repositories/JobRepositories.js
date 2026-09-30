@@ -453,9 +453,9 @@ async function updateProposalStatusRepositories(proposalId, accountIds, status, 
             SET status = $1, reject_reason = $2, updated_at = NOW()
             FROM jobs j
             WHERE p.proposal_id = $3 AND p.job_id = j.job_id AND j.client_account_id = ANY($4::uuid[])
-            RETURNING p.*;
+            RETURNING p.*, j.title as job_title, j.client_account_id;
         `;
-        const res = await pool.query(query, [status, rejectReason, proposalId, accountIds]);
+        const res = await pool.query(query, [status, rejectReason || null, proposalId, accountIds]);
         return res.rows[0];
     } catch (err) {
         console.error('Error in updateProposalStatusRepositories:', err);
