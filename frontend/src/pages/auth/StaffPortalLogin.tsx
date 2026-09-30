@@ -10,7 +10,7 @@ import {
   getStaffHomePath,
 } from '@/lib/staffRoutes';
 import {
-  AccountStandingNotice,
+  AccountRestrictionCard,
   standingFromPayload,
   type AccountStanding,
 } from '@/components/ui/AccountStanding';
@@ -218,7 +218,11 @@ export default function StaffPortalLogin({ portal }: StaffPortalLoginProps) {
 
           {restriction ? (
             <div className="mt-6">
-              <AccountStandingNotice standing={restriction} />
+              <AccountRestrictionCard
+                standing={restriction}
+                actionLabel="Use a different account"
+                onAction={() => setRestriction(null)}
+              />
             </div>
           ) : null}
 
