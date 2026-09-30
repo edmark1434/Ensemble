@@ -22,7 +22,9 @@ const {
     getApproachingDeadlineMilestones,
     getSubmissionsNeedingReviewReminder,
     cancelMilestoneAndRefund,
+    cancelContractAndRefundUnfinishedMilestones,
     extendMilestoneDeadline,
+    extendContractDeadline,
     approveMilestoneSubmit,
     requestMilestoneRevision,
     getMilestoneWithParties,
@@ -295,7 +297,85 @@ async function cancelMilestoneService(milestoneId, callerAccountId) {
 }
 
 /**
+ * Client cancels the contract and receives a refund for all unfinished milestones.
+ * Completed milestones remain with the freelancer.
+ */
+async function cancelContractService(contractId, callerAccountId) {
+    const { getContractWithParties } = require('../repositories/ContractRepositories');
+    const contract = await getContractWithParties(contractId);
+    if (!contract) {
+        throw Object.assign(new Error('Contract not found'), { statusCode: 404 });
+    }
+
+    if (String(contract.client_account_id) !== String(callerAccountId)) {
+        throw Object.assign(new Error('Only the client can cancel a contract'), { statusCode: 403 });
+    }
+
+    if (!['Active', 'Waiting'].includes(contract.status)) {
+        throw Object.assign(new Error(`Contract cannot be cancelled in status: ${contract.status}`), { statusCode: 400 });
+    }
+
+    const result = await cancelContractAndRefundUnfinishedMilestones({
+        contractId,
+        clientAccountId: contract.client_account_id,
+        freelancerAccountId: contract.freelancer_account_id,
+    });
+
+    const isPartial = result.isPartial;
+    await notifyBoth({
+        clientAccountId: contract.client_account_id,
+        freelancerAccountId: contract.freelancer_account_id,
+        clientMessage: isPartial
+            ? `Contract "${contract.contract_title}" closed. ${result.refundedCredits} credits for unfinished milestones were refunded to your wallet.`
+            : `Contract "${contract.contract_title}" cancelled. ${result.refundedCredits} credits were refunded to your wallet.`,
+        freelancerMessage: isPartial
+            ? `Contract "${contract.contract_title}" was closed by the client. You retained payment for completed milestones. Unfinished milestone funds were refunded.`
+            : `Contract "${contract.contract_title}" was cancelled by the client. No unearned funds were released.`,
+        referencePrefix: isPartial ? 'CONTRACT_CLOSED' : 'CONTRACT_CANCELLED',
+        contractId: contract.contract_id,
+        milestoneId: null,
+    });
+
+    return result;
+}
+
+/**
+ * Client extends the overall contract deadline.
+ * Extends the contract's deadline_at by extensionDays, along with any active/overdue/stalled milestones.
+ */
+async function extendContractDeadlineService(contractId, callerAccountId, extensionDays) {
+    if (!extensionDays || isNaN(Number(extensionDays)) || Number(extensionDays) < 1 || Number(extensionDays) > 90) {
+        throw Object.assign(new Error('extensionDays must be between 1 and 90 days'), { statusCode: 400 });
+    }
+
+    const { getContractWithParties } = require('../repositories/ContractRepositories');
+    const contract = await getContractWithParties(contractId);
+    if (!contract) {
+        throw Object.assign(new Error('Contract not found'), { statusCode: 404 });
+    }
+
+    if (String(contract.client_account_id) !== String(callerAccountId)) {
+        throw Object.assign(new Error('Only the client can extend a contract deadline'), { statusCode: 403 });
+    }
+
+    const updated = await extendContractDeadline({ contractId, extensionDays: Number(extensionDays) });
+
+    await notifyBoth({
+        clientAccountId:     contract.client_account_id,
+        freelancerAccountId: contract.freelancer_account_id,
+        clientMessage:       `You extended the contract deadline for "${contract.contract_title}" by ${extensionDays} day(s).`,
+        freelancerMessage:   `Good news! Your client extended the contract deadline for "${contract.contract_title}" by ${extensionDays} day(s). Submit your work before the new deadline.`,
+        referencePrefix:     'CONTRACT_EXTENDED',
+        contractId:          contract.contract_id,
+        milestoneId:         updated.extendedMilestones?.[0]?.contract_milestone_id || null,
+    });
+
+    return updated;
+}
+
+/**
  * Client extends the deadline on an overdue or stalled milestone.
+ * Delegates to extending the overall contract deadline.
  */
 async function extendMilestoneService(milestoneId, callerAccountId, extensionDays) {
     const milestone = await getMilestoneWithParties(milestoneId);
@@ -305,19 +385,7 @@ async function extendMilestoneService(milestoneId, callerAccountId, extensionDay
         throw Object.assign(new Error('Only the client can extend a deadline'), { statusCode: 403 });
     }
 
-    const updated = await extendMilestoneDeadline({ milestoneId, clientAccountId: callerAccountId, extensionDays });
-
-    await notifyBoth({
-        clientAccountId:     milestone.client_account_id,
-        freelancerAccountId: milestone.freelancer_account_id,
-        clientMessage:       `You extended the deadline for "${milestone.milestone_name}" by ${extensionDays} day(s).`,
-        freelancerMessage:   `Good news! Your client extended the deadline for "${milestone.milestone_name}" by ${extensionDays} day(s). Submit your work before the new deadline.`,
-        referencePrefix: 'MILESTONE_EXTENDED',
-        contractId:  milestone.contract_id,
-        milestoneId: milestone.contract_milestone_id,
-    });
-
-    return updated;
+    return await extendContractDeadlineService(milestone.contract_id, callerAccountId, extensionDays);
 }
 
 /**
@@ -388,7 +456,9 @@ module.exports = {
     reconcileMilestoneRemindersServices,
     // Controller services
     cancelMilestoneService,
+    cancelContractService,
     extendMilestoneService,
+    extendContractDeadlineService,
     approveMilestoneService,
     requestRevisionService,
 };

@@ -33,6 +33,7 @@ export interface MilestoneItem {
   name: string;
   revisions: number;
   deadline: string;
+  deadline_at?: string;
   credits: number;
   status: MilestoneStatus;
   rawStatus?: string;
@@ -222,6 +223,12 @@ export const Contracts: React.FC = () => {
   const { user } = useGlobalState();
 
   const formatMilestoneDeadline = (m: any) => {
+    if (m.deadline_at) {
+      const d = new Date(m.deadline_at);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      }
+    }
     if (m.hours) return `${m.hours} Hours`;
     const hrs = Number(m.deadline);
     if (!isNaN(hrs) && hrs <= 0) return 'Flexible';
@@ -229,7 +236,7 @@ export const Contracts: React.FC = () => {
       if (m.started_at) {
         const st = new Date(m.started_at);
         if (!isNaN(st.getTime())) {
-          return new Date(st.getTime() + hrs * 3600000).toLocaleDateString();
+          return new Date(st.getTime() + hrs * 3600000).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
       }
       if (hrs >= 24 && hrs % 24 === 0) {
@@ -240,18 +247,68 @@ export const Contracts: React.FC = () => {
     if (typeof m.deadline === 'string' && m.deadline.includes('-')) {
       const d = new Date(m.deadline);
       if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
-        return d.toLocaleDateString();
+        return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       }
     }
     return m.deadline ? String(m.deadline) : 'N/A';
   };
 
-  const handleMilestoneAction = async (action: 'cancel' | 'approve' | 'extend' | 'revision', milestone: MilestoneItem, contractId: string) => {
+  const handleContractCancel = async (contractId: string) => {
     if (milestoneLoading) return;
     setMilestoneLoading(true);
     try {
+      const cancelRes = await api.post(`/api/contracts/${contractId}/cancel`);
+      alert(cancelRes.data?.message || 'Contract cancelled and unfinished milestones refunded.');
+      const res = await api.get('/api/contracts');
+      if (res.data.success) {
+        const remapped = res.data.data.map((c: any) => {
+          const ms = (c.milestones || []).filter(Boolean).map((m: any, _i: number, arr: any[]) => {
+            const rawStatus: string = (m.status || '').toLowerCase();
+            let uiStatus: MilestoneStatus = 'Locked';
+            if (['completed','approved','auto_approved'].includes(rawStatus)) uiStatus = 'Claimed';
+            else if (rawStatus === 'active') uiStatus = 'In Progress';
+            else if (['under_review','revision_requested'].includes(rawStatus)) uiStatus = 'Under Review';
+            else if (rawStatus === 'overdue') uiStatus = 'Overdue';
+            else if (rawStatus === 'stalled') uiStatus = 'Stalled';
+            else if (rawStatus === 'abandoned') uiStatus = 'Abandoned';
+            else if (rawStatus === 'cancelled') uiStatus = 'Cancelled';
+            return { id: m.id, name: m.name, revisions: parseInt(m.revisions,10)||0, deadline: formatMilestoneDeadline(m), deadline_at: m.deadline_at, credits: m.credits||Math.floor((parseFloat(c.rate_credits)||0)/((arr.length)||1)), status: uiStatus, rawStatus };
+          });
+          return { ...c, milestones: ms };
+        });
+        setContracts(remapped.filter((c: any) => ['Active','Waiting','Done','Closed','Cancelled'].includes(c.status)));
+        if (selectedContract) {
+          const updated = remapped.find((c: any) => c.contract_id === selectedContract.id || c.id === selectedContract.id);
+          if (updated) setSelectedContract((prev) => prev ? {
+            ...prev,
+            status: updated.status,
+            milestones: updated.milestones,
+            dueDate: updated.deadline_at || updated.job_deadline || prev.dueDate
+          } : prev);
+        }
+      }
+      setMilestoneAction(null);
+    } catch (err: any) {
+      console.error('Contract cancellation failed:', err);
+      alert(err?.response?.data?.message || 'Failed to cancel contract. Please try again.');
+    } finally {
+      setMilestoneLoading(false);
+    }
+  };
+
+  const handleMilestoneAction = async (action: 'cancel' | 'approve' | 'extend' | 'revision', milestone: MilestoneItem, contractId: string) => {
+    if (milestoneLoading) return;
+    if (action === 'cancel' && !milestone.id) {
+      await handleContractCancel(contractId);
+      return;
+    }
+    setMilestoneLoading(true);
+    try {
       const body = action === 'extend' ? { extensionDays } : {};
-      await api.post(`/api/contracts/${contractId}/milestones/${milestone.id}/${action}`, body);
+      const url = action === 'extend'
+        ? `/api/contracts/${contractId}/extend`
+        : `/api/contracts/${contractId}/milestones/${milestone.id}/${action}`;
+      await api.post(url, body);
       // Refresh contracts after action
       const res = await api.get('/api/contracts');
       if (res.data.success) {
@@ -267,7 +324,7 @@ export const Contracts: React.FC = () => {
             else if (rawStatus === 'stalled') uiStatus = 'Stalled';
             else if (rawStatus === 'abandoned') uiStatus = 'Abandoned';
             else if (rawStatus === 'cancelled') uiStatus = 'Cancelled';
-            return { id: m.id, name: m.name, revisions: parseInt(m.revisions,10)||0, deadline: formatMilestoneDeadline(m), credits: m.credits||Math.floor((parseFloat(c.rate_credits)||0)/((arr.length)||1)), status: uiStatus, rawStatus };
+            return { id: m.id, name: m.name, revisions: parseInt(m.revisions,10)||0, deadline: formatMilestoneDeadline(m), deadline_at: m.deadline_at, credits: m.credits||Math.floor((parseFloat(c.rate_credits)||0)/((arr.length)||1)), status: uiStatus, rawStatus };
           });
           return { ...c, milestones: ms };
         });
@@ -275,7 +332,11 @@ export const Contracts: React.FC = () => {
         // Update selected contract if open
         if (selectedContract) {
           const updated = remapped.find((c: any) => c.contract_id === selectedContract.id || c.id === selectedContract.id);
-          if (updated) setSelectedContract((prev) => prev ? { ...prev, milestones: updated.milestones } : prev);
+          if (updated) setSelectedContract((prev) => prev ? {
+            ...prev,
+            milestones: updated.milestones,
+            dueDate: updated.deadline_at || updated.job_deadline || prev.dueDate
+          } : prev);
         }
       }
       setMilestoneAction(null);
@@ -311,6 +372,7 @@ export const Contracts: React.FC = () => {
                 name: m.name,
                 revisions: parseInt(m.revisions, 10) || 0,
                 deadline: formatMilestoneDeadline(m),
+                deadline_at: m.deadline_at,
                 credits: m.credits || Math.floor((parseFloat(c.rate_credits) || 0) / (arr.length || 1)),
                 status: uiStatus,
                 rawStatus,
@@ -320,9 +382,9 @@ export const Contracts: React.FC = () => {
             const allMilestonesDone = mappedMilestones.length > 0 && mappedMilestones.every((m: any) => m.status === 'Claimed');
             
             let derivedStatus = c.status;
-            if (derivedStatus === 'Completed') derivedStatus = 'Closed';
-            
-            if (allMilestonesDone) {
+            if (derivedStatus === 'Completed') {
+              derivedStatus = 'Closed';
+            } else if (allMilestonesDone) {
               if (c.client_rating && c.freelancer_rating) {
                 derivedStatus = 'Closed';
               } else {
@@ -859,12 +921,14 @@ export const Contracts: React.FC = () => {
                                     <>
                                       <button onClick={() => handleMilestoneAction('approve', m, selectedContract.id)} disabled={milestoneLoading} className="rounded px-2 py-0.5 text-[9px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500/20 transition disabled:opacity-50">✓ Approve</button>
                                       <button onClick={() => handleMilestoneAction('revision', m, selectedContract.id)} disabled={milestoneLoading} className="rounded px-2 py-0.5 text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition disabled:opacity-50">↩ Revise</button>
+                                      <button onClick={() => navigate(`/contracts/dispute-form?contractId=${selectedContract.id}&milestoneId=${m.id}`)} className="rounded px-2 py-0.5 text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition">⚠ Dispute</button>
                                     </>
                                   )}
                                   {isOverdue && (
                                     <>
                                       <button onClick={() => setMilestoneAction({ type: 'extend', milestoneId: String(m.id), milestoneName: m.name })} disabled={milestoneLoading} className="rounded px-2 py-0.5 text-[9px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition disabled:opacity-50">↗ Extend</button>
                                       <button onClick={() => setMilestoneAction({ type: 'cancel', milestoneId: String(m.id), milestoneName: m.name })} disabled={milestoneLoading} className="rounded px-2 py-0.5 text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition disabled:opacity-50">✕ Cancel</button>
+                                      <button onClick={() => navigate(`/contracts/dispute-form?contractId=${selectedContract.id}&milestoneId=${m.id}`)} className="rounded px-2 py-0.5 text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition">⚠ Dispute</button>
                                     </>
                                   )}
                                 </div>
@@ -971,13 +1035,31 @@ export const Contracts: React.FC = () => {
                       View Tasks
                     </button>
                   ) : (
-                    <button
-                      onClick={() => navigate(`/dashboard/review/${selectedContract.id}`)}
-                      className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors"
-                      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                    >
-                      Review Updates
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setMilestoneAction({ type: 'extend', milestoneId: '', milestoneName: selectedContract.title })}
+                        className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors"
+                        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                      >
+                        Extend Contract
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMilestoneAction({ type: 'cancel', milestoneId: '', milestoneName: selectedContract.title })}
+                        className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-4 py-2 text-xs font-semibold text-rose-500 hover:bg-rose-500/20 transition-colors"
+                        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                      >
+                        Cancel Contract
+                      </button>
+                      <button
+                        onClick={() => navigate(`/dashboard/review/${selectedContract.id}`)}
+                        className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors"
+                        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                      >
+                        Review Updates
+                      </button>
+                    </>
                   )
                 )}
                 <button
@@ -1002,24 +1084,52 @@ export const Contracts: React.FC = () => {
           <div className="w-full max-w-sm rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0f1115] p-6 shadow-2xl space-y-4">
             {milestoneAction.type === 'cancel' ? (
               <>
-                <h3 className="text-base font-bold text-rose-500">Cancel Milestone & Refund</h3>
-                <p className="text-sm text-gray-600 dark:text-zinc-300">Are you sure you want to cancel <strong>"{milestoneAction.milestoneName}"</strong>? The milestone credits will be refunded to your wallet. This cannot be undone.</p>
+                <h3 className="text-base font-bold text-rose-500">
+                  {milestoneAction.milestoneId ? 'Cancel Milestone & Refund' : 'Cancel Contract & Partial Refund'}
+                </h3>
+                <div className="text-sm text-gray-600 dark:text-zinc-300 space-y-2">
+                  {milestoneAction.milestoneId ? (
+                    <p>Are you sure you want to cancel <strong>"{milestoneAction.milestoneName}"</strong>? The milestone credits will be refunded to your wallet. This cannot be undone.</p>
+                  ) : (
+                    <>
+                      <p>Are you sure you want to cancel the contract for <strong>"{selectedContract.title}"</strong>?</p>
+                      <div className="rounded-lg bg-gray-50 dark:bg-white/5 p-3 text-xs space-y-1.5 border border-gray-200 dark:border-white/10">
+                        <div className="flex justify-between text-gray-600 dark:text-zinc-400">
+                          <span>Completed milestones (kept by freelancer):</span>
+                          <span className="font-semibold text-emerald-500">{selectedContract.milestones.filter(m => m.status === 'Claimed').reduce((acc, m) => acc + (m.credits || 0), 0).toLocaleString()} Credits</span>
+                        </div>
+                        <div className="flex justify-between text-gray-600 dark:text-zinc-400 border-t border-gray-200 dark:border-white/10 pt-1">
+                          <span>Unfinished escrow (refunded to you):</span>
+                          <span className="font-bold text-rose-500">{selectedContract.milestones.filter(m => m.status !== 'Claimed' && m.status !== 'Cancelled').reduce((acc, m) => acc + (m.credits || 0), 0).toLocaleString()} Credits</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
                 <div className="flex gap-3 justify-end pt-2">
                   <button onClick={() => setMilestoneAction(null)} className="rounded-xl border border-gray-200 dark:border-white/15 px-4 py-2 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 transition">Keep Contract</button>
-                  <button onClick={() => handleMilestoneAction('cancel', { id: milestoneAction.milestoneId, name: milestoneAction.milestoneName } as any, selectedContract.id)} disabled={milestoneLoading} className="rounded-xl bg-rose-500 px-4 py-2 text-xs font-bold text-white hover:bg-rose-600 transition disabled:opacity-50">{milestoneLoading ? 'Processing...' : 'Yes, Cancel & Refund'}</button>
+                  <button onClick={() => {
+                    if (!milestoneAction.milestoneId) {
+                      handleContractCancel(selectedContract.id);
+                    } else {
+                      handleMilestoneAction('cancel', { id: milestoneAction.milestoneId, name: milestoneAction.milestoneName } as any, selectedContract.id);
+                    }
+                  }} disabled={milestoneLoading} className="rounded-xl bg-rose-500 px-4 py-2 text-xs font-bold text-white hover:bg-rose-600 transition disabled:opacity-50">{milestoneLoading ? 'Processing...' : 'Yes, Cancel & Refund'}</button>
                 </div>
               </>
             ) : (
               <>
-                <h3 className="text-base font-bold text-blue-400">Extend Deadline</h3>
-                <p className="text-sm text-gray-600 dark:text-zinc-300">How many additional days do you want to give for <strong>"{milestoneAction.milestoneName}"</strong>?</p>
+                <h3 className="text-base font-bold text-blue-400">Extend Contract Deadline</h3>
+                <p className="text-sm text-gray-600 dark:text-zinc-300">
+                  How many additional days do you want to extend this contract's delivery schedule by? This extends the overall contract deadline and active milestones dynamically.
+                </p>
                 <div className="flex items-center gap-3">
                   <input type="number" min={1} max={90} value={extensionDays} onChange={e => setExtensionDays(Number(e.target.value))} className="w-24 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   <span className="text-sm text-gray-500 dark:text-zinc-400">days</span>
                 </div>
                 <div className="flex gap-3 justify-end pt-2">
                   <button onClick={() => setMilestoneAction(null)} className="rounded-xl border border-gray-200 dark:border-white/15 px-4 py-2 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 transition">Cancel</button>
-                  <button onClick={() => handleMilestoneAction('extend', { id: milestoneAction.milestoneId, name: milestoneAction.milestoneName } as any, selectedContract.id)} disabled={milestoneLoading || extensionDays < 1} className="rounded-xl bg-blue-500 px-4 py-2 text-xs font-bold text-white hover:bg-blue-600 transition disabled:opacity-50">{milestoneLoading ? 'Processing...' : `Extend by ${extensionDays} day${extensionDays !== 1 ? 's' : ''}`}</button>
+                  <button onClick={() => handleMilestoneAction('extend', { id: milestoneAction.milestoneId, name: milestoneAction.milestoneName } as any, selectedContract.id)} disabled={milestoneLoading || extensionDays < 1} className="rounded-xl bg-blue-500 px-4 py-2 text-xs font-bold text-white hover:bg-blue-600 transition disabled:opacity-50">{milestoneLoading ? 'Processing...' : `Extend Contract by ${extensionDays} day${extensionDays !== 1 ? 's' : ''}`}</button>
                 </div>
               </>
             )}

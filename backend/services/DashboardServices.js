@@ -4,7 +4,7 @@ const { getIo } = require('../lib/WebSocket');
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const FREELANCER_STATUSES = new Set(['progress', 'submitted_for_review']);
-const CLIENT_STATUSES = new Set(['approval', 'revision_request']);
+const CLIENT_STATUSES = new Set(['approval', 'revision_request', 'client_message']);
 
 class DashboardActionError extends Error {
     constructor(message, statusCode = 400) {
@@ -76,12 +76,14 @@ async function notifyAndBroadcast({ task, actorId, recipientId, submission, mile
         submitted_for_review: `${actorName} requested a review for "${milestoneName}" in "${listingTitle}".`,
         revision_request: `${actorName} requested revisions for "${milestoneName}" in "${listingTitle}".`,
         approval: `${actorName} approved "${milestoneName}" in "${listingTitle}".`,
+        client_message: `${actorName} sent a message regarding "${milestoneName}" in "${listingTitle}".`,
     };
     const prefixes = {
         progress: 'MILESTONE_UPDATE',
         submitted_for_review: 'MILESTONE_REVIEW_REQUESTED',
         revision_request: 'MILESTONE_REVISION_REQUESTED',
         approval: 'MILESTONE_APPROVED',
+        client_message: 'MILESTONE_MESSAGE',
     };
     const isRecipientClient = String(recipientId) === String(task.client_account_id);
     const referencePath = isRecipientClient
@@ -156,13 +158,16 @@ async function submitMilestoneServices({ accountId, contractId, milestoneId, pay
         attachments: input.attachments,
         submissionStatus: input.status,
         milestoneStatus:
-            input.status === 'submitted_for_review' ? 'submitted_for_review' : 'active',
+            input.status === 'submitted_for_review' ? 'submitted_for_review' : null,
         allowedCurrentStatuses: [
             'active',
             'pending',
+            'submitted_for_review',
             'revision_requested',
             'revisions_requested',
             'in_progress',
+            'overdue',
+            'stalled',
         ],
     });
     const updatedTask = await DashboardRepositories.getTaskById(
@@ -193,16 +198,28 @@ async function reviewMilestoneServices({ accountId, contractId, milestoneId, pay
         throw new DashboardActionError('Only the client, team Project Leader, or team Owner/Admin can review milestone submissions', 403);
     }
 
+    const isClientMessage = input.status === 'client_message';
     const result = await DashboardRepositories.recordMilestoneAction({
         contractId: normalizedContractId,
         milestoneId: normalizedMilestoneId,
         message: input.message,
         attachments: input.attachments,
         submissionStatus: input.status,
-        milestoneStatus: input.status === 'approval' ? 'completed' : 'active',
-        unlockNext: input.status === 'approval',
-        releaseOnContractCompletion: input.status === 'approval',
-        allowedCurrentStatuses: ['submitted_for_review'],
+        milestoneStatus: isClientMessage ? null : (input.status === 'approval' ? 'completed' : 'active'),
+        unlockNext: !isClientMessage && input.status === 'approval',
+        releaseOnContractCompletion: !isClientMessage && input.status === 'approval',
+        allowedCurrentStatuses: isClientMessage
+            ? [
+                'active',
+                'pending',
+                'submitted_for_review',
+                'revision_requested',
+                'revisions_requested',
+                'in_progress',
+                'overdue',
+                'stalled',
+            ]
+            : ['submitted_for_review'],
     });
     const updatedTask = await DashboardRepositories.getTaskById(
         normalizedContractId,
@@ -218,28 +235,28 @@ async function reviewMilestoneServices({ accountId, contractId, milestoneId, pay
         action: input.status,
     });
 
-    if (result.contractCompletion) {
-        const completion = result.contractCompletion;
+    const activeRelease = result.milestoneRelease || (result.contractCompletion?.milestoneRelease || null);
+    if (activeRelease) {
         const io = safeIo();
         if (io) {
-            io.to(String(completion.freelancerAccountId)).emit(
+            io.to(String(activeRelease.freelancerAccountId)).emit(
                 'notification',
-                completion.notification
+                activeRelease.notification
             );
-            io.to(String(completion.freelancerAccountId)).emit(
+            io.to(String(activeRelease.freelancerAccountId)).emit(
                 'walletBalanceUpdated',
                 {
-                    balance_credits: completion.accountBalanceCredits,
+                    balance_credits: activeRelease.accountBalanceCredits,
                     wallet_type: 'account wallets',
-                    transaction_id: completion.transaction.credit_transaction_id,
+                    transaction_id: activeRelease.transaction.credit_transaction_id,
                 }
             );
-            io.to(String(completion.freelancerAccountId)).emit(
+            io.to(String(activeRelease.freelancerAccountId)).emit(
                 'escrowBalanceUpdated',
                 {
-                    balance_credits: completion.escrowBalanceCredits,
+                    balance_credits: activeRelease.escrowBalanceCredits,
                     wallet_type: 'escrow wallets',
-                    transaction_id: completion.transaction.credit_transaction_id,
+                    transaction_id: activeRelease.transaction.credit_transaction_id,
                 }
             );
         }
@@ -248,12 +265,24 @@ async function reviewMilestoneServices({ accountId, contractId, milestoneId, pay
     return {
         submission: result.submission,
         task: updatedTask,
-        contract_completion: result.contractCompletion
+        milestone_release: activeRelease
             ? {
-                released_credits: result.contractCompletion.releasedCredits,
-                transaction_id: result.contractCompletion.transaction.credit_transaction_id,
+                released_credits: activeRelease.releasedCredits,
+                transaction_id: activeRelease.transaction.credit_transaction_id,
             }
             : null,
+        contract_completion: result.contractCompletion
+            ? {
+                is_done: true,
+                released_credits: activeRelease ? activeRelease.releasedCredits : 0,
+                transaction_id: activeRelease ? activeRelease.transaction.credit_transaction_id : null,
+            }
+            : (activeRelease
+                ? {
+                    released_credits: activeRelease.releasedCredits,
+                    transaction_id: activeRelease.transaction.credit_transaction_id,
+                }
+                : null),
     };
 }
 
@@ -323,9 +352,81 @@ async function buyRevisionServices({ accountId, contractId, milestoneId, payload
     };
 }
 
+async function reviewContractServices({ contractId, accountId, rating, feedback }) {
+    const normalizedContractId = requireUuid(contractId, 'contract ID');
+    const actorId = requireUuid(accountId, 'account ID');
+
+    const numRating = Number(rating);
+    if (!Number.isInteger(numRating) || numRating < 1 || numRating > 5) {
+        throw new DashboardActionError('Rating must be an integer between 1 and 5');
+    }
+
+    const trimmedFeedback = String(feedback || '').trim();
+    if (!trimmedFeedback) {
+        throw new DashboardActionError('Feedback cannot be empty');
+    }
+    if (trimmedFeedback.length > 5000) {
+        throw new DashboardActionError('Feedback must be 5,000 characters or fewer');
+    }
+
+    const reviewResult = await DashboardRepositories.submitContractReview(
+        normalizedContractId,
+        actorId,
+        numRating,
+        trimmedFeedback
+    );
+
+    const task = await DashboardRepositories.getTaskById(normalizedContractId, actorId);
+
+    const io = safeIo();
+    if (io && task) {
+        const clientAccId = String(task.client_account_id);
+        const freeAccId = String(task.freelancer_account_id);
+        const targetAccId = String(reviewResult.targetAccountId);
+
+        const rooms = new Set([clientAccId, freeAccId, actorId].filter(Boolean));
+        let broadcaster = io;
+        for (const room of rooms) {
+            broadcaster = broadcaster.to(room);
+        }
+        broadcaster.emit('dashboardTaskUpdated', {
+            contract_id: normalizedContractId,
+            task,
+            action: 'contract_reviewed',
+            actor_account_id: actorId,
+            contract_status: task.contract_status,
+            contract_completed: reviewResult.contractCompleted,
+            emitted_at: new Date().toISOString(),
+        });
+
+        try {
+            const reviewerName = reviewResult.isClient ? task.client_name : task.freelancer_name;
+            const notif = await createNotificationServices({
+                message: `${reviewerName || 'A user'} left you a ${numRating}-star review for "${task.job_title || 'contract'}".`,
+                is_read: false,
+                reference_table: 'ratings',
+                reference_prefix: 'CONTRACT_REVIEW',
+                reference_path: `/profile/${targetAccId}`,
+                reference_id: reviewResult.rating.rating_id,
+                account_id: targetAccId,
+            });
+            io.to(targetAccId).emit('notification', notif);
+        } catch (notifErr) {
+            console.error('Unable to create review notification:', notifErr.message);
+        }
+    }
+
+    return {
+        review: reviewResult.rating,
+        contractCompleted: reviewResult.contractCompleted,
+        task,
+    };
+}
+
 module.exports = {
     DashboardActionError,
     submitMilestoneServices,
     reviewMilestoneServices,
     buyRevisionServices,
+    reviewContractServices,
 };

@@ -1,4 +1,5 @@
 const { pool } = require('../lib/Database');
+const { getAffiliatedAccountIds } = require('./MarketplaceActorRepositories');
 
 async function updateProfileAccountRepositories(accountId, updates) {
     try {
@@ -453,6 +454,7 @@ async function updateUserRolesByAccountIdRepositories(accountId, roles) {
 
 async function getProfileReviewsByAccountId(accountId) {
     try {
+        const actorAccountIds = await getAffiliatedAccountIds(accountId);
         const queryText = `
             SELECT 
                 r.rating_id, 
@@ -461,13 +463,13 @@ async function getProfileReviewsByAccountId(accountId) {
                 r.created_at,
                 c.contract_id,
                 CASE 
-                    WHEN g.freelancer_account_id = $1 OR p.freelancer_account_id = $1 THEN 'freelancer'
-                    WHEN req.client_account_id = $1 OR j.client_account_id = $1 THEN 'client'
+                    WHEN g.freelancer_account_id = ANY($1::uuid[]) OR p.freelancer_account_id = ANY($1::uuid[]) THEN 'freelancer'
+                    WHEN req.client_account_id = ANY($1::uuid[]) OR j.client_account_id = ANY($1::uuid[]) THEN 'client'
                     ELSE 'unknown'
                 END as role_type,
                 a.account_id as reviewer_account_id,
                 a.handle as reviewer_handle,
-                COALESCE(u.first_name || ' ' || u.last_name, a.handle) as reviewer_name,
+                COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), a.display_name, a.handle, 'User') as reviewer_name,
                 f.path as reviewer_avatar
             FROM ratings r
             JOIN contracts c ON r.contract_id = c.contract_id
@@ -480,17 +482,17 @@ async function getProfileReviewsByAccountId(accountId) {
             LEFT JOIN jobs j ON p.job_id = j.job_id
             LEFT JOIN accounts a ON a.account_id = 
                 CASE 
-                    WHEN g.freelancer_account_id = $1 THEN req.client_account_id
-                    WHEN p.freelancer_account_id = $1 THEN j.client_account_id
-                    WHEN req.client_account_id = $1 THEN g.freelancer_account_id
-                    WHEN j.client_account_id = $1 THEN p.freelancer_account_id
+                    WHEN g.freelancer_account_id = ANY($1::uuid[]) THEN req.client_account_id
+                    WHEN p.freelancer_account_id = ANY($1::uuid[]) THEN j.client_account_id
+                    WHEN req.client_account_id = ANY($1::uuid[]) THEN g.freelancer_account_id
+                    WHEN j.client_account_id = ANY($1::uuid[]) THEN p.freelancer_account_id
                 END
             LEFT JOIN users u ON a.account_id = u.account_id
             LEFT JOIN files f ON a.avatar_file_id = f.file_id
-            WHERE r.account_id = $1
+            WHERE r.account_id = ANY($1::uuid[])
             ORDER BY r.created_at DESC
         `;
-        const result = await pool.query(queryText, [accountId]);
+        const result = await pool.query(queryText, [actorAccountIds]);
         return result.rows;
     } catch (err) {
         console.error("Error fetching reviews for accountId", accountId, err);

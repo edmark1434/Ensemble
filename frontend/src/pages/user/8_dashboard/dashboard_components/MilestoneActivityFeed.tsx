@@ -1,7 +1,17 @@
 import React, { useState } from 'react';
-import { CheckCircle, FileText, AlertCircle, MessageSquare, CheckCircle2 } from 'lucide-react';
+import {
+    CheckCircle,
+    FileText,
+    AlertCircle,
+    MessageSquare,
+    CheckCircle2,
+    Shield,
+    Clock,
+    ChevronDown,
+    ChevronUp,
+} from 'lucide-react';
 import { MilestoneSubmissionForm } from './MilestoneSubmissionForm';
-import { ClientReviewPanel } from './ClientReviewPanel';
+import { ClientReviewPanel, ClientReviewCardActions } from './ClientReviewPanel';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import useChatState from '@/components/ui/chat_bubble/chat_state';
@@ -10,7 +20,7 @@ interface FeedItem {
     id: string;
     message: string;
     attachments: string[];
-    status: 'progress' | 'submitted_for_review' | 'revision_request' | 'approval';
+    status: 'progress' | 'submitted_for_review' | 'revision_request' | 'approval' | 'client_message';
     submitted_at: string;
 }
 
@@ -24,6 +34,16 @@ interface DashboardTask {
     freelancer_account_id: string;
     freelancer_name: string;
     freelancer_avatar?: string | null;
+    revision_price_credits?: number;
+    user_role?: {
+        effective_role?: string;
+        can_buy_revision?: boolean;
+        can_review_milestone?: boolean;
+        can_submit_milestone?: boolean;
+        is_team_client?: boolean;
+        is_project_lead?: boolean;
+        team_role?: string;
+    };
 }
 
 interface MilestoneDetails {
@@ -31,8 +51,11 @@ interface MilestoneDetails {
     name: string;
     status: string;
     deadline: string | number;
+    deadline_at?: string | null;
     started_at?: string;
     submissions?: FeedItem[];
+    revisions_max?: number;
+    credits?: number;
 }
 
 interface Props {
@@ -41,6 +64,7 @@ interface Props {
     isFreelancer: boolean;
     onRefreshTask: (task?: unknown) => void;
     canReviewContract?: boolean;
+    myReview?: any;
     onOpenReviewModal?: () => void;
 }
 
@@ -82,11 +106,12 @@ const isImageAttachment = (url: string) => {
         return /\.(?:avif|gif|jpe?g|png|svg|webp)$/i.test(url.split(/[?#]/, 1)[0]);
     }
 };
+
 const formatRelativeTime = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
+
     if (diffInSeconds < 60) return `${Math.max(0, diffInSeconds)} sec${diffInSeconds !== 1 ? 's' : ''} ago`;
     const diffInMinutes = Math.floor(diffInSeconds / 60);
     if (diffInMinutes < 60) return `${diffInMinutes} min${diffInMinutes !== 1 ? 's' : ''} ago`;
@@ -100,15 +125,62 @@ const formatRelativeTime = (dateString: string) => {
     return `${diffInYears} year${diffInYears !== 1 ? 's' : ''} ago`;
 };
 
-export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, isFreelancer, onRefreshTask, canReviewContract, onOpenReviewModal }) => {
-    
+export const MilestoneActivityFeed: React.FC<Props> = ({
+    task,
+    activeMilestone,
+    isFreelancer,
+    onRefreshTask,
+    canReviewContract,
+    myReview,
+    onOpenReviewModal,
+}) => {
     // Sort submissions ascending (oldest first) for chronological chat feed
     const feed: FeedItem[] = activeMilestone?.submissions ? [...activeMilestone.submissions].reverse() : [];
-    
+
     const isLocked = activeMilestone?.status === 'locked';
     const isCompleted = activeMilestone?.status === 'completed';
     const isSubmittedForReview = activeMilestone?.status === 'submitted_for_review';
+    const [activeTab, setActiveTab] = useState<'feed' | 'submissions'>('feed');
     const [isOpeningChat, setIsOpeningChat] = useState(false);
+    const [expandedReviewIds, setExpandedReviewIds] = useState<Record<string, boolean>>({});
+
+    const toggleReviewDropdown = (key: string) => {
+        setExpandedReviewIds((prev) => ({
+            ...prev,
+            [key]: !prev[key],
+        }));
+    };
+
+    // Extract all submissions that were submitted for review, with version numbers and linked client reviews
+    const reviewSubmissionsRaw = (activeMilestone?.submissions || []).filter(
+        (item) => item.status === 'submitted_for_review'
+    );
+    // reviewSubmissionsRaw is newest first; reverse it to compute chronological version numbering
+    const chronologicalSubmissions = [...reviewSubmissionsRaw].reverse();
+    const submissionsWithMeta = chronologicalSubmissions.map((sub, idx) => {
+        const nextSub = chronologicalSubmissions[idx + 1];
+        const subTime = new Date(sub.submitted_at).getTime();
+        const nextSubTime = nextSub ? new Date(nextSub.submitted_at).getTime() : Infinity;
+
+        // Find client review responses (revision_request or approval) that occurred for this deliverable version
+        const reviewResponses = feed.filter((item) => {
+            const itemTime = new Date(item.submitted_at).getTime();
+            return (
+                (item.status === 'revision_request' || item.status === 'approval') &&
+                itemTime >= subTime &&
+                itemTime < nextSubTime
+            );
+        });
+
+        return {
+            ...sub,
+            versionNumber: idx + 1,
+            isLatest: idx === chronologicalSubmissions.length - 1,
+            reviewResponses,
+        };
+    });
+    // Display newest first so client/freelancer sees the latest deliverable on top
+    const displaySubmissions = [...submissionsWithMeta].reverse();
 
     const openRevisionChat = async () => {
         const contractId = String(task?.contract_id || '').trim();
@@ -154,7 +226,7 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
             setIsOpeningChat(false);
         }
     };
-    
+
     if (isLocked) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-zinc-500 py-24 bg-dark-surface/70 shadow-xl">
@@ -169,16 +241,31 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-dark-surface/70 rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden shadow-xl">
-            
             {/* Header */}
-            <div className="flex flex-col gap-3 border-b border-gray-200 bg-gray-50 px-4 py-4 dark:border-white/10 dark:bg-white/5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex flex-col gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3.5 dark:border-white/10 dark:bg-white/5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <div>
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                    <h2
+                        className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2"
+                        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                    >
                         {activeMilestone.name}
                         {isCompleted && <CheckCircle className="h-4 w-4 text-emerald-400" />}
                     </h2>
                     <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
-                        {feed.length} updates • Deadline: {(() => {
+                        {feed.length} updates • Deadline:{' '}
+                        {(() => {
+                            if (activeMilestone?.deadline_at) {
+                                const d = new Date(activeMilestone.deadline_at);
+                                if (!isNaN(d.getTime())) {
+                                    return d.toLocaleString([], {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                    });
+                                }
+                            }
                             if (!activeMilestone?.deadline) return 'N/A';
                             const hrs = Number(activeMilestone.deadline);
                             if (!isNaN(hrs) && hrs <= 0) return 'Flexible';
@@ -186,7 +273,16 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                                 if (activeMilestone.started_at) {
                                     const st = new Date(activeMilestone.started_at);
                                     if (!isNaN(st.getTime())) {
-                                        return new Date(st.getTime() + hrs * 3600000).toLocaleDateString();
+                                        return new Date(st.getTime() + hrs * 3600000).toLocaleString(
+                                            [],
+                                            {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                year: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                            }
+                                        );
                                     }
                                 }
                                 if (hrs >= 24 && hrs % 24 === 0) {
@@ -194,10 +290,19 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                                 }
                                 return `${hrs} Hours`;
                             }
-                            if (typeof activeMilestone.deadline === 'string' && activeMilestone.deadline.includes('-')) {
+                            if (
+                                typeof activeMilestone.deadline === 'string' &&
+                                activeMilestone.deadline.includes('-')
+                            ) {
                                 const d = new Date(activeMilestone.deadline);
                                 if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
-                                    return d.toLocaleDateString();
+                                    return d.toLocaleString([], {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                    });
                                 }
                             }
                             return String(activeMilestone.deadline);
@@ -209,43 +314,59 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                         type="button"
                         onClick={() => void openRevisionChat()}
                         disabled={isOpeningChat}
-                        title={`Chat with ${isFreelancer ? task.client_name : task.freelancer_name} about revisions`}
-                        aria-label={`Chat with ${isFreelancer ? task.client_name : task.freelancer_name} about revisions`}
+                        title={`Chat with ${
+                            isFreelancer ? task.client_name : task.freelancer_name
+                        } about revisions`}
+                        aria-label={`Chat with ${
+                            isFreelancer ? task.client_name : task.freelancer_name
+                        } about revisions`}
                         className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-500 transition-colors hover:bg-blue-500/20 hover:text-blue-400 disabled:cursor-wait disabled:opacity-60"
                     >
                         <MessageSquare className={`h-4 w-4 ${isOpeningChat ? 'animate-pulse' : ''}`} />
                     </button>
-                    <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        isCompleted ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                        isSubmittedForReview ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                        activeMilestone.status === 'overdue' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
-                        activeMilestone.status === 'stalled' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' :
-                        activeMilestone.status === 'abandoned' ? 'bg-red-600/20 text-red-500 border border-red-600/30' :
-                        activeMilestone.status === 'cancelled' ? 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30' :
-                        'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                    }`}>
+                    <div
+                        className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            isCompleted
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : isSubmittedForReview
+                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                : activeMilestone.status === 'overdue'
+                                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                : activeMilestone.status === 'stalled'
+                                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                                : activeMilestone.status === 'abandoned'
+                                ? 'bg-red-600/20 text-red-500 border border-red-600/30'
+                                : activeMilestone.status === 'cancelled'
+                                ? 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30'
+                                : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                        }`}
+                    >
                         {activeMilestone.status.replace(/_/g, ' ')}
                     </div>
                 </div>
             </div>
 
             {/* Status Action / Alert Banner for Overdue / Stalled / Abandoned Milestones */}
-            {(activeMilestone.status === 'overdue' || activeMilestone.status === 'stalled' || activeMilestone.status === 'abandoned') && (
-                <div className={`px-4 py-2.5 text-xs flex items-center justify-between border-b ${
-                    activeMilestone.status === 'overdue'
-                        ? 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
-                        : 'bg-orange-500/10 border-orange-500/20 text-orange-600 dark:text-orange-400'
-                }`}>
+            {(activeMilestone.status === 'overdue' ||
+                activeMilestone.status === 'stalled' ||
+                activeMilestone.status === 'abandoned') && (
+                <div
+                    className={`px-4 py-2.5 text-xs flex items-center justify-between border-b ${
+                        activeMilestone.status === 'overdue'
+                            ? 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
+                            : 'bg-orange-500/10 border-orange-500/20 text-orange-600 dark:text-orange-400'
+                    }`}
+                >
                     <div className="flex items-center gap-2">
                         <AlertCircle className="w-4 h-4 shrink-0" />
                         <span>
                             {isFreelancer
-                                ? (activeMilestone.status === 'overdue'
+                                ? activeMilestone.status === 'overdue'
                                     ? 'This milestone is past due. Submit your work or request an extension from your client to avoid cancellation.'
-                                    : 'This milestone is stalled. Your client may cancel and reclaim escrow at any time.')
-                                : (activeMilestone.status === 'overdue'
-                                    ? 'Milestone deadline has passed. You can extend the deadline or manage actions in contracts.'
-                                    : 'Milestone is stalled due to no submission. You can cancel to reclaim your escrow funds.')}
+                                    : 'This milestone is stalled. Your client may cancel and reclaim escrow at any time.'
+                                : activeMilestone.status === 'overdue'
+                                ? 'Milestone deadline has passed. You can extend the deadline or manage actions in contracts.'
+                                : 'Milestone is stalled due to no submission. You can cancel to reclaim your escrow funds.'}
                         </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-3 text-[11px]">
@@ -257,7 +378,9 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                         </a>
                         <span className="opacity-40">•</span>
                         <a
-                            href={`/contracts/dispute-form?contractId=${task?.contract_id || ''}`}
+                            href={`/contracts/dispute-form?contractId=${task?.contract_id || ''}&milestoneId=${
+                                activeMilestone?.id || ''
+                            }`}
                             className="underline font-bold text-rose-600 dark:text-rose-400 hover:opacity-80"
                         >
                             Dispute
@@ -266,107 +389,503 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                 </div>
             )}
 
-            {/* Feed Scroll Area */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 inbox-scroll-thin">
-                {feed.length === 0 ? (
-                    <div className="text-center py-12 text-zinc-500">
-                        <MessageSquare className="h-8 w-8 text-zinc-700 mx-auto mb-3" />
-                        <p>No activity yet for this milestone.</p>
-                    </div>
-                ) : (
-                    feed.map((item) => {
-                        const isFreelancerMsg = item.status === 'progress' || item.status === 'submitted_for_review';
-                        const isOwnMessage = isFreelancer
-                            ? isFreelancerMsg
-                            : !isFreelancerMsg;
-                        
-                        return (
-                            <div key={item.id} className={`flex w-full ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`flex gap-3 max-w-[90%] ${isOwnMessage ? 'flex-row-reverse' : 'flex-row'}`}>
-                                    <div className="shrink-0 mt-5">
-                                        <img 
-                                            src={isFreelancerMsg
-                                                ? (task.freelancer_avatar ? `${import.meta.env.VITE_CLOUDFRONT_URL}${task.freelancer_avatar.startsWith('/') ? '' : '/'}${task.freelancer_avatar}` : "https://i.pravatar.cc/150?u=b042581f4e29026704d")
-                                                : (task.client_avatar ? `${import.meta.env.VITE_CLOUDFRONT_URL}${task.client_avatar.startsWith('/') ? '' : '/'}${task.client_avatar}` : "https://i.pravatar.cc/150?u=a042581f4e29026704d")
-                                            } 
-                                            alt="Avatar"
-                                            className="w-8 h-8 rounded-full object-cover border border-zinc-700"
-                                        />
-                                    </div>
-                                    <div className={`flex flex-col ${isOwnMessage ? 'items-end' : 'items-start'}`}>
-                                        <div className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1 px-1 flex gap-2">
-                                            <span>{isFreelancerMsg ? task.freelancer_name : task.client_name}</span>
-                                            <span>•</span>
-                                            <span>
-                                                {formatRelativeTime(item.submitted_at)} 
-                                                <span className="text-[9px] font-normal text-gray-400 dark:text-zinc-600/70 ml-1">
-                                                    {new Date(item.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            {/* Navigation Tabs: All Activity & Chat vs Submissions for Review */}
+            <div className="flex border-b border-gray-200 dark:border-white/10 px-4 sm:px-6 bg-gray-50/70 dark:bg-white/[0.03] gap-6">
+                <button
+                    type="button"
+                    onClick={() => setActiveTab('feed')}
+                    className={`py-3 text-xs font-bold border-b-2 flex items-center gap-2 transition ${
+                        activeTab === 'feed'
+                            ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                            : 'border-transparent text-gray-500 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-zinc-200'
+                    }`}
+                >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    All Activity & Chat ({feed.length})
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab('submissions')}
+                    className={`py-3 text-xs font-bold border-b-2 flex items-center gap-2 transition ${
+                        activeTab === 'submissions'
+                            ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                            : 'border-transparent text-gray-500 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-zinc-200'
+                    }`}
+                >
+                    <FileText className="w-3.5 h-3.5" />
+                    Submissions for Review ({reviewSubmissionsRaw.length})
+                    {reviewSubmissionsRaw.length > 0 && isSubmittedForReview && (
+                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                    )}
+                </button>
+            </div>
+
+            {/* View 1: Feed Scroll Area (Unified Activity & Chat Timeline) */}
+            {activeTab === 'feed' ? (
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 inbox-scroll-thin">
+                    {feed.length === 0 ? (
+                        <div className="text-center py-12 text-zinc-500">
+                            <MessageSquare className="h-8 w-8 text-zinc-700 mx-auto mb-3" />
+                            <p>No activity yet for this milestone.</p>
+                        </div>
+                    ) : (
+                        feed.map((item) => {
+                            const isFreelancerMsg =
+                                item.status === 'progress' || item.status === 'submitted_for_review';
+                            const isOwnMessage = isFreelancer ? isFreelancerMsg : !isFreelancerMsg;
+
+                            return (
+                                <div
+                                    key={item.id}
+                                    className={`flex w-full ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
+                                >
+                                    <div
+                                        className={`flex gap-3 max-w-[90%] ${
+                                            isOwnMessage ? 'flex-row-reverse' : 'flex-row'
+                                        }`}
+                                    >
+                                        <div className="shrink-0 mt-5">
+                                            <img
+                                                src={
+                                                    isFreelancerMsg
+                                                        ? task.freelancer_avatar
+                                                            ? `${import.meta.env.VITE_CLOUDFRONT_URL}${
+                                                                  task.freelancer_avatar.startsWith('/')
+                                                                      ? ''
+                                                                      : '/'
+                                                              }${task.freelancer_avatar}`
+                                                            : 'https://i.pravatar.cc/150?u=b042581f4e29026704d'
+                                                        : task.client_avatar
+                                                        ? `${import.meta.env.VITE_CLOUDFRONT_URL}${
+                                                              task.client_avatar.startsWith('/') ? '' : '/'
+                                                          }${task.client_avatar}`
+                                                        : 'https://i.pravatar.cc/150?u=a042581f4e29026704d'
+                                                }
+                                                alt="Avatar"
+                                                className="w-8 h-8 rounded-full object-cover border border-zinc-700"
+                                            />
+                                        </div>
+                                        <div
+                                            className={`flex flex-col ${
+                                                isOwnMessage ? 'items-end' : 'items-start'
+                                            }`}
+                                        >
+                                            <div className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1 px-1 flex gap-2">
+                                                <span>{isFreelancerMsg ? task.freelancer_name : task.client_name}</span>
+                                                <span>•</span>
+                                                <span>
+                                                    {formatRelativeTime(item.submitted_at)}
+                                                    <span className="text-[9px] font-normal text-gray-400 dark:text-zinc-600/70 ml-1">
+                                                        {new Date(item.submitted_at).toLocaleDateString('en-US', {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            year: 'numeric',
+                                                        })}
+                                                    </span>
                                                 </span>
+                                            </div>
+                                            <div
+                                                className={`rounded-2xl p-4 ${
+                                                    item.status === 'submitted_for_review'
+                                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                                                        : item.status === 'approval'
+                                                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
+                                                        : item.status === 'revision_request'
+                                                        ? 'bg-red-500/20 border border-red-500/30 text-red-600 dark:text-white'
+                                                        : item.status === 'client_message'
+                                                        ? isOwnMessage
+                                                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                                                            : 'bg-blue-500/10 border border-blue-500/20 text-gray-900 dark:text-white'
+                                                        : 'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white'
+                                                } ${isOwnMessage ? 'rounded-tr-none' : 'rounded-tl-none'}`}
+                                            >
+                                                {item.status === 'submitted_for_review' && (
+                                                    <div className="mb-2 font-bold text-xs uppercase tracking-wider text-blue-100 dark:text-blue-200 border-b border-blue-400/30 pb-2 flex items-center gap-2">
+                                                        <AlertCircle className="h-3 w-3" /> Submitted for Review
+                                                    </div>
+                                                )}
+                                                {item.status === 'approval' && (
+                                                    <div className="mb-2 font-bold text-xs uppercase tracking-wider text-emerald-100 dark:text-emerald-200 border-b border-emerald-400/30 pb-2 flex items-center gap-2">
+                                                        <CheckCircle className="h-3 w-3" /> Milestone Approved
+                                                    </div>
+                                                )}
+                                                {item.status === 'revision_request' && (
+                                                    <div className="mb-2 font-bold text-xs uppercase tracking-wider text-red-600 dark:text-red-300 border-b border-red-500/30 pb-2 flex items-center gap-2">
+                                                        <AlertCircle className="h-3 w-3" /> Revision Requested
+                                                    </div>
+                                                )}
+                                                {item.status === 'client_message' && (
+                                                    <div
+                                                        className={`mb-2 font-bold text-xs uppercase tracking-wider ${
+                                                            isOwnMessage
+                                                                ? 'text-blue-100'
+                                                                : 'text-blue-600 dark:text-blue-400'
+                                                        } border-b ${
+                                                            isOwnMessage ? 'border-blue-400/30' : 'border-blue-500/20'
+                                                        } pb-1.5 flex items-center gap-1.5`}
+                                                    >
+                                                        <MessageSquare className="h-3 w-3" /> Client Message
+                                                    </div>
+                                                )}
+
+                                                <div
+                                                    className="text-sm leading-relaxed whitespace-pre-wrap break-words break-all font-sans"
+                                                    style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                                                >
+                                                    {item.message}
+                                                </div>
+
+                                                {item.attachments && item.attachments.length > 0 && (
+                                                    <div className="mt-4 grid grid-cols-2 gap-2">
+                                                        {item.attachments.map((attachmentUrl, i) => {
+                                                            const resolvedUrl = resolveAttachmentUrl(attachmentUrl);
+
+                                                            return (
+                                                                <a
+                                                                    key={`${item.id}-attachment-${i}`}
+                                                                    href={resolvedUrl}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="group relative flex min-h-24 max-w-full items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30 transition hover:border-white/30"
+                                                                >
+                                                                    {isImageAttachment(resolvedUrl) ? (
+                                                                        <img
+                                                                            src={resolvedUrl}
+                                                                            alt="Attachment"
+                                                                            className="block h-auto max-h-[32rem] w-auto max-w-full object-contain opacity-80 transition group-hover:opacity-100"
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="flex flex-col items-center">
+                                                                            <FileText className="mb-1 h-6 w-6 text-zinc-400" />
+                                                                            <span className="text-[10px] text-zinc-400">
+                                                                                View File
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                </a>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+
+                                                {item.status === 'submitted_for_review' && (
+                                                    <div className="mt-3 pt-2.5 border-t border-blue-400/25 flex items-center justify-between text-[11px]">
+                                                        <span className="text-blue-100 opacity-80">
+                                                            Deliverable conflict?
+                                                        </span>
+                                                        <a
+                                                            href={`/contracts/dispute-form?contractId=${
+                                                                task?.contract_id || ''
+                                                            }&milestoneId=${activeMilestone?.id || ''}`}
+                                                            className="inline-flex items-center gap-1 font-bold text-white hover:text-blue-200 underline"
+                                                        >
+                                                            <Shield className="h-3 w-3" /> Dispute Submission
+                                                        </a>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            ) : (
+                /* View 2: Dedicated Submissions for Review List with In-Card Feedback Dropdowns */
+                <div className="flex-1 overflow-y-auto p-6 space-y-5 inbox-scroll-thin">
+                    {displaySubmissions.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full min-h-[16rem] text-center px-4">
+                            <div className="bg-gray-100 dark:bg-white/5 p-4 rounded-2xl border border-gray-200 dark:border-white/10 mb-3 text-gray-400 dark:text-zinc-500">
+                                <FileText className="w-8 h-8" />
+                            </div>
+                            <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-1">
+                                No Deliverables Submitted Yet
+                            </h4>
+                            <p className="text-xs text-gray-500 dark:text-zinc-400 max-w-sm leading-relaxed">
+                                When the freelancer marks work as &quot;Submit for Review&quot;, each deliverable
+                                version, message notes, and files will appear here for review.
+                            </p>
+                        </div>
+                    ) : (
+                        displaySubmissions.map((sub) => {
+                            const isPendingClientReview =
+                                sub.isLatest && isSubmittedForReview && !isFreelancer;
+                            const isPendingFreelancerNotice =
+                                sub.isLatest && isSubmittedForReview && isFreelancer;
+
+                            return (
+                                <div
+                                    key={sub.id}
+                                    className={`rounded-2xl border p-5 transition ${
+                                        sub.isLatest && isSubmittedForReview
+                                            ? 'bg-blue-500/[0.04] border-blue-500/40 shadow-lg shadow-blue-500/5'
+                                            : 'bg-white dark:bg-white/[0.02] border-gray-200 dark:border-white/10 shadow-sm'
+                                    }`}
+                                >
+                                    {/* Submission Card Header */}
+                                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 dark:border-white/5 pb-3 mb-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                                Version {sub.versionNumber}
+                                                {sub.isLatest ? ' (Latest)' : ''}
+                                            </span>
+                                            <span className="text-xs text-gray-500 dark:text-zinc-400">
+                                                {new Date(sub.submitted_at).toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    year: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                })}{' '}
+                                                • {formatRelativeTime(sub.submitted_at)}
                                             </span>
                                         </div>
-                                        <div className={`rounded-2xl p-4 ${
-                                            item.status === 'submitted_for_review' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' :
-                                            item.status === 'approval' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' :
-                                            item.status === 'revision_request' ? 'bg-red-500/20 border border-red-500/30 text-red-600 dark:text-white' :
-                                            'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white'
-                                        } ${isOwnMessage ? 'rounded-tr-none' : 'rounded-tl-none'}`}>
-                                    
-                                    {item.status === 'submitted_for_review' && (
-                                        <div className="mb-2 font-bold text-xs uppercase tracking-wider text-blue-100 dark:text-blue-200 border-b border-blue-400/30 pb-2 flex items-center gap-2">
-                                            <AlertCircle className="h-3 w-3" /> Submitted for Review
+                                        <div>
+                                            {sub.isLatest && isSubmittedForReview ? (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/20 text-blue-500 dark:text-blue-400 border border-blue-500/30">
+                                                    <Clock className="w-3 h-3 animate-pulse" /> Awaiting Review
+                                                </span>
+                                            ) : isCompleted && sub.isLatest ? (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 border border-emerald-500/30">
+                                                    <CheckCircle className="w-3 h-3" /> Approved Deliverable
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-zinc-500/20 text-zinc-500 dark:text-zinc-400 border border-zinc-500/30">
+                                                    Superseded / Revised
+                                                </span>
+                                            )}
                                         </div>
-                                    )}
-                                    {item.status === 'approval' && (
-                                        <div className="mb-2 font-bold text-xs uppercase tracking-wider text-emerald-100 dark:text-emerald-200 border-b border-emerald-400/30 pb-2 flex items-center gap-2">
-                                            <CheckCircle className="h-3 w-3" /> Milestone Approved
-                                        </div>
-                                    )}
-                                    {item.status === 'revision_request' && (
-                                        <div className="mb-2 font-bold text-xs uppercase tracking-wider text-red-600 dark:text-red-300 border-b border-red-500/30 pb-2 flex items-center gap-2">
-                                            <AlertCircle className="h-3 w-3" /> Revision Requested
+                                    </div>
+
+                                    {/* Deliverable Notes / Message */}
+                                    {sub.message && (
+                                        <div
+                                            className="text-xs text-gray-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap break-words mb-4"
+                                            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                                        >
+                                            {sub.message}
                                         </div>
                                     )}
 
-                                    <div className="text-sm leading-relaxed whitespace-pre-wrap break-words break-all font-sans" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                                        {item.message}
-                                    </div>
-                                    
-                                    {item.attachments && item.attachments.length > 0 && (
-                                        <div className="mt-4 grid grid-cols-2 gap-2">
-                                            {item.attachments.map((attachmentUrl, i) => {
-                                                const resolvedUrl = resolveAttachmentUrl(attachmentUrl);
+                                    {/* Deliverable Attachments */}
+                                    {sub.attachments && sub.attachments.length > 0 && (
+                                        <div className="space-y-2">
+                                            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                                                Deliverable Files ({sub.attachments.length})
+                                            </span>
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                                {sub.attachments.map((attachmentUrl, i) => {
+                                                    const resolvedUrl = resolveAttachmentUrl(attachmentUrl);
+                                                    return (
+                                                        <a
+                                                            key={`${sub.id}-attachment-${i}`}
+                                                            href={resolvedUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="group relative flex min-h-24 max-w-full items-center justify-center overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/30 transition hover:border-blue-500/50"
+                                                        >
+                                                            {isImageAttachment(resolvedUrl) ? (
+                                                                <img
+                                                                    src={resolvedUrl}
+                                                                    alt="Attachment"
+                                                                    className="block h-auto max-h-[32rem] w-auto max-w-full object-contain opacity-90 transition group-hover:opacity-100"
+                                                                />
+                                                            ) : (
+                                                                <div className="flex flex-col items-center p-3 text-center">
+                                                                    <FileText className="mb-1.5 h-6 w-6 text-gray-400 dark:text-zinc-400 group-hover:text-blue-500 transition" />
+                                                                    <span className="text-[11px] font-semibold text-gray-600 dark:text-zinc-300">
+                                                                        View Document
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </a>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Review Actions Section: Placed INSIDE the submitted review card */}
+                                    {isPendingClientReview && (
+                                        <ClientReviewCardActions
+                                            contractId={task.contract_id || task.job_id || ''}
+                                            milestoneId={activeMilestone.id}
+                                            activeMilestone={activeMilestone}
+                                            task={task}
+                                            onSuccess={onRefreshTask}
+                                        />
+                                    )}
+
+                                    {/* Subtle notice for freelancer if currently awaiting client review */}
+                                    {isPendingFreelancerNotice && (
+                                        <div className="mt-3.5 p-3 rounded-xl border border-blue-500/20 bg-blue-500/5 text-xs text-blue-600 dark:text-blue-400 flex items-center justify-between">
+                                            <span className="flex items-center gap-2 font-medium">
+                                                <Clock className="w-4 h-4 text-blue-500 animate-pulse shrink-0" />
+                                                This submission is currently under review by your client.
+                                            </span>
+                                            <span className="text-[11px] text-gray-500 dark:text-zinc-400">
+                                                You can send further notes in chat anytime
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {/* Dropdown to inspect the review request / feedback under this submission */}
+                                    {sub.reviewResponses && sub.reviewResponses.length > 0 && (
+                                        <div className="mt-3.5 pt-3 border-t border-gray-100 dark:border-white/5 space-y-2">
+                                            {sub.reviewResponses.map((rev) => {
+                                                const dropdownKey = `${sub.id}-${rev.id}`;
+                                                const isExpanded = Boolean(expandedReviewIds[dropdownKey]);
+                                                const isRevRequest = rev.status === 'revision_request';
 
                                                 return (
-                                                    <a
-                                                        key={`${item.id}-attachment-${i}`}
-                                                        href={resolvedUrl}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="group relative flex min-h-24 max-w-full items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30 transition hover:border-white/30"
+                                                    <div
+                                                        key={rev.id}
+                                                        className={`rounded-xl border transition overflow-hidden ${
+                                                            isRevRequest
+                                                                ? 'border-red-500/25 bg-red-500/[0.03] dark:bg-red-500/[0.02]'
+                                                                : 'border-emerald-500/25 bg-emerald-500/[0.03] dark:bg-emerald-500/[0.02]'
+                                                        }`}
                                                     >
-                                                        {isImageAttachment(resolvedUrl) ? (
-                                                            <img src={resolvedUrl} alt="Attachment" className="block h-auto max-h-[32rem] w-auto max-w-full object-contain opacity-80 transition group-hover:opacity-100" />
-                                                        ) : (
-                                                            <div className="flex flex-col items-center">
-                                                                <FileText className="mb-1 h-6 w-6 text-zinc-400" />
-                                                                <span className="text-[10px] text-zinc-400">View File</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleReviewDropdown(dropdownKey)}
+                                                            className="w-full flex items-center justify-between p-3 text-left hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition"
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                {isRevRequest ? (
+                                                                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                                                                ) : (
+                                                                    <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                                                                )}
+                                                                <div>
+                                                                    <span
+                                                                        className={`text-xs font-bold ${
+                                                                            isRevRequest
+                                                                                ? 'text-red-600 dark:text-red-400'
+                                                                                : 'text-emerald-600 dark:text-emerald-400'
+                                                                        }`}
+                                                                    >
+                                                                        {isRevRequest
+                                                                            ? 'Client Revision Request & Feedback'
+                                                                            : 'Client Approval Feedback'}
+                                                                    </span>
+                                                                    <span className="text-[11px] text-gray-400 dark:text-zinc-500 ml-2">
+                                                                        • {formatRelativeTime(rev.submitted_at)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-1 text-[11px] text-gray-500 dark:text-zinc-400 font-medium">
+                                                                <span>{isExpanded ? 'Hide' : 'View Feedback'}</span>
+                                                                {isExpanded ? (
+                                                                    <ChevronUp className="w-3.5 h-3.5" />
+                                                                ) : (
+                                                                    <ChevronDown className="w-3.5 h-3.5" />
+                                                                )}
+                                                            </div>
+                                                        </button>
+
+                                                        {isExpanded && (
+                                                            <div className="px-3.5 pb-3.5 pt-1 space-y-2.5 border-t border-gray-200/50 dark:border-white/5 animate-in fade-in duration-150">
+                                                                <div className="text-[11px] font-semibold text-gray-600 dark:text-zinc-400 flex items-center justify-between">
+                                                                    <span>Feedback from {task.client_name}</span>
+                                                                    <span className="text-[10px] text-gray-400 dark:text-zinc-500">
+                                                                        {new Date(rev.submitted_at).toLocaleDateString(
+                                                                            'en-US',
+                                                                            {
+                                                                                month: 'short',
+                                                                                day: 'numeric',
+                                                                                year: 'numeric',
+                                                                                hour: '2-digit',
+                                                                                minute: '2-digit',
+                                                                            }
+                                                                        )}
+                                                                    </span>
+                                                                </div>
+
+                                                                {rev.message ? (
+                                                                    <p
+                                                                        className="text-xs text-gray-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap break-words"
+                                                                        style={{
+                                                                            fontFamily: "'Plus Jakarta Sans', sans-serif",
+                                                                        }}
+                                                                    >
+                                                                        {rev.message}
+                                                                    </p>
+                                                                ) : (
+                                                                    <p className="text-xs italic text-gray-400 dark:text-zinc-500">
+                                                                        No written comment provided.
+                                                                    </p>
+                                                                )}
+
+                                                                {rev.attachments && rev.attachments.length > 0 && (
+                                                                    <div className="space-y-1.5 pt-1">
+                                                                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                                                                            Client Feedback Attachments (
+                                                                            {rev.attachments.length})
+                                                                        </span>
+                                                                        <div className="grid grid-cols-2 gap-2">
+                                                                            {rev.attachments.map((attachmentUrl, i) => {
+                                                                                const resolvedUrl =
+                                                                                    resolveAttachmentUrl(attachmentUrl);
+                                                                                return (
+                                                                                    <a
+                                                                                        key={`rev-att-${i}`}
+                                                                                        href={resolvedUrl}
+                                                                                        target="_blank"
+                                                                                        rel="noreferrer"
+                                                                                        className="group relative flex min-h-20 max-w-full items-center justify-center overflow-hidden rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-black/30 transition hover:border-red-500/40"
+                                                                                    >
+                                                                                        {isImageAttachment(resolvedUrl) ? (
+                                                                                            <img
+                                                                                                src={resolvedUrl}
+                                                                                                alt="Attachment"
+                                                                                                className="block h-auto max-h-40 w-auto max-w-full object-contain opacity-90 transition group-hover:opacity-100"
+                                                                                            />
+                                                                                        ) : (
+                                                                                            <div className="flex flex-col items-center p-2 text-center">
+                                                                                                <FileText className="mb-1 h-5 w-5 text-gray-400 group-hover:text-red-500 transition" />
+                                                                                                <span className="text-[10px] font-semibold text-gray-600 dark:text-zinc-300">
+                                                                                                    View File
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </a>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         )}
-                                                    </a>
+                                                    </div>
                                                 );
                                             })}
                                         </div>
                                     )}
+
+                                    {/* Footer */}
+                                    <div className="mt-4 pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-xs">
+                                        <span className="text-[11px] text-gray-400 dark:text-zinc-500">
+                                            Submitted by {task.freelancer_name}
+                                        </span>
+                                        <a
+                                            href={`/contracts/dispute-form?contractId=${
+                                                task?.contract_id || ''
+                                            }&milestoneId=${activeMilestone?.id || ''}`}
+                                            className="inline-flex items-center gap-1 font-bold text-rose-500 hover:text-rose-400 hover:underline transition"
+                                        >
+                                            <Shield className="h-3.5 w-3.5" /> Dispute Deliverable
+                                        </a>
                                     </div>
                                 </div>
-                                </div>
-                            </div>
-                        );
-                    })
-                )}
-            </div>
+                            );
+                        })
+                    )}
+                </div>
+            )}
 
-            {/* Interaction Panel */}
+            {/* Bottom Interaction Panel: Milestone Chat Composer for both Freelancer and Client */}
             <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5">
                 {isCompleted ? (
                     <div className="text-center py-4 text-emerald-400 font-bold bg-emerald-500/10 rounded-xl border border-emerald-500/20">
@@ -374,30 +893,36 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                             <CheckCircle2 className="w-5 h-5" />
                             This milestone is complete.
                         </div>
-                        {canReviewContract && onOpenReviewModal && (
-                            <button 
+                        {canReviewContract && onOpenReviewModal ? (
+                            <button
                                 onClick={onOpenReviewModal}
                                 className="mt-3 text-sm font-semibold px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-[0_0_15px_rgba(37,99,235,0.3)] inline-block"
                             >
                                 Review {isFreelancer ? 'Client' : 'Freelancer'}
                             </button>
-                        )}
+                        ) : myReview ? (
+                            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold border border-emerald-500/20">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                You have reviewed the {isFreelancer ? 'client' : 'freelancer'}
+                            </div>
+                        ) : null}
                     </div>
                 ) : isFreelancer ? (
-                    <MilestoneSubmissionForm 
-                        contractId={task.contract_id} 
-                        milestoneId={activeMilestone.id} 
+                    <MilestoneSubmissionForm
+                        contractId={task.contract_id}
+                        milestoneId={activeMilestone.id}
                         isSubmittedForReview={isSubmittedForReview}
-                        onSuccess={onRefreshTask} 
+                        onSuccess={onRefreshTask}
                     />
                 ) : (
-                    <ClientReviewPanel 
-                        contractId={task.contract_id || task.job_id} 
-                        milestoneId={activeMilestone.id} 
-                        canReview={isSubmittedForReview} 
-                        onSuccess={onRefreshTask} 
+                    <ClientReviewPanel
+                        contractId={task.contract_id || task.job_id}
+                        milestoneId={activeMilestone.id}
+                        canReview={isSubmittedForReview}
+                        onSuccess={onRefreshTask}
                         activeMilestone={activeMilestone}
                         task={task}
+                        onViewReviewTab={() => setActiveTab('submissions')}
                     />
                 )}
             </div>

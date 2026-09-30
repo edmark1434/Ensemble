@@ -1,31 +1,28 @@
-# Current Task — Multi-Milestone Partial Completion & Inactivity Abandonment Plan
+# Current Task — Fix Contract Review Submission, Status Transition, and Profile Performance Tab Display
 
-Implement production-ready partial milestone completion and abandonment lifecycle for Jobs and Gigs (Upwork/Fiverr benchmark):
-- Preserve Milestone 1 payments to freelancer (already approved, irrevocable).
-- Enable 1-click escrow refund for overdue/stalled/abandoned Milestone 2 directly to client account wallet.
-- Automated abandonment cron refund after inactivity threshold.
-- Fix contract visibility in `contracts.tsx` for cancelled/partially-completed contracts.
-- Ensure terminal contract status reflects partial completion (`Closed` with partial metrics) instead of vanishing.
+Resolve the review bug where submitting a client/freelancer review leaves the "Review" button visible and keeps contract status as 'Done' instead of 'Completed', and ensure submitted reviews display under the user profile's Performance tab (under "As Freelancer" for reviews received when working as freelancer, and under "As a Client" for reviews received when hiring as client).
+
+## Root Causes Identified
+1. **Inverted Review Query Subqueries**:
+   - In `DashboardRepositories.js` (`getDashboardTasks` and `getTaskById`) and `ContractRepositories.js` (`getContractsByUserId`), `client_rating` queried `r.account_id = client_account_id` and `freelancer_rating` queried `r.account_id = freelancer_account_id`.
+   - In PostgreSQL, `ratings.account_id` is the reviewee (the account receiving the review).
+   - The review submitted by the client targets the freelancer (`r.account_id = freelancer_account_id`).
+   - The review submitted by the freelancer targets the client (`r.account_id = client_account_id`).
+   - The inverted queries resulted in `myReview` remaining `null` on the dashboard, so the button remained visible and the status remained 'Done'.
+2. **Review Recipient ID in `submitContractReview`**:
+   - `submitContractReview` previously inserted `req.user.account_id` (the reviewer) into `ratings.account_id` instead of the reviewee/target account ID (`client_account_id` or `freelancer_account_id`).
+   - Consequently, queries on the reviewee's profile found 0 reviews.
+3. **Status Override in Frontend**:
+   - In `DashboardTaskDetail.tsx` and `DashboardTaskList.tsx`, `computedStatus` actively downgraded `task.contract_status === 'Completed'` back to `'Done'` if reviews were not yet loaded.
+4. **Missing Service Layer and Realtime Broadcast**:
+   - `DashboardControllers.reviewContract` called repository directly without a service or realtime Socket.IO broadcast (`dashboardTaskUpdated`), preventing real-time synchronization between client and freelancer browser tabs.
 
 ## Implementation Objectives
-1. **Backend Automation & Repositories (`MilestoneRepositories.js` & `MilestoneServices.js`)**:
-   - Enhance `cancelMilestoneAndRefund` to check if $\ge 1$ milestone was already completed: set contract status to `Closed` (Partial) instead of `Cancelled`.
-   - Update `reconcileAbandonedMilestonesServices` to trigger automatic escrow refund to the client if a milestone is abandoned after threshold.
-2. **Frontend Contract History & Tab Visibility (`contracts.tsx`)**:
-   - Fix `validStatuses` to include `Cancelled` and ensure cancelled/closed contracts render under the "Archived" tab.
-   - Display financial and deliverable breakdown (e.g., "1 of 2 Milestones Paid (500 CR) • 1 Refunded (500 CR)").
-3. **Dashboard Activity Feed Alerting (`MilestoneActivityFeed.tsx`)**:
-   - Provide client quick-action banners when viewing an overdue or stalled milestone.
-4. **Verification**:
-   - Frontend `npm run build` verification.
-   - Flow and transaction integrity verification.
-
-- [x] Automated refund occurs on milestone abandonment.
-- [x] Dynamic timeline scaling: Gigs and short deadlines (<= 72h) scale to 2-day stalled and 4-day abandonment; Jobs scale to 5-day stalled and 10-day abandonment.
-- [x] Deadlines <= 48h receive 50% midpoint warnings instead of premature reminders.
-- [x] Direct dispute and reporting shortcuts added to contract agreement modal and dashboard activity banner.
-- [x] Dispute form preselects contract via URL query param and allows disputing active, closed, or cancelled contracts.
-- [x] Contracts with 1 completed milestone and 1 cancelled milestone close as `Closed` with partial completion indicator.
-- [x] Cancelled and closed contracts remain visible under the "Archived" contracts tab.
-- [x] Freelancer keeps Milestone 1 earnings; Client receives 100% refund for unsubmitted Milestone 2.
-- [x] Build passes cleanly with zero errors.
+- [x] Fix `submitContractReview` in `DashboardRepositories.js` to target the counterparty account ID, perform upsert, and update `contracts.status = 'Completed'` when both parties have reviewed.
+- [x] Fix `client_rating` and `freelancer_rating` subqueries in `DashboardRepositories.js` (`getDashboardTasks`, `getTaskById`) and `ContractRepositories.js` (`getContractsByUserId`).
+- [x] Fix gig review queries in `GigRepositories.js` to match `ratings.account_id = g.freelancer_account_id`.
+- [x] Implement `reviewContractServices` in `DashboardServices.js` with validation, notification, and Socket.IO broadcast (`dashboardTaskUpdated` & `notification`).
+- [x] Update `DashboardControllers.reviewContract` to call `reviewContractServices`.
+- [x] Enhance `ProfileRepositories.getProfileReviewsByAccountId` to support affiliated accounts and proper fallback display names.
+- [x] Update frontend components (`DashboardTaskDetail.tsx`, `DashboardTaskList.tsx`, `dashboard_main.tsx`, `MilestoneActivityFeed.tsx`) to respect `'Completed'` status, hide the review button once reviewed, and display review confirmation.
+- [x] Verify frontend build and backend syntax checks.

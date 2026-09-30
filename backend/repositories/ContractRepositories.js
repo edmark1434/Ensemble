@@ -126,7 +126,8 @@ async function acceptJobOffer(freelancerIds, contractId) {
         // 1. Verify contract belongs to a proposal owned by this freelancer
         const contractRes = await client.query(`
             SELECT c.contract_id, c.starts_at, c.rate_credits, p.proposal_id, p.freelancer_account_id,
-                   j.job_id, j.no_of_hires, j.title, j.client_account_id
+                   j.job_id, j.no_of_hires, j.title, j.client_account_id,
+                   j.timeline_min, j.timeline_max, j.rough_deadline, j.rough_duration_hrs
             FROM contracts c
             JOIN job_contracts jc ON c.contract_id = jc.contract_id
             JOIN proposals p ON jc.proposal_id = p.proposal_id
@@ -139,7 +140,11 @@ async function acceptJobOffer(freelancerIds, contractId) {
             throw new Error("Contract not found or not pending signature for this user");
         }
 
-        const { starts_at, proposal_id, job_id, no_of_hires, title, client_account_id, freelancer_account_id: freelancerId } = contractRes.rows[0];
+        const {
+            starts_at, proposal_id, job_id, no_of_hires, title, client_account_id,
+            freelancer_account_id: freelancerId, timeline_min, timeline_max,
+            rough_deadline, rough_duration_hrs
+        } = contractRes.rows[0];
         const transferAmount = Number(contractRes.rows[0].rate_credits);
         if (!Number.isSafeInteger(transferAmount) || transferAmount <= 0) {
             throw new Error("Contract has an invalid rate");
@@ -193,18 +198,22 @@ async function acceptJobOffer(freelancerIds, contractId) {
             ) VALUES ('Escrow Hold', $1, 'completed', $2, $3, 'contracts', $4)
         `, [transferAmount, clientEscrow.wallet_id, freelancerEscrow.wallet_id, contractId]);
 
-        // 2. Determine new contract status based on starts_at
+        // 2. Determine new contract status based on starts_at and compute overall deadline_at
         const now = new Date();
         const contractStatus = new Date(starts_at) > now ? 'Waiting' : 'Active';
+        const minDays = Math.max(1, Number(timeline_min) || 1);
+        const maxDays = Math.max(minDays, Number(timeline_max) || minDays);
+        const totalContractHours = maxDays * 24;
+        const contractDeadlineAt = new Date(new Date(starts_at).getTime() + totalContractHours * 3600 * 1000);
 
-        // 3. Update Contract Status
+        // 3. Update Contract Status and deadline_at
         await client.query(`
             UPDATE contracts
-            SET status = $1
-            WHERE contract_id = $2
-        `, [contractStatus, contractId]);
+            SET status = $1, deadline_at = $2
+            WHERE contract_id = $3
+        `, [contractStatus, contractDeadlineAt, contractId]);
 
-        // 3.5. Copy proposal_milestones to contract_milestones and allocate credits
+        // 3.5. Copy proposal_milestones to contract_milestones, allocate credits, and dynamically divide deadline
         const pMilestonesRes = await client.query(`
             SELECT * FROM proposal_milestones WHERE proposal_id = $1 ORDER BY index ASC
         `, [proposal_id]);
@@ -216,6 +225,25 @@ async function acceptJobOffer(freelancerIds, contractId) {
             const creditsPerMilestone = Math.floor(totalCredits / milestones.length);
             let remainingCredits = totalCredits - (creditsPerMilestone * milestones.length);
 
+            // Dynamic deadline division based on min and max days:
+            // Total contract hours (maxDays * 24) are divided across the milestones
+            const totalProposedHours = milestones.reduce((sum, m) => sum + (Number(m.duration_hrs) || 0), 0);
+            const milestoneHoursList = [];
+            let sumAllocatedHours = 0;
+
+            for (let i = 0; i < milestones.length; i++) {
+                let h;
+                if (i === milestones.length - 1) {
+                    h = Math.max(1, totalContractHours - sumAllocatedHours);
+                } else if (totalProposedHours > 0) {
+                    h = Math.max(1, Math.round(((Number(milestones[i].duration_hrs) || 0) / totalProposedHours) * totalContractHours));
+                } else {
+                    h = Math.max(1, Math.floor(totalContractHours / milestones.length));
+                }
+                sumAllocatedHours += h;
+                milestoneHoursList.push(h);
+            }
+
             for (let i = 0; i < milestones.length; i++) {
                 const m = milestones[i];
                 // Add any remainder to the first milestone
@@ -224,15 +252,22 @@ async function acceptJobOffer(freelancerIds, contractId) {
                     mCredits += remainingCredits;
                 }
                 const isFirstActive = (i === 0 && contractStatus === 'Active');
+                const durationHrs = milestoneHoursList[i];
+                const startedAt = isFirstActive ? new Date() : null;
+                let deadlineAt = null;
+                if (isFirstActive && durationHrs > 0) {
+                    deadlineAt = new Date(startedAt.getTime() + durationHrs * 3600 * 1000);
+                }
                 await client.query(`
                     INSERT INTO contract_milestones (
-                        contract_id, index, name, description, deadline, no_of_revisions_max, status, credits, started_at
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                        contract_id, index, name, description, deadline, no_of_revisions_max, status, credits, started_at, deadline_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                 `, [
-                    contractId, m.index, m.name, m.description, m.duration_hrs || 0, m.no_of_revisions_max || 0,
+                    contractId, m.index, m.name, m.description, durationHrs, m.no_of_revisions_max || 0,
                     isFirstActive ? 'active' : 'pending',
                     mCredits,
-                    isFirstActive ? new Date() : null,
+                    startedAt,
+                    deadlineAt,
                 ]);
             }
         }
@@ -375,6 +410,7 @@ async function getContractsByUserId(accountIds) {
             c.contract_id,
             c.contract_type,
             c.starts_at,
+            c.deadline_at,
             c.rate_credits,
             c.status,
             c.created_at,
@@ -382,7 +418,7 @@ async function getContractsByUserId(accountIds) {
             j.job_id,
             j.title as job_title,
             j.description as job_description,
-            j.rough_deadline as job_deadline,
+            COALESCE(c.deadline_at, j.rough_deadline) as job_deadline,
             j.rate_credits_min,
             j.rate_credits_max,
             p.revision_price_credits as additional_work_rate,
@@ -396,10 +432,10 @@ async function getContractsByUserId(accountIds) {
             p.freelancer_account_id,
             COALESCE(t.terms_title, global_t.terms_title, 'Ensemble Standard Job Terms') as terms_title,
             COALESCE(t.terms_description, global_t.terms_description, 'Standard terms from job') as terms_content,
-            (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = j.client_account_id LIMIT 1) as client_rating,
-            (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = p.freelancer_account_id LIMIT 1) as freelancer_rating,
+            (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = p.freelancer_account_id LIMIT 1) as client_rating,
+            (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = j.client_account_id LIMIT 1) as freelancer_rating,
             COALESCE(
-                (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'started_at', cm.started_at, 'credits', cm.credits)) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
+                (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'deadline_at', cm.deadline_at, 'started_at', cm.started_at, 'credits', cm.credits)) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
                 (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max, 'status', 'Locked')) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id)
             ) as milestones
         FROM contracts c
@@ -420,6 +456,7 @@ async function getContractsByUserId(accountIds) {
             c.contract_id,
             c.contract_type,
             c.starts_at,
+            c.deadline_at,
             c.rate_credits,
             c.status,
             c.created_at,
@@ -427,7 +464,7 @@ async function getContractsByUserId(accountIds) {
             g.gig_id as job_id,
             g.title as job_title,
             g.description as job_description,
-            NULL as job_deadline,
+            c.deadline_at as job_deadline,
             gt.rate_credits as rate_credits_min,
             gt.rate_credits as rate_credits_max,
             c.revision_price_credits as additional_work_rate,
@@ -441,10 +478,10 @@ async function getContractsByUserId(accountIds) {
             g.freelancer_account_id as freelancer_account_id,
             COALESCE(t.terms_title, global_t.terms_title, 'Ensemble Standard Gig Terms') as terms_title,
             COALESCE(t.terms_description, global_t.terms_description, 'Standard terms from gig') as terms_content,
-            (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as client_rating,
-            (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as freelancer_rating,
+            (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as client_rating,
+            (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as freelancer_rating,
             COALESCE(
-                (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'started_at', cm.started_at, 'credits', cm.credits)) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
+                (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'deadline_at', cm.deadline_at, 'started_at', cm.started_at, 'credits', cm.credits)) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
                 '[]'::json
             ) as milestones
         FROM contracts c
@@ -546,10 +583,42 @@ async function createContractDispute(accountIds, contractId, { reason, details }
     return enrichedDispute || createdDispute;
 }
 
+async function getContractWithParties(contractId) {
+    const res = await pool.query(`
+        SELECT 
+            c.contract_id,
+            c.contract_type,
+            c.starts_at,
+            c.deadline_at,
+            c.status,
+            c.rate_credits,
+            COALESCE(jc_info.client_account_id, gc_info.client_account_id) AS client_account_id,
+            COALESCE(jc_info.freelancer_account_id, gc_info.freelancer_account_id) AS freelancer_account_id,
+            COALESCE(jc_info.title, gc_info.title, 'Contract') AS contract_title
+        FROM contracts c
+        LEFT JOIN (
+            SELECT jc.contract_id, j.client_account_id, p.freelancer_account_id, j.title
+            FROM job_contracts jc
+            JOIN proposals p ON jc.proposal_id = p.proposal_id
+            JOIN jobs j ON p.job_id = j.job_id
+        ) jc_info ON c.contract_id = jc_info.contract_id
+        LEFT JOIN (
+            SELECT gc.contract_id, gr.client_account_id, g.freelancer_account_id, g.title
+            FROM gig_contracts gc
+            JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+            JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+            JOIN gigs g ON gt.gig_id = g.gig_id
+        ) gc_info ON c.contract_id = gc_info.contract_id
+        WHERE c.contract_id = $1
+    `, [contractId]);
+    return res.rows[0] || null;
+}
+
 module.exports = {
     sendJobOffer,
     acceptJobOffer,
     rejectJobOffer,
     getContractsByUserId,
-    createContractDispute
+    createContractDispute,
+    getContractWithParties,
 };
