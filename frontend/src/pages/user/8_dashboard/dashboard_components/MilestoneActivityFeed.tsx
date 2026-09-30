@@ -30,7 +30,8 @@ interface MilestoneDetails {
     id: string;
     name: string;
     status: string;
-    deadline: string;
+    deadline: string | number;
+    started_at?: string;
     submissions?: FeedItem[];
 }
 
@@ -177,7 +178,30 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                         {isCompleted && <CheckCircle className="h-4 w-4 text-emerald-400" />}
                     </h2>
                     <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
-                        {feed.length} updates • Deadline: {new Date(activeMilestone.deadline).toLocaleDateString()}
+                        {feed.length} updates • Deadline: {(() => {
+                            if (!activeMilestone?.deadline) return 'N/A';
+                            const hrs = Number(activeMilestone.deadline);
+                            if (!isNaN(hrs) && hrs <= 0) return 'Flexible';
+                            if (!isNaN(hrs) && hrs > 0 && hrs < 100000) {
+                                if (activeMilestone.started_at) {
+                                    const st = new Date(activeMilestone.started_at);
+                                    if (!isNaN(st.getTime())) {
+                                        return new Date(st.getTime() + hrs * 3600000).toLocaleDateString();
+                                    }
+                                }
+                                if (hrs >= 24 && hrs % 24 === 0) {
+                                    return `${hrs / 24} Days (${hrs} hrs)`;
+                                }
+                                return `${hrs} Hours`;
+                            }
+                            if (typeof activeMilestone.deadline === 'string' && activeMilestone.deadline.includes('-')) {
+                                const d = new Date(activeMilestone.deadline);
+                                if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
+                                    return d.toLocaleDateString();
+                                }
+                            }
+                            return String(activeMilestone.deadline);
+                        })()}
                     </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">

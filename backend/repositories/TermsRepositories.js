@@ -6,7 +6,7 @@ async function getAllTermsRepositories(accountId) {
             SELECT t.terms_id as id, t.terms_title, t.terms_description as terms_content, t.terms_type, t.account_id,
                    CASE 
                        WHEN t.account_id IS NOT NULL THEN t.is_default
-                       WHEN t.account_id IS NULL AND NOT EXISTS (
+                       WHEN t.account_id IS NULL AND t.is_default = TRUE AND NOT EXISTS (
                            SELECT 1 FROM terms_of_service custom 
                            WHERE custom.account_id = $1 AND custom.terms_type = t.terms_type AND custom.is_default = TRUE
                        ) THEN TRUE
@@ -14,7 +14,9 @@ async function getAllTermsRepositories(accountId) {
                    END as is_default,
                    (SELECT json_agg(json_build_object('contract_id', p.proposal_id, 'type', 'job', 'title', j.title)) FROM proposals p JOIN jobs j ON p.job_id = j.job_id WHERE p.terms_id = t.terms_id) as usage_contracts
             FROM terms_of_service t
-            WHERE t.account_id IS NULL OR t.account_id = $1
+            WHERE (t.account_id IS NULL OR t.account_id = $1)
+              AND t.terms_title NOT LIKE '%(Proposal Copy)%'
+              AND t.terms_title NOT LIKE 'Gig Custom Terms%'
             ORDER BY is_default DESC, t.created_at DESC;
         `;
         const res = await pool.query(query, [accountId]);
