@@ -288,6 +288,14 @@ const Projects: React.FC = () => {
           </div>
         )}
 
+        {/* 
+        <button 
+          className="absolute right-3 top-3 rounded-full bg-black/50 p-1.5 text-zinc-400 transition hover:text-white backdrop-blur-sm"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Share2 className="h-3.5 w-3.5" />
+        </button>
+        */}
       </div>
 
       <div className="p-4">
@@ -378,16 +386,6 @@ const Projects: React.FC = () => {
           </div>
         )}
 
-        <div className="mt-3 flex items-center gap-2 border-t border-gray-100 dark:border-white/10 pt-3">
-          {/* 
-          <button 
-            className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Share2 className="h-3.5 w-3.5" />
-          </button>
-          */}
-        </div>
       </div>
 
       {hoveredProject === project.id && (
