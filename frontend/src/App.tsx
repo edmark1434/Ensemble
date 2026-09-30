@@ -64,6 +64,7 @@ import Contracts from '@/pages/user/contracts/contracts.tsx'
 import { DisputeFormPage } from '@/pages/user/contracts/DisputeFormPage.tsx'
 import UserProfilesList from '@/components/nav/user_profiles_list.tsx'
 import { VerificationStatus } from '@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx'
+import { AccountRestrictionHost } from '@/components/ui/AccountStanding'
 
 import './App.css'
 
@@ -159,6 +160,7 @@ function App() {
       <ToastProvider />
       <ToastTestingWidget />
       <DevModeWidget />
+      <AccountRestrictionHost />
       <Suspense fallback={<GlobalLoader />}>
       <Routes>
       <Route path="/admin" element={<AdminLoginPage />} />

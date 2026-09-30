@@ -106,7 +106,7 @@ const Composition = () => {
     tempMeasure.style.visibility = "hidden";
     tempMeasure.style.position = "absolute";
     tempMeasure.style.top = "-9999px";
-    tempMeasure.style.whiteSpace = "pre-line";
+    tempMeasure.style.whiteSpace = "pre-wrap";
     tempMeasure.style.overflowWrap = "break-word";
     tempMeasure.style.wordBreak = "normal";
     tempMeasure.style.width = `${finalWidth}px`;

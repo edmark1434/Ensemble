@@ -15,14 +15,14 @@ export const AnimatedChar: React.FC<{
 
   if (!isGradient) {
     return (
-      <span style={{ display: "inline-block", whiteSpace: "nowrap", ...animationStyle, ...fillStyle }}>
-      {display}
-    </span>
+      <span style={{ display: "inline-block", whiteSpace: "pre", ...animationStyle, ...fillStyle }}>
+        {display}
+      </span>
     );
   }
 
   return (
-    <span style={{ display: "inline-block", position: "relative", whiteSpace: "nowrap", ...animationStyle }}>
+    <span style={{ display: "inline-block", position: "relative", whiteSpace: "pre", ...animationStyle }}>
       <span style={{ position: "absolute", ...shadowStrokeStyle }}>
         {display}
       </span>

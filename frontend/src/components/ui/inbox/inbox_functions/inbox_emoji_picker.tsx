@@ -125,7 +125,7 @@ export const InboxReactionBadges: React.FC<InboxReactionBadgesProps> = ({
               className={`flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs transition ${
                 reactedByMe
                   ? "bg-blue-500/20 text-blue-300"
-                  : "hover:bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-300"
+                  : "hover:bg-gray-100 dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300"
               }`}
               title={`${group.count} reaction${group.count > 1 ? "s" : ""}`}
             >

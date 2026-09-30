@@ -52,6 +52,7 @@ import {RightPanelContent} from "@/features/editor/right-panel-content";
 import {canEditWithRole, EditorRole} from "@/features/editor/types/editor-role";
 import {useEditorRole} from "@/features/editor/hooks/use-editor-role";
 import {ViewOnlyProvider} from "@/features/editor/hooks/use-view-only";
+import {useProjectFonts} from "@/features/editor/hooks/use-project-fonts";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -343,15 +344,15 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
 };
 
 const Panels = ({
-  sceneRef,
-  playerRef,
-  stateManager,
-  trackItem,
-  loaded,
-  isLargeScreen,
-  viewOnly,
-  timelineLoading,
-}: any) => {
+                  sceneRef,
+                  playerRef,
+                  stateManager,
+                  trackItem,
+                  loaded,
+                  isLargeScreen,
+                  viewOnly,
+                  timelineLoading,
+                }: any) => {
   const { showMenuItem: menuItemOpen, setControlsPanelRef } = useLayoutStore();
   const showMenuItem = menuItemOpen && !viewOnly;
 
@@ -558,6 +559,7 @@ const Editor = ({ id, userId, userName, width, height, role }: {
   const viewOnly = !canEdit; // kept as `viewOnly` since ScenePlayer / useKeyboardShortcuts already take this name
 
   useTimelineEvents();
+  useProjectFonts();
 
   const { setCompactFonts, setFonts } = useDataState();
 

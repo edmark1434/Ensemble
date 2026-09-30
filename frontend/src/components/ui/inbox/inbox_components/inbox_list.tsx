@@ -154,7 +154,7 @@ export const InboxList: React.FC<InboxListProps> = ({
             key={inbox._id}
             onClick={() => onSelectConversation(inbox)}
             title={isCollapsed ? name : undefined}
-            className={`w-full flex items-center gap-3 hover:bg-gray-50 dark:bg-white/5 transition-all duration-200 ${
+            className={`w-full flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-white/10 transition-all duration-200 ${
               isCollapsed ? "p-3 justify-center" : "p-4"
             } ${
               isActive
@@ -206,7 +206,7 @@ export const InboxList: React.FC<InboxListProps> = ({
                       </p>
                     )}
                     <p
-                      className="text-[10px] text-gray-500 dark:text-zinc-500 flex-shrink-0"
+                      className="text-[10px] text-gray-500 dark:text-zinc-400 flex-shrink-0"
                       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
                       {time}
@@ -215,7 +215,7 @@ export const InboxList: React.FC<InboxListProps> = ({
                   
                   <div className="flex justify-between items-center">
                     <p
-                      className="text-xs text-gray-500 dark:text-zinc-500 truncate mr-2 text-left"
+                      className="text-xs text-gray-500 dark:text-zinc-400 truncate mr-2 text-left"
                       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
                       {lastMessage}

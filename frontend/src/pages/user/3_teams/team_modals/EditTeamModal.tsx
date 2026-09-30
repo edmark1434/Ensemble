@@ -119,17 +119,17 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fade-in">
-      <div className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-dark-surface shadow-2xl animate-scale-in">
-        <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-5">
+      <div className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl animate-scale-in">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 dark:border-white/10 px-6 py-5">
           <h3
-            className="text-xl font-semibold text-white"
+            className="text-xl font-semibold text-gray-900 dark:text-white"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
             {mode === "create" ? "Create a Team" : "Edit Team"}
           </h3>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+            className="rounded-lg p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white"
           >
             <X className="h-5 w-5" />
           </button>
@@ -137,57 +137,57 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
 
         <div className="inbox-scroll-thin flex-1 overflow-y-auto px-6 py-5">
           <div className="space-y-5">
-            <label className="block text-sm font-medium text-zinc-300">
+            <label className="block text-sm font-medium text-gray-600 dark:text-zinc-300">
               Team Name <span className="text-red-400">*</span>
               <input
                 type="text"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Enter Team name"
-                className="mt-2 w-full rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                className="mt-2 w-full rounded-lg border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 dark:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
               />
             </label>
 
-            <label className="block text-sm font-medium text-zinc-300">
+            <label className="block text-sm font-medium text-gray-600 dark:text-zinc-300">
               Handle <span className="text-red-400">*</span>
               <input
                 value={handle}
                 onChange={(event) =>
                   setHandle(event.target.value.replace(/^@/, ""))
                 }
-                className="mt-2 w-full rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
+                className="mt-2 w-full rounded-lg border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-gray-900 dark:text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
                 placeholder="team-handle"
               />
             </label>
 
-            <label className="block text-sm font-medium text-zinc-300">
+            <label className="block text-sm font-medium text-gray-600 dark:text-zinc-300">
               Tagline <span className="text-red-400">*</span>
               <input
                 value={tagline}
                 onChange={(event) => setTagline(event.target.value)}
                 maxLength={50}
                 placeholder="A short description of your Team"
-                className="mt-2 w-full rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
+                className="mt-2 w-full rounded-lg border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-gray-900 dark:text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
               />
             </label>
 
-            <label className="block text-sm font-medium text-zinc-300">
+            <label className="block text-sm font-medium text-gray-600 dark:text-zinc-300">
               Description <span className="text-red-400">*</span>
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 rows={4}
                 placeholder="Tell people about your Team"
-                className="mt-2 w-full resize-none rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
+                className="mt-2 w-full resize-none rounded-lg border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-gray-900 dark:text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
               />
             </label>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-zinc-300">
+              <label className="mb-2 block text-sm font-medium text-gray-600 dark:text-zinc-300">
                 Team Photo{" "}
                 {mode === "create" && <span className="text-red-400">*</span>}
               </label>
-              <div className="relative h-36 w-full overflow-hidden rounded-xl border border-white/15 bg-white/5">
+              <div className="relative h-36 w-full overflow-hidden rounded-xl border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5">
                 {photoPreview ? (
                   <img
                     src={photoPreview}
@@ -195,26 +195,26 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-500">
+                  <div className="flex h-full flex-col items-center justify-center gap-2 text-gray-500 dark:text-zinc-500">
                     <ImageIcon className="h-8 w-8" />
                     <span className="text-xs">No Team photo selected</span>
                   </div>
                 )}
-                <label className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/55 opacity-0 transition-opacity hover:opacity-100">
+                <label className="absolute inset-0 flex cursor-pointer items-center justify-center bg-white/80 dark:bg-black/55 opacity-0 transition-opacity hover:opacity-100">
                   <input
                     type="file"
                     accept="image/*"
                     onChange={handlePhotoUpload}
                     className="hidden"
                   />
-                  <Upload className="h-5 w-5 text-white" />
-                  <span className="ml-2 text-sm text-white">
+                  <Upload className="h-5 w-5 text-gray-900 dark:text-white" />
+                  <span className="ml-2 text-sm text-gray-900 dark:text-white">
                     {photoPreview ? "Change Photo" : "Choose Photo"}
                   </span>
                 </label>
               </div>
               <div className="mt-2 flex items-center justify-between">
-                <p className="text-xs text-zinc-500">Image file, up to 5 MB</p>
+                <p className="text-xs text-gray-500 dark:text-zinc-500">Image file, up to 5 MB</p>
                 {photoPreview && mode === "create" && (
                   <button
                     type="button"
@@ -231,7 +231,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-zinc-300">
+              <label className="mb-2 block text-sm font-medium text-gray-600 dark:text-zinc-300">
                 Team Visibility
               </label>
               <div className="grid grid-cols-2 gap-3">
@@ -240,19 +240,19 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                   onClick={() => setVisibility("Public")}
                   className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition ${
                     visibility === "Public"
-                      ? "border-blue-500 bg-blue-500/10 text-white ring-1 ring-blue-500/30"
-                      : "border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:text-zinc-200"
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-white ring-1 ring-blue-500/30"
+                      : "border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-zinc-400 hover:border-white/20 hover:text-zinc-200"
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <Globe
                       className={`h-4 w-4 ${
-                        visibility === "Public" ? "text-blue-400" : "text-zinc-400"
+                        visibility === "Public" ? "text-blue-400" : "text-gray-500 dark:text-zinc-400"
                       }`}
                     />
                     <span className="text-sm font-semibold">Public</span>
                   </div>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                  <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-zinc-400">
                     Visible to everyone. Discoverable in search and directory.
                   </p>
                 </button>
@@ -262,19 +262,19 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                   onClick={() => setVisibility("Private")}
                   className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition ${
                     visibility === "Private"
-                      ? "border-blue-500 bg-blue-500/10 text-white ring-1 ring-blue-500/30"
-                      : "border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:text-zinc-200"
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-white ring-1 ring-blue-500/30"
+                      : "border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-zinc-400 hover:border-white/20 hover:text-zinc-200"
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <Lock
                       className={`h-4 w-4 ${
-                        visibility === "Private" ? "text-blue-400" : "text-zinc-400"
+                        visibility === "Private" ? "text-blue-400" : "text-gray-500 dark:text-zinc-400"
                       }`}
                     />
                     <span className="text-sm font-semibold">Private</span>
                   </div>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                  <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-zinc-400">
                     Hidden from directory. Accessible only to members or via join code.
                   </p>
                 </button>
@@ -283,10 +283,10 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
 
             {mode === "create" && (
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-zinc-500">
                   Live Preview
                 </p>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-4">
                   <div className="flex gap-3">
                     {photoPreview && (
                       <img
@@ -297,7 +297,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                     )}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="truncate font-semibold text-white">
+                        <p className="truncate font-semibold text-gray-900 dark:text-white">
                           {name || "Team name"}
                         </p>
                         <span
@@ -315,7 +315,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                           {visibility}
                         </span>
                       </div>
-                      <p className="text-xs text-zinc-500">
+                      <p className="text-xs text-gray-500 dark:text-zinc-500">
                         @{handle || "handle"}
                       </p>
                       <p className="text-sm text-blue-300">
@@ -323,7 +323,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                       </p>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-zinc-400">
+                  <p className="mt-3 text-xs text-gray-500 dark:text-zinc-400">
                     {description || "Team description"}
                   </p>
                 </div>
@@ -332,7 +332,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
           </div>
         </div>
 
-        <div className="flex shrink-0 gap-3 border-t border-white/10 bg-dark-surface px-6 py-4">
+        <div className="flex shrink-0 gap-3 border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface px-6 py-4">
           <button
             onClick={handleSave}
             disabled={
@@ -343,7 +343,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
               !description.trim() ||
               (mode === "create" && !photo)
             }
-            className="flex-1 cursor-pointer rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 active:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex-1 cursor-pointer rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white transition hover:bg-blue-500 active:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving
               ? savingLabel || "Saving..."
@@ -354,7 +354,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 cursor-pointer rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:border-white/25 hover:bg-white/10 hover:text-white"
+            className="flex-1 cursor-pointer rounded-lg border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-zinc-300 transition hover:border-gray-300 dark:hover:border-white/25 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
           >
             Cancel
           </button>
@@ -371,3 +371,5 @@ const EditTeamModal: React.FC<EditTeamModalProps> = (props) => {
 };
 
 export default EditTeamModal;
+
+

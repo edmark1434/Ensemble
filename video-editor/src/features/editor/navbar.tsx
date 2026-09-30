@@ -49,14 +49,14 @@ import {
 import ShareModal from "@/components/share-modal";
 
 export default function Navbar({
-  user,
-  stateManager,
-  undoManager,
-  viewOnly,
-  saveStatus,
-  compactStatus,
-  onForceSave
-}: {
+                                 user,
+                                 stateManager,
+                                 undoManager,
+                                 viewOnly,
+                                 saveStatus,
+                                 compactStatus,
+                                 onForceSave
+                               }: {
   user: unknown | null;
   stateManager: StateManager;
   undoManager?: Y.UndoManager;
@@ -405,12 +405,12 @@ const ResizeVideo = () => {
 };
 
 const ResizeOption = ({
-  label,
-  icon,
-  value,
-  description,
-  handleResize
-}: ResizeOptionProps & { handleResize: (payload: ResizeValue) => void }) => {
+                        label,
+                        icon,
+                        value,
+                        description,
+                        handleResize
+                      }: ResizeOptionProps & { handleResize: (payload: ResizeValue) => void }) => {
   const Icon = Icons[icon as "text"];
   return (
     <div

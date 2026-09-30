@@ -97,7 +97,7 @@ export default function TeamInvitePage() {
       if (result?.status === "Active" || team.join_policy === "Open") {
         showSuccessToast(`Welcome to ${team.display_name}!`);
       } else {
-        showSuccessToast("Join request submitted! Team admins will review it.");
+        showSuccessToast("Join Request Sent, Wait for Approval");
       }
 
       navigate(`/teams/${targetTeamId}`);
@@ -348,3 +348,4 @@ export default function TeamInvitePage() {
     </div>
   );
 }
+

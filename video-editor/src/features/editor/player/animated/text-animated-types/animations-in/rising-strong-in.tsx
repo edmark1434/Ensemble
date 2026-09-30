@@ -2,13 +2,13 @@ import { interpolate } from "remotion";
 import { AnimatedChar } from "@/features/editor/player/animated/text-animated-types/animated-char";
 
 const RisingStrongAnimationIn = ({
-                                   char,
-                                   index,
-                                   frame,
-                                   textLength,
-                                   animationTextInFrames,
-                                   colorStyle
-                                 }: {
+  char,
+  index,
+  frame,
+  textLength,
+  animationTextInFrames,
+  colorStyle
+}: {
   char: string;
   index: number;
   frame: number;

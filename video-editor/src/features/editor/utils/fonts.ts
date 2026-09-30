@@ -47,3 +47,23 @@ export const getCompactFontData = (fonts: IFont[]): ICompactFont[] => {
 
   return Object.values(compactFontsMap);
 };
+
+const fontRequests = new Map<string, Promise<void>>();
+
+export const ensureFont = (name: string, url: string): Promise<void> => {
+  const existing = fontRequests.get(name);
+  if (existing) return existing;
+
+  const request = new FontFace(name, `url(${url})`)
+    .load()
+    .then((face) => {
+      document.fonts.add(face);
+    })
+    .catch((err) => {
+      fontRequests.delete(name); // allow a retry later
+      console.warn(`Failed to load font ${name}`, err);
+    });
+
+  fontRequests.set(name, request);
+  return request;
+};

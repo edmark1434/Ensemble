@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Plus, Trash2, Check, Minus, AlertCircle, ChevronDown } from "lucide-react";
+import { X, Plus, Trash2, Check, Minus, AlertCircle, ChevronDown, Loader2 } from "lucide-react";
 import api from "@/lib/axios.ts";
 import { showErrorToast } from "@/components/utility/toast";
 
@@ -13,6 +13,7 @@ export interface SkillObject {
 }
 
 interface SkillsEditModalProps {
+  isSaving?: boolean;
   isOpen: boolean;
   onClose: () => void;
   currentSkills: SkillObject[];
@@ -25,7 +26,8 @@ export default function SkillsEditModal({
   onClose,
   currentSkills = [],
   onSave,
-  availableSkillsList = []
+  availableSkillsList = [],
+  isSaving = false
 }: SkillsEditModalProps) {
   const [skillsList, setSkillsList] = useState<SkillObject[]>([]);
   const [newSkill, setNewSkill] = useState({ name: "", proficiency: "beginner" as Proficiency, years: 1 });
@@ -283,15 +285,23 @@ export default function SkillsEditModal({
             Cancel
           </button>
           <button 
-            type="button" 
-            onClick={handleSave} 
-            className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-lg flex items-center gap-2 hover:bg-blue-600 transition shadow-lg shadow-blue-500/10"
-          >
-            Commit Changes <Check className="h-3.5 w-3.5" />
-          </button>
+              type="button" 
+              onClick={handleSave} 
+              disabled={isSaving}
+              className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-lg flex items-center gap-2 hover:bg-blue-600 transition shadow-lg shadow-blue-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSaving ? (
+                <>Saving... <Loader2 className="h-3.5 w-3.5 animate-spin" /></>
+              ) : (
+                <>Commit Changes <Check className="h-3.5 w-3.5" /></>
+              )}
+            </button>
         </div>
 
       </div>
     </div>
   );
 }
+
+
+

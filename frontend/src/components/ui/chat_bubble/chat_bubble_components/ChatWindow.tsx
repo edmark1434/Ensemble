@@ -491,7 +491,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   {!isMe && (
                     <div className="flex-shrink-0 w-6 h-6 rounded-full overflow-hidden bg-zinc-200 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-sm mt-auto mb-1">
                       {(() => {
-                        const avatarKey = activeUser?.avatarPayload?.[String(message.sender_id)] || activeUser?.avatarUrl;
+                        const senderMember = conversation?.members?.find(m => String(m.account_id) === String(message.sender_id));
+                        const memberAvatar = senderMember ? (senderMember.avatar_preset_url || senderMember.avatar_url || senderMember.avatar) : null;
+                        const isGroupOrTeam = conversation?.conversation_type === 'team' || conversation?.conversation_type === 'group' || conversation?.is_group;
+                        const avatarKey = memberAvatar || activeUser?.avatarPayload?.[String(message.sender_id)] || (!isGroupOrTeam ? activeUser?.avatarUrl : null);
                         return avatarKey ? (
                           <img 
                             src={chatAttachmentUrl(avatarKey)} 
@@ -930,3 +933,4 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     </div>
   );
 };
+

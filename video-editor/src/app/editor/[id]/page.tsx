@@ -13,9 +13,9 @@ import { db } from "@/lib/db";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function EditorPage({
-  params,
-  searchParams,
-}: {
+                                           params,
+                                           searchParams,
+                                         }: {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ width?: string; height?: string }>;
 }) {
