@@ -469,12 +469,13 @@ const Controls = ({ panelRef }: { panelRef: React.RefObject<HTMLDivElement | nul
   );
 };
 
-const Editor = ({ id, userId, userName, width, height, role }: {
+const Editor = ({ id, userId, userName, width, height, projectName, role }: {
   id?: string;
   userId?: string;
   userName?: string;
   width?: number;
   height?: number;
+  projectName?: string;
   role?: EditorRole;
 }) => {
   const [storeSynced, setStoreSynced] = useState(false);
@@ -485,10 +486,11 @@ const Editor = ({ id, userId, userName, width, height, role }: {
         userName,
         projectId: id,
         ...(width && height ? { size: { width, height } } : {}),
+        ...(projectName ? { projectName } : {}),
       });
     }
     setStoreSynced(true);
-  }, [id, userId, userName, width, height]);
+  }, [id, userId, userName, width, height, projectName]);
 
   const { userId: storeUserId, userName: storeUserName, projectId, activeSceneBlockId, activeSceneItemId } = useStore();
 

@@ -21,6 +21,7 @@ import {
     List,
     FileCheck,
     DollarSign,
+    Loader2,
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import { useState, useEffect } from "react";
@@ -100,23 +101,32 @@ const Projects: React.FC = () => {
 
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editProjectName, setEditProjectName] = useState<string>("");
+  const [isRenamingProjectId, setIsRenamingProjectId] = useState<string | null>(null);
 
   const handleRenameProject = async (projectId: string) => {
     if (!editProjectName.trim()) {
       setEditingProjectId(null);
       return;
     }
+    
+    setIsRenamingProjectId(projectId);
     try {
       await api.put(`/api/projects/${projectId}`, { name: editProjectName });
       const updateProjectList = (projects: Project[]) => 
-        projects.map(p => p.id === projectId ? { ...p, name: editProjectName } : p);
+        projects.map(p => p.id === projectId ? { 
+          ...p, 
+          name: editProjectName,
+          thumbnail: `https://placehold.co/400x225/1e2130/4a6fa5?text=${encodeURIComponent(editProjectName)}`
+        } : p);
       setPersonalProjects(updateProjectList);
       setSharedProjects(updateProjectList);
       setRecentProjects(updateProjectList);
     } catch (err) {
       console.error("Failed to rename project", err);
+    } finally {
+      setIsRenamingProjectId(null);
+      setEditingProjectId(null);
     }
-    setEditingProjectId(null);
   };
 
   const cachedData = sessionStorage.getItem('ensemble_projects_data');
@@ -314,7 +324,12 @@ const Projects: React.FC = () => {
             >
               <Edit className="h-3.5 w-3.5" />
             </button>
-            {editingProjectId === project.id ? (
+            {isRenamingProjectId === project.id ? (
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                <span className="text-sm font-semibold text-gray-500 dark:text-zinc-400 italic">Saving...</span>
+              </div>
+            ) : editingProjectId === project.id ? (
               <input
                 autoFocus
                 type="text"
@@ -430,7 +445,12 @@ const Projects: React.FC = () => {
             >
               <Edit className="h-3.5 w-3.5" />
             </button>
-            {editingProjectId === project.id ? (
+            {isRenamingProjectId === project.id ? (
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                <span className="text-sm font-semibold text-gray-500 dark:text-zinc-400 italic">Saving...</span>
+              </div>
+            ) : editingProjectId === project.id ? (
               <input
                 autoFocus
                 type="text"
