@@ -4,31 +4,7 @@ import { BoxAnim, ContentAnim, MaskAnim } from "@designcombo/animations";
 import { calculateContainerStyles, calculateMediaStyles } from "../styles";
 import { getAnimations } from "../../utils/get-animations";
 import { calculateFrames } from "../../utils/frames";
-import {Img, useRemotionEnvironment} from "remotion";
-import {resolvePlaybackSrc} from "@/features/editor/utils/proxy-map";
-
-const ImageMedia = ({ item }: { item: IImage }) => {
-  const { isRendering } = useRemotionEnvironment();
-  const src = isRendering
-    ? item.details.src
-    : resolvePlaybackSrc(item.details.src);
-
-  return (
-    <Img
-      data-id={item.id}
-      src={src}
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        width: "100%",
-        height: "100%",
-        objectFit: "cover",
-        display: "block"
-      }}
-    />
-  );
-};
+import { Img } from "remotion";
 
 export default function Image({
   item,
@@ -78,7 +54,19 @@ export default function Image({
             id={`${item.id}-reveal-mask`}
             style={calculateMediaStyles(details, crop)}
           >
-            <ImageMedia item={item} />
+            <Img
+              data-id={item.id}
+              src={details.src}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                display: "block"
+              }}
+            />
           </div>
         </MaskAnim>
       </ContentAnim>

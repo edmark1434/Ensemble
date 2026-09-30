@@ -7,12 +7,6 @@ import { buildPublicUrl } from "@/lib/s3";
 type UploadScope = "mine" | "project" | "mine-in-project";
 const VALID_SCOPES: UploadScope[] = ["mine", "project", "mine-in-project"];
 
-const derivedUrl = (
-  filePath: string | null,
-  fileId: string | null,
-  originalId: string
-) => (filePath && fileId && fileId !== originalId ? buildPublicUrl(filePath) : undefined);
-
 export async function GET(request: NextRequest) {
   await connection();
 
@@ -42,9 +36,6 @@ export async function GET(request: NextRequest) {
     let query = db
       .selectFrom("media_assets")
       .innerJoin("files", "files.file_id", "media_assets.original_file_id")
-      .leftJoin("files as proxy_files", "proxy_files.file_id", "media_assets.proxy_file_id")
-      .leftJoin("files as poster_files", "poster_files.file_id", "media_assets.thumbnail_file_id")
-      .leftJoin("files as filmstrip_files", "filmstrip_files.file_id", "media_assets.filmstrip_file_id")
       .select([
         "media_assets.media_asset_id",
         "media_assets.name",
@@ -52,15 +43,8 @@ export async function GET(request: NextRequest) {
         "media_assets.width",
         "media_assets.height",
         "media_assets.duration_seconds",
-        "media_assets.original_file_id",
-        "media_assets.proxy_file_id",
-        "media_assets.thumbnail_file_id",
-        "media_assets.filmstrip_file_id",
         "files.path",
-        "files.mime_type",
-        "proxy_files.path as proxy_path",
-        "poster_files.path as poster_path",
-        "filmstrip_files.path as filmstrip_path"
+        "files.mime_type"
       ])
       .where("media_assets.deleted_at", "is", null);
 
@@ -77,24 +61,17 @@ export async function GET(request: NextRequest) {
 
     const rows = await query.orderBy("media_assets.created_at", "desc").execute();
 
-    const uploads = rows.map((row) => {
-      const filmstrip = derivedUrl(row.filmstrip_path, row.filmstrip_file_id, row.original_file_id);
-      return {
-        id: row.media_asset_id,
-        fileName: row.name,
-        type: row.type,
-        url: buildPublicUrl(row.path),
-        proxyUrl: derivedUrl(row.proxy_path, row.proxy_file_id, row.original_file_id),
-        posterUrl: derivedUrl(row.poster_path, row.thumbnail_file_id, row.original_file_id),
-        filmstripUrl: row.type === "video" ? filmstrip : undefined,
-        waveformUrl: row.type === "audio" ? filmstrip : undefined,
-        details: {
-          width: row.width ?? undefined,
-          height: row.height ?? undefined,
-          duration: row.duration_seconds ?? undefined
-        }
-      };
-    });
+    const uploads = rows.map((row) => ({
+      id: row.media_asset_id,
+      fileName: row.name,
+      type: row.type,
+      url: buildPublicUrl(row.path),
+      details: {
+        width: row.width ?? undefined,
+        height: row.height ?? undefined,
+        duration: row.duration_seconds ?? undefined
+      }
+    }));
 
     return NextResponse.json({ uploads });
   } catch (error) {

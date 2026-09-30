@@ -61,14 +61,6 @@ export const buildProxyKey = (
   baseName: string
 ): string => `proxies/${userId}/${fileId}/${sanitizeFileName(baseName)}.mp4`;
 
-export const buildDerivedKey = (
-  kind: "proxies" | "filmstrips" | "posters" | "thumbs" | "waveforms",
-  userId: string,
-  fileId: string,
-  baseName: string,
-  ext: string
-): string => `${kind}/${userId}/${fileId}/${sanitizeFileName(baseName)}.${ext}`;
-
 export const buildPublicUrl = (key: string): string => {
   if (process.env.AWS_S3_PUBLIC_URL) {
     return `${process.env.AWS_S3_PUBLIC_URL}/${key}`;
@@ -99,8 +91,7 @@ export const createPresignedGetUrl = async (key: string): Promise<string> =>
 export const uploadBufferToS3 = async (
   key: string,
   body: Buffer,
-  contentType: string,
-  cacheControl?: string
+  contentType: string
 ): Promise<void> => {
   await s3Client.send(
     new PutObjectCommand({
@@ -108,7 +99,7 @@ export const uploadBufferToS3 = async (
       Key: key,
       Body: body,
       ContentType: contentType,
-      ...(cacheControl ? { CacheControl: cacheControl } : {})
+      CacheControl: IMMUTABLE_CACHE_CONTROL
     })
   );
 };

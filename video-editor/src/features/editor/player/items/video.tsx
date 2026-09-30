@@ -6,7 +6,6 @@ import { getAnimations } from "../../utils/get-animations";
 import { calculateFrames } from "../../utils/frames";
 import { Video as RemotionVideo } from "@remotion/media";
 import { OffthreadVideo, useRemotionEnvironment } from "remotion";
-import {resolvePlaybackSrc} from "@/features/editor/utils/proxy-map";
 
 // Real component, so the hook lives in its own fiber. Video() below is called
 // as a plain function from renderVisibleItems, so it must not call hooks.
@@ -15,28 +14,11 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
   const { isRendering } = useRemotionEnvironment();
 
   const { details } = item;
-  const toFiniteMs = (value: unknown) =>
-    typeof value === "number" && Number.isFinite(value) ? value : 0;
   const playbackRate = item.playbackRate || 1;
-  const trimToMs = toFiniteMs(item.trim?.to);
-  const hasTrimTo = trimToMs > 0;
-  const trimBefore = (toFiniteMs(item.trim?.from) / 1000) * fps;
-  const trimAfter = hasTrimTo ? (trimToMs / 1000) * fps : undefined;
+  const hasTrimTo = typeof item.trim?.to === "number" && item.trim.to > 0;
+  const trimBefore = ((item.trim?.from ?? 0) / 1000) * fps;
+  const trimAfter = hasTrimTo ? (item.trim!.to! / 1000) * fps : undefined;
   const volume = () => (details.volume ?? 100) / 100;
-
-  if (
-    !Number.isFinite(item.trim?.from ?? 0) ||
-    !Number.isFinite(item.display.from) ||
-    !Number.isFinite(item.display.to)
-  ) {
-    console.warn("[VideoMedia] non-finite timing on item", {
-      id: item.id,
-      trim: item.trim,
-      display: item.display,
-      playbackRate,
-      fps
-    });
-  }
 
   if (isRendering) {
     return (
@@ -55,7 +37,7 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
       trimBefore={trimBefore}
       trimAfter={trimAfter}
       playbackRate={playbackRate}
-      src={resolvePlaybackSrc(details.src)}
+      src={details.src}
       volume={volume}
     />
   );

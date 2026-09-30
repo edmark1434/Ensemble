@@ -13,9 +13,8 @@ import {
   calculateOffscreenSegments,
   calculateThumbnailSegmentLayout
 } from "../../utils/filmstrip";
-import {getFileFromUrl, getFileFromUrlCached} from "../../utils/file";
+import {getFileFromUrlCached} from "../../utils/file";
 import { createMediaControls } from "../controls";
-import {resolveFilmstripSrc} from "@/features/editor/utils/proxy-map";
 
 // Type declaration for MP4Clip to avoid SSR issues
 type MP4ClipType = any;
@@ -179,7 +178,7 @@ class Video extends Trimmable {
   }
 
   public async prepareAssets() {
-    const file = await getFileFromUrlCached(resolveFilmstripSrc(this.src));
+    const file = await getFileFromUrlCached(this.src);
     const stream = file.stream();
 
     // Dynamically import MP4Clip only on the client side
@@ -245,7 +244,7 @@ class Video extends Trimmable {
       img.crossOrigin = "anonymous";
 
       const isDataUri = fallbackThumbnail.startsWith("data:");
-      img.src = isDataUri ? fallbackThumbnail : `${fallbackThumbnail}?t=${Date.now()}`;
+      img.src = fallbackThumbnail;
 
       img.onload = () => {
         const canvas = document.createElement("canvas");

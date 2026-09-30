@@ -53,7 +53,6 @@ import {canEditWithRole, EditorRole} from "@/features/editor/types/editor-role";
 import {useEditorRole} from "@/features/editor/hooks/use-editor-role";
 import {ViewOnlyProvider} from "@/features/editor/hooks/use-view-only";
 import {useProjectFonts} from "@/features/editor/hooks/use-project-fonts";
-import {loadProxyMap} from "@/features/editor/utils/proxy-map";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -567,10 +566,7 @@ const Editor = ({ id, userId, userName, width, height, role }: {
   useEffect(() => {
     setCompactFonts(getCompactFontData(FONTS));
     setFonts(FONTS);
-    const proxiesReady = id
-      ? loadProxyMap(id, userId).catch(() => {})
-      : Promise.resolve();
-    Promise.all([seedDefaultFont(), proxiesReady]).then(() => setLoaded(true));
+    seedDefaultFont().then(() => setLoaded(true));
   }, []);
 
   // useEffect(() => {

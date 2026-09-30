@@ -36,7 +36,6 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import {millisecondsToHHMMSS} from "@/features/editor/utils/format";
-import {registerProxies} from "@/features/editor/utils/proxy-map";
 
 // Mirrors buildNormalizedImagePayload in Images.tsx
 const buildNormalizedImagePayload = (image: any) => {
@@ -305,7 +304,7 @@ const UploadImageItem = ({
   const resolvedSrc = item.metadata?.uploadedUrl || item.url;
   const localPreviewUrl = useObjectUrl(item.file);
   const previewSrc =
-    item.preview || item.posterUrl || (isReady ? resolvedSrc || localPreviewUrl : localPreviewUrl || resolvedSrc);
+    item.preview || (isReady ? resolvedSrc || localPreviewUrl : localPreviewUrl || resolvedSrc);
   const displayName = item.fileName || item.file?.name || item.name || "Untitled";
 
   const enrichedItem = useMemo(
@@ -442,7 +441,7 @@ const UploadVideoItem = ({
   // now, no hover-to-play. Generated once per src.
   const [posterDataUrl, setPosterDataUrl] = useState("");
   useEffect(() => {
-    if (!videoSrc || item.posterUrl) return; // server poster exists, skip the hidden video
+    if (!videoSrc) return;
     let cancelled = false;
     extractVideoThumbnailFromUrl(videoSrc).then((url) => {
       if (!cancelled && url) setPosterDataUrl(url);
@@ -450,9 +449,7 @@ const UploadVideoItem = ({
     return () => {
       cancelled = true;
     };
-  }, [videoSrc, item.posterUrl]);
-
-  const poster = item.posterUrl || posterDataUrl;
+  }, [videoSrc]);
 
   // Fallback width/height/duration probe for assets the DB doesn't have yet,
   // done on a detached video element since we no longer render one visibly.
@@ -484,7 +481,7 @@ const UploadVideoItem = ({
       metadata: {
         ...item.metadata,
         name: displayName,
-        previewUrl: poster || undefined
+        previewUrl: posterDataUrl || undefined
       },
       details: {
         ...item.details,
@@ -492,7 +489,7 @@ const UploadVideoItem = ({
         ...(meta ? { width: meta.width, height: meta.height, duration: meta.duration } : {})
       }
     }),
-    [item, meta, resolvedSrc, displayName, poster]
+    [item, meta, resolvedSrc, displayName, posterDataUrl]
   );
 
   const normalizedVideo = useMemo(
@@ -503,10 +500,10 @@ const UploadVideoItem = ({
   const thumbnail = (
     <div className="relative w-full h-full rounded-md overflow-hidden bg-zinc-800">
       <div className={`w-full h-full ${!isReady ? "opacity-50" : ""}`}>
-        {poster ? (
+        {posterDataUrl ? (
           <img
             draggable={false}
-            src={poster}
+            src={posterDataUrl}
             className="w-full h-full rounded-md object-cover"
             alt={displayName}
           />
@@ -552,7 +549,7 @@ const UploadVideoItem = ({
             border: "1px solid var(--primary)",
             borderRadius: 6,
             overflow: "hidden",
-            backgroundImage: `url(${poster})`,
+            backgroundImage: `url(${posterDataUrl})`,
             backgroundSize: "cover"
           }}
         />
@@ -877,10 +874,7 @@ export const Uploads = () => {
     queryFn: () => {
       const params = new URLSearchParams({ projectId, scope });
       if (scope !== "project") params.set("userId", userId);
-      return axios.get(`/api/media-assets?${params}`).then((r) => {
-        registerProxies(r.data.uploads);
-        return r.data.uploads;
-      });
+      return axios.get(`/api/media-assets?${params}`).then((r) => r.data.uploads);
     },
     enabled: !!projectId && (scope === "project" || !!userId)
   });
