@@ -350,6 +350,13 @@ async function autoApproveMilestoneSubmit({ milestoneSubmitId, milestoneId, cont
             await client.query(`
                 UPDATE contracts SET status = 'Done' WHERE contract_id = $1
             `, [contractId]);
+            await client.query(`
+                UPDATE gig_requests
+                SET status = 'Completed', updated_at = NOW()
+                WHERE gig_request_id IN (
+                    SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1
+                )
+            `, [contractId]);
         }
 
         await client.query('COMMIT');
@@ -563,6 +570,13 @@ async function cancelMilestoneAndRefund({ milestoneId, clientAccountId, freelanc
             // If at least one milestone was completed, the contract was partially fulfilled
             contractStatus = completedCnt > 0 ? 'Closed' : 'Cancelled';
             await client.query(`UPDATE contracts SET status = $1 WHERE contract_id = $2`, [contractStatus, contract_id]);
+            await client.query(`
+                UPDATE gig_requests
+                SET status = 'Cancelled', updated_at = NOW()
+                WHERE gig_request_id IN (
+                    SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1
+                )
+            `, [contract_id]);
             contractClosed = true;
         }
 
@@ -766,6 +780,14 @@ async function cancelContractAndRefundUnfinishedMilestones({ contractId, clientA
             WHERE contract_id = $2
         `, [contractStatus, contractId]);
 
+        await client.query(`
+            UPDATE gig_requests
+            SET status = 'Cancelled', updated_at = NOW()
+            WHERE gig_request_id IN (
+                SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1
+            )
+        `, [contractId]);
+
         await client.query('COMMIT');
         return {
             transactionId: txId,
@@ -874,6 +896,13 @@ async function approveMilestoneSubmit({ milestoneId, contractId, milestoneIndex,
 
         if (parseInt(pendingCount.rows[0].cnt, 10) === 0) {
             await client.query(`UPDATE contracts SET status = 'Done' WHERE contract_id = $1`, [contractId]);
+            await client.query(`
+                UPDATE gig_requests
+                SET status = 'Completed', updated_at = NOW()
+                WHERE gig_request_id IN (
+                    SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1
+                )
+            `, [contractId]);
         }
 
         await client.query('COMMIT');

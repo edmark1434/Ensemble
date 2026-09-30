@@ -84,18 +84,22 @@ export const OrdersMain: React.FC = () => {
   const statusCounts = useMemo(() => {
     if (childOrdersCounts) {
       return [
-        { label: "All", count: childOrdersCounts.All || 0 },
-        { label: "Pending", count: childOrdersCounts.Pending || 0 },
-        { label: "Accepted", count: childOrdersCounts.Accepted || 0 },
-        { label: "Rejected", count: childOrdersCounts.Rejected || 0 },
+        { label: "All" as const, count: childOrdersCounts.All || 0 },
+        { label: "Pending" as const, count: childOrdersCounts.Pending || 0 },
+        { label: "Shortlisted" as const, count: childOrdersCounts.Shortlisted || 0 },
+        { label: "Accepted" as const, count: childOrdersCounts.Accepted || 0 },
+        { label: "In Contract" as const, count: childOrdersCounts["In Contract"] || 0 },
+        { label: "Rejected" as const, count: childOrdersCounts.Rejected || 0 },
       ];
     }
 
     return [
-      { label: "All", count: 0 },
-      { label: "Pending", count: 0 },
-      { label: "Accepted", count: 0 },
-      { label: "Rejected", count: 0 },
+      { label: "All" as const, count: 0 },
+      { label: "Pending" as const, count: 0 },
+      { label: "Shortlisted" as const, count: 0 },
+      { label: "Accepted" as const, count: 0 },
+      { label: "In Contract" as const, count: 0 },
+      { label: "Rejected" as const, count: 0 },
     ];
   }, [childOrdersCounts]);
 

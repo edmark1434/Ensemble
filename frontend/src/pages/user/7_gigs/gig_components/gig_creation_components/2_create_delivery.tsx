@@ -315,8 +315,8 @@ export const CreateDelivery: React.FC<CreateDeliveryProps> = ({
       {/* Gallery */}
       <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-white/5">
         <div>
-          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">Supporting Pictures (Gallery)</label>
-          <p className="text-[10px] text-gray-600 dark:text-zinc-400">Add extra images to showcase your portfolio. Up to 5 images.</p>
+          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">Supporting Pictures (Gallery) <span className="text-red-500">*</span></label>
+          <p className="text-[10px] text-gray-600 dark:text-zinc-400">Add extra images to showcase your portfolio. Up to 5 images. (Required at least 1)</p>
         </div>
         <div className="flex flex-wrap gap-3">
           {galleryUrls.map((url, idx) => (

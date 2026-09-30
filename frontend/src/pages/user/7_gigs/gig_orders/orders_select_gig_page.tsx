@@ -145,7 +145,7 @@ export const OrdersSelectGigPage: React.FC = () => {
                   <div className="flex-1 min-w-0 p-2.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5">
                     <span className="text-[9px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Orders</span>
                     <span className="font-bold text-gray-900 dark:text-white flex items-center gap-1 text-xs mt-0.5">
-                      <Briefcase className="h-3.5 w-3.5 text-blue-400 shrink-0" /> 0
+                      <Briefcase className="h-3.5 w-3.5 text-blue-400 shrink-0" /> {gig.ordersCount || 0}
                     </span>
                   </div>
                 </div>
