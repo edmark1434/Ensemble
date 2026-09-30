@@ -1,96 +1,60 @@
-# Current Task — Implement Unshortlist & Notify if Unshortlisted for Jobs and Gigs
+# Current Task — Gigs Final Confirmation before Deduction of Credits
 
-Implement the ability for clients/creators to unshortlist an applicant (revert status from 'Shortlisted' back to 'Pending') across Job proposals and Gig orders, and send in-app and real-time Socket.IO notifications to the applicant when unshortlisted.
+Transition Gig order acceptance and contract funding from the previous unilateral deduction by the freelancer to a mutual two-step handshake:
+1. **Freelancer Acceptance**: Freelancer accepts gig order; order status transitions to `'Accepted'` without deducting client wallet credits. Client receives real-time notification to review and confirm contract.
+2. **Client Final Confirmation & Deduction**: Client visits `/gigs/orders/sent/:orderId`, reviews terms and credit deduction, certifies agreement, and confirms contract. Backend validates balance, holds credits in escrow, generates contract + milestones, updates order status to `'In Contract'`, and starts the contract.
 
 ## Implementation Objectives
-- [x] **Job Proposal Unshortlisting & Notification (Backend)**:
-  - In `backend/controllers/JobControllers.js` (`updateProposalStatusController`), inspect proposal status prior to update.
-  - If previous status was `'Shortlisted'` and new status is `'Pending'`, generate notification:
-    - Message: `Your proposal on ${title} has been removed from the shortlist.`
-    - Reference table: `'proposals'`, prefix: `'unshortlisted'`, reference path: `/jobs/proposals/sent/${proposalId}`.
-    - Dispatch real-time Socket.IO notification to `freelancer_account_id`.
-  - Also ensure `rejectReason` is properly cleared/handled when reverting to `'Pending'`.
-- [x] **Job Proposal Unshortlist UI (Frontend)**:
-  - In `frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author.tsx`:
-    - Add "Unshortlist" action button in the action bar when `proposal.status === "Shortlisted"`.
-    - Add unshortlist confirmation modal with prompt confirming status reversal to 'Pending' and notification dispatch.
-    - On confirmation, send `PUT /api/jobs/proposals/:proposalId/status` with `{ status: "Pending" }`.
-    - Update local state and display success toast `"Applicant removed from shortlist"`.
-- [x] **Gig Order Shortlist & Unshortlist (Backend)**:
-  - In `backend/repositories/GigRepositories.js`:
-    - Add `shortlistGigOrderRepository(orderId, freelancerAccountIds)` to transition from `'Pending'` to `'Shortlisted'`.
-    - Add `unshortlistGigOrderRepository(orderId, freelancerAccountIds)` to transition from `'Shortlisted'` to `'Pending'`.
-    - Update `acceptGigOrderRepository` and `rejectGigOrderRepository` to allow accepting/rejecting orders that are in `'Shortlisted'` status as well as `'Pending'`.
-  - In `backend/services/GigServices.js`:
-    - Create service functions `shortlistGigOrderService` and `unshortlistGigOrderService`.
-    - Handle notification generation (`createNotificationServices`) and real-time Socket.IO emission to `client_account_id`.
-      - Shortlist message: `Your gig order for '${gig_title}' has been shortlisted by the freelancer.`
-      - Unshortlist message: `Your gig order for '${gig_title}' has been removed from the shortlist.`
-  - In `backend/controllers/GigControllers.js`:
-    - Add `shortlistGigOrderController` and `unshortlistGigOrderController`.
-  - In `backend/routes/Gig.js`:
-    - Mount `POST /orders/:orderId/shortlist` and `POST /orders/:orderId/unshortlist`.
-- [x] **Gig Order Shortlist & Unshortlist UI (Frontend)**:
-  - In `frontend/src/pages/user/7_gigs/gig_orders/incoming_order_detail.tsx`:
-    - When `order.status === 'Pending'`, provide "Shortlist" button.
-    - When `order.status === 'Shortlisted'`, show "Shortlisted" status, "Unshortlist" button, and "Open Discussion Chat" button alongside "Reject" and "Review & Accept".
-  - In `frontend/src/pages/user/7_gigs/gig_orders/sent_order_detail.tsx`:
-    - When `order.status === 'Shortlisted'`, display shortlisted badge and "Open Discussion Chat" button.
-- [x] **Shortlist Modal Initial Inbox Message (Jobs & Gigs)**:
-  - In `backend/services/JobServices.js` (`updateProposalStatusServices`):
-    - When `status === 'Shortlisted'` and `options.initialMessage` is provided, automatically create or fetch the marketplace chat conversation via `createMarketplaceChatServices`.
-    - Immediately insert the message via `createMessageServices` and broadcast `newMessage` and `conversationMessageNotification` to both applicant and client in real time.
-  - In `backend/controllers/JobControllers.js` (`updateProposalStatusController`):
-    - Extract `initialMessage` from `req.body.message`, `req.body.shortlistMessage`, or fallback reason and forward to `updateProposalStatusServices`.
-  - In `backend/services/GigServices.js` (`shortlistGigOrderService`):
-    - Create/fetch marketplace chat conversation and post initial message when provided during gig shortlisting.
-  - In `backend/controllers/GigControllers.js` (`shortlistGigOrderController`):
-    - Extract `initialMessage` and pass into `shortlistGigOrderService`.
-  - In `frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author.tsx`:
-    - Added loading state `isShortlisting` to avoid duplicate sends.
-    - Updated `handleConfirmShortlist` to pass `message`, `shortlistMessage`, and `rejection_reason` to the API.
-    - Added toast feedback: `"Candidate shortlisted and message sent to chat"`.
-- [x] **Notifications & Floating Chat on Shortlist (Applicants & Hirer)**:
-  - In `backend/repositories/JobRepositories.js`:
-    - Updated `updateProposalStatusRepositories` to return `j.title as job_title` and `j.client_account_id`.
-  - In `backend/services/JobServices.js` & `backend/services/GigServices.js`:
-    - On shortlisting with an initial message, emit `conversationCreated` to both participants to ensure synced inbox state.
-    - Emit `openFloatingChat` socket event to the recipient (`freelancer_account_id` for jobs, `client_account_id` for gigs) with conversation ID, inbox, and initial message.
-    - Return `conversation: chatResult.inbox` from services.
-  - In `backend/controllers/JobControllers.js` & `backend/controllers/GigControllers.js`:
-    - Return `conversation: updated.conversation || null` in the JSON response to the hirer/creator.
-  - In `frontend/src/components/ui/chat_bubble/chat_state.ts`:
-    - Bound `socket.on("openFloatingChat")` to automatically upsert conversation and call `openFloatingConversation`.
-    - Updated `reconcileMessage` to support marketplace conversations (`marketplace_job`, `marketplace_gig`) and automatically open floating chat for incoming messages.
-    - Updated `openFloatingConversation` to load missing conversation details directly if not yet in state.
-  - In `frontend/src/components/nav/user_header.tsx`:
-    - Added instant toast notification when a `notification` socket event arrives so users receive immediate visual feedback.
-  - In `frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author.tsx`:
-    - In `handleConfirmShortlist`, immediately open the hirer's floating chat window to the created marketplace conversation with the applicant.
-  - In `frontend/src/pages/user/7_gigs/gig_orders/incoming_order_detail.tsx`:
-    - In `handleShortlist`, open floating chat if conversation is returned from the API.
-- [x] **Instant Floating Chat Opening with Message**:
-  - In `backend/services/JobServices.js` & `backend/services/GigServices.js`:
-    - Track `createdMessage` and return `initialMessage: createdMessage` alongside `conversation`.
-  - In `backend/controllers/JobControllers.js` & `backend/controllers/GigControllers.js`:
-    - Return `initialMessage` in API responses for both job proposals and gig orders.
-  - In `frontend/src/components/ui/chat_bubble/chat_state.ts`:
-    - Exported `upsertMessage` and `upsertConversation`.
-    - Extended `loadConversation(conversationId, force?: boolean)` to allow force-reloading messages, ensuring new shortlist messages are retrieved without cache blockage.
-    - Updated `openFloatingConversation` to dispatch custom window event `chat:open-window` and invoke `loadConversation(conversationId, true)`.
-    - Handled `initialMessage` directly in `socket.on("openFloatingChat")` for instant receipt on the recipient's side.
-  - In `frontend/src/components/ui/chat_bubble/chat_main.tsx`:
-    - Added listener for `chat:open-window` to immediately remove IDs from `dismissedIds` and add them to `openIds`.
-    - Updated `activeUser` effect to eliminate `setTimeout(0)` race conditions and reliably track conversation and applicant IDs.
-    - Ensured `openWindows` includes `activeUser` synchronously even if `recentChats` is still recalculating.
-  - In `frontend/src/components/ui/Layout.tsx`:
-    - Extended `recentChats` to extract recipient details (name, avatar, `account_id`) for non-group marketplace conversations (`marketplace_job`, `marketplace_gig`).
-    - Matched `activeChatUser` by `chat.id`, `chat.inbox_id`, or `chat.account_id`.
-  - In `frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author.tsx` & `incoming_order_detail.tsx`:
-    - Directly upsert `conversation` and `initialMessage` into `useChatState` upon shortlisting so the chat window displays the message instantly without waiting for network or socket lag.
-    - Added Shortlist and Unshortlist modals to Gig incoming order details matching the Job proposal flow.
+- [x] **Backend - Repository Layer (`GigRepositories.js`)**:
+  - Refactor `acceptGigOrderRepository`:
+    - Validates order is `Pending` or `Shortlisted`.
+    - Updates `gig_requests.status = 'Accepted'`.
+    - Does NOT deduct credits or create contract.
+    - Returns order info (orderId, status, client_account_id, freelancer_account_id, gig_title).
+  - Add `confirmGigOrderContractRepository(orderId, clientAccountIds)`:
+    - Validates order belongs to client and is in `'Accepted'` status.
+    - Prevents race conditions with `FOR UPDATE OF gr` and checks `gig_contracts` for duplicates.
+    - Locks client account wallet and freelancer escrow wallet `FOR UPDATE`.
+    - Checks `clientWallet.balance_credits >= rate_credits`.
+    - Atomically debits client wallet and credits freelancer escrow wallet (`'Escrow Hold'`).
+    - Creates contract (`status = 'Active'`), `credit_transactions`, `gig_contracts`, and `contract_milestones`.
+    - Updates `gig_requests.status = 'In Contract'`.
+    - Returns `{ contractId, gig_title, freelancer_account_id, client_account_id }`.
+  - Update `getOrderByIdRepository`, `getMyOrdersRepository`, and `getIncomingOrdersRepository`:
+    - `LEFT JOIN gig_contracts gc ON r.gig_request_id = gc.gig_request_id` to include `gc.contract_id as contract_id`.
+  - Update duplicate order check to include `'shortlisted'` and `'in contract'`.
+- [x] **Backend - Service & Controller Layer (`GigServices.js`, `GigControllers.js`, `Gig.js`)**:
+  - In `GigServices.js`:
+    - Add `acceptGigOrderService(orderId, actorIds)`: calls repository and sends notification/socket event to client.
+    - Add `confirmGigOrderContractService(orderId, actorIds)`: calls repository and sends notification/socket events to both client and freelancer.
+  - In `GigControllers.js`:
+    - Update `acceptGigOrderController`: invokes `acceptGigOrderService`.
+    - Add `confirmGigOrderContractController`: invokes `confirmGigOrderContractService`.
+  - In `Gig.js`:
+    - Register route `POST /orders/:orderId/confirm-contract`.
+- [x] **Frontend - Incoming Order Detail (`incoming_order_detail.tsx`)**:
+  - Update "Accept Gig Order" modal to clarify that accepting will notify the client to review, agree to terms, and fund the contract in escrow.
+  - When order is in `'Accepted'` status, show an informative banner: "Order Accepted — Awaiting Client Confirmation & Escrow Funding", with discussion chat button.
+  - If contract is already created (`order.contract_id`), show button to "View Active Contract".
+- [x] **Frontend - Sent Order Detail (`sent_order_detail.tsx`)**:
+  - When `order.status === 'Accepted'` and no `contract_id`:
+    - Prominently display the "Freelancer Accepted Your Order - Final Confirmation & Contract Funding" panel.
+    - Fetch and display the client's current wallet balance (`/api/accounts/wallet`).
+    - Display required credits, balance status (sufficient vs. insufficient), and link to top up credits if needed.
+    - Add Terms of Service agreement checkbox and "Confirm & Start Contract" button.
+    - On confirmation, post to `/api/gigs/orders/:orderId/confirm-contract`, show success toast, and navigate to `/contracts/:contractId`.
+  - When `order.status === 'In Contract'` or `order.contract_id` exists:
+    - Display "Contract Active" badge and "View Active Contract" button linking to `/contracts/:contractId`.
+- [x] **Frontend - Orders List & Badges (`orders_list.tsx`, `sent_orders.tsx`, `incoming_orders.tsx`, `orders_main.tsx`, `orders_statuses.tsx`)**:
+  - Support `'In Contract'` and `'Shortlisted'` status badges and counts.
+  - Add quick action for client when `'Accepted'` to "Confirm & Fund" or when `'In Contract'` to "View Contract".
+- [x] **Recent Fixes — Order Placement, Duplicate Checks & Orders Count**:
+  - **Duplicate Active Order Check (`GigRepositories.js`)**: Updated `submitGigOrderRepository` duplicate check to join `contracts c`. Cancelled, closed, or completed contracts no longer block placing a new order. Added auto-healing query to sync stale `'In Contract'` orders whose linked contracts were cancelled/closed to `'Cancelled'` (or `'Completed'` if done).
+  - **Contract Cancellation Sync (`MilestoneRepositories.js`, `DashboardRepositories.js`)**: Ensured `cancelContractAndRefundUnfinishedMilestones`, `adminRefundStalledMilestone`, `approveMilestoneSubmit`, and `submitContractReview` properly update linked `gig_requests.status` to `'Cancelled'` or `'Completed'`.
+  - **Order Status Resolution (`GigRepositories.js`)**: `getIncomingOrdersRepository`, `getMyOrdersRepository`, `getOrderByIdRepository`, and `getGigByIdRepository` now resolve true status by joining `contracts`.
+  - **Order Notification & CTA Rename**: Sent real-time notification to the freelancer upon order placement. Renamed "Pay with Credits" to "Request to Order" and removed the shortlist button from gig order detail.
+  - **Orders Count Display (`orders_select_gig_page.tsx`)**: Replaced hardcoded `0` with `{gig.ordersCount || 0}`.
 - [x] **Verification**:
-  - Run `node --check` on modified backend files.
-  - Run `npm run build` in `frontend/`.
-
+  - `node --check` on all modified backend files passed.
+  - `npm run build` on `frontend` passed.
 

@@ -275,11 +275,17 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
         {/* Right: Title & Category */}
         <div className="space-y-4">
           <div>
-            <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">
-              Service Title <span className="text-red-500">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider">
+                Service Title <span className="text-red-500">*</span>
+              </label>
+              <span className="text-[10px] text-gray-400 dark:text-zinc-500 font-mono">
+                {title.length}/255
+              </span>
+            </div>
             <input
               type="text"
+              maxLength={255}
               placeholder="e.g. I will edit your YouTube gaming videos with premium VFX"
               value={title}
               onChange={(e) => {

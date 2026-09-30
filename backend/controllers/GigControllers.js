@@ -25,7 +25,12 @@ const {
 const { pool } = require('../lib/Database');
 const { getIo } = require('../lib/WebSocket');
 const { createNotificationServices } = require('../services/NotificationServices');
-const { shortlistGigOrderService, unshortlistGigOrderService } = require('../services/GigServices');
+const {
+    shortlistGigOrderService,
+    unshortlistGigOrderService,
+    acceptGigOrderService,
+    confirmGigOrderContractService
+} = require('../services/GigServices');
 
 function sendControllerError(res, error, fallbackMessage) {
     if (error instanceof MarketplaceActorError || error.statusCode) {
@@ -55,6 +60,10 @@ async function createGigController(req, res) {
 
         if (!title || !description || !tiers) {
             return res.status(400).json({ success: false, message: 'Missing required fields' });
+        }
+
+        if (title.trim().length > 255) {
+            return res.status(400).json({ success: false, message: 'Service title cannot exceed 255 characters' });
         }
 
         const gigData = {
@@ -121,7 +130,27 @@ async function submitGigOrderController(req, res) {
     try {
         const actor = await resolveMarketplaceActor(req.user.account_id, req.body.acting_team_id);
         const affiliatedAccountIds = await getAffiliatedAccountIds(req.user.account_id);
-        const requestId = await submitGigOrderRepository(actor.accountId, req.params.id, req.body, affiliatedAccountIds);
+        const result = await submitGigOrderRepository(actor.accountId, req.params.id, req.body, affiliatedAccountIds);
+        const { requestId, freelancerAccountId, gigTitle } = result;
+
+        // Notify the freelancer of the new order request
+        try {
+            const notif = await createNotificationServices({
+                account_id: freelancerAccountId,
+                message: `You have a new order request for your gig '${gigTitle}'.`,
+                reference_table: 'gig_requests',
+                reference_prefix: 'new_order',
+                reference_path: `/gigs/orders/incoming/${requestId}`,
+                reference_id: requestId
+            });
+            const io = getIo();
+            if (io && notif) {
+                io.to(String(freelancerAccountId)).emit('notification', notif);
+            }
+        } catch (notifErr) {
+            console.error('Error sending new gig order notification:', notifErr);
+        }
+
         res.status(201).json({ success: true, requestId });
     } catch (error) {
         console.error("Error in submitGigOrderController:", error);
@@ -196,6 +225,10 @@ async function updateGigController(req, res) {
             return res.status(400).json({ success: false, message: 'Missing required fields' });
         }
 
+        if (title.trim().length > 255) {
+            return res.status(400).json({ success: false, message: 'Service title cannot exceed 255 characters' });
+        }
+
         const gigData = {
             freelancer_account_id, title, description, category, slots, termsOfService,
             firstDraftDelivery, additionalWorkRate, tiers, milestones, questionnaires,
@@ -238,46 +271,31 @@ async function acceptGigOrderController(req, res) {
         }
 
         const actorIds = await getAuthorizedActorAccountIds(freelancer_account_id);
-        const contractId = await acceptGigOrderRepository(orderId, actorIds);
+        const result = await acceptGigOrderService(orderId, actorIds);
 
-        try {
-            const propQ = await pool.query(`
-                SELECT r.client_account_id, g.title
-                FROM gig_requests r 
-                JOIN gig_tiers t ON r.gig_tier_id = t.gig_tier_id
-                JOIN gigs g ON t.gig_id = g.gig_id 
-                WHERE r.gig_request_id = $1
-            `, [orderId]);
-
-            if (propQ.rows[0]) {
-                const { client_account_id, title } = propQ.rows[0];
-                const fAccQ = await pool.query('SELECT handle FROM accounts WHERE account_id = $1', [freelancer_account_id]);
-                
-                if (fAccQ.rows[0]) {
-                    const freelancerHandle = fAccQ.rows[0].handle;
-                    const notif = await createNotificationServices({
-                        message: `@${freelancerHandle} accepted your gig order for ${title}`,
-                        reference_table: 'contracts',
-                        reference_prefix: 'offer_accepted',
-                        reference_path: `/contracts/${contractId}`,
-                        reference_id: contractId,
-                        account_id: client_account_id
-                    });
-
-                    const io = getIo();
-                    if (io) {
-                        io.to(String(client_account_id)).emit('notification', notif);
-                    }
-                }
-            }
-        } catch (notifErr) {
-            console.error('Error sending gig accept notification:', notifErr);
-        }
-
-        res.status(200).json({ success: true, message: 'Gig order accepted successfully', contractId });
+        res.status(200).json({ success: true, message: 'Gig order accepted successfully', ...result });
     } catch (error) {
         console.error("Error in acceptGigOrderController:", error);
-        res.status(500).json({ success: false, message: error.message || 'Failed to accept gig order' });
+        res.status(error.statusCode || 500).json({ success: false, message: error.message || 'Failed to accept gig order' });
+    }
+}
+
+async function confirmGigOrderContractController(req, res) {
+    try {
+        const client_account_id = req.user?.account_id;
+        const orderId = req.params.orderId;
+
+        if (!client_account_id) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        const actorIds = await getAuthorizedActorAccountIds(client_account_id);
+        const result = await confirmGigOrderContractService(orderId, actorIds);
+
+        res.status(200).json({ success: true, message: 'Gig contract confirmed and funded successfully', contractId: result.contractId });
+    } catch (error) {
+        console.error("Error in confirmGigOrderContractController:", error);
+        res.status(error.statusCode || 500).json({ success: false, message: error.message || 'Failed to confirm gig contract' });
     }
 }
 
@@ -378,6 +396,7 @@ module.exports = {
     getGigByIdController,
     deleteGigController,
     acceptGigOrderController,
+    confirmGigOrderContractController,
     rejectGigOrderController,
     withdrawGigOrderController,
     shortlistGigOrderController,

@@ -310,20 +310,6 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
                     </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
-                    <button
-                        type="button"
-                        onClick={() => void openRevisionChat()}
-                        disabled={isOpeningChat}
-                        title={`Chat with ${
-                            isFreelancer ? task.client_name : task.freelancer_name
-                        } about revisions`}
-                        aria-label={`Chat with ${
-                            isFreelancer ? task.client_name : task.freelancer_name
-                        } about revisions`}
-                        className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-500 transition-colors hover:bg-blue-500/20 hover:text-blue-400 disabled:cursor-wait disabled:opacity-60"
-                    >
-                        <MessageSquare className={`h-4 w-4 ${isOpeningChat ? 'animate-pulse' : ''}`} />
-                    </button>
                     <div
                         className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                             isCompleted

@@ -381,7 +381,7 @@ async function submitGigOrderRepository(accountId, gigId, orderData, prohibitedS
         await client.query('BEGIN');
 
         const check = await client.query(
-            `SELECT g.freelancer_account_id,
+            `SELECT g.freelancer_account_id, g.title AS gig_title,
                     g.freelancer_account_id = ANY($3::uuid[]) AS is_affiliated_listing
              FROM gigs g
              JOIN gig_tiers gt ON gt.gig_id = g.gig_id
@@ -400,11 +400,37 @@ async function submitGigOrderRepository(accountId, gigId, orderData, prohibitedS
             error.statusCode = 409;
             throw error;
         }
+        // Auto-heal any stale 'In Contract' status if the underlying contract was cancelled or completed
+        await client.query(
+            `UPDATE gig_requests gr
+             SET status = CASE
+                 WHEN LOWER(c.status) IN ('cancelled', 'closed') THEN 'Cancelled'
+                 WHEN LOWER(c.status) IN ('done', 'completed') THEN 'Completed'
+                 ELSE gr.status
+             END,
+             updated_at = NOW()
+             FROM gig_contracts gc
+             JOIN contracts c ON gc.contract_id = c.contract_id
+             WHERE gr.gig_request_id = gc.gig_request_id
+               AND gr.client_account_id = $1
+               AND LOWER(gr.status) = 'in contract'
+               AND LOWER(c.status) IN ('cancelled', 'closed', 'done', 'completed')`,
+            [accountId]
+        );
+
         const duplicate = await client.query(
             `SELECT 1 FROM gig_requests gr
              JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+             LEFT JOIN gig_contracts gc ON gc.gig_request_id = gr.gig_request_id
+             LEFT JOIN contracts c ON c.contract_id = gc.contract_id
              WHERE gt.gig_id = $1 AND gr.client_account_id = $2
-               AND LOWER(gr.status) IN ('pending', 'accepted')
+               AND (
+                   LOWER(gr.status) IN ('pending', 'accepted', 'shortlisted')
+                   OR (
+                       LOWER(gr.status) = 'in contract'
+                       AND (c.contract_id IS NULL OR LOWER(c.status) NOT IN ('cancelled', 'closed', 'done', 'completed'))
+                   )
+               )
              LIMIT 1`,
             [gigId, accountId]
         );
@@ -433,7 +459,12 @@ async function submitGigOrderRepository(accountId, gigId, orderData, prohibitedS
         }
 
         await client.query('COMMIT');
-        return requestId;
+        return {
+            requestId,
+            freelancerAccountId: check.rows[0].freelancer_account_id,
+            gigTitle: check.rows[0].gig_title,
+            clientAccountId: accountId,
+        };
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Error in submitGigOrderRepository:', err);
@@ -446,16 +477,25 @@ async function submitGigOrderRepository(accountId, gigId, orderData, prohibitedS
 async function getIncomingOrdersRepository(accountIds) {
     const query = `
         SELECT 
-            r.gig_request_id as id, r.status, r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
+            r.gig_request_id as id,
+            CASE 
+                WHEN LOWER(r.status) = 'in contract' AND LOWER(cnt.status) IN ('cancelled', 'closed') THEN 'Cancelled'
+                WHEN LOWER(r.status) = 'in contract' AND LOWER(cnt.status) IN ('done', 'completed') THEN 'Completed'
+                ELSE r.status
+            END as status,
+            r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
             g.gig_id, g.title as gig_title,
             a.display_name as client_name, a.handle as client_handle,
             (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as client_avatar,
             gt.title as tier_title, gt.rate_credits as price, gt.delivery_days,
-            (SELECT json_agg(json_build_object('question_id', grp.gig_requirement_id, 'response', grp.response, 'question', req.question, 'type', req.type)) FROM gig_responses grp JOIN gig_requirements req ON grp.gig_requirement_id = req.gig_requirement_id WHERE grp.gig_request_id = r.gig_request_id) as responses
+            (SELECT json_agg(json_build_object('question_id', grp.gig_requirement_id, 'response', grp.response, 'question', req.question, 'type', req.type)) FROM gig_responses grp JOIN gig_requirements req ON grp.gig_requirement_id = req.gig_requirement_id WHERE grp.gig_request_id = r.gig_request_id) as responses,
+            gc.contract_id
         FROM gig_requests r
         JOIN gig_tiers gt ON r.gig_tier_id = gt.gig_tier_id
         JOIN gigs g ON gt.gig_id = g.gig_id
         JOIN accounts a ON r.client_account_id = a.account_id
+        LEFT JOIN gig_contracts gc ON r.gig_request_id = gc.gig_request_id
+        LEFT JOIN contracts cnt ON gc.contract_id = cnt.contract_id
         WHERE g.freelancer_account_id = ANY($1::uuid[])
         ORDER BY r.created_at DESC
     `;
@@ -466,16 +506,25 @@ async function getIncomingOrdersRepository(accountIds) {
 async function getMyOrdersRepository(accountIds) {
     const query = `
         SELECT 
-            r.gig_request_id as id, r.client_account_id, r.status, r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
+            r.gig_request_id as id, r.client_account_id,
+            CASE 
+                WHEN LOWER(r.status) = 'in contract' AND LOWER(cnt.status) IN ('cancelled', 'closed') THEN 'Cancelled'
+                WHEN LOWER(r.status) = 'in contract' AND LOWER(cnt.status) IN ('done', 'completed') THEN 'Completed'
+                ELSE r.status
+            END as status,
+            r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
             g.gig_id, g.title as gig_title,
             a.display_name as freelancer_name, a.handle as freelancer_handle,
             (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as freelancer_avatar,
             gt.title as tier_title, gt.rate_credits as price, gt.delivery_days,
-            (SELECT json_agg(json_build_object('question_id', grp.gig_requirement_id, 'response', grp.response, 'question', req.question, 'type', req.type)) FROM gig_responses grp JOIN gig_requirements req ON grp.gig_requirement_id = req.gig_requirement_id WHERE grp.gig_request_id = r.gig_request_id) as responses
+            (SELECT json_agg(json_build_object('question_id', grp.gig_requirement_id, 'response', grp.response, 'question', req.question, 'type', req.type)) FROM gig_responses grp JOIN gig_requirements req ON grp.gig_requirement_id = req.gig_requirement_id WHERE grp.gig_request_id = r.gig_request_id) as responses,
+            gc.contract_id
         FROM gig_requests r
         JOIN gig_tiers gt ON r.gig_tier_id = gt.gig_tier_id
         JOIN gigs g ON gt.gig_id = g.gig_id
         JOIN accounts a ON g.freelancer_account_id = a.account_id
+        LEFT JOIN gig_contracts gc ON r.gig_request_id = gc.gig_request_id
+        LEFT JOIN contracts cnt ON gc.contract_id = cnt.contract_id
         WHERE r.client_account_id = ANY($1::uuid[])
         ORDER BY r.created_at DESC
     `;
@@ -486,7 +535,13 @@ async function getMyOrdersRepository(accountIds) {
 async function getOrderByIdRepository(orderId, accountIds) {
     const query = `
         SELECT 
-            r.gig_request_id as id, r.status, r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
+            r.gig_request_id as id,
+            CASE 
+                WHEN LOWER(r.status) = 'in contract' AND LOWER(cnt.status) IN ('cancelled', 'closed') THEN 'Cancelled'
+                WHEN LOWER(r.status) = 'in contract' AND LOWER(cnt.status) IN ('done', 'completed') THEN 'Completed'
+                ELSE r.status
+            END as status,
+            r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
             g.gig_id, g.title as gig_title,
             r.client_account_id, g.freelancer_account_id,
             c.display_name as client_name, c.handle as client_handle,
@@ -494,12 +549,15 @@ async function getOrderByIdRepository(orderId, accountIds) {
             f.display_name as freelancer_name, f.handle as freelancer_handle,
             (SELECT f2.path FROM files f2 WHERE f2.file_id = f.avatar_file_id LIMIT 1) as freelancer_avatar,
             gt.title as tier_title, gt.rate_credits as price, gt.delivery_days,
-            (SELECT json_agg(json_build_object('question_id', grp.gig_requirement_id, 'response', grp.response, 'question', req.question, 'type', req.type)) FROM gig_responses grp JOIN gig_requirements req ON grp.gig_requirement_id = req.gig_requirement_id WHERE grp.gig_request_id = r.gig_request_id) as responses
+            (SELECT json_agg(json_build_object('question_id', grp.gig_requirement_id, 'response', grp.response, 'question', req.question, 'type', req.type)) FROM gig_responses grp JOIN gig_requirements req ON grp.gig_requirement_id = req.gig_requirement_id WHERE grp.gig_request_id = r.gig_request_id) as responses,
+            gc.contract_id
         FROM gig_requests r
         JOIN gig_tiers gt ON r.gig_tier_id = gt.gig_tier_id
         JOIN gigs g ON gt.gig_id = g.gig_id
         JOIN accounts c ON r.client_account_id = c.account_id
         JOIN accounts f ON g.freelancer_account_id = f.account_id
+        LEFT JOIN gig_contracts gc ON r.gig_request_id = gc.gig_request_id
+        LEFT JOIN contracts cnt ON gc.contract_id = cnt.contract_id
         WHERE r.gig_request_id = $1
           AND (r.client_account_id = ANY($2::uuid[]) OR g.freelancer_account_id = ANY($2::uuid[]))
     `;
@@ -585,11 +643,36 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
                 SELECT EXISTS(
                     SELECT 1 FROM gig_requests gr
                     JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+                    LEFT JOIN gig_contracts gc ON gc.gig_request_id = gr.gig_request_id
+                    LEFT JOIN contracts c ON c.contract_id = gc.contract_id
                     WHERE gt.gig_id = g.gig_id
                       AND gr.client_account_id = ANY($3::uuid[])
-                      AND gr.status = 'Pending'
+                      AND (
+                          LOWER(gr.status) IN ('pending', 'accepted', 'shortlisted')
+                          OR (
+                              LOWER(gr.status) = 'in contract'
+                              AND (c.contract_id IS NULL OR LOWER(c.status) NOT IN ('cancelled', 'closed', 'done', 'completed'))
+                          )
+                      )
                 )
             ) as "hasPendingOrder",
+            (
+                SELECT gr.gig_request_id FROM gig_requests gr
+                JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+                LEFT JOIN gig_contracts gc ON gc.gig_request_id = gr.gig_request_id
+                LEFT JOIN contracts c ON c.contract_id = gc.contract_id
+                WHERE gt.gig_id = g.gig_id
+                  AND gr.client_account_id = ANY($3::uuid[])
+                  AND (
+                      LOWER(gr.status) IN ('pending', 'accepted', 'shortlisted')
+                      OR (
+                          LOWER(gr.status) = 'in contract'
+                          AND (c.contract_id IS NULL OR LOWER(c.status) NOT IN ('cancelled', 'closed', 'done', 'completed'))
+                      )
+                  )
+                ORDER BY gr.created_at DESC
+                LIMIT 1
+            ) as "pendingOrderId",
             (SELECT COUNT(*) FROM gig_saves gs WHERE gs.gig_id = g.gig_id) as "savesCount",
             (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id WHERE gt.gig_id = g.gig_id) as "ordersCount",
             tm.team_id as "teamId",
@@ -782,7 +865,7 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
     try {
         await client.query('BEGIN');
 
-        // 1. Verify the order exists, is Pending, and belongs to the freelancer
+        // 1. Verify the order exists, is Pending or Shortlisted, and belongs to the freelancer
         const reqCheckQuery = `
             SELECT gr.gig_request_id, gr.status, gt.gig_tier_id, gt.rate_credits, gt.delivery_days, gt.no_of_revisions_max, gt.gig_id, gr.client_account_id, g.freelancer_account_id, g.title as gig_title
             FROM gig_requests gr
@@ -793,17 +876,86 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
         `;
         const reqCheck = await client.query(reqCheckQuery, [orderId, freelancerAccountIds]);
         if (reqCheck.rows.length === 0) {
-            throw new Error('Gig order not found or unauthorized');
+            const err = new Error('Gig order not found or unauthorized');
+            err.statusCode = 404;
+            throw err;
         }
         if (reqCheck.rows[0].status !== 'Pending' && reqCheck.rows[0].status !== 'Shortlisted') {
-            throw new Error('Gig order is not in Pending or Shortlisted status');
+            const err = new Error('Gig order is not in Pending or Shortlisted status');
+            err.statusCode = 400;
+            throw err;
         }
 
-        const { rate_credits, delivery_days, no_of_revisions_max, gig_id, client_account_id, freelancer_account_id: freelancerAccountId, gig_title } = reqCheck.rows[0];
+        const { client_account_id, freelancer_account_id: freelancerAccountId, gig_title } = reqCheck.rows[0];
+
+        // 2. Update gig request status to Accepted
+        await client.query(
+            "UPDATE gig_requests SET status = 'Accepted', updated_at = NOW() WHERE gig_request_id = $1",
+            [orderId]
+        );
+
+        await client.query('COMMIT');
+        return {
+            orderId,
+            status: 'Accepted',
+            client_account_id,
+            freelancer_account_id: freelancerAccountId,
+            gig_title
+        };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error in acceptGigOrderRepository:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+async function confirmGigOrderContractRepository(orderId, clientAccountIds) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Verify the order exists, is Accepted, and belongs to the client
+        const reqCheckQuery = `
+            SELECT gr.gig_request_id, gr.status, gt.gig_tier_id, gt.rate_credits, gt.delivery_days, gt.no_of_revisions_max, gt.gig_id, gr.client_account_id, g.freelancer_account_id, g.title as gig_title
+            FROM gig_requests gr
+            JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+            JOIN gigs g ON gt.gig_id = g.gig_id
+            WHERE gr.gig_request_id = $1 AND gr.client_account_id = ANY($2::uuid[])
+            FOR UPDATE OF gr
+        `;
+        const reqCheck = await client.query(reqCheckQuery, [orderId, clientAccountIds]);
+        if (reqCheck.rows.length === 0) {
+            const err = new Error('Gig order not found or unauthorized');
+            err.statusCode = 404;
+            throw err;
+        }
+        const orderRow = reqCheck.rows[0];
+        if (orderRow.status !== 'Accepted') {
+            const err = new Error(`Gig order is not in Accepted status (current: ${orderRow.status})`);
+            err.statusCode = 400;
+            throw err;
+        }
+
+        // Check if contract already exists for this order
+        const existingContract = await client.query(
+            `SELECT contract_id FROM gig_contracts WHERE gig_request_id = $1 LIMIT 1`,
+            [orderId]
+        );
+        if (existingContract.rows.length > 0) {
+            const err = new Error('A contract has already been created for this gig order');
+            err.statusCode = 409;
+            throw err;
+        }
+
+        const { rate_credits, delivery_days, no_of_revisions_max, gig_id, client_account_id, freelancer_account_id: freelancerAccountId, gig_title } = orderRow;
 
         const orderCredits = Number(rate_credits);
         if (!Number.isSafeInteger(orderCredits) || orderCredits <= 0) {
-            throw new Error('Gig order has an invalid rate');
+            const err = new Error('Gig order has an invalid rate');
+            err.statusCode = 400;
+            throw err;
         }
 
         const walletsResult = await client.query(
@@ -830,10 +982,14 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
                 wallet.type === 'escrow wallets'
         );
         if (!clientWallet || !freelancerEscrow) {
-            throw new Error('A required gig order wallet was not found');
+            const err = new Error('A required gig order wallet was not found');
+            err.statusCode = 404;
+            throw err;
         }
         if (clientWallet.status !== 'active' || freelancerEscrow.status !== 'active') {
-            throw new Error('A required gig order wallet is not active');
+            const err = new Error('A required gig order wallet is not active');
+            err.statusCode = 400;
+            throw err;
         }
 
         const debitResult = await client.query(
@@ -845,7 +1001,9 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
             [orderCredits, clientWallet.wallet_id]
         );
         if (debitResult.rows.length === 0) {
-            throw new Error('Client wallet balance is insufficient for this gig order');
+            const err = new Error('Insufficient wallet balance to fund this contract');
+            err.statusCode = 400;
+            throw err;
         }
         await client.query(
             `UPDATE wallets
@@ -854,9 +1012,9 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
             [orderCredits, freelancerEscrow.wallet_id]
         );
 
-        // 2. Update gig request status
+        // Update gig request status to 'In Contract'
         await client.query(
-            "UPDATE gig_requests SET status = 'Accepted', updated_at = NOW() WHERE gig_request_id = $1",
+            "UPDATE gig_requests SET status = 'In Contract', updated_at = NOW() WHERE gig_request_id = $1",
             [orderId]
         );
 
@@ -864,7 +1022,7 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
         const totalGigHours = deliveryDays * 24;
         const gigContractDeadlineAt = new Date(Date.now() + totalGigHours * 3600 * 1000);
 
-        // 3. Create the contract
+        // Create the contract
         const contractRes = await client.query(
             `INSERT INTO contracts (contract_type, payment_type, starts_at, deadline_at, rate_credits, revision_price_credits, status)
              VALUES ($1, $2, NOW(), $3, $4, $5, $6) RETURNING contract_id`,
@@ -890,13 +1048,13 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
             ]
         );
 
-        // 4. Link contract to gig_request
+        // Link contract to gig_request
         await client.query(
             `INSERT INTO gig_contracts (contract_id, gig_request_id) VALUES ($1, $2)`,
             [contractId, orderId]
         );
 
-        // 5. Create contract milestones from predefined gig milestones
+        // Create contract milestones from predefined gig milestones
         const milestonesRes = await client.query(
             `SELECT name, description, index FROM gig_milestones WHERE gig_id = $1 ORDER BY index ASC`,
             [gig_id]
@@ -951,28 +1109,16 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
             ]);
         }
 
-        await createNotification({
-            account_id: client_account_id,
-            message: `Your gig order for '${gig_title}' has been accepted! The contract has automatically started.`,
-            reference_table: 'contracts',
-            reference_prefix: 'CON',
-            reference_path: `/contracts/${contractId}`,
-            reference_id: contractId
-        });
-        await createNotification({
-            account_id: freelancerAccountId,
-            message: `You accepted the gig order for '${gig_title}'. The contract is now active.`,
-            reference_table: 'contracts',
-            reference_prefix: 'CON',
-            reference_path: `/contracts/${contractId}`,
-            reference_id: contractId
-        });
-
         await client.query('COMMIT');
-        return contractId;
+        return {
+            contractId,
+            gig_title,
+            freelancer_account_id: freelancerAccountId,
+            client_account_id
+        };
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('Error in acceptGigOrderRepository:', err);
+        console.error('Error in confirmGigOrderContractRepository:', err);
         throw err;
     } finally {
         client.release();
@@ -1195,6 +1341,7 @@ module.exports = {
     getGigByIdRepository,
     deleteGigRepository,
     acceptGigOrderRepository,
+    confirmGigOrderContractRepository,
     rejectGigOrderRepository,
     withdrawGigOrderRepository,
     shortlistGigOrderRepository,

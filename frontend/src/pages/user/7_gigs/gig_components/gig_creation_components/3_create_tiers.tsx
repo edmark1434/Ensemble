@@ -97,6 +97,7 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
                 <div>
                   <input
                     type="text"
+                    maxLength={120}
                     placeholder="Tier Title (e.g. Basic Edit)"
                     value={tier.title}
                     onChange={(e) => updateTier(index, "title", e.target.value)}

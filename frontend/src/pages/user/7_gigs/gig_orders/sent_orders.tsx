@@ -31,7 +31,7 @@ export const SentOrders: React.FC = () => {
         freelancer_avatar: formatAvatarUrl(o.freelancer_avatar)
       }));
       
-      const counts = { All: visibleOrders.length, Pending: 0, Accepted: 0, Rejected: 0 };
+      const counts = { All: visibleOrders.length, Pending: 0, Shortlisted: 0, Accepted: 0, "In Contract": 0, Rejected: 0 };
       visibleOrders.forEach((o: any) => {
         const s = o.status || 'Pending';
         if (counts[s as keyof typeof counts] !== undefined) {
@@ -93,8 +93,9 @@ export const SentOrders: React.FC = () => {
           >
             <div className="flex items-center justify-between mb-4">
               <span className={`px-3 py-1 text-[11px] font-bold rounded-full border ${
-                  order.status === 'Accepted' || order.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                  order.status === 'Accepted' || order.status === 'In Contract' || order.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
                   order.status === 'Rejected' || order.status === 'Cancelled' ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' :
+                  order.status === 'Shortlisted' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
                   'bg-yellow-50 text-yellow-600 border-yellow-200 dark:bg-yellow-500/10 dark:text-amber-500 dark:text-amber-400 dark:border-yellow-500/20'
                 }`}>
                 {order.status || "Pending"}
@@ -214,8 +215,10 @@ export const SentOrders: React.FC = () => {
                   </div>
                   <div className="text-right">
                     <span className={`inline-flex px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded border ${
-                      selectedOrder.status === 'Accepted' || selectedOrder.status === 'Completed' ? 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                      selectedOrder.status === 'In Contract' || selectedOrder.status === 'Completed' ? 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                      selectedOrder.status === 'Accepted' ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
                       selectedOrder.status === 'Rejected' || selectedOrder.status === 'Cancelled' ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' :
+                      selectedOrder.status === 'Shortlisted' ? 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20' :
                       'bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-500/10 dark:text-yellow-400 dark:border-yellow-500/20'
                     }`}>
                       {selectedOrder.status}
@@ -263,11 +266,27 @@ export const SentOrders: React.FC = () => {
                 >
                   View Gig Page
                 </button>
+                {selectedOrder.status === 'Accepted' && !selectedOrder.contract_id && (
+                  <button
+                    onClick={() => navigate(`/gigs/orders/sent/${selectedOrder.id}`)}
+                    className="px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-lg shadow-emerald-500/20"
+                  >
+                    Confirm & Start Contract
+                  </button>
+                )}
+                {(selectedOrder.status === 'In Contract' || selectedOrder.contract_id) && (
+                  <button
+                    onClick={() => navigate(selectedOrder.contract_id ? `/contracts/${selectedOrder.contract_id}` : `/gigs/orders/sent/${selectedOrder.id}`)}
+                    className="px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-lg shadow-blue-500/20"
+                  >
+                    View Active Contract
+                  </button>
+                )}
                 <button
                   onClick={() => setSelectedOrder(null)}
-                  className="px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-lg shadow-blue-500/20"
+                  className="px-5 py-2.5 text-xs font-bold text-gray-700 dark:text-zinc-300 bg-gray-200/50 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 rounded-xl transition-colors"
                 >
-                  Close Details
+                  Close
                 </button>
               </div>
             </motion.div>

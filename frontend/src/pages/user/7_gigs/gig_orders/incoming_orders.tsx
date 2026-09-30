@@ -47,7 +47,7 @@ export const IncomingOrders: React.FC = () => {
           client_avatar: formatAvatarUrl(o.client_avatar),
       }));
       
-      const counts = { All: fetchedOrders.length, Pending: 0, Accepted: 0, Rejected: 0 };
+      const counts = { All: fetchedOrders.length, Pending: 0, Shortlisted: 0, Accepted: 0, "In Contract": 0, Rejected: 0 };
       fetchedOrders.forEach((o: any) => {
         const s = o.status || 'Pending';
         if (counts[s as keyof typeof counts] !== undefined) {
@@ -177,8 +177,10 @@ export const IncomingOrders: React.FC = () => {
             >
               <div className="flex items-center justify-between mb-4">
                 <span className={`px-3 py-1 text-[11px] font-bold rounded-full border ${
-                    order.status === 'Accepted' || order.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                    order.status === 'In Contract' || order.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                    order.status === 'Accepted' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
                     order.status === 'Rejected' || order.status === 'Cancelled' ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' :
+                    order.status === 'Shortlisted' ? 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20' :
                     'bg-yellow-50 text-yellow-600 border-yellow-200 dark:bg-yellow-500/10 dark:text-amber-500 dark:text-amber-400 dark:border-yellow-500/20'
                   }`}>
                   {order.status || "Pending"}
