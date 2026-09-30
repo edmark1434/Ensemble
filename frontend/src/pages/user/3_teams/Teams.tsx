@@ -1,12 +1,24 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { UserHeader } from "@/components/nav/user_header";
-import { Plus, Search, Compass, X, UserPlus } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Compass, Plus, Search, UserPlus, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/axios";
-import { showSuccessToast, showErrorToast } from "@/components/ui/toast";
-import { EditTeamModal, CreateTeamValues } from "./team_modals/EditTeamModal";
-import { useDebounce } from "@/hooks/useDebounce";
-import { uploadFileToIntent } from "@/utils/uploadFileWithIntent";
+import { uploadFileToIntent } from "@/lib/uploadFile";
+import UserHeader from "@/components/nav/user_header";
+import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
+import EditTeamModal from "./team_modals/EditTeamModal";
+
+interface CreateTeamValues {
+  name: string;
+  handle: string;
+  tagline: string;
+  description: string;
+  visibility: "Public" | "Private";
+  joinPolicy: "Open" | "Approval";
+  category: string;
+  website: string;
+  location: string;
+  photo: File;
+}
 
 interface Team {
   team_id: string;
@@ -38,14 +50,18 @@ const TeamCardSkeleton = () => (
   </div>
 );
 
-export function Teams() {
+export default function Teams() {
   const navigate = useNavigate();
   const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isBrowseMode, setIsBrowseMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
 
   const [createProgress, setCreateProgress] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -380,3 +396,6 @@ function getApiError(error: unknown, fallback: string) {
 
   return fallback;
 }
+
+
+
