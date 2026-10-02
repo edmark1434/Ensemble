@@ -92,6 +92,15 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
               <div className="text-xs text-gray-700 dark:text-zinc-300 mt-2 line-clamp-2">
                 <div dangerouslySetInnerHTML={{ __html: description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }} />
               </div>
+              {skills && skills.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                  {skills.map((skill, idx) => (
+                    <span key={idx} className="px-2 py-1 rounded-md bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300 text-[10px] font-bold">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -111,7 +120,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           <div className="flex flex-col md:flex-row gap-6">
             <div className="flex-1 space-y-2">
               <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1"><FileText className="h-3.5 w-3.5" /> Terms of Service</span>
-              <div className="text-[10px] text-gray-600 dark:text-zinc-400 bg-white dark:bg-dark-base p-3 rounded-xl border border-gray-200 dark:border-white/10 line-clamp-3">
+              <div className="text-[10px] text-gray-600 dark:text-zinc-400 bg-white dark:bg-dark-base p-3 rounded-xl border border-gray-200 dark:border-white/10 whitespace-pre-wrap max-h-64 overflow-y-auto">
                 {termsOfService || "Standard Agreement"}
               </div>
             </div>
