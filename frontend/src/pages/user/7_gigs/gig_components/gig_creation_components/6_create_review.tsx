@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { ArrowLeft, CheckCircle2, Rocket, Calendar, MapPin, Tag, Box, Layers, DollarSign, Edit2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { CreditIcon } from "@/components/ui/credit-icon";
+import { FileText, Image as ImageIcon } from "lucide-react";
 import type { GigTier, Milestone, Questionnaire } from "../../gig_datasets";
 import MarketplaceIdentitySelector from "@/components/marketplace/MarketplaceIdentitySelector";
 
@@ -94,6 +96,38 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           </div>
         </div>
 
+                {/* Media & Terms */}
+        <div className="p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-4 border-b border-gray-200 dark:border-white/10 pb-2 flex justify-between items-center">
+            <div className="flex items-center">
+              <span>Media & Terms</span>
+              {onEdit && (
+                <button onClick={() => onEdit(2)} className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors ml-2" title="Edit section">
+                  <Edit2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </h3>
+          <div className="flex flex-col md:flex-row gap-6">
+            <div className="flex-1 space-y-2">
+              <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1"><FileText className="h-3.5 w-3.5" /> Terms of Service</span>
+              <div className="text-[10px] text-gray-600 dark:text-zinc-400 bg-white dark:bg-dark-base p-3 rounded-xl border border-gray-200 dark:border-white/10 line-clamp-3">
+                {termsOfService || "Standard Agreement"}
+              </div>
+            </div>
+            {galleryUrls.length > 0 && (
+              <div className="flex-[1.5]">
+                <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2"><ImageIcon className="h-3.5 w-3.5" /> Gallery Showcase ({galleryUrls.length})</span>
+                <div className="flex flex-wrap gap-2">
+                  {galleryUrls.map((url, idx) => (
+                    <img key={idx} src={url} alt={"Gallery " + idx} className="w-14 h-14 rounded-lg object-cover border border-gray-200 dark:border-white/10" />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Tiers Summary */}
         <div className="p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
           <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-4 border-b border-gray-200 dark:border-white/10 pb-2 flex items-center justify-between">
@@ -105,7 +139,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
               <div key={idx} className="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] font-bold text-gray-500 uppercase">{tier.tierName}</span>
-                  <span className="text-xs font-black text-gray-900 dark:text-white">${tier.price}</span>
+                  <span className="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1"><CreditIcon className="h-3 w-3 text-yellow-500" /> {tier.price}</span>
                 </div>
                 <div className="text-xs font-bold text-gray-800 dark:text-zinc-200 mb-1 truncate">{tier.title}</div>
                 <div className="text-[10px] text-gray-500 flex items-center gap-2">
