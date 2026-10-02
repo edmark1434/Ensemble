@@ -80,7 +80,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           </h3>
           <div className="flex flex-col md:flex-row gap-5">
             {thumbnailUrl && (
-              <img src={thumbnailUrl} alt="Thumbnail" className="w-24 h-24 object-cover rounded-xl border border-gray-200 dark:border-white/10" />
+              <img src={thumbnailUrl} alt="Thumbnail" className="w-full md:w-48 aspect-video object-cover rounded-xl border border-gray-200 dark:border-white/10" />
             )}
             <div className="flex-1 space-y-2">
               <h4 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h4>
@@ -129,7 +129,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                 <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2"><ImageIcon className="h-3.5 w-3.5" /> Gallery Showcase ({galleryUrls.length})</span>
                 <div className="flex flex-wrap gap-2">
                   {galleryUrls.map((url, idx) => (
-                    <img key={idx} src={url} alt={"Gallery " + idx} className="w-14 h-14 rounded-lg object-cover border border-gray-200 dark:border-white/10" />
+                    <img key={idx} src={url} alt={"Gallery " + idx} className="w-20 md:w-24 aspect-video rounded-lg object-cover border border-gray-200 dark:border-white/10" />
                   ))}
                 </div>
               </div>
