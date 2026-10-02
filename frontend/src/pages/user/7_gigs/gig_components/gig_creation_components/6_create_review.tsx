@@ -127,9 +127,9 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
             {galleryUrls.length > 0 && (
               <div className="flex-[1.5]">
                 <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2"><ImageIcon className="h-3.5 w-3.5" /> Gallery Showcase ({galleryUrls.length})</span>
-                <div className="grid grid-cols-2 gap-2 w-full">
+                <div className="grid grid-cols-2 gap-2 w-full min-h-[140px] md:min-h-[180px]">
                     {galleryUrls.length > 0 && (
-                      <div className="col-span-1 aspect-video">
+                      <div className="col-span-1 h-full">
                         <img src={galleryUrls[0]} alt="Gallery Main" className="w-full h-full object-cover rounded-lg border border-gray-200 dark:border-white/10 shadow-sm" />
                       </div>
                     )}
