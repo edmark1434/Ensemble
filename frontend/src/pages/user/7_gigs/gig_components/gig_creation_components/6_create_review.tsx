@@ -118,18 +118,18 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
             </div>
           </h3>
           <div className="flex flex-col md:flex-row gap-6">
-            <div className="flex-1 space-y-2">
-              <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1"><FileText className="h-3.5 w-3.5" /> Terms of Service</span>
-              <div className="text-[10px] text-gray-600 dark:text-zinc-400 bg-white dark:bg-dark-base p-3 rounded-xl border border-gray-200 dark:border-white/10 whitespace-pre-wrap max-h-64 overflow-y-auto">
+            <div className="flex-1 flex flex-col">
+              <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2"><FileText className="h-3.5 w-3.5" /> Terms of Service</span>
+              <div className="flex-1 text-[10px] text-gray-600 dark:text-zinc-400 bg-white dark:bg-dark-base p-3 rounded-xl border border-gray-200 dark:border-white/10 whitespace-pre-wrap max-h-64 overflow-y-auto">
                 {termsOfService || "Standard Agreement"}
               </div>
             </div>
             {galleryUrls.length > 0 && (
               <div className="flex-[1.5]">
                 <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2"><ImageIcon className="h-3.5 w-3.5" /> Gallery Showcase ({galleryUrls.length})</span>
-                <div className="grid grid-cols-2 gap-2 h-32 md:h-40 w-full max-w-sm">
+                <div className="grid grid-cols-2 gap-2 w-full">
                     {galleryUrls.length > 0 && (
-                      <div className="col-span-1 h-full">
+                      <div className="col-span-1 aspect-video">
                         <img src={galleryUrls[0]} alt="Gallery Main" className="w-full h-full object-cover rounded-lg border border-gray-200 dark:border-white/10 shadow-sm" />
                       </div>
                     )}
