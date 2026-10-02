@@ -208,6 +208,9 @@ const GigCreatePage: React.FC = () => {
     }
 
     setCurrentSlide(targetSlide);
+    if (targetSlide > highestStepReached) {
+      setHighestStepReached(targetSlide);
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -472,6 +475,13 @@ const GigCreatePage: React.FC = () => {
                 </motion.div>
               )}
             </AnimatePresence>
+            {highestStepReached >= 6 && currentSlide < 6 && (
+              <div className="absolute -bottom-16 right-0">
+                <button onClick={() => handleNext(6)} className="flex items-center gap-2 rounded-xl bg-purple-600/10 text-purple-600 dark:text-purple-400 px-6 py-2.5 text-xs font-bold hover:bg-purple-600/20 transition-all border border-purple-500/20">
+                  Jump to Review <Rocket className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
