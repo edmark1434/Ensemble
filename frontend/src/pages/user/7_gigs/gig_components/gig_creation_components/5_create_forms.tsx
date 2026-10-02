@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowRight, Plus, Trash2, Check, X, GripVertical, FileText, Upload, ListTodo } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Check, X, GripVertical, FileText, Upload, ListTodo, HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Questionnaire } from "../../gig_datasets";
 
@@ -86,7 +86,15 @@ export const CreateForms: React.FC<CreateFormsProps> = ({
   return (
     <div className="space-y-6 text-left">
       <div>
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-0.5">Requirements & Questionnaires</h2>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-0.5 flex items-center gap-1.5">
+          Requirements & Questionnaires
+          <div className="group relative flex items-center cursor-help">
+            <HelpCircle className="h-4 w-4 text-gray-400" />
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-white dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 normal-case font-normal text-center shadow-xl">
+              Ask buyers for the necessary information, files, or references you need to begin working on their order immediately.
+            </div>
+          </div>
+        </h2>
         <p className="text-xs text-gray-600 dark:text-zinc-300">Set up questions and requests for the client to answer when they order your service.</p>
       </div>
 
