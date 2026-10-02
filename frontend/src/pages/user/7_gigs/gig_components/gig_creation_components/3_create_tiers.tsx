@@ -192,8 +192,8 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
           </div>
         </label>
         
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-1">
-          {[10, 15, 20, 25, 30].map((rate) => {
+        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 mt-1">
+          {[10, 15, 20, 25, 30, 40, 50].map((rate) => {
             const isSelected = additionalWorkRate === rate;
             return (
               <button

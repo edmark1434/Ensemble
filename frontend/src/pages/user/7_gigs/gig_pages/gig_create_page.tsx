@@ -97,7 +97,11 @@ const GigCreatePage: React.FC = () => {
     { tierName: "Basic", title: "Essential Delivery", description: "Standard quality output perfect for simple projects.", daysOfDelivery: 1, revisions: 1, price: 100 },
     { tierName: "Standard", title: "Pro Delivery", description: "High-quality output with source files and extra revisions.", daysOfDelivery: 3, revisions: 2, price: 300 }
   ]);
-  const [milestones, setMilestones] = useState<Milestone[]>([{ name: "Kickoff", description: "Initial setup and requirements gathering." }]);
+  const [milestones, setMilestones] = useState<Milestone[]>([
+    { id: "m1", name: "Phase 1: Discovery & Planning", description: "Initial setup, gathering requirements, and outlining the project scope." },
+    { id: "m2", name: "Phase 2: Core Development", description: "Executing the main deliverables and providing a first draft for review." },
+    { id: "m3", name: "Phase 3: Final Revisions & Handover", description: "Applying feedback and delivering the final source files." }
+  ]);
   const [additionalWorkRate, setAdditionalWorkRate] = useState<number>(0);
 
   // --- SLIDE 4: QUESTIONNAIRES ---

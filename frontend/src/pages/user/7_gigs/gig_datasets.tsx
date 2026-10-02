@@ -27,6 +27,7 @@ export interface GigTier {
 }
 
 export interface Milestone {
+  id?: string;
   name: string;
   description: string;
 }
