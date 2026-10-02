@@ -293,20 +293,6 @@ export function AccountRestrictionHost() {
       {suspended && warning ? (
         <SuspensionBanner standing={warning} onOpenNotifications={() => navigate('/notifications')} />
       ) : null}
-      {showWarning && warning ? (
-        <div className="sticky top-0 z-[80] px-3 py-3 sm:px-6">
-          <AccountStandingNotice
-            standing={{
-              ...warning,
-              message:
-                warning.message ||
-                `You have ${warning.violations?.length || 0} active violation${
-                  (warning.violations?.length || 0) === 1 ? '' : 's'
-                }. Further violations can suspend this account.`,
-            }}
-          />
-        </div>
-      ) : null}
       {blocked ? (
         <AccountBlockedScreen
           standing={blocked}

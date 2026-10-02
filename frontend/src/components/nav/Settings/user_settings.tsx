@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, CreditCard, HelpCircle, FileText, ArrowLeft, AlertCircle, Monitor, Wallet } from "lucide-react";
+import { User, CreditCard, HelpCircle, FileText, ArrowLeft, AlertCircle, Monitor, Wallet, ShieldAlert } from "lucide-react";
 
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -18,7 +18,8 @@ import { UserSettingsHelp } from "./user_settings_help";
 import { UserSettingsLegalPolicies } from "./user_settings_legalpolicies";
 import { UserSettingsDisplay } from "./user_settings_display";
 import { UserSettingsWallet } from "./user_settings_wallet";
-type TabType = "account" | "wallet" | "subscription" | "help" | "legal" | "display";
+import { AccountStandingNotice, type AccountStanding } from "@/components/ui/AccountStanding";
+type TabType = "account" | "wallet" | "subscription" | "help" | "legal" | "display" | "violations";
 
 interface Preset {
   file_id: number;
@@ -279,13 +280,34 @@ export default function UserSettings() {
       }
     }
   };
-  const navItems = [
-    { id: "display", label: "Display Settings", icon: Monitor },
-    { id: "account", label: "Account Details", icon: User },
-    { id: "wallet", label: "Wallet", icon: Wallet },
-    { id: "subscription", label: "Subscription Details", icon: CreditCard },
-    { id: "help", label: "Help & Support", icon: HelpCircle },
-    { id: "legal", label: "Legal & Policies", icon: FileText },
+  const navCategories = [
+    {
+      title: "General",
+      items: [
+        { id: "display", label: "Display Settings", icon: Monitor },
+      ]
+    },
+    {
+      title: "Account",
+      items: [
+        { id: "account", label: "Account Details", icon: User },
+        { id: "violations", label: "Account Violations", icon: ShieldAlert },
+      ]
+    },
+    {
+      title: "Billing & Credits",
+      items: [
+        { id: "wallet", label: "Wallet", icon: Wallet },
+        { id: "subscription", label: "Subscription Details", icon: CreditCard },
+      ]
+    },
+    {
+      title: "Information",
+      items: [
+        { id: "help", label: "Help & Support", icon: HelpCircle },
+        { id: "legal", label: "Legal & Policies", icon: FileText },
+      ]
+    }
   ] as const;
 
   return (
@@ -322,31 +344,38 @@ export default function UserSettings() {
 
           {/* Side Navigation Menu */}
           <aside className="md:col-span-1 space-y-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => handleTabChange(item.id)}
-                  className={`relative w-full flex items-center gap-3.5 px-5 py-3.5 rounded-xl text-sm font-medium transition-all ${
-                    isActive
-                      ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 shadow-sm dark:shadow-md"
-                      : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-200 hover:bg-gray-50 dark:hover:bg-white/5 border border-transparent"
-                  }`}
-                >
-                  <Icon className={`h-4 w-4 ${isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-zinc-400"}`} />
-                  <span className="z-10">{item.label}</span>
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeTabIndicator"
-                      className="absolute inset-0 bg-blue-500/10 rounded-xl border border-blue-500/20"
-                      transition={{ type: "spring", stiffness: 350, damping: 30 }}
-                    />
-                  )}
-                </button>
-              );
-            })}
+            {navCategories.map((category) => (
+              <div key={category.title} className="mb-6 last:mb-0 space-y-2">
+                <h3 className="px-5 text-xs font-semibold text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-2">
+                  {category.title}
+                </h3>
+                {category.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleTabChange(item.id)}
+                      className={`relative w-full flex items-center gap-3.5 px-5 py-3.5 rounded-xl text-sm font-medium transition-all ${
+                        isActive
+                          ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 shadow-sm dark:shadow-md"
+                          : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-200 hover:bg-gray-50 dark:hover:bg-white/5 border border-transparent"
+                      }`}
+                    >
+                      <Icon className={`h-4 w-4 ${isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-zinc-400"}`} />
+                      <span className="z-10">{item.label}</span>
+                      {isActive && (
+                        <motion.div
+                          layoutId="activeTabIndicator"
+                          className="absolute inset-0 bg-blue-500/10 rounded-xl border border-blue-500/20"
+                          transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </aside>
 
           {/* Main Animated Workspace */}
@@ -390,6 +419,37 @@ export default function UserSettings() {
                 )}
 
                 {activeTab === "wallet" && <UserSettingsWallet />}
+
+                {activeTab === "violations" && (
+                  <div className="space-y-6">
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900 dark:text-white">Account Violations</h2>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">
+                        Review your account standing and active violations.
+                      </p>
+                    </div>
+                    {(() => {
+                      const warning = globalUser?.restriction as AccountStanding | undefined;
+                      const hasViolations = warning && (warning.violations || []).length > 0;
+                      return hasViolations ? (
+                        <AccountStandingNotice
+                          standing={{
+                            ...warning,
+                            message:
+                              warning.message ||
+                              `You have ${warning.violations?.length || 0} active violation${
+                                (warning.violations?.length || 0) === 1 ? '' : 's'
+                              }. Further violations can suspend this account.`,
+                          }}
+                        />
+                      ) : (
+                        <div className="rounded-xl border border-gray-200 dark:border-white/10 p-6 text-center text-gray-500 dark:text-zinc-400">
+                          You have no active violations. Keep up the good work!
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
 
                 {activeTab === "help" && <UserSettingsHelp />}
 
