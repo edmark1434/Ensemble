@@ -40,56 +40,76 @@ export const CreateMilestones: React.FC<CreateMilestonesProps> = ({
         <p className="text-xs text-gray-600 dark:text-zinc-300">Break down large orders into phases to establish structured deliveries.</p>
       </div>
 
-      <div className="space-y-4 max-w-2xl">
+      <div className="space-y-0 max-w-2xl">
         {milestones.length === 0 ? (
-          <div className="text-center py-10 border border-dashed border-gray-200 dark:border-white/10 rounded-xl text-gray-400 dark:text-zinc-500 text-sm bg-gray-50 dark:bg-white/[0.02]">
+          <div className="text-center py-10 border border-dashed border-gray-200 dark:border-white/10 rounded-xl text-gray-400 dark:text-zinc-500 text-sm bg-gray-50 dark:bg-white/[0.02] mb-4">
             No milestones added. Click below to add phases to your project.
           </div>
         ) : (
           milestones.map((milestone, idx) => (
-            <div key={idx} className="relative p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none">
-              <div className="flex items-center justify-between mb-4 border-b border-gray-100 dark:border-white/5 pb-3">
-                <span className="text-sm font-bold text-gray-900 dark:text-white">Step {idx + 1}</span>
-                <button onClick={() => handleRemoveMilestone(idx)} className="text-red-400 hover:text-red-500 transition-colors p-1.5 bg-red-50 dark:bg-red-500/10 rounded-lg">
-                  <X className="h-3.5 w-3.5" />
-                </button>
+            <div key={idx} className="relative flex gap-4">
+              {/* Timeline Track */}
+              <div className="flex flex-col items-center">
+                <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-sm shrink-0 shadow-sm border border-blue-200 dark:border-blue-500/30 z-10">
+                  {idx + 1}
+                </div>
+                {/* Vertical Line */}
+                <div className="w-px h-full bg-gray-200 dark:bg-white/10 my-1" />
               </div>
               
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block mb-1.5">Milestone Name <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Phase 1: Initial Draft"
-                    value={milestone.name}
-                    onChange={(e) => updateMilestone(idx, "name", e.target.value)}
-                    className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all ${
-                       errors[`milestone_${idx}_name`] ? "border-red-500/50" : "border-gray-200 dark:border-white/10"
-                    }`}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block mb-1.5">Description <span className="text-red-500">*</span></label>
-                  <textarea
-                    placeholder="Deliver rough cut / core framework for initial feedback."
-                    value={milestone.description}
-                    onChange={(e) => updateMilestone(idx, "description", e.target.value)}
-                    className={`w-full h-24 rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-4 py-3 text-xs text-gray-600 dark:text-zinc-300 outline-none focus:border-blue-500/50 transition-all resize-none ${
-                       errors[`milestone_${idx}_desc`] ? "border-red-500/50" : "border-gray-200 dark:border-white/10"
-                    }`}
-                  />
+              {/* Content Card */}
+              <div className="flex-1 pb-6 pt-1">
+                <div className="relative p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 shadow-sm dark:shadow-none hover:border-gray-300 dark:hover:border-white/20 transition-all group">
+                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 dark:border-white/5">
+                    <span className="text-sm font-bold text-gray-900 dark:text-white">Milestone {idx + 1}</span>
+                    <button onClick={() => handleRemoveMilestone(idx)} className="text-gray-400 hover:text-red-500 transition-colors p-1.5 opacity-0 group-hover:opacity-100 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block mb-1.5">Milestone Name <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Phase 1: Initial Draft"
+                        value={milestone.name}
+                        onChange={(e) => updateMilestone(idx, "name", e.target.value)}
+                        className={\`w-full rounded-xl border bg-gray-50 dark:bg-dark-base shadow-sm dark:shadow-none px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all \${
+                           errors[\`milestone_\${idx}_name\`] ? "border-red-500/50" : "border-gray-200 dark:border-white/10"
+                        }\`}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block mb-1.5">Description <span className="text-red-500">*</span></label>
+                      <textarea
+                        placeholder="Deliver rough cut / core framework for initial feedback."
+                        value={milestone.description}
+                        onChange={(e) => updateMilestone(idx, "description", e.target.value)}
+                        className={\`w-full h-24 rounded-xl border bg-gray-50 dark:bg-dark-base shadow-sm dark:shadow-none px-4 py-3 text-xs text-gray-600 dark:text-zinc-300 outline-none focus:border-blue-500/50 transition-all resize-none \${
+                           errors[\`milestone_\${idx}_desc\`] ? "border-red-500/50" : "border-gray-200 dark:border-white/10"
+                        }\`}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           ))
         )}
 
-        <button
-          onClick={handleAddMilestone}
-          className="w-full py-3.5 rounded-xl border border-dashed border-gray-300 dark:border-white/20 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors flex items-center justify-center gap-2 text-xs font-bold text-gray-500 hover:text-blue-600 dark:text-zinc-400 dark:hover:text-blue-400"
-        >
-          <Plus className="h-4 w-4" /> Add Milestone
-        </button>
+        <div className="relative flex gap-4 mt-2">
+          <div className="flex flex-col items-center">
+             <div className="h-8 w-8 rounded-full bg-gray-50 dark:bg-white/5 border border-dashed border-gray-300 dark:border-white/20 flex items-center justify-center shrink-0">
+               <Plus className="h-4 w-4 text-gray-400" />
+             </div>
+          </div>
+          <div className="flex-1 flex items-center">
+             <button onClick={handleAddMilestone} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1.5 transition px-2 py-1">
+               Add Another Milestone
+             </button>
+          </div>
+        </div>
       </div>
 
       {/* Actions */}

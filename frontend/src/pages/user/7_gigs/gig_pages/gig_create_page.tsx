@@ -98,7 +98,7 @@ const GigCreatePage: React.FC = () => {
     { tierName: "Standard", title: "Pro Delivery", description: "High-quality output with source files and extra revisions.", daysOfDelivery: 3, revisions: 2, price: 300 }
   ]);
   const [milestones, setMilestones] = useState<Milestone[]>([{ name: "Kickoff", description: "Initial setup and requirements gathering." }]);
-  const [additionalWorkRate, setAdditionalWorkRate] = useState<number>(50);
+  const [additionalWorkRate, setAdditionalWorkRate] = useState<number>(0);
 
   // --- SLIDE 4: QUESTIONNAIRES ---
   const [questionnaires, setQuestionnaires] = useState<Questionnaire[]>([]);
@@ -154,7 +154,7 @@ const GigCreatePage: React.FC = () => {
         if (!tier.description.trim()) stepErrors[`tier_${index}_description`] = "Description required";
         if (tier.price <= 0) stepErrors[`tier_${index}_price`] = "Price required";
       });
-      if (additionalWorkRate <= 0) stepErrors.additionalWorkRate = "Hourly rate must be > 0";
+      if (additionalWorkRate <= 0) stepErrors.additionalWorkRate = "Please select an additional work rate";
 
       if (Object.keys(stepErrors).length > 0) {
         setErrors(stepErrors);

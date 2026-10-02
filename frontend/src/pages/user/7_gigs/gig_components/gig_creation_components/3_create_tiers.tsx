@@ -1,6 +1,6 @@
 import { CreditIcon } from "@/components/ui/credit-icon";
 import React, { useState } from "react";
-import { ArrowRight, Plus, Minus, Trash2, ChevronDown, Check, HelpCircle } from "lucide-react";
+import { ArrowRight, Plus, Minus, Trash2, ChevronDown, Check, HelpCircle, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { GigTier, Milestone } from "../../gig_datasets";
 
@@ -62,7 +62,15 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
       {/* Tiers Container */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">Service Tiers <span className="text-red-500">*</span></label>
+          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider flex items-center gap-1.5 mb-1">
+            Service Tiers <span className="text-red-500">*</span>
+            <div className="group relative flex items-center cursor-help">
+              <HelpCircle className="h-3 w-3 text-gray-400" />
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 bg-white dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 normal-case font-normal text-center shadow-xl">
+                Create multiple pricing packages. Each higher tier must have a greater price than the previous one.
+              </div>
+            </div>
+          </label>
           <span className="text-[10px] text-gray-600 dark:text-zinc-400">{tiers.length}/3 Tiers</span>
         </div>
 
@@ -143,13 +151,13 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
                 {/* Price */}
                 <div className="mt-auto pt-2">
                   <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><CreditIcon className="h-4 w-4 text-yellow-500" /></div>
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2"><CreditIcon className="h-4 w-4 text-yellow-500" /></div>
                     <input
                       type="number"
                       min="5"
                       value={tier.price || ""}
                       onChange={(e) => updateTier(index, "price", parseInt(e.target.value) || 0)}
-                      className={`w-full rounded-xl border bg-white dark:bg-zinc-900 shadow-sm dark:shadow-none pl-7 pr-3 py-2 text-sm font-black text-gray-900 dark:text-white outline-none transition-all ${
+                      className={`w-full rounded-xl border bg-white dark:bg-zinc-900 shadow-sm dark:shadow-none pl-9 pr-3 py-2 text-sm font-black text-gray-900 dark:text-white outline-none transition-all ${
                         errors[`tier_${index}_price`] ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
                       }`}
                     />
@@ -195,12 +203,17 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
                   setAdditionalWorkRate(rate);
                   clearError("additionalWorkRate");
                 }}
-                className={`flex flex-col items-center justify-center py-2.5 rounded-xl border transition-all ${
+                className={`relative flex flex-col items-center justify-center py-2.5 rounded-xl border transition-all ${
                   isSelected 
                     ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/20" 
                     : "bg-white dark:bg-zinc-900 border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:border-blue-500/50 hover:bg-gray-50 dark:hover:bg-white/5"
                 }`}
               >
+                {isSelected && (
+                  <div className="absolute top-1 right-1">
+                    <CheckCircle2 className="h-3 w-3 fill-white text-blue-600" />
+                  </div>
+                )}
                 <span className="text-sm font-black">+{rate}%</span>
                 <span className={`text-[9px] font-bold uppercase ${isSelected ? 'text-blue-100' : 'text-gray-400 dark:text-zinc-500'}`}>per extra</span>
               </button>
