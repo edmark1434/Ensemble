@@ -205,12 +205,13 @@ const GigEditPage: React.FC = () => {
   };
 
   const handleNext = (targetSlide: number) => {
-    if (currentSlide === 1 && targetSlide === 2) {
+    if (currentSlide === 1 && targetSlide > 1) {
       const stepErrors: Record<string, string> = {};
       if (!title.trim()) stepErrors.title = "Service title is required";
       if (!description.trim()) stepErrors.description = "Service description is required";
       if (!category) stepErrors.category = "Category is required";
       if (!thumbnailFile && !thumbnailUrl) stepErrors.thumbnail = "Thumbnail image is required";
+      if (skills.length === 0) stepErrors.skills = "At least 1 skill is required";
 
       if (Object.keys(stepErrors).length > 0) {
         setErrors(stepErrors);
@@ -219,7 +220,7 @@ const GigEditPage: React.FC = () => {
       setErrors({});
     }
 
-    if (currentSlide === 2 && targetSlide === 3) {
+    if (currentSlide === 2 && targetSlide > 2) {
       const stepErrors: Record<string, string> = {};
       if (skills.length === 0) stepErrors.skills = "At least 1 skill is required";
       if (!firstDraftDelivery) stepErrors.firstDraftDelivery = "Timeline is required";
@@ -233,7 +234,7 @@ const GigEditPage: React.FC = () => {
       setErrors({});
     }
 
-    if (currentSlide === 3 && targetSlide === 4) {
+    if (currentSlide === 3 && targetSlide > 3) {
       const stepErrors: Record<string, string> = {};
       tiers.forEach((tier, index) => {
         if (!tier.title.trim()) stepErrors[`tier_${index}_title`] = "Title required";
@@ -249,7 +250,7 @@ const GigEditPage: React.FC = () => {
       setErrors({});
     }
 
-    if (currentSlide === 4 && targetSlide === 5) {
+    if (currentSlide === 4 && targetSlide > 4) {
       const stepErrors: Record<string, string> = {};
       if (milestones.length === 0) {
         stepErrors.milestones = "At least 1 milestone is required";
@@ -265,7 +266,7 @@ const GigEditPage: React.FC = () => {
       setErrors({});
     }
 
-    if (currentSlide === 5 && targetSlide === 6) {
+    if (currentSlide === 5 && targetSlide > 5) {
       const stepErrors: Record<string, string> = {};
       questionnaires.forEach((q) => {
         if (!q.question.trim()) stepErrors[`question_${q.id}_question`] = "Question text is required";
@@ -399,7 +400,7 @@ const GigEditPage: React.FC = () => {
 
         {/* Header (Stepper) */}
         <div className="mb-6 w-full">
-          <GigCreateHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
+          <GigCreateHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} highestStepReached={highestStepReached} onJumpToReview={() => handleNext(6)} />
         </div>
 
         {/* Content Area */}
