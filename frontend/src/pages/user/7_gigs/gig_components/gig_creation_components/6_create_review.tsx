@@ -140,7 +140,14 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
         {/* Tiers Summary */}
         <div className="p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
           <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-4 border-b border-gray-200 dark:border-white/10 pb-2 flex items-center justify-between">
-            <span>Pricing Tiers</span>
+            <div className="flex items-center">
+              <span>Pricing Tiers</span>
+              {onEdit && (
+                <button onClick={() => onEdit(3)} className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors ml-2" title="Edit section">
+                  <Edit2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
             <span className="bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded text-[9px]">+{additionalWorkRate}/hr Additional</span>
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -162,8 +169,15 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
         {/* Milestones Summary */}
         {milestones.length > 0 && (
           <div className="p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-4 border-b border-gray-200 dark:border-white/10 pb-2 flex justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-4 border-b border-gray-200 dark:border-white/10 pb-2 flex justify-between items-center">
+            <div className="flex items-center">
               <span>Project Milestones</span>
+              {onEdit && (
+                <button onClick={() => onEdit(4)} className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors ml-2" title="Edit section">
+                  <Edit2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
               <span>{milestones.length} Phases</span>
             </h3>
             <div className="space-y-2">
@@ -187,8 +201,15 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
 
         {/* Requirements Summary */}
         <div className="p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-4 border-b border-gray-200 dark:border-white/10 pb-2 flex justify-between">
-            <span>Client Requirements</span>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-4 border-b border-gray-200 dark:border-white/10 pb-2 flex justify-between items-center">
+            <div className="flex items-center">
+              <span>Client Requirements</span>
+              {onEdit && (
+                <button onClick={() => onEdit(5)} className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors ml-2" title="Edit section">
+                  <Edit2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
             <span>{questionnaires.length} Questions</span>
           </h3>
           <div className="space-y-2">

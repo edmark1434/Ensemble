@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { Rocket } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -103,6 +104,7 @@ const GigCreatePage: React.FC = () => {
     { id: "m3", name: "Phase 3: Final Revisions & Handover", description: "Applying feedback and delivering the final source files." }
   ]);
   const [additionalWorkRate, setAdditionalWorkRate] = useState<number>(0);
+    const [highestStepReached, setHighestStepReached] = useState<number>(1);
 
   // --- SLIDE 4: QUESTIONNAIRES ---
   const [questionnaires, setQuestionnaires] = useState<Questionnaire[]>([]);
@@ -123,7 +125,7 @@ const GigCreatePage: React.FC = () => {
   };
 
   const handleNext = (targetSlide: number) => {
-    if (currentSlide === 1 && targetSlide === 2) {
+    if (currentSlide === 1 && targetSlide > 1) {
       const stepErrors: Record<string, string> = {};
       if (!title.trim()) stepErrors.title = "Service title is required";
       if (!description.trim()) stepErrors.description = "Service description is required";
@@ -138,7 +140,7 @@ const GigCreatePage: React.FC = () => {
       setErrors({});
     }
 
-    if (currentSlide === 2 && targetSlide === 3) {
+    if (currentSlide === 2 && targetSlide > 2) {
         const stepErrors: Record<string, string> = {};
       if (!firstDraftDelivery) stepErrors.firstDraftDelivery = "Timeline is required";
       if (!termsOfService.trim()) stepErrors.termsOfService = "Terms of service are required";
@@ -151,7 +153,7 @@ const GigCreatePage: React.FC = () => {
       setErrors({});
     }
 
-    if (currentSlide === 3 && targetSlide === 4) {
+    if (currentSlide === 3 && targetSlide > 3) {
       const stepErrors: Record<string, string> = {};
       tiers.forEach((tier, index) => {
         if (!tier.title.trim()) stepErrors[`tier_${index}_title`] = "Title required";
@@ -167,7 +169,7 @@ const GigCreatePage: React.FC = () => {
       setErrors({});
     }
 
-    if (currentSlide === 4 && targetSlide === 5) {
+    if (currentSlide === 4 && targetSlide > 4) {
       const stepErrors: Record<string, string> = {};
       if (milestones.length === 0) {
         stepErrors.milestones = "At least 1 milestone is required";
@@ -183,7 +185,7 @@ const GigCreatePage: React.FC = () => {
       setErrors({});
     }
 
-    if (currentSlide === 5 && targetSlide === 6) {
+    if (currentSlide === 5 && targetSlide > 5) {
       const stepErrors: Record<string, string> = {};
       questionnaires.forEach((q, i) => {
         if (!q.question.trim()) stepErrors[`question_${q.id}_question`] = "Question text is required";
