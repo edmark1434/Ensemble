@@ -32,6 +32,7 @@ const GigEditPage: React.FC = () => {
   const theme = useGlobalState((state) => state.theme);
 
   const [currentSlide, setCurrentSlide] = useState<number>(1);
+  const [highestStepReached, setHighestStepReached] = useState<number>(1);
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
