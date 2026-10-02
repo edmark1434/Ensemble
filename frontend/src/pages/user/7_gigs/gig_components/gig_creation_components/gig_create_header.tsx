@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, Rocket } from "lucide-react";
 
 export interface StepConfig {
   id: number;
@@ -16,11 +16,15 @@ export const GIG_WIZARD_STEPS: StepConfig[] = [
 ];
 
 interface GigCreateHeaderProps {
+  highestStepReached?: number;
+  onJumpToReview?: () => void;
   currentSlide: number;
   onReturn: () => void;
 }
 
 export const GigCreateHeader: React.FC<GigCreateHeaderProps> = ({
+  highestStepReached = 1,
+  onJumpToReview,
   currentSlide,
   onReturn,
 }) => {
@@ -55,6 +59,15 @@ export const GigCreateHeader: React.FC<GigCreateHeaderProps> = ({
                 >
                   {isCompleted ? <Check className="h-4 w-4" /> : step.id}
                 </div>
+                {step.id === 6 && highestStepReached >= 6 && currentSlide < 6 && (
+                  <button 
+                    onClick={onJumpToReview}
+                    className="absolute -top-10 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg hover:bg-purple-700 transition flex items-center gap-1 animate-bounce whitespace-nowrap cursor-pointer z-50"
+                  >
+                    Jump Here <Rocket className="h-3 w-3" />
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-purple-600 rotate-45" />
+                  </button>
+                )}
                 <span
                   className={`text-[10px] font-bold uppercase tracking-wider mt-2 transition-colors absolute -bottom-5 whitespace-nowrap ${
                     isActive ? "text-blue-600 dark:text-blue-400" : isCompleted ? "text-green-600 dark:text-green-400" : "text-gray-500 dark:text-zinc-500"
