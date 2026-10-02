@@ -1,5 +1,5 @@
 import React, { useRef, useState, type ChangeEvent } from "react";
-import { ArrowRight, Image as ImageIcon, ChevronDown, Check, Bold, Italic, List, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Image as ImageIcon, X, ChevronDown, Check, Bold, Italic, List, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { showErrorToast } from "@/components/utility/toast";
 
@@ -38,6 +38,8 @@ interface CreateCoreInfoProps {
   setDescription: (val: string) => void;
   category: string;
   setCategory: (val: string) => void;
+  skills: string[];
+  setSkills: React.Dispatch<React.SetStateAction<string[]>>;
   previewUrl: string | null;
   setPreviewUrl: (val: string | null) => void;
   setThumbnailFile?: (file: File | null) => void;
@@ -130,6 +132,8 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
   setDescription,
   category,
   setCategory,
+  skills,
+  setSkills,
   previewUrl,
   setPreviewUrl,
   setThumbnailFile,
@@ -143,6 +147,34 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [skillInput, setSkillInput] = useState("");
+
+  
+  const handleSkillKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const val = skillInput.trim();
+      if (!val) return;
+      if (skills.length >= 8) {
+        setErrors(prev => ({ ...prev, skills: "You can add a maximum of 8 skills." }));
+        return;
+      }
+      if (skills.includes(val)) {
+        setErrors(prev => ({ ...prev, skills: "This skill has already been added." }));
+        return;
+      }
+      setSkills(prev => [...prev, val]);
+      setSkillInput("");
+      clearError("skills");
+    } else if (e.key === 'Backspace' && !skillInput && skills.length > 0) {
+      e.preventDefault();
+      setSkills(prev => prev.slice(0, -1));
+    }
+  };
+
+  const removeSkill = (skillToRemove: string) => {
+    setSkills(prev => prev.filter(s => s !== skillToRemove));
+  };
 
   const insertMarkdown = (prefix: string, suffix: string = '') => {
     const textarea = descriptionRef.current;
@@ -313,83 +345,132 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
         </div>
       </div>
 
+      
+      {/* Skills Tags */}
+      <div className="space-y-1.5 mt-6">
+        <div className="flex justify-between items-center">
+          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider">Applied Skills & Tags <span className="text-red-500">*</span></label>
+          <span className="text-[10px] text-gray-600 dark:text-zinc-400">{skills.length}/8 Added</span>
+        </div>
+        <div className={`flex flex-wrap gap-2 p-2 min-h-[46px] items-center rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition-all ${errors.skills ? "border-red-500/50" : "border-gray-200 dark:border-white/10 focus-within:border-blue-500/50"}`}>
+          {skills.map(s => (
+            <span key={s} className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-700 dark:text-zinc-300">
+              {s} <X className="h-3 w-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors" onClick={() => removeSkill(s)} />
+            </span>
+          ))}
+          <input
+            type="text"
+            placeholder={skills.length === 0 ? "e.g., Color Grading, Audio Sync (Press Enter to add)" : ""}
+            value={skillInput}
+            onChange={e => {
+              setSkillInput(e.target.value);
+              clearError("skills");
+            }}
+            onKeyDown={handleSkillKeyDown}
+            className="flex-1 bg-transparent border-none outline-none text-xs text-gray-900 dark:text-white placeholder:text-gray-400 min-w-[150px]"
+          />
+        </div>
+        {errors.skills && <p className="text-[11px] text-red-400">{errors.skills}</p>}
+      </div>
+
       {/* Description */}
-      <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">
-            Service Description <span className="text-red-500">*</span>
-          </label>
-          <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-dark-base rounded-lg p-1 border border-gray-200 dark:border-white/5">
-            <button
-              onClick={() => insertMarkdown('**', '**')}
-              title="Bold"
-              className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 transition"
-            >
-              <Bold className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={() => insertMarkdown('*', '*')}
-              title="Italic"
-              className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 transition"
-            >
-              <Italic className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={() => insertMarkdown('- ')}
-              title="Bullet List"
-              className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 transition"
-            >
-              <List className="h-3.5 w-3.5" />
-            </button>
-            <div className="w-px h-4 bg-gray-300 dark:bg-white/10 mx-1" />
-            <button
-              onClick={() => setIsPreviewMode(!isPreviewMode)}
-              title={isPreviewMode ? "Edit Mode" : "Preview Mode"}
-              className={`p-1.5 rounded transition flex items-center gap-1.5 px-2 ${
-                isPreviewMode ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400"
-              }`}
-            >
-              {isPreviewMode ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              <span className="text-[10px] font-bold">{isPreviewMode ? "Edit" : "Preview"}</span>
-            </button>
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-5 items-start mt-4">
+        {/* Left Side: Guide / Info */}
+        <div className="flex flex-col p-4 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300 mb-2">
+            Writing a Great Description
+          </h3>
+          <p className="text-[11px] text-gray-600 dark:text-zinc-400 leading-relaxed mb-3">
+            Cover the basics to help clients understand your value:
+          </p>
+          <ul className="text-[11px] text-gray-600 dark:text-zinc-400 list-disc list-inside space-y-1.5 font-medium">
+            <li>What is it about?</li>
+            <li>What's included?</li>
+            <li>Why choose this service?</li>
+            <li>Who is it for?</li>
+            <li>How does it work?</li>
+            <li>Any requirements?</li>
+          </ul>
         </div>
 
-        {isPreviewMode ? (
-          <div className="w-full min-h-[160px] rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-4 py-3 text-sm text-gray-900 dark:text-zinc-200 shadow-inner overflow-auto custom-scrollbar prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-li:my-0">
-            {description.trim() ? (
-              <div dangerouslySetInnerHTML={{ __html: description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }} />
-            ) : (
-              <span className="text-gray-400 dark:text-zinc-500 italic">No description provided yet...</span>
-            )}
-          </div>
-        ) : (
-          <>
-            <textarea
-              ref={descriptionRef}
-              maxLength={2000}
-              placeholder="Describe what you are offering. Markdown is supported (e.g. **bold**, *italic*, - list)..."
-              value={description}
-              onChange={(e) => {
-                setDescription(e.target.value);
-                clearError("description");
-              }}
-              className={`w-full min-h-[160px] rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-3 text-sm text-gray-900 dark:text-white transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus:outline-none resize-y custom-scrollbar ${
-                errors.description ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 focus:border-blue-500/50"
-              }`}
-            />
-            <div className="flex justify-between items-center mt-1">
-              {errors.description ? (
-                <p className="text-[11px] text-red-400">{errors.description}</p>
-              ) : (
-                <span />
-              )}
-              <span className={`text-[10px] font-medium ${description.length >= 2000 ? "text-red-500" : "text-gray-500"}`}>
-                {description.length} / 2000
-              </span>
+        {/* Right Side: Editor */}
+        <div className="flex flex-col w-full h-full">
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">
+              Service Description <span className="text-red-500">*</span>
+            </label>
+            <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-dark-base rounded-lg p-1 border border-gray-200 dark:border-white/5">
+              <button
+                onClick={() => insertMarkdown('**', '**')}
+                title="Bold"
+                className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 transition"
+              >
+                <Bold className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => insertMarkdown('*', '*')}
+                title="Italic"
+                className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 transition"
+              >
+                <Italic className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => insertMarkdown('- ')}
+                title="Bullet List"
+                className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 transition"
+              >
+                <List className="h-3.5 w-3.5" />
+              </button>
+              <div className="w-px h-4 bg-gray-300 dark:bg-white/10 mx-1" />
+              <button
+                onClick={() => setIsPreviewMode(!isPreviewMode)}
+                title={isPreviewMode ? "Edit Mode" : "Preview Mode"}
+                className={`p-1.5 rounded transition flex items-center gap-1.5 px-2 ${
+                  isPreviewMode ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400"
+                }`}
+              >
+                {isPreviewMode ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                <span className="text-[10px] font-bold">{isPreviewMode ? "Edit" : "Preview"}</span>
+              </button>
             </div>
-          </>
-        )}
+          </div>
+
+          {isPreviewMode ? (
+            <div className="w-full min-h-[300px] h-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-4 py-3 text-sm text-gray-900 dark:text-zinc-200 shadow-inner overflow-auto custom-scrollbar prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-li:my-0">
+              {description.trim() ? (
+                <div dangerouslySetInnerHTML={{ __html: description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }} />
+              ) : (
+                <span className="text-gray-400 dark:text-zinc-500 italic">No description provided yet...</span>
+              )}
+            </div>
+          ) : (
+            <>
+              <textarea
+                ref={descriptionRef}
+                maxLength={5000}
+                placeholder="Describe what you are offering. Markdown is supported (e.g. **bold**, *italic*, - list)..."
+                value={description}
+                onChange={(e) => {
+                  setDescription(e.target.value);
+                  clearError("description");
+                }}
+                className={`w-full min-h-[300px] h-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-3 text-sm text-gray-900 dark:text-white transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus:outline-none resize-y custom-scrollbar ${
+                  errors.description ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 focus:border-blue-500/50"
+                }`}
+              />
+              <div className="flex justify-between items-center mt-1">
+                {errors.description ? (
+                  <p className="text-[11px] text-red-400">{errors.description}</p>
+                ) : (
+                  <span />
+                )}
+                <span className={`text-[10px] font-medium ${description.length >= 5000 ? "text-red-500" : "text-gray-500"}`}>
+                  {description.length} / 5000
+                </span>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-white/5">

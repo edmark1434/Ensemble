@@ -326,6 +326,8 @@ const GigCreatePage: React.FC = () => {
                       setDescription={setDescription}
                       category={category}
                       setCategory={setCategory}
+                      skills={skills}
+                      setSkills={setSkills}
                       previewUrl={thumbnailUrl}
                       setPreviewUrl={setThumbnailUrl}
                       setThumbnailFile={setThumbnailFile}
@@ -353,8 +355,6 @@ const GigCreatePage: React.FC = () => {
                       setSlots={setSlots}
                       termsOfService={termsOfService}
                       setTermsOfService={setTermsOfService}
-                      skills={skills}
-                      setSkills={setSkills}
                       firstDraftDelivery={firstDraftDelivery}
                       setFirstDraftDelivery={setFirstDraftDelivery}
                       galleryUrls={galleryUrls}

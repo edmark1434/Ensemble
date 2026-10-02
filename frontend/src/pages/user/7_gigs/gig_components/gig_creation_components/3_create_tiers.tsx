@@ -1,5 +1,6 @@
+import { CreditIcon } from "@/components/ui/credit-icon";
 import React, { useState } from "react";
-import { ArrowRight, Plus, Trash2, ChevronDown, Check } from "lucide-react";
+import { ArrowRight, Plus, Minus, Trash2, ChevronDown, Check, HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { GigTier, Milestone } from "../../gig_datasets";
 
@@ -101,7 +102,7 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
                     placeholder="Tier Title (e.g. Basic Edit)"
                     value={tier.title}
                     onChange={(e) => updateTier(index, "title", e.target.value)}
-                    className={`w-full rounded-xl border bg-white dark:bg-dark-base shadow-sm dark:shadow-none px-3 py-2 text-xs font-bold text-gray-900 dark:text-white outline-none transition-all ${
+                    className={`w-full rounded-xl border bg-white dark:bg-zinc-900 shadow-sm dark:shadow-none px-3 py-2 text-xs font-bold text-gray-900 dark:text-white outline-none transition-all ${
                       errors[`tier_${index}_title`] ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
                     }`}
                   />
@@ -113,7 +114,7 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
                     placeholder="Briefly describe what is included..."
                     value={tier.description}
                     onChange={(e) => updateTier(index, "description", e.target.value)}
-                    className={`w-full h-20 rounded-xl border bg-white dark:bg-dark-base shadow-sm dark:shadow-none px-3 py-2 text-xs text-gray-900 dark:text-white outline-none transition-all resize-none ${
+                    className={`w-full h-20 rounded-xl border bg-white dark:bg-zinc-900 shadow-sm dark:shadow-none px-3 py-2 text-xs text-gray-900 dark:text-white outline-none transition-all resize-none ${
                       errors[`tier_${index}_description`] ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
                     }`}
                   />
@@ -123,36 +124,32 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[9px] font-bold text-gray-500 dark:text-zinc-400 uppercase mb-1 block">Delivery (Days)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={tier.daysOfDelivery}
-                      onChange={(e) => updateTier(index, "daysOfDelivery", parseInt(e.target.value) || 1)}
-                      className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base px-2 py-1.5 text-xs text-center text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all"
-                    />
+                    <div className="flex items-center justify-between border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-zinc-900 p-1">
+                      <button type="button" onClick={() => updateTier(index, "daysOfDelivery", Math.max(1, tier.daysOfDelivery - 1))} className="h-7 w-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-900 dark:text-white focus:outline-none hover:bg-gray-100 dark:hover:bg-white/10 transition"><Minus className="h-3 w-3" /></button>
+                      <span className="w-8 text-center font-mono font-bold text-xs select-none text-gray-900 dark:text-white">{tier.daysOfDelivery}</span>
+                      <button type="button" onClick={() => updateTier(index, "daysOfDelivery", tier.daysOfDelivery + 1)} className="h-7 w-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-900 dark:text-white focus:outline-none hover:bg-gray-100 dark:hover:bg-white/10 transition"><Plus className="h-3 w-3" /></button>
+                    </div>
                   </div>
                   <div>
                     <label className="text-[9px] font-bold text-gray-500 dark:text-zinc-400 uppercase mb-1 block">Revisions</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={tier.revisions}
-                      onChange={(e) => updateTier(index, "revisions", parseInt(e.target.value) || 0)}
-                      className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base px-2 py-1.5 text-xs text-center text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all"
-                    />
+                    <div className="flex items-center justify-between border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-zinc-900 p-1">
+                      <button type="button" onClick={() => updateTier(index, "revisions", Math.max(0, tier.revisions - 1))} className="h-7 w-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-900 dark:text-white focus:outline-none hover:bg-gray-100 dark:hover:bg-white/10 transition"><Minus className="h-3 w-3" /></button>
+                      <span className="w-8 text-center font-mono font-bold text-xs select-none text-gray-900 dark:text-white">{tier.revisions}</span>
+                      <button type="button" onClick={() => updateTier(index, "revisions", tier.revisions + 1)} className="h-7 w-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-900 dark:text-white focus:outline-none hover:bg-gray-100 dark:hover:bg-white/10 transition"><Plus className="h-3 w-3" /></button>
+                    </div>
                   </div>
                 </div>
 
                 {/* Price */}
                 <div className="mt-auto pt-2">
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span>
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2"><CreditIcon className="h-4 w-4 text-yellow-500" /></div>
                     <input
                       type="number"
                       min="5"
-                      value={tier.price}
+                      value={tier.price || ""}
                       onChange={(e) => updateTier(index, "price", parseInt(e.target.value) || 0)}
-                      className={`w-full rounded-xl border bg-white dark:bg-dark-base shadow-sm dark:shadow-none pl-7 pr-3 py-2 text-sm font-black text-gray-900 dark:text-white outline-none transition-all ${
+                      className={`w-full rounded-xl border bg-white dark:bg-zinc-900 shadow-sm dark:shadow-none pl-7 pr-3 py-2 text-sm font-black text-gray-900 dark:text-white outline-none transition-all ${
                         errors[`tier_${index}_price`] ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
                       }`}
                     />
@@ -179,31 +176,36 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
       <div>
         <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
           ADDITIONAL WORK RATE <span className="text-red-500">*</span>
+          <div className="group relative ml-1 flex items-center cursor-help">
+            <HelpCircle className="h-3 w-3 text-gray-400" />
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 bg-white dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 normal-case font-normal text-center shadow-xl">
+              This percentage determines how much you will charge the buyer for any additional revisions beyond their tier's limit.
+            </div>
+          </div>
         </label>
         
-        <div className="relative">
-          <select
-            value={additionalWorkRate}
-            onChange={(e) => {
-              setAdditionalWorkRate(parseInt(e.target.value) || 0);
-              clearError("additionalWorkRate");
-            }}
-            className={`w-full appearance-none rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-10 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none transition-all cursor-pointer ${
-              errors.additionalWorkRate ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50 hover:border-gray-300 dark:hover:border-white/20"
-            }`}
-          >
-            <option value={10}>+10% per extra revision pass</option>
-            <option value={15}>+15% per extra revision pass</option>
-            <option value={20}>+20% per extra revision pass</option>
-            <option value={25}>+25% per extra revision pass</option>
-            <option value={30}>+30% per extra revision pass</option>
-          </select>
-          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-500 font-bold text-sm">
-            %
-          </div>
-          <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-            <ChevronDown className="h-4 w-4" />
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-1">
+          {[10, 15, 20, 25, 30].map((rate) => {
+            const isSelected = additionalWorkRate === rate;
+            return (
+              <button
+                key={rate}
+                type="button"
+                onClick={() => {
+                  setAdditionalWorkRate(rate);
+                  clearError("additionalWorkRate");
+                }}
+                className={`flex flex-col items-center justify-center py-2.5 rounded-xl border transition-all ${
+                  isSelected 
+                    ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/20" 
+                    : "bg-white dark:bg-zinc-900 border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:border-blue-500/50 hover:bg-gray-50 dark:hover:bg-white/5"
+                }`}
+              >
+                <span className="text-sm font-black">+{rate}%</span>
+                <span className={`text-[9px] font-bold uppercase ${isSelected ? 'text-blue-100' : 'text-gray-400 dark:text-zinc-500'}`}>per extra</span>
+              </button>
+            );
+          })}
         </div>
         
         {errors.additionalWorkRate && <p className="text-[11px] text-red-400 mt-1">{errors.additionalWorkRate}</p>}
