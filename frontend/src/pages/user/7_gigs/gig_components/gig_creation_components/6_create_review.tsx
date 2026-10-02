@@ -127,14 +127,23 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
             {galleryUrls.length > 0 && (
               <div className="flex-[1.5]">
                 <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2"><ImageIcon className="h-3.5 w-3.5" /> Gallery Showcase ({galleryUrls.length})</span>
-                <div className="flex flex-wrap gap-2">
-                  {galleryUrls.map((url, idx) => (
-                    <img key={idx} src={url} alt={"Gallery " + idx} className="w-20 md:w-24 aspect-video rounded-lg object-cover border border-gray-200 dark:border-white/10" />
-                  ))}
+                <div className="grid grid-cols-2 gap-2 h-32 md:h-40 w-full max-w-sm">
+                    {galleryUrls.length > 0 && (
+                      <div className="col-span-1 h-full">
+                        <img src={galleryUrls[0]} alt="Gallery Main" className="w-full h-full object-cover rounded-lg border border-gray-200 dark:border-white/10 shadow-sm" />
+                      </div>
+                    )}
+                    {galleryUrls.length > 1 && (
+                      <div className="col-span-1 grid grid-cols-2 grid-rows-2 gap-2 h-full">
+                        {galleryUrls.slice(1, 5).map((url, idx) => (
+                          <img key={idx} src={url} alt={"Gallery " + (idx + 1)} className="w-full h-full object-cover rounded-lg border border-gray-200 dark:border-white/10 shadow-sm" />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
         </div>
 
         {/* Tiers Summary */}
