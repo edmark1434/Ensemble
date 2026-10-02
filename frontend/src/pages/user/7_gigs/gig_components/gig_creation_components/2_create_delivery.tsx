@@ -117,7 +117,7 @@ export const CreateDelivery: React.FC<CreateDeliveryProps> = ({
   onNext,
 }) => {
   
-  const [skillInput, setSkillInput] = useState("");
+  
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   const [selectedIdxs, setSelectedIdxs] = useState<Set<number>>(new Set());
 

@@ -424,6 +424,8 @@ const GigEditPage: React.FC = () => {
                       setDescription={setDescription}
                       category={category}
                       setCategory={setCategory}
+                      skills={skills}
+                      setSkills={setSkills}
                       previewUrl={thumbnailUrl}
                       setPreviewUrl={setThumbnailUrl}
                       setThumbnailFile={setThumbnailFile}
