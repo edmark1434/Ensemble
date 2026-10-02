@@ -18,7 +18,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import { JobRichText } from "../../job_components/JobRichText";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 
-export type ProposalStatus = "Pending" | "Shortlisted" | "Accepted" | "Rejected";
+export type ProposalStatus = "Pending" | "Shortlisted" | "Accepted" | "Rejected" | "Hired" | "Withdrawn" | "Archived" | "Approved";
 
 export interface ProposalItemData {
   id: string;
@@ -156,6 +156,9 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
         return "bg-blue-100 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400";
       case "Rejected":
         return "bg-red-100 dark:bg-red-500/10 border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400";
+      case "Withdrawn":
+      case "Archived":
+        return "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400";
       default:
         return "bg-yellow-100 dark:bg-yellow-500/10 border-yellow-200 dark:border-yellow-500/30 text-yellow-600 dark:text-yellow-400";
     }

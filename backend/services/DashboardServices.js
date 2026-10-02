@@ -101,7 +101,16 @@ async function notifyAndBroadcast({ task, actorId, recipientId, submission, mile
             reference_id: submission.milestone_submit_id,
             account_id: recipientId,
         });
-        if (io) io.to(String(recipientId)).emit('notification', notification);
+        const actorAvatar = isFreelancerAction ? task.freelancer_avatar : task.client_avatar;
+        const enrichedNotification = {
+            ...notification,
+            userName: actorName,
+            userAvatar: actorAvatar,
+            chatMessage: submission?.message || null,
+            chatAction: action,
+            taskType: task.contract_type || 'job', // Fallback to 'job' if missing
+        };
+        if (io) io.to(String(recipientId)).emit('notification', enrichedNotification);
     } catch (error) {
         console.error('Unable to create milestone notification:', error.message);
     }
@@ -401,6 +410,7 @@ async function reviewContractServices({ contractId, accountId, rating, feedback 
 
         try {
             const reviewerName = reviewResult.isClient ? task.client_name : task.freelancer_name;
+            const reviewerAvatar = reviewResult.isClient ? task.client_avatar : task.freelancer_avatar;
             const notif = await createNotificationServices({
                 message: `${reviewerName || 'A user'} left you a ${numRating}-star review for "${task.job_title || 'contract'}".`,
                 is_read: false,
@@ -410,6 +420,10 @@ async function reviewContractServices({ contractId, accountId, rating, feedback 
                 reference_id: reviewResult.rating.rating_id,
                 account_id: targetAccId,
             });
+            notif.reviewerName = reviewerName;
+            notif.reviewerAvatar = reviewerAvatar;
+            notif.reviewFeedback = trimmedFeedback;
+            notif.reviewStars = numRating;
             io.to(targetAccId).emit('notification', notif);
         } catch (notifErr) {
             console.error('Unable to create review notification:', notifErr.message);

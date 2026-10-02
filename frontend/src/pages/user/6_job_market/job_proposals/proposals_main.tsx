@@ -96,7 +96,10 @@ export const ProposalsMain: React.FC = () => {
         { label: "Pending", count: childProposalsCounts.Pending || 0 },
         { label: "Shortlisted", count: childProposalsCounts.Shortlisted || 0 },
         { label: "Accepted", count: childProposalsCounts.Accepted || 0 },
+        { label: "Hired", count: childProposalsCounts.Hired || 0 },
         { label: "Rejected", count: childProposalsCounts.Rejected || 0 },
+        { label: "Withdrawn", count: childProposalsCounts.Withdrawn || 0 },
+        { label: "Archived", count: childProposalsCounts.Archived || 0 },
       ];
     }
 
@@ -115,11 +118,16 @@ export const ProposalsMain: React.FC = () => {
       Shortlisted: 0,
       Accepted: 0,
       Rejected: 0,
+      Withdrawn: 0,
+      Archived: 0,
+      Hired: 0,
     };
 
     activeDataset.forEach((p) => {
       if (p.status in counts) {
         counts[p.status as keyof typeof counts]++;
+      } else if (p.status === "Approved") {
+        counts.Accepted++;
       }
     });
 
@@ -128,7 +136,10 @@ export const ProposalsMain: React.FC = () => {
       { label: "Pending", count: counts.Pending },
       { label: "Shortlisted", count: counts.Shortlisted },
       { label: "Accepted", count: counts.Accepted },
+      { label: "Hired", count: counts.Hired },
       { label: "Rejected", count: counts.Rejected },
+      { label: "Withdrawn", count: counts.Withdrawn },
+      { label: "Archived", count: counts.Archived },
     ];
   }, [isSentPage, location.pathname, childProposalsCounts]);
 

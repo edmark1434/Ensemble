@@ -67,10 +67,12 @@ export const ProposalsIncomingPage: React.FC = () => {
         }
 
         // Calculate and report status counts to parent
-        const counts = { All: mapped.length, Pending: 0, Shortlisted: 0, Accepted: 0, Rejected: 0 };
+        const counts = { All: mapped.length, Pending: 0, Shortlisted: 0, Accepted: 0, Rejected: 0, Withdrawn: 0, Archived: 0, Hired: 0 };
         mapped.forEach((p: any) => {
           if (p.status in counts) {
             counts[p.status as keyof typeof counts]++;
+          } else if (p.status === "Approved") {
+            counts.Accepted++;
           }
         });
         setChildProposalsCounts(counts);

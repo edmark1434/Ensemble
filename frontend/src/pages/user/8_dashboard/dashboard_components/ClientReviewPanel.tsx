@@ -183,6 +183,14 @@ export const ClientReviewCardActions: React.FC<ReviewCardActionsProps> = ({
                     <textarea
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                if (!isSubmitting) {
+                                    e.currentTarget.form?.requestSubmit();
+                                }
+                            }
+                        }}
                         placeholder="Optional remarks or feedback for the freelancer..."
                         rows={2}
                         className="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-dark-base p-2.5 text-xs text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-emerald-500/50 resize-none leading-relaxed"
@@ -233,6 +241,14 @@ export const ClientReviewCardActions: React.FC<ReviewCardActionsProps> = ({
                     <textarea
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                if (!isSubmitting && (message.trim() || mediaList.length > 0)) {
+                                    e.currentTarget.form?.requestSubmit();
+                                }
+                            }
+                        }}
                         placeholder="Describe what needs to be changed in detail..."
                         rows={2}
                         required
@@ -418,6 +434,14 @@ export const ClientReviewPanel: React.FC<Props> = ({
             <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!isSubmitting && (message.trim() || mediaList.length > 0)) {
+                            e.currentTarget.form?.requestSubmit();
+                        }
+                    }
+                }}
                 placeholder="Type your message to the freelancer..."
                 rows={2}
                 className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-dark-base/50 p-3 text-xs font-sans text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 transition focus:border-blue-500/50 focus:outline-none resize-none leading-relaxed shadow-sm dark:shadow-none"

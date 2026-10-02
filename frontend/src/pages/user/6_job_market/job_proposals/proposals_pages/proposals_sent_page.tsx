@@ -90,10 +90,15 @@ export const ProposalsSentPage: React.FC = () => {
         Shortlisted: 0,
         Accepted: 0,
         Rejected: 0,
+        Withdrawn: 0,
+        Archived: 0,
+        Hired: 0,
       };
       proposals.forEach((p) => {
         if (p.status in counts) {
           counts[p.status as keyof typeof counts]++;
+        } else if (p.status === "Approved") {
+          counts.Accepted++; // map Approved to Accepted
         }
       });
       setChildProposalsCounts(counts);

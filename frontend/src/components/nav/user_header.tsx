@@ -12,6 +12,7 @@ import socket from "@/lib/socket";
 import useChatState from "@/components/ui/chat_bubble/chat_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import toast from "react-hot-toast";
+import { toastConfig } from "@/components/utility/toast";
 
 interface UserHeaderProps {
   pageTitle: string;
@@ -31,6 +32,15 @@ interface Notification {
   account_id: string;
   created_at: string;
   deleted_at: string | null;
+  userName?: string;
+  userAvatar?: string;
+  chatMessage?: string;
+  chatAction?: string;
+  taskType?: string;
+  reviewerName?: string;
+  reviewerAvatar?: string;
+  reviewFeedback?: string;
+  reviewStars?: number;
 }
 
 interface CreatorSearchApiAccount {
@@ -349,10 +359,139 @@ useEffect(() => {
 
       // Display visual toast alert
       if (notification.message) {
-        toast(notification.message, {
-          icon: '🔔',
-          duration: 4500,
-        });
+        if (notification.chatMessage && notification.userName) {
+          const getActionLabel = (action?: string) => {
+            switch (action) {
+              case 'progress': return 'Update';
+              case 'submitted_for_review': return 'Submission';
+              case 'revision_request': return 'Request For Revision';
+              case 'approval': return 'Approval';
+              case 'client_message': return 'Message';
+              default: return 'Message';
+            }
+          };
+          const typeLabel = notification.taskType ? notification.taskType.charAt(0).toUpperCase() + notification.taskType.slice(1) : 'Job';
+          const tagText = `${typeLabel} | ${getActionLabel(notification.chatAction)}`;
+
+          toast.custom((t) => (
+            <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2`}>
+              <div className="absolute top-2 left-3">
+                <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
+                  {tagText}
+                </span>
+              </div>
+              <div className="flex-1 w-0 flex items-start text-right justify-end">
+                <div className="mr-3 flex-1">
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">
+                    {notification.userName}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
+                    {notification.chatMessage}
+                  </p>
+
+                </div>
+                <div className="flex-shrink-0 pt-0.5">
+                  <img src={notification.userAvatar ? constructAvatarUrl(notification.userAvatar) : "/images/default_avatar.png"} alt={notification.userName} className="h-10 w-10 rounded-full object-cover" />
+                </div>
+              </div>
+            </div>
+          ), { duration: 5000 });
+        } else if (notification.reference_prefix === 'MILESTONE_FUNDS_RELEASED') {
+          const creditsMatch = notification.message.match(/^([\d,]+)\s+credits/);
+          const creditsAmount = creditsMatch ? creditsMatch[1] : '';
+          const milestoneMatch = notification.message.match(/milestone\s+"([^"]+)"/);
+          const milestoneName = milestoneMatch ? milestoneMatch[1] : '';
+
+          toast.custom((t) => (
+            <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-emerald-200 dark:border-emerald-500/20 p-4`}>
+              <div className="flex-1 w-0 flex items-start">
+                <div className="flex-shrink-0 pt-0.5">
+                  <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
+                    <span className="text-xl">💰</span>
+                  </div>
+                </div>
+                <div className="ml-3 flex-1">
+                  <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                    You Received {creditsAmount ? `${creditsAmount} Credits!` : 'Credits!'}
+                  </p>
+                  <p className="mt-1 text-xs font-medium text-gray-500 dark:text-zinc-400">
+                    {milestoneName ? `From milestone "${milestoneName}"` : 'Funds released to your wallet'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ), { duration: 6000 });
+        } else if (notification.reference_prefix === 'MILESTONE_REVISION_PURCHASED') {
+          const milestoneMatch = notification.message.match(/revision for "([^"]+)"/);
+          const milestoneName = milestoneMatch ? milestoneMatch[1] : '';
+          const nameMatch = notification.message.match(/^([^]+?) purchased/);
+          const buyerName = nameMatch ? nameMatch[1] : 'Client';
+          
+          toast.custom((t) => (
+            <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-blue-200 dark:border-blue-500/20 p-4 pt-7 mt-2`}>
+              <div className="absolute top-2 left-3">
+                <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
+                  Revision Purchased
+                </span>
+              </div>
+              <div className="flex-1 w-0 flex items-start text-right justify-end">
+                <div className="mr-3 flex-1">
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">
+                    {buyerName}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
+                    Purchased an additional revision.
+                  </p>
+                  <p className="mt-2 text-[11px] font-medium text-gray-400 dark:text-zinc-500 line-clamp-1">
+                    {milestoneName ? `For milestone "${milestoneName}"` : ''}
+                  </p>
+                </div>
+                <div className="flex-shrink-0 pt-0.5">
+                   <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
+                    <span className="text-xl">🔄</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ), { duration: 6000 });
+        } else if (notification.reference_prefix === 'CONTRACT_REVIEW') {
+          const stars = notification.reviewStars || 5;
+          const starsDisplay = Array.from({ length: 5 }, (_, i) => i < stars ? '★' : '☆').join('');
+          
+          toast.custom((t) => (
+            <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2`}>
+              <div className="absolute top-2 left-3">
+                <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
+                  NEW REVIEW
+                </span>
+              </div>
+              <div className="flex-1 w-0 flex items-center justify-between">
+                <div className="flex-shrink-0 pl-1 mr-2">
+                  <span className="text-yellow-500 text-lg tracking-[0.15em] drop-shadow-sm">{starsDisplay}</span>
+                </div>
+                <div className="flex flex-1 items-start justify-end text-right">
+                  <div className="mr-3 flex-1">
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">
+                      {notification.reviewerName || "User"}
+                    </p>
+                    <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 italic line-clamp-3">
+                      "{notification.reviewFeedback || notification.message}"
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0 pt-0.5">
+                    <img src={notification.reviewerAvatar ? constructAvatarUrl(notification.reviewerAvatar) : "/images/default_avatar.png"} alt={notification.reviewerName || "User"} className="h-10 w-10 rounded-full object-cover" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ), { duration: 6000 });
+        } else {
+          toast(notification.message, {
+            ...(toastConfig.custom as any),
+            icon: '🔔',
+            duration: 4500,
+          });
+        }
       }
 
       // Play notification sound

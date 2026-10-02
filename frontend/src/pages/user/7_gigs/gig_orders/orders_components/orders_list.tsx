@@ -18,7 +18,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import { GigRichText } from "../../gig_components/GigRichText";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 
-export type OrderStatus = "Pending" | "Shortlisted" | "Accepted" | "In Contract" | "Rejected";
+export type OrderStatus = "Pending" | "Shortlisted" | "Accepted" | "In Contract" | "Rejected" | "Withdrawn" | "Hired" | "Approved" | "Completed" | "Cancelled";
 
 export interface OrderItemData {
   id: string;
@@ -117,7 +117,7 @@ export const OrdersList: React.FC<OrdersListProps> = ({
       <div
         className={
           viewType === "grid"
-            ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+            ? "grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4"
             : "space-y-3.5"
         }
       >
@@ -151,6 +151,8 @@ export const OrdersList: React.FC<OrdersListProps> = ({
       case "Rejected":
       case "Cancelled":
         return "bg-red-100 dark:bg-red-500/10 border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400";
+      case "Withdrawn":
+        return "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400";
       default:
         return "bg-yellow-100 dark:bg-yellow-500/10 border-yellow-200 dark:border-yellow-500/30 text-yellow-600 dark:text-yellow-400";
     }
@@ -162,7 +164,7 @@ export const OrdersList: React.FC<OrdersListProps> = ({
       transition={{ duration: 0.3, ease: "easeInOut" }}
       className={
         viewType === "grid"
-          ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+          ? "grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4"
           : "space-y-3.5"
       }
     >
