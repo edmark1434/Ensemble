@@ -1,5 +1,5 @@
 import React from "react";
-import { Calendar, Clock, Briefcase, Users, Star, Send, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText, Bookmark } from "lucide-react";
+import { Calendar, Clock, Briefcase, Users, Star, Send, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText, Bookmark, CheckCircle2, XCircle, HelpCircle } from "lucide-react";
 import { JobRichText } from "./JobRichText";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
@@ -149,23 +149,61 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               </div>
 
               {/* Price & Budget Row */}
-              <div className="p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none flex items-center justify-between">
+              {/* Price, Timeline & Deadline */}
+              <div className="p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none flex flex-wrap gap-4 items-center justify-between">
                 <div>
-                  <p className="text-[9px] uppercase font-bold text-gray-500 dark:text-zinc-500 mb-0.5">
-                    Budget Range
-                  </p>
-                  <p className="text-lg font-extrabold text-yellow-500 flex items-center gap-1.5">
-                    <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
-                    <span>{selectedJob.priceRange}</span>
-                  </p>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <p className="text-[9px] uppercase font-bold text-gray-500 dark:text-zinc-500">
+                      Budget Range {selectedJob.positionsNeeded > 1 ? "(Divided)" : ""}
+                    </p>
+                    {selectedJob.positionsNeeded > 1 && (
+                      <div className="group relative flex items-center">
+                        <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1.5 hidden group-hover:block w-48 bg-white dark:bg-gray-900 text-gray-800 dark:text-white border border-gray-200 dark:border-gray-800 text-[10px] p-2 rounded-lg shadow-xl text-center z-10 before:content-[''] before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-white dark:before:border-t-gray-900">
+                          This job requires {selectedJob.positionsNeeded} positions. The total budget pool is divided to show the estimated budget per freelancer.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col">
+                    {selectedJob.positionsNeeded > 1 ? (
+                      <>
+                        <p className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 line-through mb-0.5 flex items-center gap-1">
+                          <CreditIcon className="h-3 w-3 shrink-0" />
+                          <span>{selectedJob.priceRange}</span>
+                        </p>
+                        <p className="text-lg font-extrabold text-blue-500 flex items-center gap-1.5 leading-none">
+                          <CreditIcon className="h-5 w-5 text-blue-500 shrink-0" />
+                          <span>{`${(selectedJob.minBudget / selectedJob.positionsNeeded).toFixed(0).toLocaleString()} ~ ${(selectedJob.maxBudget / selectedJob.positionsNeeded).toFixed(0).toLocaleString()}`}</span>
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-lg font-extrabold text-yellow-500 flex items-center gap-1.5 leading-none">
+                        <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
+                        <span>{selectedJob.priceRange}</span>
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-[9px] uppercase font-bold text-gray-500 dark:text-zinc-500 mb-0.5 flex items-center gap-1 justify-end">
-                    <Clock className="h-3 w-3" /> Timeline
-                  </p>
-                  <p className="text-xs font-semibold text-gray-700 dark:text-zinc-200">
-                    {selectedJob.timeline}
-                  </p>
+                <div className="flex gap-6 text-right">
+                  <div>
+                    <p className="text-[9px] uppercase font-bold text-gray-500 dark:text-zinc-500 mb-0.5 flex items-center gap-1 justify-end">
+                      <Clock className="h-3 w-3" /> Timeline
+                    </p>
+                    <p className="text-xs font-semibold text-gray-700 dark:text-zinc-200">
+                      {selectedJob.timeline}
+                    </p>
+                  </div>
+                  {selectedJob.deadline && (
+                    <div>
+                      <p className="text-[9px] uppercase font-bold text-gray-500 dark:text-zinc-500 mb-0.5 flex items-center gap-1 justify-end">
+                         Deadline
+                      </p>
+                      <p className="text-xs font-semibold text-gray-700 dark:text-zinc-200">
+                        {selectedJob.deadline}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -198,6 +236,53 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   </div>
                 </div>
               )}
+              {/* Workflow & Terms Section */}
+              <div className="space-y-2 mt-4 pt-4 border-t border-gray-100 dark:border-white/5">
+                <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400 flex items-center gap-1">
+                  <Briefcase className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
+                  Workflow & Terms
+                </h4>
+                <div className="p-4 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] space-y-4">
+                  {/* Client initiates the project? */}
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 shrink-0 text-gray-400 dark:text-zinc-500">
+                      {selectedJob.initiatorRole === "Client" ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-gray-400 dark:text-zinc-500" />}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-900 dark:text-white">Client initiates the project?</p>
+                      <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">
+                        {selectedJob.initiatorRole === "Client" ? "Yes, the client will create the project upon hiring." : "No, the freelancer is expected to create the project."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Client linked an existing project */}
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 shrink-0 text-gray-400 dark:text-zinc-500">
+                      {selectedJob.isExistingProject ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-gray-400 dark:text-zinc-500" />}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-900 dark:text-white">Client linked an existing project?</p>
+                      <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">
+                        {selectedJob.isExistingProject ? "Yes, a project is already prepared for this job." : "No, a project has not been linked yet."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Portfolio Use */}
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 shrink-0 text-gray-400 dark:text-zinc-500">
+                      {selectedJob.portfolioUseAllowed ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-gray-400 dark:text-zinc-500" />}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-900 dark:text-white">Allow Portfolio Use?</p>
+                      <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">
+                        {selectedJob.portfolioUseAllowed ? `Yes, allowed to use output for portfolio (Up to ${selectedJob.portfolioDuration} secs).` : "No, not allowed to use final output for personal portfolio."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Sticky Action Footer */}
