@@ -51,6 +51,7 @@ const ProposalsCreatePage: React.FC = () => {
       description: "Deliver rough cut / core framework for initial feedback.",
       hours: 12,
       revisions: 2,
+      percentage: 50,
     },
     {
       id: "ms-2",
@@ -58,6 +59,7 @@ const ProposalsCreatePage: React.FC = () => {
       description: "Apply color passes, audio sync, and final master deliverables.",
       hours: 8,
       revisions: 1,
+      percentage: 50,
     },
   ]);
 
@@ -145,6 +147,12 @@ const ProposalsCreatePage: React.FC = () => {
   const handleMilestonesAdvance = () => {
     if (milestones.length === 0) {
       setErrors({ milestones: "You must create at least 1 milestone." });
+      return;
+    }
+
+    const totalPercentage = milestones.reduce((sum, m) => sum + (Number(m.percentage) || 0), 0);
+    if (totalPercentage !== 100) {
+      setErrors({ milestones: `Total milestone percentage must be exactly 100%. Current total is ${totalPercentage}%.` });
       return;
     }
 
