@@ -3,12 +3,16 @@ import SuccessModal from "@/components/ui/SuccessModal";
 
 interface CreationSuccessProps {
   isOpen: boolean;
+  title?: string;
+  message?: string;
   onConfirm: () => void;
   autoCloseMs?: number;
 }
 
 export const CreationSuccess: React.FC<CreationSuccessProps> = ({
   isOpen,
+  title = "Successfully Posted!",
+  message = "Your job post is now live. Freelancers can now send their applications and you'll be notified.",
   onConfirm,
   autoCloseMs = 2800,
 }) => {
@@ -30,7 +34,8 @@ export const CreationSuccess: React.FC<CreationSuccessProps> = ({
       {/* Base SuccessModal with built-in confetti trigger */}
       <SuccessModal
         isOpen={isOpen}
-        message="Your job post is now live. Freelancers can now send their applications and you'll be notified."
+        title={title}
+        message={message}
         onConfirm={onConfirm}
       />
     </div>

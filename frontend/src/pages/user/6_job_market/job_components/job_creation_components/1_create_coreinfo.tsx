@@ -200,6 +200,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
     setPreviewUrl(localUrl);
     setThumbnail(localUrl);
     if (setThumbnailFile) setThumbnailFile(file);
+    clearError("thumbnail");
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -242,7 +243,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-5 items-start">
         {/* Left: Thumbnail Image */}
         <div className="flex flex-col">
-          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">Job Thumbnail</label>
+          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">Job Thumbnail <span className="text-red-500">*</span></label>
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -274,6 +275,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
               </div>
             )}
           </div>
+          {errors.thumbnail && <p className="text-[11px] text-red-400 mt-2">{errors.thumbnail}</p>}
         </div>
 
         {/* Right: Stacked Dropdowns */}

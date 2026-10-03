@@ -12,18 +12,34 @@ async function createJobRepositories(jobData) {
                 client_account_id, title, description, category, payment_type, 
                 experience_level, no_of_hires, rate_credits_min, rate_credits_max,
                 timeline_min, timeline_max, posted_as, team_id, status,
-                rough_deadline, rough_no_of_revisions
+                rough_deadline, rough_no_of_revisions,
+                portfolio_use_allowed, portfolio_use_duration_seconds,
+                is_existing_project, existing_project_id, initiator_role
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                NOW() + interval '1 day' * COALESCE($11::int, 30), 0
+                $15, 0,
+                $16, $17, $18, $19, $20
             ) RETURNING job_id;
         `;
+        
+        let deadline = jobData.deadline || jobData.rough_deadline;
+        if (!deadline) {
+            deadline = new Date();
+            deadline.setDate(deadline.getDate() + (parseInt(jobData.timeline_max) || 30));
+        }
+
         const jobValues = [
             jobData.client_account_id, jobData.title, jobData.description, 
             jobData.category, jobData.payment_type, jobData.experience_level, 
             jobData.no_of_hires || 1, jobData.rate_credits_min, jobData.rate_credits_max,
             jobData.timeline_min, jobData.timeline_max, jobData.posted_as, 
-            jobData.team_id || null, jobData.status || 'Open'
+            jobData.team_id || null, jobData.status || 'Open',
+            deadline,
+            jobData.portfolio_use_allowed || false,
+            jobData.portfolio_use_duration_seconds || null,
+            jobData.is_existing_project || false,
+            jobData.existing_project_id || null,
+            jobData.initiator_role || null
         ];
         
         const res = await client.query(jobQuery, jobValues);
@@ -126,13 +142,21 @@ async function updateJobRepositories(jobId, accountIds, jobData) {
         const query = `
             UPDATE jobs
             SET title = $1, description = $2, category = $3, experience_level = $4,
+                portfolio_use_allowed = $7, portfolio_use_duration_seconds = $8,
+                is_existing_project = $9, existing_project_id = $10,
+                initiator_role = $11,
                 updated_at = NOW()
             WHERE job_id = $5 AND client_account_id = ANY($6::uuid[])
             RETURNING *;
         `;
         const values = [
             jobData.title, jobData.description, jobData.category, jobData.experience_level,
-            jobId, accountIds
+            jobId, accountIds,
+            jobData.portfolio_use_allowed, 
+            jobData.portfolio_use_duration_seconds, 
+            jobData.is_existing_project, 
+            jobData.existing_project_id, 
+            jobData.initiator_role
         ];
         const res = await client.query(query, values);
         const updatedJob = res.rows[0];
