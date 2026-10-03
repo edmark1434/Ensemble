@@ -252,7 +252,7 @@ const Projects: React.FC = () => {
         token: handoffToken,
       });
 
-      window.location.href = `${EDITOR_URL}/editor/${projectId}?${params.toString()}`;
+      window.open(`${EDITOR_URL}/editor/${projectId}?${params.toString()}`, '_blank');
     } catch (err) {
       console.error('Failed to get editor handoff token:', err);
     }

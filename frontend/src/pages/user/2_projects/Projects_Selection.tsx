@@ -173,7 +173,7 @@ const ProjectsSelection: React.FC = () => {
         token: handoffToken,
       });
 
-      window.location.href = `${EDITOR_URL}/editor/new?${params.toString()}`;
+      window.open(`${EDITOR_URL}/editor/new?${params.toString()}`, '_blank');
     } catch (err) {
       console.error('Failed to get editor handoff token:', err);
       // not logged in / session expired — bail or redirect to login

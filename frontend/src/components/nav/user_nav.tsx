@@ -22,7 +22,8 @@ import {
     Video,
     ListVideo,
     Projector,
-    Library
+    Library,
+    Compass
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
@@ -41,7 +42,6 @@ let primaryNavInitial: NavItem[] = [
     { label: "Projects", icon: ListVideo, to: "/projects" },
     { label: "Teams", icon: Users, to: "/teams" },
     { label: "Forums", icon: Projector, to: "/forums" },
-    { label: "Asset Library", icon: Library, to: "/assets" },
 ];
 
 let jobsItemsInitial: NavItem[] = [
@@ -52,6 +52,11 @@ let jobsItemsInitial: NavItem[] = [
 let gigsItemsInitial: NavItem[] = [
     { label: "Services", icon: MonitorPlay, to: "/gigs" },
     { label: "Orders", icon: Inbox, to: "/gigs/orders" },
+];
+
+let marketplaceTopInitial: NavItem[] = [
+    { label: "Discovery", icon: Compass, to: "/discovery" },
+    { label: "Asset Library", icon: Library, to: "/assets" },
 ];
 
 let activityRecordsInitial: NavItem[] = [
@@ -78,6 +83,7 @@ const UserNav: React.FC<UserNavProps> = () => {
     const [isGigsOpen, setIsGigsOpen] = useState(false);
 
     const primaryNavState = isGuestMode ? primaryNavInitial.filter(item => item.label !== "Teams" && item.label !== "Projects") : primaryNavInitial;
+    const marketplaceTopState = marketplaceTopInitial;
     const jobsState = isGuestMode ? jobsItemsInitial.filter(item => item.label !== "Proposals") : jobsItemsInitial;
     const gigsState = isGuestMode ? gigsItemsInitial.filter(item => item.label !== "Orders") : gigsItemsInitial;
     const activityState = isGuestMode ? [] : activityRecordsInitial;
@@ -231,6 +237,61 @@ const UserNav: React.FC<UserNavProps> = () => {
                             Marketplace
                          </p>
                       )}
+
+                       {/* Marketplace Top Items: Discovery, Asset Library */}
+                       <ul className={isCollapsed ? "space-y-1" : "space-y-1 mb-2"}>
+                          {marketplaceTopState.map(({ label, icon: Icon, to }) => (
+                             <li key={label}>
+                                {!isCollapsed ? (
+                                   <NavLink to={to}>
+                                      {({ isActive }) => (
+                                         <div
+                                            className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 ${
+                                               isActive ? "text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
+                                            }`}
+                                         >
+                                            {isActive && (
+                                               <motion.div
+                                                  layoutId="activeNavBackground"
+                                                  className="absolute inset-0 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 nav-rainbow-shine"
+                                                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                               />
+                                            )}
+                                            <Icon className="relative z-10 h-4 w-4 shrink-0" />
+                                            <span className="relative z-10 text-sm">{label}</span>
+                                         </div>
+                                      )}
+                                   </NavLink>
+                                ) : (
+                                   <div className="group w-full flex justify-center hover:z-50">
+                                      <NavLink to={to}>
+                                         {({ isActive }) => (
+                                            <div
+                                               className={`relative flex items-center justify-center rounded-lg p-2 text-sm transition-colors duration-200 ${
+                                                  isActive ? "text-gray-900 dark:text-gray-100" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
+                                               }`}
+                                            >
+                                               {isActive && (
+                                                  <motion.div
+                                                     layoutId="activeNavBackgroundCollapsed"
+                                                     className="absolute inset-0 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 nav-rainbow-shine"
+                                                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                                  />
+                                               )}
+                                               <Icon className="relative z-10 h-4 w-4 shrink-0" />
+                                            </div>
+                                         )}
+                                      </NavLink>
+                                      <div className="absolute left-full -ml-6 pl-6 hidden group-hover:block z-50 pointer-events-none">
+                                         <div className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] px-3 py-2 shadow-xl dark:shadow-2xl animate-fade-in whitespace-nowrap">
+                                            <span className="text-xs font-medium text-gray-900 dark:text-zinc-200">{label}</span>
+                                         </div>
+                                      </div>
+                                   </div>
+                                )}
+                             </li>
+                          ))}
+                       </ul>
 
                       {/* Jobs Section */}
                       {!isCollapsed ? (
