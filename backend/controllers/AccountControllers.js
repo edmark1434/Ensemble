@@ -259,17 +259,28 @@ async function followUserController(req, res) {
         await followUserService(followerId, followedId);
         
         try {
-            const accQ = await pool.query('SELECT handle FROM accounts WHERE account_id = $1', [followerId]);
+            const accQ = await pool.query(`
+                SELECT a.handle, a.display_name, f.path as avatar_path 
+                FROM accounts a 
+                LEFT JOIN files f ON a.avatar_file_id = f.file_id 
+                WHERE a.account_id = $1
+            `, [followerId]);
             if (accQ.rows[0]) {
                 const handle = accQ.rows[0].handle;
+                const displayName = accQ.rows[0].display_name;
+                const avatar = accQ.rows[0].avatar_path;
                 const notif = await createNotificationServices({
-                    message: `@${handle} followed you.`,
+                    message: `${displayName} (@${handle}) followed you.`,
                     reference_table: 'accounts',
                     reference_prefix: 'follow',
                     reference_path: `/profile/${followerId}`,
                     reference_id: followerId,
                     account_id: followedId
                 });
+                notif.followerName = displayName;
+                notif.followerHandle = handle;
+                notif.followerAvatar = avatar;
+                
                 const io = getIo();
                 if (io) io.to(String(followedId)).emit('notification', notif);
             }

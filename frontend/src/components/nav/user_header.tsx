@@ -485,8 +485,32 @@ useEffect(() => {
               </div>
             </div>
           ), { duration: 6000 });
-        } else {
-          toast(notification.message, {
+          } else if (notification.reference_prefix === 'follow') {
+            toast.custom((t) => (
+              <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-emerald-200 dark:border-emerald-500/20 p-4 pt-7 mt-2 cursor-pointer transition-all hover:scale-[1.02]`}
+                   onClick={() => { toast.dismiss(t.id); window.location.href = notification.reference_path || '#'; }}>
+                <div className="absolute top-2 left-3">
+                  <span className="text-[9px] font-bold tracking-wider uppercase text-emerald-500 dark:text-emerald-400">
+                    NEW FOLLOWER
+                  </span>
+                </div>
+                <div className="flex-1 w-0 flex items-start justify-between">
+                  <div className="mr-3 flex-1 text-left mt-2">
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">
+                      {notification.followerName || 'Someone'}
+                    </p>
+                    <p className="mt-1 text-sm text-gray-800 dark:text-gray-200">
+                      started following you
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0 pt-0.5">
+                    <img src={notification.followerAvatar ? constructAvatarUrl(notification.followerAvatar) : "/images/default_avatar.png"} alt={notification.followerName || "User"} className="h-10 w-10 rounded-full object-cover ring-2 ring-emerald-500/20" />
+                  </div>
+                </div>
+              </div>
+            ), { duration: 5000 });
+          } else {
+            toast(notification.message, {
             ...(toastConfig.custom as any),
             icon: '🔔',
             duration: 4500,
@@ -1056,3 +1080,4 @@ useEffect(() => {
 };
 
 export default UserHeader;
+
