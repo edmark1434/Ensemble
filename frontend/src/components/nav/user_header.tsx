@@ -1,4 +1,5 @@
 import { Bell, ChevronDown, Settings, LogOut, User, Search, Sparkles, MessageSquare } from "lucide-react";
+import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useGlobalState from "@/lib/global_state";
@@ -223,6 +224,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const userInfo = useGlobalState((state) => state.user);
+  const isStaffPreview = isStaffPlatformViewer(userInfo);
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isGlobalLoading = useGlobalState((state) => state.isLoading);
   const isSessionLoading = isGlobalLoading || (!userInfo?.account_id && !isGuestMode);
@@ -774,10 +776,13 @@ useEffect(() => {
                     <div className="h-3 w-24 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
                   </div>
                 </div>
-                <div className="h-[36px] w-[36px] rounded-full bg-gray-200 dark:bg-white/10 animate-pulse border border-gray-100 dark:border-white/5 shadow-sm"></div>
+                {!isStaffPreview && (
+                  <div className="h-[36px] w-[36px] rounded-full bg-gray-200 dark:bg-white/10 animate-pulse border border-gray-100 dark:border-white/5 shadow-sm"></div>
+                )}
               </div>
             )}
           </div>
+          {!isStaffPreview && (
           <div className="flex items-center gap-4 shrink-0">
             <div className="h-[36px] w-20 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse shadow-sm"></div>
             <div className="h-[36px] w-[36px] bg-gray-200 dark:bg-white/10 rounded-xl animate-pulse"></div>
@@ -790,6 +795,7 @@ useEffect(() => {
               <ChevronDown className="h-4 w-4 text-gray-300 dark:text-zinc-700" />
             </div>
           </div>
+          )}
         </div>
       </header>
     );
@@ -861,6 +867,7 @@ useEffect(() => {
                   )}
                 </form>
 
+                {!isStaffPreview && (
                 <button
                   onClick={() => {
                     if (isAskAiClickLoading) return;
@@ -913,10 +920,12 @@ useEffect(() => {
                     Ask AI
                   </span>
                 </button>
+                )}
               </div>
             )}
           </div>
 
+          {!isStaffPreview && (
           <div className="flex items-center gap-4 shrink-0">
             {isGuestView ? (
               <div className="flex items-center gap-3">
@@ -1063,6 +1072,7 @@ useEffect(() => {
               </>
             )}
           </div>
+          )}
         </div>
 
         <style>{`
@@ -1074,7 +1084,9 @@ useEffect(() => {
         `}</style>
       </header>
 
-      <UserLogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} onConfirm={executeFinalLogout} />
+      {!isStaffPreview && (
+        <UserLogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} onConfirm={executeFinalLogout} />
+      )}
     </>
   ) : null;
 };
