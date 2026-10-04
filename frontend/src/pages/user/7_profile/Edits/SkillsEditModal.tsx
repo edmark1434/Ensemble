@@ -43,7 +43,8 @@ export default function SkillsEditModal({
       setSearchTerm("");
       setNewSkill({ name: "", proficiency: "beginner", years: 1 });
     }
-  }, [isOpen, currentSkills]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]); // only reset on open; parent re-renders were wiping newly added skills
 
   // Fetch capability tag choices from server if fallback array is blank
   useEffect(() => {
