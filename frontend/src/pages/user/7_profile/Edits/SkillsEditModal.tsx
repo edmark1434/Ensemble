@@ -242,7 +242,7 @@ export default function SkillsEditModal({
             className="w-full px-4 py-2 bg-blue-600 rounded-lg text-xs font-bold hover:bg-blue-500 transition shadow-md shadow-blue-600/10 text-white disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={isLoading || !newSkill.name.trim()}
           >
-            Add Skill Matrix Block
+            <span className="flex items-center justify-center gap-1.5"><Plus className="w-4 h-4" /> Add Skill</span>
           </button>
         </div>
 

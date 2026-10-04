@@ -202,18 +202,14 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
 
             {/* Tooltip & Trigger Node Group Wrapper */}
             <div className="relative group flex items-center">
-              <button
-                onClick={() => setIsMetadataOpen(!isMetadataOpen)}
-                className={`text-zinc-500 hover:text-blue-400 transition-colors p-0.5 rounded-full outline-none ${isMetadataOpen ? 'text-blue-400' : ''}`}
-              >
-                <HelpCircle className="h-5 w-5" />
-              </button>
+              {/*<button*/}
+              {/*  onClick={() => setIsMetadataOpen(!isMetadataOpen)}*/}
+              {/*  className={`text-zinc-500 hover:text-blue-400 transition-colors p-0.5 rounded-full outline-none ${isMetadataOpen ? 'text-blue-400' : ''}`}*/}
+              {/*>*/}
+              {/*  <HelpCircle className="h-5 w-5" />*/}
+              {/*</button>*/}
 
-              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block pointer-events-none z-30">
-                <div className="bg-gray-800 dark:bg-zinc-950/90 text-white border border-gray-700 dark:border-white/15 px-2 py-1 rounded text-[10px] font-semibold whitespace-nowrap tracking-wide shadow-md backdrop-blur-sm">
-                  Click for Info
-                </div>
-              </div>
+              
 
               {/* Floating Meta Dashboard Pane */}
               {isMetadataOpen && (
