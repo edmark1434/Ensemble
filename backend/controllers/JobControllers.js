@@ -339,7 +339,44 @@ async function toggleJobSaveController(req, res) {
     }
 }
 
+
+async function getActiveJobsByClientController(req, res) {
+    try {
+        const accountId = req.user?.account_id || req.user?.accountId;
+        if (!accountId) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+        const jobs = await JobServices.getActiveJobsByClientServices(accountId);
+        res.status(200).json({ success: true, data: jobs });
+    } catch (err) {
+        console.error('Error in getActiveJobsByClientController:', err);
+        res.status(500).json({ success: false, message: 'Failed to fetch active jobs' });
+    }
+}
+
+async function createJobInvitationController(req, res) {
+    try {
+        const clientAccountId = req.user?.account_id || req.user?.accountId;
+        const { jobId, freelancerAccountId, message } = req.body;
+        
+        if (!clientAccountId) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+        if (!jobId || !freelancerAccountId) {
+            return res.status(400).json({ success: false, message: 'Missing required fields' });
+        }
+
+        const invite = await JobServices.createJobInvitationServices(jobId, clientAccountId, freelancerAccountId, message);
+        res.status(201).json({ success: true, data: invite, message: 'Invitation sent successfully' });
+    } catch (err) {
+        console.error('Error in createJobInvitationController:', err);
+        res.status(500).json({ success: false, message: err.message || 'Failed to send invitation' });
+    }
+}
+
 module.exports = {
+    getActiveJobsByClientController,
+    createJobInvitationController,
     createJobController,
     getAllJobsController,
     updateJobController,

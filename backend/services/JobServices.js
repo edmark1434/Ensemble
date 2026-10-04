@@ -1,5 +1,7 @@
 // backend/services/JobServices.js
 const JobRepositories = require('../repositories/JobRepositories');
+const { createNotificationServices } = require('./NotificationServices');
+const { getAccountById } = require('../repositories/AccountRepositories');
 
 async function createJobServices(jobData) {
     if (!jobData.title || !jobData.description) {
@@ -151,7 +153,51 @@ async function toggleJobSaveServices(jobId, accountId) {
     return await JobRepositories.toggleJobSaveRepositories(jobId, accountId);
 }
 
+
+async function getActiveJobsByClientServices(clientAccountId) {
+    return await JobRepositories.getActiveJobsByClientRepositories(clientAccountId);
+}
+
+async function createJobInvitationServices(jobId, clientAccountId, freelancerAccountId, message) {
+    if (clientAccountId === freelancerAccountId) {
+        throw new Error("You cannot invite yourself to a job.");
+    }
+
+    // Check if the job exists and belongs to the client
+    const jobs = await JobRepositories.getActiveJobsByClientRepositories(clientAccountId);
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) {
+        throw new Error("Job not found or you do not have permission to invite users to it.");
+    }
+
+    const existing = await JobRepositories.checkJobInvitationExistsRepositories(jobId, freelancerAccountId);
+    if (existing) {
+        throw new Error("This freelancer has already been invited to this job.");
+    }
+
+    const invite = await JobRepositories.createJobInvitationRepositories(jobId, clientAccountId, freelancerAccountId, message);
+
+    // Fetch client details for notification
+    const client = await getAccountById(clientAccountId);
+    const clientName = client ? (client.handle || client.display_name) : 'A client';
+
+    // Send notification to freelancer
+    await createNotificationServices({
+        account_id: freelancerAccountId,
+        message: `@${clientName} invited you to apply for their job: ${job.title}`,
+        is_read: false,
+        reference_table: 'jobs',
+        reference_prefix: 'JOB_INVITATION',
+        reference_path: `/jobs/postings/${jobId}`,
+        reference_id: jobId
+    });
+
+    return invite;
+}
+
 module.exports = {
+    getActiveJobsByClientServices,
+    createJobInvitationServices,
     createJobServices,
     getAllJobsServices,
     updateJobServices,

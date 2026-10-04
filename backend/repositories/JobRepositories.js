@@ -522,7 +522,40 @@ async function toggleJobSaveRepositories(jobId, accountId) {
     }
 }
 
+
+async function getActiveJobsByClientRepositories(clientAccountId) {
+    const result = await pool.query(
+        `SELECT job_id as id, title, payment_type, rate_credits_min, rate_credits_max, rough_deadline, status, created_at
+         FROM jobs 
+         WHERE client_account_id = $1  AND deleted_at IS NULL
+         ORDER BY created_at DESC`,
+        [clientAccountId]
+    );
+    return result.rows;
+}
+
+async function createJobInvitationRepositories(jobId, clientAccountId, freelancerAccountId, message) {
+    const result = await pool.query(
+        `INSERT INTO job_invitations (job_id, client_account_id, freelancer_account_id, message, status)
+         VALUES ($1, $2, $3, $4, 'pending')
+         RETURNING *`,
+        [jobId, clientAccountId, freelancerAccountId, message]
+    );
+    return result.rows[0];
+}
+
+async function checkJobInvitationExistsRepositories(jobId, freelancerAccountId) {
+    const result = await pool.query(
+        `SELECT * FROM job_invitations WHERE job_id = $1 AND freelancer_account_id = $2`,
+        [jobId, freelancerAccountId]
+    );
+    return result.rows[0];
+}
+
 module.exports = {
+    getActiveJobsByClientRepositories,
+    createJobInvitationRepositories,
+    checkJobInvitationExistsRepositories,
     createJobRepositories,
     getAllJobsRepositories,
     updateJobRepositories,
