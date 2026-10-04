@@ -1,6 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { StaffPlatformBlocked, useStaffPlatformGuard } from "@/components/staff/StaffPlatformView";
-import { isStaffBrowsePath, isStaffPlatformViewer } from "@/lib/staffPlatformView";
+import { useStaffPlatformGuard } from "@/components/staff/StaffPlatformView";
+import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import UserNav from "@/components/nav/user_nav.tsx";
 import UtilScrollTop from "@/components/utility/util_scroll_top.tsx";
@@ -49,7 +49,6 @@ const Layout = () => {
   const unreadCounts = useChatState((state) => state.unreadCounts);
 
   const isStaffView = isStaffPlatformViewer(user);
-  const staffCanBrowseHere = !isStaffView || isStaffBrowsePath(location.pathname);
   useStaffPlatformGuard(isStaffView);
   const isInboxPage = location.pathname.startsWith("/inbox");
   const currentUserId = String(user?.account_id || "");
@@ -212,7 +211,12 @@ const Layout = () => {
         }`}
         style={{ paddingLeft: marginLeft }}
       >
-        {staffCanBrowseHere ? <Outlet context={{ openChatWithUser }} /> : <StaffPlatformBlocked />}
+        {isStaffView && (
+          <style>
+            {`[data-staff-preview-hide]{display:none !important;}`}
+          </style>
+        )}
+        <Outlet context={{ openChatWithUser }} />
       </main>
 
       {!isInboxPage && !isStaffView && (

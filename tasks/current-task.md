@@ -6,5 +6,5 @@ Keep Platform view as a tab inside each staff console. The tab shows a framed, b
 ## Acceptance Criteria
 - Admin, the staff portal, and each moderator console open Platform view on their own route.
 - The tab contains a framed member-site preview with shortcuts for home, forums, jobs, gigs, discovery, marketplace, and projects.
-- Browsing stays inside the frame. Posting, buying, messaging, and other member actions stay off.
+- The preview can open every member page. Action controls are removed from the preview. Writes stay blocked.
 - Opening a member URL in the main window returns staff to their Platform view tab.

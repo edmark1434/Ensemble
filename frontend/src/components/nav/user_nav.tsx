@@ -30,7 +30,6 @@ import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { motion, LayoutGroup } from "framer-motion";
 import useGlobalState from "@/lib/global_state";
-import { isStaffPreviewFrame } from "@/lib/staffPlatformView";
 
 type NavItem = {
     label: string;
@@ -80,16 +79,14 @@ const UserNav: React.FC<UserNavProps> = () => {
     const isCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
     const setIsCollapsed = useGlobalState((state) => state.setIsSidebarCollapsed);
     const isGuestMode = useGlobalState((state) => state.isGuestMode);
-    const isStaffView = useGlobalState((state) => state.user?.type === "Staff") && isStaffPreviewFrame();
-    const browseOnly = isGuestMode || isStaffView;
     const [isJobsOpen, setIsJobsOpen] = useState(false);
     const [isGigsOpen, setIsGigsOpen] = useState(false);
 
-    const primaryNavState = browseOnly ? primaryNavInitial.filter(item => item.label !== "Teams") : primaryNavInitial;
+    const primaryNavState = isGuestMode ? primaryNavInitial.filter(item => item.label !== "Teams") : primaryNavInitial;
     const marketplaceTopState = marketplaceTopInitial;
-    const jobsState = browseOnly ? jobsItemsInitial.filter(item => item.label !== "Proposals") : jobsItemsInitial;
-    const gigsState = browseOnly ? gigsItemsInitial.filter(item => item.label !== "Orders") : gigsItemsInitial;
-    const activityState = browseOnly ? [] : activityRecordsInitial;
+    const jobsState = isGuestMode ? jobsItemsInitial.filter(item => item.label !== "Proposals") : jobsItemsInitial;
+    const gigsState = isGuestMode ? gigsItemsInitial.filter(item => item.label !== "Orders") : gigsItemsInitial;
+    const activityState = isGuestMode ? [] : activityRecordsInitial;
 
     const handleLogoClick = () => {
        const { user: currentUser, isAuthenticated: auth } = useGlobalState.getState();

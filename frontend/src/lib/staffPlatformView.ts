@@ -1,11 +1,3 @@
-import { isGuestAllowedPath } from "./guestRouteAccess";
-
-const EXTRA_BROWSE_PATHS = [
-  /^\/discovery\/[^/]+$/,
-  /^\/search\/user\/[^/]+$/,
-  /^\/profile$/,
-];
-
 const ACTION_LABEL =
   /\b(like|unlike|save|unsave|follow|unfollow|message|chat|buy|purchase|checkout|order|post|create|edit|delete|remove|submit|send|reply|comment|upload|apply|hire|report|share|invite|join|leave|pay|publish|archive|download|bookmark|contact|offer|bid|propose|accept|decline|reject|withdraw|subscribe|upgrade|block|mute|pin|react|logout|log out|sign out)\b/i;
 
@@ -18,15 +10,6 @@ export function isStaffConsolePath(pathname: string): boolean {
     || pathname.startsWith("/admin/")
     || pathname.startsWith("/staff/")
     || pathname.startsWith("/moderator/");
-}
-
-export function isStaffBrowsePath(pathname: string): boolean {
-  const path = !pathname || pathname === "/"
-    ? "/"
-    : pathname.endsWith("/")
-      ? pathname.slice(0, -1)
-      : pathname;
-  return isGuestAllowedPath(path) || EXTRA_BROWSE_PATHS.some((pattern) => pattern.test(path));
 }
 
 export function isStaffPreviewFrame(): boolean {
@@ -43,36 +26,36 @@ function controlLabel(element: Element): string {
   return `${labelled} ${text}`.replace(/\s+/g, " ").trim();
 }
 
-export function isAllowedStaffBrowseClick(target: Element): boolean {
-  if (target.closest("[data-staff-view-allow]")) return true;
-  if (target.closest("aside, nav")) return true;
+/** Action control to hide in the staff preview. Navigation and readable content stay. */
+export function staffPreviewHideTarget(element: Element): Element | null {
+  if (element.closest("aside, nav, [data-staff-view-keep]")) return null;
 
-  const anchor = target.closest("a[href]");
-  if (anchor) {
-    const href = anchor.getAttribute("href") || "";
-    if (!href || href.startsWith("#")) return true;
-    if (href.startsWith("mailto:") || href.startsWith("tel:") || href.startsWith("javascript:")) return false;
-    try {
-      const url = new URL(href, window.location.origin);
-      if (url.origin !== window.location.origin) return false;
-      return isStaffBrowsePath(url.pathname);
-    } catch {
-      return false;
+  if (element instanceof HTMLTextAreaElement || element.getAttribute("contenteditable") === "true") {
+    return element.closest("form") || element;
+  }
+
+  if (element instanceof HTMLInputElement) {
+    if (element.type === "file" || element.type === "submit" || element.type === "password") {
+      return element;
     }
+    return null;
   }
 
-  const control = target.closest(
-    "button, input, textarea, select, label, [role='button'], [contenteditable='true']"
-  );
-  if (!control) return true;
-  if (control instanceof HTMLTextAreaElement || control.getAttribute("contenteditable") === "true") return false;
-  if (control instanceof HTMLSelectElement) return true;
-  if (control instanceof HTMLInputElement) {
-    return control.type === "search" || control.type === "text";
-  }
+  const control = element.matches("button, a, [role='button']")
+    ? element
+    : element.closest("button, a, [role='button']");
+  if (!control || control.closest("aside, nav")) return null;
 
   const label = controlLabel(control);
-  if (ACTION_LABEL.test(label)) return false;
-  if (!label) return PASSIVE_CONTROL_LABEL.test(control.getAttribute("aria-label") || "");
-  return true;
+  if (ACTION_LABEL.test(label)) {
+    if (control.tagName === "A" && label.length > 48) return null;
+    return control;
+  }
+
+  const isButton = control.tagName === "BUTTON" || control.getAttribute("role") === "button";
+  if (!isButton || label) return null;
+  if (control.closest("header")) return null;
+  const hint = control.getAttribute("aria-label") || control.getAttribute("title") || "";
+  if (PASSIVE_CONTROL_LABEL.test(hint)) return null;
+  return control;
 }

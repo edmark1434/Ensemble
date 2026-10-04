@@ -56,7 +56,7 @@ export default function StaffPlatformPreviewPage() {
           <div>
             <h1 className="text-lg font-semibold text-white">Platform view</h1>
             <p className="mt-1 max-w-3xl text-sm text-zinc-400">
-              A browse-only look at the member site, kept inside this tab. You can move through the areas below. Posting, buying, messaging, and other member actions stay off.
+              The member site stays inside this tab. Staff can open anything a member can see. Buttons for posting, buying, messaging, and other actions are removed.
             </p>
           </div>
         </div>
