@@ -11,6 +11,16 @@ async function getUserGalleries(req, res) {
     }
 }
 
+async function getAllGalleriesController(req, res) {
+    try {
+        const galleries = await GalleryServices.getAllGalleries();
+        res.status(200).json(galleries);
+    } catch (err) {
+        console.error('getAllGalleriesController error:', err);
+        res.status(500).json({ error: err.message || 'Failed to fetch all galleries' });
+    }
+}
+
 async function createGalleryItem(req, res) {
     try {
         // Assume req.user contains the authenticated account details
@@ -71,6 +81,7 @@ async function updateGalleryItem(req, res) {
 
 module.exports = {
     getUserGalleries,
+    getAllGalleriesController,
     createGalleryItem,
     deleteGalleryItem,
     updateGalleryItem

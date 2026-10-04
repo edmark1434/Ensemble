@@ -27,6 +27,8 @@ import UserHeader from "@/components/nav/user_header";
 import {useState, useEffect, useRef} from "react";
 import api from "@/lib/axios.ts";
 import { formatDistanceToNow } from "date-fns";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
+import useGlobalState from "@/lib/global_state";
 
 interface Project {
   id: string;
@@ -96,6 +98,8 @@ const ProjectCardSkeleton = ({ view = "grid" }: { view?: ViewType }) => (
 const Projects: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [hoveredProject, setHoveredProject] = useState<string | number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewType>("grid");
@@ -232,7 +236,7 @@ const Projects: React.FC = () => {
     { id: "recent" as TabType, label: "Recent", icon: <Clock className="h-4 w-4" /> },
     { id: "personal" as TabType, label: "Personal", icon: <User className="h-4 w-4" /> },
     { id: "shared" as TabType, label: "Shared", icon: <Share2 className="h-4 w-4" /> },
-  ];
+  ].filter(tab => !(isGuestMode && (tab.id === 'personal' || tab.id === 'shared')));
 
   const handleTabClick = (tabId: TabType) => {
     setOpenTeamFolderId(null);
@@ -244,6 +248,10 @@ const Projects: React.FC = () => {
   const EDITOR_URL = import.meta.env.VITE_EDITOR_URL || 'http://localhost:3000';
 
   const handleOpenProject = async (projectId: string) => {
+    if (isGuestMode) {
+      setIsModalOpen(true);
+      return;
+    }
     try {
       const { data } = await api.get('/api/editor/handoff-token');
       const handoffToken = data.handoffToken;
@@ -772,7 +780,7 @@ const Projects: React.FC = () => {
         {/* Action Bar */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
           <button
-            onClick={() => navigate("/projects/select")}
+            onClick={() => isGuestMode ? setIsModalOpen(true) : navigate("/projects/select")}
             className="shrink-0 flex items-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group"
           >
             <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
@@ -937,7 +945,7 @@ const Projects: React.FC = () => {
               Create your first project to get started
             </p>
             <button
-              onClick={() => navigate("/projects/select")}
+              onClick={() => isGuestMode ? setIsModalOpen(true) : navigate("/projects/select")}
               className="mt-4 rounded-full bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-600"
             >
               Create Project
@@ -945,8 +953,7 @@ const Projects: React.FC = () => {
           </div>
         )}
       </div>
-
-
+      <GuestLoginModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
   );
 };

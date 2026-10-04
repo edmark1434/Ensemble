@@ -9,7 +9,8 @@ const {
     removeUserTagsRepositories,
     updateUserTagsRepositories,
     hasUserTagRepositories,
-    getUserTagsWithDetailsRepositories
+    getUserTagsWithDetailsRepositories,
+    getTagIdsByNamesRepositories
 } = require('../repositories/TagRepositories');
 
 // ============= EXISTING FUNCTIONS (KEPT AS IS) =============
@@ -102,10 +103,19 @@ async function updateUserSkillsServices(userId, originalSkills, updatedSkills) {
 
         // Handle added skills
         if (comparison.added.length > 0) {
+            // Skills typed manually arrive with a non-UUID placeholder id; resolve them by name
+            const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const unresolved = comparison.added.filter(s => !UUID_RE.test(String(s.tag_id)));
+            if (unresolved.length) {
+                const found = await getTagIdsByNamesRepositories(unresolved.map(s => s.name));
+                const byName = new Map(found.map(t => [t.name.toLowerCase(), t.tag_id]));
+                unresolved.forEach(s => { s.tag_id = byName.get(String(s.name).toLowerCase()) || null; });
+            }
+            comparison.added = comparison.added.filter(s => s.tag_id);
             const tagsToAdd = comparison.added.map(skill => ({
                 tag_id: skill.tag_id,
                 proficiency: skill.proficiency,
-                years: skill.years
+                years: Number.parseInt(skill.years, 10) || 0
             }));
             await addUserTagsRepositories(userId, tagsToAdd);
             addedCount = comparison.added.length;

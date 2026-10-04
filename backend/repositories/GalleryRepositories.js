@@ -26,6 +26,36 @@ async function getUserGalleries(accountId) {
     }
 }
 
+async function getAllGalleries() {
+    try {
+        const query = `
+            SELECT 
+                g.gallery_id, 
+                g.account_id, 
+                g.title, 
+                g.description, 
+                g.created_at, 
+                g.updated_at,
+                f.file_id,
+                f.path AS file_url,
+                f.mime_type AS file_mimetype,
+                a.display_name,
+                a.handle,
+                af.path AS avatar_url
+            FROM user_galleries g
+            JOIN files f ON g.file_id = f.file_id
+            JOIN accounts a ON g.account_id = a.account_id
+            LEFT JOIN files af ON a.avatar_file_id = af.file_id
+            ORDER BY g.created_at DESC
+        `;
+        const result = await pool.query(query);
+        return result.rows;
+    } catch (err) {
+        console.error('Error fetching all galleries:', err);
+        throw err;
+    }
+}
+
 async function createGalleryItem(accountId, fileId, title, description) {
     try {
         const query = `
@@ -101,9 +131,11 @@ async function updateGalleryItem(galleryId, accountId, title, description) {
 
 module.exports = {
     getUserGalleries,
+    getAllGalleries,
     createGalleryItem,
     isOwnedGalleryFile,
     deleteGalleryItem,
     getGalleryItem,
     updateGalleryItem
 };
+
