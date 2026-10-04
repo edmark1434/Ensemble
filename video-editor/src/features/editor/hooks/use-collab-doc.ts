@@ -43,6 +43,7 @@ export interface CollabDoc {
   saveStatus: PersistenceStatus;
   compactStatus: "idle" | "compacting" | "error";
   forceSave: () => void;
+  target: CollabTarget;
 }
 
 // "Last resort" correction for drift between the durable Yjs doc (source of
@@ -207,6 +208,7 @@ export function useCollabDoc(
       undoManager,
       syncGuard,
       localOrigin,
+      target,
       sessionId: null,
       ready: false,
       error: null,

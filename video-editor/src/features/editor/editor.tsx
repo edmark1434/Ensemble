@@ -6,7 +6,7 @@ import useTimelineEvents from "./hooks/use-timeline-events";
 import Scene from "./scene";
 import { SceneRef } from "./scene/scene.types";
 import StateManager, {DESIGN_LOAD, LAYER_DELETE} from "@designcombo/state";
-import { useEffect, useRef, useState } from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -53,6 +53,7 @@ import {canEditWithRole, EditorRole} from "@/features/editor/types/editor-role";
 import {useEditorRole} from "@/features/editor/hooks/use-editor-role";
 import {ViewOnlyProvider} from "@/features/editor/hooks/use-view-only";
 import {useProjectFonts} from "@/features/editor/hooks/use-project-fonts";
+import SceneRemovedModal from "./scene-removed-modal";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -515,8 +516,29 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
     projectName,
   );
 
-  const resolvedRole = useEditorRole(projectId, activeSceneBlockId, storeUserId, role ?? null);
+  const [removedFromScene, setRemovedFromScene] = useState<string | null>(null);
+
+  const leaveSceneNoAccess = useCallback(() => {
+    const { activeSceneBlockId: openId, currentBlockName, closeScene } = useStore.getState();
+    if (!openId) return; // already left
+    stateManager.updateState({ activeIds: [] }, { updateHistory: false, kind: "layer:selection" });
+    dispatch(PLAYER_PAUSE);
+    closeScene();
+    setRemovedFromScene(currentBlockName || "Untitled scene");
+  }, [stateManager]);
+
+  const resolvedRole = useEditorRole(projectId, activeSceneBlockId, storeUserId, role ?? null, leaveSceneNoAccess);
   const canEdit = canEditWithRole(resolvedRole);
+
+  const blockDocReady =
+    !!activeSceneBlockId &&
+    !!collab?.ready &&
+    collab.target.kind === "block" &&
+    collab.target.id === activeSceneBlockId;
+
+  useEffect(() => {
+    if (collab) collab.syncGuard.readOnly = !canEdit;
+  }, [collab, canEdit]);
 
   useSceneContentBroadcast(
     stateManager,
@@ -524,7 +546,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
     activeSceneBlockId ? storeUserId : undefined,
     activeSceneBlockId ? storeUserName : undefined,
     activeSceneBlockId ? activeSceneItemId ?? undefined : undefined,
-    canEdit,
+    canEdit && blockDocReady,
   );
 
   // Only the very first sync should block the whole editor. Once we've
@@ -695,6 +717,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
           )}
         </div>
       </div>
+      <SceneRemovedModal sceneName={removedFromScene} onClose={() => setRemovedFromScene(null)} />
     </ViewOnlyProvider>
   );
 };

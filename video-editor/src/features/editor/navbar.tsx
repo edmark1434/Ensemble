@@ -48,6 +48,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ShareModal from "@/components/share-modal";
 import {useViewOnly} from "@/features/editor/hooks/use-view-only";
+import {useProjectRole} from "@/features/editor/hooks/use-project-role";
+import {canEditWithRole, canManageSharing} from "@/features/editor/types/editor-role";
 
 export default function Navbar({
   user,
@@ -73,6 +75,9 @@ export default function Navbar({
   const { isShortcutsModalOpen, setShortcutsModalOpen, projectName, setProjectName, projectId } = useStore();
   const [isShareModalOpen, setShareModalOpen] = useState(false);
   const [title, setTitle] = useState(projectName);
+
+  const projectRole = useProjectRole(projectId);
+  const canShare = canManageSharing(projectRole);
 
   useEffect(() => {
     setTitle(projectName);
@@ -306,9 +311,9 @@ export default function Navbar({
               </TooltipContent>
             </Tooltip>
           )}
-
           <DownloadPopover stateManager={stateManager} />
-          {!viewOnly && (
+
+          {canShare && (
             <Button
               onClick={() => setShareModalOpen(true)}
               className="flex h-8 gap-2 border border-border"

@@ -4,6 +4,7 @@ import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import { CollabSchema } from "./ydoc-schema";
 import { CollabTarget } from "./collab-target";
+import {emitAccessChanged} from "@/features/editor/collab/access-events";
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
@@ -17,6 +18,8 @@ const MAX_RECONNECT_DELAY_MS = 15_000;
 // no access, unknown block). Reconnecting can't change the answer, so stop
 // retrying instead of looping forever.
 const REJECTED_CLOSE_CODES = new Set([4000, 4001, 4003, 4004]);
+
+const MESSAGE_ACCESS_CHANGED = 3;
 
 export function attachWsProvider(
   schema: CollabSchema,
@@ -115,6 +118,8 @@ export function attachWsProvider(
         awarenessProtocol.applyAwarenessUpdate(awareness, decoding.readVarUint8Array(decoder), remoteOrigin);
       } else if (messageType === MESSAGE_SYNC_DONE) {
         options?.onFirstSync?.();
+      } else if (messageType === MESSAGE_ACCESS_CHANGED) {
+        emitAccessChanged();
       }
     };
 
@@ -122,6 +127,7 @@ export function attachWsProvider(
       if (ws === socket) ws = null;
       if (destroyed) return;
       if (REJECTED_CLOSE_CODES.has(event.code)) {
+        emitAccessChanged();
         options?.onRejected?.();
         return;
       }

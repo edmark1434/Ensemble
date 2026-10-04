@@ -14,16 +14,22 @@ export const ASSIGNABLE_BLOCK_ROLES: AssignableBlockRole[] = [
   "Viewer",
 ];
 
+export const ROLE_RANK: Record<BlockRole, number> = { Viewer: 0, Commenter: 1, Editor: 2, Owner: 3 };
+export const minRole = (a: BlockRole, b: BlockRole): BlockRole =>
+  ROLE_RANK[a] <= ROLE_RANK[b] ? a : b;
+
 export interface BlockPerson {
   userId: string;
   name: string;
   email: string;
   // Resolved from accounts.avatar_file_id -> files.path; null = show initials.
   avatarUrl: string | null;
+  projectRole?: BlockRole | null;
 }
 
 export interface BlockMember extends BlockPerson {
-  role: AssignableBlockRole;
+  role: AssignableBlockRole;          // what was granted
+  effectiveRole: BlockRole | null;    // what applies now
 }
 
 export interface BlockAccess {

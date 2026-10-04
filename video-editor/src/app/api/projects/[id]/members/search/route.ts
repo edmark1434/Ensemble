@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { getProjectMemberRole, searchAddableProjectUsers } from "@/lib/db/project-members";
+import {canEditWithRole, canManageSharing} from "@/features/editor/types/editor-role";
 
 export async function GET(
   req: NextRequest,
@@ -18,9 +19,9 @@ export async function GET(
 
   const { id: projectId } = await params;
 
-  // Only the owner can add people, so only the owner needs to search.
+  // Owners and managers can add people, so they're the ones who can search.
   const role = await getProjectMemberRole(projectId, decoded.userId);
-  if (role !== "Owner") {
+  if (!canManageSharing(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -1,12 +1,13 @@
 // lib/db/block-members.ts
 
 import { db } from "@/lib/db";
-import type {
+import {
   AssignableBlockRole,
   BlockAccess,
   BlockPerson,
-  BlockRole, GeneralAccessLevel,
+  BlockRole, GeneralAccessLevel, minRole,
 } from "@/features/editor/types/block-members";
+import {StoredProjectRole, toEditorRole} from "@/features/editor/types/editor-role";
 
 type PersonRow = {
   user_id: string;
@@ -14,10 +15,8 @@ type PersonRow = {
   last_name: string;
   email_address: string;
   avatar_path: string | null;
+  project_role?: StoredProjectRole | null;
 };
-
-// Only project Owners and Editors can be given access to a scene.
-const ADDABLE_PROJECT_ROLES = ["Owner", "Editor"] as const;
 
 // files.path -> a URL an <img> can load. Avatars are either presets from the
 // main app's public/ folder ("/public/profile_presets/p1.png") or a real path.
@@ -48,6 +47,7 @@ const toPerson = (row: PersonRow): BlockPerson => ({
   name: `${row.first_name} ${row.last_name}`.trim(),
   email: row.email_address,
   avatarUrl: resolveFileUrl(row.avatar_path),
+  projectRole: toEditorRole(row.project_role),
 });
 
 export async function isProjectMember(
@@ -89,19 +89,11 @@ async function getProjectRole(
     .where("deleted_at", "is", null)
     .select(["role"])
     .executeTakeFirst();
-  return row?.role ?? null;
+  return toEditorRole(row?.role);
 }
 
-const ROLE_RANK: Record<BlockRole, number> = {
-  Viewer: 0,
-  Commenter: 1,
-  Editor: 2,
-  Owner: 3,
-};
-
-// The most a general access level can give a project member. Their project
-// role can only lower this, never raise it, so "Anyone can edit" means
-// project Owners/Editors edit, Commenters comment, Viewers view.
+// What a general access level gives a project member, before their project
+// role caps it. Only used when the user has no specific block_members row.
 const GENERAL_ACCESS_CEILING: Record<GeneralAccessLevel, BlockRole | null> = {
   "Anyone can edit": "Editor",
   "Anyone can comment": "Commenter",
@@ -112,33 +104,27 @@ const GENERAL_ACCESS_CEILING: Record<GeneralAccessLevel, BlockRole | null> = {
 /**
  * Effective role in a scene:
  *  - the scene's Owner (block_members row with role Owner) is always Owner
- *  - general access = min(project role, general access ceiling)
- *  - a specific block_members row can raise that, never lower it
- * `projectRole` null (not a project member) means general access gives nothing.
+ *  - not a project member -> no access
+ *  - a specific block_members row decides the role outright (general access
+ *    is ignored, up or down), capped by the project role
+ *  - no specific row -> general access ceiling, capped by the project role
  */
 export function resolveEffectiveBlockRole({
-                                            blockRole,
-                                            generalAccess,
-                                            projectRole,
-                                          }: {
+  blockRole,
+  generalAccess,
+  projectRole,
+}: {
   blockRole: BlockRole | null;
   generalAccess: GeneralAccessLevel;
   projectRole: BlockRole | null;
 }): BlockRole | null {
   if (blockRole === "Owner") return "Owner";
+  if (!projectRole) return null;
+
+  if (blockRole) return minRole(blockRole, projectRole);
 
   const ceiling = GENERAL_ACCESS_CEILING[generalAccess] ?? null;
-  const general: BlockRole | null =
-    ceiling && projectRole
-      ? ROLE_RANK[projectRole] < ROLE_RANK[ceiling]
-        ? projectRole
-        : ceiling
-      : null;
-
-  if (blockRole && general) {
-    return ROLE_RANK[blockRole] >= ROLE_RANK[general] ? blockRole : general;
-  }
-  return blockRole ?? general;
+  return ceiling ? minRole(ceiling, projectRole) : null;
 }
 
 /** What the collab socket and the write routes check. null = no access. */
@@ -186,6 +172,12 @@ export async function getBlockAccess(
           .onRef("f.file_id", "=", "a.avatar_file_id")
           .on("f.deleted_at", "is", null),
       )
+      .leftJoin("project_members as pm", (join) =>
+        join
+          .onRef("pm.user_id", "=", "bm.user_id")
+          .on("pm.project_id", "=", projectId)
+          .on("pm.deleted_at", "is", null),
+      )
       .where("bm.block_id", "=", blockId)
       .where("bm.deleted_at", "is", null)
       .select([
@@ -195,6 +187,7 @@ export async function getBlockAccess(
         "u.email_address",
         "f.path as avatar_path",
         "bm.role",
+        "pm.role as project_role"
       ])
       .orderBy("bm.joined_at")
       .execute(),
@@ -210,7 +203,6 @@ export async function getBlockAccess(
       )
       .where("pm.project_id", "=", projectId)
       .where("pm.deleted_at", "is", null)
-      .where("pm.role", "in", [...ADDABLE_PROJECT_ROLES])
       .where(
         "pm.user_id",
         "not in",
@@ -226,6 +218,7 @@ export async function getBlockAccess(
         "u.last_name",
         "u.email_address",
         "f.path as avatar_path",
+        "pm.role as project_role"
       ])
       .orderBy("u.first_name")
       .orderBy("u.last_name")
@@ -249,7 +242,17 @@ export async function getBlockAccess(
   return {
     owner: ownerRow ? toPerson(ownerRow) : null,
     members: memberRows.flatMap((r) =>
-      r.role === "Owner" ? [] : [{ ...toPerson(r), role: r.role }],
+      r.role === "Owner"
+        ? []
+        : [{
+          ...toPerson(r),
+          role: r.role,
+          effectiveRole: resolveEffectiveBlockRole({
+            blockRole: r.role,
+            generalAccess,
+            projectRole: toEditorRole(r.project_role),
+          }),
+        }],
     ),
     candidates: candidateRows.map(toPerson),
     canManage: !!ownerRow && ownerRow.user_id === viewerUserId,
@@ -265,7 +268,6 @@ export async function getBlockAccess(
 export type AddBlockMemberResult =
   | "ok"
   | "not_project_member"
-  | "not_editor"
   | "already_member";
 
 export async function addBlockMember({
@@ -291,9 +293,7 @@ export async function addBlockMember({
       .executeTakeFirst();
 
     if (!projectMembership) return "not_project_member";
-    if (!(ADDABLE_PROJECT_ROLES as readonly string[]).includes(projectMembership.role)) {
-      return "not_editor";
-    }
+    const applied = minRole(role, toEditorRole(projectMembership.role)!) as AssignableBlockRole;
 
     const existing = await trx
       .selectFrom("block_members")
@@ -309,7 +309,7 @@ export async function addBlockMember({
       // a second one for the same (block, user).
       await trx
         .updateTable("block_members")
-        .set({ role, deleted_at: null, joined_at: new Date() })
+        .set({ role: applied, deleted_at: null, joined_at: new Date() })
         .where("block_id", "=", blockId)
         .where("user_id", "=", userId)
         .execute();
@@ -319,7 +319,7 @@ export async function addBlockMember({
         .values({
           block_id: blockId,
           user_id: userId,
-          role,
+          role: applied,
           cursor_color: projectMembership.cursor_color,
         })
         .execute();
@@ -330,18 +330,16 @@ export async function addBlockMember({
 }
 
 /** Returns false when there was nobody to update (or the target is the Owner). */
-export async function updateBlockMemberRole({
-                                              blockId,
-                                              userId,
-                                              role,
-                                            }: {
-  blockId: string;
-  userId: string;
-  role: AssignableBlockRole;
+export async function updateBlockMemberRole({ blockId, projectId, userId, role }: {
+  blockId: string; projectId: string; userId: string; role: AssignableBlockRole;
 }): Promise<boolean> {
+  const projectRole = await getProjectRole(projectId, userId);
+  if (!projectRole) return false;
+  const applied = minRole(role, projectRole) as AssignableBlockRole;
+
   const result = await db
     .updateTable("block_members")
-    .set({ role })
+    .set({ role: applied })
     .where("block_id", "=", blockId)
     .where("user_id", "=", userId)
     .where("role", "!=", "Owner")

@@ -45,9 +45,12 @@ const ROOM_EMPTY_GRACE_MS = 5_000;
 // lost access entirely gets closed.
 const ACCESS_RECHECK_MS = 15_000;
 
+const MESSAGE_ACCESS_CHANGED = 3;
+
 interface ClientInfo {
   controlledAwarenessIds: Set<number>;
   canWrite: boolean;
+  recheck: (force?: boolean) => Promise<void>;
 }
 
 interface Room {
@@ -277,7 +280,28 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
 
   if (closedDuringSetup || ws.readyState !== WebSocket.OPEN) return;
 
-  room.clients.set(ws, { controlledAwarenessIds: new Set(), canWrite });
+  const recheck = async (force = false) => {
+    try {
+      const next = await resolveRoomAccess(target, membershipProjectId, decoded.userId);
+      if (!next.allowed) {
+        ws.close(4003, "forbidden");
+        return;
+      }
+      const info = room.clients.get(ws);
+      if (!info) return;
+      const changed = info.canWrite !== next.canWrite;
+      info.canWrite = next.canWrite;
+      if ((changed || force) && ws.readyState === WebSocket.OPEN) {
+        const enc = encoding.createEncoder();
+        encoding.writeVarUint(enc, MESSAGE_ACCESS_CHANGED);
+        ws.send(encoding.toUint8Array(enc));
+      }
+    } catch (err) {
+      console.error(`collab: access recheck failed for ${roomKey(target)}`, err);
+    }
+  };
+
+  room.clients.set(ws, { controlledAwarenessIds: new Set(), canWrite, recheck });
 
   const syncEncoder = encoding.createEncoder();
   encoding.writeVarUint(syncEncoder, MESSAGE_SYNC);
@@ -335,19 +359,7 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
   for (const data of pendingMessages) handleMessage(data);
   ws.on("message", handleMessage);
 
-  const recheckTimer = setInterval(async () => {
-    try {
-      const next = await resolveRoomAccess(target, membershipProjectId, decoded.userId);
-      if (!next.allowed) {
-        ws.close(4003, "forbidden");
-        return;
-      }
-      const info = room.clients.get(ws);
-      if (info) info.canWrite = next.canWrite;
-    } catch (err) {
-      console.error(`collab: access recheck failed for ${roomKey(target)}`, err);
-    }
-  }, ACCESS_RECHECK_MS);
+  const recheckTimer = setInterval(() => void recheck(), ACCESS_RECHECK_MS);
 
   ws.on("close", () => {
     clearInterval(recheckTimer);

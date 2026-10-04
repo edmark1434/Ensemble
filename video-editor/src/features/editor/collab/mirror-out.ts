@@ -157,7 +157,7 @@ export function setupMirrorOutFromStateManager(
     // clients instead of cleanly reconciling.
     prevState = state;
 
-    if (syncGuard.isApplyingRemote) return;
+    if (syncGuard.isApplyingRemote || syncGuard.readOnly) return;
     if (!relevantChanged) return;
 
     // A transition may be absent from state.transitionsMap for two very
@@ -216,7 +216,7 @@ export function setupMirrorOutFromStore(
   isProjectTarget: boolean,
 ): () => void {
   return useStore.subscribe((state, prevState) => {
-    if (syncGuard.isApplyingRemote) return;
+    if (syncGuard.isApplyingRemote || syncGuard.readOnly) return;
 
     const fpsChanged = state.fps !== prevState.fps;
     const sizeChanged = state.size !== prevState.size;

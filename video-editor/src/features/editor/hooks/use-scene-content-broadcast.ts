@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import {useEffect, useRef} from "react";
 import * as Y from "yjs";
 import type StateManager from "@designcombo/state";
 import useStore from "../store/use-store";
@@ -20,6 +20,10 @@ export function useSceneContentBroadcast(
   // and live project-name updates over this connection, but never writes.
   canPush: boolean,
 ) {
+  const canPushRef = useRef(canPush);
+  canPushRef.current = canPush;
+  const activateRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     if (!projectId || !userId || !sceneItemId) return;
 
@@ -31,6 +35,7 @@ export function useSceneContentBroadcast(
     let pendingPush = false;
     let activeSessionId: number | null = null;
     let forceFlush: (() => Promise<void>) | null = null;
+    let teardownPersistence: (() => void) | null = null;
 
     const doc = new Y.Doc({ gc: false });
     const schema = createCollabSchema(doc);
@@ -74,7 +79,7 @@ export function useSceneContentBroadcast(
     let pushQueued = false;
 
     const attemptPush = (attempt: number): Promise<boolean> => {
-      if (!canPush || !wsSynced || !blockHydrated) return Promise.resolve(false);
+      if (!canPushRef.current || !wsSynced || !blockHydrated) return Promise.resolve(false);
       const applied = applySceneContentToDoc(schema, sceneItemId, buildContent(), stateManager.getState().duration, localOrigin);
       if (!applied) {
         console.debug("[scene-broadcast] miss", {
@@ -115,7 +120,7 @@ export function useSceneContentBroadcast(
     };
 
     const schedulePush = () => {
-      if (!canPush) return;
+      if (!canPushRef.current) return;
       pendingPush = true;
       if (!flushTimer) {
         flushTimer = setTimeout(() => {
@@ -141,17 +146,25 @@ export function useSceneContentBroadcast(
     // Own persistence, independent of the room's 60s internal timer or
     // the (now-delayed) empty-room flush — writes made here should be
     // durable within a few seconds, not up to a minute.
-    if (canPush) {
-      createSession(projectId, userId).then((sessionId) => {
-        if (cancelled) {
-          endSession(sessionId);
-          return;
-        }
-        activeSessionId = sessionId;
-        const handle = attachPersistence(schema, target, sessionId, localOrigin);
-        forceFlush = handle.forceFlush;
-      });
-    }
+    let activated = false;
+    const activate = () => {
+      if (activated || cancelled) return;
+      activated = true;
+      createSession(projectId, userId)
+        .then((sessionId) => {
+          if (cancelled) {
+            endSession(sessionId);
+            return;
+          }
+          activeSessionId = sessionId;
+          const handle = attachPersistence(schema, target, sessionId, localOrigin);
+          forceFlush = handle.forceFlush;
+          teardownPersistence = handle.teardown;
+        })
+        .catch((err) => console.error("useSceneContentBroadcast: createSession failed", err));
+      push();
+    };
+    activateRef.current = activate;
 
     // Read current state right away instead of waiting for stateManager to
     // emit a change. Block hydration is a plain REST fetch and is usually
@@ -160,6 +173,7 @@ export function useSceneContentBroadcast(
     blockHydrated = true;
     prevState = stateManager.getState();
     push();
+    if (canPushRef.current) activate();
 
     const subscription = stateManager.subscribe(() => {
       const state = stateManager.getState();
@@ -186,6 +200,9 @@ export function useSceneContentBroadcast(
     });
 
     return () => {
+      activateRef.current = null;
+      clearWorkingInsideScene(schema.awareness);
+
       if (flushTimer) {
         clearTimeout(flushTimer);
         flushTimer = null;
@@ -203,19 +220,25 @@ export function useSceneContentBroadcast(
       pendingPush = false;
 
       settledPush.finally(() => {
-        forceFlush?.()
-          .catch((err) => {
-            console.error("useSceneContentBroadcast: force flush on exit failed", err);
-          })
-          .finally(() => {
-            clearWorkingInsideScene(schema.awareness);
-            schema.meta.unobserve(syncProjectName);
-            teardownWs();
-            schema.awareness.destroy();
-            doc.destroy();
-            if (activeSessionId !== null) endSession(activeSessionId);
-          });
+        const flushed = forceFlush
+          ? Promise.race([
+            forceFlush().catch((err) => { console.error("useSceneContentBroadcast: force flush on exit failed", err); }),
+            new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+          ])
+          : Promise.resolve();
+        flushed.finally(() => {
+          schema.meta.unobserve(syncProjectName);
+          teardownPersistence?.();
+          teardownWs();
+          schema.awareness.destroy();
+          doc.destroy();
+          if (activeSessionId !== null) endSession(activeSessionId);
+        });
       });
     };
-  }, [stateManager, projectId, userId, userName, sceneItemId, canPush]);
+  }, [stateManager, projectId, userId, userName, sceneItemId]);
+
+  useEffect(() => {
+    if (canPush) activateRef.current?.();
+  }, [canPush]);
 }

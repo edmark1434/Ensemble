@@ -387,6 +387,8 @@ const Timeline = ({ stateManager, readOnly = false }: { stateManager: StateManag
 
     let isDragging = false;
     let activeIdsBeforeClick: string[] = [];
+    const isRealTrackItem = (item: any) =>
+      !!item.id && item.id in useStore.getState().trackItemsMap;
 
     canvas.on('mouse:down', (e: any) => {
       isDragging = false;
@@ -397,8 +399,9 @@ const Timeline = ({ stateManager, readOnly = false }: { stateManager: StateManag
       const trackItems = canvas.getTrackItems() as any[];
       const target = trackItems.find(item => {
         const b = item.getBoundingRect();
-        return pointer.x >= b.left && pointer.x <= b.left + b.width &&
-          pointer.y >= b.top && pointer.y <= b.top + b.height;
+        return isRealTrackItem(item)
+          && pointer.x >= b.left && pointer.x <= b.left + b.width
+          && pointer.y >= b.top && pointer.y <= b.top + b.height;
       });
 
       if (!target) return; // don't deselect here, just bail
@@ -459,8 +462,9 @@ const Timeline = ({ stateManager, readOnly = false }: { stateManager: StateManag
       const trackItems = canvas.getTrackItems() as any[];
       const target = trackItems.find(item => {
         const b = item.getBoundingRect();
-        return pointer.x >= b.left && pointer.x <= b.left + b.width &&
-          pointer.y >= b.top && pointer.y <= b.top + b.height;
+        return isRealTrackItem(item)
+          && pointer.x >= b.left && pointer.x <= b.left + b.width
+          && pointer.y >= b.top && pointer.y <= b.top + b.height;
       });
 
       if (!target) {

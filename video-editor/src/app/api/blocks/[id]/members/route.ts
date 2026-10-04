@@ -16,6 +16,7 @@ import {
   ASSIGNABLE_BLOCK_ROLES,
   type AssignableBlockRole, GENERAL_ACCESS_LEVELS, GeneralAccessLevel,
 } from "@/features/editor/types/block-members";
+import {recheckRoom} from "@/lib/collab/access-recheck";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -86,12 +87,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   if (result === "not_project_member") {
     return fail("That user isn't a member of this project", 400);
   }
-  if (result === "not_editor") {
-    return fail("Only project owners and editors can be added", 400);
-  }
   if (result === "already_member") {
     return fail("That user already has access", 409);
   }
+  void recheckRoom(`block:${auth.blockId}`);
   return NextResponse.json({ ok: true });
 }
 
@@ -106,6 +105,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       return fail("Invalid generalAccess", 400);
     }
     await updateBlock({ blockId: auth.blockId, generalAccess: body.generalAccess });
+    void recheckRoom(`block:${auth.blockId}`, false);
     return NextResponse.json({ ok: true });
   }
 
@@ -117,9 +117,11 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     blockId: auth.blockId,
     userId: body.userId,
     role: body.role,
+    projectId: auth.projectId
   });
   if (!updated) return fail("Member not found", 404);
 
+  void recheckRoom(`block:${auth.blockId}`);
   return NextResponse.json({ ok: true });
 }
 
@@ -133,5 +135,6 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
   const removed = await removeBlockMember({ blockId: auth.blockId, userId });
   if (!removed) return fail("Member not found", 404);
 
+  void recheckRoom(`block:${auth.blockId}`);
   return NextResponse.json({ ok: true });
 }

@@ -12,6 +12,8 @@ import {
   updateProjectMemberRole,
   type AssignableProjectRole,
 } from "@/lib/db/project-members";
+import {recheckAllRooms} from "@/lib/collab/access-recheck";
+import {canEditWithRole, canManageSharing} from "@/features/editor/types/editor-role";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -28,8 +30,8 @@ async function getSessionUserId(): Promise<string | null> {
   return decoded?.userId ?? null;
 }
 
-/** Reading the list: any project member. Changing it: the project Owner only. */
-async function authorize(ctx: Ctx, { requireOwner }: { requireOwner: boolean }) {
+/** Reading the list: any project member. Changing it: project Owners and Editors. */
+async function authorize(ctx: Ctx, { requireManager }: { requireManager: boolean }) {
   const { id: projectId } = await ctx.params;
 
   const userId = await getSessionUserId();
@@ -37,15 +39,27 @@ async function authorize(ctx: Ctx, { requireOwner }: { requireOwner: boolean }) 
 
   const role = await getProjectMemberRole(projectId, userId);
   if (!role) return { error: fail("Forbidden", 403) };
-  if (requireOwner && role !== "Owner") {
-    return { error: fail("Only the project owner can change access", 403) };
+  if (requireManager && !canManageSharing(role)) {
+    return { error: fail("Only project owners and managers can change access", 403) };
   }
 
-  return { projectId, userId };
+  return { projectId, userId, role };
+}
+
+const MANAGER_ONLY = "Only the project owner can grant or change manager access";
+
+async function touchesManager(
+  auth: { projectId: string; role: string },
+  targetUserId: string,
+  newRole?: string,
+) {
+  if (auth.role === "Owner") return false;
+  if (newRole === "Manager") return true;
+  return (await getProjectMemberRole(auth.projectId, targetUserId)) === "Manager";
 }
 
 export async function GET(_req: NextRequest, ctx: Ctx) {
-  const auth = await authorize(ctx, { requireOwner: false });
+  const auth = await authorize(ctx, { requireManager: false });
   if ("error" in auth) return auth.error;
 
   const access = await getProjectAccess(auth.projectId, auth.userId);
@@ -53,13 +67,15 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 }
 
 export async function POST(req: NextRequest, ctx: Ctx) {
-  const auth = await authorize(ctx, { requireOwner: true });
+  const auth = await authorize(ctx, { requireManager: true });
   if ("error" in auth) return auth.error;
 
   const body = await req.json().catch(() => null);
   if (typeof body?.userId !== "string" || !isAssignableRole(body?.role)) {
     return fail("Invalid userId/role", 400);
   }
+
+  if (await touchesManager(auth, body.userId, body.role)) return fail(MANAGER_ONLY, 403);
 
   const result = await addProjectMember({
     projectId: auth.projectId,
@@ -68,17 +84,20 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   });
 
   if (result === "already_member") return fail("That user already has access", 409);
+  void recheckAllRooms();
   return NextResponse.json({ ok: true });
 }
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
-  const auth = await authorize(ctx, { requireOwner: true });
+  const auth = await authorize(ctx, { requireManager: true });
   if ("error" in auth) return auth.error;
 
   const body = await req.json().catch(() => null);
   if (typeof body?.userId !== "string" || !isAssignableRole(body?.role)) {
     return fail("Invalid userId/role", 400);
   }
+
+  if (await touchesManager(auth, body.userId, body.role)) return fail(MANAGER_ONLY, 403);
 
   const updated = await updateProjectMemberRole({
     projectId: auth.projectId,
@@ -87,18 +106,22 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   });
   if (!updated) return fail("Member not found", 404);
 
+  void recheckAllRooms();
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: NextRequest, ctx: Ctx) {
-  const auth = await authorize(ctx, { requireOwner: true });
+  const auth = await authorize(ctx, { requireManager: true });
   if ("error" in auth) return auth.error;
 
   const userId = req.nextUrl.searchParams.get("userId");
   if (!userId) return fail("Invalid userId", 400);
 
+  if (await touchesManager(auth, userId)) return fail(MANAGER_ONLY, 403);
+
   const removed = await removeProjectMember({ projectId: auth.projectId, userId });
   if (!removed) return fail("Member not found", 404);
 
+  void recheckAllRooms();
   return NextResponse.json({ ok: true });
 }
