@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X, Tag } from "lucide-react";
+import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X, Tag, Star, Briefcase, Flag } from "lucide-react";
 import { ProfileTags } from "../Utilities/ProfileTags.tsx";
 import useGlobalState from "@/lib/global_state";
 
@@ -35,10 +35,15 @@ interface TopSectionProps {
   followingCount?: number;
   isFollowing?: boolean;
   isFollowedBy?: boolean;
+  avgRating?: number;
+  freelancerRating?: number;
+  totalReviews?: number;
   onFollow?: () => void;
   onUnfollow?: () => void;
   onFollowersClick?: () => void;
   onFollowingClick?: () => void;
+  onInviteToJobClick?: () => void;
+    onReportClick?: () => void;
 }
 
 export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
@@ -68,10 +73,15 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   followingCount = 0,
   isFollowing = false,
   isFollowedBy = false,
+    avgRating = 0,
+    freelancerRating = 0,
+    totalReviews = 0,
   onFollow,
   onUnfollow,
   onFollowersClick,
-  onFollowingClick
+  onFollowingClick,
+  onInviteToJobClick,
+  onReportClick
 }) => {
   const isGuestMode = useGlobalState(state => state.isGuestMode);
   const [isMetadataOpen, setIsMetadataOpen] = useState(false);
@@ -243,7 +253,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
 
             <div className="flex items-center gap-1 text-gray-700 dark:text-zinc-400 font-medium tracking-wide bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 px-2 py-0.5 rounded text-[11px]">
               <MapPin className="h-3 w-3 text-gray-500 dark:text-zinc-400 flex-shrink-0" />
-              <span>Cebu City | Cebu | Philippines</span>
+              <span>{location || country || "Location not set"}</span>
             </div>
           </div>
 
@@ -262,60 +272,154 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             <button onClick={onFollowingClick} className="hover:text-blue-500 dark:hover:text-blue-400 hover:underline decoration-blue-400/50 underline-offset-4 transition">
               <span className="text-gray-900 dark:text-white">{followingCount}</span> <span className="text-gray-500 dark:text-zinc-500 font-normal">Following</span>
             </button>
+            <span className="mx-2 text-gray-300 dark:text-zinc-700">&bull;</span>
+            <div className="flex items-center gap-2 cursor-default group text-[11px]" title="Total Platform Rating">
+              <div className="flex items-center gap-1">
+                <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+                <span className="text-gray-500 dark:text-zinc-400 font-medium tracking-wide">Total Rating:</span>
+                <span className="font-bold text-gray-900 dark:text-white">{avgRating}</span>
+                <span className="text-gray-400 dark:text-zinc-500">({totalReviews})</span>
+              </div>
+              <span className="text-gray-300 dark:text-zinc-700 mx-0.5">|</span>
+              <div className="flex items-center gap-1">
+                <span className="text-gray-500 dark:text-zinc-400 font-medium tracking-wide">Freelance Rating:</span>
+                <span className="font-bold text-gray-900 dark:text-white">{freelancerRating || "N/A"}</span>
+              </div>
+            </div>
           </div>
 
         </div>
 
         {/* Action Controls Row */}
-        <div className="flex flex-row gap-2 flex-shrink-0">
-          {isOwner && (
-            <button
-              onClick={onEditProfile}
-              className="p-2.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/20 transition shadow-sm"
-              title="Modify Properties"
-            >
-              <Edit2 className="h-4 w-4" />
-            </button>
-          )}
+          <div className="flex flex-row gap-2 flex-shrink-0">
+            {isOwner && (
+              <div className="relative group/btn flex items-center justify-center">
+                <button
+                  onClick={onEditProfile}
+                  className="p-2.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/20 transition shadow-sm"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </button>
+                
+              {/* Tooltip */}
+              <div className="absolute -bottom-[36px] left-1/2 transform -translate-x-1/2 opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none z-50 drop-shadow-md">
+                <div className="bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-white/10 text-[11px] px-2.5 py-1.5 rounded whitespace-nowrap font-medium tracking-wide">
+                  Edit Profile
+                  <div className="absolute -top-[5px] left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-white dark:bg-zinc-800 border-l border-t border-gray-200 dark:border-white/10 rotate-45" />
+                </div>
+              </div>
+              </div>
+            )}
 
-          <button
-            onClick={onChatClick}
-            className="p-2.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/20 transition shadow-sm"
-            title="Open Communications Hub"
-          >
-            <MessageCircle className="h-4 w-4" />
-          </button>
-          
-          {!isOwner && !isGuestMode && (
-            <button
-              onClick={isFollowing ? onUnfollow : onFollow}
-              className={`px-4 py-2 text-sm font-bold rounded-xl border transition shadow-sm ${
-                isFollowing
-                  ? "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-500 dark:hover:text-red-400"
-                  : "bg-blue-600 border-blue-500 text-white hover:bg-blue-500 hover:border-blue-400"
-              }`}
-            >
-              {isFollowing ? "Following" : isFollowedBy ? "Follow Back" : "Follow"}
-            </button>
-          )}
+            <div className="relative group/btn flex items-center justify-center">
+              <button
+                onClick={onChatClick}
+                className="p-2.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/20 transition shadow-sm"
+              >
+                <MessageCircle className="h-4 w-4" />
+              </button>
+              
+              {/* Tooltip */}
+              <div className="absolute -bottom-[36px] left-1/2 transform -translate-x-1/2 opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none z-50 drop-shadow-md">
+                <div className="bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-white/10 text-[11px] px-2.5 py-1.5 rounded whitespace-nowrap font-medium tracking-wide">
+                  Chat
+                  <div className="absolute -top-[5px] left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-white dark:bg-zinc-800 border-l border-t border-gray-200 dark:border-white/10 rotate-45" />
+                </div>
+              </div>
+            </div>
+            
+            {!isOwner && !isGuestMode && (
+                <div className="flex gap-2">
+                  <div className="relative group/btn flex items-center justify-center">
+                    <button
+                      onClick={onInviteToJobClick}
+                      className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/20 hover:border-blue-300 dark:hover:border-blue-500/30 transition shadow-sm"
+                    >
+                      <Briefcase className="h-4 w-4" />
+                    </button>
+                    
+              {/* Tooltip */}
+              <div className="absolute -bottom-[36px] left-1/2 transform -translate-x-1/2 opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none z-50 drop-shadow-md">
+                <div className="bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-white/10 text-[11px] px-2.5 py-1.5 rounded whitespace-nowrap font-medium tracking-wide">
+                  Invite to Job
+                  <div className="absolute -top-[5px] left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-white dark:bg-zinc-800 border-l border-t border-gray-200 dark:border-white/10 rotate-45" />
+                </div>
+              </div>
+                  </div>
+                  <button
+                    onClick={isFollowing ? onUnfollow : onFollow}
+                    className={`px-4 py-2 text-sm font-bold rounded-xl border transition shadow-sm ${
+                      isFollowing
+                        ? "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-500 dark:hover:text-red-400"
+                        : "bg-blue-600 border-blue-500 text-white hover:bg-blue-500 hover:border-blue-400"
+                    }`}
+                  >
+                    {isFollowing ? "Following" : isFollowedBy ? "Follow Back" : "Follow"}
+                  </button>
+                </div>
+            )}
 
-          {!verificationLevel && isOwner && (
-          <button
-            onClick={onVerificationClick}
-            className="p-2.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-emerald-600 dark:text-emerald-500 hover:text-emerald-500 dark:hover:text-emerald-400 hover:bg-gray-200 dark:hover:bg-white/10 hover:border-emerald-500/20 transition shadow-sm"
-            title="Account Verification Status"
-          >
-            <ShieldCheck className="h-4 w-4" />
-          </button>
-          )}
-          <button
-            className="p-2.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/20 transition"
-            title="Share Profile Workspace"
-          >
-            <Share2 className="h-4 w-4" />
-          </button>
-        </div>
+            {!verificationLevel && isOwner && (
+              <div className="relative group/btn flex items-center justify-center">
+                <button
+                  onClick={onVerificationClick}
+                  className="p-2.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-emerald-600 dark:text-emerald-500 hover:text-emerald-500 dark:hover:text-emerald-400 hover:bg-gray-200 dark:hover:bg-white/10 hover:border-emerald-500/20 transition shadow-sm"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                </button>
+                
+              {/* Tooltip */}
+              <div className="absolute -bottom-[36px] left-1/2 transform -translate-x-1/2 opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none z-50 drop-shadow-md">
+                <div className="bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-white/10 text-[11px] px-2.5 py-1.5 rounded whitespace-nowrap font-medium tracking-wide">
+                  Verify Account
+                  <div className="absolute -top-[5px] left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-white dark:bg-zinc-800 border-l border-t border-gray-200 dark:border-white/10 rotate-45" />
+                </div>
+              </div>
+              </div>
+            )}
 
+            <div className="relative group/btn flex items-center justify-center">
+              <button
+                className="p-2.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/20 transition shadow-sm"
+              >
+                <Share2 className="h-4 w-4" />
+              </button>
+              
+              {/* Tooltip */}
+              <div className="absolute -bottom-[36px] left-1/2 transform -translate-x-1/2 opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none z-50 drop-shadow-md">
+                <div className="bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-white/10 text-[11px] px-2.5 py-1.5 rounded whitespace-nowrap font-medium tracking-wide">
+                  Share Profile
+                  <div className="absolute -top-[5px] left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-white dark:bg-zinc-800 border-l border-t border-gray-200 dark:border-white/10 rotate-45" />
+                </div>
+              </div>
+            </div>
+
+            {!isOwner && (
+              <div className="relative group/btn flex items-center justify-center">
+                <button
+                  onClick={onReportClick}
+                  className="p-2.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-red-500/70 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-200 dark:hover:border-red-500/20 transition shadow-sm"
+                >
+                  <Flag className="h-4 w-4" />
+                </button>
+                
+              {/* Tooltip */}
+              <div className="absolute -bottom-[36px] left-1/2 transform -translate-x-1/2 opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none z-50 drop-shadow-md">
+                <div className="bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-white/10 text-[11px] px-2.5 py-1.5 rounded whitespace-nowrap font-medium tracking-wide">
+                  Report User
+                  <div className="absolute -top-[5px] left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-white dark:bg-zinc-800 border-l border-t border-gray-200 dark:border-white/10 rotate-45" />
+                </div>
+              </div>
+              </div>
+            )}
+          </div>
+
+          {joinedDate && (
+          <div className="absolute bottom-4 right-6 flex items-center gap-1.5 text-[10px] text-gray-400 dark:text-zinc-500 font-medium tracking-wide">
+            <Calendar className="h-3 w-3" />
+            Joined {new Date(joinedDate).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+          </div>
+        )}
       </div>
     </div>
   );

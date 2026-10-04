@@ -98,6 +98,11 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, 
             EXISTS(SELECT 1 FROM account_followers WHERE follower_id = a.account_id AND followed_id = $1::uuid) AS is_followed_by,
             a.description AS bio,
             a.tagline AS tagline,
+              u.email_address AS email,
+              a.created_at AS joined_date,
+              (SELECT COUNT(*) FROM jobs j WHERE j.client_account_id = a.account_id) AS total_jobs,
+              (SELECT COUNT(*) FROM gigs g WHERE g.freelancer_account_id = a.account_id) AS total_services,
+              (SELECT COUNT(*) FROM media_assets ma WHERE ma.owner_user_id = u.user_id) AS total_assets,
             COALESCE(
                 (SELECT json_agg(json_build_object('role_id', pp.plpu_id, 'role_name', pp.purpose_name))
                  FROM platform_purpose pp JOIN user_platform_purpose upp ON pp.plpu_id = upp.plpu_id WHERE upp.user_id = u.user_id),
@@ -262,7 +267,7 @@ async function getProfileRepositories(accountId) {
                 A.CREATED_AT, 
                 A.MERIT_SCORE, 
                 A.AVATAR_FILE_ID,
-                U.COUNTRY AS LOCATION,
+                U.COUNTRY AS COUNTRY, U.ADDRESS AS LOCATION, U.ZIP_CODE,
                 U.USER_ID,
                 V.IS_VERIFIED AS VERIFICATION_STATUS,
                 -- Aggregates all matching ACCOUNT_LINK rows into a JSON array

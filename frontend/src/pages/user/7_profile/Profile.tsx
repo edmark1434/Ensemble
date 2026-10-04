@@ -6,6 +6,8 @@ import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import toast from "react-hot-toast";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
+import { InviteToJobModal } from "@/components/ui/InviteToJobModal";
 
 // Modularized Profile Sub-Components
 import { TopSection_ProfileDisplay } from "./Displays/TopSection_ProfileDisplay.tsx";
@@ -162,6 +164,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
   const [currentAvatar, setCurrentAvatar] = useState<Preset | null>(null);
 
   const [isFollowing, setIsFollowing] = useState(false);
+    const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+    const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [isFollowedBy, setIsFollowedBy] = useState(false);
   const [followersModalType, setFollowersModalType] = useState<"followers" | "following" | null>(null);
   const [profileNotFound, setProfileNotFound] = useState(hasInvalidProfileId);
@@ -470,10 +474,11 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
 
       if (response.data.success) {
         setUserDetails((prev) => (prev ? { ...prev, skills: updatedSkills } : null));
-        const { added, removed, modified, totalSkills } = response.data.data;
-        toast.success(
-          `Skills updated: ${added} added, ${removed} removed, ${modified} modified. Total: ${totalSkills} skills`
-        );
+        const { added, removed, modified } = response.data.data;
+        const label = (n: number) => `${n} ${n === 1 ? "skill has" : "skills have"}`;
+        if (added > 0) toast.success(`${label(added)} been added!`);
+        if (modified > 0) toast.success(`${label(modified)} been updated`);
+        if (removed > 0) toast.success(`${label(removed)} been removed`);
         setIsSkillsModalOpen(false);
       } else {
         toast.error(response.data.message || "Failed to update skills");
@@ -518,7 +523,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
   };
 
   useEffect(() => {
-    if (confirmedProfileId === id && isUuid(id)) {
+    if (confirmedProfileId === id && isUuid(id) && isOwner) {
       fetchAvatarPresets();
     }
   }, [id, confirmedProfileId]);
@@ -834,6 +839,9 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
 
         <TopSection_ProfileDisplay
           loading={loading}
+          avgRating={userDetails?.avg_rating ? Number(parseFloat(userDetails.avg_rating as string).toFixed(1)) : 0.0}
+          freelancerRating={userDetails?.freelancer_rating ? Number(parseFloat(userDetails.freelancer_rating as string).toFixed(1)) : 0.0}
+          totalReviews={userDetails?.total_reviews ? Number(userDetails.total_reviews) : 0}
           username={userDetails?.username}
           name={userDetails?.name}
           middleName={userDetails?.middleName}
@@ -859,6 +867,16 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
           onUnfollow={handleUnfollow}
           onFollowersClick={() => setFollowersModalType("followers")}
           onFollowingClick={() => setFollowersModalType("following")}
+            onInviteToJobClick={() => {
+                if (!user) return setIsGuestModalOpen(true);
+                setIsInviteModalOpen(true);
+              }}
+              onReportClick={() => {
+                if (!user) return setIsGuestModalOpen(true);
+                toast.error("User reporting system will be available in a future update.", {
+                  style: { background: '#18181b', color: '#fff' }
+                });
+              }}
           onEditAvatar={() => setIsAvatarModalOpen(true)}
           onEditProfile={() => setIsProfileModalOpen(true)}
           onChatClick={handleOpenChat}
@@ -1026,6 +1044,19 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         onSave={saveSkillsCuration}
         availableSkillsList={availableSkills}
         isSaving={isSavingSkills}
+      />
+      <InviteToJobModal 
+        isOpen={isInviteModalOpen} 
+        onClose={() => setIsInviteModalOpen(false)} 
+        freelancerId={id || ""} 
+        freelancerName={userDetails?.name || userDetails?.username || "Freelancer"} 
+      />
+
+      <GuestLoginModal
+        isOpen={isGuestModalOpen}
+        onClose={() => setIsGuestModalOpen(false)}
+        title="Login Required"
+        message="You need to be logged in to invite freelancers to jobs. Log in now to access your workspace."
       />
     </div>
   );

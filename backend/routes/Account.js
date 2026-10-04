@@ -40,14 +40,18 @@ const {
     getUserGalleries,
     createGalleryItem,
     deleteGalleryItem,
-    updateGalleryItem
+    updateGalleryItem,
+    getAllGalleriesController
 } = require('../controllers/GalleryControllers');
+
+router.get('/galleries/all', optionalSession, getAllGalleriesController);
 const { adjustAccountCredits } = require('../repositories/AdminUserTeamRepositories');
 
 router.get('/recent-avatars', getRecentUserAvatarsController);
 router.put('/profile/tagline-description', [checkSession, requireAuth], updateTaglineAndDescriptionController);
 router.get('/wallet', [checkSession, requireAuth], getAccountWalletController);
-router.get('/search-users', [checkSession, requireAuth], searchUserAccountsByHandleController);
+// Optional auth for searching users (allows guests but includes follow status if logged in)
+router.get('/search-users', [optionalSession], searchUserAccountsByHandleController);
 router.get('/personal-details', [checkSession, requireAuth], getPersonalDetailsController);
 router.get('/profile/current-avatar', [checkSession, requireAuth], getProfileCurrentAvatarByAccountIdController);
 router.post('/:accountId/follow', [checkSession, requireAuth], followUserController);
@@ -225,3 +229,4 @@ router.post('/dev/add-rating', [checkSession, requireAuth], async (req, res) => 
 });
 
 module.exports = router;
+
