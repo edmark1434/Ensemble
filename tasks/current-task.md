@@ -1,12 +1,9 @@
-# Current Task: Discovery Page Redesign
+# Current Task: Fixed 1-year verification approval
 
 ## Objective
-Redesign `/discovery` so clients are hooked by freelancers matched to their recent open job posts.
+Remove duration choices from verification approval. Staff get one Verify action that always lasts 1 year, with that length labeled on the review screen.
 
 ## Acceptance Criteria
-- "Talent matched for you" section ranks freelancers by overlap between their profile skills and the client's open job `tags`.
-- Client can switch between "All my open jobs" and each individual recent job (up to 5).
-- Each match card shows a match % ring, matched skills (green), rating, and follow/message actions.
-- Empty state prompts posting a job when the client has no open jobs with skills.
-- Explore section: grid cards, search, role filters, Best match / Top rated / Following sorts, matched skills highlighted.
-- No gradients; existing theme preserved. `npx tsc --noEmit` passes.
+- The verification modal has no 30/90/180/365/730-day or custom-day controls.
+- The action button is labeled Verify, and the screen states that verification lasts 1 year from approval.
+- Backend approval always stores a 365-day expiry, including when a client sends another `validityDays` value.

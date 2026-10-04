@@ -187,9 +187,8 @@ async function applyAdminDiditVerificationAction(accountId, action, options = {}
   const verifiedByAccountId = options.verifiedByAccountId;
   const comment = String(options.comment || '').trim();
   const reverificationRequirements = options.reverificationRequirements || {};
-  let validityDays = Number(options.validityDays);
-  if (!Number.isFinite(validityDays) || validityDays <= 0) validityDays = 365;
-  validityDays = Math.min(Math.max(Math.floor(validityDays), 1), 3650);
+  // Approval length is fixed at 1 year. Staff do not choose a duration.
+  const validityDays = 365;
 
   if (String(record?.account_type || '').toLowerCase() === 'team') {
     if (!['approve', 'decline', 'reverify'].includes(normalizedAction)) {
