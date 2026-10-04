@@ -1,4 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom";
+import { StaffPlatformBanner, StaffPlatformBlocked, useStaffPlatformGuard } from "@/components/staff/StaffPlatformView";
+import { isStaffBrowsePath, isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import UserNav from "@/components/nav/user_nav.tsx";
 import UtilScrollTop from "@/components/utility/util_scroll_top.tsx";
@@ -46,6 +48,9 @@ const Layout = () => {
   const activeFloatingId = useChatState((state) => state.activeFloatingId);
   const unreadCounts = useChatState((state) => state.unreadCounts);
 
+  const isStaffView = isStaffPlatformViewer(user);
+  const staffCanBrowseHere = !isStaffView || isStaffBrowsePath(location.pathname);
+  useStaffPlatformGuard(isStaffView);
   const isInboxPage = location.pathname.startsWith("/inbox");
   const currentUserId = String(user?.account_id || "");
 
@@ -138,8 +143,9 @@ const Layout = () => {
   const marginLeft = isSidebarCollapsed ? "5rem" : "16rem";
 
   useEffect(() => {
+    if (isStaffView) return;
     if (user?.account_id) initializeChat(String(user.account_id));
-  }, [user?.account_id, initializeChat]);
+  }, [isStaffView, user?.account_id, initializeChat]);
 
   const openChatWithUser = useCallback(
     (target?: ChatTarget) => {
@@ -206,10 +212,11 @@ const Layout = () => {
         }`}
         style={{ paddingLeft: marginLeft }}
       >
-        <Outlet context={{ openChatWithUser }} />
+        {isStaffView && <StaffPlatformBanner />}
+        {staffCanBrowseHere ? <Outlet context={{ openChatWithUser }} /> : <StaffPlatformBlocked />}
       </main>
 
-      {!isInboxPage && (
+      {!isInboxPage && !isStaffView && (
         <ChatMain
           activeUser={activeChatUser}
           recentChats={recentChats}
@@ -217,7 +224,7 @@ const Layout = () => {
           onRemoveChat={removeFloatingWindow}
         />
       )}
-      <CallOverlay />
+      {!isStaffView && <CallOverlay />}
 
       <UtilScrollTop />
       <VerificationRequiredModal />

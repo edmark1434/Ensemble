@@ -1,4 +1,4 @@
-import { ExternalLink, Sparkles } from 'lucide-react';
+import { Eye, Sparkles } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { NavLink } from 'react-router-dom';
 import LogoutButton from './LogoutButton';
@@ -45,7 +45,7 @@ export default function ModeratorNavbar({
         <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
           Menu
         </p>
-        {items.map(({ label, icon: Icon, to }) => (
+        {[...items, { label: 'Platform view', icon: Eye, to: '/home' }].map(({ label, icon: Icon, to }) => (
           <NavLink
             key={label}
             to={to}
@@ -81,8 +81,8 @@ export default function ModeratorNavbar({
           to="/home"
           className="flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-xs font-medium text-zinc-400 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
         >
-          <ExternalLink className="h-3.5 w-3.5" />
-          Back to platform
+          <Eye className="h-3.5 w-3.5" />
+          Platform view
         </NavLink>
         <LogoutButton loginPath={STAFF_LOGIN_PATH} />
       </div>

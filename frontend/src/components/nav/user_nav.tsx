@@ -79,18 +79,20 @@ const UserNav: React.FC<UserNavProps> = () => {
     const isCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
     const setIsCollapsed = useGlobalState((state) => state.setIsSidebarCollapsed);
     const isGuestMode = useGlobalState((state) => state.isGuestMode);
+    const isStaffView = useGlobalState((state) => state.user?.type === "Staff");
+    const browseOnly = isGuestMode || isStaffView;
     const [isJobsOpen, setIsJobsOpen] = useState(false);
     const [isGigsOpen, setIsGigsOpen] = useState(false);
 
-    const primaryNavState = isGuestMode ? primaryNavInitial.filter(item => item.label !== "Teams") : primaryNavInitial;
+    const primaryNavState = browseOnly ? primaryNavInitial.filter(item => item.label !== "Teams") : primaryNavInitial;
     const marketplaceTopState = marketplaceTopInitial;
-    const jobsState = isGuestMode ? jobsItemsInitial.filter(item => item.label !== "Proposals") : jobsItemsInitial;
-    const gigsState = isGuestMode ? gigsItemsInitial.filter(item => item.label !== "Orders") : gigsItemsInitial;
-    const activityState = isGuestMode ? [] : activityRecordsInitial;
+    const jobsState = browseOnly ? jobsItemsInitial.filter(item => item.label !== "Proposals") : jobsItemsInitial;
+    const gigsState = browseOnly ? gigsItemsInitial.filter(item => item.label !== "Orders") : gigsItemsInitial;
+    const activityState = browseOnly ? [] : activityRecordsInitial;
 
     const handleLogoClick = () => {
        const { user: currentUser, isAuthenticated: auth } = useGlobalState.getState();
-       if (auth && currentUser?.type === "User") {
+       if (auth && (currentUser?.type === "User" || currentUser?.type === "Staff")) {
           navigate("/home");
           return;
        }

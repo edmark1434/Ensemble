@@ -7,6 +7,7 @@ import { ONBOARDING_COMPLETED_EVENT, ONBOARDING_STEP_CHANGED_EVENT, wasOnboardin
 import { ProfileLoadingState } from "@/pages/user/7_profile/Displays/ProfileLoadingState.tsx";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { isGuestAllowedPath } from "./guestRouteAccess";
+import { isStaffBrowsePath, isStaffConsolePath } from "./staffPlatformView";
 
 type OnboardingGateState = {
     accountId: string | null;
@@ -285,6 +286,12 @@ export default function RouteMiddleware() {
 
         navigate('/', { replace: true });
     }, [isCheckingSession, resolvedUser, isGuestMode, isPublicRoute, isGuestAllowedRoute, navigate]);
+
+    useEffect(() => {
+        if (isCheckingSession || resolvedUser?.type !== 'Staff') return;
+        if (isPublicRoute || isStaffConsolePath(location.pathname) || isStaffBrowsePath(location.pathname)) return;
+        navigate('/home', { replace: true });
+    }, [isCheckingSession, resolvedUser, isPublicRoute, location.pathname, navigate]);
 
     if (onboardingVerificationFailed) {
         return createElement(RouteLoadingShell);
