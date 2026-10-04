@@ -47,7 +47,7 @@ export const IncomingOrders: React.FC = () => {
           client_avatar: formatAvatarUrl(o.client_avatar),
       }));
       
-      const counts = { All: fetchedOrders.length, Pending: 0, Shortlisted: 0, Accepted: 0, "In Contract": 0, Rejected: 0 };
+      const counts = { All: fetchedOrders.length, Pending: 0, Shortlisted: 0, Accepted: 0, "In Contract": 0, Rejected: 0, Withdrawn: 0 };
       fetchedOrders.forEach((o: any) => {
         const s = o.status || 'Pending';
         if (counts[s as keyof typeof counts] !== undefined) {
@@ -166,7 +166,7 @@ export const IncomingOrders: React.FC = () => {
         </div>
       </div>
 
-      <div className={viewType === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-4"}>
+      <div className={viewType === "grid" ? "grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4" : "space-y-4"}>
         {filteredOrders.length === 0 ? (
           <div className="col-span-full py-10 text-center text-sm text-gray-500">No {context?.activeStatus} orders found.</div>
         ) : filteredOrders.map((order) => (

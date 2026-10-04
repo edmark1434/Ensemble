@@ -44,6 +44,12 @@ export interface Job {
   is_team?: boolean;
   isTeam?: boolean;
   posted_as?: "Team" | "Self" | string;
+  deadline?: string;
+  portfolioUseAllowed?: boolean;
+  portfolioDuration?: number | null;
+  isExistingProject?: boolean;
+  existingProjectId?: string | null;
+  initiatorRole?: string;
 }
 
 interface JobListProps {

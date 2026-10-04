@@ -31,7 +31,7 @@ export const SentOrders: React.FC = () => {
         freelancer_avatar: formatAvatarUrl(o.freelancer_avatar)
       }));
       
-      const counts = { All: visibleOrders.length, Pending: 0, Shortlisted: 0, Accepted: 0, "In Contract": 0, Rejected: 0 };
+      const counts = { All: visibleOrders.length, Pending: 0, Shortlisted: 0, Accepted: 0, "In Contract": 0, Rejected: 0, Withdrawn: 0 };
       visibleOrders.forEach((o: any) => {
         const s = o.status || 'Pending';
         if (counts[s as keyof typeof counts] !== undefined) {
@@ -82,7 +82,7 @@ export const SentOrders: React.FC = () => {
   return (
     <div className="space-y-4">
 
-      <div className={viewType === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-4"}>
+      <div className={viewType === "grid" ? "grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4" : "space-y-4"}>
         {filteredOrders.length === 0 ? (
           <div className="col-span-full py-10 text-center text-sm text-gray-500">No {context?.activeStatus} orders found.</div>
         ) : filteredOrders.map((order) => (
@@ -93,9 +93,11 @@ export const SentOrders: React.FC = () => {
           >
             <div className="flex items-center justify-between mb-4">
               <span className={`px-3 py-1 text-[11px] font-bold rounded-full border ${
-                  order.status === 'Accepted' || order.status === 'In Contract' || order.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                  order.status === 'In Contract' || order.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                  order.status === 'Accepted' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
                   order.status === 'Rejected' || order.status === 'Cancelled' ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' :
-                  order.status === 'Shortlisted' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
+                  order.status === 'Withdrawn' ? 'bg-gray-50 text-gray-600 border-gray-200 dark:bg-white/5 dark:text-gray-400 dark:border-white/10' :
+                  order.status === 'Shortlisted' ? 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20' :
                   'bg-yellow-50 text-yellow-600 border-yellow-200 dark:bg-yellow-500/10 dark:text-amber-500 dark:text-amber-400 dark:border-yellow-500/20'
                 }`}>
                 {order.status || "Pending"}
@@ -218,6 +220,7 @@ export const SentOrders: React.FC = () => {
                       selectedOrder.status === 'In Contract' || selectedOrder.status === 'Completed' ? 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
                       selectedOrder.status === 'Accepted' ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
                       selectedOrder.status === 'Rejected' || selectedOrder.status === 'Cancelled' ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' :
+                      selectedOrder.status === 'Withdrawn' ? 'bg-gray-100 text-gray-700 border-gray-300 dark:bg-white/5 dark:text-gray-400 dark:border-white/10' :
                       selectedOrder.status === 'Shortlisted' ? 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20' :
                       'bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-500/10 dark:text-yellow-400 dark:border-yellow-500/20'
                     }`}>

@@ -7,6 +7,10 @@ async function getUserGalleries(accountId) {
     return await GalleryRepositories.getUserGalleries(accountId);
 }
 
+async function getAllGalleries() {
+    return await GalleryRepositories.getAllGalleries();
+}
+
 async function createGalleryItem(accountId, fileId, title, description) {
     if (!accountId || !fileId || !title) {
         throw new Error('Account ID, File ID, and Title are required');
@@ -54,6 +58,7 @@ async function updateGalleryItem(galleryId, accountId, title, description) {
 
 module.exports = {
     getUserGalleries,
+    getAllGalleries,
     createGalleryItem,
     deleteGalleryItem,
     updateGalleryItem

@@ -260,28 +260,39 @@ export const DashboardTaskDetail = () => {
                                                 )}
                                             </div>
                                             <div className="flex-1 pb-1">
-                                                <p className={`font-semibold text-xs mb-1 ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-zinc-300'}`}>{milestone.name}</p>
-                                                <p className="text-gray-500 dark:text-zinc-500 text-[10px] mb-2 leading-relaxed line-clamp-2" title={milestone.description}>
+                                                <p className={`font-semibold text-sm mb-1 ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-zinc-300'}`}>{milestone.name}</p>
+                                                <p className="text-gray-500 dark:text-zinc-500 text-xs mb-2 leading-relaxed line-clamp-2" title={milestone.description}>
                                                     {milestone.description || "No description provided."}
                                                 </p>
                                                 
-                                                <div className="flex flex-col gap-1.5 mt-2">
+                                                <div className="flex flex-col gap-1.5 mt-3">
                                                     <div className="flex items-center justify-between">
-                                                        <div className="flex items-center gap-1 text-[10px] font-bold text-yellow-600 dark:text-yellow-500">
-                                                            <img src="/icons/lottie/credit.png" alt="credits" className="w-3 h-3 object-contain" onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                                                        <div className="flex items-center gap-1.5 text-[15px] font-bold text-yellow-600 dark:text-yellow-500">
+                                                            <img src="/icons/lottie/credit.png" alt="credits" className="w-5 h-5 object-contain" onError={(e) => { e.currentTarget.style.display = 'none' }} />
                                                             {milestone.credits} Credits
                                                         </div>
-                                                        <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${isLocked ? 'bg-gray-100 dark:bg-dark-surface text-gray-500 dark:text-zinc-600 border-gray-200 dark:border-white/5' : statusColors}`}>
+                                                        <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded border ${isLocked ? 'bg-gray-100 dark:bg-dark-surface text-gray-500 dark:text-zinc-600 border-gray-200 dark:border-white/5' : statusColors}`}>
                                                             {isLocked ? 'LOCKED' : milestone.status.replace(/_/g, ' ')}
                                                         </span>
                                                     </div>
-                                                    <div className="flex items-center justify-between text-[9px] text-gray-500 dark:text-zinc-400 font-medium">
-                                                        <span>Additional work rate: <span className="text-yellow-600 dark:text-yellow-500">{task.revision_price_credits} Credits</span></span>
-                                                        <span>
-                                                            Revisions: <span className={milestone.submissions?.filter((s: any) => s.status === 'revision_request').length >= milestone.revisions_max ? "text-red-600 dark:text-red-400" : "text-gray-700 dark:text-white"}>
-                                                                {milestone.submissions?.filter((s: any) => s.status === 'revision_request').length || 0} / {milestone.revisions_max}
+
+                                                    <div className="flex flex-col gap-1 text-[13px] text-gray-700 dark:text-zinc-300 font-medium mt-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <span>Additional Work Rate: <span className="font-bold text-yellow-600 dark:text-yellow-500 ml-1">{task.revision_price_credits} Credits</span></span>
+                                                            <span>
+                                                                Revisions: <span className={`font-bold ml-1 ${milestone.submissions?.filter((s: any) => s.status === 'revision_request').length >= milestone.revisions_max ? "text-red-600 dark:text-red-500" : "text-gray-900 dark:text-white"}`}>
+                                                                    {milestone.submissions?.filter((s: any) => s.status === 'revision_request').length || 0} / {milestone.revisions_max}
+                                                                </span>
                                                             </span>
-                                                        </span>
+                                                        </div>
+                                                        
+                                                        <div>
+                                                            Freelancer Net: <span className="font-bold text-emerald-600 dark:text-emerald-500 ml-1">{Math.round(milestone.credits * 0.9)} Credits</span>
+                                                        </div>
+                                                        
+                                                        <div>
+                                                            10% Platform Fee: <span className="font-bold text-red-500 dark:text-red-400 ml-1">-{Math.round(milestone.credits * 0.1)} Credits</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>

@@ -143,6 +143,12 @@ const JobMain: React.FC = () => {
           is_team: Boolean(j.is_team || j.posted_as === 'Team' || j.team_id),
           isTeam: Boolean(j.is_team || j.posted_as === 'Team' || j.team_id),
           posted_as: j.posted_as,
+          deadline: j.rough_deadline ? new Date(j.rough_deadline).toLocaleDateString() : undefined,
+          portfolioUseAllowed: j.portfolio_use_allowed || false,
+          portfolioDuration: j.portfolio_use_duration_seconds || null,
+          isExistingProject: j.is_existing_project || false,
+          existingProjectId: j.existing_project_id || null,
+          initiatorRole: j.initiator_role || "Client"
         }));
         setJobsList(mappedJobs);
       } catch (err) {

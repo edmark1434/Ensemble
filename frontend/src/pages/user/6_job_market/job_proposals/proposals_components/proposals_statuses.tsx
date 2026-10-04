@@ -1,5 +1,5 @@
 import React from "react";
-import { Clock, UserCheck, CheckCircle2, XCircle, Layers } from "lucide-react";
+import { Clock, UserCheck, CheckCircle2, XCircle, Layers, Archive, MinusCircle, Briefcase } from "lucide-react";
 import { motion } from "framer-motion";
 import type { ProposalStatus } from "./proposals_list";
 
@@ -25,6 +25,12 @@ const getStatusIcon = (label: string, isActive: boolean) => {
       return <CheckCircle2 className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-emerald-400" : defaultClass}`} />;
     case "Rejected":
       return <XCircle className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-red-400" : defaultClass}`} />;
+    case "Hired":
+      return <Briefcase className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-emerald-400" : defaultClass}`} />;
+    case "Withdrawn":
+      return <MinusCircle className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-gray-400" : defaultClass}`} />;
+    case "Archived":
+      return <Archive className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-gray-400" : defaultClass}`} />;
     default:
       return <Layers className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-gray-500 dark:text-zinc-400" : defaultClass}`} />;
   }

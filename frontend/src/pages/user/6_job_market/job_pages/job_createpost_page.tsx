@@ -11,6 +11,7 @@ import { requireVerifiedAccount } from "@/lib/accountVerification";
 import JobCreateHeader from "../job_components/job_creation_components/job_create_header";
 import CreateCoreInfo from "../job_components/job_creation_components/1_create_coreinfo";
 import CreateBudgetSkills from "../job_components/job_creation_components/2_create_budgetskills";
+import CreateTerms from "../job_components/job_creation_components/3_create_terms";
 import CreateReview from "../job_components/job_creation_components/3_create_review";
 import CreationSuccess from "../job_components/job_creation_components/4_creation_success";
 import PopupConfirmReturn from "../job_components/job_popups/popup_confirm_return";
@@ -65,6 +66,7 @@ const JobCreatePostPage: React.FC = () => {
   }, [isGuestMode, isGlobalLoading, isVerified, user?.is_verified, navigate]);
   const theme = useGlobalState((state) => state.theme);
   const [currentSlide, setCurrentSlide] = useState<number>(1);
+  const [hasReachedReview, setHasReachedReview] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
 
@@ -92,7 +94,15 @@ const JobCreatePostPage: React.FC = () => {
   const [maxBudget, setMaxBudget] = useState("");
   const [minTimeline, setMinTimeline] = useState("");
   const [maxTimeline, setMaxTimeline] = useState("");
+  const [deadline, setDeadline] = useState("");
   const [positions, setPositions] = useState(1);
+
+  // --- STEP 3 STATES (TERMS) ---
+  const [portfolioUseAllowed, setPortfolioUseAllowed] = useState(false);
+  const [portfolioDuration, setPortfolioDuration] = useState("");
+  const [isExistingProject, setIsExistingProject] = useState(false);
+  const [existingProjectId, setExistingProjectId] = useState<string | null>(null);
+  const [initiatorRole, setInitiatorRole] = useState("Client");
 
   // --- ERROR & VALIDATION STATES ---
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -107,7 +117,8 @@ const JobCreatePostPage: React.FC = () => {
       minBudget ||
       maxBudget ||
       minTimeline ||
-      maxTimeline
+      maxTimeline ||
+      deadline
   );
 
   const handleReturnTrigger = () => {
@@ -130,6 +141,7 @@ const JobCreatePostPage: React.FC = () => {
 
   const validateSlide1 = () => {
     const stepErrors: { [key: string]: string } = {};
+    if (!thumbnailFile && !previewUrl) stepErrors.thumbnail = "Thumbnail image is required.";
     if (!title.trim()) stepErrors.title = "Job Title is required.";
     if (title.length > 300) stepErrors.title = "Title cannot exceed 300 characters.";
     if (!description.trim()) stepErrors.description = "Job Description is required.";
@@ -165,6 +177,19 @@ const JobCreatePostPage: React.FC = () => {
     if (minTimeline && maxTimeline && parseInt(maxTimeline) < parseInt(minTimeline)) {
       stepErrors.maxTimeline = "Max timeline cannot be lower than min timeline.";
     }
+    if (!deadline) {
+      stepErrors.deadline = "Deadline is required.";
+    } else if (maxTimeline && parseInt(maxTimeline)) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const selected = new Date(deadline);
+      const diffTime = selected.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (parseInt(maxTimeline) > diffDays) {
+        stepErrors.maxTimeline = `Max timeline (${maxTimeline} days) cannot exceed the days until deadline (${diffDays} days).`;
+      }
+    }
 
     if (Object.keys(stepErrors).length > 0) {
       setErrors(stepErrors);
@@ -173,6 +198,37 @@ const JobCreatePostPage: React.FC = () => {
 
     setErrors({});
     setCurrentSlide(3);
+  };
+
+  const handleSlide3Advance = () => {
+    const stepErrors: { [key: string]: string } = {};
+
+    if (portfolioUseAllowed && !portfolioDuration) {
+      stepErrors.portfolioDuration = "Please specify allowed duration.";
+    }
+    
+    if (isExistingProject && !existingProjectId) {
+      stepErrors.existingProjectId = "Please select an existing project or choose 'No'.";
+    }
+
+    if (Object.keys(stepErrors).length > 0) {
+      setErrors(stepErrors);
+      return;
+    }
+
+    setErrors({});
+    setHasReachedReview(true);
+    setCurrentSlide(4);
+  };
+
+  const handleJumpToReview = () => {
+    if (currentSlide === 1) {
+      if (validateSlide1()) setCurrentSlide(4);
+    } else if (currentSlide === 2) {
+      handleSlide2Advance();
+    } else if (currentSlide === 3) {
+      handleSlide3Advance();
+    }
   };
 
   const handleSubmit = async () => {
@@ -203,8 +259,14 @@ const JobCreatePostPage: React.FC = () => {
         rate_credits_max: rawMaxBudget,
         timeline_min: parseInt(minTimeline) || 0,
         timeline_max: parseInt(maxTimeline) || 0,
+        deadline,
         no_of_hires: positions,
-        file_id: fileId
+        file_id: fileId,
+        portfolio_use_allowed: portfolioUseAllowed,
+        portfolio_use_duration_seconds: portfolioDuration ? parseInt(portfolioDuration) : null,
+        is_existing_project: isExistingProject,
+        existing_project_id: isExistingProject ? existingProjectId : null,
+        initiator_role: initiatorRole
       };
 
       await createJob(finalJobPayload);
@@ -268,7 +330,12 @@ const JobCreatePostPage: React.FC = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
         >
-          <JobCreateHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
+          <JobCreateHeader 
+            currentSlide={currentSlide} 
+            onReturn={handleReturnTrigger} 
+            hasReachedReview={hasReachedReview}
+            onJumpToReview={handleJumpToReview}
+          />
         </motion.div>
 
         {/* Form Box Wrapper with Slide Transition */}
@@ -331,6 +398,8 @@ const JobCreatePostPage: React.FC = () => {
                   setMinTimeline={setMinTimeline}
                   maxTimeline={maxTimeline}
                   setMaxTimeline={setMaxTimeline}
+                  deadline={deadline}
+                  setDeadline={setDeadline}
                   positions={positions}
                   setPositions={setPositions}
                   errors={errors}
@@ -350,6 +419,32 @@ const JobCreatePostPage: React.FC = () => {
                 exit={{ opacity: 0, x: -10 }}
                 transition={{ duration: 0.25 }}
               >
+                <CreateTerms
+                  portfolioUseAllowed={portfolioUseAllowed}
+                  setPortfolioUseAllowed={setPortfolioUseAllowed}
+                  portfolioDuration={portfolioDuration}
+                  setPortfolioDuration={setPortfolioDuration}
+                  isExistingProject={isExistingProject}
+                  setIsExistingProject={setIsExistingProject}
+                  existingProjectId={existingProjectId}
+                  setExistingProjectId={setExistingProjectId}
+                  initiatorRole={initiatorRole}
+                  setInitiatorRole={setInitiatorRole}
+                  errors={errors}
+                  onBack={() => setCurrentSlide(2)}
+                  onAdvance={handleSlide3Advance}
+                />
+              </motion.div>
+            )}
+
+            {currentSlide === 4 && (
+              <motion.div
+                key="step-4"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.25 }}
+              >
                 <CreateReview
                   title={title}
                   description={description}
@@ -360,17 +455,23 @@ const JobCreatePostPage: React.FC = () => {
                   maxBudget={maxBudget}
                   minTimeline={minTimeline}
                   maxTimeline={maxTimeline}
+                  deadline={deadline}
                   positions={positions}
                   postingAs={postingAs}
                   setPostingAs={setPostingAs}
                   selectedTeam={selectedTeam}
                   setSelectedTeam={setSelectedTeam}
+                  portfolioUseAllowed={portfolioUseAllowed}
+                  portfolioDuration={portfolioDuration}
+                  isExistingProject={isExistingProject}
+                  existingProjectId={existingProjectId}
+                  initiatorRole={initiatorRole}
                   skills={skills}
                   errors={errors}
                   setErrors={setErrors}
                   formatCommaString={formatCommaString}
                   onEditStep={setCurrentSlide}
-                  onBack={() => setCurrentSlide(2)}
+                  onBack={() => setCurrentSlide(3)}
                   onSubmit={handleSubmit}
                   isSubmitting={isSubmitting}
                 />

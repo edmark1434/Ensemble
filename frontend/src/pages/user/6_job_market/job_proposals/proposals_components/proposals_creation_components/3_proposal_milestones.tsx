@@ -9,6 +9,7 @@ export interface Milestone {
   description: string;
   hours: number | string;
   revisions: number | string;
+  percentage?: number;
 }
 
 interface ProposalMilestonesProps {
@@ -36,6 +37,9 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
 }) => {
   const totalBid = parseInt(bidAmount || "0");
   const count = milestones.length || 1;
+  const totalPercentage = milestones.reduce((sum, m) => sum + (Number(m.percentage) || 0), 0);
+  const isPercentageValid = totalPercentage === 100;
+  // Compute average payout just for overage estimation
   const milestonePayout = Math.floor(totalBid / count);
   const overageRateBonus = Math.floor(milestonePayout * (additionalWorkRate / 100));
 
@@ -65,6 +69,7 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
       description: "",
       hours: 10,
       revisions: 2,
+      percentage: 0,
     };
     setMilestones((prev) => [...prev, newM]);
     setErrors((prev) => {
@@ -110,8 +115,10 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
           </p>
         </div>
         <div>
-          <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase">Payout Per Milestone</span>
-          <p className="text-sm font-bold text-gray-700 dark:text-zinc-300">{milestonePayout.toLocaleString()}</p>
+          <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase">Total Allocations (%)</span>
+          <p className={`text-sm font-bold ${isPercentageValid ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+            {totalPercentage}% / 100%
+          </p>
         </div>
         <div>
           <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase">Overage Revision Fee</span>
@@ -131,7 +138,7 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
               <div className="flex items-center gap-2">
                 <GripVertical className="h-4 w-4 text-gray-300 dark:text-zinc-600 cursor-grab active:cursor-grabbing" />
                 <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Layers className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500" /> Milestone {idx + 1} - <CreditIcon className="h-3 w-3 text-amber-500 dark:text-amber-400" /> {milestonePayout.toLocaleString()} Credits
+                  <Layers className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500" /> Milestone {idx + 1} - <CreditIcon className="h-3 w-3 text-amber-500 dark:text-amber-400" /> {Math.floor(totalBid * ((Number(m.percentage) || 0) / 100)).toLocaleString()} Credits
                 </span>
               </div>
               {milestones.length > 1 && (
@@ -163,11 +170,25 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
               />
             </div>
 
-            {/* Hours & Revision Limit Settings */}
-            <div className="grid grid-cols-2 gap-3 pt-1">
+            {/* Settings Grid */}
+            <div className="grid grid-cols-3 gap-3 pt-1">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase flex items-center gap-1">
-                  <Clock className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> Estimated Hours
+                  <CreditIcon className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> Percentage %
+                </label>
+                <input
+                  type="number"
+                  value={m.percentage ?? ""}
+                  onChange={(e) => handleUpdate(m.id, "percentage", e.target.value === "" ? "" : parseInt(e.target.value) || 0)}
+                  className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 text-xs text-gray-900 dark:text-white outline-none"
+                  min={0}
+                  max={100}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase flex items-center gap-1">
+                  <Clock className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> Hours
                 </label>
                 <input
                   type="number"
@@ -179,7 +200,7 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
 
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase flex items-center gap-1">
-                  <RefreshCcw className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> Max Included Revisions
+                  <RefreshCcw className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> Revisions
                 </label>
                 <input
                   type="number"

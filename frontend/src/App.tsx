@@ -26,6 +26,7 @@ import ExpandDiscussion from '@/pages/user/4_forums/ExpandDiscussion.tsx'
 import InboxMain from '@/components/ui/inbox/inbox_main.tsx'
 import SectionPlaceholder from '@/pages/user/0_misc/SectionPlaceholder.tsx'
 import AssetsLibrary from '@/pages/user/5_assets/AssetsLibrary.tsx'
+import DiscoveryPage from '@/pages/user/14_discovery/DiscoveryPage.tsx'
 import AssetDetails from '@/pages/user/5_assets/AssetDetails.tsx'
 import DashboardMain from './pages/user/8_dashboard/dashboard_main'
 import { DashboardTaskDetail } from './pages/user/8_dashboard/dashboard_components/DashboardTaskDetail'
@@ -233,6 +234,8 @@ function App() {
             <Route path=':id' element={<SelectedTeam />} />
           </Route>
 
+          <Route path='/discovery' element={<DiscoveryPage />} />
+          <Route path='/discovery/:tab' element={<DiscoveryPage />} />
           <Route path='/assets' element={<AssetsLibrary />} />
           <Route path='/assets/owned' element={<AssetsLibrary />} />
           <Route path='/assets/purchased' element={<AssetsLibrary />} />

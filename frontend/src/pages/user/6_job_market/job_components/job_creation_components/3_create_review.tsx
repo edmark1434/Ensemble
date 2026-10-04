@@ -20,11 +20,17 @@ interface CreateReviewProps {
   maxBudget: string;
   minTimeline: string;
   maxTimeline: string;
+  deadline: string;
   positions: number;
   postingAs: "self" | "team";
   setPostingAs: (val: "self" | "team") => void;
   selectedTeam: string;
   setSelectedTeam: (val: string) => void;
+  portfolioUseAllowed?: boolean;
+  portfolioDuration?: string;
+  isExistingProject?: boolean;
+  existingProjectId?: string | null;
+  initiatorRole?: string;
   skills: string[];
   errors: { [key: string]: string };
   setErrors: React.Dispatch<React.SetStateAction<{ [key: string]: string }>>;
@@ -136,11 +142,17 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   maxBudget,
   minTimeline,
   maxTimeline,
+  deadline,
   positions,
   postingAs,
   setPostingAs,
   selectedTeam,
   setSelectedTeam,
+  portfolioUseAllowed,
+  portfolioDuration,
+  isExistingProject,
+  existingProjectId,
+  initiatorRole,
   skills,
   errors,
   setErrors,
@@ -210,19 +222,31 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           </div>
 
           {/* ROW 1: Dedicated Budget Pool Range */}
-          <div className="p-3 rounded-xl border border-yellow-500/20 bg-yellow-500/5 flex items-center justify-between">
-            <span className="text-gray-600 dark:text-zinc-300 text-[11px] font-semibold">Budget Pool Range</span>
-            <span className="text-sm font-extrabold text-yellow-500 flex items-center gap-1.5">
-              <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
-              {formatCommaString(minBudget)} ~ {formatCommaString(maxBudget)}
-            </span>
+          <div className="flex flex-col gap-2">
+            <div className="p-3 rounded-xl border border-yellow-500/20 bg-yellow-500/5 flex items-center justify-between">
+              <span className="text-gray-600 dark:text-zinc-300 text-[11px] font-semibold">Budget Pool Range</span>
+              <span className="text-sm font-extrabold text-yellow-500 flex items-center gap-1.5">
+                <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
+                {formatCommaString(minBudget)} ~ {formatCommaString(maxBudget)}
+              </span>
+            </div>
+
+            {positions > 1 && (
+              <div className="p-3 rounded-xl border border-blue-500/20 bg-blue-500/5 flex items-center justify-between">
+                <span className="text-gray-600 dark:text-zinc-300 text-[11px] font-semibold">Divided Budget (Per Person)</span>
+                <span className="text-sm font-extrabold text-blue-500 flex items-center gap-1.5">
+                  <CreditIcon className="h-4 w-4 shrink-0 text-blue-500" />
+                  {formatCommaString((parseInt(minBudget.replace(/,/g, '')) / positions).toFixed(0))} ~ {formatCommaString((parseInt(maxBudget.replace(/,/g, '')) / positions).toFixed(0))}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* ROW 2: Timeline Envelope & Positions Open */}
-          <div className="grid grid-cols-2 gap-3 pt-1">
+          <div className="grid grid-cols-3 gap-3 pt-1">
             <div className="p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
               <span className="text-gray-600 dark:text-zinc-400 mb-0.5 text-[10px] flex items-center gap-1">
-                Estimated Deadline (Days)
+                Project Timeline (Days)
                 <div className="group relative flex items-center">
                   <HelpCircle className="h-3 w-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
@@ -231,6 +255,18 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                 </div>
               </span>
               <span className="text-xs font-bold text-gray-900 dark:text-white">{minTimeline} - {maxTimeline} Days</span>
+            </div>
+            <div className="p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
+              <span className="text-gray-600 dark:text-zinc-400 mb-0.5 text-[10px] flex items-center gap-1">
+                Project Deadline
+                <div className="group relative flex items-center">
+                  <HelpCircle className="h-3 w-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
+                    The strict final delivery date you actually need it by.
+                  </div>
+                </div>
+              </span>
+              <span className="text-xs font-bold text-gray-900 dark:text-white">{deadline}</span>
             </div>
             <div className="p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
               <span className="text-gray-600 dark:text-zinc-400 block mb-0.5 text-[10px]">Positions Open</span>
@@ -249,9 +285,38 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           </div>
         </div>
 
+        {/* SECTION 3: Terms & Workflow */}
+        <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white/[0.01] space-y-3 mb-4">
+          <div className="flex justify-between items-center border-b border-gray-200 dark:border-white/10 pb-2">
+            <span className="font-bold text-blue-400 uppercase tracking-wider text-[10px]">03. Workflow & Terms</span>
+            <button type="button" onClick={() => onEditStep(3)} className="text-[10px] text-blue-500 hover:underline font-bold transition focus:outline-none">Edit</button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1 text-xs text-gray-700 dark:text-zinc-300">
+            <div>
+              <span className="text-[10px] text-gray-500 dark:text-zinc-400 block mb-0.5">Portfolio Use</span>
+              <p className="font-bold text-gray-900 dark:text-white">
+                {portfolioUseAllowed ? `Allowed (Max ${portfolioDuration}s)` : "Not Allowed"}
+              </p>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-500 dark:text-zinc-400 block mb-0.5">Existing Project</span>
+              <p className="font-bold text-gray-900 dark:text-white">
+                {isExistingProject ? `Yes` : "No"}
+              </p>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-500 dark:text-zinc-400 block mb-0.5">Initiator</span>
+              <p className="font-bold text-gray-900 dark:text-white">
+                {initiatorRole}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Posting Identity Selection (Moved to Review & Post Step, Defaults to Self) */}
         <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white/[0.01] space-y-3">
-          <span className="font-bold text-blue-400 uppercase tracking-wider text-[10px] block border-b border-gray-200 dark:border-white/10 pb-2">03. Posting Identity</span>
+          <span className="font-bold text-blue-400 uppercase tracking-wider text-[10px] block border-b border-gray-200 dark:border-white/10 pb-2">04. Posting Identity</span>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div
               onClick={() => {

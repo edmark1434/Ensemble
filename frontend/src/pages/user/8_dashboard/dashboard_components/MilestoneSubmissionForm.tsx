@@ -79,6 +79,14 @@ export const MilestoneSubmissionForm: React.FC<Props> = ({
             <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!isSubmitting && (message.trim() || mediaList.length > 0)) {
+                            e.currentTarget.form?.requestSubmit();
+                        }
+                    }
+                }}
                 placeholder={
                     isSubmittedForReview
                         ? 'Type a message or further update for your client...'

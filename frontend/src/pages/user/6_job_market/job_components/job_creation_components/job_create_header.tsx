@@ -9,17 +9,22 @@ export interface StepConfig {
 export const WIZARD_STEPS: StepConfig[] = [
   { id: 1, label: "Core Info" },
   { id: 2, label: "Budget & Skills" },
-  { id: 3, label: "Review & Post" },
+  { id: 3, label: "Terms & Workflow" },
+  { id: 4, label: "Review & Post" },
 ];
 
 interface JobCreateHeaderProps {
   currentSlide: number;
   onReturn: () => void;
+  hasReachedReview?: boolean;
+  onJumpToReview?: () => void;
 }
 
 export const JobCreateHeader: React.FC<JobCreateHeaderProps> = ({
   currentSlide,
   onReturn,
+  hasReachedReview,
+  onJumpToReview,
 }) => {
   return (
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
@@ -37,10 +42,21 @@ export const JobCreateHeader: React.FC<JobCreateHeaderProps> = ({
         {WIZARD_STEPS.map((step, idx) => {
           const isCompleted = currentSlide > step.id;
           const isActive = currentSlide === step.id;
+          
+          // Only show floating jump button if we are on step 1, 2, or 3, have reached review, and this is the 4th step
+          const showJumpButton = step.id === 4 && hasReachedReview && currentSlide < 4;
 
           return (
             <React.Fragment key={step.id}>
               <div className="flex flex-col items-center relative z-10 select-none">
+                {showJumpButton && onJumpToReview && (
+                  <button 
+                    onClick={onJumpToReview}
+                    className="absolute -top-10 bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg transition-transform hover:scale-105 flex items-center gap-1.5 whitespace-nowrap z-50 animate-bounce"
+                  >
+                    Jump Here 🚀
+                  </button>
+                )}
                 <div
                   className={`h-9 w-9 rounded-full flex items-center justify-center border text-xs font-bold transition-all duration-300 shadow-md ${
                     isCompleted

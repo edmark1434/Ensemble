@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, type FormEvent, type ChangeEvent } 
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Save, X, ChevronDown, Check, Briefcase, Lock, Image as ImageIcon, Info, Plus, Trash2, Bold, Italic, List, Eye, EyeOff } from "lucide-react";
+import api from "@/lib/axios";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import PopupConfirmReturn from "../job_components/job_popups/popup_confirm_return";
@@ -11,6 +12,7 @@ import type { Job } from "../job_components/job_lists";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { JobRichText } from "../job_components/JobRichText";
 import { showErrorToast } from "@/components/utility/toast";
+import { SkillsAutocomplete } from "../job_components/job_creation_components/SkillsAutocomplete";
 
 interface CustomSelectProps {
   label: string;
@@ -127,9 +129,25 @@ export const JobEditPostPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Read-only baseline state holders
+  const [minBudget, setMinBudget] = useState<number>(0);
+  const [maxBudget, setMaxBudget] = useState<number>(0);
   const [priceRange, setPriceRange] = useState("");
   const [positionsNeeded, setPositionsNeeded] = useState<number>(1);
   const [hiredCount, setHiredCount] = useState<number>(0);
+  const [minTimeline, setMinTimeline] = useState<number>(0);
+  const [maxTimeline, setMaxTimeline] = useState<number>(0);
+  const [deadline, setDeadline] = useState<string>("");
+
+  // Editable Terms State
+  const [portfolioUseAllowed, setPortfolioUseAllowed] = useState(false);
+  const [portfolioDuration, setPortfolioDuration] = useState("");
+  const [isExistingProject, setIsExistingProject] = useState(false);
+  const [existingProjectId, setExistingProjectId] = useState<string | null>(null);
+  const [initiatorRole, setInitiatorRole] = useState("Client");
+  
+  // Project Selection
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
 
   // Popup & UI States
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
@@ -160,9 +178,27 @@ export const JobEditPostPage: React.FC = () => {
             }
           }
           setSkills(parsedTags);
+          setMinBudget(found.rate_credits_min || 0);
+          setMaxBudget(found.rate_credits_max || 0);
           setPriceRange(`${found.rate_credits_min?.toLocaleString() || 0} ~ ${found.rate_credits_max?.toLocaleString() || 0}`);
           setPositionsNeeded(found.no_of_hires || 1);
           setHiredCount(parseInt(found.hired_count) || 0);
+          setMinTimeline(found.timeline_min || 0);
+          setMaxTimeline(found.timeline_max || 0);
+          
+          let deadlineStr = found.rough_deadline || found.deadline;
+          if (deadlineStr) {
+            const d = new Date(deadlineStr);
+            deadlineStr = d.toISOString().split('T')[0];
+          }
+          setDeadline(deadlineStr || "");
+          
+          setPortfolioUseAllowed(found.portfolio_use_allowed || false);
+          setPortfolioDuration(found.portfolio_use_duration_seconds ? found.portfolio_use_duration_seconds.toString() : "");
+          setIsExistingProject(found.is_existing_project || false);
+          setExistingProjectId(found.existing_project_id || null);
+          setInitiatorRole(found.initiator_role || "Client");
+
           if (found.thumbnail_path) {
             setPreviewUrl(`${import.meta.env.VITE_CLOUDFRONT_URL}/${found.thumbnail_path}`);
           }
@@ -173,6 +209,23 @@ export const JobEditPostPage: React.FC = () => {
     };
     loadData();
   }, [id, fetchJobs]);
+
+  useEffect(() => {
+    if (initiatorRole === "Client" && projects.length === 0) {
+      const fetchUserProjects = async () => {
+        try {
+          setLoadingProjects(true);
+          const response = await api.get('/api/projects');
+          setProjects(response.data.projects || []);
+        } catch (error) {
+          console.error("Failed to fetch projects", error);
+        } finally {
+          setLoadingProjects(false);
+        }
+      };
+      fetchUserProjects();
+    }
+  }, [initiatorRole, projects.length]);
 
   // Thumbnail Handlers
   const processFile = (file: File) => {
@@ -276,6 +329,11 @@ export const JobEditPostPage: React.FC = () => {
         experience_level: difficulty,
         tags: skills,
         file_id: thumbnailFile ? fileId : undefined,
+        portfolio_use_allowed: portfolioUseAllowed,
+        portfolio_use_duration_seconds: portfolioDuration ? parseInt(portfolioDuration) : null,
+        is_existing_project: isExistingProject,
+        existing_project_id: isExistingProject ? existingProjectId : null,
+        initiator_role: initiatorRole
       };
 
       if (!id) throw new Error("Job ID missing");
@@ -387,28 +445,65 @@ export const JobEditPostPage: React.FC = () => {
         <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-5 text-left">
 
           {/* Read-Only Fixed Parameters Notice */}
-          <div className="p-3.5 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] grid grid-cols-1 md:grid-cols-2 gap-3 text-xs mb-2">
-            <div className="flex items-center gap-2.5 text-gray-500 dark:text-zinc-400">
-              <div className="p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 shrink-0">
-                <CreditIcon className="h-4 w-4" />
+          <div className="flex flex-col gap-2 mb-2">
+            <div className="p-3.5 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div className="flex items-center gap-2.5 text-gray-500 dark:text-zinc-400">
+                <div className="p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 shrink-0">
+                  <CreditIcon className="h-4 w-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-500 flex items-center gap-1">
+                    Budget Pool {positionsNeeded > 1 ? "(Divided)" : ""} <Lock className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-500" />
+                  </span>
+                  <div className="flex flex-col">
+                    {positionsNeeded > 1 ? (
+                      <>
+                        <span className="font-bold text-gray-900 dark:text-white line-through opacity-70 text-[10px]">{priceRange} (Original)</span>
+                        <span className="font-extrabold text-blue-500">
+                          {`${(minBudget / positionsNeeded).toFixed(0).toLocaleString()} ~ ${(maxBudget / positionsNeeded).toFixed(0).toLocaleString()} (Per Person)`}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="font-bold text-gray-900 dark:text-white">{priceRange}</span>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-500 flex items-center gap-1">
-                  Budget Pool <Lock className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-500" />
-                </span>
-                <span className="font-bold text-gray-900 dark:text-white">{priceRange}</span>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-2.5 text-gray-500 dark:text-zinc-400">
-              <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 shrink-0">
-                <Briefcase className="h-4 w-4" />
+              <div className="flex items-center gap-2.5 text-gray-500 dark:text-zinc-400">
+                <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 shrink-0">
+                  <Briefcase className="h-4 w-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-500 flex items-center gap-1">
+                    Positions Open <Lock className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-500" />
+                  </span>
+                  <span className="font-bold text-gray-900 dark:text-white">{positionsNeeded} Slots</span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-500 flex items-center gap-1">
-                  Positions Open <Lock className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-500" />
-                </span>
-                <span className="font-bold text-gray-900 dark:text-white">{positionsNeeded} Slots</span>
+
+              <div className="flex items-center gap-2.5 text-gray-500 dark:text-zinc-400">
+                <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 shrink-0">
+                  <Lock className="h-4 w-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-500 flex items-center gap-1">
+                    Project Timeline <Lock className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-500" />
+                  </span>
+                  <span className="font-bold text-gray-900 dark:text-white">{minTimeline} - {maxTimeline} Days</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 text-gray-500 dark:text-zinc-400">
+                <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 shrink-0">
+                  <Lock className="h-4 w-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-500 flex items-center gap-1">
+                    Project Deadline <Lock className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-500" />
+                  </span>
+                  <span className="font-bold text-gray-900 dark:text-white">{deadline}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -578,42 +673,192 @@ export const JobEditPostPage: React.FC = () => {
 
 
           {/* Required Skills Management */}
-          <div className="space-y-1.5 pt-2">
-            <div className="flex justify-between items-center mb-1.5">
-              <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">
-                Required Skills <span className="text-red-500">*</span>
-              </label>
-              <span className="text-[10px] text-gray-500 dark:text-zinc-500">{skills.length}/6 Added</span>
+          <SkillsAutocomplete 
+            skills={skills} 
+            setSkills={setSkills} 
+            error={errors.skills} 
+            maxSkills={6} 
+          />
+
+          {/* Workflow & Terms */}
+          <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-white/5">
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-0.5">Workflow & Terms</h3>
+              <p className="text-xs text-gray-600 dark:text-zinc-400">Manage rules for the final output and collaboration initiation.</p>
             </div>
-            <form onSubmit={handleAddSkill} className="flex gap-2">
-              <input
-                type="text"
-                placeholder="e.g., Color Grading, Audio Sync"
-                value={skillInput}
-                onChange={(e) => setSkillInput(e.target.value)}
-                className="flex-1 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-2 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all"
-              />
-              <button
-                type="submit"
-                className="px-4 rounded-xl bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold hover:bg-white/20 transition text-gray-900 dark:text-white focus:outline-none"
-              >
-                Add
-              </button>
-            </form>
-            {errors.skills && <p className="text-[11px] text-red-400">{errors.skills}</p>}
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {skills.map((s) => (
-                <span
-                  key={s}
-                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300"
-                >
-                  {s}{" "}
-                  <X
-                    className="h-3 w-3 cursor-pointer hover:text-red-400 transition"
-                    onClick={() => handleRemoveSkill(s)}
+
+            {/* Initiator */}
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">
+              <label className="text-sm font-semibold text-gray-900 dark:text-white block mb-0.5">
+                Who will initiate the Creation of the video project?
+              </label>
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mb-3">
+                If this is a new project, who is responsible for creating and inviting the other party?
+              </p>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="initiatorRole"
+                    value="Client"
+                    checked={initiatorRole === "Client"}
+                    onChange={(e) => {
+                      setInitiatorRole(e.target.value);
+                      setIsDirty(true);
+                    }}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 bg-transparent"
                   />
-                </span>
-              ))}
+                  <span className="text-xs font-medium text-gray-700 dark:text-zinc-300">Me (Client)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="initiatorRole"
+                    value="Freelancer"
+                    checked={initiatorRole === "Freelancer"}
+                    onChange={(e) => {
+                      setInitiatorRole(e.target.value);
+                      setIsExistingProject(false);
+                      setExistingProjectId(null);
+                      setIsDirty(true);
+                    }}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 bg-transparent"
+                  />
+                  <span className="text-xs font-medium text-gray-700 dark:text-zinc-300">The Freelancer</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Existing Project Link */}
+            {initiatorRole === "Client" && (
+              <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">
+                <div className="flex items-start gap-3">
+                  <input 
+                    type="checkbox" 
+                    checked={isExistingProject}
+                    onChange={(e) => {
+                      setIsExistingProject(e.target.checked);
+                      if (!e.target.checked) setExistingProjectId(null);
+                      setIsDirty(true);
+                    }}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 bg-transparent"
+                  />
+                  <div className="flex-1">
+                    <label className="text-sm font-semibold text-gray-900 dark:text-white block">
+                      Link to Existing Project
+                    </label>
+                    <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                      Is this job part of an existing Ensemble project?
+                    </p>
+                    {isExistingProject && (
+                      <div className="mt-3">
+                        <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-2">
+                          Select Project <span className="text-red-500">*</span>
+                        </label>
+                        {loadingProjects ? (
+                          <div className="text-xs text-gray-500">Loading projects...</div>
+                        ) : existingProjectId ? (
+                          <div className="flex flex-col gap-2">
+                            {projects.filter(p => p.id === existingProjectId).map(p => (
+                              <div key={p.id} className="relative w-48 rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1a1d2d] shadow-sm">
+                                <div className="h-24 bg-gray-100 dark:bg-black/40 relative">
+                                  {p.thumbnail && <img src={p.thumbnail} alt={p.name} className="w-full h-full object-cover" />}
+                                  {p.duration_seconds && (
+                                    <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1">
+                                      <span className="font-bold">{new Date(p.duration_seconds * 1000).toISOString().slice(11, 19)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="p-2">
+                                  <div className="text-xs font-bold text-gray-900 dark:text-white truncate">{p.name}</div>
+                                  <div className="flex justify-between items-center mt-1 text-[9px] text-gray-500">
+                                    <span>{p.width}x{p.height}</span>
+                                    <span>{p.size}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                            <button 
+                              type="button" 
+                              onClick={() => { setExistingProjectId(null); setIsDirty(true); }}
+                              className="text-[10px] text-blue-500 hover:underline text-left font-bold"
+                            >
+                              Change Project
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {projects.map(p => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => { setExistingProjectId(p.id); setIsDirty(true); }}
+                                className="text-left relative rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 hover:border-blue-500 transition-colors bg-white dark:bg-[#1a1d2d] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              >
+                                <div className="h-20 bg-gray-100 dark:bg-black/40 relative">
+                                  {p.thumbnail && <img src={p.thumbnail} alt={p.name} className="w-full h-full object-cover" />}
+                                </div>
+                                <div className="p-2">
+                                  <div className="text-[11px] font-bold text-gray-900 dark:text-white truncate">{p.name}</div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {errors.existingProjectId && <p className="text-[11px] text-red-400 mt-1">{errors.existingProjectId}</p>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Portfolio Use */}
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">
+              <div className="flex items-start gap-3">
+                <input 
+                  type="checkbox" 
+                  checked={portfolioUseAllowed}
+                  onChange={(e) => {
+                    setPortfolioUseAllowed(e.target.checked);
+                    if (!e.target.checked) setPortfolioDuration("");
+                    setIsDirty(true);
+                  }}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 bg-transparent"
+                />
+                <div className="flex-1">
+                  <label className="text-sm font-semibold text-gray-900 dark:text-white block">
+                    Allow Freelancer Portfolio Use
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                    Agree to let the freelancer use the final project output for their personal portfolio.
+                  </p>
+                  {portfolioUseAllowed && (
+                    <div className="mt-3">
+                      <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-2">
+                        Allowed Duration <span className="text-red-500">*</span>
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {["5", "10", "15", "20", "30", "45", "60"].map(secs => (
+                          <button
+                            key={secs}
+                            type="button"
+                            onClick={() => { setPortfolioDuration(secs); setIsDirty(true); }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+                              portfolioDuration === secs 
+                                ? "bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20" 
+                                : "bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-100 dark:hover:bg-white/10"
+                            }`}
+                          >
+                            {secs} secs
+                          </button>
+                        ))}
+                      </div>
+                      {errors.portfolioDuration && <p className="text-[11px] text-red-400 mt-2">{errors.portfolioDuration}</p>}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -660,6 +905,8 @@ export const JobEditPostPage: React.FC = () => {
       {/* Success Popup Feedback */}
       <CreationSuccess
         isOpen={isSuccessOpen}
+        title="Successfully Edited your Post"
+        message="Your changes have been saved and your job post is updated."
         onConfirm={() => navigate("/jobs")}
       />
 

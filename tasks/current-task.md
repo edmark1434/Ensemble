@@ -1,92 +1,12 @@
-# Current Task — Mutual Cancellation of Contract & Platform Terms Policy
+# Current Task: Discovery Page Redesign
 
-Allow both clients and freelancers to initiate mutual cancellation on active or waiting contracts with industry-standard escrow safeguards, a 72-hour auto-approval countdown, and full transparency in the Platform Terms of Service.
+## Objective
+Redesign `/discovery` so clients are hooked by freelancers matched to their recent open job posts.
 
 ## Acceptance Criteria
-
-- [x] **Database Migration**: Added append-only migration `1821500000000_175-create-contract-cancellation-requests.js` creating table `contract_cancellation_requests` with status checks, timestamps, reason, message, auto_cancel_at (72 hours), and response metadata.
-- [x] **Backend Repositories & Services**:
-  - `createCancellationRequestRepository`: Creates request, sets `auto_cancel_at = NOW() + INTERVAL '72 hours'`, enforces single pending request per contract.
-  - `getActiveCancellationRequestByContract`: Retrieves pending request with contract context and initiator name.
-  - `respondCancellationRequestRepository`: Handles 'accept' (cancels contract and refunds unfinished milestones) and 'decline' (with decline reason).
-  - `withdrawCancellationRequestRepository`: Allows initiator to withdraw request before response.
-  - `reconcileExpiredCancellationRequestsServices`: Cron job auto-approves requests past 72h window and refunds escrow.
-  - Realtime Socket.IO events (`cancellation_request_updated`) and in-app notifications dispatched to both participants.
-- [x] **Backend Controllers & Routes**:
-  - `GET /api/contracts/:contractId/cancellation-request`
-  - `POST /api/contracts/:contractId/cancellation-request`
-  - `POST /api/contracts/:contractId/cancellation-request/:requestId/respond`
-  - `POST /api/contracts/:contractId/cancellation-request/:requestId/withdraw`
-- [x] **Platform Terms of Service Integration**:
-  - Updated `page_TermsOfService.tsx` (Section 6: Mutual Contract Cancellation & Escrow Policy).
-  - Updated `TermsModal.tsx` (Section 6: Mutual Contract Cancellation & Escrow Policy).
-- [x] **Frontend Contract Experience (`contracts.tsx`)**:
-  - Display prominent "Mutual Contract Cancellation Requested" banner with 72h auto-resolution countdown and escrow refund breakdown.
-  - Initiator view provides a "Withdraw Request" action.
-  - Recipient view provides "Accept Cancellation & Refund Escrow" and "Decline Request" (with decline reason modal).
-  - "Request Cancellation" button available to both clients and freelancers in the contract view footer when no cancellation is pending.
-  - Added "Mutual Cancellation Policy" card in Section V (Platform Escrow & Milestone Policy).
-  - Realtime synchronization via Socket.IO `cancellation_request_updated` and `notification` listeners.
-- [x] **Verification**:
-  - `node --check` passed for all modified backend files.
-  - `npm run build` passed with zero errors in `frontend`.
-# Current Task — Gigs Final Confirmation before Deduction of Credits
-
-Transition Gig order acceptance and contract funding from the previous unilateral deduction by the freelancer to a mutual two-step handshake:
-1. **Freelancer Acceptance**: Freelancer accepts gig order; order status transitions to `'Accepted'` without deducting client wallet credits. Client receives real-time notification to review and confirm contract.
-2. **Client Final Confirmation & Deduction**: Client visits `/gigs/orders/sent/:orderId`, reviews terms and credit deduction, certifies agreement, and confirms contract. Backend validates balance, holds credits in escrow, generates contract + milestones, updates order status to `'In Contract'`, and starts the contract.
-
-## Implementation Objectives
-- [x] **Backend - Repository Layer (`GigRepositories.js`)**:
-  - Refactor `acceptGigOrderRepository`:
-    - Validates order is `Pending` or `Shortlisted`.
-    - Updates `gig_requests.status = 'Accepted'`.
-    - Does NOT deduct credits or create contract.
-    - Returns order info (orderId, status, client_account_id, freelancer_account_id, gig_title).
-  - Add `confirmGigOrderContractRepository(orderId, clientAccountIds)`:
-    - Validates order belongs to client and is in `'Accepted'` status.
-    - Prevents race conditions with `FOR UPDATE OF gr` and checks `gig_contracts` for duplicates.
-    - Locks client account wallet and freelancer escrow wallet `FOR UPDATE`.
-    - Checks `clientWallet.balance_credits >= rate_credits`.
-    - Atomically debits client wallet and credits freelancer escrow wallet (`'Escrow Hold'`).
-    - Creates contract (`status = 'Active'`), `credit_transactions`, `gig_contracts`, and `contract_milestones`.
-    - Updates `gig_requests.status = 'In Contract'`.
-    - Returns `{ contractId, gig_title, freelancer_account_id, client_account_id }`.
-  - Update `getOrderByIdRepository`, `getMyOrdersRepository`, and `getIncomingOrdersRepository`:
-    - `LEFT JOIN gig_contracts gc ON r.gig_request_id = gc.gig_request_id` to include `gc.contract_id as contract_id`.
-  - Update duplicate order check to include `'shortlisted'` and `'in contract'`.
-- [x] **Backend - Service & Controller Layer (`GigServices.js`, `GigControllers.js`, `Gig.js`)**:
-  - In `GigServices.js`:
-    - Add `acceptGigOrderService(orderId, actorIds)`: calls repository and sends notification/socket event to client.
-    - Add `confirmGigOrderContractService(orderId, actorIds)`: calls repository and sends notification/socket events to both client and freelancer.
-  - In `GigControllers.js`:
-    - Update `acceptGigOrderController`: invokes `acceptGigOrderService`.
-    - Add `confirmGigOrderContractController`: invokes `confirmGigOrderContractService`.
-  - In `Gig.js`:
-    - Register route `POST /orders/:orderId/confirm-contract`.
-- [x] **Frontend - Incoming Order Detail (`incoming_order_detail.tsx`)**:
-  - Update "Accept Gig Order" modal to clarify that accepting will notify the client to review, agree to terms, and fund the contract in escrow.
-  - When order is in `'Accepted'` status, show an informative banner: "Order Accepted — Awaiting Client Confirmation & Escrow Funding", with discussion chat button.
-  - If contract is already created (`order.contract_id`), show button to "View Active Contract".
-- [x] **Frontend - Sent Order Detail (`sent_order_detail.tsx`)**:
-  - When `order.status === 'Accepted'` and no `contract_id`:
-    - Prominently display the "Freelancer Accepted Your Order - Final Confirmation & Contract Funding" panel.
-    - Fetch and display the client's current wallet balance (`/api/accounts/wallet`).
-    - Display required credits, balance status (sufficient vs. insufficient), and link to top up credits if needed.
-    - Add Terms of Service agreement checkbox and "Confirm & Start Contract" button.
-    - On confirmation, post to `/api/gigs/orders/:orderId/confirm-contract`, show success toast, and navigate to `/contracts/:contractId`.
-  - When `order.status === 'In Contract'` or `order.contract_id` exists:
-    - Display "Contract Active" badge and "View Active Contract" button linking to `/contracts/:contractId`.
-- [x] **Frontend - Orders List & Badges (`orders_list.tsx`, `sent_orders.tsx`, `incoming_orders.tsx`, `orders_main.tsx`, `orders_statuses.tsx`)**:
-  - Support `'In Contract'` and `'Shortlisted'` status badges and counts.
-  - Add quick action for client when `'Accepted'` to "Confirm & Fund" or when `'In Contract'` to "View Contract".
-- [x] **Recent Fixes — Order Placement, Duplicate Checks & Orders Count**:
-  - **Duplicate Active Order Check (`GigRepositories.js`)**: Updated `submitGigOrderRepository` duplicate check to join `contracts c`. Cancelled, closed, or completed contracts no longer block placing a new order. Added auto-healing query to sync stale `'In Contract'` orders whose linked contracts were cancelled/closed to `'Cancelled'` (or `'Completed'` if done).
-  - **Contract Cancellation Sync (`MilestoneRepositories.js`, `DashboardRepositories.js`)**: Ensured `cancelContractAndRefundUnfinishedMilestones`, `adminRefundStalledMilestone`, `approveMilestoneSubmit`, and `submitContractReview` properly update linked `gig_requests.status` to `'Cancelled'` or `'Completed'`.
-  - **Order Status Resolution (`GigRepositories.js`)**: `getIncomingOrdersRepository`, `getMyOrdersRepository`, `getOrderByIdRepository`, and `getGigByIdRepository` now resolve true status by joining `contracts`.
-  - **Order Notification & CTA Rename**: Sent real-time notification to the freelancer upon order placement. Renamed "Pay with Credits" to "Request to Order" and removed the shortlist button from gig order detail.
-  - **Orders Count Display (`orders_select_gig_page.tsx`)**: Replaced hardcoded `0` with `{gig.ordersCount || 0}`.
-- [x] **Verification**:
-  - `node --check` on all modified backend files passed.
-  - `npm run build` on `frontend` passed.
-
+- "Talent matched for you" section ranks freelancers by overlap between their profile skills and the client's open job `tags`.
+- Client can switch between "All my open jobs" and each individual recent job (up to 5).
+- Each match card shows a match % ring, matched skills (green), rating, and follow/message actions.
+- Empty state prompts posting a job when the client has no open jobs with skills.
+- Explore section: grid cards, search, role filters, Best match / Top rated / Following sorts, matched skills highlighted.
+- No gradients; existing theme preserved. `npx tsc --noEmit` passes.

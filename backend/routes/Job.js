@@ -12,12 +12,19 @@ const {
     updateProposalStatusController,
     getTermsOfServiceController,
     toggleJobSaveController,
-    deleteJobController
+    deleteJobController,
+    getActiveJobsByClientController,
+    createJobInvitationController
 } = require('../controllers/JobControllers');
 
 const checkSession = require('../middleware/CheckSession');
 const requireAuth = require('../middleware/RequireAuth');
 const optionalAuth = require('../middleware/OptionalAuth');
+
+
+// Job Invitations
+router.get('/my-active-jobs', [checkSession, requireAuth], getActiveJobsByClientController);
+router.post('/invite', [checkSession, requireAuth], createJobInvitationController);
 
 // Terms of service
 router.get('/tos', getTermsOfServiceController);

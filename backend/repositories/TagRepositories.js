@@ -96,6 +96,18 @@ async function addUserTagsRepositories(userId, tags) {
 }
 
 /**
+ * Resolve tag ids by (case-insensitive) names
+ */
+async function getTagIdsByNamesRepositories(names) {
+    if (!names || names.length === 0) return [];
+    const result = await pool.query(
+        `SELECT tag_id, name FROM tags WHERE LOWER(name) = ANY($1::text[])`,
+        [names.map(n => String(n).toLowerCase())]
+    );
+    return result.rows;
+}
+
+/**
  * Remove multiple user tags
  */
 async function removeUserTagsRepositories(userId, tagIds) {
@@ -104,7 +116,7 @@ async function removeUserTagsRepositories(userId, tagIds) {
     try {
         const query = `
             DELETE FROM user_tags 
-            WHERE user_id = $1 AND tag_id = ANY($2::int[])
+            WHERE user_id = $1 AND tag_id = ANY($2::uuid[])
         `;
         
         const result = await pool.query(query, [userId, tagIds]);
@@ -189,6 +201,7 @@ async function getUserTagsWithDetailsRepositories(userId) {
 }
 
 module.exports = {
+    getTagIdsByNamesRepositories,
     // Existing exports
     getAllTagsRepositories,
     getTagByIdRepositories,

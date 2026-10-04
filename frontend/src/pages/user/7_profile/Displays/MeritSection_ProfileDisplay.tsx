@@ -304,7 +304,7 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
           <div className="bg-gradient-to-r from-amber-500/20 via-amber-500/5 to-transparent border border-amber-500/30 rounded-xl p-3 flex items-center justify-between animate-fadeIn shadow-[0_0_15px_rgba(245,158,11,0.15)]">
             <div className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-amber-500" />
-              <span className="text-sm font-black text-gray-900 dark:text-white tracking-wide uppercase">Overall Rating Index Matrix:</span>
+              <span className="text-sm font-black text-gray-900 dark:text-white tracking-wide uppercase">Total Rating</span>
             </div>
             <div className="flex items-center gap-1.5 text-lg font-black text-amber-500 tracking-tight">
               <Star className="h-5 w-5 fill-current text-amber-500" />

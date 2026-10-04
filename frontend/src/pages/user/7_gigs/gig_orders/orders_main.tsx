@@ -90,6 +90,7 @@ export const OrdersMain: React.FC = () => {
         { label: "Accepted" as const, count: childOrdersCounts.Accepted || 0 },
         { label: "In Contract" as const, count: childOrdersCounts["In Contract"] || 0 },
         { label: "Rejected" as const, count: childOrdersCounts.Rejected || 0 },
+        { label: "Withdrawn" as const, count: childOrdersCounts.Withdrawn || 0 },
       ];
     }
 
@@ -100,6 +101,7 @@ export const OrdersMain: React.FC = () => {
       { label: "Accepted" as const, count: 0 },
       { label: "In Contract" as const, count: 0 },
       { label: "Rejected" as const, count: 0 },
+      { label: "Withdrawn" as const, count: 0 },
     ];
   }, [childOrdersCounts]);
 

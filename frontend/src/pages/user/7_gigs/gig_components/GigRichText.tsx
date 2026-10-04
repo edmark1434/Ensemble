@@ -5,6 +5,7 @@ import {
   ChevronRight, ChevronLeft, ChevronDown, PlayCircle, Edit2, Flag, Maximize2, User, FileText, CheckCircle2, HelpCircle, Wrench, MessageSquare, ZoomIn, ShoppingCart
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Gig } from "../gig_datasets";
@@ -858,11 +859,15 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                           </div>
 
                           <button
-                            onClick={() => !isOwner && !isGuestMode && isVerified && navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
-                              disabled={isOwner || isGuestMode || !isVerified}
+                              onClick={() => {
+                                if (isOwner) return;
+                                if (isGuestMode) return setIsModalOpen(true);
+                                if (isVerified) navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
+                              }}
+                              disabled={isOwner || (!isGuestMode && !isVerified)}
                               className={`w-full py-3.5 rounded-xl font-bold text-sm transition-colors shadow-lg ${
                                 isOwner ? 'bg-gray-400 dark:bg-zinc-700 cursor-not-allowed text-white shadow-none' :
-                                (isGuestMode || !isVerified) ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' :
+                                (!isGuestMode && !isVerified) ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' :
                                 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
                               }`}
                             >
@@ -931,17 +936,17 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
 
                         <button
                           onClick={() => {
-                              if (isOwner || isGuestMode || !isVerified) return;
+                              if (isOwner || (!isGuestMode && !isVerified)) return;
                               if (gig.hasPendingOrder && gig.pendingOrderId) {
                                 navigate(`/gigs/orders/sent/${gig.pendingOrderId}`);
                               } else {
                                 navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
                               }
                             }}
-                            disabled={isOwner || isGuestMode || !isVerified}
+                            disabled={isOwner || (!isGuestMode && !isVerified)}
                             className={`w-full py-3.5 rounded-xl font-bold text-sm transition-colors shadow-lg ${
                               isOwner ? 'bg-gray-400 dark:bg-zinc-700 cursor-not-allowed text-white shadow-none' :
-                              (isGuestMode || !isVerified) ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' :
+                              (!isGuestMode && !isVerified) ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' :
                               'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
                             }`}
                           >
@@ -988,17 +993,19 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
             </div>
             <button
               onClick={() => {
-                  if (isOwner || !isVerified) return;
+                  if (isOwner) return;
+                  if (isGuestMode) return setIsModalOpen(true);
+                  if (!isVerified) return;
                   if (gig.hasPendingOrder && gig.pendingOrderId) {
                     navigate(`/gigs/orders/sent/${gig.pendingOrderId}`);
                   } else {
                     navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
                   }
                 }}
-                disabled={isOwner || !isVerified}
+                disabled={isOwner || (!isGuestMode && !isVerified)}
                 className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
               >
-                {isOwner ? "You own this service" : !isVerified ? "Verify First" : gig.hasPendingOrder ? "View My Order" : "Order Now"}
+                {isOwner ? "You own this service" : isGuestMode ? "Login to Order" : !isVerified ? "Verify First" : gig.hasPendingOrder ? "View My Order" : "Order Now"}
             </button>
           </div>
         )}
@@ -1108,6 +1115,8 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
           console.log("Report submitted for gig:", gig.id, reason, details);
         }}
       />
+      <GuestLoginModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+
     </>
   );
 };

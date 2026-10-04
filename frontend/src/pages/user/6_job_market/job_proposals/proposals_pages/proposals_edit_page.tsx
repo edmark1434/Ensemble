@@ -165,6 +165,11 @@ export const ProposalsEditPage: React.FC = () => {
       setErrors({ milestones: "You must create at least 1 milestone." });
       return;
     }
+    const totalPercentage = milestones.reduce((sum, m) => sum + (Number(m.percentage) || 0), 0);
+    if (totalPercentage !== 100) {
+      setErrors({ milestones: `Total milestone percentage must be exactly 100%. Current total is ${totalPercentage}%.` });
+      return;
+    }
     setErrors({});
     setCurrentSlide(4);
   };

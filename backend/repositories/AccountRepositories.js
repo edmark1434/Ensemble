@@ -80,12 +80,9 @@ async function getAccountByHandle(handle) {
 
 async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, role = null) {
     const search = String(handle || '').replace(/^@/, '').trim();
-    if (!search) return [];
+    const escapedSearch = search ? search.replace(/[\\%_]/g, '\\\$&') : '';
 
-    const escapedSearch = search.replace(/[\\%_]/g, '\\$&');
-
-    const result = await pool.query(
-        `SELECT
+    let query = `SELECT
             a.account_id,
             a.display_name,
             u.first_name || ' ' || u.last_name AS full_name,
@@ -97,10 +94,15 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, 
             (SELECT COALESCE(AVG(stars_out_of_five), 0) FROM ratings WHERE account_id = a.account_id) AS overall_rating,
             (SELECT COUNT(*) FROM account_followers WHERE followed_id = a.account_id) AS followers_count,
             (SELECT COUNT(*) FROM account_followers WHERE follower_id = a.account_id) AS following_count,
-            EXISTS(SELECT 1 FROM account_followers WHERE follower_id = $3::uuid AND followed_id = a.account_id) AS is_following,
-            EXISTS(SELECT 1 FROM account_followers WHERE follower_id = a.account_id AND followed_id = $3::uuid) AS is_followed_by,
+            EXISTS(SELECT 1 FROM account_followers WHERE follower_id = $1::uuid AND followed_id = a.account_id) AS is_following,
+            EXISTS(SELECT 1 FROM account_followers WHERE follower_id = a.account_id AND followed_id = $1::uuid) AS is_followed_by,
             a.description AS bio,
             a.tagline AS tagline,
+              u.email_address AS email,
+              a.created_at AS joined_date,
+              (SELECT COUNT(*) FROM jobs j WHERE j.client_account_id = a.account_id) AS total_jobs,
+              (SELECT COUNT(*) FROM gigs g WHERE g.freelancer_account_id = a.account_id) AS total_services,
+              (SELECT COUNT(*) FROM media_assets ma WHERE ma.owner_user_id = u.user_id) AS total_assets,
             COALESCE(
                 (SELECT json_agg(json_build_object('role_id', pp.plpu_id, 'role_name', pp.purpose_name))
                  FROM platform_purpose pp JOIN user_platform_purpose upp ON pp.plpu_id = upp.plpu_id WHERE upp.user_id = u.user_id),
@@ -119,35 +121,55 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, 
          LEFT JOIN plans p ON s.plan_id = p.plan_id
          WHERE a.type = 'User'
            AND LOWER(a.status) = 'active'
-           AND a.deleted_at IS NULL
-           AND (
-                LOWER(a.handle) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
-                OR LOWER(a.display_name) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
+           AND a.deleted_at IS NULL`;
+           
+    const values = [excludeAccountId || null, limit];
+    let paramIndex = 3;
+
+    if (search) {
+        query += ` AND (
+                LOWER(a.handle) LIKE '%' || LOWER($${paramIndex}) || '%' ESCAPE '\\'
+                OR LOWER(a.display_name) LIKE '%' || LOWER($${paramIndex}) || '%' ESCAPE '\\'
                 OR EXISTS (
                    SELECT 1 FROM user_tags ut
                    JOIN tags t ON t.tag_id = ut.tag_id
                    WHERE ut.user_id = u.user_id 
-                   AND LOWER(t.name) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
+                   AND LOWER(t.name) LIKE '%' || LOWER($${paramIndex}) || '%' ESCAPE '\\'
                 )
-           )
-           ${role ? `AND EXISTS (
+           )`;
+        values.push(escapedSearch);
+        paramIndex++;
+    }
+
+    if (role) {
+        query += ` AND EXISTS (
                SELECT 1 FROM user_platform_purpose upp 
                JOIN platform_purpose pp ON pp.plpu_id = upp.plpu_id 
-               WHERE upp.user_id = u.user_id AND pp.purpose_name = $5
-           )` : ''}
-         ORDER BY
+               WHERE upp.user_id = u.user_id AND pp.purpose_name = $${paramIndex}
+           )`;
+        values.push(role);
+        paramIndex++;
+    }
+
+    if (search) {
+        const searchValIndex = paramIndex;
+        values.push(search);
+        query += ` ORDER BY
            CASE
-             WHEN LOWER(a.handle) = LOWER($2) THEN 0
-             WHEN LOWER(a.display_name) = LOWER($2) THEN 1
-             WHEN LOWER(a.handle) LIKE LOWER($1) || '%' ESCAPE '\\' THEN 2
-             WHEN LOWER(a.display_name) LIKE LOWER($1) || '%' ESCAPE '\\' THEN 3
+             WHEN LOWER(a.handle) = LOWER($${searchValIndex}) THEN 0
+             WHEN LOWER(a.display_name) = LOWER($${searchValIndex}) THEN 1
+             WHEN LOWER(a.handle) LIKE LOWER($${searchValIndex - 1}) || '%' ESCAPE '\\' THEN 2
+             WHEN LOWER(a.display_name) LIKE LOWER($${searchValIndex - 1}) || '%' ESCAPE '\\' THEN 3
              ELSE 4
            END,
-           a.display_name
-         LIMIT $4`,
-        role ? [escapedSearch, search, excludeAccountId || null, limit, role] : [escapedSearch, search, excludeAccountId || null, limit]
-    );
+           a.display_name`;
+    } else {
+        query += ` ORDER BY a.created_at DESC`;
+    }
 
+    query += ` LIMIT $2`;
+
+    const result = await pool.query(query, values);
     return result.rows;
 }
 
@@ -245,7 +267,7 @@ async function getProfileRepositories(accountId) {
                 A.CREATED_AT, 
                 A.MERIT_SCORE, 
                 A.AVATAR_FILE_ID,
-                U.COUNTRY AS LOCATION,
+                U.COUNTRY AS COUNTRY, U.ADDRESS AS LOCATION, U.ZIP_CODE,
                 U.USER_ID,
                 V.IS_VERIFIED AS VERIFICATION_STATUS,
                 -- Aggregates all matching ACCOUNT_LINK rows into a JSON array
