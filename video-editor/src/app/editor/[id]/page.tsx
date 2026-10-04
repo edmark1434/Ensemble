@@ -6,6 +6,7 @@ import Editor from "@/features/editor";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { createProject } from "@/lib/db/projects";
 import { db } from "@/lib/db";
+import {toEditorRole} from "@/features/editor/types/editor-role";
 
 // Random/garbage segments (e.g. someone fat-fingering /editor/asdf) aren't
 // valid uuid syntax, and postgres throws on that rather than just returning
@@ -73,7 +74,7 @@ export default async function EditorPage({
       projectName={membership.name}
       width={membership.width}
       height={membership.height}
-      role={membership.role}
+      role={toEditorRole(membership.role) ?? undefined}
     />
   );
 }

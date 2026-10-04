@@ -56,7 +56,7 @@ interface ProjectsTable {
 interface ProjectMembersTable {
   project_id: string;
   user_id: string;
-  role: "Owner" | "Editor" | "Commenter" | "Viewer";
+  role: "Owner" | "Manager" | "Editor" | "Commenter" | "Viewer";
   cursor_color: string;
   joined_at: Generated<Date>;
   deleted_at: Date | null;

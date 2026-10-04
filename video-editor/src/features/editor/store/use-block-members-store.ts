@@ -7,10 +7,10 @@
 import { create } from "zustand";
 import useStore from "@/features/editor/store/use-store";
 import { isSceneItem, type ISceneDetails } from "@/features/editor/types/ensemble-scene";
-import type {
+import {
   AssignableBlockRole,
   BlockAccess,
-  BlockPerson, GeneralAccessLevel,
+  BlockPerson, GeneralAccessLevel, minRole,
 } from "@/features/editor/types/block-members";
 
 type Status = "idle" | "loading" | "ready" | "error";
@@ -49,6 +49,8 @@ async function request(
 
 const byName = (a: BlockPerson, b: BlockPerson) => a.name.localeCompare(b.name);
 
+let loadSeq = 0;
+
 const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
   blockId: null,
   status: "idle",
@@ -71,17 +73,19 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
         candidates: [],
         canManage: false,
         generalAccess: "Restricted",
+        viewerRole: null,
       });
     }
 
+    const seq = ++loadSeq;
     try {
-      const res = await fetch(membersUrl(blockId));
+      const res = await fetch(membersUrl(blockId), { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: BlockAccess = await res.json();
-      if (get().blockId !== blockId) return;
+      if (get().blockId !== blockId || seq !== loadSeq) return;
       set({ ...data, status: "ready", error: null });
     } catch (err) {
-      if (get().blockId !== blockId) return;
+      if (get().blockId !== blockId || seq !== loadSeq) return;
       console.error("Failed to load scene access", err);
       set({ status: "error", error: "Couldn't load who has access." });
     }
@@ -90,6 +94,7 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
   setGeneralAccess: async (generalAccess) => {
     const { blockId } = get();
     if (!blockId) return;
+    loadSeq++;
 
     const previous = get().generalAccess;
     set({ error: null, generalAccess });
@@ -103,10 +108,14 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
   addMember: async (person, role) => {
     const { blockId } = get();
     if (!blockId) return;
+    loadSeq++;
 
+    const applied = person.projectRole
+      ? (minRole(role, person.projectRole) as AssignableBlockRole)
+      : role;
     set((s) => ({
       error: null,
-      members: [...s.members, { ...person, role }],
+      members: [...s.members, { ...person, role: applied, effectiveRole: applied }],
       candidates: s.candidates.filter((c) => c.userId !== person.userId),
     }));
 
@@ -123,10 +132,17 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
   changeRole: async (userId, role) => {
     const { blockId } = get();
     if (!blockId) return;
+    loadSeq++;
 
     set((s) => ({
       error: null,
-      members: s.members.map((m) => (m.userId === userId ? { ...m, role } : m)),
+      members: s.members.map((m) => {
+        if (m.userId !== userId) return m;
+        const applied = m.projectRole
+          ? (minRole(role, m.projectRole) as AssignableBlockRole)
+          : role;
+        return { ...m, role: applied, effectiveRole: applied };
+      }),
     }));
 
     const ok = await request(membersUrl(blockId), "PATCH", { userId, role });
@@ -140,9 +156,10 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
     const { blockId, members } = get();
     const removed = members.find((m) => m.userId === userId);
     if (!blockId || !removed) return;
+    loadSeq++;
 
     // Goes back into the suggestions, since they're still a project member.
-    const { role: _role, ...person } = removed;
+    const { role: _r, effectiveRole: _e, ...person } = removed;
     set((s) => ({
       error: null,
       members: s.members.filter((m) => m.userId !== userId),

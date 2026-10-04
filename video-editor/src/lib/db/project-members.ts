@@ -1,15 +1,11 @@
 // lib/db/project-members.ts
 
 import { db } from "@/lib/db";
+import {canManageSharing} from "@/features/editor/types/editor-role";
 
-export type ProjectRole = "Owner" | "Editor" | "Commenter" | "Viewer";
-export type AssignableProjectRole = "Editor" | "Commenter" | "Viewer";
-
-export const ASSIGNABLE_PROJECT_ROLES: AssignableProjectRole[] = [
-  "Editor",
-  "Commenter",
-  "Viewer",
-];
+export type ProjectRole = "Owner" | "Manager" | "Editor" | "Commenter" | "Viewer";
+export type AssignableProjectRole = "Manager" | "Editor" | "Commenter" | "Viewer";
+export const ASSIGNABLE_PROJECT_ROLES: AssignableProjectRole[] = ["Manager", "Editor", "Commenter", "Viewer"];
 
 export interface ProjectPerson {
   userId: string;
@@ -26,6 +22,7 @@ export interface ProjectAccess {
   owner: ProjectPerson | null;
   members: ProjectMember[];
   canManage: boolean;
+  canGrantManager: boolean;
 }
 
 type PersonRow = {
@@ -101,6 +98,7 @@ export async function getProjectAccess(
     .execute();
 
   const ownerRow = memberRows.find((r) => r.role === "Owner");
+  const viewerRole = memberRows.find((r) => r.user_id === viewerUserId)?.role;
 
   return {
     owner: ownerRow ? toPerson(ownerRow) : null,
@@ -109,7 +107,8 @@ export async function getProjectAccess(
         ? []
         : [{ ...toPerson(r), role: r.role as AssignableProjectRole }],
     ),
-    canManage: !!ownerRow && ownerRow.user_id === viewerUserId,
+    canManage: canManageSharing(viewerRole),
+    canGrantManager: viewerRole === "Owner",
   };
 }
 

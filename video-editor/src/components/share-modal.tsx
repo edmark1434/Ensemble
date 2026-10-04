@@ -17,10 +17,11 @@ import {
 } from "@/components/ui/popover";
 import { ChevronDown, Check, Search } from "lucide-react";
 import { debounce } from "lodash";
+import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
+import {onAccessChanged} from "@/features/editor/collab/access-events";
 
-type AssignableProjectRole = "Editor" | "Commenter" | "Viewer";
-
-const ASSIGNABLE_PROJECT_ROLES: AssignableProjectRole[] = ["Editor", "Commenter", "Viewer"];
+type AssignableProjectRole = "Manager" | "Editor" | "Commenter" | "Viewer";
+const ASSIGNABLE_PROJECT_ROLES: AssignableProjectRole[] = ["Manager", "Editor", "Commenter", "Viewer"];
 
 interface ProjectPerson {
   userId: string;
@@ -37,6 +38,7 @@ interface ProjectAccess {
   owner: ProjectPerson | null;
   members: ProjectMember[];
   canManage: boolean;
+  canGrantManager: boolean;
 }
 
 const getInitials = (name: string) =>
@@ -69,15 +71,17 @@ const Avatar = ({ name, avatarUrl }: { name: string; avatarUrl?: string | null }
 };
 
 const RoleSelectPopover = ({
-                             value,
-                             onChange,
-                             onRemove,
-                             prefix
-                           }: {
+  value,
+  onChange,
+  onRemove,
+  prefix,
+  roles
+}: {
   value: AssignableProjectRole;
   onChange: (v: AssignableProjectRole) => void;
   onRemove?: () => void;
   prefix?: string;
+  roles: AssignableProjectRole[];
 }) => {
   const [open, setOpen] = useState(false);
 
@@ -98,7 +102,7 @@ const RoleSelectPopover = ({
         className="z-[1000] p-0"
         style={{ width: "var(--radix-popover-trigger-width)" }}
       >
-        {ASSIGNABLE_PROJECT_ROLES.map((option) => (
+        {roles.map((option) => (
           <div
             key={option}
             onClick={() => {
@@ -128,14 +132,15 @@ const RoleSelectPopover = ({
 };
 
 const UserRow = ({
-                   name,
-                   email,
-                   avatarUrl,
-                   role,
-                   editable,
-                   onRoleChange,
-                   onRemove
-                 }: {
+  name,
+  email,
+  avatarUrl,
+  role,
+  editable,
+  onRoleChange,
+  onRemove,
+  roles
+}: {
   name: string;
   email: string;
   avatarUrl: string | null;
@@ -143,6 +148,7 @@ const UserRow = ({
   editable: boolean;
   onRoleChange?: (role: AssignableProjectRole) => void;
   onRemove?: () => void;
+  roles: AssignableProjectRole[];
 }) => (
   <div className="flex items-center gap-3">
     <Avatar name={name} avatarUrl={avatarUrl} />
@@ -151,10 +157,15 @@ const UserRow = ({
       <p className="truncate text-xs text-muted-foreground">{email}</p>
     </div>
     {role === "Owner" || !editable ? (
-      <span className="w-32 shrink-0 text-right text-sm text-muted-foreground">{role}</span>
+      <span className="w-36 shrink-0 text-right text-sm text-muted-foreground">{role}</span>
     ) : (
-      <div className="w-32 shrink-0">
-        <RoleSelectPopover value={role} onChange={(v) => onRoleChange?.(v)} onRemove={onRemove} />
+      <div className="w-36 shrink-0">
+        <RoleSelectPopover
+          value={role}
+          onChange={(v) => onRoleChange?.(v)}
+          onRemove={onRemove}
+          roles={roles}
+        />
       </div>
     )}
   </div>
@@ -166,12 +177,18 @@ interface ShareModalProps {
   projectId: string;
 }
 
+const refreshSceneAccess = () => {
+  const { blockId, load } = useBlockMembersStore.getState();
+  if (blockId) void load(blockId);
+};
+
 export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [owner, setOwner] = useState<ProjectPerson | null>(null);
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [canManage, setCanManage] = useState(false);
+  const [canGrantManager, setCanGrantManager] = useState(false);
 
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<ProjectPerson[]>([]);
@@ -182,18 +199,31 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
 
   const searchWrapperRef = useRef<HTMLDivElement>(null);
 
-  const load = async () => {
-    setStatus("loading");
-    setLoadError(null);
+  const loadSeq = useRef(0);
+
+  const roleOptions = canGrantManager
+    ? ASSIGNABLE_PROJECT_ROLES
+    : ASSIGNABLE_PROJECT_ROLES.filter((r) => r !== "Manager");
+
+  const load = async (silent = false) => {
+    const seq = ++loadSeq.current;
+    if (!silent) {
+      setStatus("loading");
+      setLoadError(null);
+    }
     try {
-      const res = await fetch(`/api/projects/${projectId}/members`);
+      const res = await fetch(`/api/projects/${projectId}/members`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load");
       const data: ProjectAccess = await res.json();
+      if (seq !== loadSeq.current) return; // a newer load or an edit superseded this one
       setOwner(data.owner);
       setMembers(data.members);
       setCanManage(data.canManage);
+      setCanGrantManager(data.canGrantManager);
+      setLoadError(null);
       setStatus("ready");
     } catch {
+      if (seq !== loadSeq.current || silent) return; // background failures keep what's on screen
       setLoadError("Couldn't load project access");
       setStatus("error");
     }
@@ -201,6 +231,23 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
 
   useEffect(() => {
     if (open) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, projectId]);
+  useEffect(() => {
+    if (!open) return;
+
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const off = onAccessChanged(() => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => void load(true), 150);
+    });
+    const poll = setInterval(() => void load(true), 5_000);
+
+    return () => {
+      off();
+      clearInterval(poll);
+      if (t) clearTimeout(t);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, projectId]);
 
@@ -267,6 +314,7 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
     }
     setAddError(null);
     await load();
+    refreshSceneAccess();
   };
 
   // Enter adds the top match.
@@ -283,12 +331,13 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
     status !== "ready"
       ? null
       : !canManage
-        ? "Only the project owner can change who has access."
+        ? "Only the project owner and managers can change who has access."
         : query.trim() && !searching && suggestions.length === 0
           ? "No matching users found."
           : null;
 
   const handleRoleChange = async (userId: string, role: AssignableProjectRole) => {
+    loadSeq.current++;
     setMembers((prev) => prev.map((m) => (m.userId === userId ? { ...m, role } : m)));
     const res = await fetch(`/api/projects/${projectId}/members`, {
       method: "PATCH",
@@ -296,15 +345,18 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
       body: JSON.stringify({ userId, role })
     });
     if (!res.ok) void load();
+    refreshSceneAccess();
   };
 
   const handleRemove = async (userId: string) => {
+    loadSeq.current++;
     setMembers((prev) => prev.filter((m) => m.userId !== userId));
     const res = await fetch(
       `/api/projects/${projectId}/members?userId=${encodeURIComponent(userId)}`,
       { method: "DELETE" }
     );
     if (!res.ok) void load();
+    refreshSceneAccess();
   };
 
   return (
@@ -357,7 +409,12 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
                 )}
               </div>
 
-              <RoleSelectPopover prefix="Add as:" value={newUserRole} onChange={setNewUserRole} />
+              <RoleSelectPopover
+                prefix="Add as:"
+                value={newUserRole}
+                onChange={setNewUserRole}
+                roles={roleOptions}
+              />
 
               {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
               {addError && <p className="text-xs text-red-500">{addError}</p>}
@@ -375,6 +432,7 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
                   avatarUrl={owner.avatarUrl}
                   role="Owner"
                   editable={false}
+                  roles={roleOptions}
                 />
               )}
               {members.map((m) => (
@@ -384,9 +442,10 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
                   email={m.email}
                   avatarUrl={m.avatarUrl}
                   role={m.role}
-                  editable={canManage}
+                  editable={canManage && (canGrantManager || m.role !== "Manager")}
                   onRoleChange={(role) => void handleRoleChange(m.userId, role)}
                   onRemove={() => void handleRemove(m.userId)}
+                  roles={roleOptions}
                 />
               ))}
             </div>

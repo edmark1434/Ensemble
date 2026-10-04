@@ -15,8 +15,9 @@ import useBlockMembersStore, {
 import {
   ASSIGNABLE_BLOCK_ROLES,
   type AssignableBlockRole,
-  type BlockPerson
+  type BlockPerson, BlockRole, ROLE_RANK
 } from "@/features/editor/types/block-members";
+import {onAccessChanged} from "@/features/editor/collab/access-events";
 
 const getInitials = (name: string) =>
   name
@@ -58,12 +59,14 @@ const RoleSelectPopover = ({
   value,
   onChange,
   onRemove,
-  prefix
+  prefix,
+  maxRole
 }: {
   value: AssignableBlockRole;
   onChange: (v: AssignableBlockRole) => void;
   onRemove?: () => void;
   prefix?: string;
+  maxRole?: BlockRole | null;
 }) => {
   const [open, setOpen] = useState(false);
 
@@ -90,21 +93,26 @@ const RoleSelectPopover = ({
         className="z-[300] p-0"
         style={{ width: "var(--radix-popover-trigger-width)" }}
       >
-        {ASSIGNABLE_BLOCK_ROLES.map((option) => (
-          <div
-            key={option}
-            onClick={() => {
-              onChange(option);
-              setOpen(false);
-            }}
-            className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
-          >
-            {option}
-            {option === value && (
-              <Check size={14} className="text-muted-foreground" />
-            )}
-          </div>
-        ))}
+        {ASSIGNABLE_BLOCK_ROLES.map((option) => {
+          const blocked = !!maxRole && ROLE_RANK[option] > ROLE_RANK[maxRole];
+          return (
+            <div
+              key={option}
+              title={blocked ? `Limited by their project role (${maxRole})` : undefined}
+              onClick={() => {
+                if (blocked) return;
+                onChange(option);
+                setOpen(false);
+              }}
+              className={`flex items-center justify-between px-3 py-2 text-sm text-zinc-200 ${
+                blocked ? "cursor-not-allowed opacity-40" : "cursor-pointer hover:bg-zinc-800/50"
+              }`}
+            >
+              {option}
+              {option === value && <Check size={14} className="text-muted-foreground" />}
+            </div>
+          );
+        })}
         {onRemove && (
           <div
             onClick={() => {
@@ -128,7 +136,9 @@ const UserRow = ({
   role,
   editable,
   onRoleChange,
-  onRemove
+  onRemove,
+  maxRole,
+  removed,
 }: {
   name: string;
   email: string;
@@ -138,15 +148,21 @@ const UserRow = ({
   editable: boolean;
   onRoleChange?: (role: AssignableBlockRole) => void;
   onRemove?: () => void;
+  maxRole?: BlockRole | null;
+  removed?: boolean;
 }) => {
   return (
-    <div className="flex items-center gap-3">
+    <div className={`flex items-center gap-3 ${removed ? "opacity-50" : ""}`}>
       <Avatar name={name} avatarUrl={avatarUrl} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm text-zinc-200">{name}</p>
         <p className="truncate text-xs text-muted-foreground">{email}</p>
       </div>
-      {role === "Owner" || !editable ? (
+      {removed ? (
+        <span className="w-36 shrink-0 text-right text-sm text-muted-foreground">
+          Not in project
+        </span>
+      ) : role === "Owner" || !editable ? (
         <span className="w-36 shrink-0 text-right text-sm text-muted-foreground">
           {role}
         </span>
@@ -154,6 +170,7 @@ const UserRow = ({
         <div className="w-36 shrink-0">
           <RoleSelectPopover
             value={role}
+            maxRole={maxRole}
             onChange={(v) => onRoleChange?.(v)}
             onRemove={onRemove}
           />
@@ -183,10 +200,22 @@ export default function AccessPicker() {
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [newUserRole, setNewUserRole] = useState<AssignableBlockRole>("Viewer");
 
-  // Refresh on open so people added to the project since the panel was last
-  // shown appear as suggestions.
   useEffect(() => {
-    if (blockId) void load(blockId);
+    if (!blockId) return;
+    void load(blockId);
+
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const off = onAccessChanged(() => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => void load(blockId), 150);
+    });
+    const poll = setInterval(() => void load(blockId), 30_000);
+
+    return () => {
+      off();
+      clearInterval(poll);
+      if (t) clearTimeout(t);
+    };
   }, [blockId, load]);
 
   // No scene selected (e.g. selection cleared while the panel was open).
@@ -310,6 +339,7 @@ export default function AccessPicker() {
               avatarUrl={owner.avatarUrl}
               role="Owner"
               editable={false}
+              removed={owner.projectRole === null}
             />
           )}
           {members.map((m) => (
@@ -318,10 +348,12 @@ export default function AccessPicker() {
               name={m.name}
               email={m.email}
               avatarUrl={m.avatarUrl}
-              role={m.role}
+              role={(m.effectiveRole ?? m.role) as AssignableBlockRole}
               editable={canManage}
               onRoleChange={(role) => void changeRole(m.userId, role)}
               onRemove={() => void removeMember(m.userId)}
+              removed={m.projectRole === null}
+              maxRole={m.projectRole}
             />
           ))}
         </div>
