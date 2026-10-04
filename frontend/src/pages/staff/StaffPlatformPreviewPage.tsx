@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Eye } from "lucide-react";
+import { STAFF_PREVIEW_NAV_MESSAGE } from "@/lib/staffPlatformView";
 
 const SECTIONS = [
   { label: "Home", path: "/home" },
@@ -19,10 +20,9 @@ function sectionForPath(pathname: string): string {
 }
 
 export default function StaffPlatformPreviewPage() {
-  const [src, setSrc] = useState("/home");
   const [shownPath, setShownPath] = useState("/home");
-  const [frameKey, setFrameKey] = useState(0);
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const pendingPath = useRef<string | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => syncShownPath(frameRef.current), 500);
@@ -30,9 +30,16 @@ export default function StaffPlatformPreviewPage() {
   }, []);
 
   const openSection = (path: string) => {
-    setSrc(path);
     setShownPath(path);
-    setFrameKey((key) => key + 1);
+    const frameWindow = frameRef.current?.contentWindow;
+    if (!frameWindow) {
+      pendingPath.current = path;
+      return;
+    }
+    frameWindow.postMessage(
+      { type: STAFF_PREVIEW_NAV_MESSAGE, path },
+      window.location.origin,
+    );
   };
 
   const syncShownPath = (frame: HTMLIFrameElement | null) => {
@@ -92,11 +99,19 @@ export default function StaffPlatformPreviewPage() {
             </p>
           </div>
           <iframe
-            key={frameKey}
             ref={frameRef}
             title="Member platform preview"
-            src={src}
-            onLoad={(event) => syncShownPath(event.currentTarget)}
+            src="/home"
+            onLoad={(event) => {
+              syncShownPath(event.currentTarget);
+              const nextPath = pendingPath.current;
+              if (!nextPath) return;
+              pendingPath.current = null;
+              event.currentTarget.contentWindow?.postMessage(
+                { type: STAFF_PREVIEW_NAV_MESSAGE, path: nextPath },
+                window.location.origin,
+              );
+            }}
             className="min-h-0 w-full flex-1 bg-white"
             sandbox="allow-scripts allow-same-origin"
           />

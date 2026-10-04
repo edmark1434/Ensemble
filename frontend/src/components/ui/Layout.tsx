@@ -1,6 +1,6 @@
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useStaffPlatformGuard } from "@/components/staff/StaffPlatformView";
-import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
+import { isStaffPlatformViewer, isStaffPreviewFrame, STAFF_PREVIEW_NAV_MESSAGE } from "@/lib/staffPlatformView";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import UserNav from "@/components/nav/user_nav.tsx";
 import UtilScrollTop from "@/components/utility/util_scroll_top.tsx";
@@ -33,6 +33,7 @@ export const emitIncomingMessage = (sender: ChatTarget) => {
 
 const Layout = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
   const isSidebarCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
   const initializeChat = useChatState((state) => state.initialize);
@@ -50,6 +51,20 @@ const Layout = () => {
 
   const isStaffView = isStaffPlatformViewer(user);
   useStaffPlatformGuard(isStaffView);
+
+  useEffect(() => {
+    if (!isStaffPreviewFrame()) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as { type?: string; path?: string } | null;
+      if (!data || data.type !== STAFF_PREVIEW_NAV_MESSAGE) return;
+      const path = String(data.path || "");
+      if (!path.startsWith("/") || path.startsWith("//")) return;
+      navigate(path);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [navigate]);
   const isInboxPage = location.pathname.startsWith("/inbox");
   const currentUserId = String(user?.account_id || "");
 

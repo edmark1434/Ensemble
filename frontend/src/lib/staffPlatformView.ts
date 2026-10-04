@@ -18,6 +18,8 @@ export function isStaffConsolePath(pathname: string): boolean {
     || pathname.startsWith("/moderator/");
 }
 
+export const STAFF_PREVIEW_NAV_MESSAGE = "ensemble-staff-preview-nav";
+
 export function isStaffPreviewFrame(): boolean {
   return typeof window !== "undefined" && window.self !== window.top;
 }
