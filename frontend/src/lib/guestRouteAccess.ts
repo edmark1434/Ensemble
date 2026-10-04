@@ -6,6 +6,9 @@ const GUEST_EXACT_PATHS = new Set([
   "/jobs/postings",
   "/gigs",
   "/gigs/services",
+  "/discovery",
+  "/discovery/gallery",
+  "/projects",
 ]);
 
 const GUEST_DETAIL_PATHS = [
@@ -14,7 +17,6 @@ const GUEST_DETAIL_PATHS = [
   /^\/jobs\/postings\/[^/]+$/,
   /^\/gigs\/services\/[^/]+(?:\/page)?$/,
   /^\/profile\/[^/]+$/,
-  /^\/search\/user\/[^/]+$/,
   /^\/teams\/(?:invite|join)\/[^/]+$/,
 ];
 

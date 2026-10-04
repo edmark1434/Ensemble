@@ -235,6 +235,7 @@ function App() {
           </Route>
 
           <Route path='/discovery' element={<DiscoveryPage />} />
+          <Route path='/discovery/:tab' element={<DiscoveryPage />} />
           <Route path='/assets' element={<AssetsLibrary />} />
           <Route path='/assets/owned' element={<AssetsLibrary />} />
           <Route path='/assets/purchased' element={<AssetsLibrary />} />

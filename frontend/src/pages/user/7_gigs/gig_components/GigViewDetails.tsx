@@ -7,6 +7,7 @@ import type { Gig } from "../gig_datasets";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import PopupReportGig from "./PopupReportGig";
 import useGlobalState from "@/lib/global_state";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 
 interface GigViewDetailsProps {
   selectedGig: Gig | null;
@@ -16,6 +17,7 @@ interface GigViewDetailsProps {
 }
 
 const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, onReportGig, onToggleSave }) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isVerified = useGlobalState((state) => state.isVerified);
@@ -459,11 +461,13 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                       View Full
                     </button>
                     <button
-                        onClick={() => !isGuestMode && isVerified && handleOpenCheckout()}
-                        disabled={isGuestMode || !isVerified}
+                          onClick={() => {
+                            if (isGuestMode) return setIsModalOpen(true);
+                            if (isVerified) handleOpenCheckout();
+                          }}
+                          disabled={!isGuestMode && !isVerified}
                         className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg ${
-                          isGuestMode || !isVerified
-                            ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' 
+                          !isGuestMode && !isVerified ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' 
                             : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]'
                         }`}
                       >
@@ -493,6 +497,8 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
         .thin-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
         .thin-scrollbar::-webkit-scrollbar-track { background: transparent; }
       `}</style>
+      <GuestLoginModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+
     </>
   );
 };

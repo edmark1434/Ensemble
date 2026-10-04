@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import { Calendar, Clock, Briefcase, Users, Star, Send, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText, Bookmark, CheckCircle2, XCircle, HelpCircle } from "lucide-react";
 import { JobRichText } from "./JobRichText";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import useGlobalState from "@/lib/global_state";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 
 interface JobViewDetailsProps {
   selectedJob: Job | null;
@@ -14,6 +15,7 @@ interface JobViewDetailsProps {
 }
 
 const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, onReportJob, onToggleSave }) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isVerified = useGlobalState((state) => state.isVerified);
@@ -353,10 +355,13 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   </button>
                 ) : (
                   <button
-                      onClick={() => !isGuestMode && isVerified && navigate(`/jobs/${selectedJob.id}/make-proposal`)}
-                      disabled={isGuestMode || !isVerified}
+                        onClick={() => {
+                          if (isGuestMode) return setIsModalOpen(true);
+                          if (isVerified) navigate(`/jobs/${selectedJob.id}/make-proposal`);
+                        }}
+                        disabled={!isGuestMode && !isVerified}
                       className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg ${
-                        isGuestMode || !isVerified
+                        (!isGuestMode && !isVerified)
                           ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' 
                           : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]'
                       }`}
@@ -392,6 +397,8 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
         .thin-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
         .thin-scrollbar::-webkit-scrollbar-track { background: transparent; }
       `}</style>
+      <GuestLoginModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+
     </>
   );
 };
