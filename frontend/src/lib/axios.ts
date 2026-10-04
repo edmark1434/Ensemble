@@ -2,7 +2,7 @@ import axios from "axios";
 import { API_BASE_URL } from "./api";
 import useGlobalState from "./global_state";
 import { showErrorToast } from "@/components/utility/toast";
-import { isStaffBrowsePath } from "./staffPlatformView";
+import { isStaffPreviewFrame } from "./staffPlatformView";
 
 const ACCOUNT_RESTRICTION_CODES = new Set([
   "ACCOUNT_BANNED",
@@ -38,7 +38,7 @@ const CSRF_EXEMPT_URL = /\/api\/(?:chat|users\/(?:login|signup|signup-save-sessi
 
 function rejectStaffPlatformWrite(config: { method?: string; url?: string }) {
   if (useGlobalState.getState().user?.type !== "Staff") return null;
-  if (!isStaffBrowsePath(window.location.pathname)) return null;
+  if (!isStaffPreviewFrame()) return null;
   const method = String(config.method || "get").toLowerCase();
   const url = String(config.url || "");
   const reading = method === "get" || method === "head" || method === "options";

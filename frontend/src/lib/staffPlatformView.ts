@@ -29,8 +29,12 @@ export function isStaffBrowsePath(pathname: string): boolean {
   return isGuestAllowedPath(path) || EXTRA_BROWSE_PATHS.some((pattern) => pattern.test(path));
 }
 
+export function isStaffPreviewFrame(): boolean {
+  return typeof window !== "undefined" && window.self !== window.top;
+}
+
 export function isStaffPlatformViewer(user: { type?: string | null } | null | undefined): boolean {
-  return user?.type === "Staff";
+  return user?.type === "Staff" && isStaffPreviewFrame();
 }
 
 function controlLabel(element: Element): string {
@@ -51,7 +55,7 @@ export function isAllowedStaffBrowseClick(target: Element): boolean {
     try {
       const url = new URL(href, window.location.origin);
       if (url.origin !== window.location.origin) return false;
-      return isStaffBrowsePath(url.pathname) || isStaffConsolePath(url.pathname);
+      return isStaffBrowsePath(url.pathname);
     } catch {
       return false;
     }

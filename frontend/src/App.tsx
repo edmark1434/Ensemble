@@ -92,6 +92,7 @@ const TicketManagementPage = lazyPage(() => import('./pages/admin/ticketManageme
 const SystemSettingsPage = lazyPage(() => import('./pages/admin/systemSettings/SystemSettingsPage'));
 const StaffPortalLayout = lazyPage(() => import('./pages/staff/StaffPortalLayout'));
 const StaffDashboard = lazyPage(() => import('./pages/staff/StaffDashboard'));
+const StaffPlatformPreviewPage = lazyPage(() => import('./pages/staff/StaffPlatformPreviewPage'));
 const VerifyEmail = lazyPage(() => import('@/pages/setup_account/00_VerifyEmail.tsx'));
 const UploadImage = lazyPage(() => import('@/pages/setup_account/02_UploadImage.tsx'));
 const Survey = lazyPage(() => import('@/pages/setup_account/04_Survey.tsx'));
@@ -314,6 +315,7 @@ function App() {
       <Route element={<StaffMiddleware />}>
         <Route path='/staff' element={<StaffPortalLayout />}>
           <Route path='dashboard' element={<StaffDashboard />} />
+          <Route path='platform-view' element={<StaffPlatformPreviewPage />} />
         </Route>
 
         <Route path='/admin' element={<AdminLayout />}>
@@ -327,6 +329,7 @@ function App() {
           <Route path='analytics' element={<AnalyticsPage />} />
           <Route path='ticket-management' element={<TicketManagementPage />} />
           <Route path='system-settings' element={<SystemSettingsPage />} />
+          <Route path='platform-view' element={<StaffPlatformPreviewPage />} />
         </Route>
 
         {/* Moderator Routes */}
@@ -338,6 +341,7 @@ function App() {
           <Route path='reports' element={<ForumReports />} />
           <Route path='restrictions' element={<ForumRestrictions />} />
           <Route path='user-team' element={<ForumUserTeam />} />
+          <Route path='platform-view' element={<StaffPlatformPreviewPage />} />
         </Route>
 
         <Route path='/moderator/marketplace' element={<MarketplaceModeratorLayout />}>
@@ -348,6 +352,7 @@ function App() {
           <Route path='reports' element={<MarketplaceReports />} />
           <Route path='restrictions' element={<MarketplaceRestrictions />} />
           <Route path='user-team' element={<MarketplaceUserTeam />} />
+          <Route path='platform-view' element={<StaffPlatformPreviewPage />} />
         </Route>
 
         <Route path='/moderator/support' element={<SupportModeratorLayout />}>
@@ -357,6 +362,7 @@ function App() {
           <Route path='reports' element={<SupportReports />} />
           <Route path='restrictions' element={<SupportRestrictions />} />
           <Route path='user-team' element={<SupportUserTeam />} />
+          <Route path='platform-view' element={<StaffPlatformPreviewPage />} />
         </Route>
 
         <Route path='/moderator/jobs' element={<JobsModeratorLayout />}>
@@ -367,6 +373,7 @@ function App() {
           <Route path='reports' element={<JobsReports />} />
           <Route path='restrictions' element={<JobsRestrictions />} />
           <Route path='user-team' element={<JobsUserTeam />} />
+          <Route path='platform-view' element={<StaffPlatformPreviewPage />} />
         </Route>
       </Route>
       </Routes>

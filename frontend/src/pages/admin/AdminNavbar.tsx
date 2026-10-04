@@ -30,7 +30,7 @@ const navItems: NavItem[] = [
   { label: 'Tickets', icon: Ticket, to: '/admin/ticket-management' },
   { label: 'Platform Feedback', icon: MessageSquare, to: '/admin/feedbacks' },
   { label: 'Settings', icon: Settings2, to: '/admin/system-settings' },
-  { label: 'Platform view', icon: Eye, to: '/home' },
+  { label: 'Platform view', icon: Eye, to: '/admin/platform-view' },
 ];
 
 const AdminNavbar = () => {
@@ -86,13 +86,6 @@ const AdminNavbar = () => {
       </nav>
 
       <div className="space-y-2 border-t border-white/[0.06] p-4">
-        <NavLink
-          to="/home"
-          className="flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-xs font-medium text-zinc-400 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
-        >
-          <Eye className="h-3.5 w-3.5" />
-          Platform view
-        </NavLink>
         <LogoutButton loginPath={ADMIN_LOGIN_PATH} />
       </div>
     </aside>

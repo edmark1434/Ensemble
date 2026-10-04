@@ -1,5 +1,5 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { StaffPlatformBanner, StaffPlatformBlocked, useStaffPlatformGuard } from "@/components/staff/StaffPlatformView";
+import { StaffPlatformBlocked, useStaffPlatformGuard } from "@/components/staff/StaffPlatformView";
 import { isStaffBrowsePath, isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import UserNav from "@/components/nav/user_nav.tsx";
@@ -212,7 +212,6 @@ const Layout = () => {
         }`}
         style={{ paddingLeft: marginLeft }}
       >
-        {isStaffView && <StaffPlatformBanner />}
         {staffCanBrowseHere ? <Outlet context={{ openChatWithUser }} /> : <StaffPlatformBlocked />}
       </main>
 
