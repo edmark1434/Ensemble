@@ -9,6 +9,7 @@ const toRad = (deg: number) => (deg * Math.PI) / 180;
 const toDeg = (rad: number) => (rad * 180) / Math.PI;
 
 type Mat2 = { a: number; b: number; c: number; d: number };
+
 // CSS matrix(a, b, c, d, e, f) layout: x' = a*x + c*y; y' = b*x + d*y
 
 function mul(m1: Mat2, m2: Mat2): Mat2 {
@@ -44,16 +45,23 @@ function decompose2x2(m: Mat2): Decomposed2D {
   let { a, b, c, d } = m;
 
   let scaleX = Math.sqrt(a * a + b * b) || 1e-8;
-  a /= scaleX; b /= scaleX;
+  a /= scaleX;
+  b /= scaleX;
 
   let skew = a * c + b * d;
-  c -= a * skew; d -= b * skew;
+  c -= a * skew;
+  d -= b * skew;
 
   let scaleY = Math.sqrt(c * c + d * d) || 1e-8;
-  c /= scaleY; d /= scaleY; skew /= scaleY;
+  c /= scaleY;
+  d /= scaleY;
+  skew /= scaleY;
 
   if (a * d - b * c < 0) {
-    a = -a; b = -b; scaleX = -scaleX; skew = -skew;
+    a = -a;
+    b = -b;
+    scaleX = -scaleX;
+    skew = -skew;
   }
 
   return {

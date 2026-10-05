@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { dispatch } from "@designcombo/events";
 import { ADD_ITEMS, EDIT_OBJECT, LAYER_DELETE } from "@designcombo/state";
 import { ITrackItem, ITrackItemsMap } from "@designcombo/types";
-import {CircleOff, X} from "lucide-react";
+import { CircleOff, X } from "lucide-react";
 import useLayoutStore from "../../store/use-layout-store";
 import { useEffect, useRef, useState } from "react";
 import useClickOutside from "../../hooks/use-click-outside";
@@ -12,12 +12,14 @@ import { groupBy } from "lodash";
 import { transformCaptions } from "../common/caption-words";
 import { generateId } from "@designcombo/timeline";
 import { PresetPicker } from "../common/preset-picker";
+
 interface IBoxShadow {
   color: string;
   x: number;
   y: number;
   blur: number;
 }
+
 export interface ICaptionsControlProps {
   type?: "word" | "lines";
   appearedColor: string;

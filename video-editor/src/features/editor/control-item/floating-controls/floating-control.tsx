@@ -65,7 +65,8 @@ export default function FloatingControl({ anchorRef }: { anchorRef: React.RefObj
   }
 
   return createPortal(
-    <Draggable nodeRef={nodeRef as unknown as React.RefObject<HTMLElement>} handle=".handle" bounds="body" defaultPosition={dragStart}>
+    <Draggable nodeRef={nodeRef as unknown as React.RefObject<HTMLElement>} handle=".handle" bounds="body"
+               defaultPosition={dragStart}>
       <div ref={nodeRef} style={{ position: "fixed", top: 0, left: 0, zIndex: 100 }}>
         {content}
       </div>

@@ -5,10 +5,10 @@ import { dispatch } from "@designcombo/events";
 import { EDIT_OBJECT } from "@designcombo/state";
 import { ITrackItem } from "@designcombo/types";
 import React, { useEffect, useState } from "react";
-import {Crop, FlipHorizontal, FlipVertical, Info, Link, RotateCw, Unlink} from "lucide-react";
+import { Crop, FlipHorizontal, FlipVertical, Info, Link, RotateCw, Unlink } from "lucide-react";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
-import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
-import {cn} from "cn";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "cn";
 
 interface LayoutMediaControlsProps {
   trackItem: ITrackItem & any;

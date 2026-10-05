@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useRef, useState} from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,13 +9,13 @@ import {
   PopoverTrigger
 } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import {Check, ChevronDown, Download, X} from "lucide-react";
+import { Check, ChevronDown, Download, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { generateId } from "@designcombo/timeline";
 import type { IDesign } from "@designcombo/types";
 import type StateManager from "@designcombo/state";
 import { useIsMediumScreen } from "@/hooks/use-media-query";
-import {RenderPayload, useDownloadState} from "./store/use-download-state";
+import { RenderPayload, useDownloadState } from "./store/use-download-state";
 import useStore from "./store/use-store";
 import {
   AUDIO_BITRATE_RANGE_KBPS,
@@ -29,7 +29,7 @@ import {
   getResolutionOptions, getDefaultVideoBitrateKbps, GIF_MAXIMUM_DURATION_MS
 } from "./constants/download-options";
 import { DraggablePanel } from "@/components/draggable-panel";
-import {getSafeCurrentFrame} from "@/features/editor/utils/time";
+import { getSafeCurrentFrame } from "@/features/editor/utils/time";
 
 export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
   const isMediumScreen = useIsMediumScreen();
@@ -272,7 +272,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
   );
 };
 
-const SelectField = <T extends string | number,>({
+const SelectField = <T extends string | number, >({
   label,
   value,
   options,
@@ -398,10 +398,10 @@ const BitrateSlider = ({
       </div>
       <div className="flex items-center justify-between">
         <Label className="text-xs text-muted-foreground">
-          {`Recommended: ${isAudio 
-            ? "320 kbps" 
-            : Math.round(getDefaultVideoBitrateKbps(compositionWidth, compositionHeight, resolution, fps) / 100) / 10 
-              + " Mbps"}
+          {`Recommended: ${isAudio
+            ? "320 kbps"
+            : Math.round(getDefaultVideoBitrateKbps(compositionWidth, compositionHeight, resolution, fps) / 100) / 10
+            + " Mbps"}
           `}
         </Label>
       </div>

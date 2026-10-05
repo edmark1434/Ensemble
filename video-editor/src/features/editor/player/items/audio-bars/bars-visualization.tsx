@@ -93,10 +93,10 @@ const Bars: React.FC<BarsProps> = ({
 
 export const BarsVisualization: React.FC<
   Omit<BarsProps, "values"> & {
-    frequencyData: number[];
-    maxDb?: number;
-    minDb?: number;
-  }
+  frequencyData: number[];
+  maxDb?: number;
+  minDb?: number;
+}
 > = ({
   width,
   height,

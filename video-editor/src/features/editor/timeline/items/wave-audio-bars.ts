@@ -10,6 +10,7 @@ class WaveAudioBars extends Resizable {
   public backgroundColorDiv: string = "#808080";
 
   public hasSrc = true;
+
   constructor(props: WaveAudioBarsProps) {
     super(props);
     this.id = props.id;

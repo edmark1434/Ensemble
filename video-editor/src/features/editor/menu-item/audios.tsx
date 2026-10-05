@@ -3,14 +3,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { dispatch } from "@designcombo/events";
 import { ADD_AUDIO, ADD_ITEMS } from "@designcombo/state";
 import { IAudio } from "@designcombo/types";
-import {Loader2, Music, Music2, Pause, Play, Search} from "lucide-react";
-import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
+import { Loader2, Music, Music2, Pause, Play, Search } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { generateId } from "@designcombo/timeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { debounce } from "lodash";
-import {useIsDraggingOverTimeline} from "@/features/editor/hooks/is-dragging-over-timeline";
-import {getCurrentTime} from "@/features/editor/utils/time";
+import { useIsDraggingOverTimeline } from "@/features/editor/hooks/is-dragging-over-timeline";
+import { getCurrentTime } from "@/features/editor/utils/time";
 
 export const Audios = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -222,10 +222,10 @@ export const Audios = () => {
 };
 
 const AudioItem = ({
-   item,
-   onAdd,
-   playingId,
-   setPlayingId
+  item,
+  onAdd,
+  playingId,
+  setPlayingId
 }: {
   item: Partial<IAudio>;
   onAdd: (payload: Partial<IAudio>) => void;
@@ -277,13 +277,15 @@ const AudioItem = ({
     <Draggable
       data={item}
       renderCustomPreview={
-        <div className="w-[120px] h-[120px] rounded-md flex items-center justify-center bg-zinc-800 border border-primary">
+        <div
+          className="w-[120px] h-[120px] rounded-md flex items-center justify-center bg-zinc-800 border border-primary">
           <Music className="text-muted-foreground" size={40} />
         </div>
       }
       shouldDisplayPreview={!isDraggingOverTimeline}
     >
-      <div className="group relative flex items-center gap-3 cursor-pointer px-3 py-2 rounded hover:bg-zinc-800/50 transition-colors">
+      <div
+        className="group relative flex items-center gap-3 cursor-pointer px-3 py-2 rounded hover:bg-zinc-800/50 transition-colors">
         <audio
           ref={audioRef}
           src={item.details?.src}

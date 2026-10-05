@@ -1,12 +1,12 @@
-import {useEffect, useRef, useState} from "react";
+import { useEffect, useRef, useState } from "react";
 import Header from "./header";
 import Ruler from "./ruler";
-import {timeMsToUnits, unitsToTimeMs} from "@designcombo/timeline";
+import { timeMsToUnits, unitsToTimeMs } from "@designcombo/timeline";
 import CanvasTimeline from "./items/timeline";
 import useStore from "../store/use-store";
 import Playhead from "./playhead";
-import {useTheme} from "next-themes";
-import {useCurrentPlayerFrame} from "../hooks/use-current-frame";
+import { useTheme } from "next-themes";
+import { useCurrentPlayerFrame } from "../hooks/use-current-frame";
 import {
   Audio,
   Caption,
@@ -21,15 +21,15 @@ import {
   WaveAudioBars,
 } from "./items";
 import StateManager from "@designcombo/state";
-import {TIMELINE_OFFSET_CANVAS_LEFT, TIMELINE_OFFSET_CANVAS_RIGHT} from "../constants/constants";
+import { TIMELINE_OFFSET_CANVAS_LEFT, TIMELINE_OFFSET_CANVAS_RIGHT } from "../constants/constants";
 import PreviewTrackItem from "./items/preview-drag-item";
-import {useTimelineOffsetX} from "../hooks/use-timeline-offset";
-import {useStateManagerEvents} from "../hooks/use-state-manager-events";
-import {useResizbleTimeline} from "../hooks/use-resizable-timeline";
+import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
+import { useStateManagerEvents } from "../hooks/use-state-manager-events";
+import { useResizbleTimeline } from "../hooks/use-resizable-timeline";
 import "./items/transitions/transition-render";
-import {patchTransitionGuideRender} from "@/features/editor/timeline/items/transitions/transition-guide-render";
-import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
-import {patchTransitionZOrder} from "@/features/editor/timeline/items/transitions/transition-z-order";
+import { patchTransitionGuideRender } from "@/features/editor/timeline/items/transitions/transition-guide-render";
+import { scrollTimelineToFrame } from "@/features/editor/utils/timeline-scroll";
+import { patchTransitionZOrder } from "@/features/editor/timeline/items/transitions/transition-z-order";
 import {
   broadcastLiveTransform,
   clearLiveTransform,
@@ -42,13 +42,13 @@ import {
   RemoteActiveEditor,
   LiveTransformState, subscribeToRemoteWorkingInside
 } from "../collab/live-transform";
-import {FabricText, Path, Rect} from "fabric";
+import { FabricText, Path, Rect } from "fabric";
 import Scene from "./items/ensemble-scene";
-import {syncCanvasTransitions} from "@/features/editor/timeline/items/transitions/sync-canvas-transitions";
+import { syncCanvasTransitions } from "@/features/editor/timeline/items/transitions/sync-canvas-transitions";
 import { patchTransitionRenderPositioning } from "./items/transitions/transition-position-patch";
-import {dispatch} from "@designcombo/events";
-import {PLAYER_PAUSE} from "@/features/editor/constants/events";
-import {canOpenScene} from "@/features/editor/utils/scene-access";
+import { dispatch } from "@designcombo/events";
+import { PLAYER_PAUSE } from "@/features/editor/constants/events";
+import { canOpenScene } from "@/features/editor/utils/scene-access";
 
 CanvasTimeline.registerItems({
   Text,
@@ -177,7 +177,18 @@ const Timeline = ({ stateManager, readOnly = false }: { stateManager: StateManag
   const canvasElRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<CanvasTimeline | null>(null);
   const horizontalScrollbarVpRef = useRef<HTMLDivElement>(null);
-  const { scale, playerRef, fps, duration, setState, timeline, collabSchema, activeIds, trackItemsMap, transitionsMap } = useStore();
+  const {
+    scale,
+    playerRef,
+    fps,
+    duration,
+    setState,
+    timeline,
+    collabSchema,
+    activeIds,
+    trackItemsMap,
+    transitionsMap
+  } = useStore();
   const currentFrame = useCurrentPlayerFrame(playerRef);
   const [canvasSize, setCanvasSize] = useState(EMPTY_SIZE);
 
@@ -602,7 +613,7 @@ const Timeline = ({ stateManager, readOnly = false }: { stateManager: StateManag
       const { collabSchema } = useStore.getState();
       if (collabSchema) clearSelection(collabSchema.awareness);
     });
-    
+
     return () => {
       unsubscribeTransitionZOrder();
       canvas.purge();
@@ -1092,7 +1103,10 @@ const Timeline = ({ stateManager, readOnly = false }: { stateManager: StateManag
 
       nextIds.forEach((id) => {
         const t = resetTimers.get(id);
-        if (t) { clearTimeout(t); resetTimers.delete(id); }
+        if (t) {
+          clearTimeout(t);
+          resetTimers.delete(id);
+        }
         applyPatch(id, merged[id]);
       });
 

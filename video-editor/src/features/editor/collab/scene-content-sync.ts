@@ -1,5 +1,5 @@
 import { CollabSchema, readStateFromDoc } from "./ydoc-schema";
-import {isSceneItem, DEFAULT_SCENE_DURATION_MS, SceneRenderContent, ISceneDetails} from "../types/ensemble-scene";
+import { isSceneItem, DEFAULT_SCENE_DURATION_MS, SceneRenderContent, ISceneDetails } from "../types/ensemble-scene";
 
 export const DURATION_SYNC_INTERVAL_MS = 400;
 

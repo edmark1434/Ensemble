@@ -12,14 +12,14 @@ export interface SceneControlsProps {
 }
 
 export const SceneControls = ({
-                                name,
-                                onNameCommit,
-                                size,
-                                onSizeCommit,
-                                background,
-                                onBackgroundChange,
-                                disabled = false,
-                              }: SceneControlsProps) => {
+  name,
+  onNameCommit,
+  size,
+  onSizeCommit,
+  background,
+  onBackgroundChange,
+  disabled = false,
+}: SceneControlsProps) => {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">

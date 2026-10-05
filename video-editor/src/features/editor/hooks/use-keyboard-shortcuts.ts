@@ -1,4 +1,4 @@
-import {useEffect, useRef} from "react";
+import { useEffect, useRef } from "react";
 import { dispatch } from "@designcombo/events";
 import StateManager, {
   ACTIVE_SPLIT,
@@ -10,12 +10,12 @@ import StateManager, {
 import { buildSelectionSnapshot, cloneIntoNewTracks, setClipboard, getClipboard } from "../utils/item-actions";
 import { getCurrentTime } from "../utils/time";
 import useStore from "../store/use-store";
-import {timeMsToUnits} from "@designcombo/timeline";
-import {ITimelineScaleState} from "@designcombo/types";
-import {getFitZoomLevel, getNextZoomLevel, getPreviousZoomLevel} from "@/features/editor/utils/timeline";
-import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
-import {TIMELINE_OFFSET_CANVAS_LEFT} from "@/features/editor/constants/constants";
-import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
+import { timeMsToUnits } from "@designcombo/timeline";
+import { ITimelineScaleState } from "@designcombo/types";
+import { getFitZoomLevel, getNextZoomLevel, getPreviousZoomLevel } from "@/features/editor/utils/timeline";
+import { useTimelineOffsetX } from "@/features/editor/hooks/use-timeline-offset";
+import { TIMELINE_OFFSET_CANVAS_LEFT } from "@/features/editor/constants/constants";
+import { scrollTimelineToFrame } from "@/features/editor/utils/timeline-scroll";
 import type * as Y from "yjs";
 import {
   makeSceneTrackItem,
@@ -24,7 +24,7 @@ import {
   SCENE_TYPE,
   ISceneTrackItem,
 } from "../types/ensemble-scene";
-import {PLAYER_PAUSE} from "@/features/editor/constants/events";
+import { PLAYER_PAUSE } from "@/features/editor/constants/events";
 
 export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y.UndoManager, viewOnly?: boolean) {
   const viewOnlyRef = useRef(viewOnly);
@@ -407,7 +407,16 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       // add scene
       if (!viewOnlyRef.current && !mod && !e.shiftKey && e.code === "KeyS") {
         e.preventDefault();
-        const { activeIds, trackItemsMap, trackItemIds, tracks, duration, activeSceneBlockId, projectId, size } = useStore.getState();
+        const {
+          activeIds,
+          trackItemsMap,
+          trackItemIds,
+          tracks,
+          duration,
+          activeSceneBlockId,
+          projectId,
+          size
+        } = useStore.getState();
         if (activeSceneBlockId) return;
         const activeItems = activeIds.map((id) => trackItemsMap[id]).filter(Boolean);
         if (activeItems.some((item) => isSceneItem(item.type))) return;

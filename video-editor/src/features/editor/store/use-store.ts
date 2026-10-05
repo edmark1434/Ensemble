@@ -12,12 +12,12 @@ import {
 import { Moveable } from "@interactify/toolkit";
 import { PlayerRef } from "@remotion/player";
 import { create } from "zustand";
-import {TIMELINE_ZOOM_LEVELS} from "@/features/editor/constants/scale";
-import {nanoid} from "nanoid";
+import { TIMELINE_ZOOM_LEVELS } from "@/features/editor/constants/scale";
+import { nanoid } from "nanoid";
 import StateManager from "@designcombo/state";
 import * as Y from "yjs";
 import { CollabSchema, markerToY } from "../collab/ydoc-schema";
-import {RemoteActiveEditor} from "@/features/editor/collab/live-transform";
+import { RemoteActiveEditor } from "@/features/editor/collab/live-transform";
 
 interface ITimelineStore {
   duration: number;
@@ -88,8 +88,8 @@ interface ITimelineStore {
   openScene: (blockId: string, itemId: string, name?: string) => void;
   closeScene: () => void;
 
-  saveStatus?: "saved"|"saving"|"error";
-  compactStatus?: "idle"|"compacting"|"error";
+  saveStatus?: "saved" | "saving" | "error";
+  compactStatus?: "idle" | "compacting" | "error";
 
   workingInsideByItemId: Map<string, RemoteActiveEditor[]>;
   setWorkingInsideByItemId: (map: Map<string, RemoteActiveEditor[]>) => void;

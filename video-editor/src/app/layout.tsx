@@ -45,24 +45,24 @@ export default async function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistMono.variable} ${geist.variable} ${plusJakartaSans.variable} antialiased font-sans bg-muted`}
-      >
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          // enableSystem
-          disableTransitionOnChange
-        >
-          <QueryProvider>
-            {children}
-            <StoreInitializer />
-            <BackgroundUploadRunner />
-            <Toaster />
-          </QueryProvider>
-          <Analytics />
-        </ThemeProvider>
-      </body>
+    <body
+      className={`${geistMono.variable} ${geist.variable} ${plusJakartaSans.variable} antialiased font-sans bg-muted`}
+    >
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="dark"
+      // enableSystem
+      disableTransitionOnChange
+    >
+      <QueryProvider>
+        {children}
+        <StoreInitializer />
+        <BackgroundUploadRunner />
+        <Toaster />
+      </QueryProvider>
+      <Analytics />
+    </ThemeProvider>
+    </body>
     </html>
   );
 }

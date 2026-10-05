@@ -33,11 +33,11 @@ import { LogoIcons } from "@/components/shared/logos";
 import Link from "next/link";
 import { ShortcutsModal } from "./shortcuts-modal";
 import { ModeToggle } from "@/components/ui/mode-toggle";
-import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
-import {Input} from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Input } from "@/components/ui/input";
 import useStore from "./store/use-store";
-import {Kbd, KbdGroup} from "@/components/ui/kbd";
-import {cn} from "@/lib/utils";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
+import { cn } from "@/lib/utils";
 import type * as Y from "yjs";
 
 import {
@@ -47,9 +47,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import ShareModal from "@/components/share-modal";
-import {useViewOnly} from "@/features/editor/hooks/use-view-only";
-import {useProjectRole} from "@/features/editor/hooks/use-project-role";
-import {canEditWithRole, canManageSharing} from "@/features/editor/types/editor-role";
+import { useViewOnly } from "@/features/editor/hooks/use-view-only";
+import { useProjectRole } from "@/features/editor/hooks/use-project-role";
+import { canEditWithRole, canManageSharing } from "@/features/editor/types/editor-role";
 
 export default function Navbar({
   user,
@@ -154,13 +154,15 @@ export default function Navbar({
       <div className="flex items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <div className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-md invert dark:invert-0 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+            <div
+              className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-md invert dark:invert-0 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
               <LogoIcons.ensemble />
             </div>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-48 ml-2 mt-1 z-[100]">
             <DropdownMenuItem asChild className="cursor-pointer">
-              <a href={process.env.MAIN_APP_URL ? `${process.env.MAIN_APP_URL}/projects` : 'https://ensemble.software/projects'}>
+              <a
+                href={process.env.MAIN_APP_URL ? `${process.env.MAIN_APP_URL}/projects` : 'https://ensemble.software/projects'}>
                 Return to Projects
               </a>
             </DropdownMenuItem>

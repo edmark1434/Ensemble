@@ -10,6 +10,7 @@ class LinealAudioBars extends Resizable {
   public backgroundColorDiv: string = "#808080";
 
   public hasSrc = true;
+
   constructor(props: LinealAudioBarsProps) {
     super(props);
     this.id = props.id;

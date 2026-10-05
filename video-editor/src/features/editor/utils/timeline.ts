@@ -18,6 +18,7 @@ export function getPreviousZoomLevel(
 export function getZoomByIndex(index: number) {
   return TIMELINE_ZOOM_LEVELS[index];
 }
+
 export function getNextZoomLevel(
   currentZoom: ITimelineScaleState
 ): ITimelineScaleState {
@@ -112,17 +113,17 @@ export const getNextZoom = (
 // }
 
 export function getFitZoomLevel(
-    totalLengthMs: number,
-    zoom = 1,
-    scrollOffset = 8
+  totalLengthMs: number,
+  zoom = 1,
+  scrollOffset = 8
 ): ITimelineScaleState {
   const getVisibleWidth = () => {
     const clampedScrollOffset = Math.max(0, scrollOffset);
     const timelineCanvas = document.getElementById(
-        "designcombo-timeline-canvas"
+      "designcombo-timeline-canvas"
     ) as HTMLElement;
     const offsetWidth =
-        timelineCanvas?.offsetWidth ?? document.body.offsetWidth;
+      timelineCanvas?.offsetWidth ?? document.body.offsetWidth;
     return Math.max(1, offsetWidth - clampedScrollOffset);
   };
 
@@ -133,13 +134,13 @@ export function getFitZoomLevel(
 
   // Find the largest preset zoom that still fits the whole timeline
   const fittingLevels = TIMELINE_ZOOM_LEVELS.filter(
-      (level) => level.zoom <= targetZoom
+    (level) => level.zoom <= targetZoom
   );
 
   if (fittingLevels.length === 0) return TIMELINE_ZOOM_LEVELS[0];
 
   return fittingLevels.reduce((best, curr) =>
-      curr.zoom > best.zoom ? curr : best
+    curr.zoom > best.zoom ? curr : best
   );
 }
 

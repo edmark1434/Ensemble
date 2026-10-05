@@ -3,8 +3,8 @@ import { CollabSchema, createCollabSchema } from "./ydoc-schema";
 import { attachWsProvider } from "./ws-provider";
 import { createSession, endSession, attachPersistence } from "./persistence";
 import type { CollabTarget } from "./collab-target";
-import {ISceneDetails} from "@/features/editor/types/ensemble-scene";
-import {applySceneDetailsPatch} from "@/features/editor/collab/scene-content-sync";
+import { ISceneDetails } from "@/features/editor/types/ensemble-scene";
+import { applySceneDetailsPatch } from "@/features/editor/collab/scene-content-sync";
 
 const CONNECT_TIMEOUT_MS = 4000;
 

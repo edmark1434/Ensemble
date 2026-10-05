@@ -4,7 +4,7 @@ import Outline from "./common/outline";
 import Shadow from "./common/shadow";
 import AspectRatio from "./common/aspect-ratio";
 import { Button } from "@/components/ui/button";
-import {Crop, Eye, Lock} from "lucide-react";
+import { Crop, Eye, Lock } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { dispatch } from "@designcombo/events";
 import { EDIT_OBJECT } from "@designcombo/state";
@@ -13,8 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Animations } from "./common/animations";
 import { Appearance } from "@/features/editor/control-item/common/appearance";
 import { LayoutControls } from "@/features/editor/control-item/common/layout";
-import {LayoutMediaControls} from "@/features/editor/control-item/common/layout-media";
-import {useViewOnly} from "@/features/editor/hooks/use-view-only";
+import { LayoutMediaControls } from "@/features/editor/control-item/common/layout-media";
+import { useViewOnly } from "@/features/editor/hooks/use-view-only";
 
 interface IImageControlProps {
   opacity: number;

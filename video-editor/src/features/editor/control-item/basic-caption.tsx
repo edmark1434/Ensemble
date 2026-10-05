@@ -12,16 +12,16 @@ import CaptionColors from "./common/caption-colors";
 import { TextControls } from "./common/text";
 import { Animation, presets } from "../player/animated";
 import { PresetName } from "../player/animated/presets";
-import {Eye, Lock, X} from "lucide-react";
+import { Eye, Lock, X } from "lucide-react";
 import { ICompactFont, IFont } from "../interfaces/editor";
 import { DEFAULT_FONT } from "../constants/font";
 import { PresetCaption } from "./common/preset-caption";
 import AnimationCaption from "./common/animation-caption";
-import {LayoutControls} from "@/features/editor/control-item/common/layout";
-import {CaptionDimensionsSync} from "@/features/editor/control-item/common/caption-dimensions-sync";
-import {Appearance} from "@/features/editor/control-item/common/appearance";
-import {useViewOnly} from "@/features/editor/hooks/use-view-only";
-import {fetchAllFontItems, getDefaultFont, itemToFonts} from "@/features/editor/utils/fetch-google-fonts";
+import { LayoutControls } from "@/features/editor/control-item/common/layout";
+import { CaptionDimensionsSync } from "@/features/editor/control-item/common/caption-dimensions-sync";
+import { Appearance } from "@/features/editor/control-item/common/appearance";
+import { useViewOnly } from "@/features/editor/hooks/use-view-only";
+import { fetchAllFontItems, getDefaultFont, itemToFonts } from "@/features/editor/utils/fetch-google-fonts";
 
 interface ITextControlProps {
   color: string;
@@ -143,9 +143,9 @@ const getPropertiesFromDetails = (
 };
 
 const BasicCaption = ({
-                        trackItem,
-                        type
-                      }: {
+  trackItem,
+  type
+}: {
   trackItem: ITrackItem & ICaption;
   type?: string;
 }) => {

@@ -1,15 +1,15 @@
 // animation-preview/text/preview-scene
 
-import React, {useEffect, useMemo, useRef, useState} from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Player } from "@remotion/player";
-import {AbsoluteFill, useCurrentFrame} from "remotion";
+import { AbsoluteFill, useCurrentFrame } from "remotion";
 import { BoxAnim } from "@designcombo/animations";
 import { TextAnimated } from "../../../../player/animated/text-animated";
 import { presets, PresetName } from "../../../../player/animated/presets";
 import { createPreviewTrackItem } from "./preview-data";
 import { isCustomTextAnimation } from "./preview-dispatch";
 import { getSlideAnimation } from "../../../../utils/get-animations";
-import {getTextColorStyle} from "@/features/editor/player/styles";
+import { getTextColorStyle } from "@/features/editor/player/styles";
 
 const HOLD_FRAMES = 20;
 const PREVIEW_W = 140;

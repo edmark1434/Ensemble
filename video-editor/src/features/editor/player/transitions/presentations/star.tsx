@@ -6,6 +6,7 @@ import type {
 } from "..";
 import React, { useMemo, useState } from "react";
 import { AbsoluteFill, random } from "remotion";
+
 export type CustomPresentationProps = {
   width: number;
   height: number;

@@ -1,11 +1,11 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { IAudio, ITrackItem } from "@designcombo/types";
-import React, {useEffect, useState} from "react";
+import React, { useEffect, useState } from "react";
 import { dispatch } from "@designcombo/events";
 import { EDIT_OBJECT } from "@designcombo/state";
-import {Eye, Lock} from "lucide-react";
+import { Eye, Lock } from "lucide-react";
 import { PlaybackControls } from "./common/playback";
-import {useViewOnly} from "@/features/editor/hooks/use-view-only";
+import { useViewOnly } from "@/features/editor/hooks/use-view-only";
 
 const BasicAudio = ({
   trackItem,

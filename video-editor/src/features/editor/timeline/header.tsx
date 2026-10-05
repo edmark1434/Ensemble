@@ -32,12 +32,12 @@ import { useCurrentPlayerFrame } from "../hooks/use-current-frame";
 import { Slider } from "@/components/ui/slider";
 import { useEffect, useState } from "react";
 import useUpdateAnsestors from "../hooks/use-update-ansestors";
-import {ITimelineScaleState, ITrackItem} from "@designcombo/types";
+import { ITimelineScaleState, ITrackItem } from "@designcombo/types";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
 import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
-import {timeMsToUnits} from "@designcombo/timeline";
-import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
-import {Kbd, KbdGroup} from "@/components/ui/kbd";
+import { timeMsToUnits } from "@designcombo/timeline";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import {
   makeSceneTrackItem,
   makeSceneTrack,
@@ -53,32 +53,34 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import {PLAYER_PAUSE} from "@/features/editor/constants/events";
-import {useViewOnly} from "@/features/editor/hooks/use-view-only";
+import { PLAYER_PAUSE } from "@/features/editor/constants/events";
+import { useViewOnly } from "@/features/editor/hooks/use-view-only";
 
 const IconAddMarker = ({ size }: { size: number }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 2.5 24 24" fill="none" stroke="currentColor"
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 2.5 24 24" fill="none"
+       stroke="currentColor"
        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-tag-icon lucide-tag">
     <g transform="rotate(225 12 12)">
       <path
-        d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/>
+        d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
     </g>
   </svg>
 );
 const IconRemoveMarker = ({ size }: { size: number }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 2.5 24 24" fill="none" stroke="currentColor"
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 2.5 24 24" fill="none"
+       stroke="currentColor"
        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
        className="lucide lucide-tag-plus-icon lucide-tag-plus">
     <g transform="scale(-1 1) translate(-24 0) rotate(225 12 12)">
       <path
-        d="m16.5 6.5-3.914-3.914A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l1.79-1.79"/>
-      <path d="M15 13h8"/>
-      <path d="M19 9v8"/>
+        d="m16.5 6.5-3.914-3.914A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l1.79-1.79" />
+      <path d="M15 13h8" />
+      <path d="M19 9v8" />
     </g>
   </svg>
 );
 
-const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
+const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
   toggleFullHeight: () => void;
   timelineHeight: number;
   stateManager: StateManager;
@@ -107,7 +109,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
   const isLargeScreen = useIsLargeScreen();
   const viewOnly = useViewOnly();
 
-  useUpdateAnsestors({playing, playerRef});
+  useUpdateAnsestors({ playing, playerRef });
 
   const currentFrame = useCurrentPlayerFrame(playerRef);
   const timelineOffsetX = useTimelineOffsetX();
@@ -724,7 +726,8 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                             </button>
                           </BreadcrumbLink>
                         </TooltipTrigger>
-                        <TooltipContent side="bottom" align="center" sideOffset={1} className={"flex gap-2 items-center"}>
+                        <TooltipContent side="bottom" align="center" sideOffset={1}
+                                        className={"flex gap-2 items-center"}>
                           {isSaving ? "Saving…" : (<>Go home <Kbd>H</Kbd></>)}
                         </TooltipContent>
                       </Tooltip>

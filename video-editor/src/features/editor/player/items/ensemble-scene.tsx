@@ -116,12 +116,12 @@ export const Scene = ({ item, options }: { item: ISceneTrackItem; options: Seque
 };
 
 const SceneContentLayer = ({
-                             content,
-                             fps,
-                             volume,
-                             outerWidth,
-                             outerHeight
-                           }: {
+  content,
+  fps,
+  volume,
+  outerWidth,
+  outerHeight
+}: {
   content: SceneRenderContent;
   fps: number;
   volume?: number;

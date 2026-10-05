@@ -6,7 +6,7 @@ import { dispatch } from "@designcombo/events";
 import { ADD_ANIMATION, EDIT_OBJECT } from "@designcombo/state";
 import React, { useEffect, useState } from "react";
 import { IBoxShadow, ITrackItem } from "@designcombo/types";
-import {Eye, Group, Lock, X} from "lucide-react";
+import { Eye, Group, Lock, X } from "lucide-react";
 import Outline from "./common/outline";
 import Shadow from "./common/shadow";
 import { TextControls } from "./common/text";
@@ -22,7 +22,7 @@ import { DEFAULT_FONT } from "../constants/font";
 import { Appearance } from "@/features/editor/control-item/common/appearance";
 import { LayoutGroup } from "@/features/editor/control-item/common/layout-group";
 import PlaybackControls from "@/features/editor/control-item/common/playback";
-import {useViewOnly} from "@/features/editor/hooks/use-view-only";
+import { useViewOnly } from "@/features/editor/hooks/use-view-only";
 
 interface ITransitionLike {
   id: string;

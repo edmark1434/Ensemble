@@ -8,7 +8,7 @@ import { calculateTextHeight } from "../utils/text";
 import { getBackgroundFillStyle } from "./styles";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import useStore from "../store/use-store";
-import {renderVisibleItems} from "@/features/editor/player/render-visible-items";
+import { renderVisibleItems } from "@/features/editor/player/render-visible-items";
 
 const Composition = () => {
   const [editableTextId, setEditableTextId] = useState<string | null>(null);

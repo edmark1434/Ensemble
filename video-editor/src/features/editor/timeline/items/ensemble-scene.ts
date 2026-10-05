@@ -1,7 +1,7 @@
 // features/editor/timeline/items/ensemble-scene.ts
 
 import { Resizable, ResizableProps, Control, timeMsToUnits } from "@designcombo/timeline";
-import {DEFAULT_SCENE_DURATION_MS} from "@/features/editor/types/ensemble-scene";
+import { DEFAULT_SCENE_DURATION_MS } from "@/features/editor/types/ensemble-scene";
 
 interface SceneProps extends ResizableProps {
   hidden: boolean;

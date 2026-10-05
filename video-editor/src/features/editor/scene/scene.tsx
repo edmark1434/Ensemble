@@ -1,5 +1,5 @@
 import { Player } from "../player";
-import {useRef, useImperativeHandle, forwardRef, useEffect} from "react";
+import { useRef, useImperativeHandle, forwardRef, useEffect } from "react";
 import useStore from "../store/use-store";
 import StateManager from "@designcombo/state";
 import SceneEmpty from "./empty";

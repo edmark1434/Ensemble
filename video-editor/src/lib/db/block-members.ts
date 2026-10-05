@@ -7,7 +7,7 @@ import {
   BlockPerson,
   BlockRole, GeneralAccessLevel, minRole,
 } from "@/features/editor/types/block-members";
-import {StoredProjectRole, toEditorRole} from "@/features/editor/types/editor-role";
+import { StoredProjectRole, toEditorRole } from "@/features/editor/types/editor-role";
 
 type PersonRow = {
   user_id: string;
@@ -271,11 +271,11 @@ export type AddBlockMemberResult =
   | "already_member";
 
 export async function addBlockMember({
-                                       blockId,
-                                       projectId,
-                                       userId,
-                                       role,
-                                     }: {
+  blockId,
+  projectId,
+  userId,
+  role,
+}: {
   blockId: string;
   projectId: string;
   userId: string;
@@ -350,9 +350,9 @@ export async function updateBlockMemberRole({ blockId, projectId, userId, role }
 
 /** Soft delete, same as the rest of the schema. The Owner can't be removed. */
 export async function removeBlockMember({
-                                          blockId,
-                                          userId,
-                                        }: {
+  blockId,
+  userId,
+}: {
   blockId: string;
   userId: string;
 }): Promise<boolean> {

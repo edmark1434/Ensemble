@@ -2,9 +2,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { SceneControls } from "./common/scene-controls";
 import { patchBlock } from "./common/composition-controls";
 import useStore from "../store/use-store";
-import {patchProjectSceneDetails} from "@/features/editor/collab/remote-patch";
-import {useViewOnly} from "@/features/editor/hooks/use-view-only";
-import {Eye} from "lucide-react";
+import { patchProjectSceneDetails } from "@/features/editor/collab/remote-patch";
+import { useViewOnly } from "@/features/editor/hooks/use-view-only";
+import { Eye } from "lucide-react";
 import React from "react";
 
 const BasicScene = () => {

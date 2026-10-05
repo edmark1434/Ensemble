@@ -1,6 +1,6 @@
 // app/api/uploads/url/route.ts
 
-import {connection, NextRequest, NextResponse} from "next/server";
+import { connection, NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import {
   buildPublicUrl,
@@ -9,9 +9,9 @@ import {
   uploadBufferToS3
 } from "@/lib/s3";
 import { db } from "@/lib/db";
-import {probeAudioVideoDuration, probeImageDimensions, probeVideoMetadata} from "@/utils/media-probe";
+import { probeAudioVideoDuration, probeImageDimensions, probeVideoMetadata } from "@/utils/media-probe";
 import { resolveUniqueFileName } from "@/utils/resolve-unique-filename";
-import {MAX_FILE_SIZE_BYTES} from "@/constants/upload-limits";
+import { MAX_FILE_SIZE_BYTES } from "@/constants/upload-limits";
 
 interface UrlEntry {
   url: string;

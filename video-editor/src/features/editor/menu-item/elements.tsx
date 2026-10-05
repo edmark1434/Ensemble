@@ -28,10 +28,12 @@ type ActiveAllState = {
   type: string | null;
   all: string | null;
 };
+
 interface ControlAllItemsProps {
   type: ActiveAllState;
   handleAllClick: (type: string | null, all: string | null) => void;
 }
+
 const TAGS = [
   {
     id: "stickers",
@@ -278,7 +280,8 @@ export const Elements = () => {
               </div>
 
               <div className="flex flex-col">
-                <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold justify-between">
+                <div
+                  className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold justify-between">
                   <div>Stickers</div>
                   <div
                     className="text-xs text-muted-foreground flex cursor-pointer"
@@ -299,7 +302,8 @@ export const Elements = () => {
 
               {/* section shapes */}
               <div className="flex flex-col">
-                <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold justify-between">
+                <div
+                  className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold justify-between">
                   <div>Shapes</div>
                   <div
                     className="text-xs text-muted-foreground flex cursor-pointer"
@@ -319,7 +323,8 @@ export const Elements = () => {
 
               {/* section visualizers */}
               <div className="flex flex-col">
-                <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold justify-between">
+                <div
+                  className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold justify-between">
                   <div>Visualizers</div>
                   <div
                     className="text-xs text-muted-foreground flex cursor-pointer"
@@ -340,7 +345,8 @@ export const Elements = () => {
 
               {/* section visualizers */}
               <div className="flex flex-col">
-                <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold justify-between">
+                <div
+                  className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold justify-between">
                   <div>Progress Bars</div>
                   <div
                     className="text-xs text-muted-foreground flex cursor-pointer"

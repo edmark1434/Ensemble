@@ -1,6 +1,6 @@
 // app/auth-error/page.tsx
 
-import {RedirectCountdown} from "@/components/redirect-countdown";
+import { RedirectCountdown } from "@/components/redirect-countdown";
 
 export default function AuthErrorPage() {
   return (

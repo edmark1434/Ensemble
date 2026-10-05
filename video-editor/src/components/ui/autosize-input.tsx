@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import {cn} from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 const sizerStyle: React.CSSProperties = {
   position: "absolute",
@@ -161,10 +161,10 @@ const AutosizeInput: React.FC<AutosizeInputProps> = (props) => {
       <input
         {...cleanInputProps(rest)}
         className={cn(
-            "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground bg-transparent dark:hover:bg-input/30 dark:focus:bg-input/30 border border-transparent hover:border-input focus:border-input flex h-9 w-full min-w-0 rounded-md px-3 text-base hover:shadow-xs focus:shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm font-normal file:font-normal disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
-            "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
-            "aria-invalid:ring-red-500/20 dark:aria-invalid:ring-red-500/40 aria-invalid:border-red-500",
-            inputClassName
+          "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground bg-transparent dark:hover:bg-input/30 dark:focus:bg-input/30 border border-transparent hover:border-input focus:border-input flex h-9 w-full min-w-0 rounded-md px-3 text-base hover:shadow-xs focus:shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm font-normal file:font-normal disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+          "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+          "aria-invalid:ring-red-500/20 dark:aria-invalid:ring-red-500/40 aria-invalid:border-red-500",
+          inputClassName
         )}
         id={inputId}
         value={value}

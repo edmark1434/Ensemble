@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
-import {getBlockProjectId, updateBlock} from "@/lib/db/blocks";
+import { getBlockProjectId, updateBlock } from "@/lib/db/blocks";
 import {
   addBlockMember,
   getBlockAccess,
@@ -16,7 +16,7 @@ import {
   ASSIGNABLE_BLOCK_ROLES,
   type AssignableBlockRole, GENERAL_ACCESS_LEVELS, GeneralAccessLevel,
 } from "@/features/editor/types/block-members";
-import {recheckRoom} from "@/lib/collab/access-recheck";
+import { recheckRoom } from "@/lib/collab/access-recheck";
 
 type Ctx = { params: Promise<{ id: string }> };
 

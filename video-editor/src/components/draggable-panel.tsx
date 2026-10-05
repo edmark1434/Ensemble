@@ -15,13 +15,13 @@ interface DraggablePanelProps {
 }
 
 export function DraggablePanel({
-                                 title,
-                                 onClose,
-                                 children,
-                                 className,
-                                 anchorRef,
-                                 anchorGap = 16
-                               }: DraggablePanelProps) {
+  title,
+  onClose,
+  children,
+  className,
+  anchorRef,
+  anchorGap = 16
+}: DraggablePanelProps) {
   const nodeRef = useRef<HTMLDivElement>(null);
   const { offset, setOffset, dragHandleProps } = useDraggable(nodeRef);
 

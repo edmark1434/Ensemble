@@ -24,12 +24,12 @@ interface PresetGridProps {
 }
 
 const PresetGrid = ({
-                      presets,
-                      captionItemIds,
-                      captionsData,
-                      matchedPreset,
-                      onPresetClick
-                    }: PresetGridProps) => (
+  presets,
+  captionItemIds,
+  captionsData,
+  matchedPreset,
+  onPresetClick
+}: PresetGridProps) => (
   <div className="grid grid-cols-2 gap-2 pb-4">
     <div
       onClick={() => onPresetClick(NONE_PRESET, captionItemIds, captionsData)}
@@ -58,7 +58,8 @@ const PresetGrid = ({
           )}
         >
           <LazyCaptionStylePresetPreview preset={preset} />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+          <div
+            className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
             <div className="rounded-full p-1" />
           </div>
         </div>
@@ -80,12 +81,12 @@ interface PresetPickerProps {
 }
 
 export const PresetPicker = ({
-                               captionItemIds,
-                               captionsData,
-                               currentDetails,
-                               onPresetClick,
-                               className = ""
-                             }: PresetPickerProps) => {
+  captionItemIds,
+  captionsData,
+  currentDetails,
+  onPresetClick,
+  className = ""
+}: PresetPickerProps) => {
   const wordPresets = STYLE_CAPTION_PRESETS.filter((preset) => preset.type === "word");
   const linePresets = STYLE_CAPTION_PRESETS.filter((preset) => preset.type !== "word");
   const matchedPreset = useMemo(

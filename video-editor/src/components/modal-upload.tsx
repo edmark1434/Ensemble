@@ -12,9 +12,9 @@ import { AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import useUploadStore from "@/features/editor/store/use-upload-store";
 import { Input } from "./ui/input";
-import {useIsLargeScreen, useIsMediumScreen} from "@/hooks/use-media-query";
+import { useIsLargeScreen, useIsMediumScreen } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
-import {MAX_FILE_COUNT, MAX_FILE_SIZE_BYTES } from "@/constants/upload-limits";
+import { MAX_FILE_COUNT, MAX_FILE_SIZE_BYTES } from "@/constants/upload-limits";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
 import { formatFileSize } from "@/features/editor/hooks/use-file-drop-upload";
 
@@ -503,7 +503,7 @@ const ModalUpload: React.FC<ModalUploadProps> = ({ type = "all" }) => {
       thumbnailNode:
         entry.kind === "audio" ? (
           <div className={iconWrapClass}>
-            <Music className={iconClass}/>
+            <Music className={iconClass} />
           </div>
         ) : entry.thumbnail ? (
           <img
@@ -512,13 +512,13 @@ const ModalUpload: React.FC<ModalUploadProps> = ({ type = "all" }) => {
             className={thumbClass}
             onError={() =>
               setUrlEntries((prev) =>
-                prev.map((u) => (u.id === entry.id ? {...u, thumbnail: null} : u))
+                prev.map((u) => (u.id === entry.id ? { ...u, thumbnail: null } : u))
               )
             }
           />
         ) : (
           <div className={iconWrapClass}>
-            <Link2 className={iconClass}/>
+            <Link2 className={iconClass} />
           </div>
         )
     };

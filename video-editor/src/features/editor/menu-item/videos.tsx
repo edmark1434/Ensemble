@@ -4,16 +4,16 @@ import { dispatch } from "@designcombo/events";
 import { ADD_VIDEO } from "@designcombo/state";
 import { generateId } from "@designcombo/timeline";
 import { IVideo } from "@designcombo/types";
-import React, {useState, useEffect, useRef, useMemo} from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useIsDraggingOverTimeline } from "../hooks/is-dragging-over-timeline";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Loader2, PlusIcon } from "lucide-react";
 import { usePexelsVideos } from "@/hooks/use-pexels-videos";
 import { ImageLoading } from "@/components/ui/image-loading";
-import {getCurrentTime} from "@/features/editor/utils/time";
+import { getCurrentTime } from "@/features/editor/utils/time";
 import useStore from "../store/use-store";
-import {useMasonryRows} from "@/features/editor/hooks/use-masonry-rows";
+import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
 import { millisecondsToHHMMSS } from "../utils/format";
 
 // Shared by both click-to-add and drag-to-add: scales the raw video
@@ -249,10 +249,10 @@ export const Videos = () => {
 };
 
 const VideoItem = ({
-                     handleAddVideo,
-                     video,
-                     shouldDisplayPreview
-                   }: {
+  handleAddVideo,
+  video,
+  shouldDisplayPreview
+}: {
   handleAddVideo: (payload: Partial<IVideo>) => void;
   video: Partial<IVideo>;
   shouldDisplayPreview: boolean;
@@ -305,14 +305,16 @@ const VideoItem = ({
           alt="Video preview"
         />
         {/* Play button overlay */}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
           <div className="rounded-full p-1">
             <PlusIcon className="h-6 w-6 fill-current" />
           </div>
         </div>
         {/* Duration badge */}
         {(video.details as any)?.duration && (
-          <div className="absolute bottom-3 right-2 bg-secondary/90 text-secondary-foreground/90 text-xs px-1 py-0.5 rounded">
+          <div
+            className="absolute bottom-3 right-2 bg-secondary/90 text-secondary-foreground/90 text-xs px-1 py-0.5 rounded">
             {millisecondsToHHMMSS(Math.floor((video.details as any).duration) * 1000)}
           </div>
         )}

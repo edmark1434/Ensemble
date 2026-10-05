@@ -1,18 +1,20 @@
-import {Ban, X} from "lucide-react";
+import { Ban, X } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {ADD_ANIMATION, EDIT_OBJECT} from "@designcombo/state";
+import { ADD_ANIMATION, EDIT_OBJECT } from "@designcombo/state";
 import { dispatch } from "@designcombo/events";
 import useStore from "../../store/use-store";
 import { Animation, presets } from "../../player/animated";
-import React, {useEffect, useMemo, useRef, useState} from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import useLayoutStore from "../../store/use-layout-store";
 import useClickOutside from "../../hooks/use-click-outside";
 import { Easing } from "remotion";
 import { PresetName } from "../../player/animated/presets";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AnimationDuration } from "../common/animation-duration";
-import {cn} from "@/lib/utils";
-import { LazyPresetPreview } from "@/features/editor/control-item/floating-controls/animation-preview/text/preview-scene";
+import { cn } from "@/lib/utils";
+import {
+  LazyPresetPreview
+} from "@/features/editor/control-item/floating-controls/animation-preview/text/preview-scene";
 
 export const createPresetButtons = (
   filter: (key: string) => boolean,
@@ -67,7 +69,8 @@ export const createPresetButtons = (
             )}
           >
             <LazyPresetPreview presetKey={presetKey as PresetName} type={type} />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+            <div
+              className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
               <div className="rounded-full p-1" />
             </div>
           </div>
@@ -217,7 +220,8 @@ export default function AnimationPicker({
 
         <TabsContent value="in">
           <ScrollArea className="h-[400px] w-full px-4">
-            <div className={`grid grid-cols-2 gap-2 ${hasCurrentTabAnimation ? "pb-0" : "pb-4"}`}>{presetInButtons}</div>
+            <div
+              className={`grid grid-cols-2 gap-2 ${hasCurrentTabAnimation ? "pb-0" : "pb-4"}`}>{presetInButtons}</div>
           </ScrollArea>
         </TabsContent>
         {animationType === "text" && (
@@ -229,7 +233,8 @@ export default function AnimationPicker({
         )}
         <TabsContent value="out">
           <ScrollArea className="h-[400px] w-full px-4">
-            <div className={`grid grid-cols-2 gap-2 ${hasCurrentTabAnimation ? "pb-0" : "pb-4"}`}>{presetOutButtons}</div>
+            <div
+              className={`grid grid-cols-2 gap-2 ${hasCurrentTabAnimation ? "pb-0" : "pb-4"}`}>{presetOutButtons}</div>
           </ScrollArea>
         </TabsContent>
       </Tabs>

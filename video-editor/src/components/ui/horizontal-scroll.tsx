@@ -73,12 +73,14 @@ export const HorizontalScroll: React.FC<HorizontalScrollProps> = ({
 
       {/* Left shadow */}
       {showShadows && showLeftShadow && (
-        <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-black/50 via-black/30 to-transparent pointer-events-none z-20" />
+        <div
+          className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-black/50 via-black/30 to-transparent pointer-events-none z-20" />
       )}
 
       {/* Right shadow */}
       {showShadows && showRightShadow && (
-        <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-black/50 via-black/30 to-transparent pointer-events-none z-20" />
+        <div
+          className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-black/50 via-black/30 to-transparent pointer-events-none z-20" />
       )}
 
       {/* Scrollable content */}

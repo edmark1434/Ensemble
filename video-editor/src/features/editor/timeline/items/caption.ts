@@ -70,8 +70,8 @@ class Caption extends Resizable {
 
   public updateSelected(ctx: CanvasRenderingContext2D) {
     const borderColor = this.isSelected
-        ? "rgba(255, 255, 255,1.0)"
-        : "rgba(255, 255, 255,0.05)";
+      ? "rgba(255, 255, 255,1.0)"
+      : "rgba(255, 255, 255,0.05)";
     const borderWidth = 1;
     const innerRadius = 4;
 
@@ -88,11 +88,11 @@ class Caption extends Resizable {
 
     // Create a path for the inner rectangle with rounded corners (the hole)
     ctx.roundRect(
-        -this.width / 2 + borderWidth,
-        -this.height / 2 + borderWidth,
-        this.width - borderWidth * 2,
-        this.height - borderWidth * 2,
-        innerRadius
+      -this.width / 2 + borderWidth,
+      -this.height / 2 + borderWidth,
+      this.width - borderWidth * 2,
+      this.height - borderWidth * 2,
+      innerRadius
     );
 
     // Use even-odd fill rule to create the border effect

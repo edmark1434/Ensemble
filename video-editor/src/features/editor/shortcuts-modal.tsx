@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import {Kbd, KbdGroup} from "@/components/ui/kbd";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import React from "react";

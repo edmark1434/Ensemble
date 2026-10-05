@@ -15,7 +15,7 @@ import {
   getDefaultVideoBitrateKbps,
   getResolutionOptions
 } from "../constants/download-options";
-import useStore, {IBackground} from "@/features/editor/store/use-store";
+import useStore, { IBackground } from "@/features/editor/store/use-store";
 
 export interface RenderPayload extends IDesign {
   projectName: string;
@@ -132,8 +132,8 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
       const bitrate =
         format === "gif" || format === "mov" ? null
           : (type === "video"
-            ? getDefaultVideoBitrateKbps(compositionWidth, compositionHeight, nextResolution, fps)
-            : get().bitrate
+              ? getDefaultVideoBitrateKbps(compositionWidth, compositionHeight, nextResolution, fps)
+              : get().bitrate
           );
       set({ format, resolution: nextResolution, bitrate });
     },
@@ -199,7 +199,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
           headers: {
             "Content-Type": "application/json",
             "x-user-id": useStore.getState().userId
-      },
+          },
           body: JSON.stringify(payload)
         });
 
@@ -236,7 +236,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
           headers: {
             "Content-Type": "application/json",
             "x-user-id": useStore.getState().userId
-      }
+          }
         });
 
         if (!response.ok) return;

@@ -1,7 +1,7 @@
 // lib/db/projects.ts
 
 import { db } from "@/lib/db";
-import {setProjectNameInLiveRoom} from "@/lib/collab/live-rooms";
+import { setProjectNameInLiveRoom } from "@/lib/collab/live-rooms";
 
 const CURSOR_COLORS = ["#F97316", "#3B82F6", "#22C55E", "#EAB308", "#EC4899", "#8B5CF6"];
 

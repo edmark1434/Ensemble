@@ -66,7 +66,8 @@ export function Droppable(props: DroppableProps) {
         >
           <input {...getInputProps()} />
           {isDragActive ? (
-            <div className="flex h-full flex-col items-center justify-center gap-4 border-2 border-dashed border-zinc-600 bg-zinc-900">
+            <div
+              className="flex h-full flex-col items-center justify-center gap-4 border-2 border-dashed border-zinc-600 bg-zinc-900">
               <div className="rounded-full border border-dashed p-3">
                 <PlusIcon
                   className="size-5 text-muted-foreground"

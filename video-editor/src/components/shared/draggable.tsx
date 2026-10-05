@@ -79,20 +79,20 @@ const Draggable: React.FC<DraggableProps> = ({
       {childWithProps}
       {isDragging && shouldDisplayPreview && renderCustomPreview
         ? createPortal(
-            <div
-              style={{
-                position: "fixed",
-                left: position.x,
-                top: position.y,
-                pointerEvents: "none",
-                zIndex: 9999,
-                transform: "translate(-50%, -50%)" // Center the preview
-              }}
-            >
-              {renderCustomPreview}
-            </div>,
-            document.body
-          )
+          <div
+            style={{
+              position: "fixed",
+              left: position.x,
+              top: position.y,
+              pointerEvents: "none",
+              zIndex: 9999,
+              transform: "translate(-50%, -50%)" // Center the preview
+            }}
+          >
+            {renderCustomPreview}
+          </div>,
+          document.body
+        )
         : null}
     </>
   );

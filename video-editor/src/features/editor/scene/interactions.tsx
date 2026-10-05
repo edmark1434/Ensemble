@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Selection, Moveable } from "@interactify/toolkit";
 import { getIdFromClassName } from "../utils/scene";
 import { dispatch } from "@designcombo/events";
@@ -13,9 +13,9 @@ import useStore from "../store/use-store";
 import StateManager from "@designcombo/state";
 import { getCurrentTime } from "../utils/time";
 import { getMinTextDimensions } from "../utils/text";
-import {getMoveableTransform} from "@/features/editor/player/styles";
-import {getMinCaptionDimensions} from "@/features/editor/utils/captions";
-import {foldSkewYIntoScale} from "@/features/editor/utils/matrix-fold";
+import { getMoveableTransform } from "@/features/editor/player/styles";
+import { getMinCaptionDimensions } from "@/features/editor/utils/captions";
+import { foldSkewYIntoScale } from "@/features/editor/utils/matrix-fold";
 import {
   broadcastLiveTransform,
   clearLiveTransform,
@@ -28,9 +28,9 @@ import {
   RemoteActiveEditor,
   LiveTransformState
 } from "../collab/live-transform";
-import {createPortal} from "react-dom";
-import {PLAYER_PAUSE} from "@/features/editor/constants/events";
-import {canOpenScene} from "@/features/editor/utils/scene-access";
+import { createPortal } from "react-dom";
+import { PLAYER_PAUSE } from "@/features/editor/constants/events";
+import { canOpenScene } from "@/features/editor/utils/scene-access";
 
 let holdGroupPosition: Record<string, any> | null = null;
 let groupTextScaleStart: Record<string, {

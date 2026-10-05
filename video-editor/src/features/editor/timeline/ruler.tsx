@@ -9,7 +9,7 @@ import { formatTimelineUnit } from "../utils/format";
 import useStore from "../store/use-store";
 import { debounce } from "lodash";
 import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
-import {timeMsToUnits} from "@designcombo/timeline";
+import { timeMsToUnits } from "@designcombo/timeline";
 
 interface RulerProps {
   height?: number;
@@ -108,9 +108,9 @@ const Ruler = (props: RulerProps) => {
   }, [canvasContext, scrollLeft, scale, timelineOffsetX]);
 
   const resize = (
-      canvas: HTMLCanvasElement | null,
-      context: CanvasRenderingContext2D | null,
-      scrollLeft: number
+    canvas: HTMLCanvasElement | null,
+    context: CanvasRenderingContext2D | null,
+    scrollLeft: number
   ) => {
     if (!canvas || !context) return;
 

@@ -71,18 +71,18 @@ export const Hills: React.FC<HillsProps> = ({
   const { scaling, viewBoxVerticalShift } =
     placement === "over"
       ? {
-          viewBoxVerticalShift: -h,
-          scaling: 1
-        }
+        viewBoxVerticalShift: -h,
+        scaling: 1
+      }
       : placement === "under"
         ? {
-            viewBoxVerticalShift: 0,
-            scaling: 1
-          }
+          viewBoxVerticalShift: 0,
+          scaling: 1
+        }
         : {
-            viewBoxVerticalShift: -0.5 * h,
-            scaling: 0.5
-          };
+          viewBoxVerticalShift: -0.5 * h,
+          scaling: 0.5
+        };
 
   const pad = 0.15;
   const padWidth = pad * w;
@@ -170,10 +170,10 @@ export const Hills: React.FC<HillsProps> = ({
 
 export const HillsVisualization: React.FC<
   Omit<HillsProps, "values"> & {
-    frequencyData: number[];
-    maxDb?: number;
-    minDb?: number;
-  }
+  frequencyData: number[];
+  maxDb?: number;
+  minDb?: number;
+}
 > = ({
   width,
   height,

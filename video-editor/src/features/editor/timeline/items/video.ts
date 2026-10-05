@@ -43,6 +43,7 @@ interface VideoProps extends TrimmableProps {
   hidden: boolean;
   volume: number;
 }
+
 class Video extends Trimmable {
   static type = "Video";
   public clip?: MP4ClipType | null;
@@ -222,7 +223,7 @@ class Video extends Trimmable {
       1 +
       Math.round(
         (widthOnScreen + leftBacklogSize + rightBacklogSize) /
-          this.thumbnailWidth
+        this.thumbnailWidth
       );
 
     return {
@@ -337,6 +338,7 @@ class Video extends Trimmable {
     this.set("fill", fillPattern);
     this.canvas?.requestRenderAll();
   }
+
   public async loadAndRenderThumbnails() {
     if (this.isFetchingThumbnails || !this.clip) return;
     // set segmentDrawn to segmentToDraw
@@ -527,6 +529,7 @@ class Video extends Trimmable {
   public onResizeSnap() {
     this.renderToOffscreen(true);
   }
+
   public onResize() {
     this.renderToOffscreen(true);
   }
@@ -701,6 +704,7 @@ class Video extends Trimmable {
       this.loadAndRenderThumbnails();
     }
   }
+
   public onScale() {
     this.currentFilmstrip = { ...EMPTY_FILMSTRIP };
     this.nextFilmstrip = { ...EMPTY_FILMSTRIP, segmentIndex: 0 };

@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import * as Y from "yjs";
 import { createCollabSchema, hydrateDocFromState } from "@/features/editor/collab/ydoc-schema";
-import {DEFAULT_GENERAL_ACCESS, GeneralAccessLevel} from "@/features/editor/types/block-members";
+import { DEFAULT_GENERAL_ACCESS, GeneralAccessLevel } from "@/features/editor/types/block-members";
 
 const BLOCK_FRAME_RATE = 30;
 const BLOCK_COLOR_SPACE = "RGB";

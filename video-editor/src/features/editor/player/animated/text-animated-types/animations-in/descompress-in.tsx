@@ -1,4 +1,4 @@
-import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
+import { AnimatedChar } from "@/features/editor/player/animated/text-animated-types/animated-char";
 
 const DescompressAnimationIn = ({
   char,

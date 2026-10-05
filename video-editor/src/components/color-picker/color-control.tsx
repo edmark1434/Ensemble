@@ -24,7 +24,7 @@ const InputRgba: FC<TProps> = ({
   alpha,
   format = "rgb",
   onChange,
-onSubmitChange
+  onSubmitChange
 }) => {
   const canonicalHex = hex.toUpperCase();
   const [color, setColor] = useState({

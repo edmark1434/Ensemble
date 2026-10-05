@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import {X, SearchIcon, Loader2, ChevronDown, Check} from "lucide-react";
+import { X, SearchIcon, Loader2, ChevronDown, Check } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";

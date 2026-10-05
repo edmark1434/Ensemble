@@ -1,7 +1,7 @@
 // features/editor/timeline/items/transition-render.ts
 import { Transition } from "@designcombo/timeline";
-import {createResizeControls, createTransitionControls} from "../../controls";
-import {drawArrowIcon, drawSelectionBorder} from "./transition-visuals";
+import { createResizeControls, createTransitionControls } from "../../controls";
+import { drawArrowIcon, drawSelectionBorder } from "./transition-visuals";
 
 if (!(Transition.prototype as any).__patchedRender) {
   const baseRender = Transition.prototype._render;

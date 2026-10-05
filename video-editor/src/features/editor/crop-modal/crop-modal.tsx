@@ -126,7 +126,8 @@ const CropModal = () => {
           }}
         >
           <DialogOverlay className="z-[300] bg-zinc-950/80">
-            <DialogContent className="z-[300] flex max-h-[800px] w-full sm:max-w-[900px] flex-col border bg-card px-2 py-8 gap-6 overflow-hidden">
+            <DialogContent
+              className="z-[300] flex max-h-[800px] w-full sm:max-w-[900px] flex-col border bg-card px-2 py-8 gap-6 overflow-hidden">
               <DialogHeader className="px-6 -mt-0.75">
                 <DialogTitle className="text-md font-semibold">Crop</DialogTitle>
               </DialogHeader>

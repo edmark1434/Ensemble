@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {Button} from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 
 export function RedirectCountdown({
   url,

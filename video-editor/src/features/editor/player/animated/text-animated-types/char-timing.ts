@@ -1,9 +1,9 @@
 export const getCharTiming = ({
-                                index,
-                                textLength,
-                                windowFrames,
-                                fps
-                              }: {
+  index,
+  textLength,
+  windowFrames,
+  fps
+}: {
   index: number;
   textLength: number;
   windowFrames: number;

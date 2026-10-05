@@ -1,4 +1,4 @@
-import {useEffect, useRef} from "react";
+import { useEffect, useRef } from "react";
 import * as Y from "yjs";
 import type StateManager from "@designcombo/state";
 import useStore from "../store/use-store";
@@ -7,7 +7,7 @@ import { attachWsProvider } from "../collab/ws-provider";
 import { createSession, endSession, attachPersistence } from "../collab/persistence";
 import { applySceneContentToDoc, DURATION_SYNC_INTERVAL_MS } from "../collab/scene-content-sync";
 import { SceneRenderContent } from "../types/ensemble-scene";
-import {broadcastWorkingInsideScene, clearWorkingInsideScene} from "@/features/editor/collab/live-transform";
+import { broadcastWorkingInsideScene, clearWorkingInsideScene } from "@/features/editor/collab/live-transform";
 
 export function useSceneContentBroadcast(
   stateManager: StateManager,

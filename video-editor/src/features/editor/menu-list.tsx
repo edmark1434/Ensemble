@@ -20,13 +20,13 @@ import {
 } from "lucide-react";
 
 const MENU_ITEMS = [
-  {id: "videos",      icon: Clapperboard,       label: "Videos",      ariaLabel: "Add and manage video content"},
-  {id: "images",      icon: Image,              label: "Images",      ariaLabel: "Add and manage images"},
-  {id: "audios",      icon: Music,              label: "Audios",      ariaLabel: "Add and manage audio content" },
-  {id: "uploads",     icon: CloudUpload,        label: "Uploads",     ariaLabel: "Add and manage uploads"},
-  {id: "texts",       icon: Type,               label: "Texts",       ariaLabel: "Add and edit text elements" },
-  {id: "captions",    icon: ClosedCaption,      label: "Captions",    ariaLabel: "Add and edit captions" },
-  {id: "transitions", icon: ArrowBigRightDash,  label: "Transitions", ariaLabel: "Add transition effects" },
+  { id: "videos", icon: Clapperboard, label: "Videos", ariaLabel: "Add and manage video content" },
+  { id: "images", icon: Image, label: "Images", ariaLabel: "Add and manage images" },
+  { id: "audios", icon: Music, label: "Audios", ariaLabel: "Add and manage audio content" },
+  { id: "uploads", icon: CloudUpload, label: "Uploads", ariaLabel: "Add and manage uploads" },
+  { id: "texts", icon: Type, label: "Texts", ariaLabel: "Add and edit text elements" },
+  { id: "captions", icon: ClosedCaption, label: "Captions", ariaLabel: "Add and edit captions" },
+  { id: "transitions", icon: ArrowBigRightDash, label: "Transitions", ariaLabel: "Add transition effects" },
 ] as const;
 
 // Memoized menu button component for better performance
@@ -136,7 +136,8 @@ function MenuList() {
     <>
       <div className="relative flex items-center bg-card py-4">
         {showLeftFade && (
-          <div className="absolute left-0 top-0 bottom-0 w-8 bg-linear-to-r from-card to-transparent z-10 pointer-events-none" />
+          <div
+            className="absolute left-0 top-0 bottom-0 w-8 bg-linear-to-r from-card to-transparent z-10 pointer-events-none" />
         )}
         <div
           ref={scrollRef}
@@ -160,7 +161,8 @@ function MenuList() {
         </div>
 
         {showRightFade && (
-          <div className="absolute right-0 top-0 bottom-0 w-8 bg-linear-to-l from-card to-transparent z-10 pointer-events-none" />
+          <div
+            className="absolute right-0 top-0 bottom-0 w-8 bg-linear-to-l from-card to-transparent z-10 pointer-events-none" />
         )}
       </div>
 

@@ -1,7 +1,7 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ProjectControls } from "./common/project-controls";
-import {useViewOnly} from "@/features/editor/hooks/use-view-only";
-import {Eye} from "lucide-react";
+import { useViewOnly } from "@/features/editor/hooks/use-view-only";
+import { Eye } from "lucide-react";
 
 const BasicProject = () => {
   const viewOnly = useViewOnly();

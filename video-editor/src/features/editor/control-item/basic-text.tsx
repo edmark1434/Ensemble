@@ -12,12 +12,12 @@ import { ICompactFont, IFont } from "../interfaces/editor";
 import { DEFAULT_FONT } from "../constants/font";
 import { PresetText } from "./common/preset-text";
 import { Animations } from "./common/animations";
-import {LayoutControls} from "@/features/editor/control-item/common/layout";
-import {TextContent} from "@/features/editor/control-item/common/text-content";
-import {Eye, Lock} from "lucide-react";
-import {Appearance} from "@/features/editor/control-item/common/appearance";
-import {useViewOnly} from "@/features/editor/hooks/use-view-only";
-import {fetchAllFontItems, getDefaultFont, itemToFonts} from "@/features/editor/utils/fetch-google-fonts";
+import { LayoutControls } from "@/features/editor/control-item/common/layout";
+import { TextContent } from "@/features/editor/control-item/common/text-content";
+import { Eye, Lock } from "lucide-react";
+import { Appearance } from "@/features/editor/control-item/common/appearance";
+import { useViewOnly } from "@/features/editor/hooks/use-view-only";
+import { fetchAllFontItems, getDefaultFont, itemToFonts } from "@/features/editor/utils/fetch-google-fonts";
 
 interface ITextControlProps {
   color: string;
@@ -125,9 +125,9 @@ const getPropertiesFromDetails = (
 };
 
 const BasicText = ({
-                     trackItem,
-                     type
-                   }: {
+  trackItem,
+  type
+}: {
   trackItem: ITrackItem & IText;
   type?: string;
 }) => {

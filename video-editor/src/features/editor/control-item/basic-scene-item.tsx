@@ -1,5 +1,5 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {Eye, Info, Lock} from "lucide-react";
+import { Eye, Info, Lock } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import type { ITrackItem } from "@designcombo/types";
 import { dispatch } from "@designcombo/events";
@@ -17,10 +17,10 @@ import { LayoutMediaControls } from "@/features/editor/control-item/common/layou
 import { PlaybackControls } from "./common/playback";
 import { Access } from "@/features/editor/control-item/common/access";
 import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
-import {hasBlockAccess} from "@/features/editor/types/block-members";
-import {useViewOnly} from "@/features/editor/hooks/use-view-only";
-import {getSceneRole} from "@/features/editor/utils/scene-access";
-import {canEditWithRole, type EditorRole} from "@/features/editor/types/editor-role";
+import { hasBlockAccess } from "@/features/editor/types/block-members";
+import { useViewOnly } from "@/features/editor/hooks/use-view-only";
+import { getSceneRole } from "@/features/editor/utils/scene-access";
+import { canEditWithRole, type EditorRole } from "@/features/editor/types/editor-role";
 
 interface ISceneControlProps {
   opacity: number;
@@ -39,9 +39,9 @@ const getPropertiesFromDetails = (details: ISceneDetails): ISceneControlProps =>
 });
 
 const BasicSceneItem = ({
-                          trackItem,
-                          type
-                        }: {
+  trackItem,
+  type
+}: {
   trackItem: ITrackItem & { details: ISceneDetails };
   type?: string;
 }) => {

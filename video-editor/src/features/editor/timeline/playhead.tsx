@@ -12,7 +12,8 @@ import { timeMsToUnits, unitsToTimeMs } from "../utils/timeline";
 import { TIMELINE_OFFSET_CANVAS_LEFT } from "../constants/constants";
 import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
 import { useTheme } from "next-themes";
-import {useIsDraggingOverTimeline} from "@/features/editor/hooks/is-dragging-over-timeline";
+import { useIsDraggingOverTimeline } from "@/features/editor/hooks/is-dragging-over-timeline";
+
 const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
   const playheadRef = useRef<HTMLDivElement>(null);
   const { playerRef, fps, scale, markers, playheadSnapped } = useStore();

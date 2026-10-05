@@ -9,7 +9,7 @@ import {
 import { useDownloadState } from "./store/use-download-state";
 import useStore from "./store/use-store";
 import { Button } from "@/components/ui/button";
-import {CircleCheckIcon, CircleXIcon, Loader2} from "lucide-react";
+import { CircleCheckIcon, CircleXIcon, Loader2 } from "lucide-react";
 import { download } from "@/utils/download";
 import { useEffect, useState } from "react";
 import { millisecondsToHHMMSS } from "./utils/format";
@@ -135,7 +135,7 @@ const DownloadProgressModal = () => {
               <div className="space-y-1">
                 <div className="font-semibold">Download expired</div>
                 <div className="text-muted-foreground text-sm">
-                  This export is no longer available.<br/>Please export again.
+                  This export is no longer available.<br />Please export again.
                 </div>
               </div>
               <Button variant="outline" onClick={() => actions.setDisplayProgressModal(false)}>

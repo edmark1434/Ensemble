@@ -6,7 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger
 } from "@/components/ui/popover";
-import {Check, ChevronDown, Info} from "lucide-react";
+import { Check, ChevronDown, Info } from "lucide-react";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
 import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
 import { GENERAL_ACCESS_LEVELS, type GeneralAccessLevel } from "@/features/editor/types/block-members";

@@ -43,12 +43,12 @@ const WordSpan = styled.span<WordSpanProps>`
     text-decoration: ${(props) => props.textDecoration};
 
     color: ${(props) =>
-            props.isShapeLayer || props.isGradientColor ? "transparent" : props.wordColor};
+  props.isShapeLayer || props.isGradientColor ? "transparent" : props.wordColor};
 
     ${(props) =>
-            !props.isShapeLayer &&
-            props.isGradientColor &&
-            css`
+  !props.isShapeLayer &&
+  props.isGradientColor &&
+  css`
                 background-image: ${props.wordColor};
                 -webkit-background-clip: text;
                 background-clip: text;
@@ -56,36 +56,36 @@ const WordSpan = styled.span<WordSpanProps>`
             `}
 
     ${(props) => {
-        if (
-                !props.isShapeLayer &&
-                props.isActive &&
-                props.animation.includes("underline-effect")
-        ) {
-            return `
+  if (
+    !props.isShapeLayer &&
+    props.isActive &&
+    props.animation.includes("underline-effect")
+  ) {
+    return `
         text-decoration: underline;
         text-decoration-color: #9238ef;
         text-decoration-thickness: 0.2em;
       `;
-        }
+  }
 
-        if (!props.isActive && props.animationNoneCaption) {
-            return `display: none;`;
-        }
+  if (!props.isActive && props.animationNoneCaption) {
+    return `display: none;`;
+  }
 
-        if (
-                !props.isAppeared &&
-                (ANIMATION_CAPTION_LIST.includes(props.animation) ||
-                        props.showObject === "word")
-        ) {
-            return `display: none;`;
-        }
+  if (
+    !props.isAppeared &&
+    (ANIMATION_CAPTION_LIST.includes(props.animation) ||
+      props.showObject === "word")
+  ) {
+    return `display: none;`;
+  }
 
-        if (!props.isActive && props.animation === "customAnimation1") {
-            return `display: none;`;
-        }
+  if (!props.isActive && props.animation === "customAnimation1") {
+    return `display: none;`;
+  }
 
-        return "";
-    }}
+  return "";
+}}
 
     &::before {
         content: "";
@@ -100,19 +100,19 @@ const WordSpan = styled.span<WordSpanProps>`
     }
 
     ${(props) =>
-            props.isShapeLayer &&
-            props.isActive &&
-            css`
+  props.isShapeLayer &&
+  props.isActive &&
+  css`
                 &::before {
                     ${props.isActiveFillGradient
-                            ? css`background-image: ${props.activeFillColor};`
-                            : css`background-color: ${props.activeFillColor};`}
+    ? css`background-image: ${props.activeFillColor};`
+    : css`background-color: ${props.activeFillColor};`}
 
                     ${props.animation === "captionAnimation10" ||
-                    props.animation === "captionAnimationKeyword42" ||
-                    props.animation === "captionAnimationKeyword57" ||
-                    (props.animation === "captionAnimationKeyword48" &&
-                            css`
+  props.animation === "captionAnimationKeyword42" ||
+  props.animation === "captionAnimationKeyword57" ||
+  (props.animation === "captionAnimationKeyword48" &&
+    css`
                                 animation: ${scalePulse} 0.4s ease-in-out;
                                 transform-origin: center;
                             `)}

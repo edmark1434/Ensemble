@@ -1,6 +1,6 @@
 import { interpolate, spring } from "remotion";
 import { AnimatedChar } from "../animated-char";
-import {getCharTiming} from "@/features/editor/player/animated/text-animated-types/char-timing";
+import { getCharTiming } from "@/features/editor/player/animated/text-animated-types/char-timing";
 
 const BeatifulQuestionAnimationIn = ({
   char,

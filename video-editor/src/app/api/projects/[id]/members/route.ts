@@ -12,8 +12,8 @@ import {
   updateProjectMemberRole,
   type AssignableProjectRole,
 } from "@/lib/db/project-members";
-import {recheckAllRooms} from "@/lib/collab/access-recheck";
-import {canEditWithRole, canManageSharing} from "@/features/editor/types/editor-role";
+import { recheckAllRooms } from "@/lib/collab/access-recheck";
+import { canEditWithRole, canManageSharing } from "@/features/editor/types/editor-role";
 
 type Ctx = { params: Promise<{ id: string }> };
 

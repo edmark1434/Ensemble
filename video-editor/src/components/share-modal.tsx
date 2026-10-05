@@ -18,7 +18,7 @@ import {
 import { ChevronDown, Check, Search } from "lucide-react";
 import { debounce } from "lodash";
 import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
-import {onAccessChanged} from "@/features/editor/collab/access-events";
+import { onAccessChanged } from "@/features/editor/collab/access-events";
 
 type AssignableProjectRole = "Manager" | "Editor" | "Commenter" | "Viewer";
 const ASSIGNABLE_PROJECT_ROLES: AssignableProjectRole[] = ["Manager", "Editor", "Commenter", "Viewer"];
@@ -64,7 +64,8 @@ const Avatar = ({ name, avatarUrl }: { name: string; avatarUrl?: string | null }
   }
 
   return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xs font-medium text-zinc-200">
+    <div
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xs font-medium text-zinc-200">
       {getInitials(name)}
     </div>
   );
@@ -370,7 +371,8 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
           {canManage && (
             <div className="flex flex-col gap-3">
               <div className="relative" ref={searchWrapperRef}>
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Add people by name or email"
                   className="pl-10"
@@ -388,7 +390,8 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
                 />
 
                 {suggestOpen && suggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full z-[1000] mt-1 rounded-md border bg-popover text-popover-foreground shadow-md">
+                  <div
+                    className="absolute left-0 right-0 top-full z-[1000] mt-1 rounded-md border bg-popover text-popover-foreground shadow-md">
                     <ScrollArea className="[&>[data-radix-scroll-area-viewport]]:max-h-[200px]">
                       {suggestions.map((person) => (
                         <div

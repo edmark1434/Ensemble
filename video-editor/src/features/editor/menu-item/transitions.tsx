@@ -71,11 +71,13 @@ const TransitionsMenuItem = ({
           draggable={false}
         >
           {isNone && <Ban className="text-muted-foreground" size={24} />}
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+          <div
+            className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
             <div className="rounded-full p-1" />
           </div>
         </div>
-        <div className="flex w-full items-center justify-center text-center overflow-hidden text-ellipsis whitespace-nowrap text-[12px] capitalize text-muted-foreground">
+        <div
+          className="flex w-full items-center justify-center text-center overflow-hidden text-ellipsis whitespace-nowrap text-[12px] capitalize text-muted-foreground">
           {transition.name || transition.kind}
         </div>
       </div>

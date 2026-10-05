@@ -5,8 +5,8 @@ import Navbar from "./navbar";
 import useTimelineEvents from "./hooks/use-timeline-events";
 import Scene from "./scene";
 import { SceneRef } from "./scene/scene.types";
-import StateManager, {DESIGN_LOAD, LAYER_DELETE} from "@designcombo/state";
-import {useCallback, useEffect, useRef, useState} from "react";
+import StateManager, { DESIGN_LOAD, LAYER_DELETE } from "@designcombo/state";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/resizable";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { getCompactFontData, loadFonts } from "./utils/fonts";
-import {TIMELINE_OFFSET_CANVAS_LEFT} from "./constants/constants";
+import { TIMELINE_OFFSET_CANVAS_LEFT } from "./constants/constants";
 import MenuList from "./menu-list";
 import { ControlItem } from "./control-item";
 import { MenuItem } from "./menu-item";
@@ -31,28 +31,28 @@ import useLayoutStore from "./store/use-layout-store";
 import ControlItemHorizontal from "./control-item-horizontal";
 import { design } from "./mock";
 import { Separator } from "@/components/ui/separator";
-import {ArrowLeftToLine, ArrowRightToLine, Loader2, Maximize, Minimize, Volume2, VolumeOff} from "lucide-react";
-import {frameToTimeString, timeToString} from "./utils/time";
-import {useCurrentPlayerFrame} from "@/features/editor/hooks/use-current-frame";
-import {Button} from "@/components/ui/button";
-import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
+import { ArrowLeftToLine, ArrowRightToLine, Loader2, Maximize, Minimize, Volume2, VolumeOff } from "lucide-react";
+import { frameToTimeString, timeToString } from "./utils/time";
+import { useCurrentPlayerFrame } from "@/features/editor/hooks/use-current-frame";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import useUpdateAnsestors from "@/features/editor/hooks/use-update-ansestors";
-import {PLAYER_PAUSE, PLAYER_PLAY} from "@/features/editor/constants/events";
-import {cn} from "@/lib/utils";
-import {useKeyboardShortcuts} from './hooks/use-keyboard-shortcuts'
-import {timeMsToUnits} from "@designcombo/timeline";
-import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
-import {Kbd, KbdGroup} from "@/components/ui/kbd";
-import {seedDefaultFont} from "@/features/editor/utils/seed-default-font";
-import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
-import {useCollabDoc} from "@/features/editor/hooks/use-collab-doc";
-import {CollabTarget} from "@/features/editor/collab/collab-target";
-import {useSceneContentBroadcast} from "@/features/editor/hooks/use-scene-content-broadcast";
-import {RightPanelContent} from "@/features/editor/right-panel-content";
-import {canEditWithRole, EditorRole} from "@/features/editor/types/editor-role";
-import {useEditorRole} from "@/features/editor/hooks/use-editor-role";
-import {ViewOnlyProvider} from "@/features/editor/hooks/use-view-only";
-import {useProjectFonts} from "@/features/editor/hooks/use-project-fonts";
+import { PLAYER_PAUSE, PLAYER_PLAY } from "@/features/editor/constants/events";
+import { cn } from "@/lib/utils";
+import { useKeyboardShortcuts } from './hooks/use-keyboard-shortcuts'
+import { timeMsToUnits } from "@designcombo/timeline";
+import { useTimelineOffsetX } from "@/features/editor/hooks/use-timeline-offset";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
+import { seedDefaultFont } from "@/features/editor/utils/seed-default-font";
+import { scrollTimelineToFrame } from "@/features/editor/utils/timeline-scroll";
+import { useCollabDoc } from "@/features/editor/hooks/use-collab-doc";
+import { CollabTarget } from "@/features/editor/collab/collab-target";
+import { useSceneContentBroadcast } from "@/features/editor/hooks/use-scene-content-broadcast";
+import { RightPanelContent } from "@/features/editor/right-panel-content";
+import { canEditWithRole, EditorRole } from "@/features/editor/types/editor-role";
+import { useEditorRole } from "@/features/editor/hooks/use-editor-role";
+import { ViewOnlyProvider } from "@/features/editor/hooks/use-view-only";
+import { useProjectFonts } from "@/features/editor/hooks/use-project-fonts";
 import SceneRemovedModal from "./scene-removed-modal";
 
 // ts not getting used
@@ -186,7 +186,8 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
       <div className="flex-1 relative overflow-hidden">
         <CropModal />
         {!isLargeScreen && trackItemIds.length === 0 ? (
-          <div className="w-full h-full flex items-center justify-center text-center px-6 text-sm text-muted-foreground">
+          <div
+            className="w-full h-full flex items-center justify-center text-center px-6 text-sm text-muted-foreground">
             The project is currently empty, no preview available
           </div>
         ) : (
@@ -345,15 +346,15 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
 };
 
 const Panels = ({
-                  sceneRef,
-                  playerRef,
-                  stateManager,
-                  trackItem,
-                  loaded,
-                  isLargeScreen,
-                  viewOnly,
-                  timelineLoading,
-                }: any) => {
+  sceneRef,
+  playerRef,
+  stateManager,
+  trackItem,
+  loaded,
+  isLargeScreen,
+  viewOnly,
+  timelineLoading,
+}: any) => {
   const { showMenuItem: menuItemOpen, setControlsPanelRef } = useLayoutStore();
   const showMenuItem = menuItemOpen && !viewOnly;
 
@@ -384,7 +385,14 @@ const Panels = ({
     return (
       <div className="relative flex h-full w-full flex-col bg-background">
         <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} viewOnly={viewOnly} />
-        <div aria-hidden inert style={{ position: "absolute", top: -99999, left: -99999, width: 1200, height: 300, pointerEvents: "none" }}>
+        <div aria-hidden inert style={{
+          position: "absolute",
+          top: -99999,
+          left: -99999,
+          width: 1200,
+          height: 300,
+          pointerEvents: "none"
+        }}>
           <Timeline key={timelineKey} stateManager={stateManager} />
           <MenuItem />
         </div>
@@ -425,7 +433,8 @@ const Panels = ({
               maxSize={showMenuItem ? 45 : 75}
               className="relative bg-card min-w-0"
             >
-              <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} isLargeScreen={isLargeScreen} viewOnly={viewOnly} />
+              <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager}
+                           isLargeScreen={isLargeScreen} viewOnly={viewOnly} />
             </ResizablePanel>
 
             <ResizableHandle className="bg-border/90" />

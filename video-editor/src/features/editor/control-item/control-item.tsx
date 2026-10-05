@@ -21,7 +21,7 @@ import useStore from "../store/use-store";
 import useLayoutStore from "../store/use-layout-store";
 import BasicScene from "@/features/editor/control-item/basic-scene";
 import BasicSceneItem from "@/features/editor/control-item/basic-scene-item";
-import {ISceneDetails, isSceneItem} from "@/features/editor/types/ensemble-scene";
+import { ISceneDetails, isSceneItem } from "@/features/editor/types/ensemble-scene";
 
 type Selection =
   | { type: "none" }
@@ -30,9 +30,9 @@ type Selection =
   | { type: "trackItem"; item: ITrackItem };
 
 const ActiveControlItem = ({
-                             selection,
-                             insideScene
-                           }: {
+  selection,
+  insideScene
+}: {
   selection: Selection;
   insideScene: boolean;
 }) => {

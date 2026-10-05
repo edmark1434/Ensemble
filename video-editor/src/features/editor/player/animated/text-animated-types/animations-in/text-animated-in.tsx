@@ -1,6 +1,6 @@
 import { spring } from "remotion";
-import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
-import {getCharTiming} from "@/features/editor/player/animated/text-animated-types/char-timing";
+import { AnimatedChar } from "@/features/editor/player/animated/text-animated-types/animated-char";
+import { getCharTiming } from "@/features/editor/player/animated/text-animated-types/char-timing";
 
 const AnimatedTextIn = ({
   char,
@@ -57,7 +57,11 @@ const AnimatedTextIn = ({
   return (
     <AnimatedChar
       char={char}
-      animationStyle={{ opacity, transform: `translateY(${y}px) rotate(${rotate}deg)`, transition: "all 0.05s ease-out" }}
+      animationStyle={{
+        opacity,
+        transform: `translateY(${y}px) rotate(${rotate}deg)`,
+        transition: "all 0.05s ease-out"
+      }}
       isGradient={colorStyle.isGradient}
       shadowStrokeStyle={colorStyle.shadowStrokeStyle}
       fillStyle={colorStyle.fillStyle}

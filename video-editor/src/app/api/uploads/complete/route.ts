@@ -1,6 +1,6 @@
 // app/api/uploads/complete/route.ts
 
-import {connection, NextRequest, NextResponse} from "next/server";
+import { connection, NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
 export async function POST(request: NextRequest) {

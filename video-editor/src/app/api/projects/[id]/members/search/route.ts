@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { getProjectMemberRole, searchAddableProjectUsers } from "@/lib/db/project-members";
-import {canEditWithRole, canManageSharing} from "@/features/editor/types/editor-role";
+import { canEditWithRole, canManageSharing } from "@/features/editor/types/editor-role";
 
 export async function GET(
   req: NextRequest,

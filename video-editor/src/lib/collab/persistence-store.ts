@@ -7,8 +7,8 @@
 
 import { db } from "@/lib/db";
 import * as Y from "yjs";
-import {withProjectSnapshotLock} from "@/lib/collab/snapshot-lock";
-import {compactBlockFromStorage, withBlockSnapshotLock} from "@/lib/collab/block-persistence-store";
+import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
+import { compactBlockFromStorage, withBlockSnapshotLock } from "@/lib/collab/block-persistence-store";
 
 export async function compactProject(projectId: string, extraUpdate?: Uint8Array): Promise<void> {
   const snapshotRow = await db

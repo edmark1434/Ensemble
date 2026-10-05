@@ -1,15 +1,15 @@
 import { AnimatedChar } from "@/features/editor/player/animated/text-animated-types/animated-char";
 
 const Wave = ({
-                char,
-                frame,
-                fps,
-                index,
-                durationInFrames,
-                animationTextInFrames,
-                animationTextOutFrames,
-                colorStyle,
-              }: {
+  char,
+  frame,
+  fps,
+  index,
+  durationInFrames,
+  animationTextInFrames,
+  animationTextOutFrames,
+  colorStyle,
+}: {
   char: string;
   frame: number;
   fps: number;

@@ -22,7 +22,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import useStore from "../store/use-store";
-import {useQuery, useQueryClient} from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { getCurrentTime } from "@/features/editor/utils/time";
 import { normalizeDimensionsToCanvas } from "@/features/editor/utils/dimensions";
@@ -35,7 +35,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import {millisecondsToHHMMSS} from "@/features/editor/utils/format";
+import { millisecondsToHHMMSS } from "@/features/editor/utils/format";
 
 // Mirrors buildNormalizedImagePayload in Images.tsx
 const buildNormalizedImagePayload = (image: any) => {
@@ -276,10 +276,10 @@ const MIN_ROW_HEIGHT = 120;
 const MAX_ROW_HEIGHT = 999999;
 
 const UploadImageItem = ({
-                           item,
-                           onAdd,
-                           shouldDisplayPreview
-                         }: {
+  item,
+  onAdd,
+  shouldDisplayPreview
+}: {
   item: any;
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
@@ -394,7 +394,8 @@ const UploadImageItem = ({
         className="relative flex w-full h-full items-center justify-center overflow-hidden cursor-pointer group rounded-md"
       >
         {thumbnail}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
           <div className="rounded-full p-1">
             <PlusIcon className="h-6 w-6 fill-current" />
           </div>
@@ -405,10 +406,10 @@ const UploadImageItem = ({
 };
 
 const UploadVideoItem = ({
-                           item,
-                           onAdd,
-                           shouldDisplayPreview
-                         }: {
+  item,
+  onAdd,
+  shouldDisplayPreview
+}: {
   item: any;
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
@@ -527,7 +528,8 @@ const UploadVideoItem = ({
           </div>
         ))}
       {isReady && meta?.duration ? (
-        <div className="absolute bottom-3 right-2 bg-secondary/90 text-secondary-foreground/90 text-xs px-1 py-0.5 rounded">
+        <div
+          className="absolute bottom-3 right-2 bg-secondary/90 text-secondary-foreground/90 text-xs px-1 py-0.5 rounded">
           {formatDuration(meta.duration)}
         </div>
       ) : null}
@@ -561,7 +563,8 @@ const UploadVideoItem = ({
         className="relative flex w-full h-full items-center justify-center overflow-hidden cursor-pointer group rounded-md"
       >
         {thumbnail}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
           <div className="rounded-full p-1">
             <PlusIcon className="h-6 w-6 fill-current" />
           </div>
@@ -572,12 +575,12 @@ const UploadVideoItem = ({
 };
 
 const UploadAudioItem = ({
-                           item,
-                           onAdd,
-                           playingId,
-                           setPlayingId,
-                           shouldDisplayPreview
-                         }: {
+  item,
+  onAdd,
+  playingId,
+  setPlayingId,
+  shouldDisplayPreview
+}: {
   item: any;
   onAdd: (payload: any) => void;
   playingId: string | null;
@@ -725,7 +728,8 @@ const UploadAudioItem = ({
     <Draggable
       data={enrichedItem}
       renderCustomPreview={
-        <div className="w-[120px] h-[120px] rounded-md flex items-center justify-center bg-zinc-800 border border-primary">
+        <div
+          className="w-[120px] h-[120px] rounded-md flex items-center justify-center bg-zinc-800 border border-primary">
           <Music className="text-muted-foreground" size={40} />
         </div>
       }
@@ -739,10 +743,10 @@ const UploadAudioItem = ({
 // Mirrors Images.tsx's body exactly: own containerRef + ResizeObserver +
 // useMasonryRows, not shared with any other tab.
 const UploadImagesGrid = ({
-                            items,
-                            onAdd,
-                            shouldDisplayPreview
-                          }: {
+  items,
+  onAdd,
+  shouldDisplayPreview
+}: {
   items: any[];
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
@@ -798,10 +802,10 @@ const UploadImagesGrid = ({
 
 // Mirrors Videos.tsx's body exactly.
 const UploadVideosGrid = ({
-                            items,
-                            onAdd,
-                            shouldDisplayPreview
-                          }: {
+  items,
+  onAdd,
+  shouldDisplayPreview
+}: {
   items: any[];
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
@@ -902,7 +906,11 @@ export const Uploads = () => {
   const [probedImageFileDims, setProbedImageFileDims] = useState<Record<string, { width: number; height: number }>>({});
   const probingImageIdsRef = useRef<Set<string>>(new Set());
 
-  const [probedVideoFileDims, setProbedVideoFileDims] = useState<Record<string, { width: number; height: number; duration: number }>>({});
+  const [probedVideoFileDims, setProbedVideoFileDims] = useState<Record<string, {
+    width: number;
+    height: number;
+    duration: number
+  }>>({});
   const probingVideoIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {

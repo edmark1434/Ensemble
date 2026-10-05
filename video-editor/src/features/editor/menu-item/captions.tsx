@@ -12,15 +12,15 @@ import { loadFonts } from "../utils/fonts";
 import { dispatch } from "@designcombo/events";
 import { ADD_CAPTIONS, ADD_ITEMS } from "@designcombo/state";
 import { ITrackItem, ITrackItemsMap } from "@designcombo/types";
-import {formatTimeToHumanReadable, millisecondsToHHMMSS} from "../utils/format";
+import { formatTimeToHumanReadable, millisecondsToHHMMSS } from "../utils/format";
 import useStore from "../store/use-store";
-import {groupBy, uniqBy} from "lodash";
+import { groupBy, uniqBy } from "lodash";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PLAYER_SEEK } from "../constants/events";
 import { useCurrentPlayerFrame } from "../hooks/use-current-frame";
 import { generateId } from "@designcombo/timeline";
 import { Loader2 } from "lucide-react";
-import {seedDefaultFont} from "@/features/editor/utils/seed-default-font";
+import { seedDefaultFont } from "@/features/editor/utils/seed-default-font";
 
 export const Captions = () => {
   const { trackItemsMap, size } = useStore();
@@ -175,17 +175,17 @@ export const Captions = () => {
 };
 
 const MediaSection = ({
-                        selectMediaItems,
-                        selectedMedia,
-                        onSelectChange,
-                        captionTrackItemsMap,
-                        createCaptions,
-                        generatingMedia,
-                        generatingLabel,
-                        errorMessage,
-                        estimatedMs,
-                        elapsedMs,
-                      }: {
+  selectMediaItems,
+  selectedMedia,
+  onSelectChange,
+  captionTrackItemsMap,
+  createCaptions,
+  generatingMedia,
+  generatingLabel,
+  errorMessage,
+  estimatedMs,
+  elapsedMs,
+}: {
   selectMediaItems: { label: string; value: string }[];
   selectedMedia: string | undefined;
   onSelectChange: (value: string) => void;
@@ -261,12 +261,12 @@ const EmptyMediaTrackItems = () => (
 );
 
 const MediaWithNoCaptions = ({
-                               createCaptions,
-                               isGenerating,
-                               blockedBy,
-                               estimatedMs,
-                               elapsedMs
-                             }: {
+  createCaptions,
+  isGenerating,
+  blockedBy,
+  estimatedMs,
+  elapsedMs
+}: {
   createCaptions: () => void;
   isGenerating: boolean;
   blockedBy?: string;
@@ -307,8 +307,8 @@ const MediaWithNoCaptions = ({
 );
 
 const MediaWithCaptions = ({
-                             captionTrackItems
-                           }: {
+  captionTrackItems
+}: {
   captionTrackItems: ITrackItem[];
 }) => {
   const { playerRef } = useStore();
@@ -330,9 +330,9 @@ const MediaWithCaptions = ({
   );
 };
 const CaptionItem = ({
-                       item,
-                       isActive
-                     }: {
+  item,
+  isActive
+}: {
   item: ITrackItem;
   isActive?: boolean;
 }) => {

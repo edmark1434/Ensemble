@@ -53,12 +53,12 @@ export async function patchBlock(
 }
 
 export const NameField = ({
-                            label = "Name",
-                            value,
-                            maxLength,
-                            onCommit,
-                            disabled = false
-                          }: {
+  label = "Name",
+  value,
+  maxLength,
+  onCommit,
+  disabled = false
+}: {
   label?: string;
   value: string;
   maxLength?: number;
@@ -104,10 +104,10 @@ export const NameField = ({
 };
 
 export const BackgroundField = ({
-                                  value,
-                                  onChange,
-                                  disabled = false
-                                }: {
+  value,
+  onChange,
+  disabled = false
+}: {
   value: string;
   onChange: (v: string) => void;
   disabled?: boolean;
@@ -126,11 +126,11 @@ export const BackgroundField = ({
 );
 
 export const SizeFields = ({
-                             width,
-                             height,
-                             onCommit,
-                             disabled = false
-                           }: {
+  width,
+  height,
+  onCommit,
+  disabled = false
+}: {
   width: number;
   height: number;
   onCommit: (width: number, height: number) => void;
@@ -206,13 +206,13 @@ export const SizeFields = ({
 };
 
 const SizeDimension = ({
-                         field,
-                         label,
-                         value,
-                         isLinked,
-                         onCommit,
-                         disabled = false
-                       }: {
+  field,
+  label,
+  value,
+  isLinked,
+  onCommit,
+  disabled = false
+}: {
   field: "width" | "height";
   label: string;
   value: number;
@@ -278,9 +278,9 @@ const SizeDimension = ({
 };
 
 const FrameRate = ({
-                     value,
-                     onChange
-                   }: {
+  value,
+  onChange
+}: {
   value: number;
   onChange: (v: number) => void;
 }) => {

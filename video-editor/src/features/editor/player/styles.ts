@@ -1,5 +1,5 @@
 import { IImage, IText, ITrackItem } from "@designcombo/types";
-import {foldSkewYIntoScale} from "@/features/editor/utils/matrix-fold";
+import { foldSkewYIntoScale } from "@/features/editor/utils/matrix-fold";
 
 export const calculateCropStyles = (
   details: IImage["details"],

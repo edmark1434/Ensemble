@@ -67,7 +67,10 @@ export function patchTransitionZOrder(canvas: any) {
     let unchanged = next.length === objects.length;
     if (unchanged) {
       for (let i = 0; i < next.length; i++) {
-        if (next[i] !== objects[i]) { unchanged = false; break; }
+        if (next[i] !== objects[i]) {
+          unchanged = false;
+          break;
+        }
       }
     }
     if (unchanged) return;

@@ -6,7 +6,7 @@ import Editor from "@/features/editor";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { createProject } from "@/lib/db/projects";
 import { db } from "@/lib/db";
-import {toEditorRole} from "@/features/editor/types/editor-role";
+import { toEditorRole } from "@/features/editor/types/editor-role";
 
 // Random/garbage segments (e.g. someone fat-fingering /editor/asdf) aren't
 // valid uuid syntax, and postgres throws on that rather than just returning

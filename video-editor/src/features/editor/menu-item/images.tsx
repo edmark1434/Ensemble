@@ -3,18 +3,18 @@ import { dispatch } from "@designcombo/events";
 import { generateId } from "@designcombo/timeline";
 import Draggable from "@/components/shared/draggable";
 import { IImage } from "@designcombo/types";
-import React, {useState, useEffect, useRef, useMemo} from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useIsDraggingOverTimeline } from "../hooks/is-dragging-over-timeline";
 import { ADD_IMAGE } from "@designcombo/state";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {Search, Loader2, PlusIcon} from "lucide-react";
+import { Search, Loader2, PlusIcon } from "lucide-react";
 import { usePexelsImages } from "@/hooks/use-pexels-images";
 import { ImageLoading } from "@/components/ui/image-loading";
-import {getCurrentTime} from "@/features/editor/utils/time";
-import {normalizeDimensionsToCanvas} from "@/features/editor/utils/dimensions";
+import { getCurrentTime } from "@/features/editor/utils/time";
+import { normalizeDimensionsToCanvas } from "@/features/editor/utils/dimensions";
 import useStore from "../store/use-store";
-import {useMasonryRows} from "@/features/editor/hooks/use-masonry-rows";
+import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
 
 const buildNormalizedImagePayload = (image: Partial<IImage>): Partial<IImage> => {
   const details = image.details;
@@ -282,7 +282,8 @@ const ImageItem = ({
           className="w-full h-full rounded-md object-cover"
           alt="Visual content"
         />
-        <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
           <div className="rounded-full p-1">
             <PlusIcon className="h-6 w-6 fill-current" />
           </div>

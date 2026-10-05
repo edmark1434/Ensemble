@@ -1,6 +1,6 @@
 import { interpolate, spring } from "remotion";
-import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
-import {getCharTiming} from "@/features/editor/player/animated/text-animated-types/char-timing";
+import { AnimatedChar } from "@/features/editor/player/animated/text-animated-types/animated-char";
+import { getCharTiming } from "@/features/editor/player/animated/text-animated-types/char-timing";
 
 const SunnyMorningsAnimationIn = ({
   char,

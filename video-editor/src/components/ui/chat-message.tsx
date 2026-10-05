@@ -177,7 +177,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             >
               <MarkdownRenderer>{part.text}</MarkdownRenderer>
               {actions ? (
-                <div className="absolute -bottom-4 right-2 flex space-x-1 rounded-lg border bg-background p-1 text-foreground opacity-0 transition-opacity group-hover/message:opacity-100">
+                <div
+                  className="absolute -bottom-4 right-2 flex space-x-1 rounded-lg border bg-background p-1 text-foreground opacity-0 transition-opacity group-hover/message:opacity-100">
                   {actions}
                 </div>
               ) : null}
@@ -213,7 +214,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       <div className={cn(chatBubbleVariants({ isUser, animation }))}>
         <MarkdownRenderer>{content}</MarkdownRenderer>
         {actions ? (
-          <div className="absolute -bottom-4 right-2 flex space-x-1 rounded-lg border bg-background p-1 text-foreground opacity-0 transition-opacity group-hover/message:opacity-100">
+          <div
+            className="absolute -bottom-4 right-2 flex space-x-1 rounded-lg border bg-background p-1 text-foreground opacity-0 transition-opacity group-hover/message:opacity-100">
             {actions}
           </div>
         ) : null}
@@ -237,7 +239,8 @@ const ReasoningBlock = ({ part }: { part: ReasoningPart }) => {
         className="group w-full overflow-hidden rounded-lg border bg-muted/50"
       >
         <AccordionItem value="reasoning">
-          <AccordionTrigger className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground w-full">
+          <AccordionTrigger
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground w-full">
             <span>Thinking</span>
           </AccordionTrigger>
           <AccordionContent>

@@ -43,9 +43,9 @@ function dropDanglingTransitions(group: GroupEntry[]): GroupEntry[] {
 }
 
 export function renderVisibleItems({
-                                     trackItemIds, trackItemsMap, transitionsMap, fps, size, frame,
-                                     handleTextChange, onTextBlur, editableTextId, nested = false,
-                                   }: RenderVisibleItemsOptions) {
+  trackItemIds, trackItemsMap, transitionsMap, fps, size, frame,
+  handleTextChange, onTextBlur, editableTextId, nested = false,
+}: RenderVisibleItemsOptions) {
   const groupedItems = groupTrackItems({ trackItemIds, transitionsMap, trackItemsMap });
 
   const isRenderable = (g: GroupEntry) => {

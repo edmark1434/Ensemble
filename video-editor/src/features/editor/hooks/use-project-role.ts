@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type {EditorRole, StoredProjectRole} from "@/features/editor/types/editor-role";
+import type { EditorRole, StoredProjectRole } from "@/features/editor/types/editor-role";
 import { onAccessChanged } from "@/features/editor/collab/access-events";
 
 const REFRESH_MS = 30_000;

@@ -8,6 +8,7 @@ export interface IUpload {
   url: string;
   previewData?: string;
 }
+
 export interface User {
   id: string;
   email: string;
@@ -15,6 +16,7 @@ export interface User {
   username: string;
   provider: "github";
 }
+
 export interface IFont {
   id: string;
   family: string;

@@ -1,9 +1,9 @@
 import { dispatch } from "@designcombo/events";
-import {ADD_AUDIO, ADD_IMAGE, ADD_TEXT, ADD_VIDEO} from "@designcombo/state";
+import { ADD_AUDIO, ADD_IMAGE, ADD_TEXT, ADD_VIDEO } from "@designcombo/state";
 import { generateId } from "@designcombo/timeline";
 import React, { useCallback, useState } from "react";
-import {ITrackItem} from "@designcombo/types";
-import {getCurrentTime} from "@/features/editor/utils/time";
+import { ITrackItem } from "@designcombo/types";
+import { getCurrentTime } from "@/features/editor/utils/time";
 
 enum AcceptedDropTypes {
   IMAGE = "image",
@@ -14,6 +14,7 @@ enum AcceptedDropTypes {
 
 interface DraggedData {
   type: AcceptedDropTypes;
+
   [key: string]: any;
 }
 

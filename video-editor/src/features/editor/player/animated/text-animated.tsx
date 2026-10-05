@@ -1,7 +1,7 @@
 import { ITextDetails } from "@designcombo/types";
 import React, { useMemo } from "react";
 import { useCurrentFrame } from "remotion";
-import {getCharLayerStyles, getLineHeightPx, getWrappedTextLayout} from "../styles";
+import { getCharLayerStyles, getLineHeightPx, getWrappedTextLayout } from "../styles";
 import AnimatedTextIn from "./text-animated-types/animations-in/text-animated-in";
 import SunnyMorningsAnimationIn from "./text-animated-types/animations-in/sunny-mornings-in";
 import DominoDreamsIn from "./text-animated-types/animations-in/domino-dreams-in";
@@ -27,7 +27,7 @@ import Heartbeat from "./text-animated-types/animations-loop/heartbeat";
 import Wave from "./text-animated-types/animations-loop/wave";
 import ShakyLettersText from "./text-animated-types/animations-loop/shaky-letters-text";
 import PulseText from "./text-animated-types/animations-loop/pulse";
-import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
+import { AnimatedChar } from "@/features/editor/player/animated/text-animated-types/animated-char";
 import TypeWriterIn from "@/features/editor/player/animated/text-animated-types/animations-in/type-writer-in";
 import SoundWaveIn from "@/features/editor/player/animated/text-animated-types/animations-in/sound-wave-in";
 import BackgroundIn from "./text-animated-types/animations-in/background-in";
@@ -40,7 +40,7 @@ import FontChange from "@/features/editor/player/animated/text-animated-types/an
 import ShakeText from "@/features/editor/player/animated/text-animated-types/animations-loop/shake-text";
 import Vintage from "@/features/editor/player/animated/text-animated-types/animations-loop/vintage";
 import Glitch from "@/features/editor/player/animated/text-animated-types/animations-loop/glitch";
-import {getKerningAdjustment} from "@/features/editor/player/animated/text-animated-types/kerning";
+import { getKerningAdjustment } from "@/features/editor/player/animated/text-animated-types/kerning";
 
 const animationsIn: { [key: string]: React.FC<any> } = {
   animatedTextIn: AnimatedTextIn,
@@ -112,20 +112,20 @@ export const TextAnimated: React.FC<{
   textColorStyle: React.CSSProperties;
   id: string;
 }> = ({
-        text,
-        fps,
-        textAnimationNameIn,
-        textAnimationNameOut,
-        textAnimationNameLoop,
-        details,
-        animationTextInFrames,
-        animationTextOutFrames,
-        animationTextLoopFrames,
-        durationInFrames,
-        animationFonts,
-        textColorStyle,
-        id
-      }) => {
+  text,
+  fps,
+  textAnimationNameIn,
+  textAnimationNameOut,
+  textAnimationNameLoop,
+  details,
+  animationTextInFrames,
+  animationTextOutFrames,
+  animationTextLoopFrames,
+  durationInFrames,
+  animationFonts,
+  textColorStyle,
+  id
+}) => {
   const frame = useCurrentFrame();
   const animInFrom = animationTextInFrames;
   const animOut = durationInFrames - animationTextOutFrames;

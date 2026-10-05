@@ -10,11 +10,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { groupCaptionItems } from "./caption-preset-picker";
 import useStore from "../../store/use-store";
-import { LazyCaptionPresetPreview } from "@/features/editor/control-item/floating-controls/animation-preview/caption/preview-scene";
+import {
+  LazyCaptionPresetPreview
+} from "@/features/editor/control-item/floating-controls/animation-preview/caption/preview-scene";
 import {
   isExcludedForCaptions
 } from "@/features/editor/control-item/floating-controls/animation-preview/caption/preview-exclusions";
-import {useCaptionGroupIds} from "@/features/editor/control-item/common/animation-caption";
+import { useCaptionGroupIds } from "@/features/editor/control-item/common/animation-caption";
 
 const AnimationCaption = () => {
   const { setFloatingControl, trackItem, floatingControlIds } = useLayoutStore();

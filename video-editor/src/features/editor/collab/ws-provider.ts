@@ -4,7 +4,7 @@ import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import { CollabSchema } from "./ydoc-schema";
 import { CollabTarget } from "./collab-target";
-import {emitAccessChanged} from "@/features/editor/collab/access-events";
+import { emitAccessChanged } from "@/features/editor/collab/access-events";
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
@@ -111,7 +111,10 @@ export function attachWsProvider(
         const beforeIds = target.kind === "project" ? [...schema.trackItems.keys()] : [];
         syncProtocol.readSyncMessage(decoder, encoder, schema.doc, remoteOrigin);
         if (target.kind === "project") {
-          console.debug("[ws-provider] project sync applied", { before: beforeIds.length, after: schema.trackItems.size });
+          console.debug("[ws-provider] project sync applied", {
+            before: beforeIds.length,
+            after: schema.trackItems.size
+          });
         }
         if (encoding.length(encoder) > 1) send(encoding.toUint8Array(encoder));
       } else if (messageType === MESSAGE_AWARENESS) {
@@ -152,7 +155,11 @@ export function attachWsProvider(
   };
   schema.doc.on("update", sendUpdate);
 
-  const sendAwarenessUpdate = ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }, origin: unknown) => {
+  const sendAwarenessUpdate = ({ added, updated, removed }: {
+    added: number[];
+    updated: number[];
+    removed: number[]
+  }, origin: unknown) => {
     if (origin === remoteOrigin) return;
     const changed = [...added, ...updated, ...removed];
     const encoder = encoding.createEncoder();

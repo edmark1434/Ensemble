@@ -1,4 +1,4 @@
-import TimelineBase, {Rect, timeMsToUnits} from "@designcombo/timeline";
+import TimelineBase, { Rect, timeMsToUnits } from "@designcombo/timeline";
 import Video from "./video";
 import { throttle } from "lodash";
 import Audio from "./audio";
@@ -12,17 +12,17 @@ class Timeline extends TimelineBase {
   private isSnappedToPlayhead: boolean = false;
 
   constructor(
-      canvasEl: HTMLCanvasElement,
-      options: Partial<TimelineOptions> & {
-        scale: ITimelineScaleState;
-        duration: number;
-        guideLineColor?: string;
-      }
+    canvasEl: HTMLCanvasElement,
+    options: Partial<TimelineOptions> & {
+      scale: ITimelineScaleState;
+      duration: number;
+      guideLineColor?: string;
+    }
   ) {
     // Intercept the wheel listener registration before super()
     let capturedWheelListener: EventListenerOrEventListenerObject | null = null;
     const origAddEventListener = EventTarget.prototype.addEventListener;
-    EventTarget.prototype.addEventListener = function(type: string, listener: any, options: any) {
+    EventTarget.prototype.addEventListener = function (type: string, listener: any, options: any) {
       if (type === 'wheel') {
         capturedWheelListener = listener;
       }

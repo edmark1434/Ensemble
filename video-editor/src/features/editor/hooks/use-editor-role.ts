@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getSceneRoleStrict } from "@/features/editor/utils/scene-access";
-import {EditorRole, StoredProjectRole, toEditorRole} from "@/features/editor/types/editor-role";
+import { EditorRole, StoredProjectRole, toEditorRole } from "@/features/editor/types/editor-role";
 import { onAccessChanged } from "@/features/editor/collab/access-events";
 
 const ROLE_REFRESH_MS = 30_000;

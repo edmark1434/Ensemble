@@ -8,7 +8,7 @@ import useUploadStore from "@/features/editor/store/use-upload-store";
 import { useIsMediumScreen } from "@/hooks/use-media-query";
 import ModalUpload from "@/components/modal-upload";
 import { useFileDropUpload } from "../hooks/use-file-drop-upload";
-import {cn} from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 const SceneEmpty = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -67,9 +67,9 @@ const SceneEmpty = () => {
           }`}
         >
           <div className={cn(
-              "flex items-center justify-center gap-4 p-2",
-              size.height >= size.width ? "flex-col" : "flex-row",
-            )}
+            "flex items-center justify-center gap-4 p-2",
+            size.height >= size.width ? "flex-col" : "flex-row",
+          )}
           >
             {dragError ? (
               <p className="text-sm font-medium text-red-500">{dragError}</p>
@@ -92,7 +92,8 @@ const SceneEmpty = () => {
           </div>
         </DroppableArea>
       ) : (
-        <div className="fixed top-0 left-0 z-50 flex h-screen w-screen flex-col items-center justify-center gap-4 bg-card">
+        <div
+          className="fixed top-0 left-0 z-50 flex h-screen w-screen flex-col items-center justify-center gap-4 bg-card">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">Loading...</p>
         </div>

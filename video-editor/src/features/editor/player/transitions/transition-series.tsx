@@ -47,7 +47,7 @@ type SeriesSequenceProps = PropsWithChildren<
      */
     readonly stack?: string;
   } & LayoutBasedProps &
-    Pick<SequencePropsWithoutDuration, "name">
+  Pick<SequencePropsWithoutDuration, "name">
 >;
 
 const SeriesSequence = ({ children }: SeriesSequenceProps) => {
@@ -62,9 +62,9 @@ type TransitionType<PresentationProps extends Record<string, unknown>> = {
 
 type TypeChild<PresentationProps extends Record<string, unknown>> =
   | {
-      props: SeriesSequenceProps;
-      type: typeof SeriesSequence;
-    }
+  props: SeriesSequenceProps;
+  type: typeof SeriesSequence;
+}
   | TransitionType<PresentationProps>
   | string;
 
@@ -198,34 +198,34 @@ const TransitionSeriesChildren: FC<{ readonly children: React.ReactNode }> = ({
 
       const nextProgress = next
         ? next.props.timing.getProgress({
-            frame:
-              frame -
-              actualStartFrame -
-              durationInFrames +
-              next.props.timing.getDurationInFrames({ fps }) / 2 +
-              transitionOffsets,
-            fps
-          })
+          frame:
+            frame -
+            actualStartFrame -
+            durationInFrames +
+            next.props.timing.getDurationInFrames({ fps }) / 2 +
+            transitionOffsets,
+          fps
+        })
         : null;
 
       const prevProgress = prev
         ? prev.props.timing.getProgress({
-            frame: frame - actualStartFrame,
-            fps
-          })
+          frame: frame - actualStartFrame,
+          fps
+        })
         : null;
 
       const nextProgressIn = prev
         ? prev.props.timing.getProgress({
-            frame: frame - (actualStartFrame + durationInFrames),
-            fps
-          })
+          frame: frame - (actualStartFrame + durationInFrames),
+          fps
+        })
         : null;
 
       if (
         next &&
         durationInFramesProp <
-          next.props.timing.getDurationInFrames({ fps }) / 2
+        next.props.timing.getDurationInFrames({ fps }) / 2
       ) {
         throw new Error(
           `The duration of a <TransitionSeries.Sequence /> must not be shorter than the duration of the next <TransitionSeries.Transition />. The transition is ${next.props.timing.getDurationInFrames(
@@ -237,7 +237,7 @@ const TransitionSeriesChildren: FC<{ readonly children: React.ReactNode }> = ({
       if (
         prev &&
         durationInFramesProp <
-          prev.props.timing.getDurationInFrames({ fps }) / 2
+        prev.props.timing.getDurationInFrames({ fps }) / 2
       ) {
         throw new Error(
           `The duration of a <TransitionSeries.Sequence /> must not be shorter than the duration of the previous <TransitionSeries.Transition />. The transition is ${prev.props.timing.getDurationInFrames(
@@ -265,13 +265,13 @@ const TransitionSeriesChildren: FC<{ readonly children: React.ReactNode }> = ({
         const isEndFreeze =
           frame >
           Math.floor(actualStartFrame) +
-            Math.floor(durationInFrames) +
-            prevTransitionDuration / 2;
+          Math.floor(durationInFrames) +
+          prevTransitionDuration / 2;
 
         const freezeFrame = isEndFreeze
           ? Math.floor(actualStartFrame) +
-            Math.floor(durationInFrames) +
-            Math.floor(nextTransitionDuration / 2)
+          Math.floor(durationInFrames) +
+          Math.floor(nextTransitionDuration / 2)
           : Math.floor(actualStartFrame);
 
         const fromTemp = isStartFreeze
@@ -288,9 +288,9 @@ const TransitionSeriesChildren: FC<{ readonly children: React.ReactNode }> = ({
         const isBeforeSequenceEnd =
           frame <
           actualStartFrame +
-            durationInFrames +
-            nextTransitionDuration / 2 +
-            prevTransitionDuration / 2;
+          durationInFrames +
+          nextTransitionDuration / 2 +
+          prevTransitionDuration / 2;
 
         return (
           <Freeze
@@ -400,8 +400,8 @@ const TransitionSeriesChildren: FC<{ readonly children: React.ReactNode }> = ({
         const isBeforeSequenceEnd =
           frame <
           Math.floor(durationInFrames) +
-            Math.floor(actualStartFrame) +
-            partialDuration;
+          Math.floor(actualStartFrame) +
+          partialDuration;
 
         return (
           <Freeze

@@ -1,6 +1,6 @@
 "use client";
-import React, {useState, useEffect, useCallback, useRef, useMemo} from "react";
-import {Search, Loader2, Music2, Pause, Play, Music} from "lucide-react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { Search, Loader2, Music2, Pause, Play, Music } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { debounce } from "lodash";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { dispatch } from "@designcombo/events";
 import { ADD_AUDIO } from "@designcombo/state";
 import { IAudio } from "@designcombo/types";
 import { Input } from "@/components/ui/input";
-import {useIsDraggingOverTimeline} from "@/features/editor/hooks/is-dragging-over-timeline";
+import { useIsDraggingOverTimeline } from "@/features/editor/hooks/is-dragging-over-timeline";
 import Draggable from "@/components/shared/draggable";
 
 export function SFX() {
@@ -189,10 +189,10 @@ export function SFX() {
 }
 
 const AudioItem = ({
-   item,
-   onAdd,
-   playingId,
-   setPlayingId
+  item,
+  onAdd,
+  playingId,
+  setPlayingId
 }: {
   item: Partial<IAudio>;
   onAdd: (payload: Partial<IAudio>) => void;
@@ -251,7 +251,8 @@ const AudioItem = ({
       renderCustomPreview={<div style={style} />}
       shouldDisplayPreview={!isDraggingOverTimeline}
     >
-      <div className="group relative flex items-center gap-3 p-2 bg-secondary rounded-md border hover:opacity-80 transition-colors">
+      <div
+        className="group relative flex items-center gap-3 p-2 bg-secondary rounded-md border hover:opacity-80 transition-colors">
         <audio
           ref={audioRef}
           src={item.details?.src}

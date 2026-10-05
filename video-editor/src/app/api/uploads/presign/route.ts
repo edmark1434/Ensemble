@@ -1,6 +1,6 @@
 // app/api/uploads/presign/route.ts
 
-import {connection, NextRequest, NextResponse} from "next/server";
+import { connection, NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import {
   buildPublicUrl,

@@ -4,7 +4,7 @@ import { dispatch } from "@designcombo/events";
 import { EDIT_OBJECT } from "@designcombo/state";
 import { ITrackItem } from "@designcombo/types";
 import { useEffect, useState } from "react";
-import {getMinTextDimensions} from "@/features/editor/utils/text";
+import { getMinTextDimensions } from "@/features/editor/utils/text";
 
 interface TextContentProps {
   trackItem: ITrackItem & any;

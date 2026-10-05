@@ -16,11 +16,17 @@ export interface ITinyColor {
   lightnessValue: number;
   saturationValue: number;
   redValue: number;
+
   initRgb(): void;
+
   initHsb(): void;
+
   toHexString(): string;
+
   toRgbString(): string;
+
   toHsv(): ColorFormats.HSVA;
+
   hex: string;
   hue: number;
   saturation: number;

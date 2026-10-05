@@ -4,7 +4,7 @@ import Solid from "./solid";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 import { IPropsMain } from "./types";
 import "./colorpicker.css";
-import {isGradientColor} from "@/components/color-picker/helpers";
+import { isGradientColor } from "@/components/color-picker/helpers";
 
 const ColorPicker: FC<IPropsMain> = ({
   value = "#ffffff",

@@ -5,8 +5,8 @@ import { dispatch } from "@designcombo/events";
 import { EDIT_OBJECT } from "@designcombo/state";
 import { ITrackItem } from "@designcombo/types";
 import { useEffect, useState } from "react";
-import {FlipHorizontal, FlipVertical, Link, RotateCw, Unlink} from "lucide-react";
-import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
+import { FlipHorizontal, FlipVertical, Link, RotateCw, Unlink } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface LayoutControlProps {
   trackItem: ITrackItem & any;

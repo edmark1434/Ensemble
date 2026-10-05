@@ -5,21 +5,21 @@ import {
   PopoverTrigger
 } from "@/components/ui/popover";
 
-import {Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 
 import { Label } from "@/components/ui/label";
 import { useCallback, useEffect, useRef, useState } from "react";
 import useLayoutStore from "../../store/use-layout-store";
 import { ICaption, ITrackItem } from "@designcombo/types";
 import useStore from "../../store/use-store";
-import {applyPreset, groupCaptionItems} from "../floating-controls/caption-preset-picker";
+import { applyPreset, groupCaptionItems } from "../floating-controls/caption-preset-picker";
 import { dispatch } from "@designcombo/events";
 import { ADD_ITEMS, EDIT_OBJECT, LAYER_DELETE } from "@designcombo/state";
 import { generateId } from "@designcombo/timeline";
 import { debounce } from "lodash";
-import {PresetPicker} from "@/features/editor/control-item/common/preset-picker";
-import {useIsLargeScreen} from "@/hooks/use-media-query";
-import {useMixedValue} from "@/features/editor/hooks/use-mixed-value";
+import { PresetPicker } from "@/features/editor/control-item/common/preset-picker";
+import { useIsLargeScreen } from "@/hooks/use-media-query";
+import { useMixedValue } from "@/features/editor/hooks/use-mixed-value";
 
 export function regroupCaptions(
   captions: ICaption[],
@@ -108,6 +108,7 @@ export function regroupCaptions(
 
   return newCaptions;
 }
+
 type CaptionTransformType = "punctuationOrPause" | "time" | "singleWord";
 
 export function transformCaptions(
@@ -215,6 +216,7 @@ export function transformCaptions(
       return captions;
   }
 }
+
 const OPTIONS_LINES_PER_PAGE = [
   {
     label: "One",

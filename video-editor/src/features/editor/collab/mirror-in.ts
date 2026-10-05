@@ -6,7 +6,7 @@ import { dispatch } from "@designcombo/events";
 import useStore from "../store/use-store";
 import { CollabSchema, readStateFromDoc } from "./ydoc-schema";
 import { SyncGuard } from "./sync-guard";
-import {isSceneItem} from "@/features/editor/types/ensemble-scene";
+import { isSceneItem } from "@/features/editor/types/ensemble-scene";
 import { syncCanvasTransitions } from "../timeline/items/transitions/sync-canvas-transitions";
 
 // Field-wise, order-insensitive compare. The old JSON.stringify compare

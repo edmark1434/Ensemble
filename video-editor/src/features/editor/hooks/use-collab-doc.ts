@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState} from "react";
+import { useEffect, useRef, useState } from "react";
 import * as Y from "yjs";
 import type StateManager from "@designcombo/state";
 import useStore from "../store/use-store";
@@ -21,15 +21,15 @@ import {
 } from "../collab/persistence";
 import { setupMirrorOutFromStateManager, setupMirrorOutFromStore } from "../collab/mirror-out";
 import { attachWsProvider } from "../collab/ws-provider";
-import {CollabTarget} from "@/features/editor/collab/collab-target";
-import {isForbiddenError, patchBlock, patchProject} from "@/features/editor/control-item/common/composition-controls";
-import {isSceneItem} from "@/features/editor/types/ensemble-scene";
-import {patchBlockMeta, patchProjectSceneDetails} from "@/features/editor/collab/remote-patch";
+import { CollabTarget } from "@/features/editor/collab/collab-target";
+import { isForbiddenError, patchBlock, patchProject } from "@/features/editor/control-item/common/composition-controls";
+import { isSceneItem } from "@/features/editor/types/ensemble-scene";
+import { patchBlockMeta, patchProjectSceneDetails } from "@/features/editor/collab/remote-patch";
 import { syncCanvasTransitions } from "../timeline/items/transitions/sync-canvas-transitions";
-import {dispatch} from "@designcombo/events";
-import {PLAYER_PAUSE} from "@/features/editor/constants/events";
-import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
-import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
+import { dispatch } from "@designcombo/events";
+import { PLAYER_PAUSE } from "@/features/editor/constants/events";
+import { scrollTimelineToFrame } from "@/features/editor/utils/timeline-scroll";
+import { useTimelineOffsetX } from "@/features/editor/hooks/use-timeline-offset";
 
 export interface CollabDoc {
   doc: Y.Doc;

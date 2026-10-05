@@ -10,6 +10,7 @@ class HillAudioBars extends Resizable {
   public backgroundColorDiv: string = "#808080";
 
   public hasSrc = true;
+
   constructor(props: HillAudioBarsProps) {
     super(props);
     this.id = props.id;

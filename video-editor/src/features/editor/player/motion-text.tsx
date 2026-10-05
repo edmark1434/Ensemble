@@ -23,20 +23,20 @@ const TextLayer: React.FC<{
   durationInFrames: number;
   animationFonts: { fontFamily: string; url: string }[];
 }> = ({
-        id,
-        content,
-        style = {},
-        fps,
-        textAnimationNameIn,
-        textAnimationNameOut,
-        textAnimationNameLoop,
-        details,
-        animationTextInFrames,
-        animationTextOutFrames,
-        animationTextLoopFrames,
-        durationInFrames,
-        animationFonts
-      }) => {
+  id,
+  content,
+  style = {},
+  fps,
+  textAnimationNameIn,
+  textAnimationNameOut,
+  textAnimationNameLoop,
+  details,
+  animationTextInFrames,
+  animationTextOutFrames,
+  animationTextLoopFrames,
+  durationInFrames,
+  animationFonts
+}) => {
   const frame = useCurrentFrame();
 
   // Same windowing TextAnimated uses internally (animInFrom >= frame for the

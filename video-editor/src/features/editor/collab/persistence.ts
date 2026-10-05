@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import { CollabSchema } from "./ydoc-schema";
-import {collabApiBase, CollabTarget} from "@/features/editor/collab/collab-target";
+import { collabApiBase, CollabTarget } from "@/features/editor/collab/collab-target";
 
 const FLUSH_INTERVAL_MS = 3000;
 

@@ -27,13 +27,13 @@ import { ICompactFont, IFont } from "../../interfaces/editor";
 import { DEFAULT_FONT } from "../../constants/font";
 import useLayoutStore from "../../store/use-layout-store";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
-import {RadioGroup, RadioGroupItem} from "@/components/ui/radio-group";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useResolvedLineHeight } from "../../hooks/use-resolved-line-height";
 import { useMixedValue } from "../../hooks/use-mixed-value";
-import {Slider} from "@/components/ui/slider";
-import {ColorPickerField} from "@/features/editor/control-item/common/color-picker-field";
-import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
-import {Kbd, KbdGroup} from "@/components/ui/kbd";
+import { Slider } from "@/components/ui/slider";
+import { ColorPickerField } from "@/features/editor/control-item/common/color-picker-field";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
 
 interface TextControlsProps {
   trackItem: ITrackItem & any;
@@ -351,7 +351,8 @@ const FontFamily = ({
             </PopoverTrigger>
 
             <PopoverContent className="z-[300] w-full p-0 -ml-4">
-              <div className="relative flex items-center rounded-md border focus-within:ring-1 focus-within:ring-ring pl-2">
+              <div
+                className="relative flex items-center rounded-md border focus-within:ring-1 focus-within:ring-ring pl-2">
                 <Search className="h-5 w-5 text-muted-foreground" />
                 <Input
                   type="text"

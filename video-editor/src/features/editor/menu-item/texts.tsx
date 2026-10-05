@@ -14,7 +14,7 @@ import {
 } from "../control-item/floating-controls/text-preset-picker";
 import { seedDefaultFont } from "@/features/editor/utils/seed-default-font";
 import { loadFonts } from "@/features/editor/utils/fonts";
-import {getCurrentTime} from "@/features/editor/utils/time";
+import { getCurrentTime } from "@/features/editor/utils/time";
 import useStore from "../store/use-store";
 
 const getFontDetails = async () => {
@@ -160,7 +160,8 @@ export const Texts = () => {
         <Draggable
           data={buildTextAddPayload()}
           renderCustomPreview={
-            <div className="flex aspect-square w-30 items-center justify-center rounded-md bg-zinc-800 border border-primary">
+            <div
+              className="flex aspect-square w-30 items-center justify-center rounded-md bg-zinc-800 border border-primary">
               <div
                 style={{
                   backgroundColor: "transparent",
@@ -207,7 +208,8 @@ export const Texts = () => {
                 key={index}
                 data={buildPresetPayload(preset)}
                 renderCustomPreview={
-                  <div className="flex aspect-square w-30 items-center justify-center rounded-md bg-zinc-800 border border-primary">
+                  <div
+                    className="flex aspect-square w-30 items-center justify-center rounded-md bg-zinc-800 border border-primary">
                     <div style={previewStyle} className="place-content-center px-2 text-2xl">
                       Text
                     </div>
@@ -222,7 +224,8 @@ export const Texts = () => {
                   <div style={previewStyle} className="place-content-center px-2 text-2xl">
                     Text
                   </div>
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+                  <div
+                    className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
                     <div className="rounded-full p-1" />
                   </div>
                 </div>

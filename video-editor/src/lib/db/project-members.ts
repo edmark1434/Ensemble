@@ -1,7 +1,7 @@
 // lib/db/project-members.ts
 
 import { db } from "@/lib/db";
-import {canManageSharing} from "@/features/editor/types/editor-role";
+import { canManageSharing } from "@/features/editor/types/editor-role";
 
 export type ProjectRole = "Owner" | "Manager" | "Editor" | "Commenter" | "Viewer";
 export type AssignableProjectRole = "Manager" | "Editor" | "Commenter" | "Viewer";
@@ -117,10 +117,10 @@ const CURSOR_COLORS = ["#F97316", "#3B82F6", "#22C55E", "#EAB308", "#EC4899", "#
 export type AddProjectMemberResult = "ok" | "already_member";
 
 export async function addProjectMember({
-                                         projectId,
-                                         userId,
-                                         role,
-                                       }: {
+  projectId,
+  userId,
+  role,
+}: {
   projectId: string;
   userId: string;
   role: AssignableProjectRole;
@@ -166,10 +166,10 @@ export async function addProjectMember({
  * re-adding a deleted row goes through addProjectMember, not a fresh search hit).
  */
 export async function searchAddableProjectUsers({
-                                                  projectId,
-                                                  query,
-                                                  limit = 8,
-                                                }: {
+  projectId,
+  query,
+  limit = 8,
+}: {
   projectId: string;
   query: string;
   limit?: number;
@@ -217,10 +217,10 @@ export async function searchAddableProjectUsers({
 
 /** Returns false when there was nobody to update (or the target is the Owner). */
 export async function updateProjectMemberRole({
-                                                projectId,
-                                                userId,
-                                                role,
-                                              }: {
+  projectId,
+  userId,
+  role,
+}: {
   projectId: string;
   userId: string;
   role: AssignableProjectRole;
@@ -238,9 +238,9 @@ export async function updateProjectMemberRole({
 
 /** Soft delete. The Owner can't be removed. */
 export async function removeProjectMember({
-                                            projectId,
-                                            userId,
-                                          }: {
+  projectId,
+  userId,
+}: {
   projectId: string;
   userId: string;
 }): Promise<boolean> {

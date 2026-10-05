@@ -11,9 +11,9 @@ import ColorPicker from "@/components/color-picker";
 import { formatColorDisplay, isGradientColor } from "@/components/color-picker/helpers";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
 import useLayoutStore from "../../store/use-layout-store";
-import {cn} from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { DraggablePanel } from "@/components/draggable-panel";
-import {useDraggable} from "@/hooks/use-draggable";
+import { useDraggable } from "@/hooks/use-draggable";
 
 const CHECKERBOARD_STYLE: React.CSSProperties = {
   backgroundImage:

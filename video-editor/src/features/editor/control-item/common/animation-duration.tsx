@@ -1,6 +1,6 @@
 import { Slider } from "@/components/ui/slider";
 import { formatearNumero, useAnimationDuration } from "../../hooks/use-animation-duration";
-import {DurationInputSlider} from "@/features/editor/control-item/common/duration-input-slider";
+import { DurationInputSlider } from "@/features/editor/control-item/common/duration-input-slider";
 
 export const AnimationDuration = ({
   activeTab

@@ -17,7 +17,7 @@ import {
   type AssignableBlockRole,
   type BlockPerson, BlockRole, ROLE_RANK
 } from "@/features/editor/types/block-members";
-import {onAccessChanged} from "@/features/editor/collab/access-events";
+import { onAccessChanged } from "@/features/editor/collab/access-events";
 
 const getInitials = (name: string) =>
   name
@@ -49,7 +49,8 @@ const Avatar = ({
   }
 
   return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xs font-medium text-zinc-200">
+    <div
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xs font-medium text-zinc-200">
       {getInitials(name)}
     </div>
   );
@@ -270,7 +271,8 @@ export default function AccessPicker() {
         >
           <PopoverTrigger asChild>
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Add project members by name or email"
                 className="pl-10"

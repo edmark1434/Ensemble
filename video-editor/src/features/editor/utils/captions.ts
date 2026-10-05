@@ -162,6 +162,7 @@ function createCaptionLines(
 
   return captionLines;
 }
+
 interface FontInfo {
   fontFamily: string;
   fontUrl: string;

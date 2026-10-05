@@ -11,11 +11,11 @@ import { db } from "@/lib/db";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { loadLatestProjectState, compactProject } from "@/lib/collab/persistence-store";
 import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
-import {CollabTarget} from "@/features/editor/collab/collab-target";
-import {compactBlock, loadLatestBlockState, withBlockSnapshotLock} from "@/lib/collab/block-persistence-store";
+import { CollabTarget } from "@/features/editor/collab/collab-target";
+import { compactBlock, loadLatestBlockState, withBlockSnapshotLock } from "@/lib/collab/block-persistence-store";
 import { getEffectiveBlockRole } from "@/lib/db/block-members";
 import { canEditWithRole } from "@/features/editor/types/editor-role";
-import {liveRooms} from "@/lib/collab/live-rooms";
+import { liveRooms } from "@/lib/collab/live-rooms";
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;

@@ -12,9 +12,9 @@ import React, { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { formatearNumero, useAnimationDuration } from "../../hooks/use-animation-duration";
 import { presets } from "../../player/animated";
-import {DurationInputSlider} from "@/features/editor/control-item/common/duration-input-slider";
+import { DurationInputSlider } from "@/features/editor/control-item/common/duration-input-slider";
 import { useCaptionAnimationSummary } from "./animation-caption";
-import {useMixedValue} from "@/features/editor/hooks/use-mixed-value";
+import { useMixedValue } from "@/features/editor/hooks/use-mixed-value";
 
 interface PresetTextProps {
   trackItem: ITrackItem & any;

@@ -6,7 +6,7 @@
 <h1 align="center">React Video Editor</h1>
 
 <div align="center">
-  
+
 Video Editor application using React and TypeScript.
 
 <p align="center">
@@ -51,7 +51,8 @@ pnpm install
 pnpm dev
 ```
 
-Open your browser and visit http://localhost:3000 , see more at [Development](https://github.com/designcombo/react-video-editor).
+Open your browser and visit http://localhost:3000 , see more
+at [Development](https://github.com/designcombo/react-video-editor).
 
 ## 📝 License
 
