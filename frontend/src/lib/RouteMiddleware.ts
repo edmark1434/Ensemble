@@ -2,11 +2,12 @@ import { createElement, Fragment, useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import useGlobalState from "./global_state";
 import api from "./axios";
-import { getStaffHomePath } from "./staffRoutes";
+import { getStaffHomePath, getStaffPlatformViewPath } from "./staffRoutes";
 import { ONBOARDING_COMPLETED_EVENT, ONBOARDING_STEP_CHANGED_EVENT, wasOnboardingCompleted } from "./onboardingEvents";
 import { ProfileLoadingState } from "@/pages/user/7_profile/Displays/ProfileLoadingState.tsx";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { isGuestAllowedPath } from "./guestRouteAccess";
+import { isStaffConsolePath, isStaffPreviewFrame } from "./staffPlatformView";
 
 type OnboardingGateState = {
     accountId: string | null;
@@ -285,6 +286,13 @@ export default function RouteMiddleware() {
 
         navigate('/', { replace: true });
     }, [isCheckingSession, resolvedUser, isGuestMode, isPublicRoute, isGuestAllowedRoute, navigate]);
+
+    useEffect(() => {
+        if (isCheckingSession || resolvedUser?.type !== 'Staff') return;
+        if (isStaffPreviewFrame()) return;
+        if (isPublicRoute || isStaffConsolePath(location.pathname) || isOnboardingRoute) return;
+        navigate(getStaffPlatformViewPath(resolvedUser.role), { replace: true });
+    }, [isCheckingSession, resolvedUser, isPublicRoute, isOnboardingRoute, location.pathname, navigate]);
 
     if (onboardingVerificationFailed) {
         return createElement(RouteLoadingShell);

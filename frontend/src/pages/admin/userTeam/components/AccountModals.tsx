@@ -600,13 +600,7 @@ export function CreditActivityModal({
   );
 }
 
-const VERIFICATION_DURATION_OPTIONS = [
-  { value: 30, label: '30 days' },
-  { value: 90, label: '90 days' },
-  { value: 180, label: '6 months' },
-  { value: 365, label: '1 year' },
-  { value: 730, label: '2 years' },
-] as const;
+const VERIFICATION_VALIDITY_DAYS = 365;
 
 function VerificationStatusBadge({ status }: { status: string | null }) {
   const value = status || 'Unavailable';
@@ -914,9 +908,6 @@ export function VerificationModal({
   loadDiditDetails?: boolean;
 }) {
   const [saving, setSaving] = useState(false);
-  const [validityDays, setValidityDays] = useState(365);
-  const [customDays, setCustomDays] = useState('');
-  const [useCustom, setUseCustom] = useState(false);
   const [actionReason, setActionReason] = useState('');
   const [actionReasonError, setActionReasonError] = useState('');
   const actionReasonRef = useRef<HTMLTextAreaElement>(null);
@@ -950,17 +941,6 @@ export function VerificationModal({
     void load();
     return () => { cancelled = true; };
   }, [accountId, diditRefreshToken, loadDiditDetails]);
-
-  const resolvedDays = useCustom
-    ? Math.min(Math.max(Number(customDays) || 0, 1), 3650)
-    : validityDays;
-
-  const durationLabel = (() => {
-    if (resolvedDays === 365) return '1 year';
-    if (resolvedDays === 180) return '6 months';
-    if (resolvedDays === 730) return '2 years';
-    return `${resolvedDays} day${resolvedDays === 1 ? '' : 's'}`;
-  })();
 
   const storedValidityLabel = (() => {
     const verifiedAt = diditDetails?.verifiedAt;
@@ -1004,8 +984,7 @@ export function VerificationModal({
   const approveDisabled =
     saving ||
     isPendingSessionLoading ||
-    !canApprove ||
-    (useCustom && (!customDays || Number(customDays) <= 0));
+    !canApprove;
 
   const focusActionReason = () => {
     window.requestAnimationFrame(() => {
@@ -1032,7 +1011,7 @@ export function VerificationModal({
     setSaving(true);
     try {
       await setAccountVerification(accountId, action, {
-        validityDays: action === 'approve' ? resolvedDays : undefined,
+        validityDays: action === 'approve' ? VERIFICATION_VALIDITY_DAYS : undefined,
         diditWorkflow: loadDiditDetails,
         comment: actionReason.trim() || undefined,
         reverificationRequirements:
@@ -1074,7 +1053,7 @@ export function VerificationModal({
             title={!canApprove ? 'Cannot approve: no verification URL exists in the verification session' : undefined}
             className="rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Approve for {durationLabel}
+            Verify
           </button>
           {[
             { label: 'Decline', action: 'decline' },
@@ -1238,57 +1217,13 @@ export function VerificationModal({
           </div>
         </div>
 
-        <div className="mb-4 rounded-xl border border-white/[0.06] bg-black/20 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Approval validity period
+        <div className="mb-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300/80">
+            Verification length
           </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {VERIFICATION_DURATION_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => {
-                  setUseCustom(false);
-                  setValidityDays(opt.value);
-                }}
-                className={`rounded-lg border px-3 py-1.5 text-xs transition ${
-                  !useCustom && validityDays === opt.value
-                    ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'
-                    : 'border-white/[0.08] text-zinc-400 hover:text-white'
-                }`}
-              >
-                {opt.label}
-                {opt.value === 365 ? ' (default)' : ''}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setUseCustom(true)}
-              className={`rounded-lg border px-3 py-1.5 text-xs transition ${
-                useCustom
-                  ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'
-                  : 'border-white/[0.08] text-zinc-400 hover:text-white'
-              }`}
-            >
-              Custom
-            </button>
-          </div>
-          {useCustom && (
-            <label className="mt-3 block text-xs text-zinc-500">
-              Custom days (1–3650)
-              <input
-                type="number"
-                min={1}
-                max={3650}
-                value={customDays}
-                onChange={(e) => setCustomDays(e.target.value)}
-                placeholder="e.g. 400"
-                className="mt-1 w-36 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
-              />
-            </label>
-          )}
-          <p className="mt-2 text-xs text-zinc-500">
-            Approving will set expiry to {durationLabel} from now.
+          <p className="mt-1 text-sm font-medium text-white">1 year</p>
+          <p className="mt-1 text-xs text-emerald-100/80">
+            Verify sets this account as verified for 1 year from today.
           </p>
         </div>
 
@@ -1315,7 +1250,7 @@ export function VerificationModal({
             <p className="font-medium text-white">No uploaded business document</p>
             <p className="mt-1 text-xs text-zinc-500">Application ID: {verification.applicationId}</p>
             <p className="mt-1 text-xs text-zinc-500">
-              Verification is tracked via verifications. Choose a validity period, then approve.
+              Verification is tracked via verifications. Verify sets it for 1 year.
             </p>
           </div>
         )}

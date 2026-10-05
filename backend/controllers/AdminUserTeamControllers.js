@@ -95,8 +95,7 @@ async function patchAdminAccountVerification(req, res) {
     const data = await updateAccountVerification(accountId, action, staffIdFromSession(req.session), {
       validityDays: req.body?.validityDays ?? req.body?.validity_days,
     });
-    const durationNote =
-      data.validityDays != null ? ` (valid for ${data.validityDays} day${data.validityDays === 1 ? '' : 's'})` : '';
+    const durationNote = data.validityDays != null ? ' (valid for 1 year)' : '';
     res.status(200).json({
       success: true,
       data,
@@ -119,7 +118,7 @@ async function runAdminDiditVerificationAction(req, res, action) {
     const message = data.mode === 'team_local_update'
       ? `Team verification updated to ${data.verificationStatus}`
       : data.mode === 'no_change'
-      ? 'Verification is already approved with the selected validity period'
+      ? 'Verification is already approved for 1 year'
       : data.mode === 'expiry_updated'
         ? 'Verification expiry updated'
         : `Didit ${action} request submitted`;

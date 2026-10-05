@@ -1,4 +1,6 @@
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useStaffPlatformGuard } from "@/components/staff/StaffPlatformView";
+import { isStaffPlatformViewer, isStaffPreviewFrame, STAFF_PREVIEW_NAV_MESSAGE } from "@/lib/staffPlatformView";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import UserNav from "@/components/nav/user_nav.tsx";
 import UtilScrollTop from "@/components/utility/util_scroll_top.tsx";
@@ -31,6 +33,7 @@ export const emitIncomingMessage = (sender: ChatTarget) => {
 
 const Layout = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
   const isSidebarCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
   const initializeChat = useChatState((state) => state.initialize);
@@ -46,6 +49,22 @@ const Layout = () => {
   const activeFloatingId = useChatState((state) => state.activeFloatingId);
   const unreadCounts = useChatState((state) => state.unreadCounts);
 
+  const isStaffView = isStaffPlatformViewer(user);
+  useStaffPlatformGuard(isStaffView);
+
+  useEffect(() => {
+    if (!isStaffPreviewFrame()) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as { type?: string; path?: string } | null;
+      if (!data || data.type !== STAFF_PREVIEW_NAV_MESSAGE) return;
+      const path = String(data.path || "");
+      if (!path.startsWith("/") || path.startsWith("//")) return;
+      navigate(path);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [navigate]);
   const isInboxPage = location.pathname.startsWith("/inbox");
   const currentUserId = String(user?.account_id || "");
 
@@ -138,8 +157,9 @@ const Layout = () => {
   const marginLeft = isSidebarCollapsed ? "5rem" : "16rem";
 
   useEffect(() => {
+    if (isStaffView) return;
     if (user?.account_id) initializeChat(String(user.account_id));
-  }, [user?.account_id, initializeChat]);
+  }, [isStaffView, user?.account_id, initializeChat]);
 
   const openChatWithUser = useCallback(
     (target?: ChatTarget) => {
@@ -206,10 +226,15 @@ const Layout = () => {
         }`}
         style={{ paddingLeft: marginLeft }}
       >
+        {isStaffView && (
+          <style>
+            {`[data-staff-preview-hide]{display:none !important;}`}
+          </style>
+        )}
         <Outlet context={{ openChatWithUser }} />
       </main>
 
-      {!isInboxPage && (
+      {!isInboxPage && !isStaffView && (
         <ChatMain
           activeUser={activeChatUser}
           recentChats={recentChats}
@@ -217,7 +242,7 @@ const Layout = () => {
           onRemoveChat={removeFloatingWindow}
         />
       )}
-      <CallOverlay />
+      {!isStaffView && <CallOverlay />}
 
       <UtilScrollTop />
       <VerificationRequiredModal />

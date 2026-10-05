@@ -1136,7 +1136,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null) {
   return { accountId, status, previousStatus: account.status };
 }
 
-async function updateAccountVerification(accountId, action, staffId, options = {}) {
+async function updateAccountVerification(accountId, action, staffId, _options = {}) {
   await assertAccountExists(accountId);
   const key = String(action || '').toLowerCase();
   const statusMap = {
@@ -1154,9 +1154,8 @@ async function updateAccountVerification(accountId, action, staffId, options = {
   const nextStatus = statusMap[key];
   if (!nextStatus) throw new Error(`Invalid verification action: ${action}`);
 
-  let validityDays = Number(options.validityDays);
-  if (!Number.isFinite(validityDays) || validityDays <= 0) validityDays = 365;
-  validityDays = Math.min(Math.max(Math.floor(validityDays), 1), 3650); // 1 day – 10 years
+  // Approval length is fixed at 1 year. Staff do not choose a duration.
+  const validityDays = 365;
 
   const isVerified = nextStatus === 'verified';
   const accountTypeRes = await pool.query(

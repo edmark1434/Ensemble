@@ -90,7 +90,7 @@ const UserNav: React.FC<UserNavProps> = () => {
 
     const handleLogoClick = () => {
        const { user: currentUser, isAuthenticated: auth } = useGlobalState.getState();
-       if (auth && currentUser?.type === "User") {
+       if (auth && (currentUser?.type === "User" || currentUser?.type === "Staff")) {
           navigate("/home");
           return;
        }

@@ -1,12 +1,10 @@
-# Current Task: Discovery Page Redesign
+# Current Task: Staff platform view inside the console
 
 ## Objective
-Redesign `/discovery` so clients are hooked by freelancers matched to their recent open job posts.
+Keep Platform view as a tab inside each staff console. The tab shows a framed, browse-only preview of the member site. Staff do not leave the console for the real platform.
 
 ## Acceptance Criteria
-- "Talent matched for you" section ranks freelancers by overlap between their profile skills and the client's open job `tags`.
-- Client can switch between "All my open jobs" and each individual recent job (up to 5).
-- Each match card shows a match % ring, matched skills (green), rating, and follow/message actions.
-- Empty state prompts posting a job when the client has no open jobs with skills.
-- Explore section: grid cards, search, role filters, Best match / Top rated / Following sorts, matched skills highlighted.
-- No gradients; existing theme preserved. `npx tsc --noEmit` passes.
+- Admin, the staff portal, and each moderator console open Platform view on their own route.
+- The tab contains a framed member-site preview with shortcuts for home, forums, jobs, gigs, discovery, marketplace, and projects.
+- The preview can open every member page. Action controls are removed from the preview. Writes stay blocked.
+- Opening a member URL in the main window returns staff to their Platform view tab.

@@ -29,11 +29,38 @@ export function getStaffHomePath(role?: string | null): string {
   return STAFF_HOME_BY_ROLE[role] ?? STAFF_PORTAL_DASHBOARD;
 }
 
+/** In-console tab that previews the member site. Staff never leave their console for this. */
+export function getStaffPlatformViewPath(role?: string | null): string {
+  if (role === 'Admin') return '/admin/platform-view';
+  if (role === 'Forum Moderator') return '/moderator/forum/platform-view';
+  if (role === 'Marketplace Moderator') return '/moderator/marketplace/platform-view';
+  if (role === 'Support Moderator') return '/moderator/support/platform-view';
+  if (role === 'Jobs N Gigs Moderator' || role === 'Jobs Moderator' || role === 'Jobs & Gigs Moderator') {
+    return '/moderator/jobs/platform-view';
+  }
+  return '/staff/platform-view';
+}
+
+export function platformViewPathForConsole(homeTo: string): string {
+  if (homeTo.startsWith('/admin')) return '/admin/platform-view';
+  if (homeTo.startsWith('/moderator/forum')) return '/moderator/forum/platform-view';
+  if (homeTo.startsWith('/moderator/marketplace')) return '/moderator/marketplace/platform-view';
+  if (homeTo.startsWith('/moderator/support')) return '/moderator/support/platform-view';
+  if (homeTo.startsWith('/moderator/jobs')) return '/moderator/jobs/platform-view';
+  return '/staff/platform-view';
+}
+
 export function isStaffPortalDashboardPath(pathname: string): boolean {
   return pathname === STAFF_PORTAL_DASHBOARD || pathname.startsWith(`${STAFF_PORTAL_DASHBOARD}/`);
 }
 
 export function getStaffRoleForPath(pathname: string): string | undefined {
+  if (pathname === '/admin/platform-view' || pathname.startsWith('/admin/platform-view/')) {
+    return 'Admin';
+  }
+  if (pathname === '/staff/platform-view' || pathname.startsWith('/staff/platform-view/')) {
+    return STAFF_PORTAL_ANY_MODERATOR;
+  }
   if (isStaffPortalDashboardPath(pathname)) {
     return STAFF_PORTAL_ANY_MODERATOR;
   }

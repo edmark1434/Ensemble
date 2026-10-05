@@ -2,6 +2,7 @@ import axios from "axios";
 import { API_BASE_URL } from "./api";
 import useGlobalState from "./global_state";
 import { showErrorToast } from "@/components/utility/toast";
+import { isStaffPreviewFrame } from "./staffPlatformView";
 
 const ACCOUNT_RESTRICTION_CODES = new Set([
   "ACCOUNT_BANNED",
@@ -35,8 +36,23 @@ async function getCsrfToken() {
 
 const CSRF_EXEMPT_URL = /\/api\/(?:chat|users\/(?:login|signup|signup-save-session|verify-email|resend-verification-email|refresh-token|forgot-password|reset-password))(?:$|[?#])/;
 
+function rejectStaffPlatformWrite(config: { method?: string; url?: string }) {
+  if (useGlobalState.getState().user?.type !== "Staff") return null;
+  if (!isStaffPreviewFrame()) return null;
+  const method = String(config.method || "get").toLowerCase();
+  const url = String(config.url || "");
+  const reading = method === "get" || method === "head" || method === "options";
+  if (reading && !/\/download(?:$|[?#/])/i.test(url)) return null;
+  return Promise.reject(Object.assign(new Error("Platform view is browse-only."), {
+    code: "STAFF_VIEW_ONLY",
+    config,
+  }));
+}
+
 export function installDefaultAxiosCsrfInterceptor() {
   axios.interceptors.request.use(async (config) => {
+    const blocked = rejectStaffPlatformWrite(config);
+    if (blocked) return blocked;
     const method = String(config.method || "get").toLowerCase();
     const url = String(config.url || "");
     if (!["get", "head", "options"].includes(method) && !CSRF_EXEMPT_URL.test(url)) {
@@ -55,6 +71,8 @@ const api = axios.create({
 });
 
 api.interceptors.request.use(async (config) => {
+  const blocked = rejectStaffPlatformWrite(config);
+  if (blocked) return blocked;
   const method = String(config.method || "get").toLowerCase();
   const url = String(config.url || "");
   if (!["get", "head", "options"].includes(method) && !CSRF_EXEMPT_URL.test(url)) {
