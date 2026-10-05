@@ -989,7 +989,7 @@ export default function DiscoveryPage() {
                           </p>
                           <p className="text-[10px] text-zinc-400 mt-1">based on completed jobs & gigs</p>
                         </div>
-                                                                            <div className="p-4 rounded-2xl bg-white dark:bg-dark-surface border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-center relative group cursor-pointer hover:border-blue-500/40 hover:shadow-md transition-all" onClick={() => setIsFollowersModalOpen(true)}>
+                                                                            <div className="p-4 rounded-2xl bg-white dark:bg-dark-surface border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-center relative group/followers cursor-pointer hover:border-blue-500/40 hover:shadow-md transition-all" onClick={() => setIsFollowersModalOpen(true)}>
                             <button className="absolute top-3 right-3 text-zinc-400 group-hover/followers:text-blue-500 transition-colors p-1 bg-zinc-50 dark:bg-zinc-800 rounded-full group-hover/followers:bg-blue-50 dark:group-hover/followers:bg-blue-900/30">
                               <ExternalLink className="w-3.5 h-3.5" />
                             </button>
