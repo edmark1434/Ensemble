@@ -1,0 +1,8 @@
+1. Resolve flex overflow issues for long chat messages and lock viewport height
+2. Display specific names of typing users instead of generic count
+3. Add system messages for group chat events and confirmation modal for adding members
+4. Ensure gig milestones receive delivery_days and handle zero deadline as Flexible
+5. Resolve 1/1/1970 deadline formatting and filter duplicate proposal/gig terms from presets
+6. Remove obsolete lower-timestamp migration 1813200000000
+7. Implement milestone business logic and in-app notifications
+8. Implement milestone business logic and in-app notifications

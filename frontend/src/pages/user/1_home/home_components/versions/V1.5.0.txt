@@ -1,0 +1,15 @@
+1. Fixed Gig Sticky Header
+2. Add Team Task Dashboard, Modal, and Workspace components
+3. Improved Auth UI
+4. Dynamic Landing Tags Categories
+5. Dynamic Landing Search
+6. Home fixes
+7. Improved Auth Required UI
+8. Improved Logout UI
+9. Adjust
+10. Implemented Restrictions and Access for Guest
+11. Login Prompter
+12. Implementation of Guest Mode
+13. Fixed Skeleton loading for header
+14. Conditional tabs
+15. Fixed header size

@@ -1,0 +1,15 @@
+1. Make contract accept buttons use white text for visibility on emerald background
+2. Make Approved status green and deep-link offer notifications to contract modal
+3. Add Set to Now button next to contract start date input in accept modal
+4. Add terms certification checkbox to accept proposal modal
+5. Style(ui): update homepage, transaction history, contracts, and various components
+6. Update order proposal creation steps and milestone UI
+7. Resolve UI and data issues in gig lists and order details
+8. Integrate profile portfolio and gallery into applicant and author views
+9. Improve proposal creation flow and listings
+10. Update database repositories for dashboard and jobs
+11. Link forum discussion and group member names to profiles
+12. Update the redirect url of the return to the project in the prod
+13. Change the redirect url of the return to project buttonm in the video editor
+14. Remove customer payload in checkout topup
+15. Updating upload limit to 1gb

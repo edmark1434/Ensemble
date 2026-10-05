@@ -1,0 +1,8 @@
+1. Improved Filter for Category Dynamic Display Upon Switching Tabs
+2. Enhance account verification process and UI
+3. Improved Notifications
+4. Improved UI UX on Job Posting and Edit
+5. Improved Visual Tab Display and Applied Light Modes to Some Areas and Minor Bug Fixes
+6. Toast Loading Animation Update
+7. Add CSRF protection, rate limiting, and webhook verification
+8. Implement onboarding controllers, services, and routes

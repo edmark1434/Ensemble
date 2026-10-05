@@ -1,0 +1,15 @@
+1. Resolve layout and navigation warnings across discovery, jobs, and gigs
+2. Enhance gallery and projects backend logic with tag associations
+3. Update skills and merit display sections and logic
+4. Enhance top section UI with dynamic location, joined date, star ratings, and button tooltips
+5. Implement job invitations backend logic, migrations, and modal UI
+6. Custom toast for follow event with avatar
+7. Redesign page and fix empty search results
+8. Create new discovery page and update project views
+9. Add milestone percentage allocation and precise credit calculation
+10. Upgrade job post view with divided budgets, deadlines and terms UI
+11. Implement job workflow terms and conditional initiator logic
+12. Add extended video editing and layout skills to job requirements
+13. Enhance UI for milestone details, toast notifications, and order layouts
+14. Redesign notifications page: icons, human labels, follower avatars, 4 tabs
+15. Redesign notifications page with 4 categorized tabs

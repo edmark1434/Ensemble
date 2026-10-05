@@ -1,0 +1,15 @@
+1. Refactor forum post layouts, tags, and filters UI
+2. Fetch and map forum user badges from database
+3. Enhance job creation tooltips and text
+4. Update navigation icons
+5. Reverted hardcoded fps for video and audio, also: editor uses @remotion/media audio/video while render server uses html5 audio/video
+6. Added scene playback controls, fixed audio playback issues, fixed being able to add scenes inside scenes
+7. Temporary commit: scene access and playback
+8. Minor ui tweaks for scene items on the timeline
+9. Fixed scene corner radius not working + some code cleanup
+10. Added char limit for scene and project names - 20 and 50, fixed presence overlays in the timeline for scenes in a group selection, also: add scene button now doesnt hide when a scene is selected
+11. Implement team invite modal and related features
+12. Fixed sync of scene work size (inside) to layout size (outside), added double-click to open gesture for scenes on canvas
+13. Refactor alert handling to use showErrorToast for better user feedback; remove Claim Credits functionality from Dashboard
+14. Update UserHeader component to remove credits prop across various pages
+15. Fixed issues with transitions, updated transitions to support scenes, and enabled them back in !

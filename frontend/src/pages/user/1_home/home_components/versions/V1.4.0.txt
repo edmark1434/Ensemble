@@ -1,0 +1,15 @@
+1. Dynamic Gigs Overhaul
+2. Adjusted UI - Latest Dark mode
+3. Adjusted UI
+4. Adjusted
+5. Part 3 of Applying Semantic variables
+6. Inbox Light Mode
+7. Part 2 of Applying Semantic Variables to Custom Dark Mode Colors and adjusted layouts
+8. Modify Assets to make upload as one or as bundle, added also like, saved and review in the assets.
+9. Part 1 of Applying Semantic Variables to Custom Dark Mode Colors - Applied to Side Nav bar | Profile and more
+10. Improved UI Changes
+11. Add asset management features including media display, purchase modal, and original file preview
+12. Added collab pt2: added websocket for collab, added api route for snapshot checkouts, moved route for latest snapshot
+13. Implement join request functionality for teams
+14. Complete onboarding flow to redirect users to /home after final survey completion
+15. Fixed Dataset Error

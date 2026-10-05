@@ -1,0 +1,15 @@
+1. Align tab bar padding with search bar for consistent vertical alignment
+2. Move Create Group button beside search bar, align collapse toggle left of tabs
+3. Move collapse toggle to left of Direct Messages tab, move Create Group to far right
+4. DeleteConversation was converting conversations array to object, causing crash
+5. Black screen after deleting group chat, add toast notifications
+6. Remove invalid auth import in inbox controllers
+7. Resolve module not found error for sendError in inbox controllers
+8. Reference error props is not defined
+9. Add light mode tooltip and delete group chat functionality for owners
+10. Add tooltip explaining member limit locking mechanism
+11. Permanently lock in higher group member limits when upgrading subscriptions
+12. Clarify group member limit behavior on subscription downgrade
+13. Properly expose subscription plan globally and display ownership notice
+14. Correctly assign owner role on group creation and show member limit in creation modal
+15. Inject member subscription plan to inbox payload to reliably calculate group limits

@@ -1,3 +1,15 @@
-1. Added "Checkout Summary" UI for Job Postings and Proposal submissions.
-2. Platform fee deductions securely verified against wallet balances.
-3. Updated project initiation defaults for Freelancers.
+1. Docs: add V1.3.5 system release logs for fee checkout UI
+2. Implement job post and proposal fee checkout UI with wallet integration
+3. Prevent tooltip from opening on Followers card hover
+4. Add interactive profile stats and links
+5. Video editor codebase reformat
+6. Implement SPA fallback for marketplace and enhance staff platform navigation with message handling
+7. Integrate staff platform viewer logic to conditionally render UI elements based on user role
+8. Streamline staff platform view by removing unnecessary browse checks and enhancing action control visibility
+9. Add platform view tab for staff roles within console, ensuring browse-only access and improved navigation
+10. Implement platform view for staff roles, restricting write access and enhancing navigation
+11. Standardize verification approval to a fixed 1-year duration, removing custom duration options
+12. Fixes and updates on collab and access pt1: - fixed unkilled collab sessions inside scenes - fixed scene duration changing briefly on open, added gate between loading project and scene ydoc - fixed access resolution for scenes - project roles and scene access now update in real time - scene access now reacts to project role changes - added indicator for block members removed from project - removing scene access while inside a scene now kicks you, added scene removal modal - added manager role: editor that has share access - added gate for share button and modal
+13. Resolve layout and navigation warnings across discovery, jobs, and gigs
+14. Enhance gallery and projects backend logic with tag associations
+15. Update skills and merit display sections and logic
