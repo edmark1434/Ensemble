@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate, useOutletContext } from "react-router-dom";
+import { useParams, useNavigate, useOutletContext, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
@@ -139,7 +139,7 @@ const isUuid = (value: string | undefined): value is string =>
 export default function Profile({ validatedProfileId }: ProfileProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabType>("introduction");
+  const locationHook = useLocation(); const [activeTab, setActiveTab] = useState<TabType>((new URLSearchParams(locationHook.search).get("tab") as TabType) || "introduction");
 
   const { user } = useGlobalState();
   const { id: profileAccountId } = useParams<{ id?: string }>();

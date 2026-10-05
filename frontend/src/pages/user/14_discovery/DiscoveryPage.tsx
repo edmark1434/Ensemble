@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import {
   Search, User, ArrowRight, Star, ChevronLeft, ChevronRight, MessageCircle,
-  Sparkles, Briefcase, CheckCircle2, Users, Plus, Target, Play, ImageIcon, Video, X, Info, ThumbsUp, Tag, Check,
+  Sparkles, Briefcase, CheckCircle2, Users, Plus, Target, Play, ImageIcon, Video, X, Info, ThumbsUp, Tag, Check, ExternalLink,
 } from "lucide-react";
+import { FollowersModal } from '@/pages/user/7_profile/Displays/FollowersModal.tsx';
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -152,19 +153,20 @@ export default function DiscoveryPage() {
   const [selectedCardUser, setSelectedCardUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
-  const [roleFilter, setRoleFilter] = useState("All");
+  const [roleFilter, setRoleFilter] = useState("Freelancer");
   const [sortOption, setSortOption] = useState("default");
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 8;
 
   // Recommendation state
   const [myJobs, setMyJobs] = useState<MyJob[]>([]);
+  const [otherJobs, setOtherJobs] = useState<MyJob[]>([]);
   const [freelancers, setFreelancers] = useState<UserProfile[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string>("all");
   const [recLoading, setRecLoading] = useState(true);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false); const [isFollowersModalOpen, setIsFollowersModalOpen] = useState(false);
   
   const { tab } = useParams<{ tab: string }>();
   const [activeTab, setActiveTab] = useState<"creators" | "matched" | "gallery" | "standout">( (tab as any) || "creators" );
@@ -213,6 +215,7 @@ export default function DiscoveryPage() {
           .slice(0, 5)
           .map((j: any) => ({ id: j.job_id, title: j.title, skills: j.tags, createdAt: j.created_at, thumbnailPath: j.thumbnail_path }));
         setMyJobs(jobs);
+        setOtherJobs((jobsRes.data?.data || []).filter((j: any) => !(j.is_personal_post || j.is_own_post || j.is_manageable_post) && j.status === "Open").map((j: any) => ({ id: j.job_id, title: j.title, skills: j.tags || [], createdAt: j.created_at, thumbnailPath: j.thumbnail_path })));
         setFreelancers(
           (flRes.data?.data || [])
             .map((a: any) => mapAccount(a, cloudfront))
@@ -262,8 +265,11 @@ export default function DiscoveryPage() {
     fetchProfiles();
   }, [activeQuery, userInfo?.account_id, roleFilter, cloudfront]);
 
-  const displayedProfiles = useMemo(() => {
+    const displayedProfiles = useMemo(() => {
       let result = [...profiles];
+      if (userInfo?.account_id) {
+        result = result.filter(p => String(p.id) !== String(userInfo.account_id));
+      }
       
       const getSubWeight = (p: UserProfile) => {
         if (p.subscriptionType === 'Business') return 3;
@@ -280,7 +286,7 @@ export default function DiscoveryPage() {
         result.sort((a, b) => getSubWeight(b) - getSubWeight(a));
       }
       return result;
-    }, [profiles, sortOption, allMySkills]);
+        }, [profiles, sortOption, allMySkills, userInfo?.account_id]);
 
   const totalPages = Math.ceil(displayedProfiles.length / ITEMS_PER_PAGE);
   const paginatedProfiles = useMemo(() => {
@@ -825,13 +831,13 @@ export default function DiscoveryPage() {
               }
               
               // Calculate stats against my jobs
-              const matchResults = myJobs.map(job => {
+              const matchResults = otherJobs.map(job => {
                  return { job, match: computeMatch(myProfile, job.skills) };
               });
               const matchedJobs = matchResults.filter(r => r.match.matched.length > 0);
               
-              const avgMatchPercent = myJobs.length > 0
-                ? Math.round(matchResults.reduce((sum, r) => sum + r.match.percent, 0) / myJobs.length)
+              const avgMatchPercent = matchedJobs.length > 0
+                ? Math.round(matchedJobs.reduce((sum, r) => sum + r.match.percent, 0) / matchedJobs.length)
                 : 0;
 
               const InfoTooltip = ({ text }: { text: string }) => (
@@ -852,7 +858,7 @@ export default function DiscoveryPage() {
                     <Sparkles className="h-6 w-6 text-blue-500" /> How you stand out
                   </h2>
                   <p className="text-sm text-zinc-500 mt-2">
-                    See exactly how your profile looks in the Discovery feed to clients, and track how well you match with your own job postings.
+                    See exactly how your profile looks in the Discovery feed to clients, and track how well you match with other people's job postings.
                   </p>
                 </div>
                 
@@ -871,10 +877,10 @@ export default function DiscoveryPage() {
                         <p className="text-[11px] text-zinc-400 mt-1">This is how clients see your profile in the talent feed.</p>
                       </div>
                       
-                      <div className="w-full flex-1 flex flex-col relative group rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 shadow-sm cursor-default overflow-visible">
+                      <div className="w-full flex-1 flex flex-col relative group rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 shadow-sm cursor-pointer overflow-visible" onClick={() => setSelectedCardUser(myProfile)}>
                         
                         {/* Upper Right Badge: Avg Match */}
-                        {myJobs.length > 0 && (
+                        {otherJobs.length > 0 && (
                           <div className="absolute -top-3 -right-2 flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/50 text-zinc-600 dark:text-zinc-300 text-[10px] font-bold shadow-sm z-10 transition-transform group-hover:-translate-y-1">
                             <ThumbsUp className="w-3 h-3 text-emerald-500" />
                             {avgMatchPercent}% Avg Match
@@ -945,7 +951,7 @@ export default function DiscoveryPage() {
                       <div className="mb-4">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center">
                           Market Competitiveness
-                          <InfoTooltip text="Stats summarizing your profile's performance and match rates across your own job postings." />
+                          <InfoTooltip text="Stats summarizing your profile's performance and match rates across other people's job postings." />
                         </h3>
                         <p className="text-[11px] text-zinc-400 mt-1">Overview of your standing in the marketplace.</p>
                       </div>
@@ -954,40 +960,46 @@ export default function DiscoveryPage() {
                         <div className="p-4 rounded-2xl bg-white dark:bg-dark-surface border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-center">
                           <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider flex items-center">
   Job Matches
-  <InfoTooltip text="Total number of your own job postings where you meet at least one required skill." />
+  <InfoTooltip text="Total number of other people's job postings where you meet at least one required skill." />
                           </div>
                           <p className="text-3xl font-extrabold text-gray-900 dark:text-white mt-1">{matchedJobs.length}</p>
-                          <p className="text-[10px] text-zinc-400 mt-1">out of {myJobs.length} open jobs</p>
+                          <p className="text-[10px] text-zinc-400 mt-1">out of {otherJobs.length} open jobs</p>
                         </div>
                         <div className="p-4 rounded-2xl bg-white dark:bg-dark-surface border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-center">
                           <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider flex items-center">
   Top Match Rate
-  <InfoTooltip text="Your highest skill overlap percentage across all your open job postings." />
+  <InfoTooltip text="Your highest skill overlap percentage across all other open job postings." />
                           </div>
                           <p className="text-3xl font-extrabold text-blue-500 mt-1">
                             {matchedJobs.length > 0 ? Math.max(...matchedJobs.map(r => r.match.percent)) : 0}%
                           </p>
                           <p className="text-[10px] text-zinc-400 mt-1">highest skill overlap</p>
                         </div>
-                        <div className="p-4 rounded-2xl bg-white dark:bg-dark-surface border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-center">
-                          <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider flex items-center">
-  Your Rating
-  <InfoTooltip text="Your average rating received from clients on completed gigs." />
-                          </div>
+                                                  <div className="p-4 rounded-2xl bg-white dark:bg-dark-surface border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-center relative">
+                            <button onClick={() => navigate('/profile?tab=performance')} className="absolute top-3 right-3 text-zinc-400 hover:text-blue-500 transition-colors p-1 bg-zinc-50 dark:bg-zinc-800 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/30">
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </button>
+                            <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider flex items-center pr-6">
+    Your Rating
+    <InfoTooltip text="Your average rating received from clients on completed jobs & gigs." />
+                            </div>
                           <p className="text-3xl font-extrabold text-gray-900 dark:text-white mt-1 flex items-center gap-1">
                             {myProfile.meritScore !== "No Rating" && <Star className="h-5 w-5 text-amber-400 fill-amber-400" />}
                             {myProfile.meritScore}
                           </p>
-                          <p className="text-[10px] text-zinc-400 mt-1">based on completed gigs</p>
+                          <p className="text-[10px] text-zinc-400 mt-1">based on completed jobs & gigs</p>
                         </div>
-                        <div className="p-4 rounded-2xl bg-white dark:bg-dark-surface border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-center">
-                          <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider flex items-center">
-  Followers
-  <InfoTooltip text="The total number of creators and clients following your profile." />
+                                                                            <div className="p-4 rounded-2xl bg-white dark:bg-dark-surface border border-zinc-200 dark:border-white/10 shadow-sm flex flex-col justify-center relative group cursor-pointer hover:border-blue-500/40 hover:shadow-md transition-all" onClick={() => setIsFollowersModalOpen(true)}>
+                            <button className="absolute top-3 right-3 text-zinc-400 group-hover/followers:text-blue-500 transition-colors p-1 bg-zinc-50 dark:bg-zinc-800 rounded-full group-hover/followers:bg-blue-50 dark:group-hover/followers:bg-blue-900/30">
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </button>
+                            <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider flex items-center pr-6">
+    Followers
+    <InfoTooltip text="The total number of creators and clients following your profile." />
+                            </div>
+                            <p className="text-3xl font-extrabold text-gray-900 dark:text-white mt-1 group-hover/followers:text-blue-500 transition-colors">{myProfile.followersCount}</p>
+                            <p className="text-[10px] text-zinc-400 mt-1">creators and clients</p>
                           </div>
-                          <p className="text-3xl font-extrabold text-gray-900 dark:text-white mt-1">{myProfile.followersCount}</p>
-                          <p className="text-[10px] text-zinc-400 mt-1">creators and clients</p>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -996,7 +1008,7 @@ export default function DiscoveryPage() {
                   <div className="w-full pt-8 border-t border-zinc-200 dark:border-white/10">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-4 flex items-center">
                       Your matching jobs
-                      <InfoTooltip text="List of your own job postings where your skills match the requirements." />
+                      <InfoTooltip text="List of other people's job postings where your skills match the requirements." />
                     </h3>
                     
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1021,9 +1033,17 @@ export default function DiscoveryPage() {
                                 )}
                               </div>
                               <div className="flex items-center justify-between p-4 bg-white dark:bg-dark-surface">
-                                <div className="min-w-0 pr-4">
+                                                                <div className="min-w-0 pr-4 flex-1">
                                   <p className="text-sm font-bold text-gray-900 dark:text-white truncate group-hover:text-blue-500 transition-colors">{r.job.title}</p>
-                                  <p className="text-xs text-zinc-500 mt-1">{r.match.matched.length} of {r.job.skills.length} required skills</p>
+                                  <div className="flex flex-wrap gap-1 mt-1.5 mb-1">
+                                    {r.match.matched.slice(0, 3).map((tag, i) => (
+                                      <span key={i} className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold truncate max-w-[80px]">{tag}</span>
+                                    ))}
+                                    {r.match.matched.length > 3 && (
+                                      <span className="text-[10px] text-zinc-500">+{r.match.matched.length - 3}</span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-zinc-500">{r.match.matched.length} of {r.job.skills.length} required skills</p>
                                 </div>
                                 <MatchRing percent={r.match.percent} />
                               </div>
@@ -1345,7 +1365,16 @@ export default function DiscoveryPage() {
       )}
 
       <GuestLoginModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
-      <InviteToJobModal isOpen={isInviteModalOpen} onClose={() => setIsInviteModalOpen(false)} freelancerId={selectedCardUser?.id || ""} freelancerName={selectedCardUser?.name || ""} />
+            <InviteToJobModal isOpen={isInviteModalOpen} onClose={() => setIsInviteModalOpen(false)} freelancerId={selectedCardUser?.id || ""} freelancerName={selectedCardUser?.name || ""} />
+
+      {isFollowersModalOpen && userInfo?.account_id && (
+        <FollowersModal
+          isOpen={isFollowersModalOpen}
+          onClose={() => setIsFollowersModalOpen(false)}
+          accountId={userInfo.account_id}
+          type="followers"
+        />
+      )}
 
       <style>{`
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
