@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate, useOutletContext } from "react-router-dom";
+import { useParams, useNavigate, useOutletContext, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
@@ -7,12 +7,14 @@ import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import toast from "react-hot-toast";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
+import DiscoveryFlipCardModal from "@/components/ui/DiscoveryFlipCardModal";
 import { InviteToJobModal } from "@/components/ui/InviteToJobModal";
 
 // Modularized Profile Sub-Components
 import { TopSection_ProfileDisplay } from "./Displays/TopSection_ProfileDisplay.tsx";
 import { MeritSection_ProfileDisplay } from "./Displays/MeritSection_ProfileDisplay.tsx";
 import { BadgeSideSection_ProfileDisplay } from "./Displays/BadgeSideSection_ProfileDisplay.tsx";
+import { RatingsBudgetSideSection_ProfileDisplay } from "./Displays/RatingsBudgetSideSection_ProfileDisplay.tsx";
 import { SkillsSideSection_ProfileDisplay } from "./Displays/SkillsSideSection_ProfileDisplay.tsx";
 import { SocialLinksSection_ProfileDisplay } from "./Displays/SocialLinksSection_ProfileDisplay.tsx";
 import { ProfileSetupWidget } from "./Displays/ProfileSetupWidget.tsx";
@@ -26,6 +28,7 @@ import type { BadgeMetadata } from "./Displays/BadgeSideSection_ProfileDisplay.t
 
 // System Modals
 import AvatarEditModal from "@/pages/user/7_profile/Edits/AvatarEditModal.tsx";
+import BannerEditModal from "@/pages/user/7_profile/Edits/BannerEditModal.tsx";
 import ProfileEditModal from "@/pages/user/7_profile/Edits/ProfileEditModal.tsx";
 import { BadgeEditModal } from "./Edits/BadgeEditModal.tsx";
 import SkillsEditModal from "@/pages/user/7_profile/Edits/SkillsEditModal.tsx";
@@ -91,6 +94,8 @@ interface UserDetail {
   total_reviews?: string | number;
   client_rating?: string | number;
   freelancer_rating?: string | number;
+  budget_credits?: number | null;
+  banner_preset?: string | null;
   asset_rating?: string | number;
   successful_jobs_count?: string | number;
   freelancer_service_rating?: string | number;
@@ -139,7 +144,7 @@ const isUuid = (value: string | undefined): value is string =>
 export default function Profile({ validatedProfileId }: ProfileProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabType>("introduction");
+  const locationHook = useLocation(); const [activeTab, setActiveTab] = useState<TabType>((new URLSearchParams(locationHook.search).get("tab") as TabType) || "introduction");
 
   const { user } = useGlobalState();
   const { id: profileAccountId } = useParams<{ id?: string }>();
@@ -153,6 +158,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
   const [userDetails, setUserDetails] = useState<UserDetail | null>(null);
   const [availableSkills, setAvailableSkills] = useState<{ tag_id: number; name: string }[]>([]);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
   const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
@@ -165,6 +171,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
 
   const [isFollowing, setIsFollowing] = useState(false);
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isFlipCardOpen, setIsFlipCardOpen] = useState(false);
     const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [isFollowedBy, setIsFollowedBy] = useState(false);
   const [followersModalType, setFollowersModalType] = useState<"followers" | "following" | null>(null);
@@ -629,6 +636,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             avg_rating: profileData.avg_rating,
             total_reviews: profileData.total_reviews,
             freelancer_rating: profileData.freelancer_rating,
+            budget_credits: profileData.budget_credits ?? null,
+            banner_preset: profileData.banner_preset ?? null,
             client_rating: profileData.client_rating,
             asset_rating: profileData.asset_rating,
             successful_jobs_count: profileData.successful_jobs_count,
@@ -670,6 +679,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             avg_rating: profileData.avg_rating,
             total_reviews: profileData.total_reviews,
             freelancer_rating: profileData.freelancer_rating,
+            budget_credits: profileData.budget_credits ?? null,
+            banner_preset: profileData.banner_preset ?? null,
             client_rating: profileData.client_rating,
             asset_rating: profileData.asset_rating,
             successful_jobs_count: profileData.successful_jobs_count,
@@ -858,6 +869,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
           isOwner={isOwner}
           birthdate={userDetails?.birthdate}
           verificationLevel={userDetails?.verification_status}
+            onOpenFlipCard={() => setIsFlipCardOpen(true)}
           subscriptionType={userDetails?.subscriptionType || "Free"}
           followersCount={userDetails?.followers_count}
           followingCount={userDetails?.following_count}
@@ -878,6 +890,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
                 });
               }}
           onEditAvatar={() => setIsAvatarModalOpen(true)}
+          bannerPreset={userDetails?.banner_preset ?? null}
+          onEditBanner={() => setIsBannerModalOpen(true)}
           onEditProfile={() => setIsProfileModalOpen(true)}
           onChatClick={handleOpenChat}
           onVerificationClick={() => navigate("/account-verification-status")}
@@ -887,6 +901,20 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">
 
           <div className="space-y-4 h-fit">
+            <RatingsBudgetSideSection_ProfileDisplay
+              loading={loading}
+              isOwner={isOwner}
+              avgRating={userDetails?.avg_rating ? Number(parseFloat(userDetails.avg_rating as string).toFixed(1)) : 0}
+              totalReviews={userDetails?.total_reviews ? Number(userDetails.total_reviews) : 0}
+              freelancerRating={userDetails?.freelancer_rating ? Number(parseFloat(userDetails.freelancer_rating as string).toFixed(1)) : 0}
+              freelancerReviews={Number(userDetails?.freelancer_service_count || 0) + Number(userDetails?.freelancer_job_count || 0)}
+              budgetCredits={userDetails?.budget_credits ?? null}
+              onSaveBudget={async (budgetCredits) => {
+                const { data } = await api.put("/api/accounts/profile/budget", { budget_credits: budgetCredits });
+                const saved = data?.data?.budget_credits ?? null;
+                setUserDetails(prev => (prev ? { ...prev, budget_credits: saved } : prev));
+              }}
+            />
             <BadgeSideSection_ProfileDisplay
               loading={loading}
               badges={(userDetails?.badges || [])
@@ -964,6 +992,18 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         currentAvatarUrl={userDetails?.avatar_preset_url}
       />
 
+      <BannerEditModal
+        isOpen={isBannerModalOpen}
+        onClose={() => setIsBannerModalOpen(false)}
+        currentBanner={userDetails?.banner_preset ?? null}
+        onSave={async (bannerPreset) => {
+          const { data } = await api.put("/api/accounts/profile/banner", { banner_preset: bannerPreset });
+          const saved = data?.data?.banner_preset ?? null;
+          setUserDetails(prev => (prev ? { ...prev, banner_preset: saved } : prev));
+          toast.success(saved ? "Profile banner updated successfully." : "Profile banner removed.");
+        }}
+      />
+
       {userDetails && (
         <ProfileEditModal
           isOpen={isProfileModalOpen}
@@ -972,6 +1012,39 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
           onSave={saveProfileDetails}
           availableSkillsList={availableSkills}
           highlightField={highlightField}
+        />
+      )}
+
+      
+      {isFlipCardOpen && userDetails && (
+        <DiscoveryFlipCardModal
+          user={{
+            id: id || "",
+            name: userDetails.name || "",
+            username: userDetails.username || "",
+            avatar: userDetails.avatar_preset_url || "",
+            bio: userDetails.bio || "",
+            skills: (userDetails.skills || []).map((s: any) => s.name || s), // fallback string map
+            rawSkills: userDetails.skills || [],
+            verified: !!userDetails.verification_status,
+            meritScore: userDetails.merit_score || "No Rating",
+            followersCount: userDetails.followers_count || 0,
+            roles: userDetails.role || [],
+            subscriptionType: "Free",
+            tagline: userDetails.tagline || "",
+            totalJobs: userDetails.total_jobs || 0,
+            totalServices: userDetails.total_services || 0,
+            totalAssets: userDetails.total_assets || 0,
+            joinedDate: userDetails.joinedDate || "",
+            email: userDetails.email_address || ""
+          } as any}
+          onClose={() => setIsFlipCardOpen(false)}
+          onInvite={() => {
+            setIsFlipCardOpen(false);
+            if (!user) return setIsGuestModalOpen(true);
+            setIsInviteModalOpen(true);
+          }}
+          hideActions={true}
         />
       )}
 

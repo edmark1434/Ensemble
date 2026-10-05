@@ -1,0 +1,15 @@
+1. Refactor code structure for improved readability and maintainability
+2. Refactor documentation and code structure
+3. Implement public ID generation and update database schemas for accounts, projects, and media assets
+4. Add user settings wallet component for managing wallets and cashouts
+5. Integrate Google Meet functionality with meeting creation and management
+6. Fixed db create not accepting db names with dashes
+7. Light Mode Avatar Selection
+8. Improved Edit Profile
+9. Profile upclose view
+10. Better Portfolio Expanded View
+11. Fixed Introduction Position + Rearranged Layouts
+12. Profile Introduction Added as a Separate Tab
+13. Fixed the Profile Not Displaying the Correct Middle name
+14. Dynamic Badges
+15. Profile Page Light Mode

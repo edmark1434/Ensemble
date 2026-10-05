@@ -1,0 +1,15 @@
+1. View Proposal Adjustments
+2. Dashboard Initial Light Mode
+3. Contracts Light Mode Color Fixes
+4. Improved HomePage Light Mode Quick Action Buttons
+5. Dev Mode for Adding Credits (Alt + I)
+6. Grid Visibility Adjustment
+7. Added Toast Dev Mode (Alt + O) to test
+8. Updated Toast Look
+9. Light Mode FollowersModal.tsx
+10. Fixed bugs + Edit and Delete Gallery with Set of 5 Uploads Limit
+11. Migrations for the Gallery and Gallery modal and Files
+12. Added empty States and Improved Profile Page with added Gallery Tab
+13. Added Account Gallery Routes
+14. Allowed Folders
+15. Added File Upload Validation Error when a file can't be uploaded for some reasons that needs to be displayed to the user

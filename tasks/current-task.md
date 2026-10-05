@@ -1,10 +1,12 @@
-# Current Task: Staff platform view inside the console
+# Current Task: Profile banner presets
 
 ## Objective
-Keep Platform view as a tab inside each staff console. The tab shows a framed, browse-only preview of the member site. Staff do not leave the console for the real platform.
+Let users pick a profile banner from fixed presets in `frontend/public/profile_banner_presets` (851 x 315). No custom uploads.
 
-## Acceptance Criteria
-- Admin, the staff portal, and each moderator console open Platform view on their own route.
-- The tab contains a framed member-site preview with shortcuts for home, forums, jobs, gigs, discovery, marketplace, and projects.
-- The preview can open every member page. Action controls are removed from the preview. Writes stay blocked.
-- Opening a member URL in the main window returns staff to their Platform view tab.
+## Acceptance criteria
+- `accounts.banner_preset` stores the chosen preset file name (nullable); added via a new migration with up/down.
+- `PUT /api/accounts/profile/banner` accepts `{ banner_preset: string | null }` and rejects names outside the preset list.
+- The profile query returns `banner_preset`.
+- The profile header shows the banner at an 851:315 ratio, with the avatar overlapping its bottom edge.
+- Owners get an "Edit banner" / "Add a profile banner" control that opens a preset picker modal styled like the avatar picker, with a "Remove banner" option.
+- The preset list is kept in sync in `frontend/src/lib/profileBanners.ts` and `backend/lib/ProfileBannerPresets.js`.

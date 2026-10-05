@@ -3,6 +3,7 @@ import { Filter } from "lucide-react";
 import { Outlet, useNavigate, useLocation, useParams } from "react-router-dom";
 import UserHeader from "@/components/nav/user_header";
 import api from "@/lib/axios";
+import useGlobalState from "@/lib/global_state";
 
 // Modular Component Imports
 import GigSearchBar from "./gig_components/gig_searchbar";
@@ -10,8 +11,41 @@ import GigTabs from "./gig_components/gig_tabs";
 import GigCategories from "./gig_components/gig_categories";
 import GigListViewType from "./gig_components/gig_list_viewtype";
 import type { ViewType } from "./gig_components/gig_list_viewtype";
+import type { GigBudgetStatus } from "./gig_components/gig_lists";
 import GigFilters from "./gig_components/gig_filters";
 import type { GigFilterState } from "./gig_components/gig_filters";
+
+const BUDGET_NEAR_RATIO = 1.2;
+
+const FILTERS_STORAGE_KEY = "gigMarketFilters";
+
+type Sort = "inc" | "dec" | null;
+
+interface SavedGigFilters {
+  minPrice?: string;
+  maxPrice?: string;
+  priceSort?: Sort;
+  tiersCount?: string;
+  tiersSort?: Sort;
+  dateSort?: Sort;
+  deliverySort?: Sort;
+  revisions?: string;
+  deliveryDays?: string;
+  ratingSort?: boolean;
+  budgetMatch?: boolean;
+  budgetTarget?: number | null;
+}
+
+const readSavedFilters = (): SavedGigFilters => {
+  try {
+    return JSON.parse(localStorage.getItem(FILTERS_STORAGE_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+};
+
+const startingPrice = (gig: Gig) => (gig.tiers?.length ? Math.min(...gig.tiers.map((t) => t.price)) : null);
+const fastestDelivery = (gig: Gig) => (gig.tiers?.length ? Math.min(...gig.tiers.map((t) => t.daysOfDelivery)) : Infinity);
 
 // Datasets & Types
 import type { Gig } from "./gig_datasets";
@@ -23,6 +57,7 @@ export interface GigMainContext {
   filteredGigs: Gig[];
   viewType: ViewType;
   toggleSaveGig: (e: React.MouseEvent, gigId: string) => void;
+  getBudgetStatus: (gig: Gig) => GigBudgetStatus;
 }
 
 const SidebarSkeleton = () => (
@@ -70,15 +105,46 @@ const GigMain: React.FC = () => {
   const [showFilters, setShowFilters] = useState(true);
   const [selectedGig, setSelectedGig] = useState<Gig | null>(null);
 
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
-  const [priceSort, setPriceSort] = useState<"inc" | "dec" | null>(null);
-  const [tiersCount, setTiersCount] = useState("");
-  const [tiersSort, setTiersSort] = useState<"inc" | "dec" | null>(null);
-  const [dateSort, setDateSort] = useState<"inc" | "dec" | null>(null);
-  const [revisions, setRevisions] = useState("");
-  const [deliveryDays, setDeliveryDays] = useState("");
-  const [ratingSort, setRatingSort] = useState(false);
+  const [saved] = useState(readSavedFilters);
+  const [minPrice, setMinPrice] = useState(saved.minPrice ?? "");
+  const [maxPrice, setMaxPrice] = useState(saved.maxPrice ?? "");
+  const [priceSort, setPriceSort] = useState<Sort>(saved.priceSort ?? null);
+  const [tiersCount, setTiersCount] = useState(saved.tiersCount ?? "");
+  const [tiersSort, setTiersSort] = useState<Sort>(saved.tiersSort ?? null);
+  const [dateSort, setDateSort] = useState<Sort>(saved.dateSort !== undefined ? saved.dateSort : "dec");
+  const [deliverySort, setDeliverySort] = useState<Sort>(saved.deliverySort ?? null);
+  const [revisions, setRevisions] = useState(saved.revisions ?? "");
+  const [deliveryDays, setDeliveryDays] = useState(saved.deliveryDays ?? "");
+  const [ratingSort, setRatingSort] = useState(saved.ratingSort ?? false);
+  const [budgetMatch, setBudgetMatch] = useState(saved.budgetMatch ?? false);
+  const [budgetTarget, setBudgetTarget] = useState<number | null>(saved.budgetTarget ?? null);
+  const [profileBudget, setProfileBudget] = useState<number | null>(null);
+  const { user } = useGlobalState();
+
+  useEffect(() => {
+    if (!user?.account_id) return;
+    api.get(`/api/accounts/profile/${user.account_id}`)
+      .then(({ data }) => {
+        const payload = data?.data ?? data?.profile ?? data;
+        const profile = Array.isArray(payload) ? payload[0] : payload;
+        const budget = profile?.budget_credits;
+        if (Number.isSafeInteger(budget) && budget > 0) {
+          setProfileBudget(budget);
+          if (saved.budgetMatch === undefined) setBudgetMatch(true);
+        }
+      })
+      .catch(() => setProfileBudget(null));
+  }, [user?.account_id, saved.budgetMatch]);
+
+  useEffect(() => {
+    const toSave: SavedGigFilters = {
+      minPrice, maxPrice, priceSort, tiersCount, tiersSort, dateSort, deliverySort,
+      revisions, deliveryDays, ratingSort, budgetMatch, budgetTarget,
+    };
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(toSave));
+  }, [minPrice, maxPrice, priceSort, tiersCount, tiersSort, dateSort, deliverySort, revisions, deliveryDays, ratingSort, budgetMatch, budgetTarget]);
+
+  const budgetCredits = budgetTarget ?? profileBudget;
 
   useEffect(() => {
     const fetchGigs = async () => {
@@ -160,6 +226,9 @@ const GigMain: React.FC = () => {
     setTiersCount("");
     setTiersSort(null);
     setDateSort(null);
+    setDeliverySort(null);
+    setBudgetMatch(false);
+    setBudgetTarget(null);
     setRevisions("");
     setDeliveryDays("");
     setRatingSort(false);
@@ -196,6 +265,8 @@ const GigMain: React.FC = () => {
   }, [tabFilteredGigs]);
 
   const filteredGigs = useMemo(() => {
+    const isServicesTab = !location.pathname.includes("/saved-services") && !location.pathname.includes("/my-services");
+    const applyBudget = budgetMatch && budgetCredits !== null && isServicesTab;
     let result = tabFilteredGigs.filter((gig) => {
       const matchesSearch =
         gig.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -204,6 +275,11 @@ const GigMain: React.FC = () => {
         activeCategoryFilter === "All" || gig.category === activeCategoryFilter;
       
       if (!matchesSearch || !matchesCategory) return false;
+
+      if (applyBudget) {
+        const price = startingPrice(gig);
+        if (price === null || price > (budgetCredits ?? 0) * BUDGET_NEAR_RATIO) return false;
+      }
 
       // Extract tier metrics
       const tiers = gig.tiers || [];
@@ -263,6 +339,22 @@ const GigMain: React.FC = () => {
         }
       }
 
+      if (deliverySort) {
+        const aDays = fastestDelivery(a);
+        const bDays = fastestDelivery(b);
+        if (aDays !== bDays) {
+          if (aDays === Infinity) return 1;
+          if (bDays === Infinity) return -1;
+          return deliverySort === "inc" ? aDays - bDays : bDays - aDays;
+        }
+      }
+
+      if (applyBudget) {
+        const aOver = (startingPrice(a) ?? 0) > (budgetCredits ?? 0);
+        const bOver = (startingPrice(b) ?? 0) > (budgetCredits ?? 0);
+        if (aOver !== bOver) return aOver ? 1 : -1;
+      }
+
       if (dateSort) {
         const aDate = new Date(a.postedAt || 0).getTime();
         const bDate = new Date(b.postedAt || 0).getTime();
@@ -285,10 +377,23 @@ const GigMain: React.FC = () => {
     tiersCount,
     tiersSort,
     dateSort,
+    deliverySort,
     revisions,
     deliveryDays,
-    ratingSort
+    ratingSort,
+    budgetMatch,
+    budgetCredits,
+    location.pathname
   ]);
+
+  const isServicesTab = !location.pathname.includes("/saved-services") && !location.pathname.includes("/my-services");
+  const getBudgetStatus = (gig: Gig): GigBudgetStatus => {
+    if (!budgetMatch || budgetCredits === null || !isServicesTab) return null;
+    const price = startingPrice(gig);
+    if (price === null) return null;
+    if (price <= budgetCredits) return "within";
+    return price <= budgetCredits * BUDGET_NEAR_RATIO ? "near" : null;
+  };
 
   const contextValue: GigMainContext = {
     gigsList,
@@ -296,6 +401,7 @@ const GigMain: React.FC = () => {
     loading,
     viewType,
     toggleSaveGig,
+    getBudgetStatus,
   };
 
   return (
@@ -346,6 +452,7 @@ const GigMain: React.FC = () => {
                       tiersCount,
                       tiersSort,
                       dateSort,
+                      deliverySort,
                       revisions,
                       deliveryDays,
                       ratingSort
@@ -357,11 +464,23 @@ const GigMain: React.FC = () => {
                       setTiersCount,
                       setTiersSort,
                       setDateSort,
+                      setDeliverySort,
                       setRevisions,
                       setDeliveryDays,
                       setRatingSort
                     }}
                     onClear={handleClearFilters}
+                    budget={{
+                      credits: budgetCredits,
+                      profileCredits: profileBudget,
+                      enabled: budgetMatch,
+                      onToggle: () => {
+                        if (!budgetMatch) setBudgetTarget(null);
+                        setBudgetMatch(!budgetMatch);
+                      },
+                      onChange: (value) => setBudgetTarget(value === profileBudget ? null : value),
+                      nearRatio: BUDGET_NEAR_RATIO,
+                    }}
                   />
                 </>
               )}

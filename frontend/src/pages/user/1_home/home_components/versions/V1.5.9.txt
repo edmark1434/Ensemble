@@ -1,0 +1,15 @@
+1. Update cancellation request handling to include initiator account details and prevent self-acceptance/decline of requests
+2. Changes alert display to toast
+3. Enhance notification handling with improved reference ID resolution and dynamic reference table assignment
+4. Fixed live project name update across main site and editor, added auth guards for project name updates
+5. Enhance file upload handling and support additional media types in dashboard components
+6. Implement mutual cancellation of contracts with escrow safeguards
+7. Chat UI improvements (author names, system messages for calls, light mode banner, remove ended banners)
+8. Replace account standing notices with AccountRestrictionCard component
+9. Enhance suspended account messaging and notification handling
+10. Implement two-step gig order confirmation process with credit deduction
+11. Implement suspended account handling and notifications
+12. Improve chatbot loading animation
+13. Adapt chatbot error message colors for light mode and support bold markdown parsing
+14. Enforce account restrictions across authentication and session management
+15. Fixes and updates: - updated captions width to be dynamic according to canvas size - updated duration pills in videos and uploads menus - added blocking when user media already is generating captions - fixed caption generation timeout: job start and fetch now separate requests - fixed non-default fonts not loading on reload - fixed text content to support a series of whitespaces - fixed kerning in text animations - auth-error and project-not-found pages now redirect to main site

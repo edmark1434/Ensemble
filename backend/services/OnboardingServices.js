@@ -4,6 +4,9 @@ const s3 = require('../lib/AmazonS3');
 const { generateOnboardingAvatarUploadUrl } = require('./FileServices');
 const { getAllSurveysRepositoriesBySurveyName } = require('../repositories/SurveyRepositories');
 const { getOnboardingCompletion, persistCompletedOnboarding, getReferencedOnboardingAvatarPaths } = require('../repositories/OnboardingRepositories');
+const { updateBudgetCreditsRepositories } = require('../repositories/ProfileRepositories');
+
+const MAX_BUDGET_CREDITS = 100000000;
 
 const ONBOARDING_TTL_SECONDS = 60 * 60 * 24 * 30;
 const AVATAR_CLEANUP_CURSOR_KEY = 'onboarding:avatar-cleanup-cursor';
@@ -160,11 +163,20 @@ async function validateSurvey(input, requiredSection = 'all') {
     return { survey_id: catalog.survey_id, responses: normalized };
 }
 
+function validateBudget(value) {
+    const budget = Number(value);
+    if (value === null || value === undefined || value === '' || !Number.isSafeInteger(budget) || budget < 0 || budget > MAX_BUDGET_CREDITS) {
+        throw new OnboardingError(`Enter a budget between 0 and ${MAX_BUDGET_CREDITS.toLocaleString()} credits.`, 422, 'INVALID_BUDGET');
+    }
+    return budget;
+}
+
 async function saveSurveyProgress(userId, input) {
     const state = await readState(userId);
     if (!state.data.avatar) throw new OnboardingError('Complete the avatar step first.', 409, 'ONBOARDING_STEP_REQUIRED');
     const survey = await validateSurvey(input, 'first');
     state.data.survey = survey;
+    state.data.budget_credits = validateBudget(input?.budget_credits);
     state.current_step = 'survey_2';
     return writeState(userId, state);
 }
@@ -185,9 +197,11 @@ async function completeOnboarding(userId, accountId, input) {
     if (!state.data.avatar) throw new OnboardingError('Required onboarding steps are incomplete.', 409, 'ONBOARDING_INCOMPLETE');
     if (state.data.avatar.type === 'custom' && !state.data.avatar.path) throw new OnboardingError('Upload the custom avatar before completing onboarding.', 409, 'AVATAR_UPLOAD_REQUIRED');
     state.data.survey = await validateSurvey(input, 'all');
+    state.data.budget_credits = validateBudget(input?.budget_credits ?? state.data.budget_credits);
     state.current_step = 'survey_2';
     await writeState(userId, state);
     await persistCompletedOnboarding(userId, accountId, state.data);
+    await updateBudgetCreditsRepositories(accountId, state.data.budget_credits);
     await redisClient.del(stateKey(userId));
     return { completed: true, current_step: null, path: '/home' };
 }

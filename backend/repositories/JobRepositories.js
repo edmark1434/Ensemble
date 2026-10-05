@@ -4,8 +4,54 @@ const { pool } = require('../lib/Database');
 async function createJobRepositories(jobData) {
     const client = await pool.connect();
     try {
-        await client.query('BEGIN');
+                await client.query('BEGIN');
         
+        // 0. Deduct Job Posting Fee (50 Credits)
+        const accountId = jobData.client_account_id;
+        const fee = 50;
+
+        const walletRes = await client.query(`
+            SELECT w.wallet_id, w.balance_credits 
+            FROM wallets w
+            JOIN account_wallets aw ON w.wallet_id = aw.wallet_id
+            WHERE aw.account_id = $1 AND w.type = 'account wallets'
+            FOR UPDATE
+        `, [accountId]);
+
+        if (walletRes.rows.length === 0) {
+            const err = new Error('Wallet not found');
+            err.statusCode = 404;
+            throw err;
+        }
+
+        if (walletRes.rows[0].balance_credits < fee) {
+            const err = new Error('Insufficient funds. You need 50 Credits to post a job.');
+            err.statusCode = 402;
+            throw err;
+        }
+
+        const platformRes = await client.query(`
+            SELECT wallet_id FROM wallets WHERE type = 'platform wallets' LIMIT 1 FOR UPDATE
+        `);
+        const platformWalletId = platformRes.rows[0].wallet_id;
+        const userWalletId = walletRes.rows[0].wallet_id;
+
+        await client.query(`
+            UPDATE wallets SET balance_credits = balance_credits - $1 WHERE wallet_id = $2
+        `, [fee, userWalletId]);
+
+        await client.query(`
+            UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2
+        `, [fee, platformWalletId]);
+        
+        await client.query(`
+            INSERT INTO credit_transactions (
+                type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table
+            ) VALUES (
+                'Job Posting Fee', $1, 'Completed', $2, $3, 'jobs'
+            )
+        `, [fee, userWalletId, platformWalletId]);
+
         // 1. Insert Job
         const jobQuery = `
             INSERT INTO jobs (
@@ -255,7 +301,53 @@ async function deleteJobRepositories(jobId, accountIds) {
 async function createProposalRepositories(proposalData) {
     const client = await pool.connect();
     try {
-        await client.query('BEGIN');
+                await client.query('BEGIN');
+
+        // 0. Deduct Proposal Fee (10 Credits)
+        const accountId = proposalData.freelancer_account_id;
+        const fee = 10;
+
+        const walletRes = await client.query(`
+            SELECT w.wallet_id, w.balance_credits 
+            FROM wallets w
+            JOIN account_wallets aw ON w.wallet_id = aw.wallet_id
+            WHERE aw.account_id = $1 AND w.type = 'account wallets'
+            FOR UPDATE
+        `, [accountId]);
+
+        if (walletRes.rows.length === 0) {
+            const err = new Error('Wallet not found');
+            err.statusCode = 404;
+            throw err;
+        }
+
+        if (walletRes.rows[0].balance_credits < fee) {
+            const err = new Error('Insufficient funds. You need 10 Credits to submit a proposal.');
+            err.statusCode = 402;
+            throw err;
+        }
+
+        const platformRes = await client.query(`
+            SELECT wallet_id FROM wallets WHERE type = 'platform wallets' LIMIT 1 FOR UPDATE
+        `);
+        const platformWalletId = platformRes.rows[0].wallet_id;
+        const userWalletId = walletRes.rows[0].wallet_id;
+
+        await client.query(`
+            UPDATE wallets SET balance_credits = balance_credits - $1 WHERE wallet_id = $2
+        `, [fee, userWalletId]);
+
+        await client.query(`
+            UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2
+        `, [fee, platformWalletId]);
+        
+        await client.query(`
+            INSERT INTO credit_transactions (
+                type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
+            ) VALUES (
+                'Proposal Fee', $1, 'Completed', $2, $3, 'jobs', $4
+            )
+        `, [fee, userWalletId, platformWalletId, proposalData.job_id]);
 
         const jobResult = await client.query(
             `SELECT client_account_id,

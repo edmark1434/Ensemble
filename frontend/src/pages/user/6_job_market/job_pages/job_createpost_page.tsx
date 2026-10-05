@@ -102,7 +102,7 @@ const JobCreatePostPage: React.FC = () => {
   const [portfolioDuration, setPortfolioDuration] = useState("");
   const [isExistingProject, setIsExistingProject] = useState(false);
   const [existingProjectId, setExistingProjectId] = useState<string | null>(null);
-  const [initiatorRole, setInitiatorRole] = useState("Client");
+  const [initiatorRole, setInitiatorRole] = useState("Freelancer");
 
   // --- ERROR & VALIDATION STATES ---
   const [errors, setErrors] = useState<{ [key: string]: string }>({});

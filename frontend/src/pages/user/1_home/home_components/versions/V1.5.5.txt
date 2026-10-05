@@ -1,0 +1,2 @@
+1. Add feedbacks table migration
+2. Implement password recovery flow with email verification and token-based reset

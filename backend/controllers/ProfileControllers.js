@@ -8,7 +8,10 @@ const {
     updateProfileDetailsServices,
     getProfileAvatarsByAccountIdService,
     getProfileCurrentAvatarByAccountIdService,
-    getProfileReviewsByAccountIdService
+    getProfileReviewsByAccountIdService,
+    updateBudgetCreditsServices,
+    updateBannerPresetServices,
+    ProfileBudgetError
 } = require('../services/ProfileServices');
 const {
     getProfileAttachmentsService,
@@ -33,6 +36,32 @@ async function updateTaglineAndDescriptionController(req, res) {
             success: false,
             message: 'An error occurred while updating the tagline and description. Please try again.'
         });
+    }
+}
+
+async function updateBudgetCreditsController(req, res) {
+    try {
+        const budgetCredits = await updateBudgetCreditsServices(req.session.accountId, req.body?.budget_credits);
+        return res.status(200).json({ success: true, data: { budget_credits: budgetCredits } });
+    } catch (err) {
+        if (err instanceof ProfileBudgetError) {
+            return res.status(err.status).json({ success: false, message: err.message });
+        }
+        console.error('Error in updateBudgetCreditsController:', err);
+        return res.status(500).json({ success: false, message: 'Unable to update budget. Please try again.' });
+    }
+}
+
+async function updateBannerPresetController(req, res) {
+    try {
+        const bannerPreset = await updateBannerPresetServices(req.session.accountId, req.body?.banner_preset);
+        return res.status(200).json({ success: true, data: { banner_preset: bannerPreset } });
+    } catch (err) {
+        if (err instanceof ProfileBudgetError) {
+            return res.status(err.status).json({ success: false, message: err.message });
+        }
+        console.error('Error in updateBannerPresetController:', err);
+        return res.status(500).json({ success: false, message: 'Unable to update banner. Please try again.' });
     }
 }
 
@@ -265,6 +294,8 @@ async function getProfileReviewsController(req, res) {
 }
 
 module.exports = {
+    updateBudgetCreditsController,
+    updateBannerPresetController,
     getProfileReviewsController,
     updateTaglineAndDescriptionController,
     getPersonalDetailsController,

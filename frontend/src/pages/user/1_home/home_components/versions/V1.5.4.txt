@@ -1,0 +1,13 @@
+1. Redesign Feedback Form with Tailwind, auth detection, and improved UI/UX
+2. Improve Ask AI button styles and add Feedback Form link
+3. Enhance AskOurChatbot loading animation and vibrant background glow
+4. Resolve payment method saving issues and enhance webhook handling
+5. Change the static https url into frontend urls
+6. Update verification logic for test and live webhook
+7. Fixed scene sync: scenes now update across duplicated instances
+8. Updated project and scene access: added role gating for project updates from inside scenes
+9. Updated project and scene access: general scene access now doesnt take over project roles, added role gating to api routes, added project and scene access refresh
+10. Updated access modes ui: now supports both project and scene level access
+11. Added scene access controls pt 2: double-clicking scenes now gated by access + track items now show pointer cursor on hover
+12. Added scene access controls pt 1: ui (doesnt actually guard access to scenes yet)
+13. Fix forum UI visual bugs and duplicate text

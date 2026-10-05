@@ -4,6 +4,7 @@ import { Users, Briefcase, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { InboxCreateGroupModal } from "../inbox_functions/inbox_create_group";
 import type { SuggestedAccount } from "../inbox_functions/inbox_create_group";
+import { formatUnreadBadge, useInboxUnreadTotals } from "../../chat_bubble/useInboxUnreadTotals";
 
 interface InboxTabProps {
   onCreateGroup?: (groupData: { name: string; members: SuggestedAccount[], limit?: number }) => Promise<void>;
@@ -23,6 +24,18 @@ export const InboxTab: React.FC<InboxTabProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const isMarketplace = location.pathname.includes("/marketplace");
+  const unread = useInboxUnreadTotals();
+
+  const badge = (count: number) =>
+    count > 0 ? (
+      <span
+        className={`flex-shrink-0 rounded-full bg-red-500 text-[10px] font-bold leading-none text-white flex items-center justify-center ${
+          isCollapsed ? "absolute -top-1 -right-1 h-4 min-w-[16px] px-1" : "h-[18px] min-w-[18px] px-1.5"
+        }`}
+      >
+        {formatUnreadBadge(count)}
+      </span>
+    ) : null;
 
   return (
     <>
@@ -51,7 +64,7 @@ export const InboxTab: React.FC<InboxTabProps> = ({
         <button
           onClick={() => navigate("/inbox/direct")}
           title="Direct Messages"
-          className={`flex items-center transition-all duration-300 ${
+          className={`relative flex items-center transition-all duration-300 ${
             isCollapsed
               ? `justify-center p-3 rounded-xl gap-0 ${
                   !isMarketplace
@@ -74,12 +87,13 @@ export const InboxTab: React.FC<InboxTabProps> = ({
           >
             Direct Messages
           </span>
+          {badge(unread.direct)}
         </button>
 
         <button
           onClick={() => navigate("/inbox/marketplace")}
           title="Marketplace"
-          className={`flex items-center transition-all duration-300 ${
+          className={`relative flex items-center transition-all duration-300 ${
             isCollapsed
               ? `justify-center p-3 rounded-xl gap-0 ${
                   isMarketplace
@@ -102,6 +116,7 @@ export const InboxTab: React.FC<InboxTabProps> = ({
           >
             Marketplace
           </span>
+          {badge(unread.marketplace)}
         </button>
       </div>
 

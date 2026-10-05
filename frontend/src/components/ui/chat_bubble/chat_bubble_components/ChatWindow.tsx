@@ -19,6 +19,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import useGlobalState from "@/lib/global_state";
+import api from "@/lib/axios";
 import { useNavigate } from "react-router-dom";
 import type { Message } from "@/components/ui/inbox/inbox_dataset";
 import {
@@ -131,6 +132,47 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       : listingType === "job" && conversation?.job_id
       ? `/jobs/postings/${conversation.job_id}`
       : "");
+  const isMarketplaceChat = [
+    "marketplace",
+    "marketplace_job",
+    "marketplace_gig",
+    "revision",
+    "engagement",
+  ].includes(String(conversation?.conversation_type || ""));
+  const isGroupOrTeamChat =
+    conversation?.conversation_type === "team" ||
+    conversation?.conversation_type === "group" ||
+    Boolean(conversation?.is_group);
+  const [senderNames, setSenderNames] = useState<Record<string, string>>({});
+  const otherSenderIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          messages
+            .map((message) => String(message.sender_id))
+            .filter((id) => id && id !== currentActorId)
+        )
+      ).sort().join(","),
+    [messages, currentActorId]
+  );
+  useEffect(() => {
+    if (!isMarketplaceChat || !otherSenderIds) return;
+    let cancelled = false;
+    otherSenderIds.split(",").forEach((id) => {
+      if (senderNames[id]) return;
+      api
+        .get(`/api/accounts/profile/${id}`)
+        .then((res) => {
+          const profile = res.data?.data || res.data;
+          const name = profile?.name || profile?.display_name || profile?.username;
+          if (!cancelled && name) setSenderNames((prev) => ({ ...prev, [id]: name }));
+        })
+        .catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isMarketplaceChat, otherSenderIds]);
   const pinnedIds = useMemo(
     () =>
       new Set(
@@ -386,10 +428,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {liveGoogleMeeting && <LiveGoogleMeetingBanner call={liveGoogleMeeting} compact />}
 
-      {conversation?.conversation_type === "revision" && (
+      {conversation && (
         <MarketplaceContextCard
           conversation={conversation}
           currentUserId={currentActorId}
+          variant="compact"
         />
       )}
 
@@ -487,9 +530,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     <Pin size={10} className="fill-yellow-600/20 dark:fill-yellow-400/20" /> Pinned
                   </span>
                 )}
-                {!isMe && (conversation?.conversation_type === 'team' || conversation?.conversation_type === 'group' || conversation?.is_group) && (
+                {!isMe && (isGroupOrTeamChat || isMarketplaceChat) && (
                     <span className="text-[10px] text-gray-500 dark:text-zinc-400 font-medium ml-[34px] mb-0.5">
-                      {message.author_name || "User"}
+                      {message.author_name || senderNames[String(message.sender_id)] || "User"}
                     </span>
                   )}
                   <div className={`flex max-w-[100%] min-w-0 items-end gap-1.5 ${isMe ? "flex-row-reverse" : ""}`}>
