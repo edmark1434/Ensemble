@@ -1007,6 +1007,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             if (!user) return setIsGuestModalOpen(true);
             setIsInviteModalOpen(true);
           }}
+          hideActions={true}
         />
       )}
 
