@@ -28,6 +28,7 @@ import type { BadgeMetadata } from "./Displays/BadgeSideSection_ProfileDisplay.t
 
 // System Modals
 import AvatarEditModal from "@/pages/user/7_profile/Edits/AvatarEditModal.tsx";
+import BannerEditModal from "@/pages/user/7_profile/Edits/BannerEditModal.tsx";
 import ProfileEditModal from "@/pages/user/7_profile/Edits/ProfileEditModal.tsx";
 import { BadgeEditModal } from "./Edits/BadgeEditModal.tsx";
 import SkillsEditModal from "@/pages/user/7_profile/Edits/SkillsEditModal.tsx";
@@ -94,6 +95,7 @@ interface UserDetail {
   client_rating?: string | number;
   freelancer_rating?: string | number;
   budget_credits?: number | null;
+  banner_preset?: string | null;
   asset_rating?: string | number;
   successful_jobs_count?: string | number;
   freelancer_service_rating?: string | number;
@@ -156,6 +158,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
   const [userDetails, setUserDetails] = useState<UserDetail | null>(null);
   const [availableSkills, setAvailableSkills] = useState<{ tag_id: number; name: string }[]>([]);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
   const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
@@ -634,6 +637,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             total_reviews: profileData.total_reviews,
             freelancer_rating: profileData.freelancer_rating,
             budget_credits: profileData.budget_credits ?? null,
+            banner_preset: profileData.banner_preset ?? null,
             client_rating: profileData.client_rating,
             asset_rating: profileData.asset_rating,
             successful_jobs_count: profileData.successful_jobs_count,
@@ -676,6 +680,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             total_reviews: profileData.total_reviews,
             freelancer_rating: profileData.freelancer_rating,
             budget_credits: profileData.budget_credits ?? null,
+            banner_preset: profileData.banner_preset ?? null,
             client_rating: profileData.client_rating,
             asset_rating: profileData.asset_rating,
             successful_jobs_count: profileData.successful_jobs_count,
@@ -885,6 +890,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
                 });
               }}
           onEditAvatar={() => setIsAvatarModalOpen(true)}
+          bannerPreset={userDetails?.banner_preset ?? null}
+          onEditBanner={() => setIsBannerModalOpen(true)}
           onEditProfile={() => setIsProfileModalOpen(true)}
           onChatClick={handleOpenChat}
           onVerificationClick={() => navigate("/account-verification-status")}
@@ -983,6 +990,18 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         currentAvatarName={userDetails?.name}
         presets={avatarPresets}
         currentAvatarUrl={userDetails?.avatar_preset_url}
+      />
+
+      <BannerEditModal
+        isOpen={isBannerModalOpen}
+        onClose={() => setIsBannerModalOpen(false)}
+        currentBanner={userDetails?.banner_preset ?? null}
+        onSave={async (bannerPreset) => {
+          const { data } = await api.put("/api/accounts/profile/banner", { banner_preset: bannerPreset });
+          const saved = data?.data?.banner_preset ?? null;
+          setUserDetails(prev => (prev ? { ...prev, banner_preset: saved } : prev));
+          toast.success(saved ? "Profile banner updated successfully." : "Profile banner removed.");
+        }}
       />
 
       {userDetails && (

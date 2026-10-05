@@ -169,6 +169,14 @@ async function updateTaglineAndDescriptionRepositories(accountId, tagline, descr
     }
 }
 
+async function updateBannerPresetRepositories(accountId, bannerPreset) {
+    const result = await pool.query(
+        `UPDATE accounts SET banner_preset = $1 WHERE account_id = $2 RETURNING banner_preset`,
+        [bannerPreset, accountId]
+    );
+    return result.rows[0] || null;
+}
+
 async function updateBudgetCreditsRepositories(accountId, budgetCredits) {
     const result = await pool.query(
         `UPDATE accounts SET budget_credits = $1 WHERE account_id = $2 RETURNING budget_credits`,
@@ -200,6 +208,7 @@ async function getProfileByAccountId(accountId) {
                 U.SUFFIX as suffix,
                 A.TAGLINE as tagline,
                 A.BUDGET_CREDITS as budget_credits,
+                A.BANNER_PRESET as banner_preset,
                 U.EMAIL_ADDRESS as email_address, 
                 A.CREATED_AT AS joinedDate, 
                 TO_CHAR(u.birth_date, 'YYYY-MM-DD') as birthdate, 
@@ -510,6 +519,7 @@ async function getProfileReviewsByAccountId(accountId) {
 
 module.exports = {
     updateBudgetCreditsRepositories,
+    updateBannerPresetRepositories,
     getProfileReviewsByAccountId,
     updateProfileAccountRepositories,
     insertProfileSocialMediaRepositories,

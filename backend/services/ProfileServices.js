@@ -12,8 +12,10 @@ const {
     getProfileAvatarsByAccountId,
     getProfileCurrentAvatarByAccountId,
     updateUserRolesByAccountIdRepositories,
-    updateBudgetCreditsRepositories
+    updateBudgetCreditsRepositories,
+    updateBannerPresetRepositories
 } = require('../repositories/ProfileRepositories');
+const { PROFILE_BANNER_PRESETS } = require('../lib/ProfileBannerPresets');
 const { getAccountLinkByAccountIdService } = require('../services/AccountServices');
 const {getUserByIdFromAccountId} = require('../repositories/UserRepositories');
 const {checkAccountId, getAccountBadges} = require('../repositories/AccountRepositories');
@@ -61,6 +63,18 @@ async function updateBudgetCreditsServices(accountId, budgetCredits) {
     const updated = await updateBudgetCreditsRepositories(accountId, value);
     if (!updated) throw new ProfileBudgetError('Account not found', 404);
     return updated.budget_credits;
+}
+
+async function updateBannerPresetServices(accountId, bannerPreset) {
+    if (!accountId) throw new ProfileBudgetError('Account ID is required', 401);
+    const value = bannerPreset === null || bannerPreset === undefined || bannerPreset === '' ? null : bannerPreset;
+    if (value !== null && !PROFILE_BANNER_PRESETS.includes(value)) {
+        throw new ProfileBudgetError('Choose one of the available banner presets');
+    }
+
+    const updated = await updateBannerPresetRepositories(accountId, value);
+    if (!updated) throw new ProfileBudgetError('Account not found', 404);
+    return updated.banner_preset;
 }
 
 async function getPersonalDetailsServices(userId) {
@@ -407,6 +421,7 @@ async function getProfileReviewsByAccountIdService(accountId) {
 module.exports = {
     ProfileBudgetError,
     updateBudgetCreditsServices,
+    updateBannerPresetServices,
     getProfileReviewsByAccountIdService,
     updateTaglineAndDescriptionServices,
     getPersonalDetailsServices,

@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X, Tag, Briefcase, Flag } from "lucide-react";
+import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X, Tag, Briefcase, Flag, ImageIcon } from "lucide-react";
+import { bannerPresetUrl } from "@/lib/profileBanners";
 import { ProfileTags } from "../Utilities/ProfileTags.tsx";
 import useGlobalState from "@/lib/global_state";
 
@@ -28,6 +29,8 @@ interface TopSectionProps {
   verificationLevel?: boolean;
   verificationLevel?: number | boolean;
   onEditAvatar?: () => void;
+  bannerPreset?: string | null;
+  onEditBanner?: () => void;
   onEditProfile?: () => void;
   onChatClick?: () => void;
   onVerificationClick?: () => void;
@@ -67,6 +70,8 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   verificationLevel = false,
   subscriptionType = "Free",
   onEditAvatar,
+  bannerPreset,
+  onEditBanner,
   onEditProfile,
   onChatClick,
   onVerificationClick,
@@ -97,19 +102,47 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  if (loading) return <div className="h-48 w-full bg-gray-200 dark:bg-dark-elevated animate-pulse rounded-2xl" />;
+  if (loading) return <div className="h-[420px] w-full bg-gray-200 dark:bg-dark-elevated animate-pulse rounded-2xl" />;
+
+  const bannerUrl = bannerPresetUrl(bannerPreset);
 
 
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white dark:from-white/[0.03] to-transparent p-6 shadow-xl font-['Plus Jakarta Sans',sans-serif]">
+      {/* Banner */}
+      <div className="relative -mx-6 -mt-6 mb-4 aspect-[851/240] overflow-hidden border-b border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/[0.03]">
+        {bannerUrl ? (
+          <img src={bannerUrl} alt="Profile banner" className="h-full w-full object-cover" />
+        ) : (
+          isOwner && (
+            <button
+              onClick={onEditBanner}
+              className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-xs font-semibold text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 transition-colors"
+            >
+              <ImageIcon className="h-5 w-5" />
+              Add a profile banner
+            </button>
+          )
+        )}
+        {isOwner && bannerUrl && (
+          <button
+            onClick={onEditBanner}
+            className="absolute right-3 top-3 flex items-center gap-1.5 rounded-lg border border-white/20 bg-black/50 px-2.5 py-1.5 text-[11px] font-semibold text-white backdrop-blur-sm hover:bg-black/70 transition"
+          >
+            <ImageIcon className="h-3.5 w-3.5" />
+            Edit banner
+          </button>
+        )}
+      </div>
+
       <div className="flex flex-col gap-6 md:flex-row items-center md:items-start">
 
         {/* Left Side: Avatar Asset Element */}
-        <div className="relative flex-shrink-0">
+        <div className="relative flex-shrink-0 -mt-20">
           <div 
             onClick={() => { if (avatarUrl) setIsAvatarExpanded(true); }}
-            className={`h-28 w-28 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 dark:from-zinc-700 dark:to-zinc-800 p-0.5 shadow-xl shadow-gray-500/5 ${avatarUrl ? 'cursor-pointer hover:scale-105 transition-transform' : ''}`}
+            className={`h-28 w-28 rounded-full ring-4 ring-white dark:ring-dark-base bg-gradient-to-br from-gray-200 to-gray-300 dark:from-zinc-700 dark:to-zinc-800 p-0.5 shadow-xl shadow-gray-500/5 ${avatarUrl ? 'cursor-pointer hover:scale-105 transition-transform' : ''}`}
           >
             <div className="h-full w-full rounded-full bg-gray-100 dark:bg-dark-base overflow-hidden flex items-center justify-center">
               {avatarUrl ? (
