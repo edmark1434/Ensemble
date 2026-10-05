@@ -987,7 +987,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             username: userDetails.username || "",
             avatar: userDetails.avatar_preset_url || "",
             bio: userDetails.bio || "",
-            skills: userDetails.skills || [],
+            skills: (userDetails.skills || []).map((s: any) => s.name || s), // fallback string map
+            rawSkills: userDetails.skills || [],
             verified: !!userDetails.verification_status,
             meritScore: userDetails.merit_score || "No Rating",
             followersCount: userDetails.followers_count || 0,
