@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import api from "@/lib/axios.ts";
 import { Check, Layers, FileText, Percent, RefreshCcw, Send, Edit2, Clock, HelpCircle } from "lucide-react";
 import { JobRichText } from "../../../job_components/JobRichText";
 import type { Job } from "../../../job_components/job_lists";
@@ -30,6 +32,21 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
   onSubmit,
   isSubmitting
 }) => {
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [agreedToFee, setAgreedToFee] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    api.get("/api/accounts/wallet", { params: { type: "account_wallets" } })
+      .then(res => {
+        if (mounted) {
+          setWalletBalance(res.data?.wallet?.balance_credits || 0);
+        }
+      })
+      .catch(err => console.error(err));
+    return () => { mounted = false; };
+  }, []);
+
   const totalBid = parseInt(bidAmount || "0");
   const count = milestones.length || 1;
   const milestonePayout = Math.floor(totalBid / count);
@@ -172,22 +189,77 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
       </div>
 
       {/* Navigation Footer */}
-      <div className="pt-4 border-t border-gray-100 dark:border-white/5 flex gap-2.5">
-        <button
-          type="button"
-          onClick={onBack}
-          className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 font-bold hover:text-gray-900 dark:text-white transition text-xs"
-        >
-          Go Back
-        </button>
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={isSubmitting}
-          className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white transition focus:outline-none shadow-lg ${isSubmitting ? 'bg-blue-500/50 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'}`}
-        >
-          {isSubmitting ? 'Submitting...' : 'Confirm & Submit Proposal'} <Send className="h-3.5 w-3.5" />
-        </button>
+      <div className="pt-4 border-t border-gray-100 dark:border-white/5 flex flex-col gap-4">
+        {walletBalance !== null && walletBalance < 10 ? (
+          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-bold flex justify-between items-center">
+            <div>
+              <p>You need 10 Credits to submit a proposal.</p>
+              <p className="text-[10px] font-normal opacity-80 mt-1">Your current balance is {walletBalance}.</p>
+            </div>
+            <Link to="/credits" className="px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">Buy Credits</Link>
+          </div>
+        ) : walletBalance !== null ? (
+          <div className="rounded-2xl border-2 border-blue-500/20 bg-blue-50/50 dark:bg-blue-500/5 p-5 flex flex-col gap-4 shadow-inner relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-500"></div>
+            
+            <div className="flex justify-between items-start">
+              <div>
+                <h4 className="text-base font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
+                  <svg className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Checkout Summary
+                </h4>
+                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-sm leading-relaxed">
+                  To maintain a high-quality marketplace and prevent spam, we require a small fee to submit proposals.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-white/10 p-4 space-y-3 shadow-sm">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 dark:text-zinc-400 font-medium">Your Current Balance</span>
+                <span className="font-bold text-gray-900 dark:text-white">{walletBalance.toLocaleString()} Credits</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 dark:text-zinc-400 font-medium">Platform Fee</span>
+                <span className="font-bold text-red-500">-10 Credits</span>
+              </div>
+              <div className="pt-3 border-t border-dashed border-gray-200 dark:border-white/20 flex justify-between text-sm">
+                <span className="text-gray-900 dark:text-white font-bold">Balance After</span>
+                <span className="font-black text-blue-500">{(walletBalance - 10).toLocaleString()} Credits</span>
+              </div>
+            </div>
+            
+            <label className="flex items-center gap-3 cursor-pointer text-sm text-gray-700 dark:text-zinc-300 mt-1 p-3 rounded-xl hover:bg-white/50 dark:hover:bg-white/5 transition-colors border border-transparent hover:border-blue-500/10">
+              <input 
+                type="checkbox" 
+                checked={agreedToFee} 
+                onChange={(e) => setAgreedToFee(e.target.checked)}
+                className="h-5 w-5 rounded border-gray-300 text-blue-500 focus:ring-blue-500 dark:border-white/20 dark:bg-dark-surface dark:checked:bg-blue-500 transition cursor-pointer"
+              />
+              <span className="font-semibold select-none text-gray-900 dark:text-white">I agree to pay <strong className="text-blue-500">10 Credits</strong> to submit this proposal.</span>
+            </label>
+          </div>
+        ) : null}
+
+        <div className="flex gap-2.5">
+          <button
+            type="button"
+            onClick={onBack}
+            className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 font-bold hover:text-gray-900 dark:text-white transition text-xs"
+          >
+            Go Back
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={isSubmitting || (walletBalance !== null && walletBalance < 10) || (walletBalance !== null && !agreedToFee)}
+            className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white transition focus:outline-none shadow-lg ${isSubmitting || (walletBalance !== null && !agreedToFee) ? 'bg-blue-500/50 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'}`}
+          >
+            {isSubmitting ? 'Submitting...' : 'Confirm & Submit Proposal'} <Send className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );
