@@ -1,10 +1,10 @@
-# Current Task: Staff platform view inside the console
+# Current Task: Bell notification styling
 
 ## Objective
-Keep Platform view as a tab inside each staff console. The tab shows a framed, browse-only preview of the member site. Staff do not leave the console for the real platform.
+Make bell dropdown items match the live toast style (coloured type label, bold actor, avatar/icon) and share one notification type map between the bell and `/notifications`.
 
 ## Acceptance Criteria
-- Admin, the staff portal, and each moderator console open Platform view on their own route.
-- The tab contains a framed member-site preview with shortcuts for home, forums, jobs, gigs, discovery, marketplace, and projects.
-- The preview can open every member page. Action controls are removed from the preview. Writes stay blocked.
-- Opening a member URL in the main window returns staff to their Platform view tab.
+- Bell items show a readable label instead of the raw `reference_prefix`, and no longer show `reference_table`.
+- Follow notifications show the follower's name, "started following you", and their avatar.
+- Every `reference_prefix` created by the backend has a label and icon in `frontend/src/lib/notificationTypes.tsx`.
+- `cd frontend && npm run build` passes.

@@ -13,7 +13,8 @@ import socket from "@/lib/socket";
 import useChatState from "@/components/ui/chat_bubble/chat_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import toast from "react-hot-toast";
-import { toastConfig } from "@/components/utility/toast";
+import AccountAvatar from "@/components/ui/AccountAvatar";
+import { getNotificationIcon, getNotificationLabel } from "@/lib/notificationTypes";
 
 interface UserHeaderProps {
   pageTitle: string;
@@ -506,17 +507,31 @@ useEffect(() => {
                     </p>
                   </div>
                   <div className="flex-shrink-0 pt-0.5">
-                    <img src={notification.followerAvatar ? constructAvatarUrl(notification.followerAvatar) : "/images/default_avatar.png"} alt={notification.followerName || "User"} className="h-10 w-10 rounded-full object-cover ring-2 ring-emerald-500/20" />
+                    <AccountAvatar url={notification.followerAvatar ? constructAvatarUrl(notification.followerAvatar) : null} name={notification.followerName} />
                   </div>
                 </div>
               </div>
             ), { duration: 5000 });
           } else {
-            toast(notification.message, {
-            ...(toastConfig.custom as any),
-            icon: '🔔',
-            duration: 4500,
-          });
+            const def = getNotificationIcon(notification.reference_prefix);
+            toast.custom((t) => (
+              <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2 cursor-pointer transition-all hover:scale-[1.02]`}
+                   onClick={() => { toast.dismiss(t.id); if (notification.reference_path) navigate(notification.reference_path); }}>
+                <div className="absolute top-2 left-3">
+                  <span className={`text-[9px] font-bold tracking-wider uppercase ${def.text}`}>
+                    {getNotificationLabel(notification.reference_prefix)}
+                  </span>
+                </div>
+                <div className="flex-1 w-0 flex items-start justify-between">
+                  <p className="mr-3 flex-1 mt-2 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
+                    {notification.message}
+                  </p>
+                  <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/5 ${def.text}`}>
+                    {def.icon}
+                  </div>
+                </div>
+              </div>
+            ), { duration: 5000 });
         }
       }
 

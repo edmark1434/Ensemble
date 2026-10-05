@@ -21,6 +21,7 @@ import api from "@/lib/axios";
 
 import type { Inbox, Message } from "./inbox_dataset";
 import useChatState, { formatCallCardText } from "../chat_bubble/chat_state";
+import { MARKETPLACE_CONVERSATION_TYPES } from "../chat_bubble/useInboxUnreadTotals";
 
 import { InboxTab } from "./inbox_components/inbox_tab";
 import { InboxSearch } from "./inbox_components/inbox_search";
@@ -56,13 +57,6 @@ import { ChatImagePreview } from "./inbox_functions/chat_image_preview";
 const EMPTY_MESSAGES: Message[] = [];
 const EMPTY_TYPING_ACCOUNTS: string[] = [];
 const MESSAGE_PAGE_SIZE = 30;
-const MARKETPLACE_CONVERSATION_TYPES = new Set([
-  "engagement",
-  "marketplace_job",
-  "marketplace_gig",
-  "revision",
-]);
-
 interface ProfileIdentity {
   name?: string;
   username?: string;
@@ -855,9 +849,16 @@ const InboxMain = () => {
     const isLatestSeenOwnMessage =
       isSender && String(message._id) === String(latestSeenOwnMessageId) && isSeen;
 
-    const isGroupMessage = ["group", "ticket", "dispute"].includes(
-      selectedConversation?.conversation_type || ""
-    );
+    const isGroupMessage = [
+      "group",
+      "ticket",
+      "dispute",
+      "marketplace",
+      "marketplace_job",
+      "marketplace_gig",
+      "revision",
+      "engagement",
+    ].includes(selectedConversation?.conversation_type || "");
     const isTicketMessage =
       selectedConversation?.conversation_type === "ticket";
     const senderProfile = profiles[String(message.sender_id)];

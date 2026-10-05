@@ -628,6 +628,11 @@ function emitWithAck<T>(event: string, payload: unknown): Promise<T> {
   });
 }
 
+// Layout does not render floating chat windows on inbox pages.
+function floatingWindowsVisible() {
+  return typeof window === "undefined" || !window.location.pathname.startsWith("/inbox");
+}
+
 function reconcileMessage(message: Message, isNewMessage = false) {
   if (!message?._id || !message.conversation_id) return;
   const conversationId = String(message.conversation_id);
@@ -780,9 +785,35 @@ function reconcileMessage(message: Message, isNewMessage = false) {
   });
 
   const state = useChatState.getState();
+
+  if (isNewMessage && !alreadyExists && isIncoming && typeof window !== "undefined") {
+    const conv = state.conversations.find((c) => String(c._id) === conversationId);
+    const popsOut =
+      !conv ||
+      ["direct", "group"].includes(conv.conversation_type) ||
+      String(conv.conversation_type || "").startsWith("marketplace");
+    const isViewingInInbox =
+      window.location.pathname.startsWith("/inbox") &&
+      state.activeConversationId === conversationId;
+    if (popsOut && !isViewingInInbox) {
+      const floating = state.floatingWindows.find(
+        (fw) => String(fw.inbox_id || fw.id) === conversationId
+      );
+      window.dispatchEvent(
+        new CustomEvent("chat:open-window", {
+          detail: {
+            conversationId,
+            targetId: String(floating?.id || conversationId),
+          },
+        })
+      );
+    }
+  }
+
   const isConversationOpen =
     state.activeConversationId === conversationId ||
     (state.isFloatingOpen &&
+      floatingWindowsVisible() &&
       state.floatingWindows.some((chatWindow) =>
         [chatWindow.id, chatWindow.inbox_id].some(
           (id) => String(id) === conversationId
@@ -818,7 +849,7 @@ function bindSocketListeners() {
     const state = useChatState.getState();
     const openConversationIds = new Set<string>();
     if (state.activeConversationId) openConversationIds.add(String(state.activeConversationId));
-    if (state.isFloatingOpen) {
+    if (state.isFloatingOpen && floatingWindowsVisible()) {
       state.floatingWindows.forEach((chatWindow) =>
         openConversationIds.add(String(chatWindow.inbox_id || chatWindow.id))
       );

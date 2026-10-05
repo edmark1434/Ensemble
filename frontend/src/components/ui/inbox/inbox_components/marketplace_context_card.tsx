@@ -6,7 +6,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 interface MarketplaceContextCardProps {
   conversation: Inbox;
   currentUserId: string;
-  variant?: "banner" | "details";
+  variant?: "banner" | "details" | "compact";
 }
 
 export function MarketplaceContextCard({
@@ -37,6 +37,54 @@ export function MarketplaceContextCard({
     ? "Job proposal discussion"
     : "Gig order discussion";
   const amount = Number(conversation.marketplace_amount_credits || 0);
+
+  if (variant === "compact") {
+    return (
+      <section
+        className="flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]"
+        aria-label={typeLabel}
+      >
+        <div className="rounded-md border border-blue-500/20 bg-blue-500/10 p-1.5 text-blue-500 dark:text-blue-400">
+          {isJob ? (
+            <BriefcaseBusiness className="h-3.5 w-3.5" />
+          ) : (
+            <MessageSquareText className="h-3.5 w-3.5" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-[9px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+              {typeLabel}
+            </span>
+            {conversation.marketplace_status && (
+              <span className="shrink-0 rounded-full border border-gray-200 px-1.5 text-[9px] font-medium text-gray-500 dark:border-white/10 dark:text-zinc-400">
+                {conversation.marketplace_status}
+              </span>
+            )}
+          </div>
+          <p className="truncate text-xs font-medium text-gray-900 dark:text-zinc-100">
+            {conversation.listing_title || conversation.conversation_name}
+          </p>
+        </div>
+        {amount > 0 && (
+          <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-yellow-600 dark:text-yellow-400">
+            <CreditIcon className="h-3 w-3" />
+            {amount.toLocaleString()}
+          </span>
+        )}
+        {(contextPath || conversation.listing_path) && (
+          <button
+            type="button"
+            onClick={() => navigate((contextPath || conversation.listing_path)!)}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white transition hover:bg-blue-500"
+          >
+            {contextPath ? contextLabel : listingLabel}
+            <ExternalLink className="h-2.5 w-2.5" />
+          </button>
+        )}
+      </section>
+    );
+  }
 
   return (
     <section

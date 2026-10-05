@@ -3,6 +3,9 @@ import { X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import socket from "@/lib/socket";
 import api from "@/lib/axios";
+import { getFollower, getNotificationIcon, getNotificationLabel } from "@/lib/notificationTypes";
+import { useAccountAvatars } from "@/lib/accountAvatars";
+import AccountAvatar from "@/components/ui/AccountAvatar";
 
 interface Notification {
   notification_id: string;
@@ -33,6 +36,11 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
   setNotifications,
 }) => {
   const navigate = useNavigate();
+  const avatars = useAccountAvatars(
+    isOpen
+      ? notificationsData.filter((n) => n.reference_prefix === "follow").map((n) => n.reference_id)
+      : []
+  );
 
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.is_read) {
@@ -145,47 +153,68 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
             No notifications
           </div>
         ) : (
-          notificationsData.map((notification) => (
-            <button
-              key={notification.notification_id}
-              onClick={() => handleNotificationClick(notification)}
-              className={`w-full rounded-lg p-3 mb-2 text-left transition ${
-                notification.is_read
-                  ? "hover:bg-gray-50 dark:hover:bg-white/5"
-                  : "bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 hover:bg-blue-100 dark:hover:bg-blue-500/20"
-              }`}
-            >
-              <div className="flex items-start justify-between">
-                <span
-                  className={`text-xs font-semibold ${
-                    notification.is_read
-                      ? "text-gray-500 dark:text-zinc-400"
-                      : "text-blue-600 dark:text-blue-400"
-                  }`}
-                >
-                  {notification.reference_prefix}
-                </span>
+          notificationsData.map((notification) => {
+            const def = getNotificationIcon(notification.reference_prefix);
+            const isFollow = notification.reference_prefix === "follow";
+            const follower = isFollow ? getFollower(notification.message) : null;
+            const followerName = follower?.name ?? null;
+            const avatarUrl = isFollow ? avatars[notification.reference_id] : null;
 
-                <span className="text-[10px] text-gray-500 dark:text-zinc-500">
-                  {formatTimeAgo(notification.created_at)}
-                </span>
-              </div>
+            return (
+              <button
+                key={notification.notification_id}
+                onClick={() => handleNotificationClick(notification)}
+                className={`w-full flex items-start gap-3 rounded-xl border p-3 mb-2 text-left transition hover:bg-gray-50 dark:hover:bg-white/5 ${
+                  notification.is_read
+                    ? "border-transparent opacity-70"
+                    : "border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]"
+                }`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[9px] font-bold tracking-wider uppercase ${def.text}`}>
+                      {getNotificationLabel(notification.reference_prefix)}
+                    </span>
+                    <span className="ml-auto text-[10px] text-gray-500 dark:text-zinc-500 whitespace-nowrap">
+                      {formatTimeAgo(notification.created_at)}
+                    </span>
+                  </div>
 
-              <p className="mt-1 text-sm text-gray-700 dark:text-zinc-300">
-                {notification.message}
-              </p>
+                  {followerName ? (
+                    <>
+                      <p className="mt-1 text-sm font-bold text-gray-900 dark:text-white truncate">
+                        {followerName}
+                      </p>
+                      <p className="text-sm text-gray-800 dark:text-gray-200">
+                        started following you
+                      </p>
+                    </>
+                  ) : (
+                    <p className={`mt-1 text-sm line-clamp-2 ${
+                      notification.is_read
+                        ? "text-gray-600 dark:text-zinc-400"
+                        : "text-gray-900 dark:text-white font-medium"
+                    }`}>
+                      {notification.message}
+                    </p>
+                  )}
+                </div>
 
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-[11px] text-gray-500 dark:text-zinc-500">
-                  {notification.reference_table}
-                </span>
-
-                {!notification.is_read && (
-                  <div className="w-2 h-2 rounded-full bg-blue-500" />
-                )}
-              </div>
-            </button>
-          ))
+                <div className="relative flex-shrink-0 pt-0.5">
+                  {isFollow ? (
+                    <AccountAvatar url={avatarUrl} name={followerName} />
+                  ) : (
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/5 ${def.text}`}>
+                      {def.icon}
+                    </div>
+                  )}
+                  {!notification.is_read && (
+                    <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-blue-500 ring-2 ring-white dark:ring-dark-surface" />
+                  )}
+                </div>
+              </button>
+            );
+          })
         )}
       </div>
 

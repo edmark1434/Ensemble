@@ -30,6 +30,7 @@ import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { motion, LayoutGroup } from "framer-motion";
 import useGlobalState from "@/lib/global_state";
+import { formatUnreadBadge, useInboxUnreadTotals } from "@/components/ui/chat_bubble/useInboxUnreadTotals";
 
 type NavItem = {
     label: string;
@@ -81,6 +82,7 @@ const UserNav: React.FC<UserNavProps> = () => {
     const isGuestMode = useGlobalState((state) => state.isGuestMode);
     const [isJobsOpen, setIsJobsOpen] = useState(false);
     const [isGigsOpen, setIsGigsOpen] = useState(false);
+    const inboxUnread = useInboxUnreadTotals().total;
 
     const primaryNavState = isGuestMode ? primaryNavInitial.filter(item => item.label !== "Teams") : primaryNavInitial;
     const marketplaceTopState = marketplaceTopInitial;
@@ -457,6 +459,11 @@ const UserNav: React.FC<UserNavProps> = () => {
                                            )}
                                            <Icon className="relative z-10 h-4 w-4 shrink-0" />
                                            <span className="relative z-10 text-sm">{label}</span>
+                                           {to === "/inbox" && inboxUnread > 0 && (
+                                              <span className="relative z-10 ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-none text-white">
+                                                 {formatUnreadBadge(inboxUnread)}
+                                              </span>
+                                           )}
                                         </div>
                                      )}
                                   </NavLink>
@@ -478,6 +485,11 @@ const UserNav: React.FC<UserNavProps> = () => {
                                                  />
                                               )}
                                               <Icon className="relative z-10 h-4 w-4 shrink-0" />
+                                              {to === "/inbox" && inboxUnread > 0 && (
+                                                 <span className="absolute -top-1.5 -right-1.5 z-20 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white">
+                                                    {formatUnreadBadge(inboxUnread)}
+                                                 </span>
+                                              )}
                                            </div>
                                         )}
                                      </NavLink>
