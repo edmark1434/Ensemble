@@ -20,6 +20,7 @@ import { debounce } from "lodash";
 import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
 import { onAccessChanged } from "@/features/editor/collab/access-events";
 import { useAccessRefresh } from "@/features/editor/hooks/use-access-refresh";
+import { Avatar } from "@/components/user-avatar";
 
 type AssignableProjectRole = "Manager" | "Editor" | "Commenter" | "Viewer";
 const ASSIGNABLE_PROJECT_ROLES: AssignableProjectRole[] = ["Manager", "Editor", "Commenter", "Viewer"];
@@ -41,36 +42,6 @@ interface ProjectAccess {
   canManage: boolean;
   canGrantManager: boolean;
 }
-
-const getInitials = (name: string) =>
-  name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-
-const Avatar = ({ name, avatarUrl }: { name: string; avatarUrl?: string | null }) => {
-  const [failed, setFailed] = useState(false);
-
-  if (avatarUrl && !failed) {
-    return (
-      <img
-        src={avatarUrl}
-        alt=""
-        className="h-9 w-9 shrink-0 rounded-full object-cover"
-        onError={() => setFailed(true)}
-      />
-    );
-  }
-
-  return (
-    <div
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xs font-medium text-zinc-200">
-      {getInitials(name)}
-    </div>
-  );
-};
 
 const ROLE_DESCRIPTIONS: Record<AssignableProjectRole, string> = {
   Manager: "Can edit, and manage who has access",

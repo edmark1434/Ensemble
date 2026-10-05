@@ -10,6 +10,7 @@ import {
   toBlockRole,
 } from "@/features/editor/types/block-members";
 import { StoredProjectRole, toEditorRole } from "@/features/editor/types/editor-role";
+import { resolveFileUrl } from "@/lib/file-url";
 
 type PersonRow = {
   user_id: string;
@@ -18,30 +19,6 @@ type PersonRow = {
   email_address: string;
   avatar_path: string | null;
   project_role?: StoredProjectRole | null;
-};
-
-// files.path -> a URL an <img> can load. Avatars are either presets from the
-// main app's public/ folder ("/public/profile_presets/p1.png") or a real path.
-// The main app is a different origin from the editor, so URLs must be absolute.
-const MAIN_APP_URL = (process.env.MAIN_APP_URL ?? "").replace(/\/+$/, "");
-
-const resolveFileUrl = (path: string | null): string | null => {
-  if (!path) return null;
-  if (/^https?:\/\//.test(path)) return path;
-
-  // Next serves public/ from the site root, so "public" is never part of the
-  // URL. Rows can look like "/public/profile_presets/p1.png" or
-  // "/public/p1.png" (where the file actually sits in profile_presets/), so
-  // normalise both to /profile_presets/<name>.
-  if (path.startsWith("/public/")) {
-    const rest = path.slice("/public/".length);
-    const presetPath = rest.startsWith("profile_presets/")
-      ? rest
-      : `profile_presets/${rest}`;
-    return `${MAIN_APP_URL}/${presetPath}`;
-  }
-
-  return `${MAIN_APP_URL}${path.startsWith("/") ? path : `/${path}`}`;
 };
 
 const toPerson = (row: PersonRow): BlockPerson => ({

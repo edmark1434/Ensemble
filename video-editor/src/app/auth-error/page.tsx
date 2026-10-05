@@ -10,7 +10,7 @@ export default function AuthErrorPage() {
         <p className="mt-2 text-sm text-muted-foreground">
           Your session may have expired. Please return to the dashboard and try again.
         </p>
-        <RedirectCountdown url={process.env.MAIN_APP_URL} />
+        <RedirectCountdown url={`${process.env.MAIN_APP_URL}/home`} />
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { canManageSharing } from "@/features/editor/types/editor-role";
+import { resolveFileUrl } from "@/lib/file-url";
 
 export type ProjectRole = "Owner" | "Manager" | "Editor" | "Commenter" | "Viewer";
 export type AssignableProjectRole = "Manager" | "Editor" | "Commenter" | "Viewer";
@@ -31,23 +32,6 @@ type PersonRow = {
   last_name: string;
   email_address: string;
   avatar_path: string | null;
-};
-
-const MAIN_APP_URL = (process.env.MAIN_APP_URL ?? "").replace(/\/+$/, "");
-
-const resolveFileUrl = (path: string | null): string | null => {
-  if (!path) return null;
-  if (/^https?:\/\//.test(path)) return path;
-
-  if (path.startsWith("/public/")) {
-    const rest = path.slice("/public/".length);
-    const presetPath = rest.startsWith("profile_presets/")
-      ? rest
-      : `profile_presets/${rest}`;
-    return `${MAIN_APP_URL}/${presetPath}`;
-  }
-
-  return `${MAIN_APP_URL}${path.startsWith("/") ? path : `/${path}`}`;
 };
 
 const toPerson = (row: PersonRow): ProjectPerson => ({

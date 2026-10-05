@@ -18,43 +18,7 @@ import {
   type BlockPerson, BlockRole, ROLE_RANK
 } from "@/features/editor/types/block-members";
 import { onAccessChanged } from "@/features/editor/collab/access-events";
-
-const getInitials = (name: string) =>
-  name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-
-const Avatar = ({
-  name,
-  avatarUrl
-}: {
-  name: string;
-  avatarUrl?: string | null;
-}) => {
-  // Falls back to initials when there's no avatar or the image fails to load.
-  const [failed, setFailed] = useState(false);
-
-  if (avatarUrl && !failed) {
-    return (
-      <img
-        src={avatarUrl}
-        alt=""
-        className="h-9 w-9 shrink-0 rounded-full object-cover"
-        onError={() => setFailed(true)}
-      />
-    );
-  }
-
-  return (
-    <div
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xs font-medium text-zinc-200">
-      {getInitials(name)}
-    </div>
-  );
-};
+import { Avatar } from "@/components/user-avatar";
 
 const BLOCK_ROLE_DESCRIPTIONS: Record<AssignableBlockRole, string> = {
   Manager: "Can edit, and manage access to this scene",
