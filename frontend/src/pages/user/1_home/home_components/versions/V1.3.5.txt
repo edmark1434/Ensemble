@@ -1,0 +1,3 @@
+1. Added "Checkout Summary" UI for Job Postings and Proposal submissions.
+2. Platform fee deductions securely verified against wallet balances.
+3. Updated project initiation defaults for Freelancers.
