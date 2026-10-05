@@ -5,7 +5,9 @@ import {
   AssignableBlockRole,
   BlockAccess,
   BlockPerson,
-  BlockRole, GeneralAccessLevel, minRole,
+  BlockRole, canManageBlockAccess, GeneralAccessLevel, minRole,
+  StoredBlockRole,
+  toBlockRole,
 } from "@/features/editor/types/block-members";
 import { StoredProjectRole, toEditorRole } from "@/features/editor/types/editor-role";
 
@@ -48,6 +50,7 @@ const toPerson = (row: PersonRow): BlockPerson => ({
   email: row.email_address,
   avatarUrl: resolveFileUrl(row.avatar_path),
   projectRole: toEditorRole(row.project_role),
+  projectRoleLabel: row.project_role ?? null,
 });
 
 export async function isProjectMember(
@@ -67,7 +70,7 @@ export async function isProjectMember(
 export async function getBlockRole(
   blockId: string,
   userId: string,
-): Promise<BlockRole | null> {
+): Promise<StoredBlockRole | null> {
   const row = await db
     .selectFrom("block_members")
     .where("block_id", "=", blockId)
@@ -78,7 +81,7 @@ export async function getBlockRole(
   return row?.role ?? null;
 }
 
-async function getProjectRole(
+export async function getProjectRole(
   projectId: string,
   userId: string,
 ): Promise<BlockRole | null> {
@@ -114,17 +117,17 @@ export function resolveEffectiveBlockRole({
   generalAccess,
   projectRole,
 }: {
-  blockRole: BlockRole | null;
+  blockRole: StoredBlockRole | null;
   generalAccess: GeneralAccessLevel;
   projectRole: BlockRole | null;
 }): BlockRole | null {
   if (blockRole === "Owner") return "Owner";
   if (!projectRole) return null;
 
-  if (blockRole) return minRole(blockRole, projectRole);
+  if (blockRole) return toBlockRole(minRole(blockRole, projectRole));
 
   const ceiling = GENERAL_ACCESS_CEILING[generalAccess] ?? null;
-  return ceiling ? minRole(ceiling, projectRole) : null;
+  return ceiling ? toBlockRole(minRole(ceiling, projectRole)) : null;
 }
 
 /** What the collab socket and the write routes check. null = no access. */
@@ -255,7 +258,8 @@ export async function getBlockAccess(
         }],
     ),
     candidates: candidateRows.map(toPerson),
-    canManage: !!ownerRow && ownerRow.user_id === viewerUserId,
+    canManage: canManageBlockAccess({ blockRole: viewerRow?.role ?? null, projectRole }),
+    canGrantManager: !!ownerRow && ownerRow.user_id === viewerUserId,
     generalAccess,
     viewerRole: resolveEffectiveBlockRole({
       blockRole: viewerRow?.role ?? null,

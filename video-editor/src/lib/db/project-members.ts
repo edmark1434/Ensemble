@@ -161,7 +161,7 @@ export async function addProjectMember({
 }
 
 /**
- * Platform-wide search for people who could be added — matched by name or
+ * Platform-wide search for people who could be added — matched exact
  * email, minus whoever's already on the project (active or soft-deleted;
  * re-adding a deleted row goes through addProjectMember, not a fresh search hit).
  */
@@ -174,7 +174,10 @@ export async function searchAddableProjectUsers({
   query: string;
   limit?: number;
 }): Promise<ProjectPerson[]> {
-  const pattern = `%${query.replace(/[%_]/g, "\\$&")}%`;
+  // Exact email only (case-insensitive): people can't be browsed or guessed
+  // from partial names or emails.
+  const email = query.trim().toLowerCase();
+  if (!email.includes("@")) return [];
 
   const rows = await db
     .selectFrom("users as u")
@@ -184,13 +187,7 @@ export async function searchAddableProjectUsers({
         .onRef("f.file_id", "=", "a.avatar_file_id")
         .on("f.deleted_at", "is", null),
     )
-    .where(({ eb, or }) =>
-      or([
-        eb("u.first_name", "ilike", pattern),
-        eb("u.last_name", "ilike", pattern),
-        eb("u.email_address", "ilike", pattern),
-      ]),
-    )
+    .where(({ eb }) => eb(eb.fn("lower", ["u.email_address"]), "=", email))
     .where(
       "u.user_id",
       "not in",

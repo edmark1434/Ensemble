@@ -4,14 +4,14 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle
-} from "./ui/dialog";
+} from "../../../components/ui/dialog";
 import { FileIcon, Link2, Music, Plus, UploadIcon, X } from "lucide-react";
-import { Button } from "./ui/button";
-import { ScrollArea } from "./ui/scroll-area";
+import { Button } from "../../../components/ui/button";
+import { ScrollArea } from "../../../components/ui/scroll-area";
 import { AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import useUploadStore from "@/features/editor/store/use-upload-store";
-import { Input } from "./ui/input";
+import { Input } from "../../../components/ui/input";
 import { useIsLargeScreen, useIsMediumScreen } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 import { MAX_FILE_COUNT, MAX_FILE_SIZE_BYTES } from "@/constants/upload-limits";
@@ -188,7 +188,7 @@ const iconWrapClass =
 const iconClass =
   "ml-0.5 h-2.5 w-2.5 sm:h-3 sm:w-3 md:h-5 md:w-5 text-foreground";
 
-const ModalUpload: React.FC<ModalUploadProps> = ({ type = "all" }) => {
+const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
   const {
     setShowUploadModal,
     showUploadModal,
@@ -692,4 +692,4 @@ const ModalUpload: React.FC<ModalUploadProps> = ({ type = "all" }) => {
   );
 };
 
-export default ModalUpload;
+export default UploadModal;

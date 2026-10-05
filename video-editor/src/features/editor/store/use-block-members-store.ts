@@ -10,7 +10,7 @@ import { isSceneItem, type ISceneDetails } from "@/features/editor/types/ensembl
 import {
   AssignableBlockRole,
   BlockAccess,
-  BlockPerson, GeneralAccessLevel, minRole,
+  BlockPerson, GeneralAccessLevel, minRole, toBlockRole,
 } from "@/features/editor/types/block-members";
 
 type Status = "idle" | "loading" | "ready" | "error";
@@ -72,6 +72,7 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
         members: [],
         candidates: [],
         canManage: false,
+        canGrantManager: false,
         generalAccess: "Restricted",
         viewerRole: null,
       });
@@ -115,7 +116,7 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
       : role;
     set((s) => ({
       error: null,
-      members: [...s.members, { ...person, role: applied, effectiveRole: applied }],
+      members: [...s.members, { ...person, role: applied, effectiveRole: toBlockRole(applied) }],
       candidates: s.candidates.filter((c) => c.userId !== person.userId),
     }));
 
@@ -141,7 +142,7 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
         const applied = m.projectRole
           ? (minRole(role, m.projectRole) as AssignableBlockRole)
           : role;
-        return { ...m, role: applied, effectiveRole: applied };
+        return { ...m, role: applied, effectiveRole: toBlockRole(applied) };
       }),
     }));
 
@@ -175,6 +176,7 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
       set({ error: `Couldn't remove ${removed.name}.` });
     }
   },
+  canGrantManager: false,
 }));
 
 export default useBlockMembersStore;

@@ -21,6 +21,7 @@ import { hasBlockAccess } from "@/features/editor/types/block-members";
 import { useViewOnly } from "@/features/editor/hooks/use-view-only";
 import { getSceneRole } from "@/features/editor/utils/scene-access";
 import { canEditWithRole, type EditorRole } from "@/features/editor/types/editor-role";
+import { useAccessRefresh } from "@/features/editor/hooks/use-access-refresh";
 
 interface ISceneControlProps {
   opacity: number;
@@ -52,9 +53,8 @@ const BasicSceneItem = ({
   const {
     blockId: loadedAccessBlockId,
     status: accessStatus,
-    owner: blockOwner,
     members: blockMembers,
-    generalAccess,
+    viewerRole,
     load: loadBlockAccess,
   } = useBlockMembersStore();
 
@@ -62,12 +62,56 @@ const BasicSceneItem = ({
     void loadBlockAccess(blockId);
   }, [blockId, loadBlockAccess]);
 
-  // Default to "has access" while loading so the copy doesn't flash the
-  // restricted phrasing before we actually know.
-  const hasAccess =
-    loadedAccessBlockId === blockId && accessStatus === "ready"
-      ? hasBlockAccess({ owner: blockOwner, members: blockMembers, generalAccess }, userId)
-      : true;
+  // Keeps the Access section and the note below live when this user's role changes.
+  useAccessRefresh(true, () => void loadBlockAccess(blockId), 30_000);
+
+  const lead = (bold: string, rest: string) => (
+    <>
+      <span className="text-foreground">{bold}</span> {rest}
+    </>
+  );
+  const sceneAccessNote = (() => {
+    const ready = loadedAccessBlockId === blockId && accessStatus === "ready";
+    // Neutral copy until we know, so it doesn't flash the restricted wording.
+    if (!ready) return "Double-click the scene to edit scene size, background and content";
+
+    const isManager =
+      viewerRole === "Editor" &&
+      blockMembers.some((m) => m.userId === userId && m.role === "Manager");
+
+    switch (viewerRole) {
+      case "Owner":
+        return lead(
+          "You own this scene.",
+          "The access controls can be found below. Double-click the scene to edit scene size, background and content."
+        );
+      case "Editor":
+        return isManager
+          ? lead(
+            "You can edit this scene and manage who has access.",
+            "The access controls can be found below. Double-click the scene to edit scene size, background and content."
+          )
+          : lead(
+            "You can edit this scene.",
+            "Double-click it to edit scene size, background and content."
+          );
+      case "Commenter":
+        return lead(
+          "You can view and comment on this scene.",
+          "Double-click it to access scene content."
+        );
+      case "Viewer":
+        return lead(
+          "You have view access to this scene.",
+          "Double-click it to access scene content."
+        );
+      default:
+        return lead(
+          "You don't have access to this scene.",
+          "Users with access can double-click to access scene content."
+        );
+    }
+  })();
 
   // Renaming from here writes through to the scene itself (block name + block
   // doc), so it needs edit access to the scene, not just the project. Every
@@ -167,12 +211,8 @@ const BasicSceneItem = ({
             // onBackgroundChange={handleBackgroundChange}
           />
           <div className="flex gap-2 items-start text-xs text-muted-foreground -mt-3 text-pretty">
-            <Info size={16} />
-            <span>
-              {hasAccess
-                ? "Double-click the scene to edit scene size, background and content"
-                : "Users with access can double-click to edit scene size, background and content"}
-            </span>
+            <Info size={16} className="shrink-0" />
+            <span>{sceneAccessNote}</span>
           </div>
         </>
       )

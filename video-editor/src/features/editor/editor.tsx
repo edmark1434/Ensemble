@@ -18,7 +18,7 @@ import { TIMELINE_OFFSET_CANVAS_LEFT } from "./constants/constants";
 import MenuList from "./menu-list";
 import { ControlItem } from "./control-item";
 import { MenuItem } from "./menu-item";
-import CropModal from "./crop-modal/crop-modal";
+import CropModal from "@/features/editor/modals/crop-modal/crop-modal";
 import useDataState from "./store/use-data-state";
 import { FONTS } from "./data/fonts";
 import FloatingControl from "./control-item/floating-controls/floating-control";
@@ -53,7 +53,7 @@ import { canEditWithRole, EditorRole } from "@/features/editor/types/editor-role
 import { useEditorRole } from "@/features/editor/hooks/use-editor-role";
 import { ViewOnlyProvider } from "@/features/editor/hooks/use-view-only";
 import { useProjectFonts } from "@/features/editor/hooks/use-project-fonts";
-import SceneRemovedModal from "./scene-removed-modal";
+import SceneRemovedModal from "./modals/scene-removed-modal";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -535,8 +535,10 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
     closeScene();
     setRemovedFromScene(currentBlockName || "Untitled scene");
   }, [stateManager]);
+  // Removed from the project: reload, and the server renders the project's not-found page.
+  const handleProjectAccessLost = useCallback(() => window.location.reload(), []);
 
-  const resolvedRole = useEditorRole(projectId, activeSceneBlockId, storeUserId, role ?? null, leaveSceneNoAccess);
+  const resolvedRole = useEditorRole(projectId, activeSceneBlockId, storeUserId, role ?? null, leaveSceneNoAccess, handleProjectAccessLost);
   const canEdit = canEditWithRole(resolvedRole);
 
   const blockDocReady =

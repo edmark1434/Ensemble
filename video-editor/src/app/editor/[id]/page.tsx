@@ -53,6 +53,7 @@ export default async function EditorPage({
     .where("project_members.project_id", "=", id)
     .where("project_members.user_id", "=", decoded.userId)
     .where("project_members.deleted_at", "is", null)
+    .where("projects.deleted_at", "is", null)
     .select([
       "project_members.role",
       "projects.name",

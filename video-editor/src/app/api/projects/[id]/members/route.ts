@@ -12,8 +12,8 @@ import {
   updateProjectMemberRole,
   type AssignableProjectRole,
 } from "@/lib/db/project-members";
-import { recheckAllRooms } from "@/lib/collab/access-recheck";
-import { canEditWithRole, canManageSharing } from "@/features/editor/types/editor-role";
+import { recheckProject } from "@/lib/collab/access-recheck";
+import { canManageSharing } from "@/features/editor/types/editor-role";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   });
 
   if (result === "already_member") return fail("That user already has access", 409);
-  void recheckAllRooms();
+  void recheckProject(auth.projectId);
   return NextResponse.json({ ok: true });
 }
 
@@ -106,7 +106,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   });
   if (!updated) return fail("Member not found", 404);
 
-  void recheckAllRooms();
+  void recheckProject(auth.projectId);
   return NextResponse.json({ ok: true });
 }
 
@@ -122,6 +122,6 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
   const removed = await removeProjectMember({ projectId: auth.projectId, userId });
   if (!removed) return fail("Member not found", 404);
 
-  void recheckAllRooms();
+  void recheckProject(auth.projectId);
   return NextResponse.json({ ok: true });
 }

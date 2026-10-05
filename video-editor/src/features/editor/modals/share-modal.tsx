@@ -19,6 +19,7 @@ import { ChevronDown, Check, Search } from "lucide-react";
 import { debounce } from "lodash";
 import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
 import { onAccessChanged } from "@/features/editor/collab/access-events";
+import { useAccessRefresh } from "@/features/editor/hooks/use-access-refresh";
 
 type AssignableProjectRole = "Manager" | "Editor" | "Commenter" | "Viewer";
 const ASSIGNABLE_PROJECT_ROLES: AssignableProjectRole[] = ["Manager", "Editor", "Commenter", "Viewer"];
@@ -71,18 +72,27 @@ const Avatar = ({ name, avatarUrl }: { name: string; avatarUrl?: string | null }
   );
 };
 
+const ROLE_DESCRIPTIONS: Record<AssignableProjectRole, string> = {
+  Manager: "Can edit, and manage who has access",
+  Editor: "Can edit the project",
+  Commenter: "Can view and leave comments",
+  Viewer: "Can only view"
+};
+
 const RoleSelectPopover = ({
   value,
   onChange,
   onRemove,
   prefix,
-  roles
+  roles = ASSIGNABLE_PROJECT_ROLES,
+  showDescriptions,
 }: {
   value: AssignableProjectRole;
   onChange: (v: AssignableProjectRole) => void;
   onRemove?: () => void;
   prefix?: string;
-  roles: AssignableProjectRole[];
+  roles?: AssignableProjectRole[];
+  showDescriptions?: boolean;
 }) => {
   const [open, setOpen] = useState(false);
 
@@ -110,10 +120,15 @@ const RoleSelectPopover = ({
               onChange(option);
               setOpen(false);
             }}
-            className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
+            className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-zinc-200 hover:bg-zinc-800/50"
           >
-            {option}
-            {option === value && <Check size={14} className="text-muted-foreground" />}
+            <div className="min-w-0">
+              <div className="text-sm">{option}</div>
+              {showDescriptions && (
+                <div className="text-xs text-muted-foreground">{ROLE_DESCRIPTIONS[option]}</div>
+              )}
+            </div>
+            {option === value && <Check size={14} className="shrink-0 text-muted-foreground" />}
           </div>
         ))}
         {onRemove && (
@@ -140,7 +155,7 @@ const UserRow = ({
   editable,
   onRoleChange,
   onRemove,
-  roles
+  roles,
 }: {
   name: string;
   email: string;
@@ -149,7 +164,7 @@ const UserRow = ({
   editable: boolean;
   onRoleChange?: (role: AssignableProjectRole) => void;
   onRemove?: () => void;
-  roles: AssignableProjectRole[];
+  roles?: AssignableProjectRole[];
 }) => (
   <div className="flex items-center gap-3">
     <Avatar name={name} avatarUrl={avatarUrl} />
@@ -234,23 +249,8 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
     if (open) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, projectId]);
-  useEffect(() => {
-    if (!open) return;
 
-    let t: ReturnType<typeof setTimeout> | null = null;
-    const off = onAccessChanged(() => {
-      if (t) clearTimeout(t);
-      t = setTimeout(() => void load(true), 150);
-    });
-    const poll = setInterval(() => void load(true), 5_000);
-
-    return () => {
-      off();
-      clearInterval(poll);
-      if (t) clearTimeout(t);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, projectId]);
+  useAccessRefresh(open, () => void load(true));
 
   const searchUsers = useMemo(
     () =>
@@ -334,7 +334,9 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
       : !canManage
         ? "Only the project owner and managers can change who has access."
         : query.trim() && !searching && suggestions.length === 0
-          ? "No matching users found."
+          ? query.includes("@")
+            ? "No user found with that email."
+            : "Enter their full email address."
           : null;
 
   const handleRoleChange = async (userId: string, role: AssignableProjectRole) => {
@@ -374,7 +376,7 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
                 <Search
                   className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Add people by name or email"
+                  placeholder="Add people by their email"
                   className="pl-10"
                   value={query}
                   disabled={!canManage}
@@ -417,6 +419,7 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
                 value={newUserRole}
                 onChange={setNewUserRole}
                 roles={roleOptions}
+                showDescriptions
               />
 
               {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
@@ -435,7 +438,6 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
                   avatarUrl={owner.avatarUrl}
                   role="Owner"
                   editable={false}
-                  roles={roleOptions}
                 />
               )}
               {members.map((m) => (

@@ -21,7 +21,7 @@ import {
 
 import type StateManager from "@designcombo/state";
 import { DownloadPopover } from "./download-popover";
-import DownloadProgressModal from "./download-progress-modal";
+import DownloadProgressModal from "./modals/download-progress-modal";
 import AutosizeInput from "@/components/ui/autosize-input";
 import { debounce } from "lodash";
 import {
@@ -31,7 +31,7 @@ import {
 } from "@/hooks/use-media-query";
 import { LogoIcons } from "@/components/shared/logos";
 import Link from "next/link";
-import { ShortcutsModal } from "./shortcuts-modal";
+import { ShortcutsModal } from "./modals/shortcuts-modal";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
@@ -46,7 +46,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import ShareModal from "@/components/share-modal";
+import ShareModal from "@/features/editor/modals/share-modal";
 import { useViewOnly } from "@/features/editor/hooks/use-view-only";
 import { useProjectRole } from "@/features/editor/hooks/use-project-role";
 import { canEditWithRole, canManageSharing } from "@/features/editor/types/editor-role";

@@ -73,6 +73,7 @@ export const Access = ({ blockId }: { blockId: string }) => {
     owner,
     members,
     canManage,
+    canGrantManager,
     generalAccess,
     setGeneralAccess,
     load
@@ -88,6 +89,7 @@ export const Access = ({ blockId }: { blockId: string }) => {
     return null;
   }
 
+  const ready = loadedBlockId === blockId && status === "ready";
   const summary = (() => {
     if (loadedBlockId !== blockId || status === "idle" || status === "loading") {
       return "Loading…";
@@ -104,7 +106,19 @@ export const Access = ({ blockId }: { blockId: string }) => {
 
       <div className="flex gap-2 items-start text-xs text-muted-foreground -mt-1 text-pretty">
         <Info size={16} className="shrink-0" />
-        <span>Only the scene owner can control scene access</span>
+        <span>
+          Only the scene owner and managers can control scene access.
+            {ready && (
+              <>
+                {" "}
+                <span className="text-foreground">
+                  {canGrantManager
+                    ? "You are the owner of this scene."
+                    : "You are a manager of this scene."}
+                </span>
+              </>
+            )}
+        </span>
       </div>
 
       <div className="flex flex-col gap-3">

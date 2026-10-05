@@ -6,13 +6,13 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { useDownloadState } from "./store/use-download-state";
-import useStore from "./store/use-store";
+import { useDownloadState } from "../store/use-download-state";
+import useStore from "../store/use-store";
 import { Button } from "@/components/ui/button";
 import { CircleCheckIcon, CircleXIcon, Loader2 } from "lucide-react";
 import { download } from "@/utils/download";
 import { useEffect, useState } from "react";
-import { millisecondsToHHMMSS } from "./utils/format";
+import { millisecondsToHHMMSS } from "../utils/format";
 
 const sanitizeFilename = (name: string): string => {
   const trimmed = name.trim();

@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Draggable from "@/components/shared/draggable";
 import { useIsDraggingOverTimeline } from "../hooks/is-dragging-over-timeline";
 import useUploadStore from "../store/use-upload-store";
-import ModalUpload from "@/components/modal-upload";
+import UploadModal from "@/features/editor/modals/upload-modal";
 import {
   Music,
   Image as ImageIcon,
@@ -1170,7 +1170,7 @@ export const Uploads = () => {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <ModalUpload />
+      <UploadModal />
 
       {(isDragOver || dragError) && (
         <div

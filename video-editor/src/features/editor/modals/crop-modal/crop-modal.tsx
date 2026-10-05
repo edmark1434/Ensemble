@@ -8,10 +8,10 @@ import {
 import { useEffect, useState } from "react";
 import { ElementCrop } from "./element-crop";
 import { Button } from "@/components/ui/button";
-import useLayoutStore from "../store/use-layout-store";
+import useLayoutStore from "../../store/use-layout-store";
 import { dispatch } from "@designcombo/events";
 import { EDIT_OBJECT } from "@designcombo/state";
-import useCropStore from "../store/use-crop-store";
+import useCropStore from "../../store/use-crop-store";
 import {
   Select,
   SelectContent,

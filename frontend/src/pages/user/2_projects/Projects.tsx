@@ -44,7 +44,7 @@ interface Project {
   width?: number;
   height?: number;
   duration_seconds?: number;
-  role?: string;
+  role?: "Owner" | "Manager" | "Editor" | "Commenter" | "Viewer";
 }
 
 interface TeamProject {
@@ -65,8 +65,10 @@ const contractProjects: Project[] = [];
 type TabType = "recent" | "personal" | "shared";
 type ViewType = "grid" | "compact";
 
+const RENAME_ROLES = ["Owner", "Manager", "Editor"];
+
 const canRenameProject = (project: Project) =>
-  project.role === "Owner" || project.role === "Editor";
+  RENAME_ROLES.includes(project.role ?? "");
 
 // Skeleton Components
 const ProjectCardSkeleton = ({ view = "grid" }: { view?: ViewType }) => (
@@ -148,9 +150,9 @@ const Projects: React.FC = () => {
       setSharedProjects(nextShared);
       setRecentProjects(nextRecent);
       
-      sessionStorage.setItem('ensemble_projects_data', JSON.stringify({
-        personal: nextPersonal, shared: nextShared, recent: nextRecent
-      }));
+      // sessionStorage.setItem('ensemble_projects_data', JSON.stringify({
+      //   personal: nextPersonal, shared: nextShared, recent: nextRecent
+      // }));
     } catch (err) {
       console.error("Failed to rename project", err);
     } finally {
@@ -160,15 +162,15 @@ const Projects: React.FC = () => {
     }
   };
 
-  const cachedData = sessionStorage.getItem('ensemble_projects_data');
-  const parsedCache = cachedData ? JSON.parse(cachedData) : null;
+  // const cachedData = sessionStorage.getItem('ensemble_projects_data');
+  // const parsedCache = cachedData ? JSON.parse(cachedData) : null;
 
-  const [personalProjects, setPersonalProjects] = useState<Project[]>(parsedCache?.personal || []);
-  const [sharedProjects, setSharedProjects] = useState<Project[]>(parsedCache?.shared || []);
-  const [recentProjects, setRecentProjects] = useState<Project[]>(parsedCache?.recent || []);
+  const [personalProjects, setPersonalProjects] = useState<Project[]>([]);
+  const [sharedProjects, setSharedProjects] = useState<Project[]>([]);
+  const [recentProjects, setRecentProjects] = useState<Project[]>([]);
 
-  const [loading, setLoading] = useState(!parsedCache);
-  const [isRefreshing, setIsRefreshing] = useState(!!parsedCache);
+  const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   let activeTab: TabType = "recent";
   if (location.pathname.includes("/projects/personal")) {
@@ -197,9 +199,9 @@ const Projects: React.FC = () => {
         setSharedProjects(shared);
         setRecentProjects(projects);
 
-        sessionStorage.setItem('ensemble_projects_data', JSON.stringify({
-          personal, shared, recent: projects
-        }));
+        // sessionStorage.setItem('ensemble_projects_data', JSON.stringify({
+        //   personal, shared, recent: projects
+        // }));
       } catch (error) {
         console.error("Failed to fetch projects:", error);
       } finally {
@@ -471,17 +473,19 @@ const Projects: React.FC = () => {
           <div className="h-4 w-1/3 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
         ) : (
           <div className="flex items-center gap-2">
-            <button 
-              className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white shrink-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditingProjectId(project.id);
-                setEditProjectName(project.name);
-              }}
-              title="Rename Project"
-            >
-              <Edit className="h-3.5 w-3.5" />
-            </button>
+            {canRenameProject(project) && (
+              <button
+                className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingProjectId(project.id);
+                  setEditProjectName(project.name);
+                }}
+                title="Rename Project"
+              >
+                <Edit className="h-3.5 w-3.5" />
+              </button>
+            )}
             {isRenamingProjectId === project.id ? (
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
