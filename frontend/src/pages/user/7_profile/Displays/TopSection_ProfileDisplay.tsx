@@ -82,8 +82,9 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   onFollowersClick,
   onFollowingClick,
   onInviteToJobClick,
-  onReportClick
-}) => {
+  onReportClick,
+  onOpenFlipCard
+  }) => {
   const isGuestMode = useGlobalState(state => state.isGuestMode);
   const [isMetadataOpen, setIsMetadataOpen] = useState(false);
   const [isAvatarExpanded, setIsAvatarExpanded] = useState(false);
