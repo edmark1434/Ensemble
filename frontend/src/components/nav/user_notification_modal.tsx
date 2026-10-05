@@ -147,7 +147,7 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
       </div>
 
       {/* Notification List */}
-      <div className="max-h-[420px] overflow-y-auto p-2">
+      <div className="max-h-[420px] overflow-y-auto p-2 scroll-thin">
         {notificationsData.length === 0 ? (
           <div className="py-10 text-center text-gray-500 dark:text-zinc-500 text-sm">
             No notifications
