@@ -44,6 +44,7 @@ interface TopSectionProps {
   onFollowingClick?: () => void;
   onInviteToJobClick?: () => void;
     onReportClick?: () => void;
+    onOpenFlipCard?: () => void;
 }
 
 export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
@@ -121,10 +122,19 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             </div>
           </div>
           {isOwner && (
-            <button onClick={onEditAvatar} className="absolute bottom-0 right-0 rounded-full bg-blue-500 p-2 text-white hover:bg-blue-600 transition shadow-md z-10">
+            <button onClick={onEditAvatar} className="absolute bottom-0 right-0 rounded-full bg-blue-500 p-2 text-white hover:bg-blue-600 transition shadow-md z-10" title="Edit Avatar">
               <Edit2 className="h-3.5 w-3.5" />
             </button>
           )}
+          
+          <button 
+            onClick={onOpenFlipCard} 
+            className="absolute -bottom-8 left-1/2 -translate-x-1/2 flex items-center justify-center gap-1.5 px-3 py-1 rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 text-[10px] font-bold text-zinc-600 dark:text-zinc-300 shadow-sm hover:shadow-md hover:bg-zinc-50 dark:hover:bg-zinc-700 transition whitespace-nowrap z-10"
+            title="Preview Discovery Card"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></svg>
+            Flip Card
+          </button>
         </div>
 
         {/* ==================== EXPANDED AVATAR MODAL ==================== */}

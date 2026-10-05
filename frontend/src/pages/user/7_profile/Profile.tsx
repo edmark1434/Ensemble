@@ -7,6 +7,7 @@ import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import toast from "react-hot-toast";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
+import DiscoveryFlipCardModal from "@/components/ui/DiscoveryFlipCardModal";
 import { InviteToJobModal } from "@/components/ui/InviteToJobModal";
 
 // Modularized Profile Sub-Components
@@ -165,6 +166,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
 
   const [isFollowing, setIsFollowing] = useState(false);
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isFlipCardOpen, setIsFlipCardOpen] = useState(false);
     const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [isFollowedBy, setIsFollowedBy] = useState(false);
   const [followersModalType, setFollowersModalType] = useState<"followers" | "following" | null>(null);
@@ -858,6 +860,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
           isOwner={isOwner}
           birthdate={userDetails?.birthdate}
           verificationLevel={userDetails?.verification_status}
+            onOpenFlipCard={() => setIsFlipCardOpen(true)}
           subscriptionType={userDetails?.subscriptionType || "Free"}
           followersCount={userDetails?.followers_count}
           followingCount={userDetails?.following_count}
@@ -972,6 +975,37 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
           onSave={saveProfileDetails}
           availableSkillsList={availableSkills}
           highlightField={highlightField}
+        />
+      )}
+
+      
+      {isFlipCardOpen && userDetails && (
+        <DiscoveryFlipCardModal
+          user={{
+            id: id || "",
+            name: userDetails.name || "",
+            username: userDetails.username || "",
+            avatar: userDetails.avatar_preset_url || "",
+            bio: userDetails.bio || "",
+            skills: userDetails.skills || [],
+            verified: !!userDetails.verification_status,
+            meritScore: userDetails.merit_score || "No Rating",
+            followersCount: userDetails.followers_count || 0,
+            roles: userDetails.role || [],
+            subscriptionType: "Free",
+            tagline: userDetails.tagline || "",
+            totalJobs: userDetails.total_jobs || 0,
+            totalServices: userDetails.total_services || 0,
+            totalAssets: userDetails.total_assets || 0,
+            joinedDate: userDetails.joinedDate || "",
+            email: userDetails.email_address || ""
+          } as any}
+          onClose={() => setIsFlipCardOpen(false)}
+          onInvite={() => {
+            setIsFlipCardOpen(false);
+            if (!user) return setIsGuestModalOpen(true);
+            setIsInviteModalOpen(true);
+          }}
         />
       )}
 
