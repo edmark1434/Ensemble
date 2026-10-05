@@ -169,6 +169,13 @@ async function updateTaglineAndDescriptionRepositories(accountId, tagline, descr
     }
 }
 
+async function updateBudgetCreditsRepositories(accountId, budgetCredits) {
+    const result = await pool.query(
+        `UPDATE accounts SET budget_credits = $1 WHERE account_id = $2 RETURNING budget_credits`,
+        [budgetCredits, accountId]
+    );
+    return result.rows[0] || null;
+}
 
 async function getPersonalDetails(userId) {
     try {
@@ -192,6 +199,7 @@ async function getProfileByAccountId(accountId) {
                 U.MIDDLE_NAME as middleName, 
                 U.SUFFIX as suffix,
                 A.TAGLINE as tagline,
+                A.BUDGET_CREDITS as budget_credits,
                 U.EMAIL_ADDRESS as email_address, 
                 A.CREATED_AT AS joinedDate, 
                 TO_CHAR(u.birth_date, 'YYYY-MM-DD') as birthdate, 
@@ -501,6 +509,7 @@ async function getProfileReviewsByAccountId(accountId) {
 }
 
 module.exports = {
+    updateBudgetCreditsRepositories,
     getProfileReviewsByAccountId,
     updateProfileAccountRepositories,
     insertProfileSocialMediaRepositories,

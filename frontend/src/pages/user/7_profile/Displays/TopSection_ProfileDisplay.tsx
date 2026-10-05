@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X, Tag, Star, Briefcase, Flag } from "lucide-react";
+import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X, Tag, Briefcase, Flag } from "lucide-react";
 import { ProfileTags } from "../Utilities/ProfileTags.tsx";
 import useGlobalState from "@/lib/global_state";
 
@@ -74,9 +74,6 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   followingCount = 0,
   isFollowing = false,
   isFollowedBy = false,
-    avgRating = 0,
-    freelancerRating = 0,
-    totalReviews = 0,
   onFollow,
   onUnfollow,
   onFollowersClick,
@@ -279,20 +276,6 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             <button onClick={onFollowingClick} className="hover:text-blue-500 dark:hover:text-blue-400 hover:underline decoration-blue-400/50 underline-offset-4 transition">
               <span className="text-gray-900 dark:text-white">{followingCount}</span> <span className="text-gray-500 dark:text-zinc-500 font-normal">Following</span>
             </button>
-            <span className="mx-2 text-gray-300 dark:text-zinc-700">&bull;</span>
-            <div className="flex items-center gap-2 cursor-default group text-[11px]" title="Total Platform Rating">
-              <div className="flex items-center gap-1">
-                <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
-                <span className="text-gray-500 dark:text-zinc-400 font-medium tracking-wide">Total Rating:</span>
-                <span className="font-bold text-gray-900 dark:text-white">{avgRating}</span>
-                <span className="text-gray-400 dark:text-zinc-500">({totalReviews})</span>
-              </div>
-              <span className="text-gray-300 dark:text-zinc-700 mx-0.5">|</span>
-              <div className="flex items-center gap-1">
-                <span className="text-gray-500 dark:text-zinc-400 font-medium tracking-wide">Freelance Rating:</span>
-                <span className="font-bold text-gray-900 dark:text-white">{freelancerRating || "N/A"}</span>
-              </div>
-            </div>
           </div>
 
         </div>

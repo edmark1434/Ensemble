@@ -1,10 +1,11 @@
-# Current Task: Bell notification styling
+# Current Task: Profile budget
 
 ## Objective
-Make bell dropdown items match the live toast style (coloured type label, bold actor, avatar/icon) and share one notification type map between the bell and `/notifications`.
+Let users set, edit, and clear a budget (whole platform credits) on their own profile, shown publicly in the profile header stats row for later use.
 
 ## Acceptance Criteria
-- Bell items show a readable label instead of the raw `reference_prefix`, and no longer show `reference_table`.
-- Follow notifications show the follower's name, "started following you", and their avatar.
-- Every `reference_prefix` created by the backend has a label and icon in `frontend/src/lib/notificationTypes.tsx`.
+- `accounts.budget_credits` is a nullable integer with a non-negative check, added by a new reversible migration.
+- `PUT /api/accounts/profile/budget` updates only the signed-in account; the backend rejects non-integers, negatives, and values above 100,000,000.
+- The profile API returns `budget_credits`; the header shows "Budget: N credits" after Freelance Rating.
+- Owners can set, edit, and remove the budget inline; visitors see it only when set.
 - `cd frontend && npm run build` passes.

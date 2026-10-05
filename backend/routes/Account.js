@@ -34,7 +34,8 @@ const {
     getProfileCurrentAvatarByAccountIdController,
     getProfileAttachmentsController,
     createProfileAttachmentController,
-    deleteProfileAttachmentController
+    deleteProfileAttachmentController,
+    updateBudgetCreditsController
 } = require('../controllers/ProfileControllers');
 const {
     getUserGalleries,
@@ -49,6 +50,7 @@ const { adjustAccountCredits } = require('../repositories/AdminUserTeamRepositor
 
 router.get('/recent-avatars', getRecentUserAvatarsController);
 router.put('/profile/tagline-description', [checkSession, requireAuth], updateTaglineAndDescriptionController);
+router.put('/profile/budget', [checkSession, requireAuth], updateBudgetCreditsController);
 router.get('/wallet', [checkSession, requireAuth], getAccountWalletController);
 // Optional auth for searching users (allows guests but includes follow status if logged in)
 router.get('/search-users', [optionalSession], searchUserAccountsByHandleController);

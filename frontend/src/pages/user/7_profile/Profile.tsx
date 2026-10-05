@@ -14,6 +14,7 @@ import { InviteToJobModal } from "@/components/ui/InviteToJobModal";
 import { TopSection_ProfileDisplay } from "./Displays/TopSection_ProfileDisplay.tsx";
 import { MeritSection_ProfileDisplay } from "./Displays/MeritSection_ProfileDisplay.tsx";
 import { BadgeSideSection_ProfileDisplay } from "./Displays/BadgeSideSection_ProfileDisplay.tsx";
+import { RatingsBudgetSideSection_ProfileDisplay } from "./Displays/RatingsBudgetSideSection_ProfileDisplay.tsx";
 import { SkillsSideSection_ProfileDisplay } from "./Displays/SkillsSideSection_ProfileDisplay.tsx";
 import { SocialLinksSection_ProfileDisplay } from "./Displays/SocialLinksSection_ProfileDisplay.tsx";
 import { ProfileSetupWidget } from "./Displays/ProfileSetupWidget.tsx";
@@ -92,6 +93,7 @@ interface UserDetail {
   total_reviews?: string | number;
   client_rating?: string | number;
   freelancer_rating?: string | number;
+  budget_credits?: number | null;
   asset_rating?: string | number;
   successful_jobs_count?: string | number;
   freelancer_service_rating?: string | number;
@@ -631,6 +633,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             avg_rating: profileData.avg_rating,
             total_reviews: profileData.total_reviews,
             freelancer_rating: profileData.freelancer_rating,
+            budget_credits: profileData.budget_credits ?? null,
             client_rating: profileData.client_rating,
             asset_rating: profileData.asset_rating,
             successful_jobs_count: profileData.successful_jobs_count,
@@ -672,6 +675,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             avg_rating: profileData.avg_rating,
             total_reviews: profileData.total_reviews,
             freelancer_rating: profileData.freelancer_rating,
+            budget_credits: profileData.budget_credits ?? null,
             client_rating: profileData.client_rating,
             asset_rating: profileData.asset_rating,
             successful_jobs_count: profileData.successful_jobs_count,
@@ -890,6 +894,20 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">
 
           <div className="space-y-4 h-fit">
+            <RatingsBudgetSideSection_ProfileDisplay
+              loading={loading}
+              isOwner={isOwner}
+              avgRating={userDetails?.avg_rating ? Number(parseFloat(userDetails.avg_rating as string).toFixed(1)) : 0}
+              totalReviews={userDetails?.total_reviews ? Number(userDetails.total_reviews) : 0}
+              freelancerRating={userDetails?.freelancer_rating ? Number(parseFloat(userDetails.freelancer_rating as string).toFixed(1)) : 0}
+              freelancerReviews={Number(userDetails?.freelancer_service_count || 0) + Number(userDetails?.freelancer_job_count || 0)}
+              budgetCredits={userDetails?.budget_credits ?? null}
+              onSaveBudget={async (budgetCredits) => {
+                const { data } = await api.put("/api/accounts/profile/budget", { budget_credits: budgetCredits });
+                const saved = data?.data?.budget_credits ?? null;
+                setUserDetails(prev => (prev ? { ...prev, budget_credits: saved } : prev));
+              }}
+            />
             <BadgeSideSection_ProfileDisplay
               loading={loading}
               badges={(userDetails?.badges || [])

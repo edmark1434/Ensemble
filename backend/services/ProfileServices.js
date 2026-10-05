@@ -11,7 +11,8 @@ const {
     insertProfileSocialMediaRepositories,
     getProfileAvatarsByAccountId,
     getProfileCurrentAvatarByAccountId,
-    updateUserRolesByAccountIdRepositories
+    updateUserRolesByAccountIdRepositories,
+    updateBudgetCreditsRepositories
 } = require('../repositories/ProfileRepositories');
 const { getAccountLinkByAccountIdService } = require('../services/AccountServices');
 const {getUserByIdFromAccountId} = require('../repositories/UserRepositories');
@@ -35,6 +36,31 @@ async function updateTaglineAndDescriptionServices(accountId, tagline, descripti
         console.error(`Error updating tagline and description for accountId ${accountId}:`, err);
         throw err;
     }
+}
+
+const MAX_BUDGET_CREDITS = 100000000;
+
+class ProfileBudgetError extends Error {
+    constructor(message, status = 422) {
+        super(message);
+        this.status = status;
+    }
+}
+
+async function updateBudgetCreditsServices(accountId, budgetCredits) {
+    if (!accountId) throw new ProfileBudgetError('Account ID is required', 401);
+
+    let value = null;
+    if (budgetCredits !== null && budgetCredits !== undefined && budgetCredits !== '') {
+        value = Number(budgetCredits);
+        if (!Number.isSafeInteger(value) || value < 0 || value > MAX_BUDGET_CREDITS) {
+            throw new ProfileBudgetError(`Budget must be a whole number of credits between 0 and ${MAX_BUDGET_CREDITS.toLocaleString()}`);
+        }
+    }
+
+    const updated = await updateBudgetCreditsRepositories(accountId, value);
+    if (!updated) throw new ProfileBudgetError('Account not found', 404);
+    return updated.budget_credits;
 }
 
 async function getPersonalDetailsServices(userId) {
@@ -379,6 +405,8 @@ async function getProfileReviewsByAccountIdService(accountId) {
 }
 
 module.exports = {
+    ProfileBudgetError,
+    updateBudgetCreditsServices,
     getProfileReviewsByAccountIdService,
     updateTaglineAndDescriptionServices,
     getPersonalDetailsServices,
