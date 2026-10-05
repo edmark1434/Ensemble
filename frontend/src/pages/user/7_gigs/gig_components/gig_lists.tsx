@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Star, Clock, Bookmark, Users, Flag, Edit2, Wrench, ShoppingCart, Heart, Send } from "lucide-react";
+import { Star, Clock, Bookmark, Users, Flag, Edit2, Wrench, ShoppingCart, Heart, Send, CircleCheck, TrendingUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -9,6 +9,24 @@ import PopupReportGig from "./PopupReportGig";
 import useGlobalState from "@/lib/global_state";
 
 export type ViewType = "grid" | "list";
+export type GigBudgetStatus = "within" | "near" | null;
+
+const BudgetBadge: React.FC<{ status: GigBudgetStatus; className?: string }> = ({ status, className = "" }) => {
+  if (!status) return null;
+  const within = status === "within";
+  const Icon = within ? CircleCheck : TrendingUp;
+  return (
+    <span
+      className={`absolute z-10 flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-bold text-white shadow-md backdrop-blur-sm border ${
+        within ? "bg-emerald-600/90 border-emerald-400/40" : "bg-amber-600/90 border-amber-400/40"
+      } ${className}`}
+      title={within ? "Starting price is within your budget" : "Starting price is slightly above your budget"}
+    >
+      <Icon className="h-3 w-3" />
+      {within ? "Within budget" : "Slightly over"}
+    </span>
+  );
+};
 
 interface GigListProps {
   gigs: Gig[];
@@ -17,6 +35,7 @@ interface GigListProps {
   loading?: boolean;
   onToggleSave: (e: React.MouseEvent, gigId: string) => void;
   baseRoute: string;
+  getBudgetStatus?: (gig: Gig) => GigBudgetStatus;
 }
 
 export const GigCardSkeleton: React.FC<{ viewType?: ViewType }> = ({ viewType = "grid" }) => {
@@ -72,6 +91,7 @@ export const GigList: React.FC<GigListProps> = ({
   loading,
   onToggleSave,
   baseRoute,
+  getBudgetStatus,
 }) => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
@@ -172,6 +192,7 @@ export const GigList: React.FC<GigListProps> = ({
                         className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
+                      <BudgetBadge status={getBudgetStatus?.(gig) ?? null} className="bottom-2 left-2" />
 
                       {/* Orders and Service Rating Badges grouped at top-left */}
                       <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
@@ -330,6 +351,7 @@ export const GigList: React.FC<GigListProps> = ({
                     className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105 absolute inset-0"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
+                  <BudgetBadge status={getBudgetStatus?.(gig) ?? null} className="top-2 left-2" />
 
                   {/* Orders and Service Rating badges grouped */}
                   <div className="absolute bottom-2 left-2 flex items-center gap-2 z-10">

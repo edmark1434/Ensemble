@@ -7,7 +7,7 @@ import type { GigMainContext } from "../gig_main";
 import { GigList } from "../gig_components/gig_lists";
 
 const GigServicesPage: React.FC = () => {
-  const { filteredGigs, viewType, loading, toggleSaveGig } = useOutletContext<GigMainContext>();
+  const { filteredGigs, viewType, loading, toggleSaveGig, getBudgetStatus } = useOutletContext<GigMainContext>();
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -41,6 +41,7 @@ const GigServicesPage: React.FC = () => {
       viewType={viewType}
       onToggleSave={toggleSaveGig}
       baseRoute="/gigs/services"
+      getBudgetStatus={getBudgetStatus}
       loading={loading}
     />
   );
