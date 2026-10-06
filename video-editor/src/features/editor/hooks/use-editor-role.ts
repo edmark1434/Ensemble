@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getSceneRoleStrict } from "@/features/editor/utils/scene-access";
-import { EditorRole, StoredProjectRole, toEditorRole } from "@/features/editor/types/editor-role";
+import { EditorRole } from "@/features/editor/types/editor-role";
 import { onAccessChanged } from "@/features/editor/collab/access-events";
 
 const ROLE_REFRESH_MS = 30_000;
@@ -21,7 +21,7 @@ async function fetchProjectRole(projectId: string): Promise<EditorRole | null | 
     if (res.status === 403) return null;
     if (!res.ok) return undefined;
     const data = await res.json();
-    return toEditorRole(data.role as StoredProjectRole | undefined);
+    return (data.role as EditorRole | undefined) ?? null;
   } catch {
     return undefined;
   }

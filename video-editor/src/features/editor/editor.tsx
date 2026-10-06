@@ -48,6 +48,7 @@ import { scrollTimelineToFrame } from "@/features/editor/utils/timeline-scroll";
 import { useCollabDoc } from "@/features/editor/hooks/use-collab-doc";
 import { CollabTarget } from "@/features/editor/collab/collab-target";
 import { useSceneContentBroadcast } from "@/features/editor/hooks/use-scene-content-broadcast";
+import { broadcastUserRole } from "@/features/editor/collab/live-transform";
 import { RightPanelContent } from "@/features/editor/right-panel-content";
 import { canEditWithRole, EditorRole } from "@/features/editor/types/editor-role";
 import { useEditorRole } from "@/features/editor/hooks/use-editor-role";
@@ -88,7 +89,7 @@ const IconPlayerPauseFilled = ({ size }: { size: number }) => (
 );
 
 const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnly }: any) => {
-  const { fps, duration, markers, timeline, scale, trackItemIds, muted, setMuted } = useStore();
+  const { fps, duration, markers, timeline, scale, trackItemIds, muted, setMuted, activeSceneBlockId } = useStore();
   const currentFrame = useCurrentPlayerFrame(playerRef);
   const [playing, setPlaying] = useState(false);
   const timelineOffsetX = useTimelineOffsetX();
@@ -188,7 +189,9 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
         {!isLargeScreen && trackItemIds.length === 0 ? (
           <div
             className="w-full h-full flex items-center justify-center text-center px-6 text-sm text-muted-foreground">
-            The project is currently empty, no preview available
+            {activeSceneBlockId
+              ? "The scene is currently empty, no preview available"
+              : "The project is currently empty, no preview available"}
           </div>
         ) : (
           <Scene ref={sceneRef} stateManager={stateManager} viewOnly={viewOnly} />
@@ -550,6 +553,16 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
   useEffect(() => {
     if (collab) collab.syncGuard.readOnly = !canEdit;
   }, [collab, canEdit]);
+
+  // Publish this client's role in the CURRENT room (project role in the
+  // project doc, effective scene role in a block doc) so the navbar avatar
+  // group can show it for everyone else. Display only: the server never reads
+  // this, access is still enforced there. Re-runs on every room switch and
+  // whenever the role changes while connected.
+  useEffect(() => {
+    if (!collab?.ready) return;
+    broadcastUserRole(collab.schema.awareness, resolvedRole);
+  }, [collab?.schema, collab?.ready, resolvedRole]);
 
   useSceneContentBroadcast(
     stateManager,

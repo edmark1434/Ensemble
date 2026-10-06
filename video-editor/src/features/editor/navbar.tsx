@@ -47,6 +47,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import ShareModal from "@/features/editor/modals/share-modal";
+import PresenceAvatars from "@/components/presence-avatars";
 import { useViewOnly } from "@/features/editor/hooks/use-view-only";
 import { useProjectRole } from "@/features/editor/hooks/use-project-role";
 import { canEditWithRole, canManageSharing } from "@/features/editor/types/editor-role";
@@ -147,7 +148,7 @@ export default function Navbar({
         display: "grid",
         gridTemplateColumns: isLargeScreen ? "320px 1fr 320px" : "1fr 1fr 1fr"
       }}
-      className="bg-primary/12 pointer-events-none flex h-14 items-center border-b border-border/80 px-2"
+      className="bg-primary/12 pointer-events-none flex h-16 items-center border-b border-border/80 px-2"
     >
       <DownloadProgressModal />
 
@@ -288,6 +289,8 @@ export default function Navbar({
 
       <div className="flex h-13 items-center justify-end gap-2">
         <div className=" pointer-events-auto flex h-10 items-center gap-2 rounded-md px-2.5">
+          {/* gap-2 + mr-1.5 = the same 14px the logo sits from the undo button */}
+          <PresenceAvatars className="mr-2 hidden md:flex" />
           {!viewOnly && (
             <Tooltip delayDuration={10}>
               <TooltipTrigger asChild>

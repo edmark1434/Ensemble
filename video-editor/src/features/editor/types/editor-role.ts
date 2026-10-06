@@ -1,21 +1,14 @@
 import type { BlockRole } from "@/features/editor/types/block-members";
 
-export type EditorRole = BlockRole; // "Owner" | "Editor" | "Commenter" | "Viewer"
+export type EditorRole = BlockRole; // "Owner" | "Manager" | "Editor" | "Commenter" | "Viewer"
 
-// What project_members.role can hold. "Manager" is an Editor who can also
-// manage project sharing; it only matters in the share flow.
-export type StoredProjectRole = EditorRole | "Manager";
+// Alias so existing imports keep working. Safe to delete later.
+export type StoredProjectRole = EditorRole;
 
-export function toEditorRole(role: StoredProjectRole | null | undefined): EditorRole | null {
-  if (!role) return null;
-  return role === "Manager" ? "Editor" : role;
+export function canEditWithRole(role: EditorRole | null | undefined): boolean {
+  return role === "Owner" || role === "Manager" || role === "Editor";
 }
 
-export function canEditWithRole(role: StoredProjectRole | null | undefined): boolean {
-  const r = toEditorRole(role);
-  return r === "Owner" || r === "Editor";
-}
-
-export function canManageSharing(role: StoredProjectRole | null | undefined): boolean {
+export function canManageSharing(role: EditorRole | null | undefined): boolean {
   return role === "Owner" || role === "Manager";
 }

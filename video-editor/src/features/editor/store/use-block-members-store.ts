@@ -10,7 +10,7 @@ import { isSceneItem, type ISceneDetails } from "@/features/editor/types/ensembl
 import {
   AssignableBlockRole,
   BlockAccess,
-  BlockPerson, GeneralAccessLevel, minRole, toBlockRole,
+  BlockPerson, GeneralAccessLevel, minRole, sceneRoleCeiling,
 } from "@/features/editor/types/block-members";
 
 type Status = "idle" | "loading" | "ready" | "error";
@@ -112,11 +112,11 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
     loadSeq++;
 
     const applied = person.projectRole
-      ? (minRole(role, person.projectRole) as AssignableBlockRole)
+      ? minRole(role, sceneRoleCeiling(person.projectRole))
       : role;
     set((s) => ({
       error: null,
-      members: [...s.members, { ...person, role: applied, effectiveRole: toBlockRole(applied) }],
+      members: [...s.members, { ...person, role: applied, effectiveRole: applied }],
       candidates: s.candidates.filter((c) => c.userId !== person.userId),
     }));
 
@@ -140,9 +140,9 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
       members: s.members.map((m) => {
         if (m.userId !== userId) return m;
         const applied = m.projectRole
-          ? (minRole(role, m.projectRole) as AssignableBlockRole)
+          ? minRole(role, sceneRoleCeiling(m.projectRole))
           : role;
-        return { ...m, role: applied, effectiveRole: toBlockRole(applied) };
+        return { ...m, role: applied, effectiveRole: applied };
       }),
     }));
 

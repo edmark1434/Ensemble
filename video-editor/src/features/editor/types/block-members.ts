@@ -3,11 +3,12 @@
 // Shared by the members API route and the editor UI. No server-only imports
 // here — this file is imported from both sides.
 
-// Stored in block_members.role. "Manager" is an Editor who can also manage scene access.
-export type AssignableBlockRole = "Manager" | "Editor" | "Commenter" | "Viewer";
-export type StoredBlockRole = "Owner" | AssignableBlockRole;
-// What a stored role resolves to for editing and viewing. Manager behaves as Editor.
-export type BlockRole = "Owner" | "Editor" | "Commenter" | "Viewer";
+// Roles, lowest to highest. Manager is a real role: it can edit and manage
+// access. Only Owner outranks it, and Owner can't be assigned.
+export type BlockRole = "Owner" | "Manager" | "Editor" | "Commenter" | "Viewer";
+export type AssignableBlockRole = Exclude<BlockRole, "Owner">;
+// Alias so existing imports keep working. Safe to delete later.
+export type StoredBlockRole = BlockRole;
 
 export const ASSIGNABLE_BLOCK_ROLES: AssignableBlockRole[] = [
   "Manager",
@@ -16,26 +17,29 @@ export const ASSIGNABLE_BLOCK_ROLES: AssignableBlockRole[] = [
   "Viewer",
 ];
 
-export const ROLE_RANK: Record<StoredBlockRole, number> = {
+export const ROLE_RANK: Record<BlockRole, number> = {
   Viewer: 0,
   Commenter: 1,
   Editor: 2,
-  Manager: 2,
-  Owner: 3,
+  Manager: 3,
+  Owner: 4,
 };
 
-export const minRole = (a: StoredBlockRole, b: StoredBlockRole): StoredBlockRole =>
+export const minRole = <T extends BlockRole>(a: T, b: T): T =>
   ROLE_RANK[a] <= ROLE_RANK[b] ? a : b;
 
-export const toBlockRole = (r: StoredBlockRole): BlockRole =>
-  r === "Manager" ? "Editor" : r;
+// The highest scene role a project role allows. Project Editors and up can be
+// made scene Managers; Commenters and Viewers can't go above what they are in
+// the project.
+export const sceneRoleCeiling = (projectRole: BlockRole): AssignableBlockRole =>
+  projectRole === "Viewer" || projectRole === "Commenter" ? projectRole : "Manager";
 
 // Scene Owner, or a Manager who is still at least an Editor in the project.
 export function canManageBlockAccess({
   blockRole,
   projectRole,
 }: {
-  blockRole: StoredBlockRole | null;
+  blockRole: BlockRole | null;
   projectRole: BlockRole | null;
 }): boolean {
   if (blockRole === "Owner") return true;
@@ -48,9 +52,8 @@ export interface BlockPerson {
   email: string;
   // Resolved from accounts.avatar_file_id -> files.path; null = show initials.
   avatarUrl: string | null;
+  // Their role in the project, as stored.
   projectRole?: BlockRole | null;
-  // Raw project role for display only ("Manager" is not collapsed to "Editor").
-  projectRoleLabel?: BlockRole | "Manager" | null;
 }
 
 export interface BlockMember extends BlockPerson {

@@ -5,11 +5,10 @@ import {
   AssignableBlockRole,
   BlockAccess,
   BlockPerson,
-  BlockRole, canManageBlockAccess, GeneralAccessLevel, minRole,
-  StoredBlockRole,
-  toBlockRole,
+  BlockRole, canManageBlockAccess, GeneralAccessLevel, minRole, sceneRoleCeiling,
+  StoredBlockRole
 } from "@/features/editor/types/block-members";
-import { StoredProjectRole, toEditorRole } from "@/features/editor/types/editor-role";
+import { StoredProjectRole } from "@/features/editor/types/editor-role";
 import { resolveFileUrl } from "@/lib/file-url";
 
 type PersonRow = {
@@ -26,8 +25,7 @@ const toPerson = (row: PersonRow): BlockPerson => ({
   name: `${row.first_name} ${row.last_name}`.trim(),
   email: row.email_address,
   avatarUrl: resolveFileUrl(row.avatar_path),
-  projectRole: toEditorRole(row.project_role),
-  projectRoleLabel: row.project_role ?? null,
+  projectRole: row.project_role ?? null,
 });
 
 export async function isProjectMember(
@@ -69,12 +67,13 @@ export async function getProjectRole(
     .where("deleted_at", "is", null)
     .select(["role"])
     .executeTakeFirst();
-  return toEditorRole(row?.role);
+  return row?.role ?? null;
 }
 
 // What a general access level gives a project member, before their project
 // role caps it. Only used when the user has no specific block_members row.
-const GENERAL_ACCESS_CEILING: Record<GeneralAccessLevel, BlockRole | null> = {
+// General access never grants Manager.
+const GENERAL_ACCESS_CEILING: Record<GeneralAccessLevel, AssignableBlockRole | null> = {
   "Anyone can edit": "Editor",
   "Anyone can comment": "Commenter",
   "Anyone can view": "Viewer",
@@ -86,8 +85,8 @@ const GENERAL_ACCESS_CEILING: Record<GeneralAccessLevel, BlockRole | null> = {
  *  - the scene's Owner (block_members row with role Owner) is always Owner
  *  - not a project member -> no access
  *  - a specific block_members row decides the role outright (general access
- *    is ignored, up or down), capped by the project role
- *  - no specific row -> general access ceiling, capped by the project role
+ *    is ignored, up or down), capped by sceneRoleCeiling(projectRole)
+ *  - no specific row -> general access ceiling, capped the same way
  */
 export function resolveEffectiveBlockRole({
   blockRole,
@@ -101,10 +100,11 @@ export function resolveEffectiveBlockRole({
   if (blockRole === "Owner") return "Owner";
   if (!projectRole) return null;
 
-  if (blockRole) return toBlockRole(minRole(blockRole, projectRole));
+  const ceiling = sceneRoleCeiling(projectRole);
+  if (blockRole) return minRole(blockRole, ceiling);
 
-  const ceiling = GENERAL_ACCESS_CEILING[generalAccess] ?? null;
-  return ceiling ? toBlockRole(minRole(ceiling, projectRole)) : null;
+  const general = GENERAL_ACCESS_CEILING[generalAccess] ?? null;
+  return general ? minRole(general, ceiling) : null;
 }
 
 /** What the collab socket and the write routes check. null = no access. */
@@ -230,7 +230,7 @@ export async function getBlockAccess(
           effectiveRole: resolveEffectiveBlockRole({
             blockRole: r.role,
             generalAccess,
-            projectRole: toEditorRole(r.project_role),
+            projectRole: r.project_role ?? null,
           }),
         }],
     ),
@@ -274,7 +274,7 @@ export async function addBlockMember({
       .executeTakeFirst();
 
     if (!projectMembership) return "not_project_member";
-    const applied = minRole(role, toEditorRole(projectMembership.role)!) as AssignableBlockRole;
+    const applied = minRole(role, sceneRoleCeiling(projectMembership.role));
 
     const existing = await trx
       .selectFrom("block_members")
@@ -316,7 +316,7 @@ export async function updateBlockMemberRole({ blockId, projectId, userId, role }
 }): Promise<boolean> {
   const projectRole = await getProjectRole(projectId, userId);
   if (!projectRole) return false;
-  const applied = minRole(role, projectRole) as AssignableBlockRole;
+  const applied = minRole(role, sceneRoleCeiling(projectRole));
 
   const result = await db
     .updateTable("block_members")

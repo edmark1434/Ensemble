@@ -15,7 +15,7 @@ import useBlockMembersStore, {
 import {
   ASSIGNABLE_BLOCK_ROLES,
   type AssignableBlockRole, BlockMember,
-  type BlockPerson, BlockRole, ROLE_RANK
+  type BlockPerson, BlockRole, ROLE_RANK, sceneRoleCeiling
 } from "@/features/editor/types/block-members";
 import { onAccessChanged } from "@/features/editor/collab/access-events";
 import { Avatar } from "@/components/user-avatar";
@@ -26,11 +26,6 @@ const BLOCK_ROLE_DESCRIPTIONS: Record<AssignableBlockRole, string> = {
   Commenter: "Can view and comment on this scene",
   Viewer: "Can only view this scene"
 };
-
-const displayRole = (m: BlockMember): AssignableBlockRole =>
-  m.role === "Manager" && m.effectiveRole === "Editor"
-    ? "Manager"
-    : ((m.effectiveRole ?? m.role) as AssignableBlockRole);
 
 const RoleSelectPopover = ({
   value,
@@ -45,7 +40,7 @@ const RoleSelectPopover = ({
   onChange: (v: AssignableBlockRole) => void;
   onRemove?: () => void;
   prefix?: string;
-  maxRole?: BlockRole | null;
+  maxRole?: AssignableBlockRole | null;
   roles?: AssignableBlockRole[];
   showDescriptions?: boolean;
 }) => {
@@ -135,7 +130,7 @@ const UserRow = ({
   editable: boolean;
   onRoleChange?: (role: AssignableBlockRole) => void;
   onRemove?: () => void;
-  maxRole?: BlockRole | null;
+  maxRole?: AssignableBlockRole | null;
   roles?: AssignableBlockRole[];
   removed?: boolean;
 }) => {
@@ -300,9 +295,9 @@ export default function AccessPicker() {
                       {person.email}
                     </p>
                   </div>
-                  {(person.projectRoleLabel ?? person.projectRole) && (
+                  {person.projectRole && (
                     <span className="shrink-0 text-xs text-muted-foreground">
-                      {person.projectRoleLabel ?? person.projectRole}
+                      {person.projectRole}
                     </span>
                   )}
                 </div>
@@ -350,13 +345,13 @@ export default function AccessPicker() {
               name={m.name}
               email={m.email}
               avatarUrl={m.avatarUrl}
-              role={displayRole(m)}
+              role={m.effectiveRole ?? m.role}
               editable={canManage && (canGrantManager || m.role !== "Manager")}
               roles={roleOptions}
               onRoleChange={(role) => void changeRole(m.userId, role)}
               onRemove={() => void removeMember(m.userId)}
               removed={m.projectRole === null}
-              maxRole={m.projectRole}
+              maxRole={m.projectRole ? sceneRoleCeiling(m.projectRole) : null}
             />
           ))}
         </div>

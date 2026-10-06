@@ -14,10 +14,19 @@ import { download } from "@/utils/download";
 import { useEffect, useState } from "react";
 import { millisecondsToHHMMSS } from "../utils/format";
 
-const sanitizeFilename = (name: string): string => {
-  const trimmed = name.trim();
-  if (!trimmed) return "Untitled";
-  return trimmed.replace(/[/\\?%*:|"<>]/g, "-");
+export const sanitizeFilename = (name: string): string => {
+  const cleaned = Array.from(
+    name
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
+      .replace(/[/\\?%*:|"<>]/g, "-")
+      .replace(/\s+/g, " ")
+      .trim(),
+  )
+    .slice(0, 150)
+    .join("")
+    .replace(/[. ]+$/, "");
+  return cleaned || "Untitled";
 };
 
 const DownloadProgressModal = () => {
