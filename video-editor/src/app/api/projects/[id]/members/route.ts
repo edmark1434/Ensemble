@@ -14,6 +14,7 @@ import {
 } from "@/lib/db/project-members";
 import { recheckProject } from "@/lib/collab/access-recheck";
 import { canManageSharing } from "@/features/editor/types/editor-role";
+import { notifyProjectInvite } from "@/lib/invitations/notify-project-invite";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -85,6 +86,11 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   if (result === "already_member") return fail("That user already has access", 409);
   void recheckProject(auth.projectId);
+  void notifyProjectInvite({
+    projectId: auth.projectId,
+    inviterUserId: auth.userId,
+    recipientUserId: body.userId,
+  });
   return NextResponse.json({ ok: true });
 }
 
