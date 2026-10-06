@@ -15,9 +15,10 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 // Read from environment variables with defaults
-const ALLOWED_FOLDERS = process.env.UPLOAD_ALLOWED_FOLDERS 
-    ? process.env.UPLOAD_ALLOWED_FOLDERS.split(',').map(f => f.trim())
-    : ['profile', 'documents', 'assets', 'asset-originals', 'forum', 'gallery', 'jobs', 'chat-attachments', 'forum-discussions', 'forum-group', 'forum-covers', 'gig_orders', 'gig_thumbnails', 'gig_galleries'];
+const DEFAULT_UPLOAD_FOLDERS = ['profile', 'documents', 'assets', 'asset-originals', 'forum', 'gallery', 'jobs', 'chat-attachments', 'forum-discussions', 'forum-group', 'forum-covers', 'gig_orders', 'gig_thumbnails', 'gig_galleries', 'ticket-attachments'];
+const ALLOWED_FOLDERS = process.env.UPLOAD_ALLOWED_FOLDERS
+    ? [...new Set([...process.env.UPLOAD_ALLOWED_FOLDERS.split(',').map(f => f.trim()), 'ticket-attachments'])]
+    : DEFAULT_UPLOAD_FOLDERS;
 
 const ALLOWED_CONTENT_TYPES = (process.env.UPLOAD_ALLOWED_TYPES
     ? process.env.UPLOAD_ALLOWED_TYPES.split(',').map(t => t.trim())
@@ -67,6 +68,7 @@ const UPLOAD_POLICIES = {
     gig_thumbnails: { types: IMAGE_TYPES, imageLimit: 5 * MB },
     gig_galleries: { types: [...IMAGE_TYPES, ...VIDEO_TYPES], imageLimit: 20 * MB, videoLimit: 50 * MB },
     gig_orders: { types: [...IMAGE_TYPES, ...VIDEO_TYPES, ...AUDIO_TYPES, 'application/pdf', ...ARCHIVE_TYPES], imageLimit: 20 * MB, videoLimit: 100 * MB, audioLimit: 25 * MB, pdfLimit: 20 * MB, archiveLimit: 100 * MB },
+    'ticket-attachments': { types: IMAGE_TYPES, imageLimit: 8 * MB },
 };
 
 function getUploadPolicy(folder, contentType) {

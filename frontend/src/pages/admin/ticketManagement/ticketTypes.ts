@@ -29,6 +29,7 @@ export type SupportTicket = {
   escalatedToRole?: string | null;
   isEscalated?: boolean;
   waitingForResponse?: boolean;
+  isOverdue?: boolean;
   lastMessageAuthorType?: string | null;
   messageCount: number;
   lastMessageAt: string | null;
@@ -38,6 +39,61 @@ export type SupportTicket = {
   resolvedAt?: string | null;
 };
 
+export type TicketAttachment = {
+  attachment_key?: string;
+  attachment_url?: string;
+  attachment_name?: string;
+  attachment_type?: string;
+};
+
+export type TicketTimelineEntry = {
+  id: string;
+  kind: 'ticket' | 'account' | string;
+  eventType: string;
+  summary: string;
+  actorName?: string | null;
+  actorRole?: string | null;
+  createdAt: string;
+};
+
+export type TicketArticle = {
+  id: string;
+  ticketType: string;
+  title: string;
+  body: string;
+};
+
+export type TicketPaymentEvidence = {
+  payments: {
+    id: string;
+    reference: string;
+    amount: number;
+    currency: string;
+    status: string;
+    type: string | null;
+    credits: number;
+    createdAt: string;
+    processedAt: string | null;
+  }[];
+  credits: {
+    id: string;
+    type: string;
+    amount: number;
+    status: string;
+    createdAt: string;
+  }[];
+  cashouts: {
+    id: string;
+    status: string;
+    credits: number;
+    channel: string | null;
+    failureCode: string | null;
+    accountLast4: string | null;
+    createdAt: string;
+    refundedAt: string | null;
+  }[];
+};
+
 export type TicketMessage = {
   id: number | string;
   senderId?: string | null;
@@ -45,6 +101,7 @@ export type TicketMessage = {
   authorName: string;
   authorRole?: string | null;
   body: string;
+  attachments?: TicketAttachment[];
   isInternal: boolean;
   audience?: 'staff' | 'author_and_staff' | 'parties' | 'public' | string;
   publishedAt?: string | null;
@@ -299,6 +356,10 @@ export type TicketDetail = {
   categories?: string[];
   permissions?: TicketPermissions;
   assignableStaff: { staffId: number | string; name: string; role: string }[];
+  timeline?: TicketTimelineEntry[];
+  articles?: TicketArticle[];
+  payments?: TicketPaymentEvidence | null;
+  canAdjustCredits?: boolean;
 };
 
 export function ticketTypeOf(t: { type?: string; category?: string }) {

@@ -4,6 +4,15 @@ const { ObjectId } = require('mongodb');
 const { getMongoClient } = require('../lib/MongoDb');
 const { recordAccountActivity } = require('./AccountActivityRepositories');
 const {
+  normalizeTicketScreenshots,
+  canViewTicketPayments,
+  canAdjustTicketCredits,
+  recordTicketEvent,
+  listTicketTimeline,
+  listTicketArticles,
+  listTicketPaymentEvidence,
+} = require('./TicketHelpRepositories');
+const {
   createInboxRepositories,
   createMessageRepositories,
   getMessageByIdRepositories,
@@ -311,7 +320,7 @@ async function createSupportTicket(input, session = null) {
       username: sessionDisplayName(session),
     };
     try {
-      await addTicketMessage(ticketId, description, authorSession, false);
+      await addTicketMessage(ticketId, description, authorSession, false, input?.attachments || []);
     } catch (err) {
       // Ticket metadata still exists; chat can be started later when Mongo is up.
       if (!err?.message?.includes('MongoDB')) throw err;
@@ -870,6 +879,7 @@ function mapMongoTicketMessage(m, senderNames = new Map()) {
     authorType: m.author_type || (m.is_internal ? 'staff' : 'user'),
     authorName: m.author_name || senderNames.get(String(m.sender_id)) || 'Unknown',
     body: m.message_content || m.body || '',
+    attachments: Array.isArray(m.attachments) ? m.attachments : [],
     isInternal: Boolean(m.is_internal),
     createdAt: m.created_at || m.createdAt || null,
   };
@@ -982,15 +992,24 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
       ? lastPublic.authorType
       : row.last_message_author_type;
 
+  const ticket = mapTicketRow({
+    ...row,
+    message_count: messages.length || Number(row.message_count || 0),
+    last_message_at: messages.length
+      ? messages[messages.length - 1].createdAt
+      : row.last_message_at,
+    last_message_author_type: derivedAuthor,
+  });
+  const role = staff?.role || staffSession?.role || null;
+  const showPayments = Boolean(staffSession) && canViewTicketPayments(role, ticket.type);
+  const [timeline, articles, payments] = await Promise.all([
+    staffSession ? listTicketTimeline(ticketId, row.account_id, row.created_at) : Promise.resolve([]),
+    listTicketArticles(ticket.type),
+    showPayments ? listTicketPaymentEvidence(row.account_id) : Promise.resolve(null),
+  ]);
+
   return {
-    ticket: mapTicketRow({
-      ...row,
-      message_count: messages.length || Number(row.message_count || 0),
-      last_message_at: messages.length
-        ? messages[messages.length - 1].createdAt
-        : row.last_message_at,
-      last_message_author_type: derivedAuthor,
-    }),
+    ticket,
     messages,
     chatId,
     chatAvailable,
@@ -1003,6 +1022,10 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     permissions: buildTicketPermissions(row, staff, sessionStaffId(staffSession)),
     assignableQueue: normalizeQueueKey(queueKey),
     assignableStaff,
+    timeline,
+    articles,
+    payments,
+    canAdjustCredits: Boolean(staffSession) && canAdjustTicketCredits(role, ticket.type),
   };
 }
 
@@ -1034,6 +1057,12 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
        WHERE ticket_id = $2 AND deleted_at IS NULL`,
       [staff.staff_id, ticketId]
     );
+    await recordTicketEvent({
+      ticketId,
+      eventType: 'assign',
+      summary: 'Assigned the ticket to themselves',
+      actorStaffId: staff.staff_id,
+    });
     return getTicketDetail(ticketId, staffSession);
   }
 
@@ -1054,6 +1083,12 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
         [ticketId, staff.staff_id]
       );
     }
+    await recordTicketEvent({
+      ticketId,
+      eventType: 'release',
+      summary: 'Released the ticket',
+      actorStaffId: staff.staff_id,
+    });
     return getTicketDetail(ticketId, staffSession);
   }
 
@@ -1211,6 +1246,40 @@ async function updateTicket(ticketId, patch, staffSession) {
       values
     );
 
+    const actorStaffId = staff?.staff_id || null;
+    if (patch.status && normalizeTicketStatus(patch.status) !== normalizeTicketStatus(currentStatus)) {
+      await recordTicketEvent({
+        ticketId,
+        eventType: 'status',
+        summary: `Status changed from ${currentStatus} to ${normalizeTicketStatus(patch.status)}`,
+        actorStaffId,
+      });
+    }
+    if (patch.priority) {
+      await recordTicketEvent({
+        ticketId,
+        eventType: 'priority',
+        summary: `Priority set to ${normalizeTicketPriority(patch.priority)}`,
+        actorStaffId,
+      });
+    }
+    if (patch.assigned_role) {
+      await recordTicketEvent({
+        ticketId,
+        eventType: 'escalate',
+        summary: `Escalated to ${patch.assigned_role}${patch.type ? ` as ${normalizeTicketType(patch.type)}` : ''}`,
+        actorStaffId,
+      });
+    }
+    if (patch.handled_by_staff_id !== undefined) {
+      await recordTicketEvent({
+        ticketId,
+        eventType: 'assign',
+        summary: patch.handled_by_staff_id ? 'Changed the ticket handler' : 'Cleared the ticket handler',
+        actorStaffId,
+      });
+    }
+
     try {
       const notifSettings = await getSectionValue('notifications');
       const { getIo } = require('../lib/WebSocket');
@@ -1229,7 +1298,7 @@ async function updateTicket(ticketId, patch, staffSession) {
             is_read: false,
             reference_table: 'tickets',
             reference_prefix: 'TICKET_ASSIGNED',
-            reference_path: `/staff/tickets?ticketId=${ticketId}`,
+            reference_path: ticketDeskPath(staff?.role),
             reference_id: randomUUID(),
           });
           if (io) {
@@ -1267,7 +1336,7 @@ async function updateTicket(ticketId, patch, staffSession) {
   return getTicketDetail(ticketId, staffSession);
 }
 
-async function addTicketMessage(ticketId, body, staffSession, isInternal = false) {
+async function addTicketMessage(ticketId, body, staffSession, isInternal = false, rawAttachments = []) {
   if (!getMongoClient()) {
     throw new Error('MongoDB is not connected — cannot send ticket chat messages');
   }
@@ -1297,13 +1366,18 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
     }
   }
 
+  const screenshots = normalizeTicketScreenshots(rawAttachments);
+  const messageBody = String(body || '').trim();
+  if (!messageBody && !screenshots.length) {
+    throw new Error('Message body is required');
+  }
   const insertedMessageId = await createMessageRepositories({
     conversation_id: String(chatId),
     sender_id: accountId,
-    message_type: 'text',
-    message_content: body,
+    message_type: screenshots.length ? 'image' : 'text',
+    message_content: messageBody,
     message_id_reply: null,
-    attachments: [],
+    attachments: screenshots,
     links: [],
     message_react: [],
     read_by: accountId ? [{ account_id: accountId, read_at: now }] : [],
@@ -1322,10 +1396,25 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
      SET updated_at = NOW(),
          message_count = COALESCE(message_count, 0) + 1,
          last_message_at = NOW(),
-         last_message_author_type = $2
+         last_message_author_type = $2,
+         first_staff_reply_at = CASE
+           WHEN $3::boolean AND first_staff_reply_at IS NULL THEN NOW()
+           ELSE first_staff_reply_at
+         END
      WHERE ticket_id = $1 AND deleted_at IS NULL`,
-    [ticketId, staff ? 'staff' : 'user']
+    [ticketId, staff ? 'staff' : 'user', Boolean(staff && !isInternal)]
   );
+  await recordTicketEvent({
+    ticketId,
+    eventType: isInternal ? 'note' : 'reply',
+    summary: isInternal
+      ? 'Added an internal note'
+      : screenshots.length
+        ? `Replied with ${screenshots.length} screenshot${screenshots.length === 1 ? '' : 's'}`
+        : 'Replied on the ticket',
+    actorStaffId: staff ? (await resolveDisputeStaffId(staffSession))?.staff_id || null : null,
+    actorAccountId: accountId,
+  });
 
   if (ObjectId.isValid(chatId)) {
     const db = mongoDb();
@@ -1437,6 +1526,15 @@ function isDesignatedHandlerRole(role) {
 }
 
 /** Ticket/report claim roles — any specialist console + Support + Admin. */
+function ticketDeskPath(role) {
+  const label = String(role || '').toLowerCase();
+  if (label.includes('forum')) return '/moderator/forum/ticket-management';
+  if (label.includes('marketplace')) return '/moderator/marketplace/ticket-management';
+  if (label.includes('jobs')) return '/moderator/jobs/ticket-management';
+  if (label === 'admin' || label === 'administrator') return '/admin/ticket-management';
+  return '/moderator/support/ticket-management';
+}
+
 function isQueueHandlerRole(role) {
   const r = String(role || '').toLowerCase();
   return (

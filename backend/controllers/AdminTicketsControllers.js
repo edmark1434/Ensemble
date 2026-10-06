@@ -12,6 +12,14 @@ const {
   updateReport,
   getReportDetail,
 } = require('../repositories/AdminTicketsRepositories');
+const {
+  normalizeTicketScreenshots,
+  listTicketArticles,
+  saveTicketArticle,
+  deleteTicketArticle,
+  submitTicketSatisfaction,
+  adjustTicketCredits,
+} = require('../repositories/TicketHelpRepositories');
 const { pool } = require('../lib/Database');
 const { randomUUID } = require('crypto');
 const { createReport } = require('../repositories/ModeratorSharedRepositories');
@@ -111,10 +119,11 @@ async function patchAdminTicket(req, res) {
 async function postAdminTicketMessage(req, res) {
   try {
     const { body, isInternal } = req.body;
-    if (!body?.trim()) {
+    const screenshots = normalizeTicketScreenshots(req.body?.attachments);
+    if (!body?.trim() && !screenshots.length) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
     }
-    const data = await addTicketMessage(req.params.id, body.trim(), req.session, Boolean(isInternal));
+    const data = await addTicketMessage(req.params.id, body?.trim() || '', req.session, Boolean(isInternal), req.body?.attachments);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -281,6 +290,7 @@ async function createPublicTicket(req, res) {
         category,
         priority: priority || 'Medium',
         description: description.trim(),
+        attachments: req.body?.attachments,
         requesterAccountId,
       },
       req.session
@@ -356,6 +366,10 @@ async function getMyTicket(req, res) {
     data.messages = (data.messages || []).filter((m) => !m.isInternal);
     delete data.assignableStaff;
     delete data.permissions;
+    delete data.timeline;
+    delete data.payments;
+    delete data.articles;
+    delete data.canAdjustCredits;
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching user ticket:', err);
@@ -370,7 +384,8 @@ async function postMyTicketMessage(req, res) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
     const { body } = req.body;
-    if (!body?.trim()) {
+    const screenshots = normalizeTicketScreenshots(req.body?.attachments);
+    if (!body?.trim() && !screenshots.length) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
     }
     const existing = await getTicketDetail(req.params.id);
@@ -378,9 +393,13 @@ async function postMyTicketMessage(req, res) {
     if (String(existing.ticket.requester.accountId) !== String(accountId)) {
       return res.status(403).json({ success: false, message: 'Not your ticket' });
     }
-    const data = await addTicketMessage(req.params.id, body.trim(), req.session, false);
+    const data = await addTicketMessage(req.params.id, body?.trim() || '', req.session, false, req.body?.attachments);
     data.messages = (data.messages || []).filter((m) => !m.isInternal);
     delete data.assignableStaff;
+    delete data.timeline;
+    delete data.payments;
+    delete data.articles;
+    delete data.canAdjustCredits;
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error adding user ticket message:', err);
@@ -426,6 +445,75 @@ async function createMyTechnicalReport(req, res) {
   }
 }
 
+async function getAdminTicketArticles(req, res) {
+  try {
+    const data = await listTicketArticles(req.query.type || null);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Failed to load reply guides' });
+  }
+}
+
+async function postAdminTicketArticle(req, res) {
+  try {
+    const id = await saveTicketArticle({
+      articleId: req.body?.id || null,
+      ticketType: req.body?.ticketType,
+      title: req.body?.title,
+      body: req.body?.body,
+      staffId: req.session?.staffId || req.session?.staff_id || null,
+    });
+    res.status(200).json({ success: true, data: { id } });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message || 'Failed to save reply guide' });
+  }
+}
+
+async function deleteAdminTicketArticle(req, res) {
+  try {
+    const removed = await deleteTicketArticle(req.params.id);
+    if (!removed) return res.status(404).json({ success: false, message: 'Reply guide not found' });
+    res.status(200).json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Failed to delete reply guide' });
+  }
+}
+
+async function postTicketCreditAdjustment(req, res) {
+  try {
+    const role = req.session?.role;
+    const data = await adjustTicketCredits({
+      ticketId: req.params.id,
+      amount: req.body?.amount,
+      note: req.body?.note,
+      staffId: req.session?.staffId || req.session?.staff_id || null,
+      staffRole: role,
+      actorAccountId: req.session?.account_id || req.session?.accountId || null,
+    });
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    await addTicketMessage(
+      req.params.id,
+      `Credit ${Number(req.body?.amount) > 0 ? 'grant' : 'deduction'} of ${Math.abs(Number(req.body?.amount))} recorded on this ticket. ${String(req.body?.note || '').trim()}`,
+      req.session,
+      true
+    );
+    res.status(200).json({ success: true, data, message: 'Credit change recorded on the ticket' });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message || 'Failed to adjust credits' });
+  }
+}
+
+async function postMyTicketSatisfaction(req, res) {
+  try {
+    const accountId = req.session?.account_id || req.session?.accountId;
+    if (!accountId) return res.status(401).json({ success: false, message: 'Authentication required' });
+    const data = await submitTicketSatisfaction(req.params.id, accountId, req.body?.score, req.body?.comment);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message || 'Failed to save rating' });
+  }
+}
+
 module.exports = {
   getAdminTicketsOverview,
   getAdminTicketDetail,
@@ -444,4 +532,9 @@ module.exports = {
   getMyTicket,
   postMyTicketMessage,
   createMyTechnicalReport,
+  getAdminTicketArticles,
+  postAdminTicketArticle,
+  deleteAdminTicketArticle,
+  postTicketCreditAdjustment,
+  postMyTicketSatisfaction,
 };

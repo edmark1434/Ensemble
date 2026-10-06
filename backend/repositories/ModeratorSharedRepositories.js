@@ -20,6 +20,14 @@ function normalizeStatus(status) {
   return status;
 }
 
+function isTicketOverdue(row, closed) {
+  if (closed || !row.created_at) return false;
+  const ageHours = (Date.now() - new Date(row.created_at).getTime()) / 36e5;
+  if (!Number.isFinite(ageHours)) return false;
+  if (!row.first_staff_reply_at && ageHours >= 24) return true;
+  return ageHours >= 72;
+}
+
 function mapTicketRow(row) {
   const status = normalizeTicketStatus(row.status);
   const closed = isClosedStatus(status);
@@ -62,6 +70,9 @@ function mapTicketRow(row) {
     lastMessageAuthorType: row.last_message_author_type || null,
     messageCount: Number(row.message_count || 0),
     lastMessageAt: row.last_message_at,
+    firstStaffReplyAt: row.first_staff_reply_at || null,
+    isOverdue: isTicketOverdue(row, closed),
+    satisfactionScore: row.satisfaction_score == null ? null : Number(row.satisfaction_score),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     closedAt: row.resolved_at || row.closed_at || null,

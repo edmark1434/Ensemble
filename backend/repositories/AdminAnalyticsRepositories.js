@@ -594,6 +594,8 @@ async function getAnalyticsOverview() {
       moderationTeamSize: staffRoles.reduce((s, r) => s + r.count, 0),
       pendingVerifications,
       openTickets: liveModules.openTickets,
+      ticketRatings: liveModules.ticketRatings || 0,
+      ticketSatisfaction: liveModules.ticketSatisfaction ?? null,
       openReports: liveModules.openReports,
       openDisputes: liveModules.openDisputes,
       teams: liveModules.teams,
@@ -720,6 +722,8 @@ async function getAnalyticsOverview() {
       nonActiveAccounts: Number(counts.non_active_users),
       platformHealthScore: engagementScore,
       openTickets: liveModules.openTickets,
+      ticketRatings: liveModules.ticketRatings || 0,
+      ticketSatisfaction: liveModules.ticketSatisfaction ?? null,
       openReports: liveModules.openReports,
       openDisputes: liveModules.openDisputes,
       activeViolations: liveModules.activeViolations,
@@ -785,7 +789,9 @@ async function fetchLiveModuleCounts() {
           COUNT(*) FILTER (
             WHERE deleted_at IS NULL
               AND LOWER(COALESCE(status, 'open')) NOT IN ('resolved', 'closed')
-          )::int AS open_count
+          )::int AS open_count,
+          COUNT(*) FILTER (WHERE satisfaction_score IS NOT NULL)::int AS rated_count,
+          ROUND(AVG(satisfaction_score)::numeric, 2) AS avg_satisfaction
         FROM tickets
       `
         )
@@ -819,6 +825,8 @@ async function fetchLiveModuleCounts() {
     openDisputes: Number(disputes.rows[0].open_count),
     tickets: Number(tickets.rows[0].total),
     openTickets: Number(tickets.rows[0].open_count),
+    ticketRatings: Number(tickets.rows[0].rated_count || 0),
+    ticketSatisfaction: tickets.rows[0].avg_satisfaction == null ? null : Number(tickets.rows[0].avg_satisfaction),
     violations: Number(violations.rows[0].total),
     activeViolations: Number(violations.rows[0].active_count),
   };

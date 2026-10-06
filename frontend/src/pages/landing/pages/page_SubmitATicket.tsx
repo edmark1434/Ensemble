@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import api from "@/lib/axios";
+import { uploadFileWithIntent } from "@/lib/uploadFile";
 import { TICKET_TYPE_GROUPS } from "@/pages/admin/ticketManagement/ticketTypes";
 import useGlobalState from "@/lib/global_state";
 
@@ -39,6 +40,7 @@ const PageSubmitATicket: React.FC = () => {
   const [subject, setSubject] = useState("");
   const [ticketType, setTicketType] = useState<string>("Other");
   const [description, setDescription] = useState("");
+  const [screenshots, setScreenshots] = useState<File[]>([]);
   const [ticketTypeGroups, setTicketTypeGroups] = useState<TicketTypeGroup[]>(
     TICKET_TYPE_GROUPS.map((group) => ({
       label: group.label,
@@ -85,12 +87,18 @@ const PageSubmitATicket: React.FC = () => {
     setError(null);
     setSubmitting(true);
     try {
+      const attachments = [];
+      for (const file of screenshots.slice(0, 4)) {
+        const uploaded = await uploadFileWithIntent(file, "ticket-attachments");
+        attachments.push({ key: uploaded.key, name: file.name, size: file.size });
+      }
       const response = await api.post("/api/users/tickets", {
         account_id: accountId,
         subject: subject.trim(),
         type: ticketType,
         priority: "Medium",
         description: description.trim(),
+        attachments,
       });
       if (!response.data?.success) {
         setError(response.data?.message || "Failed to submit ticket");
@@ -226,6 +234,20 @@ const PageSubmitATicket: React.FC = () => {
                   resize: "none",
                 }}
               />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: theme === 'dark' ? "#7a8499" : "#6b7280", marginBottom: 8 }}>
+                Screenshots
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(event) => setScreenshots(Array.from(event.target.files || []).slice(0, 4))}
+              />
+              <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 12, marginTop: 6 }}>
+                Up to 4 images. Stored in the existing file bucket.
+              </p>
             </div>
             {error && <p style={{ color: "#f87171", fontSize: 13, margin: 0 }}>{error}</p>}
             <button

@@ -69,7 +69,8 @@ type QuickChipId =
   | 'awaiting'
   | 'escalated'
   | 'unassigned'
-  | 'high';
+  | 'high'
+  | 'overdue';
 
 export default function TicketFiltersPanel({
   filters,
@@ -163,6 +164,7 @@ export default function TicketFiltersPanel({
     }
     if (filters.flag === 'awaiting') return 'awaiting';
     if (filters.flag === 'escalated') return 'escalated';
+    if (filters.flag === 'overdue') return 'overdue';
     if (filters.assignee === 'unassigned' && filters.flag === 'all') return 'unassigned';
     if (filters.priority === 'High' && filters.flag === 'all') return 'high';
     if (
@@ -195,6 +197,10 @@ export default function TicketFiltersPanel({
         priority: 'all',
         status: 'all',
       });
+      return;
+    }
+    if (id === 'overdue') {
+      patch({ flag: 'overdue', assignee: 'all', assigneeStaffId: 'all', priority: 'all', status: 'all' });
       return;
     }
     if (id === 'awaiting') {
@@ -230,6 +236,7 @@ export default function TicketFiltersPanel({
     { id: 'all', label: 'All' },
     { id: 'open_only', label: 'Open queue' },
     { id: 'awaiting', label: 'Awaiting reply' },
+    { id: 'overdue', label: 'Overdue' },
     { id: 'escalated', label: 'Escalated' },
     { id: 'unassigned', label: 'Unassigned' },
     { id: 'high', label: 'High priority' },
@@ -404,6 +411,7 @@ export default function TicketFiltersPanel({
           <option value="awaiting">Awaiting Reply</option>
           <option value="escalated">Escalated</option>
           <option value="open_only">Open / In Progress</option>
+          <option value="overdue">Overdue</option>
         </select>
       </Field>
     </div>

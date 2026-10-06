@@ -122,6 +122,7 @@ export default function ModeratorTicketDesk({
       flag === "awaiting" ||
       flag === "escalated" ||
       flag === "open_only" ||
+      flag === "overdue" ||
       flag === "all"
     ) {
       next.flag = flag as TicketFlagFilter;
