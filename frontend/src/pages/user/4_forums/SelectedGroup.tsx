@@ -401,7 +401,7 @@ const ReplyInput = ({
   };
 
   return (
-    <div className="mt-4">
+    <div className="mt-4" data-staff-composer>
       <div className="flex gap-3">
         <img
           src={currentUserAvatar}

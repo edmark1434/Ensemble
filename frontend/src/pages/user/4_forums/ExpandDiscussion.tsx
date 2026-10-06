@@ -127,7 +127,7 @@ const ReplyComposer = ({
   };
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3">
+    <div data-staff-composer className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3">
       <textarea
         value={comment}
         onChange={(event) => setComment(event.target.value)}
