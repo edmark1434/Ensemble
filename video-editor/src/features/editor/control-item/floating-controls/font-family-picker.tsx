@@ -213,7 +213,7 @@ export default function FontFamilyPicker() {
             </PopoverTrigger>
 
             <PopoverContent
-              className="z-[200] p-0"
+              className="z-[250] p-0"
               style={{ width: "var(--radix-popover-trigger-width)" }}
             >
               {/* "All" option */}

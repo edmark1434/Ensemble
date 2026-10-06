@@ -9,6 +9,9 @@ import FontFamilyPicker from "./font-family-picker";
 import TextPresetPicker from "./text-preset-picker";
 import AccessPicker from "./access-picker";
 
+// Above the scene presence overlay (z 200 in interactions.tsx), below popovers (250) and dialogs (300).
+const FLOATING_CONTROL_Z_INDEX = 210;
+
 export default function FloatingControl({ anchorRef }: { anchorRef: React.RefObject<HTMLDivElement | null> }) {
   const { floatingControl, trackItem, floatingControlIds, floatingControlAnimationType } = useLayoutStore();
   const [spawnPos, setSpawnPos] = useState<{ top: number; left: number } | null>(null);
@@ -67,7 +70,7 @@ export default function FloatingControl({ anchorRef }: { anchorRef: React.RefObj
   return createPortal(
     <Draggable nodeRef={nodeRef as unknown as React.RefObject<HTMLElement>} handle=".handle" bounds="body"
                defaultPosition={dragStart}>
-      <div ref={nodeRef} style={{ position: "fixed", top: 0, left: 0, zIndex: 100 }}>
+      <div ref={nodeRef} style={{ position: "fixed", top: 0, left: 0, zIndex: FLOATING_CONTROL_Z_INDEX }}>
         {content}
       </div>
     </Draggable>,
