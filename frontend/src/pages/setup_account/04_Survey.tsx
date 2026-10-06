@@ -20,8 +20,6 @@ const T = {
   fontBody:  "'Plus Jakarta Sans', sans-serif",
 };
 
-const MAX_BUDGET_CREDITS = 100000000;
-
 // Types
 interface Option {
   option_id: string;
@@ -63,7 +61,6 @@ export default function Survey() {
   
   // Local sub-step control state
   const [subStep, setSubStep] = useState<1 | 2>(1);
-  const [budget, setBudget] = useState('');
   
   // Dynamic state to store answers for all questions
   const [answers, setAnswers] = useState<{ [questionId: string]: string | string[] }>({});
@@ -104,8 +101,6 @@ export default function Survey() {
           }
         });
         setAnswers(initialAnswers);
-        const savedBudget = stateResponse.data.data?.budget_credits;
-        if (Number.isSafeInteger(savedBudget)) setBudget(String(savedBudget));
         if (stateResponse.data.current_step === 'survey_2') setSubStep(2);
       } catch (error) {
         console.error('Error fetching survey:', error);
@@ -173,10 +168,6 @@ export default function Survey() {
   const validateStep = () => {
     const questions = getQuestionsForSubStep();
     const newErrors: { [key: string]: string } = {};
-    if (subStep === 1) {
-      if (!budget) newErrors.budget = 'Please enter your budget.';
-      else if (Number(budget) > MAX_BUDGET_CREDITS) newErrors.budget = `Budget can be up to ${MAX_BUDGET_CREDITS.toLocaleString()} credits.`;
-    }
     
     questions.forEach(question => {
       if (question.is_required) {
@@ -193,7 +184,6 @@ export default function Survey() {
 
   const buildSubmissionData = () => ({
     survey_id: surveyData?.survey_id,
-    budget_credits: budget ? Number(budget) : undefined,
     responses: Object.entries(answers).flatMap(([questionId, value]) => {
       const question = surveyData?.questions.find(q => q.question_id === questionId);
       const values = Array.isArray(value) ? value : value ? [value] : [];
@@ -662,27 +652,6 @@ export default function Survey() {
 
             {/* Dynamic Questions */}
             {currentQuestions.map((question) => renderQuestion(question))}
-
-            {subStep === 1 && (
-              <div className="survey-section">
-                <span className="survey-label">What is your budget? (credits) *</span>
-                <span className="survey-sublabel">
-                  How many credits you plan to spend on hiring freelancers or buying services. It is shown on your profile so freelancers know what kind of projects you can take on, and you can change it later.
-                </span>
-                <input
-                  inputMode="numeric"
-                  value={budget ? Number(budget).toLocaleString() : ""}
-                  onChange={(e) => {
-                    setBudget(e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 9));
-                    if (errors.budget) setErrors(({ budget: _, ...rest }) => rest);
-                  }}
-                  className="dropdown-select"
-                  placeholder="e.g. 5,000"
-                  style={{ borderColor: errors.budget ? T.error : T.border }}
-                />
-                {errors.budget && <span className="error-text">{errors.budget}</span>}
-              </div>
-            )}
 
             {/* Display submit error if any */}
             {errors.submit && (
