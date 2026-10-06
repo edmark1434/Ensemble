@@ -27,6 +27,9 @@ export default async function EditorPage({
   const decoded = sessionCookie ? await verifyEditorSession(sessionCookie) : null;
 
   if (!decoded) {
+    if (UUID_PATTERN.test(id)) {
+      redirect(`${process.env.MAIN_APP_URL}/projects/open/${id}`);
+    }
     redirect("/auth-error");
     return;
   }
