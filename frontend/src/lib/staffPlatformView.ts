@@ -1,5 +1,9 @@
 const ACTION_LABEL =
-  /\b(like|unlike|save|unsave|follow|unfollow|message|chat|buy|purchase|checkout|create|edit|delete|remove|submit|send|reply|comment|upload|apply|hire|report|share|invite|join|leave|pay|publish|archive|download|bookmark|contact|offer|bid|propose|accept|decline|reject|withdraw|subscribe|upgrade|block|mute|pin|react|logout|log out|sign out|settings|feedback|notification|ask ai|top up)\b/i;
+  /\b(like|unlike|save|unsave|follow|unfollow|message|chat|buy|purchase|checkout|create|edit|delete|remove|submit|send|reply|comment|upload|apply|hire|report|share|invite|join|leave|pay|publish|archive|download|bookmark|contact|offer|bid|propose|accept|decline|reject|withdraw|subscribe|upgrade|block|mute|pin|react|logout|log out|sign out|settings|feedback|notification|ask ai|top up|verify now|verify first|transaction history|my transaction|my terms|my contracts|post a job|post a service|post a gig|post job|start project|new discussion|create discussion|create post|write a comment|make a proposal|place an order)\b|\bpost\b/i;
+
+/** Member-only tools and actions. Staff can look at public pages, not these. */
+const ACTION_PATH =
+  /^\/jobs\/create$|^\/jobs\/edit(?:\/|$)|^\/jobs\/[^/]+\/make-proposal$|^\/jobs\/proposals(?:\/|$)|^\/gigs\/create$|^\/gigs\/edit(?:\/|$)|^\/gigs\/orders(?:\/|$)|^\/gigs\/services\/[^/]+\/order$|^\/projects\/select$|^\/credits(?:-subscriptions)?(?:\/checkout)?$|^\/settings(?:\/|$)|^\/notifications$|^\/account-verification-status$|^\/profile$|^\/transactions(?:\/|$)|^\/terms-of-services(?:\/|$)|^\/contracts(?:\/|$)|^\/dashboard(?:\/|$)|^\/inbox(?:\/|$)/i;
 
 /** Pages staff may open to look at people and the member site. */
 const VIEW_PATH = /^\/(?:home|forums|jobs|gigs|assets|discovery|projects|teams|search)(?:\/|$)|^\/profile\/[^/]+\/?$/i;
@@ -34,6 +38,15 @@ function controlLabel(element: Element): string {
   return `${labelled} ${text}`.replace(/\s+/g, " ").trim();
 }
 
+export function staffPreviewViewFallback(pathname: string): string | null {
+  const path = pathname.split("?")[0].replace(/\/$/, "") || "/";
+  if (!ACTION_PATH.test(path)) return null;
+  if (path.startsWith("/jobs")) return "/jobs/postings";
+  if (path.startsWith("/gigs")) return "/gigs/services";
+  if (path.startsWith("/projects")) return "/projects";
+  return "/home";
+}
+
 function pathFromHref(href: string): string | null {
   if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) return null;
   try {
@@ -64,6 +77,7 @@ export function staffPreviewHideTarget(element: Element): Element | null {
   if (!control || control.closest("aside, nav")) return null;
 
   const path = pathFromHref(control.getAttribute("href") || "");
+  if (path && staffPreviewViewFallback(path)) return control;
   if (path && VIEW_PATH.test(path)) return null;
   if (path && ACCOUNT_ONLY_PATH.test(path)) return control;
 

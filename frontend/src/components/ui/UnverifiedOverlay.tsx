@@ -1,9 +1,13 @@
 import React from 'react';
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { useNavigate } from "react-router-dom";
+import useGlobalState from "@/lib/global_state";
+import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 
 export const UnverifiedOverlay = ({ featureName = "this area" }: { featureName?: string }) => {
   const navigate = useNavigate();
+  const isStaffPreview = isStaffPlatformViewer(useGlobalState((state) => state.user));
+  if (isStaffPreview) return null;
   return (
     <div className="absolute inset-0 z-40 bg-gray-50 dark:bg-dark-base">
       <div className="sticky top-[73px] h-[calc(100vh-73px)] w-full flex flex-col items-center justify-center p-4 text-center pb-32">

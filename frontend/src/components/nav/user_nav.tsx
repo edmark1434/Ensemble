@@ -30,6 +30,7 @@ import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { motion, LayoutGroup } from "framer-motion";
 import useGlobalState from "@/lib/global_state";
+import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { formatUnreadBadge, useInboxUnreadTotals } from "@/components/ui/chat_bubble/useInboxUnreadTotals";
 
 type NavItem = {
@@ -80,15 +81,17 @@ const UserNav: React.FC<UserNavProps> = () => {
     const isCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
     const setIsCollapsed = useGlobalState((state) => state.setIsSidebarCollapsed);
     const isGuestMode = useGlobalState((state) => state.isGuestMode);
+    const isStaffPreview = isStaffPlatformViewer(useGlobalState((state) => state.user));
+    const hidePersonalNav = isGuestMode || isStaffPreview;
     const [isJobsOpen, setIsJobsOpen] = useState(false);
     const [isGigsOpen, setIsGigsOpen] = useState(false);
     const inboxUnread = useInboxUnreadTotals().total;
 
     const primaryNavState = isGuestMode ? primaryNavInitial.filter(item => item.label !== "Teams") : primaryNavInitial;
     const marketplaceTopState = marketplaceTopInitial;
-    const jobsState = isGuestMode ? jobsItemsInitial.filter(item => item.label !== "Proposals") : jobsItemsInitial;
-    const gigsState = isGuestMode ? gigsItemsInitial.filter(item => item.label !== "Orders") : gigsItemsInitial;
-    const activityState = isGuestMode ? [] : activityRecordsInitial;
+    const jobsState = hidePersonalNav ? jobsItemsInitial.filter(item => item.label !== "Proposals") : jobsItemsInitial;
+    const gigsState = hidePersonalNav ? gigsItemsInitial.filter(item => item.label !== "Orders") : gigsItemsInitial;
+    const activityState = hidePersonalNav ? [] : activityRecordsInitial;
 
     const handleLogoClick = () => {
        const { user: currentUser, isAuthenticated: auth } = useGlobalState.getState();

@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useStaffPlatformGuard } from "@/components/staff/StaffPlatformView";
-import { isStaffPlatformViewer, isStaffPreviewFrame, STAFF_PREVIEW_NAV_MESSAGE } from "@/lib/staffPlatformView";
+import { isStaffPlatformViewer, isStaffPreviewFrame, staffPreviewViewFallback, STAFF_PREVIEW_NAV_MESSAGE } from "@/lib/staffPlatformView";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import UserNav from "@/components/nav/user_nav.tsx";
 import UtilScrollTop from "@/components/utility/util_scroll_top.tsx";
@@ -60,11 +60,19 @@ const Layout = () => {
       if (!data || data.type !== STAFF_PREVIEW_NAV_MESSAGE) return;
       const path = String(data.path || "");
       if (!path.startsWith("/") || path.startsWith("//")) return;
-      navigate(path);
+      navigate(staffPreviewViewFallback(path) || path);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, [navigate]);
+
+  useEffect(() => {
+    if (!isStaffView) return;
+    const fallback = staffPreviewViewFallback(location.pathname);
+    if (!fallback || fallback === location.pathname) return;
+    navigate(fallback, { replace: true });
+  }, [isStaffView, location.pathname, navigate]);
+
   const isInboxPage = location.pathname.startsWith("/inbox");
   const currentUserId = String(user?.account_id || "");
 
