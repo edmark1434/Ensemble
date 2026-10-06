@@ -7,16 +7,15 @@ import { getBlockProjectId, updateBlock } from "@/lib/db/blocks";
 import {
   addBlockMember,
   getBlockAccess,
-  getBlockRole,
-  isProjectMember,
+  getBlockRole, getProjectRole,
   removeBlockMember,
   updateBlockMemberRole,
 } from "@/lib/db/block-members";
 import {
   ASSIGNABLE_BLOCK_ROLES,
-  type AssignableBlockRole, GENERAL_ACCESS_LEVELS, GeneralAccessLevel,
+  type AssignableBlockRole, canManageBlockAccess, GENERAL_ACCESS_LEVELS, GeneralAccessLevel,
 } from "@/features/editor/types/block-members";
-import { recheckRoom } from "@/lib/collab/access-recheck";
+import { recheckProject } from "@/lib/collab/access-recheck";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -36,11 +35,7 @@ async function getSessionUserId(): Promise<string | null> {
   return decoded?.userId ?? null;
 }
 
-/**
- * Reading the list: any project member. Changing it: the scene's Owner only.
- * The projectId always comes from the block row, never from the client.
- */
-async function authorize(ctx: Ctx, { requireOwner }: { requireOwner: boolean }) {
+async function authorize(ctx: Ctx, { requireManager }: { requireManager: boolean }) {
   const { id: blockId } = await ctx.params;
 
   const userId = await getSessionUserId();
@@ -49,19 +44,36 @@ async function authorize(ctx: Ctx, { requireOwner }: { requireOwner: boolean }) 
   const projectId = await getBlockProjectId(blockId);
   if (!projectId) return { error: fail("Block not found", 404) };
 
-  if (requireOwner) {
-    if ((await getBlockRole(blockId, userId)) !== "Owner") {
-      return { error: fail("Only the scene owner can change access", 403) };
+  const [blockRole, projectRole] = await Promise.all([
+    getBlockRole(blockId, userId),
+    getProjectRole(projectId, userId),
+  ]);
+
+  if (requireManager) {
+    if (!canManageBlockAccess({ blockRole, projectRole })) {
+      return { error: fail("Only the scene owner and managers can change access", 403) };
     }
-  } else if (!(await isProjectMember(projectId, userId))) {
+  } else if (!projectRole) {
     return { error: fail("Forbidden", 403) };
   }
 
-  return { blockId, projectId, userId };
+  return { blockId, projectId, userId, blockRole };
+}
+
+const MANAGER_ONLY = "Only the scene owner can grant or change Manager access";
+
+async function touchesManager(
+  auth: { blockId: string; blockRole: string | null },
+  targetUserId: string,
+  newRole?: string,
+) {
+  if (auth.blockRole === "Owner") return false;
+  if (newRole === "Manager") return true;
+  return (await getBlockRole(auth.blockId, targetUserId)) === "Manager";
 }
 
 export async function GET(_req: NextRequest, ctx: Ctx) {
-  const auth = await authorize(ctx, { requireOwner: false });
+  const auth = await authorize(ctx, { requireManager: false });
   if ("error" in auth) return auth.error;
 
   const access = await getBlockAccess(auth.blockId, auth.projectId, auth.userId);
@@ -69,13 +81,14 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 }
 
 export async function POST(req: NextRequest, ctx: Ctx) {
-  const auth = await authorize(ctx, { requireOwner: true });
+  const auth = await authorize(ctx, { requireManager: true });
   if ("error" in auth) return auth.error;
 
   const body = await req.json().catch(() => null);
   if (typeof body?.userId !== "string" || !isAssignableRole(body?.role)) {
     return fail("Invalid userId/role", 400);
   }
+  if (await touchesManager(auth, body.userId, body.role)) return fail(MANAGER_ONLY, 403);
 
   const result = await addBlockMember({
     blockId: auth.blockId,
@@ -90,12 +103,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   if (result === "already_member") {
     return fail("That user already has access", 409);
   }
-  void recheckRoom(`block:${auth.blockId}`);
+  void recheckProject(auth.projectId);
   return NextResponse.json({ ok: true });
 }
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
-  const auth = await authorize(ctx, { requireOwner: true });
+  const auth = await authorize(ctx, { requireManager: true });
   if ("error" in auth) return auth.error;
 
   const body = await req.json().catch(() => null);
@@ -105,13 +118,14 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       return fail("Invalid generalAccess", 400);
     }
     await updateBlock({ blockId: auth.blockId, generalAccess: body.generalAccess });
-    void recheckRoom(`block:${auth.blockId}`, false);
+    void recheckProject(auth.projectId);
     return NextResponse.json({ ok: true });
   }
 
   if (typeof body?.userId !== "string" || !isAssignableRole(body?.role)) {
     return fail("Invalid userId/role", 400);
   }
+  if (await touchesManager(auth, body.userId, body.role)) return fail(MANAGER_ONLY, 403);
 
   const updated = await updateBlockMemberRole({
     blockId: auth.blockId,
@@ -121,20 +135,22 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   });
   if (!updated) return fail("Member not found", 404);
 
-  void recheckRoom(`block:${auth.blockId}`);
+  void recheckProject(auth.projectId);
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: NextRequest, ctx: Ctx) {
-  const auth = await authorize(ctx, { requireOwner: true });
+  const auth = await authorize(ctx, { requireManager: true });
   if ("error" in auth) return auth.error;
 
   const userId = req.nextUrl.searchParams.get("userId");
   if (!userId) return fail("Invalid userId", 400);
 
+  if (await touchesManager(auth, userId)) return fail(MANAGER_ONLY, 403);
+
   const removed = await removeBlockMember({ blockId: auth.blockId, userId });
   if (!removed) return fail("Member not found", 404);
 
-  void recheckRoom(`block:${auth.blockId}`);
+  void recheckProject(auth.projectId);
   return NextResponse.json({ ok: true });
 }

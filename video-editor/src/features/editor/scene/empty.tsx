@@ -6,7 +6,7 @@ import { DroppableArea } from "./droppable";
 import { Button } from "@/components/ui/button";
 import useUploadStore from "@/features/editor/store/use-upload-store";
 import { useIsMediumScreen } from "@/hooks/use-media-query";
-import ModalUpload from "@/components/modal-upload";
+import UploadModal from "@/features/editor/modals/upload-modal";
 import { useFileDropUpload } from "../hooks/use-file-drop-upload";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +51,7 @@ const SceneEmpty = () => {
       ref={containerRef}
       className="absolute z-50 flex h-full w-full flex-1 dark:bg-card/80 bg-card"
     >
-      <ModalUpload />
+      <UploadModal />
 
       {!isLoading ? (
         <DroppableArea

@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { canManageSharing } from "@/features/editor/types/editor-role";
+import { resolveFileUrl } from "@/lib/file-url";
 
 export type ProjectRole = "Owner" | "Manager" | "Editor" | "Commenter" | "Viewer";
 export type AssignableProjectRole = "Manager" | "Editor" | "Commenter" | "Viewer";
@@ -31,23 +32,6 @@ type PersonRow = {
   last_name: string;
   email_address: string;
   avatar_path: string | null;
-};
-
-const MAIN_APP_URL = (process.env.MAIN_APP_URL ?? "").replace(/\/+$/, "");
-
-const resolveFileUrl = (path: string | null): string | null => {
-  if (!path) return null;
-  if (/^https?:\/\//.test(path)) return path;
-
-  if (path.startsWith("/public/")) {
-    const rest = path.slice("/public/".length);
-    const presetPath = rest.startsWith("profile_presets/")
-      ? rest
-      : `profile_presets/${rest}`;
-    return `${MAIN_APP_URL}/${presetPath}`;
-  }
-
-  return `${MAIN_APP_URL}${path.startsWith("/") ? path : `/${path}`}`;
 };
 
 const toPerson = (row: PersonRow): ProjectPerson => ({
@@ -161,7 +145,7 @@ export async function addProjectMember({
 }
 
 /**
- * Platform-wide search for people who could be added — matched by name or
+ * Platform-wide search for people who could be added — matched exact
  * email, minus whoever's already on the project (active or soft-deleted;
  * re-adding a deleted row goes through addProjectMember, not a fresh search hit).
  */
@@ -174,7 +158,10 @@ export async function searchAddableProjectUsers({
   query: string;
   limit?: number;
 }): Promise<ProjectPerson[]> {
-  const pattern = `%${query.replace(/[%_]/g, "\\$&")}%`;
+  // Exact email only (case-insensitive): people can't be browsed or guessed
+  // from partial names or emails.
+  const email = query.trim().toLowerCase();
+  if (!email.includes("@")) return [];
 
   const rows = await db
     .selectFrom("users as u")
@@ -184,13 +171,7 @@ export async function searchAddableProjectUsers({
         .onRef("f.file_id", "=", "a.avatar_file_id")
         .on("f.deleted_at", "is", null),
     )
-    .where(({ eb, or }) =>
-      or([
-        eb("u.first_name", "ilike", pattern),
-        eb("u.last_name", "ilike", pattern),
-        eb("u.email_address", "ilike", pattern),
-      ]),
-    )
+    .where(({ eb }) => eb(eb.fn("lower", ["u.email_address"]), "=", email))
     .where(
       "u.user_id",
       "not in",

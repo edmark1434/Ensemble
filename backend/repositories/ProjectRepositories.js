@@ -7,7 +7,7 @@ async function getProjectsForUser(userId) {
                    (SELECT u.first_name || ' ' || u.last_name 
                     FROM project_members pm2 
                     JOIN users u ON pm2.user_id = u.user_id 
-                    WHERE pm2.project_id = p.project_id AND pm2.role = 'Owner' LIMIT 1) as "sharedBy",
+                    WHERE pm2.project_id = p.project_id AND pm2.role = 'Owner' AND pm2.deleted_at IS NULL LIMIT 1) as "sharedBy",
                    (SELECT COALESCE(sum(f.size_bytes), 0)
                     FROM media_assets ma 
                     JOIN files f ON f.file_id = ma.original_file_id 
@@ -45,16 +45,21 @@ async function softDeleteProject(projectId, userId) {
 
 async function renameProject(projectId, userId, newName) {
     try {
-        // Only allow if user is Owner (or Editor)
-        const verifyQuery = `SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2 AND role IN ('Owner', 'Editor')`;
-        const verifyResult = await pool.query(verifyQuery, [projectId, userId]);
-        if (verifyResult.rows.length === 0) {
-            throw new Error('Unauthorized or not found');
-        }
-
-        const query = `UPDATE projects SET name = $1, updated_at = NOW() WHERE project_id = $2 RETURNING *`;
-        const result = await pool.query(query, [newName, projectId]);
-        return result.rows[0];
+        const query = `
+            UPDATE projects p
+            SET name = $1, updated_at = NOW()
+            FROM project_members pm
+            WHERE p.project_id = $2
+              AND p.deleted_at IS NULL
+              AND pm.project_id = p.project_id
+              AND pm.user_id = $3
+              AND pm.deleted_at IS NULL
+              AND pm.role IN ('Owner', 'Manager', 'Editor')
+            RETURNING p.*
+        `;
+        const result = await pool.query(query, [newName, projectId, userId]);
+        // No row = not allowed, or not found. The controller answers 403.
+        return result.rows[0] || null;
     } catch (err) {
         console.error('Error renaming project:', err);
         throw err;

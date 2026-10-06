@@ -31,7 +31,7 @@ const SceneRemovedModal = ({ sceneName, onClose }: SceneRemovedModalProps) => (
         <div className="flex flex-col items-center justify-center gap-4 py-4 text-center">
           <CircleXIcon size={32} className="text-red-500" />
           <div className="space-y-1">
-            <div className="font-semibold text-pretty">You have been removed from the scene: {sceneName}</div>
+            <div className="text-sm font-semibold text-pretty">You have been removed from the scene: {sceneName}</div>
             <div className="text-muted-foreground text-sm break-words">We moved you back to the project timeline.</div>
           </div>
           <Button variant="outline" onClick={onClose}>

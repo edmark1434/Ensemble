@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getSceneRoleStrict } from "@/features/editor/utils/scene-access";
-import { EditorRole, StoredProjectRole, toEditorRole } from "@/features/editor/types/editor-role";
+import { EditorRole } from "@/features/editor/types/editor-role";
 import { onAccessChanged } from "@/features/editor/collab/access-events";
 
 const ROLE_REFRESH_MS = 30_000;
@@ -21,7 +21,7 @@ async function fetchProjectRole(projectId: string): Promise<EditorRole | null | 
     if (res.status === 403) return null;
     if (!res.ok) return undefined;
     const data = await res.json();
-    return toEditorRole(data.role as StoredProjectRole | undefined);
+    return (data.role as EditorRole | undefined) ?? null;
   } catch {
     return undefined;
   }
@@ -33,6 +33,7 @@ export function useEditorRole(
   viewerUserId: string | null | undefined,
   initialProjectRole: EditorRole | null,
   onSceneAccessLost?: () => void,
+  onProjectAccessLost?: () => void,
 ): EditorRole | null {
   const targetKey = activeSceneBlockId ?? "root";
   const [resolved, setResolved] = useState<{ key: string; role: EditorRole | null }>({
@@ -41,6 +42,8 @@ export function useEditorRole(
   });
   const lostRef = useRef(onSceneAccessLost);
   lostRef.current = onSceneAccessLost;
+  const projectLostRef = useRef(onProjectAccessLost);
+  projectLostRef.current = onProjectAccessLost;
 
   useEffect(() => {
     if (!viewerUserId) return;
@@ -54,13 +57,20 @@ export function useEditorRole(
       const role = await getSceneRoleStrict(blockId, uid);
       if (cancelled || role === undefined) return;
       commit(blockId, role);
-      if (role === null) lostRef.current?.();
+      if (role !== null) return;
+
+      // No scene access: just this scene, or the whole project?
+      const projectRole = projectId ? await fetchProjectRole(projectId) : undefined;
+      if (cancelled) return;
+      if (projectRole === null) projectLostRef.current?.();
+      else lostRef.current?.();
     };
 
     const resolveProject = async (pid: string) => {
       const fresh = await fetchProjectRole(pid);
       if (cancelled || fresh === undefined) return;
       commit("root", fresh);
+      if (fresh === null) projectLostRef.current?.();
     };
 
     const resolve = (): Promise<void> => {

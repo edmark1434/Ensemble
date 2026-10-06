@@ -14,46 +14,17 @@ import useBlockMembersStore, {
 } from "@/features/editor/store/use-block-members-store";
 import {
   ASSIGNABLE_BLOCK_ROLES,
-  type AssignableBlockRole,
-  type BlockPerson, BlockRole, ROLE_RANK
+  type AssignableBlockRole, BlockMember,
+  type BlockPerson, BlockRole, ROLE_RANK, sceneRoleCeiling
 } from "@/features/editor/types/block-members";
 import { onAccessChanged } from "@/features/editor/collab/access-events";
+import { Avatar } from "@/components/user-avatar";
 
-const getInitials = (name: string) =>
-  name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-
-const Avatar = ({
-  name,
-  avatarUrl
-}: {
-  name: string;
-  avatarUrl?: string | null;
-}) => {
-  // Falls back to initials when there's no avatar or the image fails to load.
-  const [failed, setFailed] = useState(false);
-
-  if (avatarUrl && !failed) {
-    return (
-      <img
-        src={avatarUrl}
-        alt=""
-        className="h-9 w-9 shrink-0 rounded-full object-cover"
-        onError={() => setFailed(true)}
-      />
-    );
-  }
-
-  return (
-    <div
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xs font-medium text-zinc-200">
-      {getInitials(name)}
-    </div>
-  );
+const BLOCK_ROLE_DESCRIPTIONS: Record<AssignableBlockRole, string> = {
+  Manager: "Can edit, and manage access to this scene",
+  Editor: "Can edit this scene",
+  Commenter: "Can view and comment on this scene",
+  Viewer: "Can only view this scene"
 };
 
 const RoleSelectPopover = ({
@@ -61,13 +32,17 @@ const RoleSelectPopover = ({
   onChange,
   onRemove,
   prefix,
-  maxRole
+  maxRole,
+  roles = ASSIGNABLE_BLOCK_ROLES,
+  showDescriptions,
 }: {
   value: AssignableBlockRole;
   onChange: (v: AssignableBlockRole) => void;
   onRemove?: () => void;
   prefix?: string;
-  maxRole?: BlockRole | null;
+  maxRole?: AssignableBlockRole | null;
+  roles?: AssignableBlockRole[];
+  showDescriptions?: boolean;
 }) => {
   const [open, setOpen] = useState(false);
 
@@ -94,7 +69,7 @@ const RoleSelectPopover = ({
         className="z-[300] p-0"
         style={{ width: "var(--radix-popover-trigger-width)" }}
       >
-        {ASSIGNABLE_BLOCK_ROLES.map((option) => {
+        {roles.map((option) => {
           const blocked = !!maxRole && ROLE_RANK[option] > ROLE_RANK[maxRole];
           return (
             <div
@@ -105,12 +80,17 @@ const RoleSelectPopover = ({
                 onChange(option);
                 setOpen(false);
               }}
-              className={`flex items-center justify-between px-3 py-2 text-sm text-zinc-200 ${
+              className={`flex items-center justify-between gap-3 px-3 py-2 text-zinc-200 ${
                 blocked ? "cursor-not-allowed opacity-40" : "cursor-pointer hover:bg-zinc-800/50"
               }`}
             >
-              {option}
-              {option === value && <Check size={14} className="text-muted-foreground" />}
+              <div className="min-w-0">
+                <div className="text-sm">{option}</div>
+                {showDescriptions && (
+                  <div className="text-xs text-muted-foreground">{BLOCK_ROLE_DESCRIPTIONS[option]}</div>
+                )}
+              </div>
+              {option === value && <Check size={14} className="shrink-0 text-muted-foreground" />}
             </div>
           );
         })}
@@ -139,6 +119,7 @@ const UserRow = ({
   onRoleChange,
   onRemove,
   maxRole,
+  roles,
   removed,
 }: {
   name: string;
@@ -149,7 +130,8 @@ const UserRow = ({
   editable: boolean;
   onRoleChange?: (role: AssignableBlockRole) => void;
   onRemove?: () => void;
-  maxRole?: BlockRole | null;
+  maxRole?: AssignableBlockRole | null;
+  roles?: AssignableBlockRole[];
   removed?: boolean;
 }) => {
   return (
@@ -172,6 +154,7 @@ const UserRow = ({
           <RoleSelectPopover
             value={role}
             maxRole={maxRole}
+            roles={roles}
             onChange={(v) => onRoleChange?.(v)}
             onRemove={onRemove}
           />
@@ -191,11 +174,16 @@ export default function AccessPicker() {
     members,
     candidates,
     canManage,
+    canGrantManager,
     load,
     addMember,
     changeRole,
     removeMember
   } = useBlockMembersStore();
+
+  const roleOptions = canGrantManager
+    ? ASSIGNABLE_BLOCK_ROLES
+    : ASSIGNABLE_BLOCK_ROLES.filter((r) => r !== "Manager");
 
   const [query, setQuery] = useState("");
   const [suggestOpen, setSuggestOpen] = useState(false);
@@ -245,7 +233,7 @@ export default function AccessPicker() {
     status !== "ready"
       ? null
       : !canManage
-        ? "Only the scene owner can change who has access."
+        ? "Only the scene owner and managers can change who has access."
         : candidates.length === 0
           ? "Everyone in this project already has access."
           : q && suggestions.length === 0
@@ -256,7 +244,7 @@ export default function AccessPicker() {
     <div className="w-md bg-card border flex flex-col rounded-lg">
       {/* Header */}
       <div className="handle flex cursor-grab justify-between items-center p-4">
-        <p className="text-sm font-semibold">Specific access</p>
+        <p className="text-sm font-semibold">Scene access</p>
         <X
           className="h-4 w-4 cursor-pointer text-muted-foreground"
           onClick={() => setFloatingControl("")}
@@ -307,6 +295,11 @@ export default function AccessPicker() {
                       {person.email}
                     </p>
                   </div>
+                  {person.projectRole && (
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {person.projectRole}
+                    </span>
+                  )}
                 </div>
               ))}
             </ScrollArea>
@@ -321,6 +314,8 @@ export default function AccessPicker() {
             prefix="Add as:"
             value={newUserRole}
             onChange={setNewUserRole}
+            roles={roleOptions}
+            showDescriptions
           />
         </div>
       )}
@@ -350,12 +345,13 @@ export default function AccessPicker() {
               name={m.name}
               email={m.email}
               avatarUrl={m.avatarUrl}
-              role={(m.effectiveRole ?? m.role) as AssignableBlockRole}
-              editable={canManage}
+              role={m.effectiveRole ?? m.role}
+              editable={canManage && (canGrantManager || m.role !== "Manager")}
+              roles={roleOptions}
               onRoleChange={(role) => void changeRole(m.userId, role)}
               onRemove={() => void removeMember(m.userId)}
               removed={m.projectRole === null}
-              maxRole={m.projectRole}
+              maxRole={m.projectRole ? sceneRoleCeiling(m.projectRole) : null}
             />
           ))}
         </div>

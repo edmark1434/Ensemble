@@ -250,11 +250,121 @@ export function subscribeToRemoteWorkingInside(
         userName: working.userName,
       };
       const list = result.get(working.sceneItemId);
-      if (list) list.push(editor);
-      else result.set(working.sceneItemId, [editor]);
+      if (list) {
+        // One person with the scene open in two tabs/windows is still one
+        // person: awareness holds one state per connection, so count by
+        // userId. (A state with no userId can't be matched; it stays its own
+        // entry.)
+        if (working.userId && list.some((e) => e.userId === working.userId)) return;
+        list.push(editor);
+      } else {
+        result.set(working.sceneItemId, [editor]);
+      }
     });
     onChange(result);
   };
+  awareness.on("change", handleChange);
+  handleChange();
+  return () => awareness.off("change", handleChange);
+}
+// ---------------------------------------------------------------------------
+// Who is in this room right now (navbar avatar group)
+// ---------------------------------------------------------------------------
+
+export interface PresentUser {
+  userId: string;
+  name: string;
+  // Role in THIS room: the project role in a project doc, the effective scene
+  // role in a block doc. Published by the client itself (see
+  // broadcastUserRole); absent for people we only know from "working inside".
+  role?: string;
+  color: string;
+  isSelf?: boolean;
+}
+
+// Adds the room-specific role to the identity attachWsProvider already
+// announces ({ id, name }). Does nothing until that identity exists.
+export function broadcastUserRole(
+  awareness: awarenessProtocol.Awareness,
+  role: string | null | undefined,
+) {
+  const current = awareness.getLocalState()?.user;
+  if (!current) return;
+  const next = role ?? undefined;
+  if (current.role === next) return;
+  awareness.setLocalStateField("user", { ...current, role: next });
+}
+
+// Fires with the distinct USERS (not connections) present in this awareness
+// room, excluding the local user. Awareness holds one state per connection, so
+// the same person in two tabs, or on both their normal connection and the
+// synthetic "working inside" one, collapses into a single entry keyed by
+// userId.
+//
+// includeWorkingInside: a project room also hears from people who are inside
+// one of its scenes (they're connected to the block room for editing, plus
+// this synthetic project connection that carries WORKING_INSIDE_FIELD), so
+// they still count as being in the project. A block room never has that
+// field, so this has no effect there.
+export function subscribeToPresentUsers(
+  awareness: awarenessProtocol.Awareness,
+  onChange: (users: PresentUser[]) => void,
+  options: { selfUserId?: string; includeWorkingInside?: boolean; includeSelf?: boolean } = {},
+): () => void {
+  const { selfUserId, includeWorkingInside = true, includeSelf = false } = options;
+  let lastKey: string | null = null;
+
+  const handleChange = () => {
+    const byUser = new Map<string, { name?: string; role?: string; color: string }>();
+
+    const add = (userId: string | undefined, name: string | undefined, role: string | undefined, clientId: number) => {
+      if (!userId) return;
+      if (userId === selfUserId && !includeSelf) return;
+      const existing = byUser.get(userId);
+      if (!existing) {
+        byUser.set(userId, { name, role, color: getColorForIdentity(userId, clientId) });
+        return;
+      }
+      if (!existing.name && name) existing.name = name;
+      if (!existing.role && role) existing.role = role;
+    };
+
+    awareness.getStates().forEach((state, clientId) => {
+      const isLocal = clientId === awareness.clientID;
+      if (isLocal && !includeSelf) return;
+      // The local state can be missing user.id for a moment (before
+      // attachWsProvider announces), so fall back to selfUserId for it.
+      add(state?.user?.id ?? (isLocal ? selfUserId : undefined), state?.user?.name, state?.user?.role, clientId);
+      if (includeWorkingInside) {
+        const working = state?.[WORKING_INSIDE_FIELD] as WorkingInsideState | null | undefined;
+        if (working?.sceneItemId) add(working.userId, working.userName, undefined, clientId);
+      }
+    });
+
+    const users: PresentUser[] = [...byUser.entries()]
+      .map(([userId, u]) => ({
+        userId,
+        name: u.name || "Someone",
+        role: u.role,
+        color: u.color,
+        isSelf: !!selfUserId && userId === selfUserId,
+      }))
+      // You first, then a stable order so avatars don't reshuffle every time awareness ticks.
+      .sort(
+        (a, b) =>
+          Number(!!b.isSelf) - Number(!!a.isSelf) ||
+          a.name.localeCompare(b.name) ||
+          a.userId.localeCompare(b.userId),
+      );
+
+    // "change" also fires for every liveTransform frame during someone's drag;
+    // only wake React when the visible list actually differs.
+    const key = users.map((u) => `${u.userId}|${u.name}|${u.role ?? ""}|${u.isSelf ? 1 : 0}`).join("\n");
+    if (key === lastKey) return;
+    lastKey = key;
+    onChange(users);
+  };
+
   awareness.on("change", handleChange);
   handleChange();
   return () => awareness.off("change", handleChange);

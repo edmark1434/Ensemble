@@ -51,6 +51,8 @@ interface ClientInfo {
   controlledAwarenessIds: Set<number>;
   canWrite: boolean;
   recheck: (force?: boolean) => Promise<void>;
+  projectId: string;
+  notify: () => void;
 }
 
 interface Room {
@@ -280,6 +282,13 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
 
   if (closedDuringSetup || ws.readyState !== WebSocket.OPEN) return;
 
+  const notify = () => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    const enc = encoding.createEncoder();
+    encoding.writeVarUint(enc, MESSAGE_ACCESS_CHANGED);
+    ws.send(encoding.toUint8Array(enc));
+  };
+
   const recheck = async (force = false) => {
     try {
       const next = await resolveRoomAccess(target, membershipProjectId, decoded.userId);
@@ -291,17 +300,19 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
       if (!info) return;
       const changed = info.canWrite !== next.canWrite;
       info.canWrite = next.canWrite;
-      if ((changed || force) && ws.readyState === WebSocket.OPEN) {
-        const enc = encoding.createEncoder();
-        encoding.writeVarUint(enc, MESSAGE_ACCESS_CHANGED);
-        ws.send(encoding.toUint8Array(enc));
-      }
+      if (changed || force) notify();
     } catch (err) {
       console.error(`collab: access recheck failed for ${roomKey(target)}`, err);
     }
   };
 
-  room.clients.set(ws, { controlledAwarenessIds: new Set(), canWrite, recheck });
+  room.clients.set(ws, {
+    controlledAwarenessIds: new Set(),
+    canWrite,
+    recheck,
+    notify,
+    projectId: membershipProjectId,
+  });
 
   const syncEncoder = encoding.createEncoder();
   encoding.writeVarUint(syncEncoder, MESSAGE_SYNC);

@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from "react";
-import { usePointerDrag } from "../hooks/use-pointer-drag";
-import { Area } from "../interfaces/editor";
-import useCropStore from "../store/use-crop-store";
-import { clamp } from "../utils/math";
+import { usePointerDrag } from "../../hooks/use-pointer-drag";
+import { Area } from "../../interfaces/editor";
+import useCropStore from "../../store/use-crop-store";
+import { clamp } from "../../utils/math";
 import { ITrackItemBase } from "@designcombo/types";
 
 const MIN_CROP_SIZE = 50;

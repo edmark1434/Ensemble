@@ -10,7 +10,7 @@ import { isSceneItem, type ISceneDetails } from "@/features/editor/types/ensembl
 import {
   AssignableBlockRole,
   BlockAccess,
-  BlockPerson, GeneralAccessLevel, minRole,
+  BlockPerson, GeneralAccessLevel, minRole, sceneRoleCeiling,
 } from "@/features/editor/types/block-members";
 
 type Status = "idle" | "loading" | "ready" | "error";
@@ -72,6 +72,7 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
         members: [],
         candidates: [],
         canManage: false,
+        canGrantManager: false,
         generalAccess: "Restricted",
         viewerRole: null,
       });
@@ -111,7 +112,7 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
     loadSeq++;
 
     const applied = person.projectRole
-      ? (minRole(role, person.projectRole) as AssignableBlockRole)
+      ? minRole(role, sceneRoleCeiling(person.projectRole))
       : role;
     set((s) => ({
       error: null,
@@ -139,7 +140,7 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
       members: s.members.map((m) => {
         if (m.userId !== userId) return m;
         const applied = m.projectRole
-          ? (minRole(role, m.projectRole) as AssignableBlockRole)
+          ? minRole(role, sceneRoleCeiling(m.projectRole))
           : role;
         return { ...m, role: applied, effectiveRole: applied };
       }),
@@ -175,6 +176,7 @@ const useBlockMembersStore = create<BlockMembersState>((set, get) => ({
       set({ error: `Couldn't remove ${removed.name}.` });
     }
   },
+  canGrantManager: false,
 }));
 
 export default useBlockMembersStore;

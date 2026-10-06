@@ -1,3 +1,5 @@
+// ill turn this into subscribe modal soon
+
 "use client";
 
 import React, { useEffect, useState } from "react";

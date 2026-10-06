@@ -77,7 +77,7 @@ interface BlocksTable {
 interface BlockMembersTable {
   block_id: string;
   user_id: string;
-  role: "Owner" | "Editor" | "Commenter" | "Viewer";
+  role: "Owner" | "Manager" | "Editor" | "Commenter" | "Viewer";
   cursor_color: string;
   joined_at: Generated<Date>;
   deleted_at: Date | null;

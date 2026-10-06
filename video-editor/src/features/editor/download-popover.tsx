@@ -49,8 +49,11 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
     downloadStatus
   } =
     useDownloadState();
-  const { duration, trackItemIds, size, projectName, background } = useStore();
+
+  const { duration, trackItemIds, size, projectName, background, activeSceneBlockId } = useStore();
+  const inScene = !!activeSceneBlockId;
   const isEmpty = trackItemIds.length === 0;
+
   const [open, setOpen] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const dragStateRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
@@ -121,18 +124,31 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
         ? queuePosition
           ? "Export queued"
           : "Export in progress"
-        : "Export";
+        : inScene
+          ? "Export scene"
+          : "Export project";
 
   const handleExport = () => {
-    const { playerRef, fps: timelineFps } = useStore.getState();
+    const {
+      playerRef,
+      fps: timelineFps,
+      activeSceneBlockId: sceneId,
+      currentBlockName
+    } = useStore.getState();
     const currentFrame = getSafeCurrentFrame(playerRef);
     const currentTime = (currentFrame / timelineFps) * 1000;
+
+    // The render job echoes projectName back, and the download modal uses it as
+    // the file name. Inside a scene, name it after the scene.
+    const exportName = sceneId
+      ? `${projectName} - ${currentBlockName?.trim() || "Untitled"}`
+      : projectName;
 
     const data: RenderPayload = {
       ...stateManager.toJSON(),
       id: generateId(),
       duration,
-      projectName,
+      projectName: exportName,
       background,
       size,
       type,
@@ -190,7 +206,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
         </span>
             </TooltipTrigger>
             <TooltipContent side="bottom" align="center" sideOffset={1}>
-              Project is still empty
+              {inScene ? "Scene is still empty" : "Project is still empty"}
             </TooltipContent>
           </Tooltip>
         ) : (

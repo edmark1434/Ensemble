@@ -5,9 +5,11 @@ import {
   AssignableBlockRole,
   BlockAccess,
   BlockPerson,
-  BlockRole, GeneralAccessLevel, minRole,
+  BlockRole, canManageBlockAccess, GeneralAccessLevel, minRole, sceneRoleCeiling,
+  StoredBlockRole
 } from "@/features/editor/types/block-members";
-import { StoredProjectRole, toEditorRole } from "@/features/editor/types/editor-role";
+import { StoredProjectRole } from "@/features/editor/types/editor-role";
+import { resolveFileUrl } from "@/lib/file-url";
 
 type PersonRow = {
   user_id: string;
@@ -18,36 +20,12 @@ type PersonRow = {
   project_role?: StoredProjectRole | null;
 };
 
-// files.path -> a URL an <img> can load. Avatars are either presets from the
-// main app's public/ folder ("/public/profile_presets/p1.png") or a real path.
-// The main app is a different origin from the editor, so URLs must be absolute.
-const MAIN_APP_URL = (process.env.MAIN_APP_URL ?? "").replace(/\/+$/, "");
-
-const resolveFileUrl = (path: string | null): string | null => {
-  if (!path) return null;
-  if (/^https?:\/\//.test(path)) return path;
-
-  // Next serves public/ from the site root, so "public" is never part of the
-  // URL. Rows can look like "/public/profile_presets/p1.png" or
-  // "/public/p1.png" (where the file actually sits in profile_presets/), so
-  // normalise both to /profile_presets/<name>.
-  if (path.startsWith("/public/")) {
-    const rest = path.slice("/public/".length);
-    const presetPath = rest.startsWith("profile_presets/")
-      ? rest
-      : `profile_presets/${rest}`;
-    return `${MAIN_APP_URL}/${presetPath}`;
-  }
-
-  return `${MAIN_APP_URL}${path.startsWith("/") ? path : `/${path}`}`;
-};
-
 const toPerson = (row: PersonRow): BlockPerson => ({
   userId: row.user_id,
   name: `${row.first_name} ${row.last_name}`.trim(),
   email: row.email_address,
   avatarUrl: resolveFileUrl(row.avatar_path),
-  projectRole: toEditorRole(row.project_role),
+  projectRole: row.project_role ?? null,
 });
 
 export async function isProjectMember(
@@ -67,7 +45,7 @@ export async function isProjectMember(
 export async function getBlockRole(
   blockId: string,
   userId: string,
-): Promise<BlockRole | null> {
+): Promise<StoredBlockRole | null> {
   const row = await db
     .selectFrom("block_members")
     .where("block_id", "=", blockId)
@@ -78,7 +56,7 @@ export async function getBlockRole(
   return row?.role ?? null;
 }
 
-async function getProjectRole(
+export async function getProjectRole(
   projectId: string,
   userId: string,
 ): Promise<BlockRole | null> {
@@ -89,12 +67,13 @@ async function getProjectRole(
     .where("deleted_at", "is", null)
     .select(["role"])
     .executeTakeFirst();
-  return toEditorRole(row?.role);
+  return row?.role ?? null;
 }
 
 // What a general access level gives a project member, before their project
 // role caps it. Only used when the user has no specific block_members row.
-const GENERAL_ACCESS_CEILING: Record<GeneralAccessLevel, BlockRole | null> = {
+// General access never grants Manager.
+const GENERAL_ACCESS_CEILING: Record<GeneralAccessLevel, AssignableBlockRole | null> = {
   "Anyone can edit": "Editor",
   "Anyone can comment": "Commenter",
   "Anyone can view": "Viewer",
@@ -106,25 +85,26 @@ const GENERAL_ACCESS_CEILING: Record<GeneralAccessLevel, BlockRole | null> = {
  *  - the scene's Owner (block_members row with role Owner) is always Owner
  *  - not a project member -> no access
  *  - a specific block_members row decides the role outright (general access
- *    is ignored, up or down), capped by the project role
- *  - no specific row -> general access ceiling, capped by the project role
+ *    is ignored, up or down), capped by sceneRoleCeiling(projectRole)
+ *  - no specific row -> general access ceiling, capped the same way
  */
 export function resolveEffectiveBlockRole({
   blockRole,
   generalAccess,
   projectRole,
 }: {
-  blockRole: BlockRole | null;
+  blockRole: StoredBlockRole | null;
   generalAccess: GeneralAccessLevel;
   projectRole: BlockRole | null;
 }): BlockRole | null {
   if (blockRole === "Owner") return "Owner";
   if (!projectRole) return null;
 
-  if (blockRole) return minRole(blockRole, projectRole);
+  const ceiling = sceneRoleCeiling(projectRole);
+  if (blockRole) return minRole(blockRole, ceiling);
 
-  const ceiling = GENERAL_ACCESS_CEILING[generalAccess] ?? null;
-  return ceiling ? minRole(ceiling, projectRole) : null;
+  const general = GENERAL_ACCESS_CEILING[generalAccess] ?? null;
+  return general ? minRole(general, ceiling) : null;
 }
 
 /** What the collab socket and the write routes check. null = no access. */
@@ -250,12 +230,13 @@ export async function getBlockAccess(
           effectiveRole: resolveEffectiveBlockRole({
             blockRole: r.role,
             generalAccess,
-            projectRole: toEditorRole(r.project_role),
+            projectRole: r.project_role ?? null,
           }),
         }],
     ),
     candidates: candidateRows.map(toPerson),
-    canManage: !!ownerRow && ownerRow.user_id === viewerUserId,
+    canManage: canManageBlockAccess({ blockRole: viewerRow?.role ?? null, projectRole }),
+    canGrantManager: !!ownerRow && ownerRow.user_id === viewerUserId,
     generalAccess,
     viewerRole: resolveEffectiveBlockRole({
       blockRole: viewerRow?.role ?? null,
@@ -293,7 +274,7 @@ export async function addBlockMember({
       .executeTakeFirst();
 
     if (!projectMembership) return "not_project_member";
-    const applied = minRole(role, toEditorRole(projectMembership.role)!) as AssignableBlockRole;
+    const applied = minRole(role, sceneRoleCeiling(projectMembership.role));
 
     const existing = await trx
       .selectFrom("block_members")
@@ -335,7 +316,7 @@ export async function updateBlockMemberRole({ blockId, projectId, userId, role }
 }): Promise<boolean> {
   const projectRole = await getProjectRole(projectId, userId);
   if (!projectRole) return false;
-  const applied = minRole(role, projectRole) as AssignableBlockRole;
+  const applied = minRole(role, sceneRoleCeiling(projectRole));
 
   const result = await db
     .updateTable("block_members")
