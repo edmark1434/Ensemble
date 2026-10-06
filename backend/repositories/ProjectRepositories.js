@@ -4,6 +4,7 @@ async function getProjectsForUser(userId) {
     try {
         const query = `
             SELECT p.project_id as id, p.name, p.status, p.width, p.height, p.duration_seconds, p.updated_at as "lastUpdated", pm.role,
+                   tf.path as "thumbnailPath",
                    (SELECT u.first_name || ' ' || u.last_name 
                     FROM project_members pm2 
                     JOIN users u ON pm2.user_id = u.user_id 
@@ -14,13 +15,14 @@ async function getProjectsForUser(userId) {
                     WHERE ma.project_id = p.project_id AND ma.deleted_at IS NULL AND f.deleted_at IS NULL) as size_bytes
             FROM projects p
             JOIN project_members pm ON p.project_id = pm.project_id
+            LEFT JOIN files tf ON tf.file_id = p.thumbnail_file_id AND tf.deleted_at IS NULL
             WHERE pm.user_id = $1 AND p.deleted_at IS NULL AND pm.deleted_at IS NULL
             ORDER BY p.updated_at DESC
         `;
         const result = await pool.query(query, [userId]);
         return result.rows;
     } catch (err) {
-        console.error('Error fetching projects for user:', err);
+        console.error("Error fetching projects for user:", err);
         throw err;
     }
 }

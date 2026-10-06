@@ -48,6 +48,8 @@ interface ProjectsTable {
   height: number;
   duration_seconds: number;
   status: string;
+  thumbnail_file_id: string | null;
+  thumbnail_source_hash: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
   deleted_at: Date | null;

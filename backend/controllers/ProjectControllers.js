@@ -26,7 +26,9 @@ async function getProjectsController(req, res) {
                 role: p.role,
                 sharedBy: p.role === 'Owner' ? null : p.sharedBy,
                 size: formatBytes(Number(p.size_bytes)),
-                thumbnail: `https://placehold.co/400x225/1e2130/4a6fa5?text=${encodeURIComponent(p.name)}`
+                thumbnailUrl: p.thumbnailPath && process.env.CLOUDFRONT_URL
+                    ? `${process.env.CLOUDFRONT_URL}/${p.thumbnailPath}`
+                    : null
             }))
         });
     } catch (error) {
