@@ -3,7 +3,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { dispatch } from "@designcombo/events";
 import { ADD_VIDEO } from "@designcombo/state";
 import { generateId } from "@designcombo/timeline";
-import { IVideo } from "@designcombo/types";
+import { IImage, IVideo } from "@designcombo/types";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useIsDraggingOverTimeline } from "../hooks/is-dragging-over-timeline";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,8 @@ import { getCurrentTime } from "@/features/editor/utils/time";
 import useStore from "../store/use-store";
 import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
 import { millisecondsToHHMMSS } from "../utils/format";
+import { useMarketAssets } from "@/hooks/use-market-assets";
+import { MarketPriceBadge } from "@/components/market-price-badge";
 
 // Shared by both click-to-add and drag-to-add: scales the raw video
 // dimensions to fit the canvas and centers left/top accordingly.
@@ -74,10 +76,19 @@ export const Videos = () => {
     clearVideos
   } = usePexelsVideos();
 
-  // Load popular videos on component mount
+  const {
+    items: marketImages,
+    loading: marketLoading,
+    hasMore: marketHasMore,
+    load: loadMarket,
+    loadMore: loadMoreMarket
+  } = useMarketAssets<Partial<IVideo>>("video");
+
+  // Load market + popular videos on component mount
   useEffect(() => {
     loadPopularVideos();
-  }, [loadPopularVideos]);
+    loadMarket("");
+  }, [loadPopularVideos, loadMarket]);
 
   const handleAddVideo = (payload: Partial<IVideo>) => {
     const normalizedPayload = buildNormalizedVideoPayload(payload);
@@ -108,15 +119,15 @@ export const Videos = () => {
   };
 
   const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      await loadPopularVideos();
+    const q = searchQuery.trim();
+    const market = loadMarket(q);
+
+    if (!q) {
+      await Promise.all([market, loadPopularVideos()]);
       return;
     }
 
-    try {
-      await searchVideos(searchQuery);
-    } finally {
-    }
+    await Promise.all([market, searchVideos(q)]);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -126,12 +137,18 @@ export const Videos = () => {
   };
 
   const handleLoadMore = () => {
-    if (hasNextPage) {
-      if (searchQuery.trim()) {
-        searchVideosAppend(searchQuery, currentPage + 1);
-      } else {
-        loadPopularVideosAppend(currentPage + 1);
-      }
+    // Exhaust market assets first, then continue into stock
+    if (marketHasMore) {
+      loadMoreMarket(searchQuery);
+      return;
+    }
+
+    if (!hasNextPage) return;
+
+    if (searchQuery.trim()) {
+      searchVideosAppend(searchQuery, currentPage + 1);
+    } else {
+      loadPopularVideosAppend(currentPage + 1);
     }
   };
 
@@ -139,10 +156,13 @@ export const Videos = () => {
     setSearchQuery("");
     clearVideos();
     loadPopularVideos();
+    loadMarket("");
   };
 
-  // Use Pexels videos if available, otherwise fall back to static videos
-  const displayVideos = pexelsVideos.map((video) => ({
+  const isLoading = pexelsLoading || marketLoading;
+
+  // Market assets always come first, then Pexels stock
+  const displayVideos = [...marketImages, ...pexelsVideos].map((video) => ({
     ...video,
     metadata: {
       ...video.metadata,
@@ -166,16 +186,16 @@ export const Videos = () => {
             variant="ghost"
             className="absolute left-2 top-1/2 h-6 w-6 -translate-y-1/2 p-0"
             onClick={handleSearch}
-            disabled={pexelsLoading}
+            disabled={isLoading}
           >
-            {pexelsLoading ? (
+            {isLoading ? (
               <Loader2 className="h-3 w-3 animate-spin" />
             ) : (
               <Search className="h-3 w-3" />
             )}
           </Button>
           <Input
-            placeholder="Search Pexels videos..."
+            placeholder="Search videos..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={handleKeyPress}
@@ -187,7 +207,7 @@ export const Videos = () => {
             size="sm"
             variant="outline"
             onClick={handleClearSearch}
-            disabled={pexelsLoading}
+            disabled={isLoading}
           >
             Clear
           </Button>
@@ -222,17 +242,17 @@ export const Videos = () => {
             </div>
           ))}
         </div>
-        {pexelsLoading && <ImageLoading message="Searching for videos..." />}
+        {isLoading && <ImageLoading message="Searching for videos..." />}
         {/* Pagination */}
-        {hasNextPage && (
+        {(hasNextPage || marketHasMore) && (
           <div className="flex items-center justify-center p-4">
             <Button
               size="sm"
               variant="outline"
               onClick={handleLoadMore}
-              disabled={pexelsLoading}
+              disabled={isLoading}
             >
-              {pexelsLoading ? (
+              {isLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Loading...
@@ -313,11 +333,14 @@ const VideoItem = ({
         </div>
         {/* Duration badge */}
         {(video.details as any)?.duration && (
-          <div
-            className="absolute bottom-3 right-2 bg-secondary/90 text-secondary-foreground/90 text-xs px-1 py-0.5 rounded">
+          <div className="absolute bottom-2 right-2 rounded-md bg-secondary/90 px-2 py-0.5 text-xs text-secondary-foreground/90">
             {millisecondsToHHMMSS(Math.floor((video.details as any).duration) * 1000)}
           </div>
         )}
+        <MarketPriceBadge
+          credits={(video.metadata as any)?.price_credits}
+          className="absolute top-2 left-2"
+        />
       </div>
     </Draggable>
   );

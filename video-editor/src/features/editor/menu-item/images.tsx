@@ -10,11 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Loader2, PlusIcon } from "lucide-react";
 import { usePexelsImages } from "@/hooks/use-pexels-images";
+import { useMarketAssets } from "@/hooks/use-market-assets";
 import { ImageLoading } from "@/components/ui/image-loading";
 import { getCurrentTime } from "@/features/editor/utils/time";
 import { normalizeDimensionsToCanvas } from "@/features/editor/utils/dimensions";
 import useStore from "../store/use-store";
 import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
+import { MarketPriceBadge } from "@/components/market-price-badge";
 
 const buildNormalizedImagePayload = (image: Partial<IImage>): Partial<IImage> => {
   const details = image.details;
@@ -79,10 +81,19 @@ export const Images = () => {
     clearImages
   } = usePexelsImages();
 
-  // Load curated images on component mount
+  const {
+    items: marketImages,
+    loading: marketLoading,
+    hasMore: marketHasMore,
+    load: loadMarket,
+    loadMore: loadMoreMarket
+  } = useMarketAssets<Partial<IImage>>("image");
+
+  // Load market + curated images on component mount
   useEffect(() => {
     loadCuratedImages();
-  }, [loadCuratedImages]);
+    loadMarket("");
+  }, [loadCuratedImages, loadMarket]);
 
   const handleAddImage = (payload: Partial<IImage>) => {
     const normalizedPayload = buildNormalizedImagePayload(payload);
@@ -111,15 +122,15 @@ export const Images = () => {
   };
 
   const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      await loadCuratedImages();
+    const q = searchQuery.trim();
+    const market = loadMarket(q);
+
+    if (!q) {
+      await Promise.all([market, loadCuratedImages()]);
       return;
     }
 
-    try {
-      await searchImages(searchQuery);
-    } finally {
-    }
+    await Promise.all([market, searchImages(q)]);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -129,12 +140,18 @@ export const Images = () => {
   };
 
   const handleLoadMore = () => {
-    if (hasNextPage) {
-      if (searchQuery.trim()) {
-        searchImagesAppend(searchQuery, currentPage + 1);
-      } else {
-        loadCuratedImagesAppend(currentPage + 1);
-      }
+    // Exhaust market assets first, then continue into stock
+    if (marketHasMore) {
+      loadMoreMarket(searchQuery);
+      return;
+    }
+
+    if (!hasNextPage) return;
+
+    if (searchQuery.trim()) {
+      searchImagesAppend(searchQuery, currentPage + 1);
+    } else {
+      loadCuratedImagesAppend(currentPage + 1);
     }
   };
 
@@ -142,10 +159,13 @@ export const Images = () => {
     setSearchQuery("");
     clearImages();
     loadCuratedImages();
+    loadMarket("");
   };
 
-  // Use Pexels images if available, otherwise fall back to static images
-  const displayImages = pexelsImages.map((image) => ({
+  const isLoading = pexelsLoading || marketLoading;
+
+  // Market assets always come first, then Pexels stock
+  const displayImages = [...marketImages, ...pexelsImages].map((image) => ({
     ...image,
     metadata: {
       ...image.metadata,
@@ -169,16 +189,16 @@ export const Images = () => {
             variant="ghost"
             className="absolute left-2 top-1/2 h-6 w-6 -translate-y-1/2 p-0"
             onClick={handleSearch}
-            disabled={pexelsLoading}
+            disabled={isLoading}
           >
-            {pexelsLoading ? (
+            {isLoading ? (
               <Loader2 className="h-3 w-3 animate-spin" />
             ) : (
               <Search className="h-3 w-3" />
             )}
           </Button>
           <Input
-            placeholder="Search Pexels images..."
+            placeholder="Search images..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={handleKeyPress}
@@ -190,7 +210,7 @@ export const Images = () => {
             size="sm"
             variant="outline"
             onClick={handleClearSearch}
-            disabled={pexelsLoading}
+            disabled={isLoading}
           >
             Clear
           </Button>
@@ -225,11 +245,11 @@ export const Images = () => {
             </div>
           ))}
         </div>
-        {pexelsLoading && <ImageLoading message="Searching for images..." />}
-        {hasNextPage && (
+        {isLoading && <ImageLoading message="Searching for images..." />}
+        {(hasNextPage || marketHasMore) && (
           <div className="flex items-center justify-center p-4">
-            <Button size="sm" variant="outline" onClick={handleLoadMore} disabled={pexelsLoading}>
-              {pexelsLoading ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Loading...</>) : "Load more"}
+            <Button size="sm" variant="outline" onClick={handleLoadMore} disabled={isLoading}>
+              {isLoading ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Loading...</>) : "Load more"}
             </Button>
           </div>
         )}
@@ -288,6 +308,10 @@ const ImageItem = ({
             <PlusIcon className="h-6 w-6 fill-current" />
           </div>
         </div>
+        <MarketPriceBadge
+          credits={(image.metadata as any)?.price_credits}
+          className="absolute top-2 left-2"
+        />
       </div>
     </Draggable>
   );

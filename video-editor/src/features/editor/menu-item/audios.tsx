@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { debounce } from "lodash";
 import { useIsDraggingOverTimeline } from "@/features/editor/hooks/is-dragging-over-timeline";
 import { getCurrentTime } from "@/features/editor/utils/time";
+import { useMarketAssets } from "@/hooks/use-market-assets";
+import { MarketPriceBadge } from "@/components/market-price-badge";
 
 export const Audios = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -21,8 +23,17 @@ export const Audios = () => {
   const [hasMore, setHasMore] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
 
+  const {
+    items: marketAudios,
+    loading: marketLoading,
+    hasMore: marketHasMore,
+    load: loadMarket,
+    loadMore: loadMoreMarket
+  } = useMarketAssets<IAudio>("audio");
+
   const fetchMusic = async (query: string, pageNumber: number = 1) => {
     if (pageNumber === 1) {
+      loadMarket(query);
       setIsLoading(true);
     } else {
       setIsMoreLoading(true);
@@ -118,13 +129,20 @@ export const Audios = () => {
   };
 
   const loadMore = () => {
+    if (marketHasMore) {
+      loadMoreMarket(searchQuery);
+      return;
+    }
     const nextPage = page + 1;
     setPage(nextPage);
     fetchMusic(searchQuery, nextPage);
   };
 
+  // Map keeps first-insertion order, so market items stay on top
   const uniqueResults = Array.from(
-    new Map(searchResults.map((item: IAudio) => [item.id, item])).values()
+    new Map(
+      [...marketAudios, ...searchResults].map((item: IAudio) => [item.id, item])
+    ).values()
   );
 
   const handleClearSearch = () => {
@@ -197,15 +215,15 @@ export const Audios = () => {
           </div>
         )}
 
-        {hasMore && uniqueResults.length > 0 && (
+        {(hasMore || marketHasMore) && uniqueResults.length > 0 && (
           <div className="py-4 flex justify-center">
             <Button
               size="sm"
               variant="outline"
               onClick={loadMore}
-              disabled={isMoreLoading}
+              disabled={isMoreLoading || marketLoading}
             >
-              {isMoreLoading ? (
+              {(isMoreLoading || marketLoading) ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Loading...
@@ -316,6 +334,9 @@ const AudioItem = ({
           </span>
           <span className="text-xs text-muted-foreground">
             {item.metadata?.author && `${item.metadata.author} · `}{duration}
+            {Number((item.metadata as any)?.price_credits) > 0 && (
+              <> · <MarketPriceBadge credits={(item.metadata as any).price_credits} /></>
+            )}
           </span>
         </div>
 
