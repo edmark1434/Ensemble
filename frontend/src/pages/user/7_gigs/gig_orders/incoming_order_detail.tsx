@@ -281,32 +281,44 @@ export const IncomingOrderDetail = () => {
           </div>
 
           <div className="lg:col-span-5 space-y-4">
-                              {/* Platform Terms */}
-                <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm">
-                  <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-4">PLATFORM TERMS</h3>
-                  <div className="space-y-4">
-                    <div className="flex flex-col">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">Project Initiator</span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">
-                        {order.initiator_role || 'The Freelancer'}
-                      </span>
-                    </div>
-                    {order.linked_project_name && (
-                      <div className="flex flex-col">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">Linked Project</span>
-                        <span className="text-sm font-medium text-blue-500">
-                          {order.linked_project_name}
-                        </span>
+                              {/* Terms splitting logic */}
+                {(() => {
+                  const platformResponses = (order.responses || []).filter((r: any) => r.question && (r.question.includes('confidentiality (NDA)') || r.question.includes('Freelancer Portfolio')));
+                  const customResponses = (order.responses || []).filter((r: any) => !r.question || !(r.question.includes('confidentiality (NDA)') || r.question.includes('Freelancer Portfolio')));
+                  return (
+                    <>
+                      {/* Platform Terms */}
+                      <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm mb-4">
+                        <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-4">PLATFORM TERMS</h3>
+                        <div className="space-y-4">
+                          <div className="flex flex-col">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Project Initiator</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {order.initiator_role || 'The Freelancer'}
+                            </span>
+                          </div>
+                          {order.linked_project_name && (
+                            <div className="flex flex-col">
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Linked Project</span>
+                              <span className="text-sm font-medium text-blue-500">
+                                {order.linked_project_name}
+                              </span>
+                            </div>
+                          )}
+                          {platformResponses.map((resp: any, idx: number) => (
+                            <div key={'plat-'+idx} className="flex flex-col">
+                              <span className="text-xs text-gray-500 dark:text-gray-400">{resp.question}</span>
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">{resp.response}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </div>
 
-<div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm">
-                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-4">QUESTIONNAIRE REQUIREMENTS</h3>
-                {order.responses && order.responses.length > 0 && order.responses[0]?.question_id ? (
-                    <div className="space-y-4">
-                        {order.responses.map((resp: any, idx: number) => {
+                      <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm">
+                        <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-4">QUESTIONNAIRE REQUIREMENTS</h3>
+                        {customResponses.length > 0 && customResponses[0]?.question_id ? (
+                            <div className="space-y-4">
+                                {customResponses.map((resp: any, idx: number) => {
                             const isFile = resp.type?.toLowerCase() === 'file' || resp.type?.toLowerCase() === 'image' || resp.type?.toLowerCase() === 'video';
                             return (
                                 <div key={idx} className="p-4 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
@@ -362,8 +374,11 @@ export const IncomingOrderDetail = () => {
                     </div>
                 ) : (
                     <div className="text-sm text-gray-500">No questionnaire responses provided.</div>
-                )}
-              </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               
               {/* TOS */}
               <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm">
