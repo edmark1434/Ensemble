@@ -30,6 +30,8 @@ interface UserProfile {
   followingCount: number;
   isFollowing: boolean;
   isFollowedBy?: boolean;
+  badges?: { id: string; display_order: number | null }[];
+  bannerPreset?: string | null;
     email?: string;
     joinedDate?: string;
     totalJobs?: number;
@@ -86,6 +88,8 @@ const mapAccount = (account: any, cloudfront: string): UserProfile => {
       totalServices: Number(account.total_services) || 0,
       totalAssets: Number(account.total_assets) || 0,
     isFollowedBy: !!account.is_followed_by,
+    badges: Array.isArray(account.badges) ? account.badges : [],
+    bannerPreset: account.banner_preset ?? null,
   };
 };
 
@@ -153,6 +157,20 @@ export default function DiscoveryPage() {
   const [selectedCardUser, setSelectedCardUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [myProfileData, setMyProfileData] = useState<UserProfile | null>(null);
+  const myHandle = userInfo?.username || userInfo?.handle;
+  useEffect(() => {
+    if (!myHandle || !userInfo?.account_id) return;
+    const fetchMyProfile = async () => {
+      try {
+        const response = await api.get('/api/accounts/search-users', { params: { handle: myHandle } });
+        const data = response.data?.data || [];
+        const me = data.find((a: any) => String(a.account_id) === String(userInfo.account_id));
+        if (me) setMyProfileData(mapAccount(me, cloudfront));
+      } catch (err) {}
+    };
+    fetchMyProfile();
+  }, [myHandle, userInfo?.account_id, cloudfront]);
   const [roleFilter, setRoleFilter] = useState("Freelancer");
   const [sortOption, setSortOption] = useState("default");
   const [currentPage, setCurrentPage] = useState(1);
@@ -619,7 +637,7 @@ export default function DiscoveryPage() {
                 </button>
               </div>
               <div className="flex flex-wrap items-center gap-2 mb-5">
-              {["All", "Freelancer", "Client", "Casual"].map((r) => (
+              {["All", "Freelancer", "Client", "Enthusiast"].map((r) => (
                 <button key={r} onClick={() => setRoleFilter(r)} className={chip(roleFilter === r)}>{r}</button>
               ))}
               <div className="h-4 w-px bg-zinc-300 dark:bg-white/10 mx-1" />
@@ -820,7 +838,7 @@ export default function DiscoveryPage() {
             
             
             {activeTab === "standout" && (() => {
-              const myProfile = profiles.find(p => String(p.id) === String(userInfo?.account_id)) || freelancers.find(p => String(p.id) === String(userInfo?.account_id));
+              const myProfile = myProfileData || profiles.find(p => String(p.id) === String(userInfo?.account_id)) || freelancers.find(p => String(p.id) === String(userInfo?.account_id));
               
               if (!myProfile) {
                  return (

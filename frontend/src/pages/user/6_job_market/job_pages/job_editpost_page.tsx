@@ -144,6 +144,7 @@ export const JobEditPostPage: React.FC = () => {
   const [isExistingProject, setIsExistingProject] = useState(false);
   const [existingProjectId, setExistingProjectId] = useState<string | null>(null);
   const [initiatorRole, setInitiatorRole] = useState("Client");
+  const [requireNDA, setRequireNDA] = useState(false);
   
   // Project Selection
   const [projects, setProjects] = useState<any[]>([]);
@@ -198,6 +199,7 @@ export const JobEditPostPage: React.FC = () => {
           setIsExistingProject(found.is_existing_project || false);
           setExistingProjectId(found.existing_project_id || null);
           setInitiatorRole(found.initiator_role || "Client");
+          setRequireNDA(found.require_nda || false);
 
           if (found.thumbnail_path) {
             setPreviewUrl(`${import.meta.env.VITE_CLOUDFRONT_URL}/${found.thumbnail_path}`);
@@ -333,7 +335,8 @@ export const JobEditPostPage: React.FC = () => {
         portfolio_use_duration_seconds: portfolioDuration ? parseInt(portfolioDuration) : null,
         is_existing_project: isExistingProject,
         existing_project_id: isExistingProject ? existingProjectId : null,
-        initiator_role: initiatorRole
+        initiator_role: initiatorRole,
+          require_nda: requireNDA
       };
 
       if (!id) throw new Error("Job ID missing");
@@ -812,6 +815,36 @@ export const JobEditPostPage: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* Confidentiality / NDA */}
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">
+              <div className="flex items-start gap-3">
+                <input 
+                  type="checkbox" 
+                  checked={requireNDA}
+                  onChange={(e) => {
+                    setRequireNDA(e.target.checked);
+                    setIsDirty(true);
+                  }}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 bg-transparent cursor-pointer"
+                />
+                <div className="flex-1">
+                  <label className="text-sm font-semibold text-gray-900 dark:text-white block">
+                    Require Confidentiality (NDA)
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                    Let candidates know they cannot share any details about this project with anyone while it is in development.
+                    {requireNDA && (
+                      <span className={`block mt-1.5 font-medium ${portfolioUseAllowed ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-300"}`}>
+                        {portfolioUseAllowed 
+                          ? "✓ Since you allow Portfolio Use below, they will be permitted to share it only after the project is officially completed."
+                          : "ⓘ They will not be permitted to share it even after completion unless Portfolio Use is allowed."}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
 
             {/* Portfolio Use */}
             <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">

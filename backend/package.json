@@ -12,7 +12,7 @@
     "db:setup": "node lib/SetupDb.js",
     "seed": "node lib/Seed.js",
     "clean": "node lib/Clean.js",
-    "migrate": "node-pg-migrate up",
+    "migrate": "node-pg-migrate up --no-check-order",
     "rollback": "node-pg-migrate down",
     "migration:create": "node-pg-migrate create",
     "rag:ingest": "node scripts/IngestDocumentation.js",

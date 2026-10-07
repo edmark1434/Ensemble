@@ -101,8 +101,8 @@ async function patchTicket(req, res) {
 
 async function postTicketMessage(req, res) {
   try {
-    const { body, isInternal } = req.body;
-    if (!body?.trim()) {
+    const { body, isInternal, attachments } = req.body;
+    if (!body?.trim() && !(Array.isArray(attachments) && attachments.length)) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
     }
     const existing = await getTicketDetail(req.params.id, req.session);
@@ -110,7 +110,7 @@ async function postTicketMessage(req, res) {
     if (isAdminTicketPayload(existing.ticket || existing)) {
       return res.status(403).json({ success: false, message: 'Admin tickets are not available to Support Moderators' });
     }
-    const data = await addTicketMessage(req.params.id, body.trim(), req.session, Boolean(isInternal));
+    const data = await addTicketMessage(req.params.id, (body || '').trim(), req.session, Boolean(isInternal), attachments);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -281,12 +281,15 @@ async function patchRestriction(req, res) {
   }
 }
 
+const { postTicketCreditAdjustment } = require('./AdminTicketsControllers');
+
 module.exports = {
   getOverview,
   getTickets,
   getTicket,
   patchTicket,
   postTicketMessage,
+  postTicketCreditAdjustment,
   getReports,
   getReport,
   patchReport,

@@ -98,6 +98,7 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, 
             EXISTS(SELECT 1 FROM account_followers WHERE follower_id = a.account_id AND followed_id = $1::uuid) AS is_followed_by,
             a.description AS bio,
             a.tagline AS tagline,
+            a.banner_preset,
               u.email_address AS email,
               a.created_at AS joined_date,
               (SELECT COUNT(*) FROM jobs j WHERE j.client_account_id = a.account_id) AS total_jobs,
@@ -112,7 +113,13 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, 
                 (SELECT json_agg(json_build_object('tag_id', t.tag_id, 'name', t.name, 'proficiency', ut.proficiency, 'years', ut.years))
                  FROM tags t JOIN user_tags ut ON t.tag_id = ut.tag_id WHERE ut.user_id = u.user_id),
                 '[]'::json
-            ) AS skills
+            ) AS skills,
+            COALESCE(
+                (SELECT json_agg(json_build_object('id', b.registry_id, 'display_order', ab.display_order) ORDER BY ab.display_order)
+                 FROM account_badges ab JOIN badges b ON b.badge_id = ab.badge_id
+                 WHERE ab.account_id = a.account_id AND ab.status = 'claimed' AND ab.display_order IS NOT NULL),
+                '[]'::json
+            ) AS badges
          FROM accounts a
          JOIN users u ON u.account_id = a.account_id
          LEFT JOIN files f ON f.file_id = a.avatar_file_id
@@ -500,28 +507,12 @@ async function getAccountBadges(accountId) {
             SELECT b.registry_id, ab.display_order
             FROM account_badges ab
             JOIN badges b ON b.badge_id = ab.badge_id
-            WHERE ab.account_id = $1
+            WHERE ab.account_id = $1 AND ab.status = 'claimed'
         `;
         const result = await pool.query(query, [accountId]);
         return result.rows;
     } catch (err) {
         console.error(`Error fetching badges for account ${accountId}:`, err);
-        throw err;
-    }
-}
-
-async function grantBadgeToAccount(accountId, registryId, displayOrder = null) {
-    try {
-        const query = `
-            INSERT INTO account_badges (account_id, badge_id, display_order)
-            SELECT $1, badge_id, $3
-            FROM badges
-            WHERE registry_id = $2
-            ON CONFLICT DO NOTHING
-        `;
-        await pool.query(query, [accountId, registryId, displayOrder]);
-    } catch (err) {
-        console.error(`Error granting badge ${registryId} to account ${accountId}:`, err);
         throw err;
     }
 }
@@ -546,6 +537,7 @@ async function updateAccountBadgeDisplayOrder(accountId, registryIds) {
                 FROM badges
                 WHERE account_badges.badge_id = badges.badge_id
                   AND account_badges.account_id = $2
+                  AND account_badges.status = 'claimed'
                   AND badges.registry_id = $3
             `, [i + 1, accountId, registryIds[i]]);
         }
@@ -581,6 +573,5 @@ module.exports = {
     getFollowing,
     checkIsFollowing,
     getAccountBadges,
-    grantBadgeToAccount,
     updateAccountBadgeDisplayOrder
 };

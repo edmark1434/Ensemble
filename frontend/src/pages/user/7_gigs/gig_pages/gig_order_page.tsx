@@ -102,6 +102,35 @@ const GigOrderPage: React.FC = () => {
   const [questionAnswers, setQuestionAnswers] = useState<Record<string, any>>({});
   const [agreedToFreelancerTerms, setAgreedToFreelancerTerms] = useState(!!editOrderId);
   const [agreedToPlatformTerms, setAgreedToPlatformTerms] = useState(!!editOrderId);
+  const [portfolioDuration, setPortfolioDuration] = useState<number>(15);
+
+  const [initiatorRole, setInitiatorRole] = useState<"Client" | "Freelancer">("Freelancer");
+  const [isExistingProject, setIsExistingProject] = useState(false);
+  const [existingProjectId, setExistingProjectId] = useState<string | null>(null);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [projectsFetched, setProjectsFetched] = useState(false);
+
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        setLoadingProjects(true);
+        const response = await api.get('/api/projects');
+        const userProjects = response.data.projects || [];
+        setProjects(userProjects);
+        if (userProjects.length === 0) {
+          setInitiatorRole("Freelancer");
+          setIsExistingProject(false);
+        }
+      } catch (error) {
+        console.error("Failed to fetch projects", error);
+      } finally {
+        setLoadingProjects(false);
+        setProjectsFetched(true);
+      }
+    };
+    fetchProjects();
+  }, []);
 
   useEffect(() => {
     const fetchGigAndOrder = async () => {
@@ -187,14 +216,23 @@ const GigOrderPage: React.FC = () => {
   const handleCheckout = async () => {
     setIsProcessing(true);
     try {
-      const payload = {
+            const payload = {
         tierId: activeTier?.tierId,
         projectBrief,
+        initiatorRole,
+        linkedProjectId: isExistingProject ? existingProjectId : null,
         acting_team_id: actingTeamId || null,
-        responses: Object.entries(questionAnswers).map(([idx, response]) => ({
-          requirementId: gig.questionnaires[parseInt(idx)]?.id || idx,
-          response: Array.isArray(response) ? response.join(', ') : response
-        }))
+        responses: Object.entries(questionAnswers).map(([idx, response]) => {
+          const q = gig.questionnaires[parseInt(idx)];
+          let finalResponse = Array.isArray(response) ? response.join(', ') : response;
+          if (q && q.question.includes("Freelancer Portfolio") && finalResponse.startsWith("Yes")) {
+            finalResponse = `${finalResponse} (Allowed duration: ${portfolioDuration} seconds)`;
+          }
+          return {
+            requirementId: q?.id || idx,
+            response: finalResponse
+          };
+        })
       };
 
       if (editOrderId) {
@@ -344,6 +382,104 @@ const GigOrderPage: React.FC = () => {
 
                 {currentSlide === 2 && (
                   <motion.div key="step-2" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="space-y-6">
+                    <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/10">
+                      <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Platform Questions</h2>
+                      <p className="text-xs text-gray-500 dark:text-zinc-400 mb-4">Required by the platform to setup your collaboration workspace.</p>
+                      
+                      <label className="text-sm font-semibold text-gray-900 dark:text-white block mb-0.5">
+                        Who will initiate the Creation of the video project? <span className="text-red-500">*</span>
+                      </label>
+                      <p className="text-xs text-gray-500 dark:text-zinc-400 mb-3">
+                        If this is a new project, who is responsible for creating and inviting the other party?
+                      </p>
+                      <div className="flex flex-col gap-2 mb-4">
+                        <div className="flex items-center gap-4">
+                        <label className={`flex items-center gap-2 ${projectsFetched && projects.length === 0 ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`} title={projectsFetched && projects.length === 0 ? "You must have an existing project to initiate." : ""}>
+                          <input
+                            type="radio"
+                            name="initiatorRole"
+                            value="Client"
+                            disabled={projectsFetched && projects.length === 0}
+                            checked={initiatorRole === "Client"}
+                            onChange={(e) => {
+                              setInitiatorRole(e.target.value as "Client" | "Freelancer");
+                              if (projects.length > 0) setIsExistingProject(true);
+                            }}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 bg-transparent disabled:cursor-not-allowed"
+                          />
+                          <span className="text-xs font-medium text-gray-700 dark:text-zinc-300">Me (Client)</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="initiatorRole"
+                            value="Freelancer"
+                            checked={initiatorRole === "Freelancer"}
+                            onChange={(e) => {
+                              setInitiatorRole(e.target.value as "Client" | "Freelancer");
+                              setIsExistingProject(false);
+                              setExistingProjectId(null);
+                            }}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 bg-transparent"
+                          />
+                          <span className="text-xs font-medium text-gray-700 dark:text-zinc-300">The Freelancer</span>
+                        </label>
+                        </div>
+                        {projectsFetched && projects.length === 0 && (
+                          <p className="text-[10px] text-red-500 font-medium">You cannot select "Me (Client)" because you don't have any existing projects.</p>
+                        )}
+                      </div>
+
+                      {initiatorRole === "Client" && (
+                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-white/10">
+                          <div className="flex items-start gap-3">
+                            <input 
+                              type="checkbox" 
+                              checked={isExistingProject}
+                              onChange={(e) => {
+                                setIsExistingProject(e.target.checked);
+                                if (!e.target.checked) setExistingProjectId(null);
+                              }}
+                              className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 bg-transparent cursor-pointer"
+                            />
+                            <div className="flex-1">
+                              <label className="text-sm font-semibold text-gray-900 dark:text-white block cursor-pointer" onClick={() => { setIsExistingProject(!isExistingProject); if (isExistingProject) setExistingProjectId(null); }}>
+                                Link to Existing Project
+                              </label>
+                              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                                Is this order part of an existing Ensemble project?
+                              </p>
+                              {isExistingProject && (
+                                <div className="mt-3">
+                                  <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-2">
+                                    Select Project <span className="text-red-500">*</span>
+                                  </label>
+                                  {loadingProjects ? (
+                                    <div className="text-xs text-gray-500">Loading projects...</div>
+                                  ) : projects.length === 0 ? (
+                                    <div className="text-xs text-gray-500 italic">No existing projects found.</div>
+                                  ) : (
+                                    <select
+                                      value={existingProjectId || ""}
+                                      onChange={(e) => setExistingProjectId(e.target.value)}
+                                      className="w-full bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                      <option value="" disabled>Select a project...</option>
+                                      {projects.map((p) => (
+                                        <option key={p.project_id} value={p.project_id}>
+                                          {p.name || p.title}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     <div>
                       <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Freelancer Questions</h2>
                       <p className="text-xs text-gray-500 dark:text-zinc-400">Please answer the following questions required by the freelancer.</p>
@@ -399,6 +535,32 @@ const GigOrderPage: React.FC = () => {
                                           <span className="text-sm text-gray-700 dark:text-zinc-300">{opt}</span>
                                         </label>
                                       ))}
+                                      {q.question.includes("Freelancer Portfolio") && typeof questionAnswers[idx] === 'string' && questionAnswers[idx].startsWith("Yes") && (
+                                        <div className="mt-3 p-4 border border-blue-500/30 bg-blue-50/50 dark:bg-blue-500/5 rounded-xl animate-in fade-in zoom-in duration-200">
+                                          <label className="text-sm font-semibold text-gray-900 dark:text-white block mb-1">
+                                            How many seconds do you allow?
+                                          </label>
+                                          <p className="text-[11px] text-gray-500 dark:text-zinc-400 mb-3">
+                                            Specify the maximum duration the freelancer can use for their portfolio.
+                                          </p>
+                                          <div className="flex flex-wrap gap-2">
+                                            {[5, 10, 15, 20, 30, 45, 60].map(secs => (
+                                              <button
+                                                key={secs}
+                                                type="button"
+                                                onClick={() => setPortfolioDuration(secs)}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+                                                  portfolioDuration === secs 
+                                                    ? "bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20" 
+                                                    : "bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-100 dark:hover:bg-white/10"
+                                                }`}
+                                              >
+                                                {secs} secs
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   )
                                 ) : (q.type === "file-upload" || q.type === "file" || q.type === "attachment") ? (

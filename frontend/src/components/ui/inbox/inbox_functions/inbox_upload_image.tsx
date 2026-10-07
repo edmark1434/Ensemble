@@ -36,9 +36,10 @@ export const chatAttachmentUrl = (attachmentKey: string): string => {
 };
 
 export const uploadChatAttachment = async (
-  media: UploadedMedia
+  media: UploadedMedia,
+  folder = "chat-attachments"
 ): Promise<ChatAttachmentPayload> => {
-  const { key } = await uploadFileWithIntent(media.file, "chat-attachments");
+  const { key } = await uploadFileWithIntent(media.file, folder);
   return {
     attachment_id: media.id,
     attachment_type: media.type,
@@ -161,6 +162,8 @@ interface InboxUploadMediaButtonProps {
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClick: () => void;
   disabled?: boolean;
+  accept?: string;
+  title?: string;
 }
 
 export const InboxUploadMediaButton: React.FC<InboxUploadMediaButtonProps> = ({
@@ -168,6 +171,8 @@ export const InboxUploadMediaButton: React.FC<InboxUploadMediaButtonProps> = ({
   onFileChange,
   onClick,
   disabled = false,
+  accept,
+  title,
 }) => {
   return (
     <>
@@ -175,7 +180,7 @@ export const InboxUploadMediaButton: React.FC<InboxUploadMediaButtonProps> = ({
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+        accept={accept || "image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"}
         className="hidden"
         onChange={onFileChange}
       />
@@ -183,7 +188,7 @@ export const InboxUploadMediaButton: React.FC<InboxUploadMediaButtonProps> = ({
         type="button"
         onClick={onClick}
         disabled={disabled}
-        title="Attach images or files (Max 3)"
+        title={title || "Attach images or files (Max 3)"}
         className={`rounded-xl p-2.5 transition flex-shrink-0 ${
           disabled
             ? "text-gray-500 dark:text-zinc-400 cursor-not-allowed"

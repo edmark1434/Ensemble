@@ -21,6 +21,7 @@ import {
   VerticalBarChart,
 } from '../analytics/components/AnalyticsCharts';
 import TicketDetailModal from './TicketDetailModal';
+import TicketArticlesPanel from './TicketArticlesPanel';
 import TicketFiltersPanel from './TicketFiltersPanel';
 import {
   DEFAULT_TICKET_FILTERS,
@@ -341,12 +342,15 @@ export default function TicketManagementPage() {
         )}
 
         {tab === 'overview' && (
-          <OverviewTab
-            summary={summary}
-            charts={charts}
-            recentActivity={recentActivity}
-            staffWorkload={staffWorkload}
-          />
+          <>
+            <OverviewTab
+              summary={summary}
+              charts={charts}
+              recentActivity={recentActivity}
+              staffWorkload={staffWorkload}
+            />
+            <TicketArticlesPanel />
+          </>
         )}
         {tab === 'tickets' && (
           <TicketsTab

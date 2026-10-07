@@ -60,6 +60,7 @@ export interface Inbox {
     type?: string | null;
     priority?: string | null;
     status?: string | null;
+    satisfaction_score?: number | null;
   };
   listing_type?: "job" | "gig" | "asset" | string;
   listing_title?: string;

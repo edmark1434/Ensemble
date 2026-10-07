@@ -52,9 +52,10 @@ export const JobCreateHeader: React.FC<JobCreateHeaderProps> = ({
                 {showJumpButton && onJumpToReview && (
                   <button 
                     onClick={onJumpToReview}
-                    className="absolute -top-10 bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg transition-transform hover:scale-105 flex items-center gap-1.5 whitespace-nowrap z-50 animate-bounce"
+                    className="absolute -top-11 group bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg transition-transform hover:scale-105 flex items-center gap-1.5 whitespace-nowrap z-50 animate-bounce"
                   >
                     Jump Here 🚀
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-purple-600 group-hover:border-t-purple-700 transition-colors"></div>
                   </button>
                 )}
                 <div

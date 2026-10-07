@@ -73,6 +73,7 @@ router.get('/support/tickets', [checkSession, supportModerator], SupportModerato
 router.get('/support/tickets/:id', [checkSession, supportModerator], SupportModerator.getTicket);
 router.patch('/support/tickets/:id', [checkSession, supportModerator], SupportModerator.patchTicket);
 router.post('/support/tickets/:id/messages', [checkSession, supportModerator], SupportModerator.postTicketMessage);
+router.post('/support/tickets/:id/credit-adjustment', [checkSession, supportModerator], SupportModerator.postTicketCreditAdjustment);
 router.get('/support/reports', [checkSession, supportModerator], SupportModerator.getReports);
 router.get('/support/reports/:id', [checkSession, supportModerator], SupportModerator.getReport);
 router.patch('/support/reports/:id', [checkSession, supportModerator], SupportModerator.patchReport);

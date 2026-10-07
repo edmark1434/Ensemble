@@ -271,6 +271,19 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                     </div>
                   </div>
 
+                  {/* Confidentiality / NDA */}
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 shrink-0 text-gray-400 dark:text-zinc-500">
+                      {selectedJob.requireNDA ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-gray-400 dark:text-zinc-500" />}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-900 dark:text-white">Require Confidentiality (NDA)?</p>
+                      <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">
+                        {selectedJob.requireNDA ? "Yes, freelancers cannot share details about this project during development." : "No, a strict confidentiality agreement is not required."}
+                      </p>
+                    </div>
+                  </div>
+
                   {/* Portfolio Use */}
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 shrink-0 text-gray-400 dark:text-zinc-500">

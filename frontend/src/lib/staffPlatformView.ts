@@ -1,5 +1,5 @@
 const ACTION_LABEL =
-  /\b(like|unlike|save|unsave|follow|unfollow|message|chat|buy|purchase|checkout|create|edit|delete|remove|submit|send|reply|comment|upload|apply|hire|report|share|invite|join|leave|pay|publish|archive|download|bookmark|contact|offer|bid|propose|accept|decline|reject|withdraw|subscribe|upgrade|block|mute|pin|react|logout|log out|sign out|settings|feedback|notification|ask ai|top up|verify now|verify first|transaction history|my transaction|my terms|my contracts|post a job|post a service|post a gig|post job|start project|new discussion|create discussion|create post|write a comment|make a proposal|place an order)\b|\bpost\b/i;
+  /\b(like|unlike|save|unsave|follow|unfollow|message|chat|buy|purchase|checkout|create|edit|delete|remove|submit|send|reply|comment|upload|apply|hire|report|share|invite|join|leave|pay|publish|archive|download|bookmark|contact|offer|bid|propose|accept|decline|reject|withdraw|subscribe|upgrade|block|mute|pin|react|logout|log out|sign out|settings|feedback|notification|ask ai|top up|verify now|verify first|transaction history|my transaction|my terms|my contracts|add image|upload image|post a job|post a service|post a gig|post job|start project|new discussion|create discussion|create post|write a comment|write a reply|make a proposal|place an order)\b|\bpost\b/i;
 
 /** Member-only tools and actions. Staff can look at public pages, not these. */
 const ACTION_PATH =
@@ -61,7 +61,7 @@ export function staffPreviewHideTarget(element: Element): Element | null {
   if (element.closest("[data-staff-view-keep], aside, nav")) return null;
 
   if (element instanceof HTMLTextAreaElement || element.getAttribute("contenteditable") === "true") {
-    return element.closest("form") || element;
+    return element.closest("[data-staff-composer], form") || element;
   }
 
   if (element instanceof HTMLInputElement) {

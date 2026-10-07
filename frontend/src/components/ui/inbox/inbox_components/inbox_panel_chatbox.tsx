@@ -24,6 +24,7 @@ interface InboxPanelChatboxProps {
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   removeMedia: (id: string) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement>;
+  imagesOnly?: boolean;
 }
 
 export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
@@ -42,6 +43,7 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
   removeMedia,
   textareaRef,
 uploadLimitMB = 250,
+  imagesOnly = false,
 }) => {
   const canSend = messageInput.trim().length > 0 || mediaList.length > 0;
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -162,7 +164,9 @@ uploadLimitMB = 250,
           fileInputRef={fileInputRef}
           onFileChange={handleFileChange}
           onClick={openFilePicker}
-          disabled={mediaList.length >= 3}
+          disabled={mediaList.length >= (imagesOnly ? 4 : 3)}
+          accept={imagesOnly ? "image/*" : undefined}
+          title={imagesOnly ? "Add a screenshot" : undefined}
         />
 
         <button

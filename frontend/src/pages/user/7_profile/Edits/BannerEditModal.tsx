@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
-import { X, Image as ImageIcon, Check, AlertTriangle } from "lucide-react";
-import { PROFILE_BANNER_PRESETS, bannerPresetLabel, bannerPresetUrl } from "@/lib/profileBanners";
+import { X, Check, AlertTriangle, Trash2, Lock } from "lucide-react";
+import { PROFILE_BANNER_GROUPS, BANNER_REQUIRED_BADGES, bannerPresetLabel, bannerPresetUrl } from "@/lib/profileBanners";
 
 interface BannerEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (bannerPreset: string | null) => Promise<void>;
   currentBanner?: string | null;
+  ownedBadgeIds?: string[];
 }
 
-export default function BannerEditModal({ isOpen, onClose, onSave, currentBanner = null }: BannerEditModalProps) {
+export default function BannerEditModal({ isOpen, onClose, onSave, currentBanner = null, ownedBadgeIds = [] }: BannerEditModalProps) {
   const [selected, setSelected] = useState<string | null>(currentBanner);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
@@ -48,7 +49,7 @@ export default function BannerEditModal({ isOpen, onClose, onSave, currentBanner
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-2xl rounded-2xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-dark-base/95 backdrop-blur-md p-6 shadow-2xl font-['Plus Jakarta Sans',sans-serif] max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full max-w-2xl rounded-2xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-dark-base/95 backdrop-blur-md p-6 shadow-2xl font-['Plus Jakarta Sans',sans-serif] max-h-[90vh] flex flex-col overflow-hidden">
         <button
           onClick={handleClose}
           disabled={isSaving}
@@ -57,11 +58,7 @@ export default function BannerEditModal({ isOpen, onClose, onSave, currentBanner
           <X className="h-5 w-5" />
         </button>
 
-        <div className="flex flex-col items-center text-center">
-          <div className="w-12 h-12 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 flex items-center justify-center text-blue-500 dark:text-blue-400 mb-4">
-            <ImageIcon className="h-5 w-5" />
-          </div>
-
+        <div className="flex flex-1 min-h-0 flex-col items-center text-center">
           <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Update Profile Banner</h3>
           <p className="text-gray-500 dark:text-zinc-400 text-xs mb-5 max-w-sm leading-relaxed">
             Choose one of our curated banner presets to display across the top of your profile.
@@ -75,7 +72,7 @@ export default function BannerEditModal({ isOpen, onClose, onSave, currentBanner
           )}
 
           <div
-            className={`w-full aspect-[851/315] rounded-xl overflow-hidden border-2 border-dashed mb-6 bg-gray-100 dark:bg-[#13151f] flex items-center justify-center transition-colors ${
+            className={`w-full shrink-0 aspect-[851/315] rounded-xl overflow-hidden border-2 border-dashed mb-6 bg-gray-100 dark:bg-[#13151f] flex items-center justify-center transition-colors ${
               selected ? "border-[#4a6fa5]" : "border-gray-300 dark:border-[#2a2d3e]"
             }`}
           >
@@ -93,8 +90,8 @@ export default function BannerEditModal({ isOpen, onClose, onSave, currentBanner
             </div>
           )}
 
-          <div className="w-full text-left">
-            <div className="flex items-center justify-between mb-3">
+          <div className="w-full text-left flex flex-1 min-h-0 flex-col">
+            <div className="flex shrink-0 items-center justify-between mb-3">
               <label className="block text-gray-500 dark:text-zinc-500 text-xs font-semibold tracking-wider uppercase">
                 Banner Presets
               </label>
@@ -103,42 +100,78 @@ export default function BannerEditModal({ isOpen, onClose, onSave, currentBanner
                   type="button"
                   onClick={() => setSelected(null)}
                   disabled={isSaving || isSaved}
-                  className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 dark:text-red-400 transition-colors hover:bg-red-500/20 hover:border-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
+                  <Trash2 className="h-3.5 w-3.5" />
                   Remove banner
                 </button>
               )}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-              {PROFILE_BANNER_PRESETS.map((preset) => {
+            <div className="flex-1 min-h-0 overflow-y-auto scroll-thin -mr-3 pr-3 mb-4 divide-y divide-gray-200 dark:divide-white/10 border-y border-gray-200 dark:border-white/10">
+            {PROFILE_BANNER_GROUPS.map((group) => (
+            <section key={group.label} className="py-4">
+              <div className="mb-2 flex items-center gap-2">
+                <h4 className="text-[11px] font-semibold text-gray-700 dark:text-zinc-300">{group.label}</h4>
+                {group.note && (
+                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">{group.note}</span>
+                )}
+              </div>
+            <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 p-1">
+              {group.presets.map((preset) => {
                 const isActive = selected === preset;
+                const requiredBadge = BANNER_REQUIRED_BADGES[preset];
+                const isLocked = !!requiredBadge && !ownedBadgeIds.includes(requiredBadge.id);
                 return (
                   <button
                     key={preset}
                     type="button"
                     onClick={() => setSelected(preset)}
-                    disabled={isSaving || isSaved}
-                    title={bannerPresetLabel(preset)}
-                    className={`group relative w-full aspect-[851/315] rounded-lg overflow-hidden bg-gray-100 dark:bg-[#13151f] border-2 transition-all duration-200 hover:scale-[1.03] ${
-                      isActive
-                        ? "border-[#4a6fa5] shadow-[0_0_12px_rgba(74,111,165,0.3)]"
-                        : "border-transparent hover:border-gray-300 dark:hover:border-zinc-500"
-                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    disabled={isSaving || isSaved || isLocked}
+                    title={isLocked ? `Requires the ${requiredBadge.name} badge` : bannerPresetLabel(preset)}
+                    className="group flex flex-col gap-1.5 text-left disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <img src={bannerPresetUrl(preset) as string} alt={bannerPresetLabel(preset)} loading="lazy" className="w-full h-full object-cover" />
-                    {isActive && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                        <Check className="h-4 w-4 text-white" />
-                      </div>
+                    <span
+                      className={`relative block w-full aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-[#13151f] border-2 transition-all duration-200 group-hover:scale-[1.03] ${
+                        isActive
+                          ? "border-[#4a6fa5] shadow-[0_0_12px_rgba(74,111,165,0.3)]"
+                          : "border-transparent group-hover:border-gray-300 dark:group-hover:border-zinc-500"
+                      }`}
+                    >
+                      <img src={bannerPresetUrl(preset) as string} alt={bannerPresetLabel(preset)} loading="lazy" className="w-full h-full object-cover" />
+                      {isActive && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/30">
+                          <Check className="h-4 w-4 text-white" />
+                        </span>
+                      )}
+                      {isLocked && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/55">
+                          <Lock className="h-4 w-4 text-white" />
+                        </span>
+                      )}
+                    </span>
+                    {isLocked && (
+                      <span className="truncate px-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+                        Requires {requiredBadge.name}
+                      </span>
                     )}
+                    <span
+                      className={`truncate px-0.5 text-[11px] font-medium ${
+                        isActive ? "text-[#4a6fa5] dark:text-blue-300" : "text-gray-600 dark:text-zinc-400"
+                      }`}
+                    >
+                      {bannerPresetLabel(preset)}
+                    </span>
                   </button>
                 );
               })}
             </div>
+            </section>
+            ))}
+            </div>
           </div>
 
-          <div className="w-full flex gap-3 mt-2">
+          <div className="w-full shrink-0 flex gap-3">
             <button
               onClick={handleClose}
               disabled={isSaving}

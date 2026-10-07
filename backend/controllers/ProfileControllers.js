@@ -54,7 +54,7 @@ async function updateBudgetCreditsController(req, res) {
 
 async function updateBannerPresetController(req, res) {
     try {
-        const bannerPreset = await updateBannerPresetServices(req.session.accountId, req.body?.banner_preset);
+        const bannerPreset = await updateBannerPresetServices(req.session.account_id, req.body?.banner_preset);
         return res.status(200).json({ success: true, data: { banner_preset: bannerPreset } });
     } catch (err) {
         if (err instanceof ProfileBudgetError) {

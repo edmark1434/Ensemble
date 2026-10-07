@@ -703,8 +703,16 @@ const InboxMain = () => {
 
     setIsSending(true);
     try {
+      const isTicketThread = selectedConversation.conversation_type === "ticket";
+      if (isTicketThread && mediaList.some((media) => !media.file.type.startsWith("image/"))) {
+        setMessageError("Tickets can only include images.");
+        setIsSending(false);
+        return;
+      }
       const attachments = await Promise.all(
-        mediaList.map(uploadChatAttachment)
+        mediaList.map((media) =>
+          uploadChatAttachment(media, isTicketThread ? "ticket-attachments" : "chat-attachments")
+        )
       );
       if (replyToMessage) {
         await replyMessage(

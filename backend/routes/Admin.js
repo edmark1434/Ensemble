@@ -48,6 +48,10 @@ const {
   createAdminTicket,
   patchAdminTicket,
   postAdminTicketMessage,
+  postTicketCreditAdjustment,
+  getAdminTicketArticles,
+  postAdminTicketArticle,
+  deleteAdminTicketArticle,
   getAdminDisputeDetail,
   patchAdminDispute,
   postAdminDisputeMessage,
@@ -97,6 +101,10 @@ router.post('/tickets', [checkSession, requireAdmin], createAdminTicket);
 router.get('/tickets/:id', [checkSession, requireAdmin], getAdminTicketDetail);
 router.patch('/tickets/:id', [checkSession, requireAdmin], patchAdminTicket);
 router.post('/tickets/:id/messages', [checkSession, requireAdmin], postAdminTicketMessage);
+router.post('/tickets/:id/credit-adjustment', [checkSession, requireUserTeamFullWrite], postTicketCreditAdjustment);
+router.get('/ticket-articles', [checkSession, requireAdmin], getAdminTicketArticles);
+router.post('/ticket-articles', [checkSession, requireAdmin], postAdminTicketArticle);
+router.delete('/ticket-articles/:id', [checkSession, requireAdmin], deleteAdminTicketArticle);
 router.get('/disputes/:id', [checkSession, requireAdmin], getAdminDisputeDetail);
 router.post('/disputes/:id/messages', [checkSession, requireAdmin], postAdminDisputeMessage);
 router.patch('/disputes/:id/messages/:messageId', [checkSession, requireAdmin], patchAdminDisputeMessage);
@@ -107,6 +115,20 @@ router.get('/settings-overview', [checkSession, requireAdmin], getAdminSettingsO
 router.patch('/settings', [checkSession, requireAdmin], patchAdminSettings);
 
 router.get('/feedbacks', [checkSession, requireAdmin], getAdminFeedbacks);
+
+const {
+  getAdminBadgeCatalog,
+  getAdminBadgeRecipients,
+  getAdminBadgeHolders,
+  postAdminBadgeGrant,
+  deleteAdminBadgeGrant,
+} = require('../controllers/BadgeControllers');
+
+router.get('/badges', [checkSession, requireAdmin], getAdminBadgeCatalog);
+router.get('/badges/recipients', [checkSession, requireAdmin], getAdminBadgeRecipients);
+router.get('/badges/:registryId/holders', [checkSession, requireAdmin], getAdminBadgeHolders);
+router.post('/badges/:registryId/grants', [checkSession, requireAdmin], postAdminBadgeGrant);
+router.delete('/badges/grants/:accountBadgeId', [checkSession, requireAdmin], deleteAdminBadgeGrant);
 const { getAdminSurveyResponsesController } = require('../controllers/AdminSurveyControllers');
 
 router.get('/survey-responses', [checkSession, requireAdmin], getAdminSurveyResponsesController);

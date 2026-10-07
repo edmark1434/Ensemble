@@ -6,6 +6,10 @@ import type { Questionnaire } from "../../gig_datasets";
 interface CreateFormsProps {
   questionnaires: Questionnaire[];
   setQuestionnaires: React.Dispatch<React.SetStateAction<Questionnaire[]>>;
+  askNDA: boolean;
+  setAskNDA: (val: boolean) => void;
+  askPortfolio: boolean;
+  setAskPortfolio: (val: boolean) => void;
   errors: Record<string, string>;
   setErrors: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onBack: () => void;
@@ -21,6 +25,10 @@ const QUESTION_TYPES = [
 export const CreateForms: React.FC<CreateFormsProps> = ({
   questionnaires,
   setQuestionnaires,
+  askNDA,
+  setAskNDA,
+  askPortfolio,
+  setAskPortfolio,
   errors,
   setErrors,
   onBack,
@@ -336,6 +344,55 @@ export const CreateForms: React.FC<CreateFormsProps> = ({
         >
           <Plus className="h-5 w-5" /> {questionnaires.length >= 8 ? "Max Questions Reached (8)" : "Add New Requirement"}
         </button>
+
+        <div className="mt-8 pt-8 border-t border-gray-200 dark:border-white/10 space-y-5">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-0.5">Workflow & Terms</h2>
+            <p className="text-xs text-gray-600 dark:text-zinc-300">Set the rules for the final output and collaboration initiation.</p>
+          </div>
+          
+          <div className="space-y-4">
+            {/* Require NDA */}
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">
+              <div className="flex items-start gap-3">
+                <input 
+                  type="checkbox" 
+                  checked={askNDA}
+                  onChange={(e) => setAskNDA(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 bg-transparent"
+                />
+                <div className="flex-1">
+                  <label className="text-sm font-semibold text-gray-900 dark:text-white block">
+                    Require Confidentiality (NDA)
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                    Let candidates know they cannot share any details about this project with anyone while it is in development.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Allow Portfolio Use */}
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">
+              <div className="flex items-start gap-3">
+                <input 
+                  type="checkbox" 
+                  checked={askPortfolio}
+                  onChange={(e) => setAskPortfolio(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 bg-transparent"
+                />
+                <div className="flex-1">
+                  <label className="text-sm font-semibold text-gray-900 dark:text-white block">
+                    Allow Freelancer Portfolio Use
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                    Allow yourself to use the completed work as part of your public portfolio to showcase your skills to future clients.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Actions */}

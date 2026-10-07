@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useOutletContext, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import UserHeader from "@/components/nav/user_header";
@@ -72,7 +72,7 @@ interface UserDetail {
   zipCode?: string;
   role: {
     role_id: number;
-    role_name: "Freelancer" | "Client"| "Casual";
+    role_name: "Freelancer" | "Client"| "Enthusiast";
   }[];
   email_address: string;
   location: string;
@@ -754,6 +754,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
     }
   ];
 
+  const setupBadgeRequestedRef = useRef(false);
   const [hasCompletedProfileSetup, setHasCompletedProfileSetup] = useState(() => {
     return localStorage.getItem(`profileSetupCompleted_${user?.account_id}`) === 'true';
   });
@@ -804,15 +805,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         window.dispatchEvent(new Event('profileSetupStatusUpdate'));
       }
 
-      if (userDetails && !userDetails.badges?.some(b => b.id === "setup-profile")) {
-        setUserDetails(prev => {
-          if (!prev) return prev;
-          if (prev.badges?.some(b => b.id === "setup-profile")) return prev;
-
-          const nextOrder = Math.max(-1, ...(prev.badges || []).filter(b => b.display_order !== null).map(b => b.display_order!)) + 1;
-          const newBadges = [...(prev.badges || []), { id: "setup-profile", display_order: nextOrder }];
-          return { ...prev, badges: newBadges };
-        });
+      if (userDetails && !setupBadgeRequestedRef.current && !userDetails.badges?.some(b => b.id === "setup-profile")) {
+        setupBadgeRequestedRef.current = true;
         api.post('/api/accounts/grant-badge', { badgeId: 'setup-profile' }).catch(() => {});
       }
     }
@@ -996,6 +990,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         isOpen={isBannerModalOpen}
         onClose={() => setIsBannerModalOpen(false)}
         currentBanner={userDetails?.banner_preset ?? null}
+        ownedBadgeIds={(userDetails?.badges || []).map(b => String(b.id))}
         onSave={async (bannerPreset) => {
           const { data } = await api.put("/api/accounts/profile/banner", { banner_preset: bannerPreset });
           const saved = data?.data?.banner_preset ?? null;
@@ -1027,10 +1022,14 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             skills: (userDetails.skills || []).map((s: any) => s.name || s), // fallback string map
             rawSkills: userDetails.skills || [],
             verified: !!userDetails.verification_status,
-            meritScore: userDetails.merit_score || "No Rating",
+            meritScore: parseFloat(String(userDetails.avg_rating ?? 0)) > 0
+              ? parseFloat(String(userDetails.avg_rating)).toFixed(1)
+              : "No Rating",
             followersCount: userDetails.followers_count || 0,
             roles: userDetails.role || [],
-            subscriptionType: "Free",
+            subscriptionType: userDetails.subscriptionType || "Free",
+            badges: userDetails.badges || [],
+            bannerPreset: userDetails.banner_preset ?? null,
             tagline: userDetails.tagline || "",
             totalJobs: userDetails.total_jobs || 0,
             totalServices: userDetails.total_services || 0,
@@ -1084,9 +1083,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
               <button
                 onClick={() => {
                   setShowCongrats(false);
-                  if (!userDetails?.badges?.some(b => b.id === "setup-profile")) {
-                    api.post('/api/accounts/grant-badge', { badgeId: 'setup-profile' }).catch(() => {});
-                  }
                   window.location.reload();
                 }}
                 className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40"

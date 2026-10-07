@@ -85,7 +85,8 @@ async function createJobRepositories(jobData) {
             jobData.portfolio_use_duration_seconds || null,
             jobData.is_existing_project || false,
             jobData.existing_project_id || null,
-            jobData.initiator_role || null
+            jobData.initiator_role || null,
+            jobData.require_nda || false
         ];
         
         const res = await client.query(jobQuery, jobValues);
@@ -191,6 +192,7 @@ async function updateJobRepositories(jobId, accountIds, jobData) {
                 portfolio_use_allowed = $7, portfolio_use_duration_seconds = $8,
                 is_existing_project = $9, existing_project_id = $10,
                 initiator_role = $11,
+                require_nda = $12,
                 updated_at = NOW()
             WHERE job_id = $5 AND client_account_id = ANY($6::uuid[])
             RETURNING *;
@@ -202,7 +204,8 @@ async function updateJobRepositories(jobId, accountIds, jobData) {
             jobData.portfolio_use_duration_seconds, 
             jobData.is_existing_project, 
             jobData.existing_project_id, 
-            jobData.initiator_role
+            jobData.initiator_role,
+            jobData.require_nda
         ];
         const res = await client.query(query, values);
         const updatedJob = res.rows[0];

@@ -77,6 +77,7 @@ async function seedBadges(userAccountIds) {
   const badgeDefs = [
     ['acc-alpha', 'Alpha Tester', 'Granted to core ecosystem pioneers who tested the platform during its early alpha stages.', 'alpha_access', 'boolean', 1, cats[0].badge_category_id],
     ['acc-beta', 'Beta Tester', 'Granted to core ecosystem pioneers who tested the platform during its early beta stages.', 'beta_access', 'boolean', 1, cats[0].badge_category_id],
+    ['setup-profile', 'Profile Complete', 'Granted to users who have successfully fully completed their profile setup.', 'profile_complete', 'boolean', 1, cats[0].badge_category_id],
     ['acc-freelance-1', 'Fresh Freelancer', 'Granted to users who have newly started becoming a freelancer on this platform.', 'gig_completed', 'count', 1, cats[0].badge_category_id],
     ['acc-freelance-2', 'Rising Freelancer', 'Granted to active freelancers establishing a consistent workspace pipeline.', 'gig_completed', 'count', 10, cats[0].badge_category_id],
     ['acc-freelance-3', 'Elite Freelancer', 'Granted to high-tier freelancers delivering premium-grade production deliverables.', 'gig_completed', 'count', 50, cats[0].badge_category_id],
@@ -92,32 +93,26 @@ async function seedBadges(userAccountIds) {
   ];
 
   const badgeIds = [];
-  let alphaBadgeId = null;
+  let alphaBadge = null;
 
   for (const b of badgeDefs) {
     const res = await pool.query(
       `INSERT INTO badges (
          registry_id, name, description, is_secret, trigger_event_code, condition_type, condition_value, badge_category_id
        ) VALUES ($1,$2,$3,false,$4,$5,$6,$7)
-       RETURNING badge_id, registry_id`,
+       RETURNING badge_id, registry_id, name`,
       b
     );
     badgeIds.push(res.rows[0].badge_id);
     if (res.rows[0].registry_id === 'acc-alpha') {
-      alphaBadgeId = res.rows[0].badge_id;
+      alphaBadge = res.rows[0];
     }
   }
 
-  // Grant the Alpha Badge to all seeded users
-  if (alphaBadgeId) {
-    for (const accountId of userAccountIds) {
-      await pool.query(
-        `INSERT INTO account_badges (badge_id, account_id, display_order)
-         VALUES ($1, $2, $3)
-         ON CONFLICT DO NOTHING`,
-        [alphaBadgeId, accountId, 1] // Display order 1 by default
-      );
-    }
+  // Alpha Tester is delivered as a pending grant with a System notification, like real signups
+  if (alphaBadge && userAccountIds.length) {
+    const { createPendingBadgeGrants } = require('../repositories/BadgeRepositories');
+    await createPendingBadgeGrants({ badge: alphaBadge, accountIds: userAccountIds });
   }
 
   console.log(`✅ Seeded ${cats.length} badge categories, ${badgeIds.length} badges`);

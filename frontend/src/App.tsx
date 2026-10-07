@@ -85,6 +85,7 @@ const NotificationsPage = lazyPage(() => import('@/pages/user/notifications/noti
 const AdminLayout = lazyPage(() => import('./pages/admin/AdminLayout'));
 const AdminDashboard = lazyPage(() => import('./pages/admin/AdminDashboard'));
 const AdminFeedbacksPage = lazyPage(() => import('./pages/admin/feedbacks/AdminFeedbacksPage'));
+const AdminBadgeGrantPage = lazyPage(() => import('./pages/admin/badgeGrant/AdminBadgeGrantPage'));
 const UserTeamPage = lazyPage(() => import('./pages/admin/userTeam/UserTeamPage'));
 const CreditEconomyPage = lazyPage(() => import('./pages/admin/creditEconomy/CreditEconomyPage'));
 const ModerationPage = lazyPage(() => import('./pages/admin/moderation/ModerationPage'));
@@ -325,6 +326,7 @@ function App() {
         <Route path='/admin' element={<AdminLayout />}>
           <Route path='dashboard' element={<AdminDashboard />} />
           <Route path='feedbacks' element={<AdminFeedbacksPage />} />
+          <Route path='badge-grant' element={<AdminBadgeGrantPage />} />
           <Route path='user-team' element={<UserTeamPage />} />
           <Route path='user-team/teams' element={<Navigate to="/admin/user-team?tab=teams" replace />} />
           <Route path='user-team/users' element={<Navigate to="/admin/user-team?tab=users" replace />} />

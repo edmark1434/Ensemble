@@ -133,7 +133,8 @@ onUpdateGroupName,
             handleFileChange={handleFileChange}
             removeMedia={removeMedia}
             textareaRef={textareaRef}
-uploadLimitMB={uploadLimitMB}
+            uploadLimitMB={selectedConversation?.conversation_type === "ticket" ? 8 : uploadLimitMB}
+            imagesOnly={selectedConversation?.conversation_type === "ticket"}
 />
           )}
         </div>

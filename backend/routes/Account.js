@@ -19,7 +19,7 @@ const {
     getFollowersController,
     getFollowingController,
     checkIsFollowingController,
-    curateBadgesController
+    curateBadgesController, grantBadgeController
 } = require('../controllers/AccountControllers');
 const {
     updateTaglineAndDescriptionController,
@@ -84,6 +84,10 @@ router.put('/update-profile-onboarding', [checkSession, requireAuth], updateProf
 router.put('/update-profile-details', [checkSession, requireAuth], updateProfileDetailsController);
 router.put('/setting-account-info', [checkSession, requireAuth], settingAccountInfoUpdateController);
 router.put('/profile/badges/curate', [checkSession, requireAuth], curateBadgesController);
+router.post('/grant-badge', [checkSession, requireAuth], grantBadgeController);
+const { getMyBadgeGrants, postClaimBadge } = require('../controllers/BadgeControllers');
+router.get('/badges/mine', [checkSession, requireAuth], getMyBadgeGrants);
+router.post('/badges/:accountBadgeId/claim', [checkSession, requireAuth], postClaimBadge);
 
 router.post('/dev/add-credits', [checkSession, requireAuth], async (req, res) => {
     try {

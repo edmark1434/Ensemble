@@ -20,6 +20,8 @@ interface CreateReviewProps {
   milestones: Milestone[];
   additionalWorkRate: number;
   questionnaires: Questionnaire[];
+  askNDA: boolean;
+  askPortfolio: boolean;
   actingTeamId: string;
   setActingTeamId: (teamId: string) => void;
   onBack: () => void;
@@ -41,6 +43,8 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   milestones,
   additionalWorkRate,
   questionnaires,
+  askNDA,
+  askPortfolio,
   actingTeamId,
   setActingTeamId,
   onBack,
@@ -219,22 +223,56 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                 </button>
               )}
             </div>
-            <span>{questionnaires.length} Questions</span>
+            <span>{questionnaires.length + (askNDA ? 1 : 0) + (askPortfolio ? 1 : 0)} Questions</span>
           </h3>
-          <div className="space-y-2">
-            {questionnaires.map((q, idx) => (
-              <div key={idx} className="flex items-start gap-2 text-xs text-gray-700 dark:text-zinc-300">
-                <span className="text-gray-400 font-bold">{idx + 1}.</span>
+          <div className="space-y-3">
+            {askNDA && (
+              <div className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-white dark:bg-white/[0.02]">
+                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-[10px]">
+                  1
+                </div>
                 <div>
-                  <span className="font-medium">{q.question}</span>
-                  <div className="text-[10px] text-gray-500 uppercase mt-0.5 tracking-wider font-bold">
-                    [{q.type}] {q.isRequired ? "• Required" : ""}
+                  <span className="font-medium text-gray-800 dark:text-zinc-200 block text-sm">Do you require confidentiality (NDA) for this project?</span>
+                  <div className="text-[10px] text-gray-500 uppercase mt-1 tracking-wider font-bold flex items-center gap-1.5">
+                    <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/10">CHOICE</span>
+                    <span className="text-blue-500 dark:text-blue-400 flex items-center gap-1"><span className="h-1 w-1 rounded-full bg-blue-500"></span> REQUIRED</span>
                   </div>
                 </div>
               </div>
-            ))}
-            {questionnaires.length === 0 && (
-              <div className="text-xs text-gray-500 italic">No requirements specified.</div>
+            )}
+            {askPortfolio && (
+              <div className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-white dark:bg-white/[0.02]">
+                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-[10px]">
+                  {askNDA ? "2" : "1"}
+                </div>
+                <div>
+                  <span className="font-medium text-gray-800 dark:text-zinc-200 block text-sm">Do you allow me to display the final work in my Freelancer Portfolio after completion?</span>
+                  <div className="text-[10px] text-gray-500 uppercase mt-1 tracking-wider font-bold flex items-center gap-1.5">
+                    <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/10">CHOICE</span>
+                    <span className="text-blue-500 dark:text-blue-400 flex items-center gap-1"><span className="h-1 w-1 rounded-full bg-blue-500"></span> REQUIRED</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {questionnaires.map((q, idx) => {
+              const num = idx + 1 + (askNDA ? 1 : 0) + (askPortfolio ? 1 : 0);
+              return (
+                <div key={idx} className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-white dark:bg-white/[0.02]">
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-[10px]">
+                    {num}
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-800 dark:text-zinc-200 block text-sm">{q.question}</span>
+                    <div className="text-[10px] text-gray-500 uppercase mt-1 tracking-wider font-bold flex items-center gap-1.5">
+                      <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/10">{q.type}</span>
+                      {q.isRequired && <span className="text-blue-500 dark:text-blue-400 flex items-center gap-1"><span className="h-1 w-1 rounded-full bg-blue-500"></span> REQUIRED</span>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {questionnaires.length === 0 && !askNDA && !askPortfolio && (
+              <div className="text-xs text-gray-500 italic p-3">No requirements specified.</div>
             )}
           </div>
         </div>

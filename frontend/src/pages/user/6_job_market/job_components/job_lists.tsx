@@ -48,6 +48,7 @@ export interface Job {
   portfolioUseAllowed?: boolean;
   portfolioDuration?: number | null;
   isExistingProject?: boolean;
+    requireNDA?: boolean;
   existingProjectId?: string | null;
   initiatorRole?: string;
 }

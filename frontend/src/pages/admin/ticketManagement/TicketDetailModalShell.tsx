@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Hand, Loader2, Lock, MessageSquare, Send, ShieldAlert, UserRound, X } from 'lucide-react';
+import { Hand, ImagePlus, Loader2, Lock, MessageSquare, Send, ShieldAlert, UserRound, X } from 'lucide-react';
 import api from '@/lib/axios';
+import { uploadFileWithIntent } from '@/lib/uploadFile';
+import { chatAttachmentUrl } from '@/components/ui/inbox/inbox_functions/inbox_upload_image';
 import socket from '@/lib/socket';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type { TicketDetail, TicketMessage } from './ticketTypes';
@@ -133,7 +135,21 @@ function MessageBubble({
               Visible to staff only
             </p>
           )}
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-100">{message.body}</p>
+          {message.body ? (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-100">{message.body}</p>
+          ) : null}
+          {(message.attachments || []).length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {message.attachments!.map((file) => {
+                const src = chatAttachmentUrl(file.attachment_key || file.attachment_url || '');
+                return (
+                  <a key={src} href={src} target="_blank" rel="noreferrer">
+                    <img src={src} alt={file.attachment_name || 'Screenshot'} className="h-24 w-24 rounded-lg object-cover" />
+                  </a>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -230,6 +246,9 @@ export default function TicketDetailModalShell({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [reply, setReply] = useState('');
+  const [screenshots, setScreenshots] = useState<{ key: string; name: string }[]>([]);
+  const [creditAmount, setCreditAmount] = useState('');
+  const [creditNote, setCreditNote] = useState('');
   const [internalNote, setInternalNote] = useState(false);
   const [status, setStatus] = useState('');
   const [priority, setPriority] = useState('');
@@ -493,15 +512,59 @@ export default function TicketDetailModalShell({
     await escalateTo('Admin', type, true);
   };
 
+  const uploadScreenshots = async (list: FileList | null) => {
+    if (!list?.length) return;
+    setSaving(true);
+    try {
+      const next = [...screenshots];
+      for (const file of Array.from(list).slice(0, 4 - next.length)) {
+        if (!file.type.startsWith('image/')) continue;
+        const uploaded = await uploadFileWithIntent(file, 'ticket-attachments');
+        next.push({ key: uploaded.key, name: file.name });
+      }
+      setScreenshots(next.slice(0, 4));
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to upload screenshot'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const applyCreditChange = async () => {
+    const amount = Number(creditAmount);
+    if (!Number.isFinite(amount) || amount === 0) {
+      showErrorToast('Enter a non-zero credit amount');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.post(`${endpointBase}/${ticketId}/credit-adjustment`, {
+        amount,
+        note: creditNote.trim(),
+      });
+      setCreditAmount('');
+      setCreditNote('');
+      showSuccessToast('Credit change recorded on the ticket');
+      await load();
+      onUpdated();
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to record credit change'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const sendReply = async () => {
-    if (!reply.trim()) return;
+    if (!reply.trim() && screenshots.length === 0) return;
     setSaving(true);
     try {
       await api.post(`${endpointBase}/${ticketId}/messages`, {
         body: reply.trim(),
         isInternal: internalNote,
+        attachments: screenshots.map((file) => ({ key: file.key, name: file.name })),
       });
       setReply('');
+      setScreenshots([]);
       showSuccessToast(internalNote ? 'Internal note added' : 'Reply sent');
       await load();
       onUpdated();
@@ -592,6 +655,99 @@ export default function TicketDetailModalShell({
                     </div>
                   </dl>
                 </section>
+
+                {(detail.articles || []).length > 0 && (
+                  <section className="space-y-2 rounded-xl border border-white/10 bg-[#14151c] p-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Reply guides</p>
+                    {detail.articles!.map((article) => (
+                      <button
+                        key={article.id}
+                        type="button"
+                        onClick={() => setReply(article.body)}
+                        className="block w-full rounded-lg border border-white/10 px-3 py-2 text-left text-xs text-zinc-300 hover:bg-white/5"
+                      >
+                        <span className="font-medium text-white">{article.title}</span>
+                        <span className="mt-1 line-clamp-2 block text-zinc-500">{article.body}</span>
+                      </button>
+                    ))}
+                  </section>
+                )}
+
+                {detail.payments && (
+                  <section className="space-y-2 rounded-xl border border-white/10 bg-[#14151c] p-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Payments</p>
+                    <p className="text-[11px] text-zinc-500">Provider payments and credit movements for this account.</p>
+                    {detail.payments.payments.length === 0 && detail.payments.credits.length === 0 && (detail.payments.cashouts || []).length === 0 && (
+                      <p className="text-xs text-zinc-500">No payment records yet.</p>
+                    )}
+                    {(detail.payments.cashouts || []).map((cashout) => (
+                      <div key={cashout.id} className="rounded-lg border border-white/10 px-3 py-2 text-xs">
+                        <p className="text-white">Withdrawal {cashout.status} · {cashout.credits} credits</p>
+                        <p className="text-zinc-500">
+                          {cashout.channel || 'Payout'}
+                          {cashout.accountLast4 ? ` · ••••${cashout.accountLast4}` : ''}
+                          {cashout.failureCode ? ` · ${cashout.failureCode}` : ''}
+                          {' · '}{formatDateTime(cashout.createdAt)}
+                        </p>
+                      </div>
+                    ))}
+                    {detail.payments.payments.map((payment) => (
+                      <div key={payment.id} className="rounded-lg border border-white/10 px-3 py-2 text-xs">
+                        <p className="text-white">{payment.status} · {payment.currency} {payment.amount}</p>
+                        <p className="text-zinc-500">{payment.type || 'Payment'} · {payment.credits} credits · {formatDateTime(payment.createdAt)}</p>
+                      </div>
+                    ))}
+                    {detail.payments.credits.map((credit) => (
+                      <div key={credit.id} className="rounded-lg border border-white/10 px-3 py-2 text-xs">
+                        <p className="text-white">{credit.type} · {credit.amount} credits</p>
+                        <p className="text-zinc-500">{credit.status} · {formatDateTime(credit.createdAt)}</p>
+                      </div>
+                    ))}
+                  </section>
+                )}
+
+                {detail.canAdjustCredits && (
+                  <section className="space-y-2 rounded-xl border border-white/10 bg-[#14151c] p-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Credit change</p>
+                    <p className="text-[11px] text-zinc-500">Admin and Support only. The note is stored on this ticket.</p>
+                    <input
+                      value={creditAmount}
+                      onChange={(event) => setCreditAmount(event.target.value)}
+                      placeholder="Amount, use minus to deduct"
+                      className="w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white"
+                    />
+                    <textarea
+                      value={creditNote}
+                      onChange={(event) => setCreditNote(event.target.value)}
+                      rows={2}
+                      placeholder="Why this payment change is being made"
+                      className="w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white"
+                    />
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void applyCreditChange()}
+                      className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white"
+                    >
+                      Record on ticket
+                    </button>
+                  </section>
+                )}
+
+                {(detail.timeline || []).length > 0 && (
+                  <section className="space-y-2 rounded-xl border border-white/10 bg-[#14151c] p-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Audit</p>
+                    {detail.timeline!.slice(0, 12).map((entry) => (
+                      <div key={entry.id} className="text-xs">
+                        <p className="text-zinc-200">{entry.summary}</p>
+                        <p className="text-zinc-600">
+                          {entry.kind === 'account' ? 'Account' : 'Ticket'} · {entry.actorName || 'Staff'}
+                          {entry.actorRole ? ` · ${entry.actorRole}` : ''} · {formatDateTime(entry.createdAt)}
+                        </p>
+                      </div>
+                    ))}
+                  </section>
+                )}
 
                 <section className="space-y-3 rounded-xl border border-white/10 bg-[#14151c] p-4">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Ticket fields</p>
@@ -850,6 +1006,18 @@ export default function TicketDetailModalShell({
                   disabled={detail.chatAvailable === false}
                   className="w-full resize-none rounded-xl border border-white/10 bg-[#14151c] px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-white/25 disabled:opacity-50"
                 />
+                {screenshots.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {screenshots.map((file) => (
+                      <span key={file.key} className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 text-[11px] text-zinc-300">
+                        {file.name}
+                        <button type="button" onClick={() => setScreenshots((current) => current.filter((item) => item.key !== file.key))} aria-label="Remove screenshot">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                   <label className="flex items-center gap-2 text-xs text-zinc-400">
                     <input
@@ -860,15 +1028,32 @@ export default function TicketDetailModalShell({
                     />
                     Internal Note (hidden from requester)
                   </label>
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex cursor-pointer items-center gap-1 rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300">
+                      <ImagePlus className="h-3.5 w-3.5" />
+                      Screenshot
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        disabled={detail.chatAvailable === false || screenshots.length >= 4}
+                        onChange={(event) => {
+                          void uploadScreenshots(event.target.files);
+                          event.target.value = '';
+                        }}
+                      />
+                    </label>
                   <button
                     type="button"
                     onClick={() => void sendReply()}
-                    disabled={saving || !reply.trim() || detail.chatAvailable === false}
+                    disabled={saving || (!reply.trim() && screenshots.length === 0) || detail.chatAvailable === false}
                     className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${tone.btn}`}
                   >
                     <Send className="h-3.5 w-3.5" />
                     {internalNote ? 'Add Note' : 'Send Reply'}
                   </button>
+                  </div>
                 </div>
               </div>
             </section>

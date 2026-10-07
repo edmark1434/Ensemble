@@ -108,6 +108,8 @@ const GigCreatePage: React.FC = () => {
 
   // --- SLIDE 4: QUESTIONNAIRES ---
   const [questionnaires, setQuestionnaires] = useState<Questionnaire[]>([]);
+  const [askNDA, setAskNDA] = useState<boolean>(true);
+  const [askPortfolio, setAskPortfolio] = useState<boolean>(true);
 
   // --- VALIDATION & ERRORS ---
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -243,6 +245,14 @@ const GigCreatePage: React.FC = () => {
 
       await Promise.all(uploadPromises);
 
+      const finalQuestionnaires = [...questionnaires];
+      if (askNDA) {
+        finalQuestionnaires.push({ id: "req-nda-" + Date.now(), type: "choice", question: "Do you require confidentiality (NDA) for this project?", isRequired: true, multipleAnswer: false, options: ["Yes, I require an NDA", "No, standard confidentiality is fine"] });
+      }
+      if (askPortfolio) {
+        finalQuestionnaires.push({ id: "req-port-" + Date.now(), type: "choice", question: "Do you allow me to display the final work in my Freelancer Portfolio after completion?", isRequired: true, multipleAnswer: false, options: ["Yes, you can use it", "No, please keep it private"] });
+      }
+
       const gigPayload = {
         title,
         description,
@@ -253,7 +263,7 @@ const GigCreatePage: React.FC = () => {
         additionalWorkRate,
         tiers,
         milestones,
-        questionnaires,
+        questionnaires: finalQuestionnaires,
         skills,
         thumbnailFileId,
         galleryFileIds,
@@ -433,6 +443,10 @@ const GigCreatePage: React.FC = () => {
                     <CreateForms
                       questionnaires={questionnaires}
                       setQuestionnaires={setQuestionnaires}
+                      askNDA={askNDA}
+                      setAskNDA={setAskNDA}
+                      askPortfolio={askPortfolio}
+                      setAskPortfolio={setAskPortfolio}
                       errors={errors}
                       setErrors={setErrors}
                       onBack={() => handleNext(4)}
@@ -453,6 +467,8 @@ const GigCreatePage: React.FC = () => {
                   <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
                     <CreateReview
                       title={title}
+                      askNDA={askNDA}
+                      askPortfolio={askPortfolio}
                       description={description}
                       category={category}
                       thumbnailUrl={thumbnailUrl}
@@ -489,3 +505,4 @@ const GigCreatePage: React.FC = () => {
 };
 
 export default GigCreatePage;
+

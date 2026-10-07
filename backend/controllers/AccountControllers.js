@@ -15,7 +15,8 @@ const { createNewAccount, fetchAllAccounts, getAccountByHandleService,
     getFollowersService,
     getFollowingService,
     checkIsFollowingService,
-    curateBadgesService
+    curateBadgesService,
+grantBadgeService
 } = require("../services/AccountServices");
 const { getUserOnboardingStep,
      updateUserDetails
@@ -378,5 +379,20 @@ module.exports = {
     getFollowersController,
     getFollowingController,
     checkIsFollowingController,
-    curateBadgesController,
+    curateBadgesController, grantBadgeController,
 };
+async function grantBadgeController(req, res) {
+    try {
+        const accountId = req.session.account_id;
+        const { badgeId } = req.body;
+        if (!accountId) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+        const result = await grantBadgeService(accountId, badgeId);
+        res.status(200).json(result);
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+        console.error('Error in grantBadgeController:', err);
+        res.status(500).json({ error: "Failed to grant badge" });
+    }
+}
