@@ -140,7 +140,7 @@ async function submitGigOrderController(req, res) {
                 message: `You have a new order request for your gig '${gigTitle}'.`,
                 reference_table: 'gig_requests',
                 reference_prefix: 'new_order',
-                reference_path: `/gigs/orders/incoming/${requestId}`,
+                reference_path: `/gigs/orders/incoming/${req.params.id}`,
                 reference_id: requestId
             });
             const io = getIo();
