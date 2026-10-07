@@ -44,15 +44,13 @@ async function seedBadgesNow() {
     // Grant alpha to all existing accounts
     console.log('Granting alpha to existing accounts...');
     const accounts = await pool.query('SELECT account_id FROM accounts');
-    const alphaBadge = await pool.query("SELECT badge_id FROM badges WHERE registry_id = 'acc-alpha'");
+    const alphaBadge = await pool.query("SELECT badge_id, registry_id, name FROM badges WHERE registry_id = 'acc-alpha'");
     if (alphaBadge.rows.length > 0) {
-        const badgeId = alphaBadge.rows[0].badge_id;
-        for (const row of accounts.rows) {
-            await pool.query(
-                'INSERT INTO account_badges (account_id, badge_id, display_order) VALUES ($1, $2, 1) ON CONFLICT DO NOTHING',
-                [row.account_id, badgeId]
-            );
-        }
+        const { createPendingBadgeGrants } = require('../repositories/BadgeRepositories');
+        await createPendingBadgeGrants({
+            badge: alphaBadge.rows[0],
+            accountIds: accounts.rows.map((row) => row.account_id),
+        });
     }
     
     console.log('Done.');
