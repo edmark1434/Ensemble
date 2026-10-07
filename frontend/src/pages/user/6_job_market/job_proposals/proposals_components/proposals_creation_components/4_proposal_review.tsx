@@ -49,8 +49,7 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
 
   const totalBid = parseInt(bidAmount || "0");
   const count = milestones.length || 1;
-  const milestonePayout = Math.floor(totalBid / count);
-  const overageRateBonus = Math.floor(milestonePayout * (additionalWorkRate / 100));
+  
   const totalHours = milestones.reduce((sum, m) => sum + (Number(m.hours) || 0), 0);
 
   return (
@@ -162,7 +161,10 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
           </div>
 
           <div className="space-y-2">
-            {milestones.map((m, idx) => (
+            {milestones.map((m, idx) => {
+              const milestonePayout = Math.floor(totalBid * ((Number(m.percentage) || (100 / count)) / 100));
+              const overageRateBonus = Math.floor(milestonePayout * (additionalWorkRate / 100));
+              return (
               <div key={m.id} className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] space-y-1">
                 <div className="flex justify-between items-center text-xs font-bold text-gray-900 dark:text-white">
                   <span className="text-gray-700 dark:text-zinc-300">Milestone {idx + 1}: {m.name}</span>
@@ -183,7 +185,8 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
                   <span>Overage Price: <strong className="text-gray-700 dark:text-zinc-300">{(milestonePayout + overageRateBonus).toLocaleString()}</strong></span>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
