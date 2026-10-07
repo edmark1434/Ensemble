@@ -24,7 +24,7 @@ import {
     Loader2,
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
-import {useState, useEffect, useRef} from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import api from "@/lib/axios.ts";
 import { formatDistanceToNow } from "date-fns";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
@@ -38,7 +38,7 @@ interface Project {
   duration?: string;
   lastUpdated: string;
   sharedBy?: string;
-  thumbnail: string;
+  thumbnailUrl?: string | null;
   progress?: number;
   contractAmount?: string;
   width?: number;
@@ -53,14 +53,14 @@ interface TeamProject {
   sharedBy: string;
   lastUpdated: string;
   size: string;
-  thumbnail: string;
+  thumbnailUrl?: string | null;
   videoCount?: number;
 }
 
 // Team Projects - Folders (placeholder)
 const teamProjects: TeamProject[] = [];
 // With Contract Projects (projects with active contracts and progress) (placeholder)
-const contractProjects: Project[] = [];
+// const contractProjects: Project[] = [];
 
 type TabType = "recent" | "personal" | "shared";
 type ViewType = "grid" | "compact";
@@ -69,6 +69,31 @@ const RENAME_ROLES = ["Owner", "Manager", "Editor"];
 
 const canRenameProject = (project: Project) =>
   RENAME_ROLES.includes(project.role ?? "");
+
+const placeholderThumbnail = (name: string) =>
+  `https://placehold.co/400x225/1e2130/4a6fa5?text=${encodeURIComponent(name)}`;
+
+const ProjectThumbnail = ({
+  project,
+  className,
+}: {
+  project: Project;
+  className: string;
+}) => {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const useReal = !!project.thumbnailUrl && project.thumbnailUrl !== failedUrl;
+
+  return (
+    <img
+      src={useReal ? project.thumbnailUrl! : placeholderThumbnail(project.name)}
+      alt={project.name}
+      className={className}
+      onError={() => {
+        if (project.thumbnailUrl) setFailedUrl(project.thumbnailUrl);
+      }}
+    />
+  );
+};
 
 // Skeleton Components
 const ProjectCardSkeleton = ({ view = "grid" }: { view?: ViewType }) => (
@@ -136,11 +161,7 @@ const Projects: React.FC = () => {
     try {
       await api.put(`/api/projects/${projectId}`, { name: nextName });
       const updateProjectList = (projects: Project[]) =>
-        projects.map(p => p.id === projectId ? {
-          ...p,
-          name: nextName,
-          thumbnail: `https://placehold.co/400x225/1e2130/4a6fa5?text=${encodeURIComponent(nextName)}`
-        } : p);
+        projects.map(p => p.id === projectId ? { ...p, name: nextName } : p);
       
       const nextPersonal = updateProjectList(personalProjects);
       const nextShared = updateProjectList(sharedProjects);
@@ -179,38 +200,63 @@ const Projects: React.FC = () => {
     activeTab = "shared";
   }
 
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const response = await api.get('/api/projects');
-        const projects = response.data.projects.map((p: any) => {
-          return {
-            ...p,
-            type: "video",
-            duration: p.duration_seconds ? new Date(p.duration_seconds * 1000).toISOString().substr(11, 8) : "00:00:00",
-            lastUpdated: p.lastUpdated ? formatDistanceToNow(new Date(p.lastUpdated), { addSuffix: true }) : "Unknown"
-          };
-        });
+  const fetchSeqRef = useRef(0);
+  const lastRefreshAtRef = useRef(0);
 
-        const personal = projects.filter((p: Project) => p.role === "Owner");
-        const shared = projects.filter((p: Project) => p.role !== "Owner");
+  const loadProjects = useCallback(async () => {
+    // a background refresh mid-rename could briefly flip the name back
+    if (renameInFlightRef.current) return;
 
-        setPersonalProjects(personal);
-        setSharedProjects(shared);
-        setRecentProjects(projects);
+    const seq = ++fetchSeqRef.current;
+    try {
+      const response = await api.get("/api/projects");
+      // a newer request started while this one was in flight; drop this one
+      if (seq !== fetchSeqRef.current) return;
 
-        // sessionStorage.setItem('ensemble_projects_data', JSON.stringify({
-        //   personal, shared, recent: projects
-        // }));
-      } catch (error) {
-        console.error("Failed to fetch projects:", error);
-      } finally {
+      const projects = response.data.projects.map((p: any) => {
+        return {
+          ...p,
+          type: "video",
+          duration: p.duration_seconds ? new Date(p.duration_seconds * 1000).toISOString().substr(11, 8) : "00:00:00",
+          lastUpdated: p.lastUpdated ? formatDistanceToNow(new Date(p.lastUpdated), { addSuffix: true }) : "Unknown"
+        };
+      });
+
+      setPersonalProjects(projects.filter((p: Project) => p.role === "Owner"));
+      setSharedProjects(projects.filter((p: Project) => p.role !== "Owner"));
+      setRecentProjects(projects);
+    } catch (error) {
+      // keep showing the current list if a background refresh fails
+      console.error("Failed to fetch projects:", error);
+    } finally {
+      if (seq === fetchSeqRef.current) {
         setLoading(false);
         setIsRefreshing(false);
       }
-    };
-    fetchProjects();
+    }
   }, []);
+
+  useEffect(() => {
+    loadProjects();
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      // focus and visibilitychange both fire when you tab back in
+      if (Date.now() - lastRefreshAtRef.current < 2000) return;
+      lastRefreshAtRef.current = Date.now();
+      loadProjects();
+    };
+
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    window.addEventListener("focus", refreshIfVisible);
+    const interval = setInterval(refreshIfVisible, 30_000);
+
+    return () => {
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+      window.removeEventListener("focus", refreshIfVisible);
+      clearInterval(interval);
+    };
+  }, [loadProjects]);
 
   useEffect(() => {
     setOpenTeamFolderId(null);
@@ -310,9 +356,8 @@ const Projects: React.FC = () => {
       onClick={() => handleOpenProject(project.id)}
     >
       <div className="relative h-36 w-full overflow-hidden bg-gray-200 dark:bg-gradient-to-br dark:from-dark-surface dark:to-dark-surface">
-        <img
-          src={project.thumbnail}
-          alt={project.name}
+        <ProjectThumbnail
+          project={project}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 dark:from-dark-base via-transparent to-transparent" />
@@ -456,11 +501,7 @@ const Projects: React.FC = () => {
       onClick={() => handleOpenProject(project.id)}
     >
       <div className="relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gray-200 dark:bg-gradient-to-br dark:from-dark-surface dark:to-dark-surface">
-        <img
-          src={project.thumbnail}
-          alt={project.name}
-          className="h-full w-full object-cover"
-        />
+        <ProjectThumbnail project={project} className="h-full w-full object-cover" />
         {project.duration && (
           <div className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[8px] text-white">
             {project.duration}

@@ -1,5 +1,6 @@
 // src/components/ui/inbox/inbox_components/inbox_panel_header.tsx
-import React from "react";
+import React, { useState } from "react";
+import api from "@/lib/axios";
 import {
   Share2,
   Video,
@@ -63,6 +64,14 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
   ).length;
   const isEngagement = selectedConversation.conversation_type === "engagement";
   const isTicket = selectedConversation.conversation_type === "ticket";
+  const ticketStatus = String(selectedConversation.ticket_details?.status || "");
+  const ticketId = selectedConversation.ticket_id || selectedConversation.support_ticket_id;
+  const canRateTicket =
+    isTicket &&
+    Boolean(ticketId) &&
+    (ticketStatus === "Resolved" || ticketStatus === "Closed") &&
+    selectedConversation.ticket_details?.satisfaction_score == null;
+  const [rated, setRated] = useState(false);
   const hasRestrictedMessageTools = ["ticket", "dispute"].includes(
     String(selectedConversation.conversation_type || "").toLowerCase()
   );
@@ -187,6 +196,26 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
             </p>
           )}
         </div>
+        {canRateTicket && !rated && (
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            <span className="text-[10px] text-gray-500 dark:text-zinc-500">How was the help?</span>
+            {[1, 2, 3, 4, 5].map((score) => (
+              <button
+                key={score}
+                type="button"
+                onClick={() => {
+                  void api
+                    .post(`/api/users/tickets/${ticketId}/satisfaction`, { score })
+                    .then(() => setRated(true))
+                    .catch(() => setRated(true));
+                }}
+                className="rounded-md border border-gray-200 px-2 py-0.5 text-[10px] text-gray-700 dark:border-white/10 dark:text-zinc-200"
+              >
+                {score}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-1">

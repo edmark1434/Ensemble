@@ -424,6 +424,12 @@ function OverviewTab({
           icon={AlertTriangle}
         />
         <KpiCard
+          label="Ticket satisfaction"
+          value={kpis.ticketSatisfaction == null ? '—' : `${kpis.ticketSatisfaction}/5`}
+          sub={`${kpis.ticketRatings ?? 0} ratings after resolve`}
+          icon={CheckCircle2}
+        />
+        <KpiCard
           label="Open reports"
           value={kpis.openReports ?? data.liveModules?.openReports ?? 0}
           sub={`${data.liveModules?.reports ?? 0} total`}

@@ -68,6 +68,7 @@ import { VerificationStatus } from '@/pages/user/7_profile/VerificationStatus/Ve
 import { AccountRestrictionHost } from '@/components/ui/AccountStanding'
 
 import './App.css'
+import OpenInEditor from "@/pages/user/2_projects/OpenInEditor.tsx";
 
 const lazyPage = (loader: () => Promise<{ default: ComponentType<any> }>) => lazy(loader);
 
@@ -199,6 +200,9 @@ function App() {
           <Route path="TermsOfService" element={<PageTermsOfService />} />
           <Route path="PrivacyPolicy" element={<PagePrivacyPolicy />} />
         </Route>
+
+        {/* Handoff page: no sidebar, but still behind RouteMiddleware */}
+        <Route path="/projects/open/:projectId" element={<OpenInEditor />} />
 
         {/* User Dashboard Routes - All wrapped in Layout */}
         <Route element={<Layout />}>

@@ -11,7 +11,7 @@ import {
 
 export type TicketQueueFilter = 'all' | 'Support' | 'Forums' | 'Marketplace' | 'Jobs and Gigs' | 'Admin';
 export type TicketAssigneeFilter = 'all' | 'assigned' | 'unassigned';
-export type TicketFlagFilter = 'all' | 'awaiting' | 'escalated' | 'open_only';
+export type TicketFlagFilter = 'all' | 'awaiting' | 'escalated' | 'open_only' | 'overdue';
 export type TicketSortKey = 'priority_desc' | 'priority_asc' | 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc';
 export type TicketDesk = 'admin' | 'support';
 
@@ -215,6 +215,7 @@ export function filterTickets(tickets: SupportTicket[], filters: TicketFilterSta
     if (filters.flag === 'open_only' && t.status !== 'Open' && t.status !== 'In Progress') {
       return false;
     }
+    if (filters.flag === 'overdue' && !t.isOverdue) return false;
 
     if (!ticketMatchesSearch(t, filters.search)) return false;
     return true;

@@ -21,7 +21,15 @@ export function useStaffPlatformGuard(active: boolean) {
       frame = requestAnimationFrame(() => hideStaffActions(document));
     };
 
-    const blockSubmit = (event: Event) => {
+    const blockInteraction = (event: Event) => {
+      if (event.type === "submit") {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (!staffPreviewHideTarget(target)) return;
       event.preventDefault();
       event.stopPropagation();
     };
@@ -29,12 +37,14 @@ export function useStaffPlatformGuard(active: boolean) {
     schedule();
     const observer = new MutationObserver(schedule);
     observer.observe(document.body, { childList: true, subtree: true });
-    document.addEventListener("submit", blockSubmit, true);
+    document.addEventListener("submit", blockInteraction, true);
+    document.addEventListener("click", blockInteraction, true);
 
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
-      document.removeEventListener("submit", blockSubmit, true);
+      document.removeEventListener("submit", blockInteraction, true);
+      document.removeEventListener("click", blockInteraction, true);
     };
   }, [active]);
 }

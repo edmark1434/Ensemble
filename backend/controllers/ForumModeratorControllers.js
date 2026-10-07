@@ -75,11 +75,11 @@ async function patchTicket(req, res) {
 
 async function postTicketMessage(req, res) {
   try {
-    const { body, isInternal } = req.body;
-    if (!body?.trim()) {
+    const { body, isInternal, attachments } = req.body;
+    if (!body?.trim() && !(Array.isArray(attachments) && attachments.length)) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
     }
-    const data = await addTicketMessage(req.params.id, body.trim(), req.session, Boolean(isInternal));
+    const data = await addTicketMessage(req.params.id, (body || '').trim(), req.session, Boolean(isInternal), attachments);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {

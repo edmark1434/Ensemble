@@ -16,6 +16,7 @@ import { compactBlock, loadLatestBlockState, withBlockSnapshotLock } from "@/lib
 import { getEffectiveBlockRole } from "@/lib/db/block-members";
 import { canEditWithRole } from "@/features/editor/types/editor-role";
 import { liveRooms } from "@/lib/collab/live-rooms";
+import { markProjectDirty, onProjectRoomEmpty } from "@/lib/collab/thumbnail-service";
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
@@ -130,7 +131,10 @@ async function getOrCreateRoom(target: CollabTarget): Promise<Room> {
       encoding.writeVarUint(encoder, MESSAGE_SYNC);
       syncProtocol.writeUpdate(encoder, update);
       broadcast(room, encoding.toUint8Array(encoder), origin);
-      if ((origin as unknown) !== HYDRATION_ORIGIN) room.dirty = true;
+      if ((origin as unknown) !== HYDRATION_ORIGIN) {
+        room.dirty = true;
+        if (target.kind === "project") markProjectDirty(target.id);
+      }
     });
 
     awareness.on("update", (
@@ -404,6 +408,9 @@ export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage
             console.error(`collab: final snapshot failed for ${roomKey(target)}`, err);
           })
           .finally(() => {
+            if (target.kind === "project") {
+              onProjectRoomEmpty(target.id, Y.encodeStateAsUpdate(room.doc));
+            }
             room.doc.destroy();
             rooms.delete(roomKey(target));
           });

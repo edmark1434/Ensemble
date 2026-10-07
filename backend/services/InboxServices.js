@@ -89,7 +89,7 @@ async function normalizeLinkedConversations(inboxes) {
     if (!ticketIds.length) return normalized;
 
     const ticketResult = await pool.query(
-        `SELECT ticket_id, ticket_number, reason, type, priority, status
+        `SELECT ticket_id, ticket_number, reason, type, priority, status, satisfaction_score
          FROM tickets
          WHERE ticket_id = ANY($1::uuid[]) AND deleted_at IS NULL`,
         [ticketIds]
@@ -110,6 +110,7 @@ async function normalizeLinkedConversations(inboxes) {
                 type: ticket.type,
                 priority: ticket.priority,
                 status: ticket.status,
+                satisfaction_score: ticket.satisfaction_score,
             },
         };
     });

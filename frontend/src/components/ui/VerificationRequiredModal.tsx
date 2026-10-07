@@ -3,13 +3,17 @@ import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import useGlobalState from "@/lib/global_state";
+import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 
 const VerificationRequiredModal = () => {
+  const user = useGlobalState((state) => state.user);
   const isVerificationModalOpen = useGlobalState((state) => state.isVerificationModalOpen);
   const verificationModalMessage = useGlobalState((state) => state.verificationModalMessage);
   const setIsVerificationModalOpen = useGlobalState((state) => state.setIsVerificationModalOpen);
   const isSidebarCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
   const navigate = useNavigate();
+
+  if (isStaffPlatformViewer(user)) return null;
 
   return (
     <AnimatePresence>

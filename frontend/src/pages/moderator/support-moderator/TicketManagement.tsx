@@ -107,10 +107,11 @@ function filtersFromSearchParams(params: URLSearchParams): TicketFilterState {
     next.assignee = assignee as TicketAssigneeFilter;
   }
   if (
-    flag === "awaiting" ||
-    flag === "escalated" ||
-    flag === "open_only" ||
-    flag === "all"
+      flag === "awaiting" ||
+      flag === "escalated" ||
+      flag === "open_only" ||
+      flag === "overdue" ||
+      flag === "all"
   ) {
     next.flag = flag as TicketFlagFilter;
   }

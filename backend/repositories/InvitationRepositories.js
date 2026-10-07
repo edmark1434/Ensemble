@@ -48,6 +48,23 @@ async function getUserAndAccountByAccountId(accountId) {
     }
 }
 
+async function getUserAndAccountByUserId(userId) {
+    try {
+        const query = `
+            SELECT u.user_id, u.account_id, u.first_name, u.last_name, u.email_address,
+                   a.display_name, a.handle, a.status AS account_status
+            FROM users u
+            JOIN accounts a ON a.account_id = u.account_id
+            WHERE u.user_id = $1 AND a.deleted_at IS NULL;
+        `;
+        const { rows } = await pool.query(query, [userId]);
+        return rows[0] || null;
+    } catch (err) {
+        console.error('Error in getUserAndAccountByUserId:', err);
+        throw err;
+    }
+}
+
 async function getUserAndAccountByEmail(email) {
     try {
         const query = `
@@ -147,6 +164,7 @@ module.exports = {
     getProjectMemberRole,
     getProjectById,
     getUserAndAccountByAccountId,
+    getUserAndAccountByUserId,
     getUserAndAccountByEmail,
     addOrReviveProjectMember,
     getProjectMembers,

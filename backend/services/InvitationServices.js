@@ -6,9 +6,7 @@ const { getIo } = require('../lib/WebSocket');
 const {
     getProjectMemberRole,
     getProjectById,
-    getUserAndAccountByAccountId,
-    getUserAndAccountByEmail,
-    addOrReviveProjectMember,
+    getUserAndAccountByUserId,
 } = require('../repositories/InvitationRepositories');
 const { createNotificationServices } = require('./NotificationServices');
 const {
@@ -17,7 +15,6 @@ const {
 } = require('./InboxServices');
 
 const INVITATION_TOKEN_TTL_SECONDS = 3 * 24 * 60 * 60; // 3 days (72 hours)
-const ASSIGNABLE_ROLES = ['Editor', 'Commenter', 'Viewer'];
 
 class InvitationServiceError extends Error {
     constructor(message, statusCode = 400) {
@@ -144,22 +141,20 @@ async function sendProjectInvitationEmail({ email, recipientName, inviterDisplay
     }
 }
 
-async function shareProjectInvitationService(params, inviterUserId, inviterAccountId) {
-    const { projectId, recipientAccountId, role = 'Editor' } = params;
-
+async function shareProjectInvitationService({ projectId, recipientUserId }, inviterUserId) {
     if (!projectId) {
         throw new InvitationServiceError('Project ID is required', 400);
     }
-    if (!recipientAccountId) {
-        throw new InvitationServiceError('Recipient account ID is required', 400);
+    if (!recipientUserId) {
+        throw new InvitationServiceError('Recipient user ID is required', 400);
     }
-    if (role && !ASSIGNABLE_ROLES.includes(role)) {
-        throw new InvitationServiceError(`Invalid role. Must be one of: ${ASSIGNABLE_ROLES.join(', ')}`, 400);
+    if (!inviterUserId) {
+        throw new InvitationServiceError('Inviter user ID is required', 400);
     }
 
-    // 1. Authorization: verify inviter has access to the project
+    // 1. The editor already authorized and added the member; just make sure the inviter is on the project
     const inviterRole = await getProjectMemberRole(projectId, inviterUserId);
-    if (!inviterRole || !['Owner', 'Editor'].includes(inviterRole)) {
+    if (!inviterRole) {
         throw new InvitationServiceError('You do not have permission to invite members to this project', 403);
     }
 
@@ -169,10 +164,13 @@ async function shareProjectInvitationService(params, inviterUserId, inviterAccou
         throw new InvitationServiceError('Project not found', 404);
     }
 
-    // 3. Resolve recipient user & email from users table via account ID
-    const recipient = await getUserAndAccountByAccountId(recipientAccountId);
+    // 3. Resolve recipient and inviter
+    const [recipient, inviter] = await Promise.all([
+        getUserAndAccountByUserId(recipientUserId),
+        getUserAndAccountByUserId(inviterUserId),
+    ]);
     if (!recipient) {
-        throw new InvitationServiceError('No user found for the provided account ID', 404);
+        throw new InvitationServiceError('No user found for the provided user ID', 404);
     }
 
     const email = recipient.email_address;
@@ -180,15 +178,11 @@ async function shareProjectInvitationService(params, inviterUserId, inviterAccou
         throw new InvitationServiceError('Recipient user does not have a registered email address', 400);
     }
 
-    // Fetch inviter account details for display name
-    const inviter = await getUserAndAccountByAccountId(inviterAccountId);
+    const inviterAccountId = inviter?.account_id || null;
     const inviterDisplayName = inviter?.display_name || (inviter ? `${inviter.first_name} ${inviter.last_name}`.trim() : 'A collaborator');
-    const recipientName = recipient?.display_name || (recipient ? `${recipient.first_name} ${recipient.last_name}`.trim() : '');
+    const recipientName = recipient.display_name || `${recipient.first_name} ${recipient.last_name}`.trim();
 
-    // 4. Ensure member is registered in project_members if they are an existing user
-    if (recipient?.user_id) {
-        await addOrReviveProjectMember(projectId, recipient.user_id, role);
-    }
+    // 4. Membership is created by the editor, not here.
 
     // 5. Generate secure 3-day invitation token
     const tokenSecret = process.env.ACCESS_TOKEN_JWT_SECRET || 'ensemble-invitation-secret';
@@ -200,7 +194,6 @@ async function shareProjectInvitationService(params, inviterUserId, inviterAccou
         recipientAccountId: recipient?.account_id || null,
         recipientUserId: recipient?.user_id || null,
         recipientEmail: email,
-        role,
         createdAt: Date.now(),
     };
 
@@ -215,7 +208,8 @@ async function shareProjectInvitationService(params, inviterUserId, inviterAccou
 
     const editorBaseUrl = (process.env.EDITOR_URL || 'http://localhost:3000').replace(/\/$/, '');
     const backendBaseUrl = (process.env.BACKEND_URL || 'http://localhost:4000').replace(/\/$/, '');
-    const editorProjectUrl = `${editorBaseUrl}/editor/${projectId}`;
+    const frontendBaseUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const editorProjectUrl = `${frontendBaseUrl}/projects/open/${projectId}`;
     const acceptInvitationLink = `${backendBaseUrl}/api/invitations/accept?token=${token}`;
 
     // 6. Channel 1: Email notification (Brevo)
@@ -232,7 +226,7 @@ async function shareProjectInvitationService(params, inviterUserId, inviterAccou
 
     // 7. Channel 2: In-app Notification
     let notification = null;
-    const targetAccountId = recipient?.account_id || recipientAccountId;
+    const targetAccountId = recipient.account_id;
     if (targetAccountId) {
         try {
             notification = await createNotificationServices({
@@ -242,7 +236,7 @@ async function shareProjectInvitationService(params, inviterUserId, inviterAccou
                 reference_table: 'projects',
                 reference_prefix: 'PROJECT_INVITATION',
                 reference_id: projectId,
-                reference_path: editorProjectUrl,
+                reference_path: `/projects/open/${projectId}`,
             });
 
             try {
@@ -257,7 +251,7 @@ async function shareProjectInvitationService(params, inviterUserId, inviterAccou
 
     // 8. Channel 3: Direct Inbox Message with embed button
     let chatMessage = null;
-    if (targetAccountId && String(targetAccountId) !== String(inviterAccountId)) {
+    if (targetAccountId && inviterAccountId && String(targetAccountId) !== String(inviterAccountId)) {
         try {
             const inbox = await createOrReuseDirectChatServices(
                 { recipientId: targetAccountId },
@@ -329,15 +323,10 @@ async function acceptProjectInvitationService(token) {
         // If JWT hasn't expired yet, we still honor it or proceed safely
     }
 
-    const { projectId, recipientUserId, role = 'Editor' } = decoded;
+    const { projectId } = decoded;
 
-    // If recipient user ID is known, ensure their project membership is active
-    if (recipientUserId) {
-        await addOrReviveProjectMember(projectId, recipientUserId, role);
-    }
-
-    const editorBaseUrl = (process.env.EDITOR_URL || 'http://localhost:3000').replace(/\/$/, '');
-    const redirectUrl = `${editorBaseUrl}/editor/${projectId}`;
+    const frontendBaseUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const redirectUrl = `${frontendBaseUrl}/projects/open/${projectId}`;
 
     return {
         success: true,

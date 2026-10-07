@@ -16,6 +16,8 @@ export type PlatformKpis = {
   moderationTeamSize: number;
   pendingVerifications: number;
   openTickets?: number;
+  ticketRatings?: number;
+  ticketSatisfaction?: number | null;
   openReports?: number;
   openDisputes?: number;
   teams?: number;

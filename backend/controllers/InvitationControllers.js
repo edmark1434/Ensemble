@@ -6,28 +6,11 @@ const {
 
 async function shareInvitationController(req, res) {
     try {
-        const projectId = req.params.id || req.body.projectId || req.body.project_id;
-        const recipientAccountId = req.body.recipientAccountId || req.body.accountId || req.body.account_id || req.body.recipientId || req.body.recipient;
-        const role = 'Editor';
-
-        const inviterUserId = req.user?.userId || req.user?.user_id;
-        const inviterAccountId = req.user?.accountId || req.user?.account_id || req.session?.account_id;
-
-        if (!inviterUserId || !inviterAccountId) {
-            return res.status(401).json({
-                success: false,
-                message: 'Unauthorized: missing active user session',
-            });
-        }
+        const { projectId, inviterUserId, recipientUserId } = req.body || {};
 
         const result = await shareProjectInvitationService(
-            {
-                projectId,
-                recipientAccountId,
-                role,
-            },
-            inviterUserId,
-            inviterAccountId
+            { projectId, recipientUserId },
+            inviterUserId
         );
 
         return res.status(200).json(result);
