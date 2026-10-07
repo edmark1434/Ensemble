@@ -281,7 +281,28 @@ export const IncomingOrderDetail = () => {
           </div>
 
           <div className="lg:col-span-5 space-y-4">
-              <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm">
+                              {/* Platform Terms */}
+                <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm">
+                  <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-4">PLATFORM TERMS</h3>
+                  <div className="space-y-4">
+                    <div className="flex flex-col">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Project Initiator</span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        {order.initiator_role || 'The Freelancer'}
+                      </span>
+                    </div>
+                    {order.linked_project_name && (
+                      <div className="flex flex-col">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Linked Project</span>
+                        <span className="text-sm font-medium text-blue-500">
+                          {order.linked_project_name}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+<div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm">
                 <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-4">QUESTIONNAIRE REQUIREMENTS</h3>
                 {order.responses && order.responses.length > 0 && order.responses[0]?.question_id ? (
                     <div className="space-y-4">
