@@ -255,9 +255,13 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
             type="button"
             onClick={onSubmit}
             disabled={isSubmitting || (walletBalance !== null && walletBalance < 10) || (walletBalance !== null && !agreedToFee)}
-            className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white transition focus:outline-none shadow-lg ${isSubmitting || (walletBalance !== null && !agreedToFee) ? 'bg-blue-500/50 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'}`}
+            className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition focus:outline-none ${
+                isSubmitting || (walletBalance !== null && walletBalance < 10) || (walletBalance !== null && !agreedToFee)
+                 ? 'bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-zinc-600 cursor-not-allowed'
+                 : 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+              }`}
           >
-            {isSubmitting ? 'Submitting...' : 'Confirm & Submit Proposal'} <Send className="h-3.5 w-3.5" />
+            {isSubmitting ? 'Submitting...' : 'Confirm & Submit Proposal'} <Check className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
