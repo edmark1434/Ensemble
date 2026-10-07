@@ -484,7 +484,8 @@ async function getIncomingOrdersRepository(accountIds) {
                 ELSE r.status
             END as status,
             r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
-            g.gig_id, g.title as gig_title,
+              g.gig_id, g.title as gig_title,
+              (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as gig_banner,
             a.display_name as client_name, a.handle as client_handle,
             (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as client_avatar,
             gt.title as tier_title, gt.rate_credits as price, gt.delivery_days,

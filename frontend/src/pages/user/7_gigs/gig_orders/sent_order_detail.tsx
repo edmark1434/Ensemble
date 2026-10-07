@@ -191,10 +191,30 @@ export const SentOrderDetail = () => {
                           {order.status || 'Pending'}
                       </span>
                   </div>
-                  <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-bold flex items-center gap-2 text-gray-900 dark:text-white"><ExternalLink className="w-4 h-4 text-blue-500 dark:text-blue-400" /> {order.gig_title}</h3>
-                      <button className="p-2 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg transition" onClick={() => navigate(`/gigs/services/${order.gig_id}/page`)}><ExternalLink className="w-4 h-4 text-gray-500 dark:text-gray-400" /></button>
-                  </div>
+                                    {order.gig_banner && (
+                    <div className="relative w-full h-28 rounded-xl overflow-hidden shadow-sm mt-3 border border-gray-100 dark:border-white/5">
+                      <img src={order.gig_banner} className="w-full h-full object-cover" alt="Gig Cover" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end justify-between p-3">
+                        <h3 className="text-sm font-bold text-white truncate flex items-center gap-2 drop-shadow-md">
+                          <ExternalLink className="h-4 w-4 text-blue-300 shrink-0" />
+                          {order.gig_title}
+                        </h3>
+                        <button
+                          onClick={() => navigate(`/gigs/services/${order.gig_id}/page`)}
+                          className="p-1.5 rounded-lg bg-black/40 hover:bg-black/60 text-white/90 hover:text-white backdrop-blur-sm transition shrink-0"
+                          title="View Target Gig Post"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {!order.gig_banner && (
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold flex items-center gap-2 text-gray-900 dark:text-white"><ExternalLink className="w-4 h-4 text-blue-500 dark:text-blue-400" /> {order.gig_title}</h3>
+                        <button className="p-2 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg transition" onClick={() => navigate(`/gigs/services/${order.gig_id}/page`)}><ExternalLink className="w-4 h-4 text-gray-500 dark:text-gray-400" /></button>
+                    </div>
+                  )}
 
                   {/* GIG AUTHOR SUB-CARD */}
                   <div className="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 flex items-center justify-between mt-2">
