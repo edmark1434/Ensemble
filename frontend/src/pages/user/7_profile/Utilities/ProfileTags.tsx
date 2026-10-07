@@ -55,7 +55,7 @@ export const ProfileTags: React.FC<ProfileTagsProps> = ({
           >
             {roleItem.role_name === "Freelancer" && <Laptop className="w-2.5 h-2.5" />}
             {roleItem.role_name === "Client" && <Briefcase className="w-2.5 h-2.5" />}
-            {roleItem.role_name === "Casual" && <User className="w-2.5 h-2.5" />}
+            {roleItem.role_name === "Enthusiast" && <User className="w-2.5 h-2.5" />}
             {roleItem.role_name}
           </span>
         ))

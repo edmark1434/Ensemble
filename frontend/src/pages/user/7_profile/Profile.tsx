@@ -72,7 +72,7 @@ interface UserDetail {
   zipCode?: string;
   role: {
     role_id: number;
-    role_name: "Freelancer" | "Client"| "Casual";
+    role_name: "Freelancer" | "Client"| "Enthusiast";
   }[];
   email_address: string;
   location: string;

@@ -236,10 +236,10 @@ export const UserProfilesList: React.FC = () => {
             
             <button 
               type="button"
-              onClick={() => setRoleFilter(roleFilter === 'Casual' ? 'All' : 'Casual')}
-              className={`px-3 py-1.5 rounded-full border transition-colors ${roleFilter === 'Casual' ? 'bg-blue-500 border-blue-500 text-white' : 'bg-transparent border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+              onClick={() => setRoleFilter(roleFilter === 'Enthusiast' ? 'All' : 'Enthusiast')}
+              className={`px-3 py-1.5 rounded-full border transition-colors ${roleFilter === 'Enthusiast' ? 'bg-blue-500 border-blue-500 text-white' : 'bg-transparent border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
             >
-              Casual
+              Enthusiast
             </button>
             <button 
               type="button"

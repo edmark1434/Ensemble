@@ -145,5 +145,12 @@
         "name":  "Platform History and Background",
         "file":  "platform/history-and-background.md",
         "enabled":  true
+    },
+    {
+        "category":  "platform",
+        "name":  "Ensemble User Ecosystem and Roles",
+        "url":  "/landing/AboutUs",
+        "file":  "platform/user-roles.md",
+        "enabled":  true
     }
 ]

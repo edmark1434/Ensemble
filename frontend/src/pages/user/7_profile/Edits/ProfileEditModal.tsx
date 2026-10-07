@@ -448,7 +448,7 @@ export default function ProfileEditModal({
           <div>
             <label className="block text-[11px] font-medium text-gray-600 dark:text-zinc-400 mb-1">Account Tags</label>
             <div className="flex flex-wrap gap-2">
-              {["Client", "Freelancer", "Casual"].map((roleName) => {
+              {["Client", "Freelancer", "Enthusiast"].map((roleName) => {
                 const isSelected = (formData.roles || []).includes(roleName);
                 return (
                   <button

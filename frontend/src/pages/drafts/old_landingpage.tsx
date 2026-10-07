@@ -232,7 +232,7 @@ const Dropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle, onItemCli
 };
 
 // ─── Navbar ───────────────────────────────────────────────────────────────────
-const NAV_USECASES: string[] = ["Casual User", "Freelancer", "Client", "Asset Creator"];
+const NAV_USECASES: string[] = ["Enthusiast User", "Freelancer", "Client", "Asset Creator"];
 
 // Map use cases to their scroll targets
 const USECASE_SCROLL_TARGETS: string[] = ["pricing", "pricing", "pricing", "pricing"];

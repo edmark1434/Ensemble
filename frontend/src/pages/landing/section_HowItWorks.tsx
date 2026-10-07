@@ -9,7 +9,7 @@ interface HowItWorksProps {
 }
 
 const HIW_DATA = {
-  casual: [
+  enthusiast: [
     { title: "Setup Account & Verify with KYC", img: "https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=800&q=80" },
     { title: "Browse Marketplace & Subscriptions", img: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80" },
     { title: "Edit and Collaborate", img: "https://tse2.mm.bing.net/th/id/OIP.5igK9JhLACAy9F8tB8XQ6AHaEK?r=0&rs=1&pid=ImgDetMain&o=7&rm=3" },
@@ -29,8 +29,8 @@ const HIW_DATA = {
 const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
   const navigate = useNavigate();
   const setIsGuestMode = useGlobalState((state) => state.setIsGuestMode);
-  const [tab, setTab] = useState<"casual" | "freelancer" | "client">("casual");
-  const [hoveredTab, setHoveredTab] = useState<"casual" | "freelancer" | "client" | null>(null);
+  const [tab, setTab] = useState<"enthusiast" | "freelancer" | "client">("enthusiast");
+  const [hoveredTab, setHoveredTab] = useState<"enthusiast" | "freelancer" | "client" | null>(null);
   const theme = useGlobalState((state) => state.theme);
 
   // Audio references
@@ -87,7 +87,7 @@ const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
     });
   };
 
-  const handleTabChange = (targetTab: "casual" | "freelancer" | "client") => {
+  const handleTabChange = (targetTab: "enthusiast" | "freelancer" | "client") => {
     if (tab === targetTab) return;
     playClickSound();
     setTab(targetTab);
@@ -166,10 +166,10 @@ const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
             <h2 style={{ fontSize: 42, fontWeight: 800, color: theme === 'dark' ? "#fff" : "#111827", letterSpacing: "-0.02em" }}>How it works</h2>
 
             <div style={{ display: "flex", background: theme === 'dark' ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)", border: theme === 'dark' ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)", borderRadius: 100, padding: 4 }}>
-              {(["casual", "freelancer", "client"] as const).map((mode) => {
+              {(["enthusiast", "freelancer", "client"] as const).map((mode) => {
                 const isActive = tab === mode;
                 const isCurrentlyHovered = hoveredTab === mode;
-                const labels = { casual: "For Casuals", freelancer: "For Freelancers", client: "For Clients" };
+                const labels = { enthusiast: "For Casuals", freelancer: "For Freelancers", client: "For Clients" };
 
                 return (
                   <button
@@ -220,7 +220,7 @@ const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
               <button
                 onClick={() => {
                   setIsGuestMode(true);
-                  if (tab === "casual") navigate("/home");
+                  if (tab === "enthusiast") navigate("/home");
                   else if (tab === "freelancer") navigate("/jobs/postings");
                   else if (tab === "client") navigate("/gigs/services");
                 }}

@@ -14,7 +14,7 @@ const STEP_PATHS = {
     survey_2: '/setup/survey',
 };
 const PURPOSE_MAP = {
-    'Explore / Learn': 'Casual',
+    'Explore / Learn': 'Enthusiast',
     'Look for Service / Hire': 'Client',
     'Earn / Find Work': 'Freelancer',
 };

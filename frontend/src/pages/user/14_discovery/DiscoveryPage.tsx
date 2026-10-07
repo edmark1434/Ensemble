@@ -619,7 +619,7 @@ export default function DiscoveryPage() {
                 </button>
               </div>
               <div className="flex flex-wrap items-center gap-2 mb-5">
-              {["All", "Freelancer", "Client", "Casual"].map((r) => (
+              {["All", "Freelancer", "Client", "Enthusiast"].map((r) => (
                 <button key={r} onClick={() => setRoleFilter(r)} className={chip(roleFilter === r)}>{r}</button>
               ))}
               <div className="h-4 w-px bg-zinc-300 dark:bg-white/10 mx-1" />
