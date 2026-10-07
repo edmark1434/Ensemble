@@ -1021,10 +1021,13 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             skills: (userDetails.skills || []).map((s: any) => s.name || s), // fallback string map
             rawSkills: userDetails.skills || [],
             verified: !!userDetails.verification_status,
-            meritScore: userDetails.merit_score || "No Rating",
+            meritScore: parseFloat(String(userDetails.avg_rating ?? 0)) > 0
+              ? parseFloat(String(userDetails.avg_rating)).toFixed(1)
+              : "No Rating",
             followersCount: userDetails.followers_count || 0,
             roles: userDetails.role || [],
-            subscriptionType: "Free",
+            subscriptionType: userDetails.subscriptionType || "Free",
+            badges: userDetails.badges || [],
             tagline: userDetails.tagline || "",
             totalJobs: userDetails.total_jobs || 0,
             totalServices: userDetails.total_services || 0,

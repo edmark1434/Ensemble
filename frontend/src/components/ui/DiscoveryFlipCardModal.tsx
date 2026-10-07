@@ -2,6 +2,7 @@ import React from "react";
 import { X, Star, Tag } from "lucide-react";
 import FlipCard from "./FlipCard";
 import { useNavigate } from "react-router-dom";
+import { badgesRegistry } from "@/pages/user/7_profile/Utilities/BadgesRegistry";
 
 export interface DiscoveryFlipCardUser {
   id: string;
@@ -22,7 +23,15 @@ export interface DiscoveryFlipCardUser {
   totalAssets?: number;
   joinedDate?: string;
   email?: string;
+  badges?: { id: string; display_order: number | null }[];
 }
+
+const SUBSCRIPTION_ICONS: Record<string, string> = {
+  premium: "/icons/subscription/premium.png",
+  business: "/icons/subscription/studio.png",
+};
+
+const badgeMetaById = new Map(badgesRegistry.map(b => [String(b.id), b]));
 
 interface DiscoveryFlipCardModalProps {
   user: DiscoveryFlipCardUser;
@@ -33,6 +42,14 @@ interface DiscoveryFlipCardModalProps {
 
 export const DiscoveryFlipCardModal: React.FC<DiscoveryFlipCardModalProps> = ({ user, onClose, onInvite, hideActions }) => {
   const navigate = useNavigate();
+  const subscription = user.subscriptionType || "Free";
+  const displayedBadges = (user.badges || [])
+    .filter(b => b.display_order !== null)
+    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+    .map(b => badgeMetaById.get(String(b.id)))
+    .filter((b): b is NonNullable<typeof b> => !!b);
+  const topBadges = displayedBadges.slice(0, 3);
+  const extraBadgeCount = displayedBadges.length - topBadges.length;
 
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
@@ -50,7 +67,21 @@ export const DiscoveryFlipCardModal: React.FC<DiscoveryFlipCardModalProps> = ({ 
               
               <img src={user.avatar} className="w-28 h-28 rounded-full object-cover border-4 border-zinc-100 dark:border-white/10 mb-5 z-10 shadow-sm" alt="Avatar" />
               <h2 className="text-2xl font-bold z-10 text-center">{user.name}</h2>
-              <p className="text-xs text-zinc-500 font-mono mt-1 z-10">@{user.username}</p>
+              <div className="flex items-center justify-center gap-1.5 mt-1 z-10 max-w-full">
+                <p className="text-xs text-zinc-500 font-mono truncate">@{user.username}</p>
+                <img
+                  src={user.verified ? "/icons/verification/lvl2_verified.png" : "/icons/verification/lvl1_verified.png"}
+                  alt={user.verified ? "Verified" : "Unverified"}
+                  title={user.verified ? "Verified" : "Unverified"}
+                  className="h-4 w-4 shrink-0 object-contain"
+                />
+                <img
+                  src={SUBSCRIPTION_ICONS[subscription.toLowerCase()] || "/icons/subscription/freemium.png"}
+                  alt={`${subscription} tier`}
+                  title={`${subscription} Member`}
+                  className="h-4 w-4 shrink-0 object-contain"
+                />
+              </div>
               
               {user.tagline && (
                 <div className="mt-3 z-10">
@@ -66,6 +97,22 @@ export const DiscoveryFlipCardModal: React.FC<DiscoveryFlipCardModalProps> = ({ 
                   ? user.roles.map((r: any) => r.role_name).join(" | ") 
                   : "Freelancer"}
               </div>
+
+              {topBadges.length > 0 && (
+                <div className="mt-4 flex items-center justify-center gap-2 z-10">
+                  {topBadges.map(b => (
+                    <img key={b.id} src={b.icon} alt={b.name} title={b.name} className="h-9 w-9 object-contain" />
+                  ))}
+                  {extraBadgeCount > 0 && (
+                    <span
+                      title={displayedBadges.slice(3).map(b => b.name).join(", ")}
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 text-[11px] font-bold text-zinc-500 dark:text-zinc-400"
+                    >
+                      +{extraBadgeCount}
+                    </span>
+                  )}
+                </div>
+              )}
               
               <div className="mt-8 flex items-center justify-center gap-8 z-10 w-full px-4 mb-2">
                 <div className="text-center">

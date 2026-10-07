@@ -112,7 +112,13 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, 
                 (SELECT json_agg(json_build_object('tag_id', t.tag_id, 'name', t.name, 'proficiency', ut.proficiency, 'years', ut.years))
                  FROM tags t JOIN user_tags ut ON t.tag_id = ut.tag_id WHERE ut.user_id = u.user_id),
                 '[]'::json
-            ) AS skills
+            ) AS skills,
+            COALESCE(
+                (SELECT json_agg(json_build_object('id', b.registry_id, 'display_order', ab.display_order) ORDER BY ab.display_order)
+                 FROM account_badges ab JOIN badges b ON b.badge_id = ab.badge_id
+                 WHERE ab.account_id = a.account_id AND ab.status = 'claimed' AND ab.display_order IS NOT NULL),
+                '[]'::json
+            ) AS badges
          FROM accounts a
          JOIN users u ON u.account_id = a.account_id
          LEFT JOIN files f ON f.file_id = a.avatar_file_id

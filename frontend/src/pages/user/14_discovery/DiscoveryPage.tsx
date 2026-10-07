@@ -30,6 +30,7 @@ interface UserProfile {
   followingCount: number;
   isFollowing: boolean;
   isFollowedBy?: boolean;
+  badges?: { id: string; display_order: number | null }[];
     email?: string;
     joinedDate?: string;
     totalJobs?: number;
@@ -86,6 +87,7 @@ const mapAccount = (account: any, cloudfront: string): UserProfile => {
       totalServices: Number(account.total_services) || 0,
       totalAssets: Number(account.total_assets) || 0,
     isFollowedBy: !!account.is_followed_by,
+    badges: Array.isArray(account.badges) ? account.badges : [],
   };
 };
 
