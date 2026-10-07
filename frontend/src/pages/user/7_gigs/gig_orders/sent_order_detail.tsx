@@ -148,7 +148,7 @@ export const SentOrderDetail = () => {
           <div className="lg:col-span-7 space-y-4">
               
             {/* PROFILE - YOUR PROFILE (CLIENT) */}
-            <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm flex flex-col gap-5">
+            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 backdrop-blur-xl shadow-2xl space-y-5">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   {order.client_avatar ? (
@@ -257,24 +257,7 @@ export const SentOrderDetail = () => {
                   </div>
               </div>
               
-              {/* CONTROLS */}
-              {order.status === 'Pending' && (
-                <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm flex items-center justify-between mt-6">
-                  <span className="text-xs font-bold text-gray-700 dark:text-gray-400">Current Status: <span className="text-amber-500 dark:text-amber-400 font-bold">{order.status || 'Pending'}</span></span>
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => navigate(`/gigs/services/${order.gig_id}/order?edit=${order.id}`)} className="px-5 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg> Edit Order
-                    </button>
-                    <button 
-                      disabled={isWithdrawing}
-                      onClick={() => setShowWithdrawConfirm(true)}
-                      className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2 disabled:opacity-50"
-                    >
-                      <XCircle className="w-4 h-4" /> Cancel Order
-                    </button>
-                  </div>
-                </div>
-              )}
+              
 
               {order.status === 'Shortlisted' && (
                 <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm flex items-center justify-between mt-6">
@@ -557,6 +540,48 @@ export const SentOrderDetail = () => {
         </div>
       </div>
 
+      
+
+          {/* ================= SECTION 5: EXPANDABLE HOVER DECISION CONTROLS (BOTTOM) ================= */}
+          <div className="sticky bottom-6 z-40 rounded-2xl border border-gray-200 dark:border-white/10 bg-white/90 dark:bg-dark-surface/90 p-4 md:px-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] dark:shadow-2xl backdrop-blur-xl mt-8 w-full transition-all">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <h3 className="text-[11px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider hidden sm:flex items-center gap-1.5">
+                  Decision & Action Controls
+                </h3>
+                <span className="text-[11px] text-gray-500 dark:text-zinc-500 font-mono bg-gray-100 dark:bg-white/5 px-2 py-1 rounded-md">Current Status: {order.status}</span>
+              </div>
+              
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {order.status === 'Pending' && (
+                  <>
+                    <button onClick={() => navigate(`/gigs/services/${order.gig_id}/order?edit=${order.id}`)} className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-blue-200 dark:border-blue-500/30 bg-blue-100 dark:bg-blue-500/10 px-4 py-2.5 text-xs font-bold text-blue-600 dark:text-blue-400 transition-all duration-300 hover:bg-blue-200 dark:hover:bg-blue-500/20 hover:shadow-lg hover:shadow-blue-500/10">
+                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                      <span className="whitespace-nowrap max-w-[65px] transition-all duration-300 group-hover:max-w-[150px]">
+                        <span className="inline group-hover:hidden">Edit</span>
+                        <span className="hidden group-hover:inline">Edit Order</span>
+                      </span>
+                    </button>
+                    <button onClick={() => setShowWithdrawConfirm(true)} className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-200 dark:border-red-500/30 bg-red-100 dark:bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-600 dark:text-red-400 transition-all duration-300 hover:bg-red-200 dark:hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10">
+                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      <span className="whitespace-nowrap max-w-[65px] transition-all duration-300 group-hover:max-w-[150px]">
+                        <span className="inline group-hover:hidden">Withdraw</span>
+                        <span className="hidden group-hover:inline">Withdraw Order</span>
+                      </span>
+                    </button>
+                  </>
+                )}
+
+                {order.status === 'Accepted' && (
+                  <button onClick={() => setShowConfirmModal(true)} className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-100 dark:bg-emerald-500/10 px-6 py-2.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 transition-all duration-300 hover:bg-emerald-200 dark:hover:bg-emerald-500/20 hover:shadow-lg hover:shadow-emerald-500/10">
+                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Fund & Confirm Contract
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
       {/* Expanded Media Modal */}
       {expandedMedia && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setExpandedMedia(null)}>
@@ -642,17 +667,35 @@ export const SentOrderDetail = () => {
                 </span>
               </div>
             </div>
-            <div className="flex gap-3 w-full pt-2">
-              <button 
-                onClick={() => setShowConfirmModal(false)}
+                          {/* Terms of Service Checkbox */}
+              <label className="flex items-start gap-3 p-3 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer group mt-4">
+                <div className="relative flex items-center justify-center mt-0.5">
+                  <input 
+                    type="checkbox" 
+                    className="peer sr-only" 
+                    checked={agreedToContractTerms} 
+                    onChange={(e) => setAgreedToContractTerms(e.target.checked)} 
+                  />
+                  <div className="w-5 h-5 rounded border-2 border-gray-300 dark:border-gray-600 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-colors"></div>
+                  <svg className="w-3 h-3 text-white absolute inset-0 m-auto opacity-0 peer-checked:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-gray-900 dark:text-white group-hover:text-emerald-500 transition-colors">
+                    I agree to the platform Terms of Service and authorize escrow deduction.
+                  </p>
+                </div>
+              </label>
+              <div className="flex gap-3 w-full pt-2">
+                <button 
+                  onClick={() => setShowConfirmModal(false)}
                 disabled={isConfirmingContract}
                 className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 font-bold text-xs hover:bg-gray-50 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
               >
                 Go Back
               </button>
               <button 
-                onClick={handleConfirmContract}
-                disabled={isConfirmingContract}
+                  onClick={handleConfirmContract}
+                  disabled={isConfirmingContract || !agreedToContractTerms}
                 className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-emerald-500/20"
               >
                 {isConfirmingContract ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}

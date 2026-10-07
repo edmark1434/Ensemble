@@ -127,7 +127,7 @@ export const IncomingOrderDetail = () => {
           <div className="lg:col-span-7 space-y-4">
               
             {/* PROFILE - YOUR PROFILE (FREELANCER) */}
-            <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm flex flex-col gap-5">
+            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 backdrop-blur-xl shadow-2xl space-y-5">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   {order.freelancer_avatar ? (
@@ -235,19 +235,7 @@ export const IncomingOrderDetail = () => {
                   </div>
               </div>
               
-              {order.status === 'Pending' && (
-                  <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm flex items-center justify-between mt-6">
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-400">Status: <span className="text-amber-500 dark:text-amber-400 font-bold">Pending Approval</span></span>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button onClick={() => setIsRejectModalOpen(true)} className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2">
-                          <XCircle className="w-4 h-4" /> Reject Order
-                      </button>
-                      <button onClick={() => setIsAcceptModalOpen(true)} className="px-5 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition flex items-center gap-2">
-                          <CheckCircle className="w-4 h-4" /> Review &amp; Accept
-                      </button>
-                    </div>
-                  </div>
-              )}
+              
 
               {(order.status === 'Accepted' && !order.contract_id) && (
                   <div className="p-5 rounded-3xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-500/5 shadow-sm mt-6 space-y-3">
@@ -396,6 +384,37 @@ export const IncomingOrderDetail = () => {
           </div>
         </div>
       </div>
+
+    
+
+          {/* ================= SECTION 5: EXPANDABLE HOVER DECISION CONTROLS (BOTTOM) ================= */}
+          <div className="sticky bottom-6 z-40 rounded-2xl border border-gray-200 dark:border-white/10 bg-white/90 dark:bg-dark-surface/90 p-4 md:px-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] dark:shadow-2xl backdrop-blur-xl mt-8 w-full transition-all">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <h3 className="text-[11px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider hidden sm:flex items-center gap-1.5">
+                  Decision & Action Controls
+                </h3>
+                <span className="text-[11px] text-gray-500 dark:text-zinc-500 font-mono bg-gray-100 dark:bg-white/5 px-2 py-1 rounded-md">Current Status: {order.status}</span>
+              </div>
+              
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {order.status === 'Pending' && (
+                  <>
+                    <button onClick={() => setIsRejectModalOpen(true)} className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-200 dark:border-red-500/30 bg-red-100 dark:bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-600 dark:text-red-400 transition-all duration-300 hover:bg-red-200 dark:hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10">
+                      <XCircle className="w-4 h-4 shrink-0" />
+                      <span className="whitespace-nowrap max-w-[65px] transition-all duration-300 group-hover:max-w-[150px]">
+                        <span className="inline group-hover:hidden">Reject</span>
+                        <span className="hidden group-hover:inline">Reject Order</span>
+                      </span>
+                    </button>
+                    <button onClick={() => setIsAcceptModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-blue-500 hover:bg-blue-600 px-6 py-2.5 text-xs font-bold text-white transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40">
+                      <CheckCircle className="w-4 h-4" /> Review &amp; Accept
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
 
     {/* Reject Modal */}
     {isRejectModalOpen && (
