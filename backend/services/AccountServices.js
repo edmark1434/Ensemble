@@ -13,7 +13,7 @@ const { getAllAccounts, createAccount, getAccountByHandle, getAccountWalletRepos
     getFollowing,
     checkIsFollowing,
     getAccountBadges,
-    updateAccountBadgeDisplayOrder
+    updateAccountBadgeDisplayOrder, grantBadgeToAccount
 } = require("../repositories/AccountRepositories");
 const {
     updateUserDetailsByAccountId,
@@ -324,6 +324,22 @@ module.exports = {
     getFollowersService,
     getFollowingService,
     checkIsFollowingService,
-    curateBadgesService
+    curateBadgesService,
+grantBadgeService
 };
 
+async function grantBadgeService(accountId, registryId) {
+    if (!await checkAccountIdService(accountId)) {
+        throw new Error('Invalid account ID');
+    }
+    if (!registryId) {
+        throw new Error('Badge registry ID is required');
+    }
+    try {
+        await grantBadgeToAccount(accountId, registryId);
+        return { success: true, message: 'Badge granted successfully' };
+    } catch (err) {
+        console.error('Error granting badge:', err);
+        throw err;
+    }
+}
