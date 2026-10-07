@@ -153,6 +153,19 @@ export default function DiscoveryPage() {
   const [selectedCardUser, setSelectedCardUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [myProfileData, setMyProfileData] = useState<UserProfile | null>(null);
+  useEffect(() => {
+    if (!userInfo?.handle) return;
+    const fetchMyProfile = async () => {
+      try {
+        const response = await api.get('/api/accounts/search-users', { params: { handle: userInfo.handle } });
+        const data = response.data?.data || [];
+        const me = data.find((a: any) => String(a.account_id) === String(userInfo.account_id));
+        if (me) setMyProfileData(mapAccount(me, cloudfront));
+      } catch (err) {}
+    };
+    fetchMyProfile();
+  }, [userInfo?.handle, userInfo?.account_id, cloudfront]);
   const [roleFilter, setRoleFilter] = useState("Freelancer");
   const [sortOption, setSortOption] = useState("default");
   const [currentPage, setCurrentPage] = useState(1);
@@ -820,7 +833,7 @@ export default function DiscoveryPage() {
             
             
             {activeTab === "standout" && (() => {
-              const myProfile = profiles.find(p => String(p.id) === String(userInfo?.account_id)) || freelancers.find(p => String(p.id) === String(userInfo?.account_id));
+              const myProfile = myProfileData || profiles.find(p => String(p.id) === String(userInfo?.account_id)) || freelancers.find(p => String(p.id) === String(userInfo?.account_id));
               
               if (!myProfile) {
                  return (
