@@ -115,6 +115,20 @@ router.get('/settings-overview', [checkSession, requireAdmin], getAdminSettingsO
 router.patch('/settings', [checkSession, requireAdmin], patchAdminSettings);
 
 router.get('/feedbacks', [checkSession, requireAdmin], getAdminFeedbacks);
+
+const {
+  getAdminBadgeCatalog,
+  getAdminBadgeRecipients,
+  getAdminBadgeHolders,
+  postAdminBadgeGrant,
+  deleteAdminBadgeGrant,
+} = require('../controllers/BadgeControllers');
+
+router.get('/badges', [checkSession, requireAdmin], getAdminBadgeCatalog);
+router.get('/badges/recipients', [checkSession, requireAdmin], getAdminBadgeRecipients);
+router.get('/badges/:registryId/holders', [checkSession, requireAdmin], getAdminBadgeHolders);
+router.post('/badges/:registryId/grants', [checkSession, requireAdmin], postAdminBadgeGrant);
+router.delete('/badges/grants/:accountBadgeId', [checkSession, requireAdmin], deleteAdminBadgeGrant);
 const { getAdminSurveyResponsesController } = require('../controllers/AdminSurveyControllers');
 
 router.get('/survey-responses', [checkSession, requireAdmin], getAdminSurveyResponsesController);

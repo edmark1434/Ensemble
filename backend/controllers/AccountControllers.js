@@ -391,6 +391,7 @@ async function grantBadgeController(req, res) {
         const result = await grantBadgeService(accountId, badgeId);
         res.status(200).json(result);
     } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
         console.error('Error in grantBadgeController:', err);
         res.status(500).json({ error: "Failed to grant badge" });
     }

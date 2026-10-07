@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Bell, CheckCheck, InboxIcon, Users, Activity, CreditCard, Shield } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "@/lib/axios";
 import { getFollower, getNotificationIcon, getNotificationLabel } from "@/lib/notificationTypes";
 import { useAccountAvatars } from "@/lib/accountAvatars";
@@ -9,6 +9,7 @@ import socket from "@/lib/socket";
 import { motion, AnimatePresence } from "framer-motion";
 import UserHeader from "@/components/nav/user_header";
 import ShapeGrid from "@/components/ui/ShapeGrid";
+import { badgesRegistry } from "@/pages/user/7_profile/Utilities/BadgesRegistry";
 
 interface Notification {
   notification_id: string;
@@ -36,7 +37,17 @@ const TRANSACTION_PREFIXES = new Set([
 const SYSTEM_PREFIXES = new Set([
   "VERIFICATION", "BUSINESS_VERIFICATION", "IDENTITY_REVERIFICATION", "SUSPEND", "MARKETPLACE",
   "TICKET_ASSIGNED", "TICKET_RESOLVED", "TICKET_REPLY", "TICKET_INTERNAL_REPLY",
+  "BADGE_GRANTED",
 ]);
+
+interface BadgeGrant {
+  account_badge_id: string;
+  status: "pending" | "claimed";
+  registry_id: string;
+  name: string;
+}
+
+const badgeMetaById = new Map(badgesRegistry.map(b => [String(b.id), b]));
 
 function classifyNotification(prefix: string): TabKey {
   if (FOLLOWER_PREFIXES.has(prefix)) return "followers";
@@ -60,14 +71,52 @@ const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabKey>("activity");
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    TABS.some(t => t.key === tabParam) ? (tabParam as TabKey) : "activity"
+  );
+  useEffect(() => {
+    if (TABS.some(t => t.key === tabParam)) setActiveTab(tabParam as TabKey);
+  }, [tabParam]);
   const avatars = useAccountAvatars(
     notifications.filter(n => n.reference_prefix === "follow").map(n => n.reference_id)
   );
 
+  const [badgeGrants, setBadgeGrants] = useState<Record<string, BadgeGrant>>({});
+  const [claimingId, setClaimingId] = useState<string | null>(null);
+
+  const fetchBadgeGrants = async () => {
+    try {
+      const { data } = await api.get("/api/accounts/badges/mine");
+      const rows: BadgeGrant[] = data?.data || [];
+      setBadgeGrants(Object.fromEntries(rows.map(g => [g.account_badge_id, g])));
+    } catch { /* badge state is optional for rendering */ }
+  };
+
+  const handleClaim = async (n: Notification) => {
+    setClaimingId(n.reference_id);
+    try {
+      await api.post(`/api/accounts/badges/${n.reference_id}/claim`);
+      setBadgeGrants(prev => prev[n.reference_id] ? { ...prev, [n.reference_id]: { ...prev[n.reference_id], status: "claimed" } } : prev);
+      if (!n.is_read) {
+        await api.patch(`/api/notifications/${n.notification_id}/read`).catch(() => {});
+        setNotifications(prev => prev.map(item => item.notification_id === n.notification_id ? { ...item, is_read: true } : item));
+      }
+    } catch {
+      await fetchBadgeGrants();
+    } finally {
+      setClaimingId(null);
+    }
+  };
+
   useEffect(() => {
     fetchNotifications();
-    const handler = (n: Notification) => setNotifications(prev => [n, ...prev]);
+    fetchBadgeGrants();
+    const handler = (n: Notification) => {
+      setNotifications(prev => [n, ...prev]);
+      if (n.reference_prefix === "BADGE_GRANTED") fetchBadgeGrants();
+    };
     if (socket.connected) socket.on("notification", handler);
     return () => { if (socket.connected) socket.off("notification", handler); };
   }, []);
@@ -199,6 +248,46 @@ const NotificationsPage: React.FC = () => {
                     const def = getIconDef(n.reference_prefix);
                     const follower = n.reference_prefix === "follow" ? getFollower(n.message) : null;
                     const isFollower = n.reference_prefix === "follow";
+                    if (n.reference_prefix === "BADGE_GRANTED") {
+                      const grant = badgeGrants[n.reference_id];
+                      const meta = grant ? badgeMetaById.get(grant.registry_id) : undefined;
+                      return (
+                        <motion.li key={n.notification_id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.035 }} className="flex items-center gap-4 px-5 py-4">
+                          <div className="relative shrink-0">
+                            {meta?.icon ? (
+                              <img src={meta.icon} alt="" className="h-11 w-11 object-contain" />
+                            ) : (
+                              <div className={`w-11 h-11 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/5 ${def.text}`}>{def.icon}</div>
+                            )}
+                            {!n.is_read && <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-blue-500 ring-2 ring-white dark:ring-dark-surface" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                              {getNotificationLabel(n.reference_prefix)}{grant ? ` · ${meta?.name || grant.name}` : ""}
+                            </span>
+                            <p className={`text-sm leading-snug line-clamp-3 ${!n.is_read ? "text-gray-900 dark:text-white font-medium" : "text-gray-600 dark:text-zinc-400"}`}>{n.message}</p>
+                          </div>
+                          <div className="shrink-0 flex flex-col items-end gap-1.5">
+                            <span className="text-[11px] text-gray-400 dark:text-zinc-500 whitespace-nowrap">{fmt(n.created_at)}</span>
+                            {grant?.status === "pending" ? (
+                              <button
+                                onClick={() => handleClaim(n)}
+                                disabled={claimingId === n.reference_id}
+                                className="px-3 py-1.5 rounded-lg bg-blue-500 text-white text-xs font-semibold hover:bg-blue-600 transition disabled:opacity-60"
+                              >
+                                {claimingId === n.reference_id ? "Claiming…" : "Claim"}
+                              </button>
+                            ) : grant?.status === "claimed" ? (
+                              <button onClick={() => navigate("/profile")} className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:underline">
+                                Claimed · View on profile
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-400 dark:text-zinc-500">No longer available</span>
+                            )}
+                          </div>
+                        </motion.li>
+                      );
+                    }
                     return (
                       <motion.li key={n.notification_id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.035 }} className="group relative">
                         <button onClick={() => handleClick(n)} className="w-full flex items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.03]">

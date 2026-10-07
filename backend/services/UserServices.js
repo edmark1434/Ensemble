@@ -22,8 +22,7 @@ const {
 } = require('../repositories/UserRepositories');
 const {
     createAccount,
-    getAccountByHandle,
-    grantBadgeToAccount
+    getAccountByHandle
 } = require('../repositories/AccountRepositories');
 const {
     getStaffByEmail,
@@ -297,7 +296,7 @@ async function registerUser(signupPayload = {}, options = {}) {
     
     // Automatically grant the Alpha Tester badge to all new accounts
     try {
-        await grantBadgeToAccount(account.account_id, 'acc-alpha', 1); // displayOrder = 1
+        await require('./BadgeServices').grantBadgeService({ registryId: 'acc-alpha', accountIds: [account.account_id] });
     } catch (e) {
         console.error("Failed to grant Alpha badge to new user", e);
     }

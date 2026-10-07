@@ -3,7 +3,7 @@ import {
   Bell, Users, MessageSquare, Briefcase, FileText, Star, AlertCircle, UserPlus,
   Wallet, BadgeCheck, Ticket, RefreshCw, Heart, BookOpen, AtSign, Calendar,
   Clock, XCircle, CheckCircle2, ArrowRightLeft, Package, Layers, ShoppingBag,
-  Send, Shield,
+  Send, Shield, Award,
 } from "lucide-react";
 
 export type NotificationIconDef = { icon: React.ReactNode; bg: string; text: string; border: string };
@@ -116,6 +116,7 @@ export const NOTIFICATION_ICONS: Record<string, NotificationIconDef> = {
   IDENTITY_REVERIFICATION:    tone("orange", i(AlertCircle)),
   SUSPEND:                    tone("red", i(XCircle)),
   MARKETPLACE:                tone("orange", i(Shield)),
+  BADGE_GRANTED:              tone("amber", i(Award)),
   // Tickets
   TICKET_ASSIGNED:            tone("indigo", i(Ticket)),
   TICKET_RESOLVED:            tone("green", i(CheckCircle2)),
@@ -165,7 +166,7 @@ export const NOTIFICATION_LABELS: Record<string, string> = {
   FORUM_SAVE: "Forum Save", FORUM_MENTION: "Mentioned",
   VERIFICATION: "Verified", BUSINESS_VERIFICATION: "Business Verified",
   IDENTITY_REVERIFICATION: "Re-verify Required", SUSPEND: "Account Suspended",
-  MARKETPLACE: "Marketplace Notice",
+  MARKETPLACE: "Marketplace Notice", BADGE_GRANTED: "Badge Awarded",
   TICKET_ASSIGNED: "Ticket Assigned", TICKET_RESOLVED: "Ticket Resolved",
   TICKET_REPLY: "Ticket Reply", TICKET_INTERNAL_REPLY: "Internal Reply",
 };

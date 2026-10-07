@@ -13,8 +13,10 @@ const { getAllAccounts, createAccount, getAccountByHandle, getAccountWalletRepos
     getFollowing,
     checkIsFollowing,
     getAccountBadges,
-    updateAccountBadgeDisplayOrder, grantBadgeToAccount
+    updateAccountBadgeDisplayOrder
 } = require("../repositories/AccountRepositories");
+
+const SELF_TRIGGERED_BADGES = new Set(['setup-profile']);
 const {
     updateUserDetailsByAccountId,
     updateUserDetails
@@ -332,19 +334,15 @@ async function grantBadgeService(accountId, registryId) {
     if (!await checkAccountIdService(accountId)) {
         throw new Error('Invalid account ID');
     }
-    if (!registryId) {
-        throw new Error('Badge registry ID is required');
+    if (!SELF_TRIGGERED_BADGES.has(registryId)) {
+        const error = new Error('This badge can only be granted by an administrator');
+        error.statusCode = 403;
+        throw error;
     }
     try {
-        const badges = await getAccountBadges(accountId);
-        const displayedBadges = badges.filter(b => b.display_order !== null);
-        let displayOrder = null;
-        if (displayedBadges.length < 5) {
-            const maxOrder = displayedBadges.reduce((max, b) => Math.max(max, b.display_order), 0);
-            displayOrder = maxOrder + 1;
-        }
-        await grantBadgeToAccount(accountId, registryId, displayOrder);
-        return { success: true, message: 'Badge granted successfully' };
+        const { grantBadgeService: createBadgeGrant } = require('./BadgeServices');
+        const result = await createBadgeGrant({ registryId, accountIds: [accountId] });
+        return { success: true, message: result.granted ? 'Badge sent to your notifications' : 'Badge already granted' };
     } catch (err) {
         console.error('Error granting badge:', err);
         throw err;

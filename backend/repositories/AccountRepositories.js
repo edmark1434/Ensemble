@@ -500,28 +500,12 @@ async function getAccountBadges(accountId) {
             SELECT b.registry_id, ab.display_order
             FROM account_badges ab
             JOIN badges b ON b.badge_id = ab.badge_id
-            WHERE ab.account_id = $1
+            WHERE ab.account_id = $1 AND ab.status = 'claimed'
         `;
         const result = await pool.query(query, [accountId]);
         return result.rows;
     } catch (err) {
         console.error(`Error fetching badges for account ${accountId}:`, err);
-        throw err;
-    }
-}
-
-async function grantBadgeToAccount(accountId, registryId, displayOrder = null) {
-    try {
-        const query = `
-            INSERT INTO account_badges (account_id, badge_id, display_order)
-            SELECT $1, badge_id, $3
-            FROM badges
-            WHERE registry_id = $2
-            ON CONFLICT DO NOTHING
-        `;
-        await pool.query(query, [accountId, registryId, displayOrder]);
-    } catch (err) {
-        console.error(`Error granting badge ${registryId} to account ${accountId}:`, err);
         throw err;
     }
 }
@@ -546,6 +530,7 @@ async function updateAccountBadgeDisplayOrder(accountId, registryIds) {
                 FROM badges
                 WHERE account_badges.badge_id = badges.badge_id
                   AND account_badges.account_id = $2
+                  AND account_badges.status = 'claimed'
                   AND badges.registry_id = $3
             `, [i + 1, accountId, registryIds[i]]);
         }
@@ -581,6 +566,5 @@ module.exports = {
     getFollowing,
     checkIsFollowing,
     getAccountBadges,
-    grantBadgeToAccount,
     updateAccountBadgeDisplayOrder
 };

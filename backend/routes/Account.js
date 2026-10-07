@@ -85,6 +85,9 @@ router.put('/update-profile-details', [checkSession, requireAuth], updateProfile
 router.put('/setting-account-info', [checkSession, requireAuth], settingAccountInfoUpdateController);
 router.put('/profile/badges/curate', [checkSession, requireAuth], curateBadgesController);
 router.post('/grant-badge', [checkSession, requireAuth], grantBadgeController);
+const { getMyBadgeGrants, postClaimBadge } = require('../controllers/BadgeControllers');
+router.get('/badges/mine', [checkSession, requireAuth], getMyBadgeGrants);
+router.post('/badges/:accountBadgeId/claim', [checkSession, requireAuth], postClaimBadge);
 
 router.post('/dev/add-credits', [checkSession, requireAuth], async (req, res) => {
     try {
