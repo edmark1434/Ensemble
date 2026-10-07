@@ -15,7 +15,8 @@ export const IncomingOrderDetail = () => {
   const theme = useGlobalState((state) => state.theme);
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [expandedMedia, setExpandedMedia] = useState<{ url: string, type: 'image' | 'video' | 'doc' } | null>(null);
+  const [bannerError, setBannerError] = useState(false);
+    const [expandedMedia, setExpandedMedia] = useState<{ url: string, type: 'image' | 'video' | 'doc' } | null>(null);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [isAcceptModalOpen, setIsAcceptModalOpen] = useState(false);
@@ -170,9 +171,9 @@ export const IncomingOrderDetail = () => {
                           {order.status || 'Pending'}
                       </span>
                   </div>
-                                    {order.gig_banner && (
+                                    {order.gig_banner && !bannerError && (
                     <div className="relative w-full h-28 rounded-xl overflow-hidden shadow-sm mt-3 border border-gray-100 dark:border-white/5">
-                      <img src={order.gig_banner} className="w-full h-full object-cover" alt="Gig Cover" />
+                      <img src={order.gig_banner} className="w-full h-full object-cover" alt="Gig Cover" onError={() => setBannerError(true)} />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end justify-between p-3">
                         <h3 className="text-sm font-bold text-white truncate flex items-center gap-2 drop-shadow-md">
                           <ExternalLink className="h-4 w-4 text-emerald-300 shrink-0" />
@@ -188,7 +189,7 @@ export const IncomingOrderDetail = () => {
                       </div>
                     </div>
                   )}
-                  {!order.gig_banner && (
+                  {(!order.gig_banner || bannerError) && (
                     <div className="flex items-center justify-between">
                         <h3 className="text-sm font-bold flex items-center gap-2 text-gray-900 dark:text-white"><ExternalLink className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /> {order.gig_title}</h3>
                         <button className="p-2 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg transition" onClick={() => navigate(`/gigs/services/${order.gig_id}/page`)}><ExternalLink className="w-4 h-4 text-gray-500 dark:text-gray-400" /></button>
