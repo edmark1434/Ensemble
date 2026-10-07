@@ -2,6 +2,7 @@ import React, { useRef, useState, type ChangeEvent } from "react";
 import { ArrowRight, Image as ImageIcon, X, ChevronDown, Check, Bold, Italic, List, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { showErrorToast } from "@/components/utility/toast";
+import { SkillsAutocomplete } from "../../../6_job_market/job_components/job_creation_components/SkillsAutocomplete";
 
 export const categories = [
   "Ads & Social",
@@ -147,31 +148,9 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
-  const [skillInput, setSkillInput] = useState("");
-
   
-  const handleSkillKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      const val = skillInput.trim();
-      if (!val) return;
-      if (skills.length >= 8) {
-        setErrors(prev => ({ ...prev, skills: "You can add a maximum of 8 skills." }));
-        return;
-      }
-      if (skills.includes(val)) {
-        setErrors(prev => ({ ...prev, skills: "This skill has already been added." }));
-        return;
-      }
-      setSkills(prev => [...prev, val]);
-      setSkillInput("");
-      clearError("skills");
-    } else if (e.key === 'Backspace' && !skillInput && skills.length > 0) {
-      e.preventDefault();
-      setSkills(prev => prev.slice(0, -1));
-    }
-  };
-
+  
+  
   const removeSkill = (skillToRemove: string) => {
     setSkills(prev => prev.filter(s => s !== skillToRemove));
   };
@@ -347,31 +326,12 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
 
       
       {/* Skills Tags */}
-      <div className="space-y-1.5 mt-6">
-        <div className="flex justify-between items-center">
-          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider">Applied Skills & Tags <span className="text-red-500">*</span></label>
-          <span className="text-[10px] text-gray-600 dark:text-zinc-400">{skills.length}/8 Added</span>
-        </div>
-        <div className={`flex flex-wrap gap-2 p-2 min-h-[46px] items-center rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition-all ${errors.skills ? "border-red-500/50" : "border-gray-200 dark:border-white/10 focus-within:border-blue-500/50"}`}>
-          {skills.map(s => (
-            <span key={s} className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-700 dark:text-zinc-300">
-              {s} <X className="h-3 w-3 cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors" onClick={() => removeSkill(s)} />
-            </span>
-          ))}
-          <input
-            type="text"
-            placeholder={skills.length === 0 ? "e.g., Color Grading, Audio Sync (Press Enter to add)" : ""}
-            value={skillInput}
-            onChange={e => {
-              setSkillInput(e.target.value);
-              clearError("skills");
-            }}
-            onKeyDown={handleSkillKeyDown}
-            className="flex-1 bg-transparent border-none outline-none text-xs text-gray-900 dark:text-white placeholder:text-gray-400 min-w-[150px]"
-          />
-        </div>
-        {errors.skills && <p className="text-[11px] text-red-400">{errors.skills}</p>}
-      </div>
+      <SkillsAutocomplete 
+        skills={skills} 
+        setSkills={setSkills} 
+        error={errors.skills} 
+        maxSkills={8} 
+      />
 
       {/* Description */}
       <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-5 items-start mt-4">
@@ -492,3 +452,5 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
 };
 
 export default CreateCoreInfo;
+
+

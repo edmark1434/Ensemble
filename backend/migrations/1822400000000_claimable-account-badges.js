@@ -23,25 +23,30 @@ const REGISTRY_BADGES = [
 
 exports.up = (pgm) => {
   pgm.sql(`
-    ALTER TABLE account_badges
-      ADD COLUMN account_badge_id uuid NOT NULL DEFAULT gen_random_uuid(),
-      ADD COLUMN status varchar(20) NOT NULL DEFAULT 'claimed',
-      ADD COLUMN granted_by_staff_id uuid,
-      ADD COLUMN grant_message text,
-      ADD COLUMN claimed_at timestamp without time zone,
-      ADD COLUMN revoked_at timestamp without time zone;
+    DO $$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_badges' AND column_name = 'account_badge_id') THEN
+            ALTER TABLE account_badges
+              ADD COLUMN account_badge_id uuid NOT NULL DEFAULT gen_random_uuid(),
+              ADD COLUMN status varchar(20) NOT NULL DEFAULT 'claimed',
+              ADD COLUMN granted_by_staff_id uuid,
+              ADD COLUMN grant_message text,
+              ADD COLUMN claimed_at timestamp without time zone,
+              ADD COLUMN revoked_at timestamp without time zone;
 
-    UPDATE account_badges SET claimed_at = created_at WHERE claimed_at IS NULL;
+            UPDATE account_badges SET claimed_at = created_at WHERE claimed_at IS NULL;
 
-    ALTER TABLE account_badges ALTER COLUMN status SET DEFAULT 'pending';
-    ALTER TABLE account_badges ADD CONSTRAINT account_badges_account_badge_id_key UNIQUE (account_badge_id);
-    ALTER TABLE account_badges ADD CONSTRAINT account_badges_status_check
-      CHECK (status IN ('pending', 'claimed', 'revoked'));
+            ALTER TABLE account_badges ALTER COLUMN status SET DEFAULT 'pending';
+            ALTER TABLE account_badges ADD CONSTRAINT account_badges_account_badge_id_key UNIQUE (account_badge_id);
+            ALTER TABLE account_badges ADD CONSTRAINT account_badges_status_check
+              CHECK (status IN ('pending', 'claimed', 'revoked'));
+
+            INSERT INTO badge_categories (name, description)
+            SELECT 'Platform', 'Platform-granted account badges'
+            WHERE NOT EXISTS (SELECT 1 FROM badge_categories);
+        END IF;
+    END $$;
     CREATE INDEX IF NOT EXISTS idx_account_badges_account_status ON account_badges (account_id, status);
-
-    INSERT INTO badge_categories (name, description)
-    SELECT 'Platform', 'Platform-granted account badges'
-    WHERE NOT EXISTS (SELECT 1 FROM badge_categories);
   `);
 
   const literal = (value) => `'${String(value).replace(/'/g, "''")}'`;

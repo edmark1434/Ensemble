@@ -37,6 +37,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   const isVerified = useGlobalState(state => state.isVerified);
   const [activeTierIdx, setActiveTierIdx] = useState(0);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const isOwner = gig?.isOwnGig;
 
