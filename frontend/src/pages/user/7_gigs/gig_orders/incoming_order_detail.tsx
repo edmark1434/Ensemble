@@ -415,7 +415,8 @@ export const IncomingOrderDetail = () => {
     
 
           {/* ================= SECTION 5: EXPANDABLE HOVER DECISION CONTROLS (BOTTOM) ================= */}
-          <div className="sticky bottom-6 z-40 mx-6 rounded-2xl border border-gray-200 dark:border-white/10 bg-white/90 dark:bg-dark-surface/90 p-4 md:px-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] dark:shadow-2xl backdrop-blur-xl mt-8 transition-all">
+          <div className="sticky bottom-6 z-40 w-full px-6 mt-8 transition-all">
+              <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/90 dark:bg-dark-surface/90 p-4 md:px-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] dark:shadow-2xl backdrop-blur-xl">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <h3 className="text-[11px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider hidden sm:flex items-center gap-1.5">
@@ -440,6 +441,7 @@ export const IncomingOrderDetail = () => {
                   </>
                 )}
               </div>
+            </div>
             </div>
           </div>
 
