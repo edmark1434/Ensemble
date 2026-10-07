@@ -6,11 +6,14 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import { JobRichText } from "../../../job_components/JobRichText";
 
 export const additionalWorkRates = [
-  { label: "+10% per extra revision pass", value: 10 },
   { label: "+15% per extra revision pass", value: 15 },
   { label: "+20% per extra revision pass", value: 20 },
   { label: "+25% per extra revision pass", value: 25 },
   { label: "+30% per extra revision pass", value: 30 },
+  { label: "+35% per extra revision pass", value: 35 },
+  { label: "+40% per extra revision pass", value: 40 },
+  { label: "+45% per extra revision pass", value: 45 },
+  { label: "+50% per extra revision pass", value: 50 },
 ];
 
 interface ProposalPitchProps {
