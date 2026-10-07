@@ -78,45 +78,51 @@ export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
       </div>
       
       <div className="relative">
-        <form onSubmit={handleManualAdd} className="flex gap-2">
-          <div className="relative flex-1">
-            <input
-              type="text"
-              placeholder={isLoading ? "Loading skills..." : "e.g., Color Grading, Auto-captioning"}
-              value={skillInput}
-              onChange={(e) => {
-                setSkillInput(e.target.value);
-                setIsDropdownOpen(true);
-              }}
-              onFocus={() => setIsDropdownOpen(true)}
-              onBlur={() => {
-                // Delay closing to allow clicking dropdown items
-                setTimeout(() => setIsDropdownOpen(false), 200);
-              }}
-              disabled={isLoading || skills.length >= maxSkills}
-              className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-2 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all pr-8"
-            />
+        <div 
+          className={`transition-all duration-300 ease-in-out ${
+            skills.length >= maxSkills ? 'max-h-0 opacity-0 overflow-hidden' : 'max-h-32 opacity-100'
+          }`}
+        >
+          <form onSubmit={handleManualAdd} className="flex gap-2 mb-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                placeholder={isLoading ? "Loading skills..." : "e.g., Color Grading, Auto-captioning"}
+                value={skillInput}
+                onChange={(e) => {
+                  setSkillInput(e.target.value);
+                  setIsDropdownOpen(true);
+                }}
+                onFocus={() => setIsDropdownOpen(true)}
+                onBlur={() => {
+                  // Delay closing to allow clicking dropdown items
+                  setTimeout(() => setIsDropdownOpen(false), 200);
+                }}
+                disabled={isLoading || skills.length >= maxSkills}
+                className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-2 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all pr-8"
+              />
+              <button
+                type="button"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                disabled={isLoading || skills.length >= maxSkills}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
+              >
+                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+            
             <button
-              type="button"
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              disabled={isLoading || skills.length >= maxSkills}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
+              type="submit"
+              disabled={skills.length >= maxSkills || !skillInput.trim()}
+              className="px-4 rounded-xl bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold hover:bg-white/20 transition text-gray-900 dark:text-white focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              Add
             </button>
-          </div>
-          
-          <button
-            type="submit"
-            disabled={skills.length >= maxSkills || !skillInput.trim()}
-            className="px-4 rounded-xl bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold hover:bg-white/20 transition text-gray-900 dark:text-white focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Add
-          </button>
-        </form>
+          </form>
+        </div>
 
         {isDropdownOpen && filteredSkills.length > 0 && skills.length < maxSkills && (
-          <div className="absolute z-50 w-[calc(100%-70px)] mt-1 bg-white dark:bg-[#1a1c23] border border-gray-200 dark:border-white/10 rounded-lg max-h-40 overflow-y-auto shadow-xl">
+          <div className="absolute top-10 left-0 z-[100] w-[calc(100%-70px)] mt-1 bg-white dark:bg-[#1a1c23] border border-gray-200 dark:border-white/10 rounded-lg max-h-40 overflow-y-auto shadow-xl">
             {filteredSkills.map((skill) => (
               <button
                 key={skill.tag_id}

@@ -33,6 +33,7 @@ interface CreateReviewProps {
   isExistingProject?: boolean;
   existingProjectId?: string | null;
   initiatorRole?: string;
+  requireNDA?: boolean;
   skills: string[];
   errors: { [key: string]: string };
   setErrors: React.Dispatch<React.SetStateAction<{ [key: string]: string }>>;
@@ -155,6 +156,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   isExistingProject,
   existingProjectId,
   initiatorRole,
+  requireNDA,
   skills,
   errors,
   setErrors,
@@ -260,10 +262,10 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           </div>
 
           {/* ROW 2: Timeline Envelope & Positions Open */}
-          <div className="grid grid-cols-3 gap-3 pt-1">
-            <div className="p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
-              <span className="text-gray-600 dark:text-zinc-400 mb-0.5 text-[10px] flex items-center gap-1">
-                Project Timeline (Days)
+          <div className="grid grid-cols-3 gap-4 pt-3 pb-1">
+            <div>
+              <span className="text-gray-500 dark:text-zinc-400 mb-1 text-[10px] flex items-center gap-1">
+                Project Timeline
                 <div className="group relative flex items-center">
                   <HelpCircle className="h-3 w-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
@@ -271,10 +273,10 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                   </div>
                 </div>
               </span>
-              <span className="text-xs font-bold text-gray-900 dark:text-white">{minTimeline} - {maxTimeline} Days</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-white">{minTimeline} - {maxTimeline} Days</span>
             </div>
-            <div className="p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
-              <span className="text-gray-600 dark:text-zinc-400 mb-0.5 text-[10px] flex items-center gap-1">
+            <div>
+              <span className="text-gray-500 dark:text-zinc-400 mb-1 text-[10px] flex items-center gap-1">
                 Project Deadline
                 <div className="group relative flex items-center">
                   <HelpCircle className="h-3 w-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
@@ -283,50 +285,56 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                   </div>
                 </div>
               </span>
-              <span className="text-xs font-bold text-gray-900 dark:text-white">{deadline}</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-white">{deadline}</span>
             </div>
-            <div className="p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
-              <span className="text-gray-600 dark:text-zinc-400 block mb-0.5 text-[10px]">Positions Open</span>
-              <span className="text-xs font-bold text-gray-900 dark:text-white">{positions} Slots</span>
+            <div>
+              <span className="text-gray-500 dark:text-zinc-400 block mb-1 text-[10px]">Positions Open</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-white">{positions} Slots</span>
             </div>
           </div>
 
           {/* Mandatory Skills */}
-          <div className="pt-2 border-t border-gray-200 dark:border-white/10">
-            <span className="text-gray-600 dark:text-zinc-400 block mb-1 text-[10px]">Required Skills:</span>
-            <div className="flex flex-wrap gap-1">
+          <div className="pt-3 border-t border-gray-200 dark:border-white/10">
+            <span className="text-gray-500 dark:text-zinc-400 block mb-2 text-[10px]">Required Skills:</span>
+            <div className="flex flex-wrap gap-1.5">
               {skills.map(s => (
-                <span key={s} className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-700 dark:text-zinc-300 text-[10px] font-semibold">{s}</span>
+                <span key={s} className="px-2 py-1 rounded-md bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 text-[10px] font-semibold">{s}</span>
               ))}
             </div>
           </div>
         </div>
 
         {/* SECTION 3: Terms & Workflow */}
-        <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white/[0.01] space-y-3 mb-4">
+        <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white/[0.01] space-y-4 mb-4">
           <div className="flex justify-between items-center border-b border-gray-200 dark:border-white/10 pb-2">
             <span className="font-bold text-blue-400 uppercase tracking-wider text-[10px]">03. Workflow & Terms</span>
             <button type="button" onClick={() => onEditStep(3)} className="text-[10px] text-blue-500 hover:underline font-bold transition focus:outline-none">Edit</button>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1 text-xs text-gray-700 dark:text-zinc-300">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <span className="text-[10px] text-gray-500 dark:text-zinc-400 block mb-0.5">Portfolio Use</span>
-              <p className="font-bold text-gray-900 dark:text-white">
-                {portfolioUseAllowed ? `Allowed (Max ${portfolioDuration}s)` : "Not Allowed"}
-              </p>
+              <span className="text-gray-500 dark:text-zinc-400 block mb-1 text-[10px]">Confidentiality (NDA)</span>
+              <span className={`text-sm font-bold ${requireNDA ? "text-blue-500" : "text-gray-900 dark:text-white"}`}>
+                {requireNDA ? 'Required' : 'Not Required'}
+              </span>
             </div>
             <div>
-              <span className="text-[10px] text-gray-500 dark:text-zinc-400 block mb-0.5">Existing Project</span>
-              <p className="font-bold text-gray-900 dark:text-white">
+              <span className="text-gray-500 dark:text-zinc-400 block mb-1 text-[10px]">Portfolio Use</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-white">
+                {portfolioUseAllowed ? `Allowed (${portfolioDuration}s)` : "Not Allowed"}
+              </span>
+            </div>
+            <div>
+              <span className="text-gray-500 dark:text-zinc-400 block mb-1 text-[10px]">Existing Project</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-white">
                 {isExistingProject ? `Yes` : "No"}
-              </p>
+              </span>
             </div>
             <div>
-              <span className="text-[10px] text-gray-500 dark:text-zinc-400 block mb-0.5">Initiator</span>
-              <p className="font-bold text-gray-900 dark:text-white">
+              <span className="text-gray-500 dark:text-zinc-400 block mb-1 text-[10px]">Initiator</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-white">
                 {initiatorRole}
-              </p>
+              </span>
             </div>
           </div>
         </div>
@@ -382,75 +390,81 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
         </div>
       </div>
 
-      {/* Navigation Footer */}
-      <div className="pt-4 border-t border-gray-200 dark:border-white/10 flex flex-col gap-4">
-        {walletBalance !== null && walletBalance < 50 ? (
-          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-bold flex justify-between items-center">
+        {/* Navigation Footer */}
+        <div className="pt-4 border-t border-gray-200 dark:border-white/10 flex flex-col gap-4">
+          <div className="flex flex-col gap-4 p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
             <div>
-              <p>You need 50 Credits to post a job.</p>
-              <p className="text-[10px] font-normal opacity-80 mt-1">Your current balance is {walletBalance}.</p>
+              <h4 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight flex items-center justify-between">
+                Checkout Summary
+                {walletBalance === null && <span className="text-[10px] font-normal text-gray-400 animate-pulse">Loading balance...</span>}
+              </h4>
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5 max-w-sm">
+                To maintain a high-quality marketplace, a small fee is required to publish postings.
+              </p>
             </div>
-            <Link to="/credits" className="px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">Buy Credits</Link>
-          </div>
-        ) : walletBalance !== null ? (
-          <div className="rounded-2xl border-2 border-blue-500/20 bg-blue-50/50 dark:bg-blue-500/5 p-5 flex flex-col gap-4 shadow-inner relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-500"></div>
-            
-            <div className="flex justify-between items-start">
-              <div>
-                <h4 className="text-base font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
-                  <svg className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Checkout Summary
-                </h4>
-                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-sm leading-relaxed">
-                  To maintain a high-quality marketplace and prevent spam, we require a small fee to publish job postings.
-                </p>
+
+            <div className="space-y-2.5 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 dark:text-zinc-400">Current Balance</span>
+                {walletBalance === null ? (
+                  <div className="h-4 w-16 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
+                ) : (
+                  <span className="font-semibold text-gray-900 dark:text-white">{walletBalance.toLocaleString()} Credits</span>
+                )}
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 dark:text-zinc-400">Platform Fee</span>
+                <span className="font-semibold text-red-500">-50 Credits</span>
+              </div>
+              <div className="pt-2.5 mt-1 border-t border-gray-200 dark:border-white/10 flex justify-between items-center text-sm">
+                <span className="font-bold text-gray-900 dark:text-white">Balance After</span>
+                {walletBalance === null ? (
+                  <div className="h-5 w-20 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
+                ) : (
+                  <span className="font-bold text-gray-900 dark:text-white">{(walletBalance - 50).toLocaleString()} Credits</span>
+                )}
               </div>
             </div>
 
-            <div className="bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-white/10 p-4 space-y-3 shadow-sm">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-zinc-400 font-medium">Your Current Balance</span>
-                <span className="font-bold text-gray-900 dark:text-white">{walletBalance.toLocaleString()} Credits</span>
+            {walletBalance !== null && walletBalance < 50 ? (
+              <div className="mt-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-[11px] font-bold flex justify-between items-center">
+                <span>Insufficient balance (requires 50 Credits)</span>
+                <Link to="/credits" className="px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">Buy Credits</Link>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-zinc-400 font-medium">Platform Fee</span>
-                <span className="font-bold text-red-500">-50 Credits</span>
-              </div>
-              <div className="pt-3 border-t border-dashed border-gray-200 dark:border-white/20 flex justify-between text-sm">
-                <span className="text-gray-900 dark:text-white font-bold">Balance After</span>
-                <span className="font-black text-blue-500">{(walletBalance - 50).toLocaleString()} Credits</span>
-              </div>
-            </div>
-            
-            <label className="flex items-center gap-3 cursor-pointer text-sm text-gray-700 dark:text-zinc-300 mt-1 p-3 rounded-xl hover:bg-white/50 dark:hover:bg-white/5 transition-colors border border-transparent hover:border-blue-500/10">
-              <input 
-                type="checkbox" 
-                checked={agreedToFee} 
-                onChange={(e) => setAgreedToFee(e.target.checked)}
-                className="h-5 w-5 rounded border-gray-300 text-blue-500 focus:ring-blue-500 dark:border-white/20 dark:bg-dark-surface dark:checked:bg-blue-500 transition cursor-pointer"
-              />
-              <span className="font-semibold select-none text-gray-900 dark:text-white">I agree to pay <strong className="text-blue-500">50 Credits</strong> to post a job.</span>
-            </label>
+            ) : (
+              <label className="flex items-start gap-2.5 cursor-pointer group mt-2">
+                <input 
+                  type="checkbox" 
+                  checked={agreedToFee} 
+                  onChange={(e) => setAgreedToFee(e.target.checked)}
+                  disabled={walletBalance === null}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 bg-white dark:bg-zinc-900 dark:border-white/20 transition cursor-pointer disabled:opacity-50"
+                />
+                <span className="text-xs text-gray-600 dark:text-zinc-400 select-none group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+                  I agree to the <span className="font-semibold text-gray-900 dark:text-white">50 Credits</span> deduction to post this job.
+                </span>
+              </label>
+            )}
           </div>
-        ) : null}
 
-        <div className="flex gap-2.5">
-          <button type="button" onClick={onBack} className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 font-bold hover:text-gray-900 dark:text-white transition text-xs focus:outline-none">Go Back</button>
-          <button
-            type="button"
-            onClick={handlePublishClick}
-            disabled={isSubmitting || (walletBalance !== null && walletBalance < 50) || (walletBalance !== null && !agreedToFee)}
-            className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white transition focus:outline-none shadow-lg ${isSubmitting || (walletBalance !== null && !agreedToFee) ? 'bg-blue-500/50 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'}`}
-          >
-            {isSubmitting ? 'Submitting...' : 'Deploy Active Job Post'} <Check className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex gap-2.5">
+            <button type="button" onClick={onBack} className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 font-bold hover:text-gray-900 dark:text-white transition text-xs focus:outline-none">Go Back</button>
+            <button
+              type="button"
+              onClick={handlePublishClick}
+              disabled={isSubmitting || walletBalance === null || walletBalance < 50 || !agreedToFee}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition focus:outline-none ${
+                isSubmitting || walletBalance === null || walletBalance < 50 || !agreedToFee 
+                  ? 'bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-zinc-600 cursor-not-allowed' 
+                  : 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+              }`}
+            >
+              {isSubmitting ? 'Submitting...' : 'Confirm Payment & Post'} <Check className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
 };
 export default CreateReview;
 

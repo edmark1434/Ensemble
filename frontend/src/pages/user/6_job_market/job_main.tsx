@@ -144,6 +144,7 @@ const JobMain: React.FC = () => {
           isTeam: Boolean(j.is_team || j.posted_as === 'Team' || j.team_id),
           posted_as: j.posted_as,
           deadline: j.rough_deadline ? new Date(j.rough_deadline).toLocaleDateString() : undefined,
+          requireNDA: j.require_nda || false,
           portfolioUseAllowed: j.portfolio_use_allowed || false,
           portfolioDuration: j.portfolio_use_duration_seconds || null,
           isExistingProject: j.is_existing_project || false,

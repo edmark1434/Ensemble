@@ -103,6 +103,7 @@ const JobCreatePostPage: React.FC = () => {
   const [isExistingProject, setIsExistingProject] = useState(false);
   const [existingProjectId, setExistingProjectId] = useState<string | null>(null);
   const [initiatorRole, setInitiatorRole] = useState("Freelancer");
+  const [requireNDA, setRequireNDA] = useState(false);
 
   // --- ERROR & VALIDATION STATES ---
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -159,7 +160,7 @@ const JobCreatePostPage: React.FC = () => {
     }
   };
 
-  const handleSlide2Advance = () => {
+  const handleSlide2Advance = (jumpToReview = false) => {
     const stepErrors: { [key: string]: string } = {};
     const rawMinBudget = getRawNumber(minBudget);
     const rawMaxBudget = getRawNumber(maxBudget);
@@ -193,14 +194,16 @@ const JobCreatePostPage: React.FC = () => {
 
     if (Object.keys(stepErrors).length > 0) {
       setErrors(stepErrors);
-      return;
+      return false;
     }
 
     setErrors({});
-    setCurrentSlide(3);
+    if (jumpToReview) setCurrentSlide(4);
+    else setCurrentSlide(3);
+    return true;
   };
 
-  const handleSlide3Advance = () => {
+  const handleSlide3Advance = (jumpToReview = false) => {
     const stepErrors: { [key: string]: string } = {};
 
     if (portfolioUseAllowed && !portfolioDuration) {
@@ -213,21 +216,22 @@ const JobCreatePostPage: React.FC = () => {
 
     if (Object.keys(stepErrors).length > 0) {
       setErrors(stepErrors);
-      return;
+      return false;
     }
 
     setErrors({});
     setHasReachedReview(true);
     setCurrentSlide(4);
+    return true;
   };
 
   const handleJumpToReview = () => {
     if (currentSlide === 1) {
       if (validateSlide1()) setCurrentSlide(4);
     } else if (currentSlide === 2) {
-      handleSlide2Advance();
+      handleSlide2Advance(true);
     } else if (currentSlide === 3) {
-      handleSlide3Advance();
+      handleSlide3Advance(true);
     }
   };
 
@@ -266,7 +270,8 @@ const JobCreatePostPage: React.FC = () => {
         portfolio_use_duration_seconds: portfolioDuration ? parseInt(portfolioDuration) : null,
         is_existing_project: isExistingProject,
         existing_project_id: isExistingProject ? existingProjectId : null,
-        initiator_role: initiatorRole
+        initiator_role: initiatorRole,
+          require_nda: requireNDA
       };
 
       await createJob(finalJobPayload);
@@ -430,6 +435,8 @@ const JobCreatePostPage: React.FC = () => {
                   setExistingProjectId={setExistingProjectId}
                   initiatorRole={initiatorRole}
                   setInitiatorRole={setInitiatorRole}
+                  requireNDA={requireNDA}
+                  setRequireNDA={setRequireNDA}
                   errors={errors}
                   onBack={() => setCurrentSlide(2)}
                   onAdvance={handleSlide3Advance}
@@ -466,6 +473,7 @@ const JobCreatePostPage: React.FC = () => {
                   isExistingProject={isExistingProject}
                   existingProjectId={existingProjectId}
                   initiatorRole={initiatorRole}
+                  requireNDA={requireNDA}
                   skills={skills}
                   errors={errors}
                   setErrors={setErrors}
