@@ -336,7 +336,14 @@ async function grantBadgeService(accountId, registryId) {
         throw new Error('Badge registry ID is required');
     }
     try {
-        await grantBadgeToAccount(accountId, registryId);
+        const badges = await getAccountBadges(accountId);
+        const displayedBadges = badges.filter(b => b.display_order !== null);
+        let displayOrder = null;
+        if (displayedBadges.length < 5) {
+            const maxOrder = displayedBadges.reduce((max, b) => Math.max(max, b.display_order), 0);
+            displayOrder = maxOrder + 1;
+        }
+        await grantBadgeToAccount(accountId, registryId, displayOrder);
         return { success: true, message: 'Badge granted successfully' };
     } catch (err) {
         console.error('Error granting badge:', err);
