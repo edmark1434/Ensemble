@@ -14,7 +14,7 @@ interface FilesTable {
 interface MediaAssetsTable {
   media_asset_id: Generated<string>;
   owner_user_id: string;
-  project_id: string;
+  project_id: string | null;
   name: string;
   original_file_id: string;
   proxy_file_id: string;
@@ -134,6 +134,36 @@ interface BlockYjsUpdatesTable {
   block_id: string;
 }
 
+interface MarketAssetsTable {
+  market_asset_id: Generated<string>;
+  name: string;
+  description: string;
+  price_credits: number;
+  status: string;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at: Date | null;
+}
+
+interface MarketMediaAssetsTable {
+  market_asset_id: string;
+  media_asset_id: string;
+}
+
+interface TagsTable {
+  tag_id: Generated<string>;
+  name: string;
+  created_at: Generated<Date>;
+  deleted_at: Date | null;
+}
+
+interface MarketAssetTagsTable {
+  market_asset_id: string;
+  tag_id: string;
+  created_at: Generated<Date>;
+  deleted_at: Date | null;
+}
+
 interface Database {
   files: FilesTable;
   media_assets: MediaAssetsTable;
@@ -154,6 +184,11 @@ interface Database {
   project_yjs_snapshots: ProjectYjsSnapshotsTable;
   block_yjs_updates: BlockYjsUpdatesTable;
   block_yjs_snapshots: BlockYjsSnapshotsTable;
+
+  market_assets: MarketAssetsTable;
+  market_media_assets: MarketMediaAssetsTable;
+  tags: TagsTable;
+  market_asset_tags: MarketAssetTagsTable;
 }
 
 const globalForDb = globalThis as unknown as { pool?: Pool };

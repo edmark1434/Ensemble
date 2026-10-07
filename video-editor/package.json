@@ -27,6 +27,7 @@
     "@google/genai": "^1.6.0",
     "@hookform/resolvers": "^3.9.0",
     "@interactify/toolkit": "^1.0.0",
+    "@lottiefiles/dotlottie-react": "^0.20.0",
     "@next/env": "^16.3.1",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-avatar": "^1.1.9",
