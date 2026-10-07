@@ -154,18 +154,19 @@ export default function DiscoveryPage() {
   const [loading, setLoading] = useState(false);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [myProfileData, setMyProfileData] = useState<UserProfile | null>(null);
+  const myHandle = userInfo?.username || userInfo?.handle;
   useEffect(() => {
-    if (!userInfo?.handle) return;
+    if (!myHandle || !userInfo?.account_id) return;
     const fetchMyProfile = async () => {
       try {
-        const response = await api.get('/api/accounts/search-users', { params: { handle: userInfo.handle } });
+        const response = await api.get('/api/accounts/search-users', { params: { handle: myHandle } });
         const data = response.data?.data || [];
         const me = data.find((a: any) => String(a.account_id) === String(userInfo.account_id));
         if (me) setMyProfileData(mapAccount(me, cloudfront));
       } catch (err) {}
     };
     fetchMyProfile();
-  }, [userInfo?.handle, userInfo?.account_id, cloudfront]);
+  }, [myHandle, userInfo?.account_id, cloudfront]);
   const [roleFilter, setRoleFilter] = useState("Freelancer");
   const [sortOption, setSortOption] = useState("default");
   const [currentPage, setCurrentPage] = useState(1);
