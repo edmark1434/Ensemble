@@ -60,11 +60,11 @@ async function createJobRepositories(jobData) {
                 timeline_min, timeline_max, posted_as, team_id, status,
                 rough_deadline, rough_no_of_revisions,
                 portfolio_use_allowed, portfolio_use_duration_seconds,
-                is_existing_project, existing_project_id, initiator_role
+                is_existing_project, existing_project_id, initiator_role, require_nda
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                 $15, 0,
-                $16, $17, $18, $19, $20
+                $16, $17, $18, $19, $20, $21
             ) RETURNING job_id;
         `;
         

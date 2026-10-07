@@ -91,40 +91,36 @@ export const OrdersSelectGigPage: React.FC = () => {
           {filteredGigs.map((gig) => (
             <motion.div
               key={gig.id}
-              whileHover={{ y: -3 }}
+              whileHover={{ y: -4 }}
               transition={{ duration: 0.2 }}
               onClick={() => navigate(`/gigs/orders/incoming/${gig.id}`)}
-              className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface overflow-hidden backdrop-blur-sm shadow-xl hover:border-white/20 cursor-pointer transition flex flex-col justify-between"
+              className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface overflow-hidden backdrop-blur-sm shadow-xl hover:shadow-2xl hover:border-blue-500/30 dark:hover:border-blue-500/30 cursor-pointer transition-all flex flex-col justify-between"
             >
               {/* Thumbnail Image Header */}
-              <div className="relative h-36 w-full bg-zinc-950 overflow-hidden border-b border-gray-100 dark:border-white/5 shrink-0">
+              <div className="relative h-44 w-full bg-zinc-950 overflow-hidden shrink-0">
                 <img
                   src={gig.thumbnail}
                   alt={gig.title}
-                  className="w-full h-full object-cover opacity-75 group-hover:scale-105 transition-transform duration-300"
+                  className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
-
-                <div className="absolute top-3 right-3 flex items-center justify-end">
-                  <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border backdrop-blur-md ${
-                    gig.status === "Open" || !gig.status
-                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                      : "bg-red-500/20 text-red-400 border-red-500/30"
-                  }`}>
-                    {gig.status || "Open"}
-                  </span>
-                </div>
               </div>
 
               {/* Gig Info Body */}
               <div className="p-5 space-y-4 flex-1 flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold text-gray-500 dark:text-zinc-400">
-                    <span className="px-2 py-0.5 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10">{gig.category}</span>
-                    <span className="px-2 py-0.5 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10">{gig.slots} Slots</span>
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
+                    <span className={`px-2.5 py-1 rounded-full border ${
+                      gig.status === "Open" || !gig.status
+                        ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
+                        : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
+                    }`}>
+                      {gig.status || "Open"}
+                    </span>
+                    <span className="px-2.5 py-1 rounded-full bg-white dark:bg-dark-base shadow-sm border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300">{gig.category}</span>
+                    <span className="px-2.5 py-1 rounded-full bg-white dark:bg-dark-base shadow-sm border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300">{gig.slots} Slots</span>
                   </div>
 
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-blue-400 transition-colors line-clamp-1 leading-snug">
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors line-clamp-1 leading-snug drop-shadow-sm">
                     {gig.title}
                   </h3>
                   
@@ -134,29 +130,43 @@ export const OrdersSelectGigPage: React.FC = () => {
                 </div>
 
                 {/* Financial Stats */}
-                <div className="flex flex-wrap items-center gap-2 text-xs pt-2">
-                  <div className="flex-1 min-w-0 p-2.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5">
-                    <span className="text-[9px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Starting at</span>
-                    <span className="font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1 text-xs mt-0.5">
+                <div className="grid grid-cols-4 gap-2 pt-3">
+                  <div className="p-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10">
+                    <span className="text-[9px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-wider block truncate">Tiers</span>
+                    <span className="font-extrabold text-gray-900 dark:text-white flex items-center gap-1 text-sm mt-0.5">
+                      <Briefcase className="h-3.5 w-3.5 text-purple-500 dark:text-purple-400 shrink-0" /> {gig.tiers ? gig.tiers.length : 0}
+                    </span>
+                  </div>
+
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500/5 to-transparent border border-amber-500/10 dark:border-amber-500/20">
+                    <span className="text-[9px] font-bold text-amber-700/70 dark:text-amber-500/70 uppercase tracking-wider block truncate">Starting</span>
+                    <span className="font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1 text-sm mt-0.5">
                       <CreditIcon className="h-3.5 w-3.5 shrink-0" /> {gig.tiers && gig.tiers[0] ? gig.tiers[0].price : 0}
                     </span>
                   </div>
 
-                  <div className="flex-1 min-w-0 p-2.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5">
-                    <span className="text-[9px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Orders</span>
-                    <span className="font-bold text-gray-900 dark:text-white flex items-center gap-1 text-xs mt-0.5">
-                      <Briefcase className="h-3.5 w-3.5 text-blue-400 shrink-0" /> {gig.ordersCount || 0}
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500/5 to-transparent border border-orange-500/10 dark:border-orange-500/20">
+                    <span className="text-[9px] font-bold text-orange-700/70 dark:text-orange-500/70 uppercase tracking-wider block truncate">Pending</span>
+                    <span className="font-extrabold text-orange-600 dark:text-orange-400 flex items-center gap-1 text-sm mt-0.5">
+                      <Clock className="h-3.5 w-3.5 shrink-0" /> {gig.pendingOrdersCount || 0}
+                    </span>
+                  </div>
+
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500/5 to-transparent border border-blue-500/10 dark:border-blue-500/20">
+                    <span className="text-[9px] font-bold text-blue-700/70 dark:text-blue-500/70 uppercase tracking-wider block truncate">Total</span>
+                    <span className="font-extrabold text-blue-600 dark:text-blue-400 flex items-center gap-1 text-sm mt-0.5">
+                      <Users className="h-3.5 w-3.5 shrink-0" /> {gig.ordersCount || 0}
                     </span>
                   </div>
                 </div>
 
                 {/* Action Link Footer */}
-                <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-xs font-semibold text-blue-400">
-                  <span className="text-[11px] text-gray-500 dark:text-zinc-500 font-medium text-left">
+                <div className="pt-4 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-xs font-bold text-blue-500 dark:text-blue-400">
+                  <span className="text-[11px] text-gray-500 dark:text-zinc-500 font-medium">
                     {gig.postedAt ? new Date(gig.postedAt).toLocaleDateString() : gig.timeAgo}
                   </span>
                   <div className="flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                    View Orders <ChevronRight className="h-3.5 w-3.5" />
+                    View Orders <ChevronRight className="h-4 w-4" />
                   </div>
                 </div>
               </div>
