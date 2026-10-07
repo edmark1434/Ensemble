@@ -203,7 +203,7 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
               className="w-full flex items-center justify-between rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface px-3.5 py-2.5 text-xs text-left transition hover:border-white/20"
             >
               <span className="text-gray-900 dark:text-white font-medium flex items-center gap-2">
-                <Percent className="h-3.5 w-3.5 text-blue-400" />
+                
                 {selectedRateLabel}
               </span>
               <ChevronDown className={`h-4 w-4 text-gray-500 dark:text-zinc-400 transition-transform ${isRateOpen ? "rotate-180 text-blue-400" : ""}`} />
@@ -230,7 +230,7 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
                             setIsRateOpen(false);
                           }}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
-                            isSelected ? "bg-blue-500/15 text-blue-400" : "text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:text-white"
+                            isSelected ? "bg-blue-500/15 text-blue-400" : "text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
                           }`}
                         >
                           <span>{rate.label}</span>
