@@ -31,6 +31,7 @@ interface UserProfile {
   isFollowing: boolean;
   isFollowedBy?: boolean;
   badges?: { id: string; display_order: number | null }[];
+  bannerPreset?: string | null;
     email?: string;
     joinedDate?: string;
     totalJobs?: number;
@@ -88,6 +89,7 @@ const mapAccount = (account: any, cloudfront: string): UserProfile => {
       totalAssets: Number(account.total_assets) || 0,
     isFollowedBy: !!account.is_followed_by,
     badges: Array.isArray(account.badges) ? account.badges : [],
+    bannerPreset: account.banner_preset ?? null,
   };
 };
 

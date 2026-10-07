@@ -1028,6 +1028,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             roles: userDetails.role || [],
             subscriptionType: userDetails.subscriptionType || "Free",
             badges: userDetails.badges || [],
+            bannerPreset: userDetails.banner_preset ?? null,
             tagline: userDetails.tagline || "",
             totalJobs: userDetails.total_jobs || 0,
             totalServices: userDetails.total_services || 0,
