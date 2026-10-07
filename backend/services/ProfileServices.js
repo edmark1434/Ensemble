@@ -15,7 +15,8 @@ const {
     updateBudgetCreditsRepositories,
     updateBannerPresetRepositories
 } = require('../repositories/ProfileRepositories');
-const { PROFILE_BANNER_PRESETS } = require('../lib/ProfileBannerPresets');
+const { PROFILE_BANNER_PRESETS, BANNER_REQUIRED_BADGES } = require('../lib/ProfileBannerPresets');
+const { hasClaimedBadge } = require('../repositories/BadgeRepositories');
 const { getAccountLinkByAccountIdService } = require('../services/AccountServices');
 const {getUserByIdFromAccountId} = require('../repositories/UserRepositories');
 const {checkAccountId, getAccountBadges} = require('../repositories/AccountRepositories');
@@ -70,6 +71,10 @@ async function updateBannerPresetServices(accountId, bannerPreset) {
     const value = bannerPreset === null || bannerPreset === undefined || bannerPreset === '' ? null : bannerPreset;
     if (value !== null && !PROFILE_BANNER_PRESETS.includes(value)) {
         throw new ProfileBudgetError('Choose one of the available banner presets');
+    }
+    const requiredBadge = value ? BANNER_REQUIRED_BADGES[value] : null;
+    if (requiredBadge && !await hasClaimedBadge(accountId, requiredBadge)) {
+        throw new ProfileBudgetError('You need to claim the matching badge to use this banner', 403);
     }
 
     const updated = await updateBannerPresetRepositories(accountId, value);

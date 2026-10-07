@@ -990,6 +990,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         isOpen={isBannerModalOpen}
         onClose={() => setIsBannerModalOpen(false)}
         currentBanner={userDetails?.banner_preset ?? null}
+        ownedBadgeIds={(userDetails?.badges || []).map(b => String(b.id))}
         onSave={async (bannerPreset) => {
           const { data } = await api.put("/api/accounts/profile/banner", { banner_preset: bannerPreset });
           const saved = data?.data?.banner_preset ?? null;

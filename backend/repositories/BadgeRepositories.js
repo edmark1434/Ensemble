@@ -130,6 +130,17 @@ async function revokeAccountBadge(accountBadgeId) {
     return rows[0] || null;
 }
 
+async function hasClaimedBadge(accountId, registryId) {
+    const { rows } = await pool.query(`
+        SELECT 1
+        FROM account_badges ab
+        JOIN badges b ON b.badge_id = ab.badge_id
+        WHERE ab.account_id = $1 AND b.registry_id = $2 AND ab.status = 'claimed'
+        LIMIT 1
+    `, [accountId, registryId]);
+    return rows.length > 0;
+}
+
 async function getOwnBadgeGrants(accountId) {
     const { rows } = await pool.query(`
         SELECT ab.account_badge_id, ab.status, ab.grant_message, ab.created_at, ab.claimed_at, b.registry_id, b.name
@@ -150,4 +161,5 @@ module.exports = {
     claimAccountBadge,
     revokeAccountBadge,
     getOwnBadgeGrants,
+    hasClaimedBadge,
 };

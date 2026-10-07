@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
-import { X, Check, AlertTriangle, Trash2 } from "lucide-react";
-import { PROFILE_BANNER_GROUPS, bannerPresetLabel, bannerPresetUrl } from "@/lib/profileBanners";
+import { X, Check, AlertTriangle, Trash2, Lock } from "lucide-react";
+import { PROFILE_BANNER_GROUPS, BANNER_REQUIRED_BADGES, bannerPresetLabel, bannerPresetUrl } from "@/lib/profileBanners";
 
 interface BannerEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (bannerPreset: string | null) => Promise<void>;
   currentBanner?: string | null;
+  ownedBadgeIds?: string[];
 }
 
-export default function BannerEditModal({ isOpen, onClose, onSave, currentBanner = null }: BannerEditModalProps) {
+export default function BannerEditModal({ isOpen, onClose, onSave, currentBanner = null, ownedBadgeIds = [] }: BannerEditModalProps) {
   const [selected, setSelected] = useState<string | null>(currentBanner);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
@@ -119,13 +120,15 @@ export default function BannerEditModal({ isOpen, onClose, onSave, currentBanner
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 p-1">
               {group.presets.map((preset) => {
                 const isActive = selected === preset;
+                const requiredBadge = BANNER_REQUIRED_BADGES[preset];
+                const isLocked = !!requiredBadge && !ownedBadgeIds.includes(requiredBadge.id);
                 return (
                   <button
                     key={preset}
                     type="button"
                     onClick={() => setSelected(preset)}
-                    disabled={isSaving || isSaved}
-                    title={bannerPresetLabel(preset)}
+                    disabled={isSaving || isSaved || isLocked}
+                    title={isLocked ? `Requires the ${requiredBadge.name} badge` : bannerPresetLabel(preset)}
                     className="group flex flex-col gap-1.5 text-left disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <span
@@ -141,7 +144,17 @@ export default function BannerEditModal({ isOpen, onClose, onSave, currentBanner
                           <Check className="h-4 w-4 text-white" />
                         </span>
                       )}
+                      {isLocked && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/55">
+                          <Lock className="h-4 w-4 text-white" />
+                        </span>
+                      )}
                     </span>
+                    {isLocked && (
+                      <span className="truncate px-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+                        Requires {requiredBadge.name}
+                      </span>
+                    )}
                     <span
                       className={`truncate px-0.5 text-[11px] font-medium ${
                         isActive ? "text-[#4a6fa5] dark:text-blue-300" : "text-gray-600 dark:text-zinc-400"
