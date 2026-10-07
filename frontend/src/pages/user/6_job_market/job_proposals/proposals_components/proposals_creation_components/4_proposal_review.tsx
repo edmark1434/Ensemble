@@ -169,7 +169,7 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
               return (
               <div key={m.id} className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] space-y-1">
                 <div className="flex justify-between items-center text-xs font-bold text-gray-900 dark:text-white">
-                  <span className="text-gray-700 dark:text-zinc-300">Milestone {idx + 1}: {m.name}</span>
+                  <span className="text-gray-700 dark:text-zinc-300">Milestone {idx + 1}: {m.name} <span className="text-gray-500 dark:text-zinc-500 font-normal ml-1">({m.percentage || Math.floor(100/count)}%)</span></span>
                   <div className="flex flex-col items-end">
                     <span className="text-gray-700 dark:text-zinc-300 font-mono flex items-center gap-1">
                       <CreditIcon className="h-3 w-3 text-amber-500 dark:text-amber-400" /> {milestonePayout.toLocaleString()}
@@ -184,7 +184,7 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
                     <RefreshCcw className="h-2.5 w-2.5 text-gray-400 dark:text-zinc-500" />
                     Included Revisions: <strong className="text-gray-600 dark:text-zinc-300">{m.revisions}</strong>
                   </span>
-                  <span>Overage Price: <strong className="text-gray-700 dark:text-zinc-300">{(milestonePayout + overageRateBonus).toLocaleString()}</strong></span>
+                  <span>Overage Price: <strong className="text-gray-700 dark:text-zinc-300">{(milestonePayout + overageRateBonus).toLocaleString()}</strong> <span className="text-gray-400 dark:text-zinc-500 font-bold ml-1">(+{additionalWorkRate}%)</span></span>
                 </div>
               </div>
               );
@@ -204,47 +204,52 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
             <Link to="/credits" className="px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">Buy Credits</Link>
           </div>
         ) : walletBalance !== null ? (
-          <div className="rounded-2xl border-2 border-blue-500/20 bg-blue-50/50 dark:bg-blue-500/5 p-5 flex flex-col gap-4 shadow-inner relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-500"></div>
-            
-            <div className="flex justify-between items-start">
-              <div>
-                <h4 className="text-base font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
-                  <svg className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Checkout Summary
-                </h4>
-                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-sm leading-relaxed">
-                  To maintain a high-quality marketplace and prevent spam, we require a small fee to submit proposals.
-                </p>
+          <div className="flex flex-col gap-4 p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
+            <div>
+              <h4 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight flex items-center justify-between">
+                Checkout Summary
+                {walletBalance === null && <span className="text-[10px] font-normal text-gray-400 animate-pulse">Loading balance...</span>}
+              </h4>
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5 max-w-sm">
+                To maintain a high-quality marketplace, a small fee is required to submit proposals.
+              </p>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 dark:text-zinc-400">Current Balance</span>
+                {walletBalance === null ? (
+                  <div className="h-4 w-16 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
+                ) : (
+                  <span className="font-semibold text-gray-900 dark:text-white">{walletBalance.toLocaleString()} Credits</span>
+                )}
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 dark:text-zinc-400">Platform Fee</span>
+                <span className="font-semibold text-red-500">-10 Credits</span>
+              </div>
+              <div className="pt-2.5 mt-1 border-t border-gray-200 dark:border-white/10 flex justify-between items-center text-sm">
+                <span className="font-bold text-gray-900 dark:text-white">Balance After</span>
+                {walletBalance === null ? (
+                  <div className="h-5 w-20 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
+                ) : (
+                  <span className="font-bold text-gray-900 dark:text-white">{(walletBalance - 10).toLocaleString()} Credits</span>
+                )}
               </div>
             </div>
 
-            <div className="bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-white/10 p-4 space-y-3 shadow-sm">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-zinc-400 font-medium">Your Current Balance</span>
-                <span className="font-bold text-gray-900 dark:text-white">{walletBalance.toLocaleString()} Credits</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-zinc-400 font-medium">Platform Fee</span>
-                <span className="font-bold text-red-500">-10 Credits</span>
-              </div>
-              <div className="pt-3 border-t border-dashed border-gray-200 dark:border-white/20 flex justify-between text-sm">
-                <span className="text-gray-900 dark:text-white font-bold">Balance After</span>
-                <span className="font-black text-blue-500">{(walletBalance - 10).toLocaleString()} Credits</span>
-              </div>
-            </div>
-            
-            <label className="flex items-center gap-3 cursor-pointer text-sm text-gray-700 dark:text-zinc-300 mt-1 p-3 rounded-xl hover:bg-white/50 dark:hover:bg-white/5 transition-colors border border-transparent hover:border-blue-500/10">
-              <input 
-                type="checkbox" 
-                checked={agreedToFee} 
+            <div className="mt-2 flex items-start gap-2.5">
+              <input
+                type="checkbox"
+                id="fee-agreement"
+                checked={agreedToFee}
                 onChange={(e) => setAgreedToFee(e.target.checked)}
-                className="h-5 w-5 rounded border-gray-300 text-blue-500 focus:ring-blue-500 dark:border-white/20 dark:bg-dark-surface dark:checked:bg-blue-500 transition cursor-pointer"
+                className="mt-0.5 rounded border-gray-300 dark:border-white/20 bg-white dark:bg-white/5 text-blue-500 focus:ring-blue-500/30"
               />
-              <span className="font-semibold select-none text-gray-900 dark:text-white">I agree to pay <strong className="text-blue-500">10 Credits</strong> to submit this proposal.</span>
-            </label>
+              <label htmlFor="fee-agreement" className="text-[11px] text-gray-500 dark:text-zinc-400 select-none cursor-pointer leading-tight">
+                I agree to the <strong className="text-gray-900 dark:text-white">10 Credits</strong> deduction to submit this proposal.
+              </label>
+            </div>
           </div>
         ) : null}
 
