@@ -110,21 +110,21 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
       <div className="p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
         <div>
           <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase">Total Escrow Bid</span>
-          <p className="text-sm font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1">
+          <div className="text-sm font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1">
             <CreditIcon className="h-4 w-4" /> {totalBid.toLocaleString()}
-          </p>
+          </div>
         </div>
         <div>
           <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase">Total Allocations (%)</span>
-          <p className={`text-sm font-bold ${isPercentageValid ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+          <div className={`text-sm font-bold ${isPercentageValid ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
             {totalPercentage}% / 100%
-          </p>
+          </div>
         </div>
         <div>
           <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase">Overage Revision Fee</span>
-          <p className="text-xs font-bold text-gray-700 dark:text-zinc-300">
+          <div className="text-xs font-bold text-gray-700 dark:text-zinc-300">
             +{overageRateBonus.toLocaleString()} ({additionalWorkRate}%)
-          </p>
+          </div>
         </div>
       </div>
 

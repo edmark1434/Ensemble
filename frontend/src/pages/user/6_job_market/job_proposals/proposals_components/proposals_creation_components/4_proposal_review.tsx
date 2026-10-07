@@ -50,6 +50,8 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
   const totalBid = parseInt(bidAmount || "0");
   const count = milestones.length || 1;
   
+  const averageMilestonePayout = Math.floor(totalBid / count);
+  const overageRateBonus = Math.floor(averageMilestonePayout * (additionalWorkRate / 100));
   const totalHours = milestones.reduce((sum, m) => sum + (Number(m.hours) || 0), 0);
 
   return (
