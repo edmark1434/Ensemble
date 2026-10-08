@@ -85,6 +85,48 @@ interface BlockMembersTable {
   deleted_at: Date | null;
 }
 
+interface BlockCommentsTable {
+  block_comment_id: Generated<string>;
+  block_id: string;
+  user_id: string;
+  comment: string;
+  time_ms: number | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+  deleted_at: Date | null;
+}
+
+interface BlockRepliesTable {
+  block_reply_id: Generated<string>;
+  block_comment_id: string;
+  user_id: string;
+  reply: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+  deleted_at: Date | null;
+}
+
+interface ProjectCommentsTable {
+  project_comment_id: Generated<string>;
+  project_id: string;
+  user_id: string;
+  comment: string;
+  time_ms: number | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+  deleted_at: Date | null;
+}
+
+interface ProjectRepliesTable {
+  project_reply_id: Generated<string>;
+  project_comment_id: string;
+  user_id: string;
+  reply: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+  deleted_at: Date | null;
+}
+
 interface SessionsTable {
   session_id: Generated<number>;
   project_id: string;
@@ -174,6 +216,11 @@ interface Database {
   project_members: ProjectMembersTable;
   blocks: BlocksTable;
   block_members: BlockMembersTable;
+
+  block_comments: BlockCommentsTable;
+  block_replies: BlockRepliesTable;
+  project_comments: ProjectCommentsTable;
+  project_replies: ProjectRepliesTable;
 
   sessions: SessionsTable;
   session_activities: SessionActivitiesTable;

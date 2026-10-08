@@ -1,15 +1,10 @@
 import React from "react";
 import { ControlItem } from "./control-item";
 import useLayoutStore from "./store/use-layout-store";
+import { CommentsPanel } from "./comments/comments-panel";
 
-// Placeholder panels - swap these out for the real Comments/Saves
-// implementations once they exist.
-const CommentsPanel = () => (
-  <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
-    Comments are coming soon.
-  </div>
-);
-
+// Placeholder panel - swap this out for the real Saves implementation
+// once it exists.
 const SavesPanel = () => (
   <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
     Save history is coming soon.
