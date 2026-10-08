@@ -32,6 +32,8 @@ interface TopSectionProps {
   bannerPreset?: string | null;
   onEditBanner?: () => void;
   onEditProfile?: () => void;
+  onEditTagline?: () => void;
+  onEditAccountTags?: () => void;
   onChatClick?: () => void;
   onVerificationClick?: () => void;
   followersCount?: number;
@@ -73,6 +75,8 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   bannerPreset,
   onEditBanner,
   onEditProfile,
+  onEditTagline,
+  onEditAccountTags,
   onChatClick,
   onVerificationClick,
   followersCount = 0,
@@ -215,7 +219,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             role={role}
             verificationLevel={verificationLevel}
             subscriptionType={subscriptionType}
-            onEditRole={isOwner ? onEditProfile : undefined}
+            onEditRole={isOwner ? onEditAccountTags : undefined}
           />
 
           {/* Row 2: Full Name Header Block */}
@@ -235,10 +239,21 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
                   return firstMid;
                 })()}
               </span>
-              <span className={`flex items-center gap-1 text-sm font-bold px-2.5 py-0.5 rounded-lg ml-1 ${!tagline ? 'opacity-60' : ''} ${subscriptionType === 'Business' ? 'animate-rainbow' : subscriptionType === 'Premium' ? 'animate-gold-solid' : 'silver-solid'}`}>
-                <Tag className="w-3.5 h-3.5" />
-                {tagline || (isOwner ? "Add Tagline" : "N/A")}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`flex items-center gap-1 text-sm font-bold px-2.5 py-0.5 rounded-lg ml-1 ${!tagline ? 'opacity-60' : ''} ${subscriptionType === 'Business' ? 'animate-rainbow' : subscriptionType === 'Premium' ? 'animate-gold-solid' : 'silver-solid'}`}>
+                  <Tag className="w-3.5 h-3.5" />
+                  {tagline || (isOwner ? "Add Tagline" : "N/A")}
+                </span>
+                {isOwner && (
+                  <button
+                    onClick={onEditTagline}
+                    className="p-1 rounded-full text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-zinc-800 transition"
+                    title="Edit Tagline"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </h1>
 
             {/* Tooltip & Trigger Node Group Wrapper */}
