@@ -1,9 +1,8 @@
-# Current Task: Restriction notice UI
+# Current Task: Support Restrictions desk layout
 
 ## Objective
-Make banned, suspended, locked, and violation notices readable on the login page, the in-app suspension bar, and account settings.
+Keep the Restrictions desk clear of the fixed moderator sidebar.
 
 ## Acceptance criteria
-- The notice stacks the status, explanation, and action. The action is a full-width button under the text.
-- Banned uses a rose tint, suspended and violations use an amber tint, and both stay readable in light and dark mode.
-- A suspended session shows a bar under the header instead of a card floating over the page.
+- The desk uses the same `md:pl-[260px]` offset as the other console pages.
+- Title, stat cards, and the violation form are fully visible beside the sidebar.

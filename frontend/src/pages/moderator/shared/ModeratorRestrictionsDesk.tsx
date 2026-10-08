@@ -176,7 +176,8 @@ export default function ModeratorRestrictionsDesk({
   const activeViolations = (data?.violations || []).filter((v) => v.active !== false).length;
 
   return (
-    <div className="space-y-6 p-6">
+    <main className="relative z-10 min-h-screen min-w-0 overflow-x-hidden px-6 py-8 md:pl-[260px] md:px-10">
+      <div className="min-w-0 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{roleLabel}</p>
@@ -223,8 +224,8 @@ export default function ModeratorRestrictionsDesk({
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <section className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-white">Issue violation</h2>
             <ShieldAlert className="h-4 w-4 text-zinc-500" />
@@ -281,7 +282,7 @@ export default function ModeratorRestrictionsDesk({
           </form>
         </section>
 
-        <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
+        <section className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-white">Account activity feed</h2>
             <span className="text-[10px] uppercase tracking-wide text-zinc-500">Live from account_activity</span>
@@ -328,8 +329,8 @@ export default function ModeratorRestrictionsDesk({
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-2">
+        <section className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
           <h2 className="mb-4 text-sm font-semibold text-white">Violations</h2>
           {loading && !data ? (
             <div className="flex items-center gap-2 text-sm text-zinc-500">
@@ -381,7 +382,7 @@ export default function ModeratorRestrictionsDesk({
           )}
         </section>
 
-        <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
+        <section className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
           <h2 className="mb-4 text-sm font-semibold text-white">Restricted accounts</h2>
           {loading && !data ? (
             <div className="flex items-center gap-2 text-sm text-zinc-500">
@@ -429,5 +430,6 @@ export default function ModeratorRestrictionsDesk({
         </section>
       </div>
     </div>
+    </main>
   );
 }
