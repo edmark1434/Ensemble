@@ -50,104 +50,6 @@ export function standingFromPayload(payload: unknown): AccountStanding | null {
   return null;
 }
 
-function toneFor(standing: AccountStanding) {
-  const code = String(standing.code || '');
-  const status = String(standing.status || '').toLowerCase();
-  if (code === 'ACCOUNT_BANNED' || status === 'banned') {
-    return {
-      Icon: Ban,
-      label: 'Banned',
-      shell: 'border-rose-300 bg-rose-600 text-white',
-      chip: 'bg-white text-rose-700',
-    };
-  }
-  if (code === 'ACCOUNT_LOCKED' || status === 'locked') {
-    return {
-      Icon: Lock,
-      label: 'Locked',
-      shell: 'border-zinc-200 bg-zinc-100 text-zinc-950',
-      chip: 'bg-zinc-950 text-white',
-    };
-  }
-  if (code === 'ACCOUNT_DELETED' || status === 'deleted') {
-    return {
-      Icon: Ban,
-      label: 'Closed',
-      shell: 'border-zinc-300 bg-zinc-900 text-white',
-      chip: 'bg-white text-zinc-950',
-    };
-  }
-  return {
-    Icon: ShieldAlert,
-    label: status === 'suspended' || code === 'ACCOUNT_SUSPENDED' ? 'Suspended' : 'Violation',
-    shell: 'border-amber-200 bg-amber-400 text-zinc-950',
-    chip: 'bg-zinc-950 text-amber-300',
-  };
-}
-
-function ViolationList({ violations }: { violations: AccountViolation[] }) {
-  if (!violations.length) return null;
-  return (
-    <ul className="mt-4 space-y-2">
-      {violations.map((violation, index) => (
-        <li
-          key={`${violation.type || 'violation'}-${index}`}
-          className="rounded-xl border border-black/15 bg-black/10 px-4 py-3 text-left"
-        >
-          <p className="text-sm font-semibold">
-            {violation.type || 'Violation'}
-            {Number(violation.points) > 0 ? ` · ${violation.points} pts` : ''}
-          </p>
-          {violation.reason ? <p className="mt-1 text-sm leading-relaxed">{violation.reason}</p> : null}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-export function AccountStandingNotice({
-  standing,
-  compact = false,
-}: {
-  standing: AccountStanding;
-  compact?: boolean;
-}) {
-  const tone = toneFor(standing);
-  const Icon = tone.Icon;
-  const violations = standing.violations || [];
-  return (
-    <div
-      role="alert"
-      className={`w-full rounded-2xl border-2 px-5 py-4 ${tone.shell}`}
-    >
-      <div className="flex items-start gap-3">
-        <Icon className={compact ? 'mt-0.5 h-6 w-6 shrink-0' : 'mt-1 h-8 w-8 shrink-0'} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${tone.chip}`}>
-              {tone.label}
-            </span>
-            {!compact ? (
-              <p className="text-lg font-bold leading-tight">
-                {standing.blocked || standing.suspended || standing.code === 'ACCOUNT_SUSPENDED'
-                  ? `Your account is ${tone.label.toLowerCase()}`
-                  : 'Your account has active violations'}
-              </p>
-            ) : null}
-          </div>
-          <p className={`${compact ? 'mt-2 text-sm' : 'mt-2 text-base'} font-medium leading-relaxed`}>
-            {standing.message ||
-              (standing.blocked
-                ? 'You cannot use Ensemble until this restriction is lifted.'
-                : 'Further violations can suspend this account.')}
-          </p>
-          <ViolationList violations={violations} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function standingKind(standing: AccountStanding) {
   const code = String(standing.code || '');
   const status = String(standing.status || '').toLowerCase();
@@ -158,8 +60,95 @@ function standingKind(standing: AccountStanding) {
   return 'warning' as const;
 }
 
-const GLASS_ACTION =
-  'shrink-0 rounded-xl border border-black/10 bg-white/60 px-3 py-2 text-xs font-semibold text-zinc-900 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10';
+function restrictionCopy(standing: AccountStanding) {
+  const kind = standingKind(standing);
+  const Icon = kind === 'banned' || kind === 'closed' ? Ban : kind === 'locked' ? Lock : ShieldAlert;
+  const label =
+    kind === 'banned'
+      ? 'Banned'
+      : kind === 'suspended'
+        ? 'Suspended'
+        : kind === 'locked'
+          ? 'Locked'
+          : kind === 'closed'
+            ? 'Closed'
+            : 'Violation';
+  const title =
+    kind === 'banned'
+      ? 'Your account is banned'
+      : kind === 'suspended'
+        ? 'Your account is suspended'
+        : kind === 'locked'
+          ? 'Your account is locked'
+          : kind === 'closed'
+            ? 'This account is closed'
+            : 'Your account has a violation';
+  const detail =
+    kind === 'banned'
+      ? 'You cannot sign in. A banned account is not allowed to log in to Ensemble.'
+      : standing.message ||
+        (kind === 'suspended'
+          ? 'You can view your account and notifications. Actions are turned off until this is lifted.'
+          : kind === 'warning'
+            ? 'Further violations can suspend this account.'
+            : 'You cannot sign in with this account.');
+  const tone =
+    kind === 'banned'
+      ? {
+          border: 'border-rose-500/35',
+          wash: 'bg-rose-50/90 dark:bg-[#1a1216]/92',
+          icon: 'bg-rose-500/15 text-rose-700 dark:text-rose-300',
+          chip: 'bg-rose-500/15 text-rose-700 dark:text-rose-200',
+        }
+      : kind === 'suspended' || kind === 'warning'
+        ? {
+            border: 'border-amber-500/40',
+            wash: 'bg-amber-50/90 dark:bg-[#1a1710]/92',
+            icon: 'bg-amber-500/15 text-amber-800 dark:text-amber-200',
+            chip: 'bg-amber-500/15 text-amber-800 dark:text-amber-200',
+          }
+        : {
+            border: 'border-zinc-300 dark:border-white/15',
+            wash: 'bg-white/90 dark:bg-[#16171c]/92',
+            icon: 'bg-zinc-900/5 text-zinc-700 dark:bg-white/10 dark:text-zinc-200',
+            chip: 'bg-zinc-900/5 text-zinc-700 dark:bg-white/10 dark:text-zinc-200',
+          };
+  return { kind, Icon, label, title, detail, tone };
+}
+
+function ViolationLines({ violations }: { violations: AccountViolation[] }) {
+  if (!violations.length) return null;
+  return (
+    <ul className="mt-3 space-y-2">
+      {violations.slice(0, 3).map((violation, index) => (
+        <li
+          key={`${violation.type || 'violation'}-${index}`}
+          className="rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2 text-left dark:border-white/10 dark:bg-white/[0.04]"
+        >
+          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {violation.type || 'Violation'}
+            {Number(violation.points) > 0 ? ` · ${violation.points} pts` : ''}
+          </p>
+          {violation.reason ? (
+            <p className="mt-0.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{violation.reason}</p>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const RESTRICTION_ACTION =
+  'inline-flex w-full items-center justify-center rounded-full bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200';
+
+export function AccountStandingNotice({
+  standing,
+}: {
+  standing: AccountStanding;
+  compact?: boolean;
+}) {
+  return <AccountRestrictionCard standing={standing} />;
+}
 
 export function AccountRestrictionCard({
   standing,
@@ -170,62 +159,33 @@ export function AccountRestrictionCard({
   actionLabel?: string;
   onAction?: () => void;
 }) {
-  const kind = standingKind(standing);
-  const banned = kind === 'banned';
-  const Icon = banned || kind === 'closed' ? Ban : kind === 'locked' ? Lock : ShieldAlert;
-  const iconClass = banned
-    ? 'text-rose-600 dark:text-rose-300'
-    : kind === 'suspended'
-      ? 'text-amber-600 dark:text-amber-300'
-      : 'text-zinc-600 dark:text-zinc-300';
-  const borderClass = banned
-    ? 'border-rose-500/30'
-    : kind === 'suspended'
-      ? 'border-amber-500/25'
-      : 'border-black/10 dark:border-white/10';
-  const title = banned
-    ? 'Your account is banned'
-    : kind === 'suspended'
-      ? 'Your account is suspended'
-      : kind === 'locked'
-        ? 'Your account is locked'
-        : kind === 'closed'
-          ? 'This account is closed'
-          : 'Your account has a violation';
-  const detail = banned
-    ? 'You cannot sign in. A banned account is not allowed to log in to Ensemble.'
-    : standing.message ||
-      (kind === 'suspended'
-        ? 'You can view your account and notifications. Actions are turned off until this is lifted.'
-        : 'You cannot sign in with this account.');
+  const { Icon, label, title, detail, tone } = restrictionCopy(standing);
 
   return (
     <div
       role="alert"
-      className={`flex w-full items-start gap-3 rounded-2xl border bg-white/70 px-4 py-3 text-zinc-900 shadow-lg backdrop-blur-md dark:bg-[#080a12]/70 dark:text-zinc-100 ${borderClass}`}
+      className={`w-full overflow-hidden rounded-2xl border text-zinc-900 shadow-sm backdrop-blur-md dark:text-zinc-100 ${tone.border} ${tone.wash}`}
+      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
     >
-      <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${iconClass}`} />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold">{title}</p>
-        <p className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{detail}</p>
-        {(standing.violations || []).length ? (
-          <ul className="mt-2 space-y-1">
-            {(standing.violations || []).slice(0, 3).map((violation, index) => (
-              <li key={`${violation.type || 'violation'}-${index}`} className="text-xs text-zinc-500 dark:text-zinc-400">
-                <span className="font-semibold text-zinc-700 dark:text-zinc-200">
-                  {violation.type || 'Violation'}
-                  {Number(violation.points) > 0 ? ` · ${violation.points} pts` : ''}
-                </span>
-                {violation.reason ? ` — ${violation.reason}` : ''}
-              </li>
-            ))}
-          </ul>
-        ) : null}
+      <div className="flex items-start gap-3 px-4 py-4">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone.icon}`}>
+          <Icon className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${tone.chip}`}>
+            {label}
+          </span>
+          <p className="mt-1.5 text-base font-semibold leading-tight">{title}</p>
+          <p className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{detail}</p>
+          <ViolationLines violations={standing.violations || []} />
+        </div>
       </div>
       {actionLabel && onAction ? (
-        <button type="button" onClick={onAction} className={GLASS_ACTION}>
-          {actionLabel}
-        </button>
+        <div className="border-t border-black/10 px-4 py-3 dark:border-white/10">
+          <button type="button" onClick={onAction} className={RESTRICTION_ACTION}>
+            {actionLabel}
+          </button>
+        </div>
       ) : null}
     </div>
   );
@@ -238,10 +198,30 @@ function SuspensionBanner({
   standing: AccountStanding;
   onOpenNotifications: () => void;
 }) {
+  const { Icon, detail, tone } = restrictionCopy(standing);
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-20 z-[80] flex justify-center px-4">
-      <div className="pointer-events-auto w-full max-w-3xl">
-        <AccountRestrictionCard standing={standing} actionLabel="Notifications" onAction={onOpenNotifications} />
+    <div className="pointer-events-none fixed inset-x-0 top-[4.75rem] z-[45] px-3 sm:px-5">
+      <div
+        role="alert"
+        className={`pointer-events-auto mx-auto flex w-full max-w-6xl flex-col gap-3 rounded-2xl border px-4 py-3 shadow-sm backdrop-blur-md sm:flex-row sm:items-center ${tone.border} ${tone.wash}`}
+        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+      >
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone.icon}`}>
+            <Icon className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Your account is suspended</p>
+            <p className="mt-0.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{detail}</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onOpenNotifications}
+          className="inline-flex shrink-0 items-center justify-center rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+        >
+          Notifications
+        </button>
       </div>
     </div>
   );
@@ -272,7 +252,10 @@ export function AccountRestrictionHost() {
   useEffect(() => {
     const onRestricted = (event: Event) => {
       const standing = standingFromPayload((event as CustomEvent).detail);
-      if (standing) setBlocked(standing);
+      if (!standing) return;
+      const path = window.location.pathname;
+      if (path === '/login' || path === '/admin' || path === '/staff') return;
+      setBlocked(standing);
     };
     window.addEventListener('ensemble:account-restricted', onRestricted);
     return () => window.removeEventListener('ensemble:account-restricted', onRestricted);
