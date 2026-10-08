@@ -30,6 +30,8 @@ import type { BadgeMetadata } from "./Displays/BadgeSideSection_ProfileDisplay.t
 import AvatarEditModal from "@/pages/user/7_profile/Edits/AvatarEditModal.tsx";
 import BannerEditModal from "@/pages/user/7_profile/Edits/BannerEditModal.tsx";
 import ProfileEditModal from "@/pages/user/7_profile/Edits/ProfileEditModal.tsx";
+import TaglineEditModal from "@/pages/user/7_profile/Edits/TaglineEditModal.tsx";
+import AccountTagsEditModal from "@/pages/user/7_profile/Edits/AccountTagsEditModal.tsx";
 import { BadgeEditModal } from "./Edits/BadgeEditModal.tsx";
 import SkillsEditModal from "@/pages/user/7_profile/Edits/SkillsEditModal.tsx";
 import { FollowersModal } from "./Displays/FollowersModal.tsx";
@@ -160,6 +162,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isTaglineModalOpen, setIsTaglineModalOpen] = useState(false);
+  const [isAccountTagsModalOpen, setIsAccountTagsModalOpen] = useState(false);
   const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
   const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
   const [isSavingSkills, setIsSavingSkills] = useState(false);
@@ -317,7 +321,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
     }
   };
 
-  const fetchAvatarPresets = async () => {
+  const fetchAvatarPresets = async (latestAvatarUrl?: string) => {
     try {
       const presetsResponse = await api.get("/api/files/profile-presets");
       const presetFiles = presetsResponse.data.files || [];
@@ -332,7 +336,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         currentAvatarItems = [currentAvatarData];
       }
 
-      let combinedPresets = [...presetFiles];
+      let newCustomPresets: Preset[] = [];
 
       if (currentAvatarItems.length > 0) {
         for (const avatar of currentAvatarItems) {
@@ -345,7 +349,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
                 path: avatar.path || avatar.avatar_preset_url || avatar.avatar_url || '',
                 name: avatar.name || 'Current Avatar'
               };
-              combinedPresets = [currentAvatarPreset, ...combinedPresets];
+              newCustomPresets.push(currentAvatarPreset);
             }
           }
         }
@@ -360,6 +364,27 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         }
       }
 
+      let combinedPresets = [...newCustomPresets.slice(0, 3), ...presetFiles];
+
+      // Ensure the actively used avatar (e.g. newly uploaded) is always present in the history list
+      const activeUrl = latestAvatarUrl || userDetails?.avatar_preset_url;
+
+      if (activeUrl) {
+        const exists = combinedPresets.some(p => p.path === activeUrl || constructAvatarUrl(p.path) === constructAvatarUrl(activeUrl));
+        if (!exists) {
+          combinedPresets.unshift({
+            file_id: latestAvatarUrl ? -1 : (userDetails?.avatar_file_id || -1), // Use its real ID if it has one, otherwise UI-only marker
+            path: activeUrl,
+            name: 'Current Avatar'
+          });
+          // Ensure we still respect the custom history limit of 3 by keeping max 3 non-preset items
+          const sysPresetsStart = combinedPresets.findIndex(p => presetFiles.some(pf => pf.file_id === p.file_id));
+          if (sysPresetsStart > 3) {
+             combinedPresets.splice(3, sysPresetsStart - 3);
+          }
+        }
+      }
+
       setAvatarPresets(combinedPresets);
       return combinedPresets;
     } catch (error) {
@@ -371,6 +396,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
 
   const saveAvatarEdit = async (fileOrPresetId: File | number, isPreset: boolean) => {
     try {
+      let newAvatarUrl: string | undefined = undefined;
+
       if (isPreset) {
         const selectedPreset = avatarPresets.find(
           p => p.file_id === fileOrPresetId
@@ -386,6 +413,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         });
 
         const fullUrl = constructAvatarUrl(selectedPreset.path);
+        newAvatarUrl = fullUrl;
         setUserDetails(prev => prev ? {
           ...prev,
           avatar_preset_url: fullUrl,
@@ -400,18 +428,21 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
           const key = await uploadFile(file);
           const cloudfrontUrl = import.meta.env.VITE_CLOUDFRONT_URL;
           const fullUrl = `${cloudfrontUrl}/${key}`;
+          newAvatarUrl = fullUrl;
 
-          await api.post("/api/accounts/update-profile", {
+          const updateResponse = await api.post("/api/accounts/update-profile", {
             name: file.name,
             path: key,
             mime_type: file.type,
             size_bytes: file.size,
           });
 
+          const newFileId = updateResponse?.data?.file || null;
+
           setUserDetails(prev => prev ? {
             ...prev,
             avatar_preset_url: fullUrl,
-            avatar_file_id: null
+            avatar_file_id: newFileId
           } : null);
 
           toast.success("Custom avatar uploaded successfully.", { id: toastId });
@@ -422,28 +453,35 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
       }
 
       setIsAvatarModalOpen(false);
-      await fetchAvatarPresets();
+      await fetchAvatarPresets(newAvatarUrl);
     } catch (e) {
       console.error("Error saving avatar:", e);
+      throw e;
     }
   };
 
   const saveProfileDetails = async (updatedData: any) => {
     try {
-      const formattedRoles = updatedData.roles
-        ? updatedData.roles.map((r: string) => ({ role_id: 0, role_name: r }))
-        : updatedData.role;
-
       setUserDetails({
         ...updatedData,
-        role: formattedRoles,
         joinedDate: updatedData.joinedDate || "",
-        location: updatedData.address
       });
       setIsProfileModalOpen(false);
     } catch (e) {
       toast.error("Failed executing operations pipeline data push.");
     }
+  };
+
+  const saveTaglineEdit = (newTagline: string) => {
+    setUserDetails((prev) => (prev ? { ...prev, tagline: newTagline } : null));
+  };
+
+  const saveAccountTagsEdit = (newRoles: string[]) => {
+    setUserDetails((prev) => {
+      if (!prev) return prev;
+      const formattedRoles = newRoles.map((r) => ({ role_id: 0, role_name: r as any }));
+      return { ...prev, role: formattedRoles };
+    });
   };
 
   const saveSelectedBadges = async (updatedBadgesList: BadgeMetadata[]) => {
@@ -533,7 +571,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
     if (confirmedProfileId === id && isUuid(id) && isOwner) {
       fetchAvatarPresets();
     }
-  }, [id, confirmedProfileId]);
+  }, [id, confirmedProfileId, userDetails?.avatar_preset_url]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -887,6 +925,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
           bannerPreset={userDetails?.banner_preset ?? null}
           onEditBanner={() => setIsBannerModalOpen(true)}
           onEditProfile={() => setIsProfileModalOpen(true)}
+          onEditTagline={() => setIsTaglineModalOpen(true)}
+          onEditAccountTags={() => setIsAccountTagsModalOpen(true)}
           onChatClick={handleOpenChat}
           onVerificationClick={() => navigate("/account-verification-status")}
         />
@@ -1000,14 +1040,30 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
       />
 
       {userDetails && (
-        <ProfileEditModal
-          isOpen={isProfileModalOpen}
-          onClose={() => { setIsProfileModalOpen(false); setHighlightField(undefined); }}
-          data={userDetails}
-          onSave={saveProfileDetails}
-          availableSkillsList={availableSkills}
-          highlightField={highlightField}
-        />
+        <>
+          <ProfileEditModal
+            isOpen={isProfileModalOpen}
+            onClose={() => { setIsProfileModalOpen(false); setHighlightField(undefined); }}
+            data={userDetails}
+            onSave={saveProfileDetails}
+            highlightField={highlightField}
+          />
+
+          <TaglineEditModal
+            isOpen={isTaglineModalOpen}
+            onClose={() => setIsTaglineModalOpen(false)}
+            currentTagline={userDetails.tagline || ""}
+            subscriptionType={userDetails.subscriptionType}
+            onSave={saveTaglineEdit}
+          />
+
+          <AccountTagsEditModal
+            isOpen={isAccountTagsModalOpen}
+            onClose={() => setIsAccountTagsModalOpen(false)}
+            currentRoles={userDetails.role?.map((r) => r.role_name) || []}
+            onSave={saveAccountTagsEdit}
+          />
+        </>
       )}
 
       

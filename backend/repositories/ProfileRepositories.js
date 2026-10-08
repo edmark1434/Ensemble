@@ -399,7 +399,7 @@ async function deleteProfileSocialMediaRepositories(accountId, listOfSocialMedia
 async function getProfileAvatarsByAccountId(accountId) {
     try{
         const queryText = `SELECT f.file_id,f.name, f.path from account_profile_files apf 
-        JOIN files f ON apf.file_id = f.file_id WHERE account_id = $1`;
+        JOIN files f ON apf.file_id = f.file_id WHERE account_id = $1 ORDER BY f.created_at DESC`;
         const result = await pool.query(queryText, [accountId]);
         return result.rows;
     }catch(err){
