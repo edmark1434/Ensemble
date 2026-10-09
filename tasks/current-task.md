@@ -1,12 +1,10 @@
-# Current Task: Staff ticket catalog
+# Current Task: Member ticket form behind login
 
 ## Objective
-Admin and moderator desks use the new ticket groups. Support is split into subgroups. Members still file with the previous labels until that form is updated.
+The submit-ticket form lives inside the signed-in app at `/support/ticket`. Logged-out visitors cannot open it. The account menu includes Get Support.
 
 ## Acceptance criteria
-- Existing ticket types are remapped by `1822700000000_ticket-catalog-v2`.
-- Support desks can filter by Account, Billing, Video Editing Platform, Messaging, Safety and appeals, and General.
-- Status includes Escalated to Dev. It does not close the ticket.
-- Account compromised, Payouts and withdrawals, Copyright claim, and Delivery and disputes default to High. Notifications and email defaults to Low.
-- Each type has a reply guide. Any moderator can move a ticket to another group.
-- Run `cd backend && npm run migrate` before using the new types.
+- `/support/ticket` renders the ticket form inside the member layout.
+- `/landing/SubmitATicket` and `/landing/submitaticket` redirect there.
+- A signed-out visit goes to `/login?redirect=/support/ticket`.
+- The profile menu has Get Support under Submit Feedback.

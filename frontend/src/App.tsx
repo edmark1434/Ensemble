@@ -195,7 +195,8 @@ function App() {
           <Route path="AboutUs" element={<PageAboutUs />} />
           <Route path="FAQ" element={<PageFAQ />} />
           <Route path="AskOurChatbot" element={<PageAskOurChatbot />} />
-          <Route path="SubmitATicket" element={<PageSubmitATicket />} />
+          <Route path="SubmitATicket" element={<Navigate to="/support/ticket" replace />} />
+          <Route path="submitaticket" element={<Navigate to="/support/ticket" replace />} />
           <Route path="SupportUs" element={<PageSupportUs />} />
           <Route path="SendAFeedback" element={<PageSendAFeedback />} />
           <Route path="TermsOfService" element={<PageTermsOfService />} />
@@ -208,6 +209,7 @@ function App() {
         {/* User Dashboard Routes - All wrapped in Layout */}
         <Route element={<Layout />}>
           <Route path='/home' element={<Home />} />
+          <Route path='/support/ticket' element={<PageSubmitATicket />} />
             <Route path='/credits' element={<CreditShop />} />
             <Route path='/credits-subscriptions' element={<CreditShop />} />
             <Route path='/credits/checkout' element={<Checkout />} />

@@ -92,9 +92,11 @@ export default function RouteMiddleware() {
         '/forgot-password',
         '/reset-password',
     ];
+    const ticketFormPath = location.pathname.replace(/\/$/, '').toLowerCase();
+    const isTicketFormRoute = ticketFormPath === '/support/ticket' || ticketFormPath === '/landing/submitaticket';
     const isPublicRoute =
         basePublicRoutes.includes(location.pathname) ||
-        location.pathname.startsWith('/landing/');
+        (location.pathname.startsWith('/landing/') && !isTicketFormRoute);
     const isOnboardingRoute = location.pathname.startsWith('/setup/');
 
     const isGuestAllowedRoute = isGuestAllowedPath(location.pathname);
@@ -284,8 +286,13 @@ export default function RouteMiddleware() {
             return;
         }
 
+        if (isTicketFormRoute) {
+            navigate('/login?redirect=%2Fsupport%2Fticket', { replace: true });
+            return;
+        }
+
         navigate('/', { replace: true });
-    }, [isCheckingSession, resolvedUser, isGuestMode, isPublicRoute, isGuestAllowedRoute, navigate]);
+    }, [isCheckingSession, resolvedUser, isGuestMode, isPublicRoute, isGuestAllowedRoute, isTicketFormRoute, navigate]);
 
     useEffect(() => {
         if (isCheckingSession || resolvedUser?.type !== 'Staff') return;

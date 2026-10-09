@@ -237,7 +237,7 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isBgmMuted, isSfxM
       "About Us": "/landing/AboutUs",
       "FAQ": "/landing/FAQ",
       "Ask our Chatbot": "/landing/AskOurChatbot",
-      "Submit a Ticket": "/landing/SubmitATicket",
+      "Submit a Ticket": "/support/ticket",
       "Support Us": "/landing/SupportUs",
       "Submit a Feedback": "/landing/SendAFeedback"
     };

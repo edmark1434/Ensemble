@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
 import api from "@/lib/axios";
+import UserHeader from "@/components/nav/user_header";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import { TICKET_TYPE_GROUPS } from "@/pages/admin/ticketManagement/ticketTypes";
 import useGlobalState from "@/lib/global_state";
@@ -116,26 +116,12 @@ const PageSubmitATicket: React.FC = () => {
     }
   };
 
+  if (!accountId) return null;
+
   return (
-    <div style={{ background: theme === 'dark' ? "#121214" : "#f9fafb", minHeight: "100vh", color: theme === 'dark' ? '#ffffff' : '#111827', padding: "80px 40px" }}>
-      <div style={{ maxWidth: 600, margin: "0 auto" }}>
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          style={{
-            background: "none",
-            border: "none",
-            color: theme === 'dark' ? "#7a8499" : "#6b7280",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            cursor: "pointer",
-            marginBottom: 40,
-            fontSize: 14,
-          }}
-        >
-          <ArrowLeft size={16} /> Back
-        </button>
+    <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-[#121214] dark:text-white">
+      <UserHeader pageTitle="Get Support" />
+      <div style={{ maxWidth: 600, margin: "0 auto", padding: "32px 24px 64px" }}>
         <h1 style={{ fontSize: 42, fontWeight: 800, marginBottom: 16 }}>Submit a Ticket</h1>
         <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 15, marginBottom: 36 }}>
           Encountered a bug or an escrow processing issue? File a support ticket and our team will look into it.

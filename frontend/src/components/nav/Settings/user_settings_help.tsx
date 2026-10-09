@@ -25,7 +25,7 @@ export const UserSettingsHelp: React.FC = () => {
         </button>
 
         <button
-          onClick={() => navigate("/landing/SubmitATicket")}
+          onClick={() => navigate("/support/ticket")}
           className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-left hover:bg-gray-50 dark:hover:bg-white/10 transition-all group"
         >
           <div className="flex justify-between items-center mb-2">

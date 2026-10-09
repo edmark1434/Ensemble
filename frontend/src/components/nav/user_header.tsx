@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, Settings, LogOut, User, Search, Sparkles, MessageSquare } from "lucide-react";
+import { Bell, ChevronDown, LifeBuoy, Settings, LogOut, User, Search, Sparkles, MessageSquare } from "lucide-react";
 import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -1037,7 +1037,7 @@ useEffect(() => {
                   </button>
                   
                   {isProfileOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1a1b23] shadow-xl dark:shadow-2xl">
+                    <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1a1b23] shadow-xl dark:shadow-2xl">
                       <div className="p-2 space-y-1">
                         <button
                           onClick={() => {
@@ -1068,7 +1068,23 @@ useEffect(() => {
                           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
                         >
                           <MessageSquare className="h-4 w-4" />
-                          Submit a Feedback
+                          Submit Feedback
+                        </button>
+
+                        <div className="my-2 border-t border-gray-200 dark:border-white/10" />
+
+                        <button
+                          onClick={() => {
+                            setIsProfileOpen(false);
+                            navigate("/support/ticket");
+                          }}
+                          className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+                        >
+                          <LifeBuoy className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span>
+                            <span className="block text-sm">Get Support</span>
+                            <span className="block text-xs text-gray-500 dark:text-zinc-500">Help, tickets, and support requests</span>
+                          </span>
                         </button>
                         
                         <div className="my-2 border-t border-gray-200 dark:border-white/10" />
