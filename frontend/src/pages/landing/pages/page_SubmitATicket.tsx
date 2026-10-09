@@ -4,17 +4,23 @@ import { Heart, HelpCircle, MessageCircleQuestion, MessageSquare } from "lucide-
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
-import { TICKET_TYPE_GROUPS } from "@/pages/admin/ticketManagement/ticketTypes";
 import useGlobalState from "@/lib/global_state";
+
+interface TicketField {
+  key: string;
+  label: string;
+  kind: "text" | "select";
+  required?: boolean;
+  options?: string[];
+}
 
 interface TicketTypeDetail {
   label: string;
   queueRole: string;
-}
-
-interface TicketTypeGroup {
-  label: string;
-  types: string[];
+  description?: string | null;
+  group?: string | null;
+  subgroup?: string | null;
+  fields?: TicketField[];
 }
 
 const SUPPORT_LINKS = [
@@ -44,17 +50,6 @@ const SUPPORT_LINKS = [
   },
 ];
 
-function groupTicketTypes(details: TicketTypeDetail[]): TicketTypeGroup[] {
-  const groups = new Map<string, string[]>();
-  details.forEach((detail) => {
-    const groupLabel = detail.queueRole.replace(/ Moderator$/, "") || "Support";
-    const current = groups.get(groupLabel) || [];
-    current.push(detail.label);
-    groups.set(groupLabel, current);
-  });
-  return Array.from(groups, ([label, types]) => ({ label, types }));
-}
-
 const PageSubmitATicket: React.FC = () => {
   const theme = useGlobalState((state) => state.theme);
 
@@ -66,16 +61,15 @@ const PageSubmitATicket: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
-  const [ticketType, setTicketType] = useState<string>("Other");
+  const [ticketType, setTicketType] = useState<string>("");
   const [description, setDescription] = useState("");
   const [screenshots, setScreenshots] = useState<File[]>([]);
-  const [ticketTypeGroups, setTicketTypeGroups] = useState<TicketTypeGroup[]>(
-    TICKET_TYPE_GROUPS.map((group) => ({
-      label: group.label,
-      types: [...group.types],
-    })),
-  );
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const [catalog, setCatalog] = useState<TicketTypeDetail[]>([]);
+  const [group, setGroup] = useState("Support");
+  const [subgroup, setSubgroup] = useState("Account");
   const [loadingTypes, setLoadingTypes] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,18 +78,18 @@ const PageSubmitATicket: React.FC = () => {
       .then((response) => {
         const details = response.data?.data?.typeDetails;
         if (!cancelled && Array.isArray(details) && details.length) {
-          const groups = groupTicketTypes(details);
-          setTicketTypeGroups(groups);
-          const availableTypes = groups.flatMap((group) => group.types);
-          setTicketType((current) =>
-            availableTypes.includes(current)
-              ? current
-              : availableTypes[0] || "Other",
-          );
+          setCatalog(details);
+          const first = details.find((item: TicketTypeDetail) => item.group === "Support") || details[0];
+          setGroup(first.group || "Support");
+          setSubgroup(first.subgroup || "Account");
+          setTicketType(first.label);
+          setCatalogError(null);
+        } else if (!cancelled) {
+          setCatalogError("Ticket types could not be loaded.");
         }
       })
       .catch(() => {
-        // Keep the shared admin ticket-type constants as the fallback catalog.
+        if (!cancelled) setCatalogError("Ticket types could not be loaded.");
       })
       .finally(() => {
         if (!cancelled) setLoadingTypes(false);
@@ -121,12 +115,12 @@ const PageSubmitATicket: React.FC = () => {
         attachments.push({ key: uploaded.key, name: file.name, size: file.size });
       }
       const response = await api.post("/api/users/tickets", {
-        account_id: accountId,
         subject: subject.trim(),
         type: ticketType,
         priority: "Medium",
         description: description.trim(),
         attachments,
+        fields: fieldValues,
       });
       if (!response.data?.success) {
         setError(response.data?.message || "Failed to submit ticket");
@@ -144,15 +138,65 @@ const PageSubmitATicket: React.FC = () => {
     }
   };
 
+  const groups = Array.from(new Set(catalog.map((item) => item.group).filter(Boolean))) as string[];
+  const subgroups = Array.from(
+    new Set(
+      catalog
+        .filter((item) => item.group === group && item.subgroup)
+        .map((item) => item.subgroup as string)
+    )
+  );
+  const visibleTypes = catalog.filter(
+    (item) => item.group === group && (group !== "Support" || item.subgroup === subgroup)
+  );
+  const selected = catalog.find((item) => item.label === ticketType) || null;
+
+  const chooseGroup = (nextGroup: string) => {
+    const inGroup = catalog.filter((item) => item.group === nextGroup);
+    const nextSubgroup = inGroup.find((item) => item.subgroup)?.subgroup || "";
+    const nextType = inGroup.find((item) => !nextSubgroup || item.subgroup === nextSubgroup);
+    setGroup(nextGroup);
+    setSubgroup(nextSubgroup);
+    setTicketType(nextType?.label || "");
+    setFieldValues({});
+  };
+
+  const chooseSubgroup = (nextSubgroup: string) => {
+    const nextType = catalog.find((item) => item.group === group && item.subgroup === nextSubgroup);
+    setSubgroup(nextSubgroup);
+    setTicketType(nextType?.label || "");
+    setFieldValues({});
+  };
+
   if (!accountId) return null;
+
+  const fieldStyle = {
+    width: "100%",
+    background: theme === "dark" ? "#18181b" : "#ffffff",
+    border: `1px solid ${theme === "dark" ? "#27272a" : "#e5e7eb"}`,
+    borderRadius: 10,
+    padding: "14px",
+    color: theme === "dark" ? "#ffffff" : "#111827",
+    outline: "none",
+  };
+  const labelStyle = {
+    display: "block",
+    fontSize: 13,
+    fontWeight: 600,
+    color: theme === "dark" ? "#7a8499" : "#6b7280",
+    marginBottom: 8,
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-[#121214] dark:text-white">
       <UserHeader pageTitle="Get Support" />
       <div style={{ maxWidth: 600, margin: "0 auto", padding: "32px 24px 64px" }}>
         <h1 style={{ fontSize: 42, fontWeight: 800, marginBottom: 16 }}>Submit a Ticket</h1>
-        <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 15, marginBottom: 24 }}>
+        <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 15, marginBottom: 8 }}>
           Encountered a bug or an escrow processing issue? File a support ticket and our team will look into it.
+        </p>
+        <p style={{ color: theme === 'dark' ? "#a1a1aa" : "#374151", fontSize: 13, marginBottom: 24 }}>
+          This ticket is filed on the account you are signed in with.
         </p>
 
         <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -201,80 +245,129 @@ const PageSubmitATicket: React.FC = () => {
         ) : (
           <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: theme === 'dark' ? "#7a8499" : "#6b7280", marginBottom: 8 }}>
-                Ticket Type
-              </label>
+              <label style={labelStyle}>Where is the problem?</label>
+              <div className="flex flex-wrap gap-2">
+                {groups.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => chooseGroup(item)}
+                    className={`rounded-full border px-3 py-1.5 text-sm ${
+                      group === item
+                        ? "border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-zinc-900"
+                        : "border-gray-200 text-gray-700 dark:border-white/10 dark:text-zinc-300"
+                    }`}
+                  >
+                    {item === "Forums" ? "Forum" : item}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {group === "Support" && subgroups.length > 0 && (
+              <div>
+                <label style={labelStyle}>Support area</label>
+                <div className="flex flex-wrap gap-2">
+                  {subgroups.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => chooseSubgroup(item)}
+                      className={`rounded-full border px-3 py-1.5 text-sm ${
+                        subgroup === item
+                          ? "border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-zinc-900"
+                          : "border-gray-200 text-gray-700 dark:border-white/10 dark:text-zinc-300"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div>
+              <label style={labelStyle}>Ticket type</label>
               <select
                 className="inbox-scroll-thin"
                 value={ticketType}
-                onChange={(e) => setTicketType(e.target.value)}
-                disabled={loadingTypes || submitting}
-                style={{
-                  width: "100%",
-                  background: theme === 'dark' ? "#18181b" : "#ffffff",
-                  border: `1px solid ${theme === 'dark' ? '#27272a' : '#e5e7eb'}`,
-                  borderRadius: 10,
-                  padding: "14px",
-                  color: theme === 'dark' ? '#ffffff' : '#111827',
-                  outline: "none",
+                onChange={(e) => {
+                  setTicketType(e.target.value);
+                  setFieldValues({});
                 }}
+                disabled={loadingTypes || submitting || !visibleTypes.length}
+                style={fieldStyle}
               >
-                {ticketTypeGroups.map((group) => (
-                  <optgroup key={group.label} label={group.label} style={{ background: theme === 'dark' ? "#18181b" : "#ffffff", color: theme === 'dark' ? '#ffffff' : '#111827' }}>
-                    {group.types.map((t) => (
-                      <option key={t} value={t} style={{ background: theme === 'dark' ? "#18181b" : "#ffffff", color: theme === 'dark' ? '#ffffff' : '#111827' }}>
-                        {t}
-                      </option>
-                    ))}
-                  </optgroup>
+                {visibleTypes.map((item) => (
+                  <option key={item.label} value={item.label}>
+                    {item.label}
+                  </option>
                 ))}
               </select>
+              {catalogError && <p style={{ color: "#f87171", fontSize: 13, marginTop: 8 }}>{catalogError}</p>}
             </div>
+            {selected?.description && (
+              <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                  This type is for
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-gray-800 dark:text-zinc-100">{selected.description}</p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-zinc-400">
+                  {[selected.group === "Forums" ? "Forum" : selected.group, selected.subgroup].filter(Boolean).join(" · ")}
+                </p>
+              </div>
+            )}
+            {(selected?.fields || []).map((field) => (
+              <div key={field.key}>
+                <label style={labelStyle}>
+                  {field.label}
+                  {field.required === false ? " (optional)" : ""}
+                </label>
+                {field.kind === "select" ? (
+                  <select
+                    required={field.required !== false}
+                    value={fieldValues[field.key] || ""}
+                    onChange={(e) => setFieldValues((current) => ({ ...current, [field.key]: e.target.value }))}
+                    style={fieldStyle}
+                  >
+                    <option value="">Choose one</option>
+                    {(field.options || []).map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    required={field.required !== false}
+                    type="text"
+                    value={fieldValues[field.key] || ""}
+                    onChange={(e) => setFieldValues((current) => ({ ...current, [field.key]: e.target.value }))}
+                    style={fieldStyle}
+                  />
+                )}
+              </div>
+            ))}
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: theme === 'dark' ? "#7a8499" : "#6b7280", marginBottom: 8 }}>
-                Issue Subject
-              </label>
+              <label style={labelStyle}>Issue Subject</label>
               <input
                 required
                 type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                style={{
-                  width: "100%",
-                  background: theme === 'dark' ? "#18181b" : "#ffffff",
-                  border: `1px solid ${theme === 'dark' ? '#27272a' : '#e5e7eb'}`,
-                  borderRadius: 10,
-                  padding: "14px",
-                  color: theme === 'dark' ? '#ffffff' : '#111827',
-                  outline: "none",
-                }}
+                style={fieldStyle}
               />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: theme === 'dark' ? "#7a8499" : "#6b7280", marginBottom: 8 }}>
-                Detailed Description
-              </label>
+              <label style={labelStyle}>Detailed Description</label>
               <textarea
                 required
                 rows={5}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                style={{
-                  width: "100%",
-                  background: theme === 'dark' ? "#18181b" : "#ffffff",
-                  border: `1px solid ${theme === 'dark' ? '#27272a' : '#e5e7eb'}`,
-                  borderRadius: 10,
-                  padding: "14px",
-                  color: theme === 'dark' ? '#ffffff' : '#111827',
-                  outline: "none",
-                  resize: "none",
-                }}
+                style={{ ...fieldStyle, resize: "none" }}
               />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: theme === 'dark' ? "#7a8499" : "#6b7280", marginBottom: 8 }}>
-                Screenshots
-              </label>
+              <label style={labelStyle}>Screenshots</label>
               <input
                 type="file"
                 accept="image/*"
@@ -288,7 +381,7 @@ const PageSubmitATicket: React.FC = () => {
             {error && <p style={{ color: "#f87171", fontSize: 13, margin: 0 }}>{error}</p>}
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || loadingTypes || !ticketType}
               style={{
                 background: theme === 'dark' ? '#ffffff' : '#111827',
                 color: theme === 'dark' ? '#121214' : '#ffffff',

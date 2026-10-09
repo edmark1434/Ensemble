@@ -1,10 +1,11 @@
-# Current Task: Member ticket form behind login
+# Current Task: Member ticket form
 
 ## Objective
-The submit-ticket form lives inside the signed-in app at `/support/ticket`. Logged-out visitors cannot open it. The account menu includes Get Support.
+Signed-in members file a ticket at `/support/ticket`. The form explains the chosen type and asks only the extra questions for that type.
 
 ## Acceptance criteria
-- `/support/ticket` renders the ticket form inside the member layout.
-- `/landing/SubmitATicket` and `/landing/submitaticket` redirect there.
-- A signed-out visit goes to `/login?redirect=/support/ticket`.
-- The profile menu has Get Support under Submit Feedback.
+- `ticket_form_values` stores one row per extra answer, linked to `tickets`.
+- Type, subject, description, and screenshots stay on the ticket and its chat.
+- The form shows the type description before the extra questions.
+- Staff ticket detail lists the saved answers.
+- Run `cd backend && npm run migrate` so `1822800000000_ticket-form-values` is applied. The earlier catalog migration must already be applied.

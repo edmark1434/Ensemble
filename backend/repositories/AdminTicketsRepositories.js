@@ -280,6 +280,11 @@ async function createSupportTicket(input, session = null) {
   if (!requesterAccountId) throw new Error('Requester account is required');
 
   const description = input?.description ? String(input.description).trim() : '';
+  let formAnswers = null;
+  if (input.fields !== undefined) {
+    const { sanitizeTicketFormValues } = require('../lib/TicketFormFields');
+    formAnswers = sanitizeTicketFormValues(type, input.fields);
+  }
   const ticketNumber = await nextTicketNumber();
   const handledBy =
     input?.handledByStaffId ?? input?.assignedStaffId ?? null;
@@ -309,6 +314,18 @@ async function createSupportTicket(input, session = null) {
   );
 
   const ticketId = insert.rows[0].ticket_id;
+
+  if (formAnswers) {
+    for (const answer of formAnswers) {
+      await pool.query(
+        `INSERT INTO ticket_form_values (ticket_id, field_key, field_label, value)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (ticket_id, field_key) DO UPDATE
+           SET field_label = EXCLUDED.field_label, value = EXCLUDED.value`,
+        [ticketId, answer.field_key, answer.field_label, answer.value]
+      );
+    }
+  }
 
   try {
     const { dispatchPlatformNotification } = require('../services/PlatformAlertServices');
@@ -1011,10 +1028,20 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
   });
   const role = staff?.role || staffSession?.role || null;
   const showPayments = Boolean(staffSession) && canViewTicketPayments(role, ticket.type);
-  const [timeline, articles, payments] = await Promise.all([
+  const [timeline, articles, payments, formValueResult] = await Promise.all([
     staffSession ? listTicketTimeline(ticketId, row.account_id, row.created_at) : Promise.resolve([]),
     listTicketArticles(ticket.type),
     showPayments ? listTicketPaymentEvidence(row.account_id) : Promise.resolve(null),
+    pool.query(
+      `SELECT field_key, field_label, value
+       FROM ticket_form_values
+       WHERE ticket_id = $1
+       ORDER BY created_at ASC`,
+      [ticketId]
+    ).catch((err) => {
+      if (err?.code === '42P01') return { rows: [] };
+      throw err;
+    }),
   ]);
 
   return {
@@ -1034,6 +1061,11 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     timeline,
     articles,
     payments,
+    formValues: formValueResult.rows.map((answer) => ({
+      key: answer.field_key,
+      label: answer.field_label,
+      value: answer.value,
+    })),
     canAdjustCredits: Boolean(staffSession) && canAdjustTicketCredits(role, ticket.type),
   };
 }

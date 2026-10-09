@@ -262,7 +262,6 @@ async function createPublicTicket(req, res) {
       category,
       priority,
       description,
-      account_id,
     } = req.body;
     const subjectOrReason = (reason || subject || '').trim();
     if (!subjectOrReason) {
@@ -276,12 +275,6 @@ async function createPublicTicket(req, res) {
     if (!requesterAccountId) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
-    if (!account_id || String(account_id) !== String(requesterAccountId)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Ticket account does not match the authenticated account',
-      });
-    }
 
     const data = await createSupportTicket(
       {
@@ -292,6 +285,7 @@ async function createPublicTicket(req, res) {
         priority: priority || 'Medium',
         description: description.trim(),
         attachments: req.body?.attachments,
+        fields: req.body?.fields ?? {},
         requesterAccountId,
       },
       req.session

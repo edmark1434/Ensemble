@@ -764,6 +764,16 @@ export default function TicketDetailModalShell({
                       Any moderator can move this ticket to another group below.
                     </p>
                   </div>
+                  {(detail.formValues || []).length > 0 && (
+                    <div className="space-y-2">
+                      {(detail.formValues || []).map((answer) => (
+                        <div key={answer.key} className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2.5">
+                          <p className="text-[11px] text-zinc-500">{answer.label}</p>
+                          <p className="mt-0.5 text-sm text-white">{answer.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <Field label="Status">
                     {statusControl === 'buttons' ? (
                       <div
