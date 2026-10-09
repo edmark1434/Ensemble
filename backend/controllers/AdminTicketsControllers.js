@@ -238,12 +238,13 @@ async function getAdminReportDetail(req, res) {
 /** Public/user ticket intake — uses session account, or looks up account by email. */
 async function getPublicTicketCatalog(_req, res) {
   try {
-    const catalog = await getTicketCatalog();
+    const { getPublicTicketTypeDetails } = require('../lib/TicketEnums');
+    const typeDetails = getPublicTicketTypeDetails();
     res.status(200).json({
       success: true,
       data: {
-        types: catalog.types,
-        typeDetails: catalog.typeDetails,
+        types: typeDetails.map((item) => item.label),
+        typeDetails,
       },
     });
   } catch (err) {

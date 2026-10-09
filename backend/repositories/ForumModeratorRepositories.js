@@ -382,7 +382,7 @@ async function getForumReportBreakdown(targetTypesIn) {
 
 function buildAlerts(tc, rc, reportBreakdown, contentStats) {
   const alerts = [];
-  const openTickets = Number(tc.open_count) + Number(tc.in_progress);
+  const openTickets = Number(tc.open_count) + Number(tc.in_progress) + Number(tc.escalated_dev || 0);
 
   if (Number(tc.unassigned) > 0) {
     alerts.push({
@@ -481,7 +481,7 @@ async function getForumOverview() {
   return {
     lastUpdated: new Date().toISOString(),
     summary: {
-      openTickets: Number(tc.open_count) + Number(tc.in_progress),
+      openTickets: Number(tc.open_count) + Number(tc.in_progress) + Number(tc.escalated_dev || 0),
       totalTickets: Number(tc.total),
       unassignedTickets: Number(tc.unassigned),
       highPriorityTickets: Number(tc.high_priority),

@@ -1,6 +1,6 @@
 import ModeratorTicketDesk from '../shared/ModeratorTicketDesk';
 
-/** Forum queue only — Forums / Forum Posts / Groups / Comments / Forum Reports types. */
+/** Forum queue: posts, groups, reports, and appeals. */
 export default function ForumTicketManagement() {
   return (
     <ModeratorTicketDesk

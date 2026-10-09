@@ -384,7 +384,7 @@ async function getMarketplaceOverview() {
       rejectedListings: Number(lc.rejected),
       delistedListings: Number(lc.delisted),
       approvedCreditValue: Number(lc.approved_credit_value),
-      openTickets: Number(tc.open_count) + Number(tc.in_progress),
+      openTickets: Number(tc.open_count) + Number(tc.in_progress) + Number(tc.escalated_dev || 0),
       totalTickets: Number(tc.total),
       unassignedTickets: Number(tc.unassigned),
       highPriorityTickets: Number(tc.high_priority),
@@ -423,7 +423,7 @@ async function getMarketplaceOverview() {
 
 function buildMarketplaceAlerts(lc, tc, reportBreakdown) {
   const alerts = [];
-  const openTickets = Number(tc.open_count) + Number(tc.in_progress || 0);
+  const openTickets = Number(tc.open_count) + Number(tc.in_progress || 0) + Number(tc.escalated_dev || 0);
   const rb = reportBreakdown?.counts || {};
 
   if (Number(lc.pending) > 0) {

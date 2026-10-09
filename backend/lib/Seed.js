@@ -1091,22 +1091,22 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
 
   const tickets = [
     // ticket_number, reason, type, priority, status, account_id, handled_by, lastAuthor, escalatedTo
-    ['TKT-50001', 'Cannot verify payment method', 'Credit Top-ups', 'High', 'Open', userAccountIds[0], supportStaffId, 'user', null],
-    ['TKT-50002', 'Account locked after password reset', 'Account Access', 'High', 'In Progress', userAccountIds[3], supportStaffId, 'user', null],
-    ['TKT-50003', 'Credits missing after package purchase', 'Credit Top-ups', 'High', 'Open', userAccountIds[4], adminStaffId, 'staff', null],
-    ['TKT-50004', 'Forum group ownership transfer', 'Forums', 'Medium', 'In Progress', userAccountIds[2], forumStaffId, 'user', null],
-    ['TKT-50005', 'How to invite team members?', 'Other', 'Low', 'Resolved', userAccountIds[6], supportStaffId, 'staff', null],
-    ['TKT-50006', 'Marketplace listing rejected', 'Asset Marketplace', 'Medium', 'Open', userAccountIds[7], marketplaceStaffId, 'user', null],
-    ['TKT-50007', 'Two-factor not receiving codes', 'Account Verification', 'High', 'Open', userAccountIds[1], null, 'user', null],
-    ['TKT-50008', 'Dispute escalation request', 'Contracts and Milestones', 'High', 'In Progress', userAccountIds[5], null, 'user', 'Jobs N Gigs Moderator'],
-    ['TKT-50009', 'Asset purchase never delivered', 'Asset Marketplace', 'High', 'In Progress', userAccountIds[9], marketplaceStaffId, 'staff', null],
-    ['TKT-50010', 'Gig milestone stuck in review', 'Jobs and Gigs', 'High', 'Open', userAccountIds[0], jobsStaffId, 'user', null],
-    ['TKT-50011', 'Freelancer proposal spam', 'Jobs and Gigs', 'Medium', 'In Progress', userAccountIds[4], jobsStaffId, 'staff', null],
-    ['TKT-50012', 'Refund status check', 'Credit Top-ups', 'Medium', 'Open', userAccountIds[2], supportStaffId, 'user', null],
-    ['TKT-50013', 'Cannot upload portfolio', 'Account Access', 'Low', 'Open', userAccountIds[8], supportStaffId, 'user', null],
-    ['TKT-50014', 'Cancel annual subscription', 'Subscriptions and Plans', 'Medium', 'Open', userAccountIds[1], supportStaffId, 'staff', null],
-    ['TKT-50015', 'Payout not arriving', 'Withdrawing Earnings', 'High', 'Open', userAccountIds[5], null, 'user', 'Support Moderator'],
-    ['TKT-50016', 'Timeline editor crash on export', 'Video Editor', 'Medium', 'In Progress', userAccountIds[6], supportStaffId, 'user', null],
+    ['TKT-50001', 'Cannot verify payment method', 'Charges and receipts', 'High', 'Open', userAccountIds[0], supportStaffId, 'user', null],
+    ['TKT-50002', 'Account locked after password reset', 'Sign-in and password', 'High', 'In Progress', userAccountIds[3], supportStaffId, 'user', null],
+    ['TKT-50003', 'Credits missing after package purchase', 'Credits and balance', 'High', 'Open', userAccountIds[4], adminStaffId, 'staff', null],
+    ['TKT-50004', 'Forum group ownership transfer', 'Forum groups', 'Medium', 'In Progress', userAccountIds[2], forumStaffId, 'user', null],
+    ['TKT-50005', 'How to invite team members?', 'Teams', 'Low', 'Resolved', userAccountIds[6], supportStaffId, 'staff', null],
+    ['TKT-50006', 'Marketplace listing rejected', 'Listing review', 'Medium', 'Open', userAccountIds[7], marketplaceStaffId, 'user', null],
+    ['TKT-50007', 'Two-factor not receiving codes', 'Identity verification', 'High', 'Open', userAccountIds[1], null, 'user', null],
+    ['TKT-50008', 'Dispute escalation request', 'Delivery and disputes', 'High', 'In Progress', userAccountIds[5], null, 'user', 'Jobs N Gigs Moderator'],
+    ['TKT-50009', 'Asset purchase never delivered', 'Asset purchase and download', 'High', 'In Progress', userAccountIds[9], marketplaceStaffId, 'staff', null],
+    ['TKT-50010', 'Gig milestone stuck in review', 'Contracts, milestones, and orders', 'High', 'Open', userAccountIds[0], jobsStaffId, 'user', null],
+    ['TKT-50011', 'Freelancer proposal spam', 'Proposals and hiring', 'Medium', 'In Progress', userAccountIds[4], jobsStaffId, 'staff', null],
+    ['TKT-50012', 'Refund status check', 'Marketplace refunds', 'Medium', 'Open', userAccountIds[2], supportStaffId, 'user', null],
+    ['TKT-50013', 'Cannot upload portfolio', 'Uploads and storage', 'Low', 'Open', userAccountIds[8], supportStaffId, 'user', null],
+    ['TKT-50014', 'Cancel annual subscription', 'Subscriptions and plans', 'Medium', 'Open', userAccountIds[1], supportStaffId, 'staff', null],
+    ['TKT-50015', 'Payout not arriving', 'Payouts and withdrawals', 'High', 'Open', userAccountIds[5], null, 'user', 'Support Moderator'],
+    ['TKT-50016', 'Timeline editor crash on export', 'Editor problems', 'Medium', 'Escalated to Dev', userAccountIds[6], supportStaffId, 'user', null],
   ];
 
   const ticketIds = [];

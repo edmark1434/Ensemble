@@ -107,6 +107,7 @@ async function getSupportTicketCounts() {
       COUNT(*)::int AS total,
       COUNT(*) FILTER (WHERE t.status = 'Open')::int AS open_count,
       COUNT(*) FILTER (WHERE t.status = 'In Progress')::int AS in_progress,
+      COUNT(*) FILTER (WHERE t.status = 'Escalated to Dev')::int AS escalated_dev,
       COUNT(*) FILTER (WHERE t.status IN ('Resolved', 'Closed'))::int AS resolved,
       COUNT(*) FILTER (
         WHERE t.priority = 'High'
@@ -307,7 +308,7 @@ async function getSupportStaffWorkload() {
 
 function buildAlerts(tc, rc, dc) {
   const alerts = [];
-  const openTickets = Number(tc.open_count) + Number(tc.in_progress);
+  const openTickets = Number(tc.open_count) + Number(tc.in_progress) + Number(tc.escalated_dev);
 
   if (Number(tc.unassigned) > 0) {
     alerts.push({
@@ -489,7 +490,7 @@ async function getSupportOverview(session = null) {
   return {
     lastUpdated: new Date().toISOString(),
     summary: {
-      openTickets: Number(tc.open_count) + Number(tc.in_progress),
+      openTickets: Number(tc.open_count) + Number(tc.in_progress) + Number(tc.escalated_dev),
       totalTickets: Number(tc.total),
       unassignedTickets: Number(tc.unassigned),
       highPriorityTickets: Number(tc.high_priority),

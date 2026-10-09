@@ -40,6 +40,9 @@ const {
   normalizeTicketType,
   normalizeTicketStatus,
   normalizeTicketPriority,
+  resolveTicketPriority,
+  defaultPriorityForType,
+  ticketTypeMeta,
   isClosedStatus,
 } = require('../lib/TicketEnums');
 const {
@@ -172,13 +175,17 @@ async function assertStaffAssignableToQueue(staffId, queueKey) {
 function getTicketCatalog() {
   return {
     types: [...TICKET_TYPES],
-    typeDetails: TICKET_TYPES.map((label) => ({
-      label,
-      queueRole:
-        Object.entries(ROLE_TO_TICKET_TYPES).find(([, list]) => list.includes(label))?.[0] ||
-        'Support Moderator',
-      description: null,
-    })),
+    typeDetails: TICKET_TYPES.map((label) => {
+      const meta = ticketTypeMeta(label);
+      return {
+        label,
+        queueRole: meta?.queueRole || 'Support Moderator',
+        description: meta?.description || null,
+        group: meta?.group || null,
+        subgroup: meta?.subgroup || null,
+        defaultPriority: defaultPriorityForType(label),
+      };
+    }),
     statuses: [...TICKET_STATUSES],
     priorities: [...TICKET_PRIORITIES],
     escalateByRole: { ...ROLE_TO_TICKET_TYPES },
@@ -267,7 +274,7 @@ async function createSupportTicket(input, session = null) {
   if (!reason) throw new Error('Subject is required');
 
   const type = normalizeTicketType(input?.type || input?.category || 'Other');
-  const priority = normalizeTicketPriority(input?.priority || 'Medium');
+  const priority = resolveTicketPriority(type, input?.priority);
   const status = normalizeTicketStatus(input?.status || 'Open');
   const requesterAccountId = input?.requesterAccountId || sessionAccountId(session);
   if (!requesterAccountId) throw new Error('Requester account is required');
@@ -427,6 +434,7 @@ async function getTicketsOverview(staffSession = null) {
         COUNT(*)::int AS total,
         COUNT(*) FILTER (WHERE status = 'Open')::int AS open_count,
         COUNT(*) FILTER (WHERE status = 'In Progress')::int AS in_progress,
+        COUNT(*) FILTER (WHERE status = 'Escalated to Dev')::int AS escalated_dev,
         COUNT(*) FILTER (WHERE status IN ('Resolved', 'Closed'))::int AS resolved,
         COUNT(*) FILTER (
           WHERE priority = 'High'
@@ -505,6 +513,7 @@ async function getTicketsOverview(staffSession = null) {
   const statusChart = [
     { label: 'Open', value: Number(tc.open_count), color: '#f87171' },
     { label: 'In Progress', value: Number(tc.in_progress), color: '#fbbf24' },
+    { label: 'Escalated to Dev', value: Number(tc.escalated_dev), color: '#38bdf8' },
     { label: 'Resolved', value: Number(tc.resolved), color: '#34d399' },
   ].filter((x) => x.value > 0);
 
@@ -542,7 +551,7 @@ async function getTicketsOverview(staffSession = null) {
   return {
     lastUpdated: new Date().toISOString(),
     summary: {
-      openTickets: Number(tc.open_count) + Number(tc.in_progress),
+      openTickets: Number(tc.open_count) + Number(tc.in_progress) + Number(tc.escalated_dev),
       totalTickets: Number(tc.total),
       unassignedTickets: Number(tc.unassigned),
       highPriorityTickets: Number(tc.high_priority),
@@ -1113,7 +1122,7 @@ async function updateTicket(ticketId, patch, staffSession) {
   }
 
   const currentRow = await pool.query(
-    `SELECT handled_by_staff_id, status, account_id, ticket_number FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    `SELECT handled_by_staff_id, status, type, account_id, ticket_number FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
   );
   if (!currentRow.rows.length) return null;
@@ -1152,11 +1161,7 @@ async function updateTicket(ticketId, patch, staffSession) {
 
     // Escalating clears the handler — only the assigned moderator (or Admin override).
     if (!ticketPerms.canEscalate) {
-      throw new Error(
-        ticketPerms.isAdmin
-          ? 'You cannot escalate this ticket.'
-          : 'Only the assigned moderator can escalate this ticket. Assign yourself first.'
-      );
+      throw new Error('Only a moderator or admin can move this ticket to another group.');
     }
 
     sets.push(`escalated_to_role = $${idx}`);
@@ -1172,6 +1177,14 @@ async function updateTicket(ticketId, patch, staffSession) {
 
     if (patch.handled_by_staff_id === undefined) {
       patch.handled_by_staff_id = null;
+    }
+  }
+
+  if (patch.type !== undefined && patch.priority === undefined) {
+    const nextType = normalizeTicketType(patch.type);
+    if (nextType !== currentTicket.type) {
+      const nextPriority = defaultPriorityForType(nextType);
+      if (nextPriority !== 'Medium') patch.priority = nextPriority;
     }
   }
 
@@ -1267,7 +1280,7 @@ async function updateTicket(ticketId, patch, staffSession) {
       await recordTicketEvent({
         ticketId,
         eventType: 'escalate',
-        summary: `Escalated to ${patch.assigned_role}${patch.type ? ` as ${normalizeTicketType(patch.type)}` : ''}`,
+        summary: `Moved to ${patch.assigned_role}${patch.type ? ` as ${normalizeTicketType(patch.type)}` : ''}`,
         actorStaffId,
       });
     }

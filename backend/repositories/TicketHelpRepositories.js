@@ -3,22 +3,28 @@ const { pool } = require('../lib/Database');
 const { adjustAccountCredits } = require('./AdminUserTeamRepositories');
 
 const CREDIT_TICKET_TYPES = new Set([
-  'Credit Top-ups',
-  'Withdrawing Earnings',
-  'Billing and Payments',
-  'Subscriptions and Plans',
-  'Marketplace Refunds',
-  'Purchase and Delivery',
-  'Contracts and Milestones',
+  'Credits and balance',
+  'Payouts and withdrawals',
+  'Charges and receipts',
+  'Subscriptions and plans',
+  'Marketplace refunds',
+  'Asset purchase and download',
+  'Contracts, milestones, and orders',
+  'Cancellations and refunds',
+  'Delivery and disputes',
 ]);
 
 const MARKETPLACE_PAYMENT_TYPES = new Set([
-  'Asset Marketplace',
-  'Purchase and Delivery',
-  'Marketplace Refunds',
+  'Asset purchase and download',
+  'Marketplace refunds',
+  'Listing review',
 ]);
 
-const JOBS_PAYMENT_TYPES = new Set(['Contracts and Milestones']);
+const JOBS_PAYMENT_TYPES = new Set([
+  'Contracts, milestones, and orders',
+  'Delivery and disputes',
+  'Cancellations and refunds',
+]);
 
 function normalizeTicketScreenshots(raw) {
   if (!Array.isArray(raw)) return [];

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
-import { TICKET_TYPE_OPTIONS } from './ticketTypes';
+import { TICKET_TYPE_GROUPS } from './ticketTypes';
 import type { TicketArticle } from './ticketTypes';
 
 export default function TicketArticlesPanel() {
   const [articles, setArticles] = useState<TicketArticle[]>([]);
-  const [ticketType, setTicketType] = useState<string>(TICKET_TYPE_OPTIONS[0]);
+  const [ticketType, setTicketType] = useState<string>(TICKET_TYPE_GROUPS[0].types[0]);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
 
@@ -54,9 +54,18 @@ export default function TicketArticlesPanel() {
             onChange={(event) => setTicketType(event.target.value)}
             className="w-full rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
           >
-            {TICKET_TYPE_OPTIONS.map((type) => (
-              <option key={type} value={type}>{type}</option>
-            ))}
+            {TICKET_TYPE_GROUPS.flatMap((group) => {
+              const buckets = group.subgroups?.length
+                ? group.subgroups.map((sub) => ({ label: `${group.label} · ${sub.label}`, types: sub.types }))
+                : [{ label: group.label, types: group.types }];
+              return buckets.map((bucket) => (
+                <optgroup key={bucket.label} label={bucket.label}>
+                  {bucket.types.map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </optgroup>
+              ));
+            })}
           </select>
           <input
             value={title}

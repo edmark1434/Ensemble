@@ -12,6 +12,7 @@ import {
   escalateTypesForRole,
   TICKET_STATUS_OPTIONS,
   TICKET_PRIORITY_OPTIONS,
+  TICKET_TYPE_GROUPS,
 } from './ticketTypes';
 import { formatEscalatedLabel } from './ticketFilterUtils';
 
@@ -211,6 +212,7 @@ function statusButtonClass(label: string, active: boolean) {
   }
   if (s === 'open') return 'border-red-500/40 bg-red-500/20 text-red-200';
   if (s === 'in progress') return 'border-amber-500/40 bg-amber-500/20 text-amber-200';
+  if (s === 'escalated to dev') return 'border-sky-500/40 bg-sky-500/20 text-sky-200';
   if (s === 'resolved') return 'border-emerald-500/40 bg-emerald-500/20 text-emerald-200';
   if (s === 'closed') return 'border-zinc-500/40 bg-zinc-500/25 text-zinc-200';
   return 'border-white/25 bg-white/10 text-white';
@@ -489,7 +491,7 @@ export default function TicketDetailModalShell({
         type,
         handled_by_staff_id: null,
       });
-      showSuccessToast(`Escalated to ${role} as ${type}`);
+      showSuccessToast(`Moved to ${role} as ${type}`);
       onUpdated();
       if (closeAfter) {
         onClose();
@@ -757,7 +759,10 @@ export default function TicketDetailModalShell({
                     {typeMeta?.description && (
                       <p className="mt-1 text-[11px] text-zinc-600">{typeMeta.description}</p>
                     )}
-                    <p className="mt-1.5 text-[11px] text-zinc-600">Type can only change when escalating.</p>
+                    <p className="mt-1.5 text-[11px] text-zinc-600">
+                      {typeMeta?.subgroup ? `${typeMeta.group} · ${typeMeta.subgroup}. ` : ''}
+                      Any moderator can move this ticket to another group below.
+                    </p>
                   </div>
                   <Field label="Status">
                     {statusControl === 'buttons' ? (
@@ -878,11 +883,11 @@ export default function TicketDetailModalShell({
                 {allowEscalate && canEscalate && (
                   <section className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4">
                     <div>
-                      <p className="text-[10px] font-semibold tracking-wide text-amber-200/80">Escalate</p>
+                      <p className="text-[10px] font-semibold tracking-wide text-amber-200/80">Move to another group</p>
                       <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
                         {allowEscalateToAdmin
-                          ? 'Hand off to Admin, or move to the correct moderator queue and type. Escalating unassigns you automatically.'
-                          : 'Move this ticket to the correct moderator queue and type when it belongs on another desk. Escalating unassigns you automatically.'}
+                          ? 'Any moderator can move this ticket to the right group and type. Moving it unassigns the current handler. Use Escalated to Dev when engineering needs to fix it without closing the ticket.'
+                          : 'Any moderator can move this ticket to the right group and type. Moving it unassigns the current handler.'}
                       </p>
                     </div>
                     {allowEscalateToAdmin && (
@@ -897,7 +902,7 @@ export default function TicketDetailModalShell({
                       </button>
                     )}
                     <div className={allowEscalateToAdmin ? 'border-t border-white/5 pt-3' : undefined}>
-                      <p className="mb-2 text-[11px] font-medium text-zinc-500">Escalate to moderator</p>
+                      <p className="mb-2 text-[11px] font-medium text-zinc-500">Moderator group</p>
                       <div className="space-y-3">
                         <Field label="Moderator Queue">
                           <select
@@ -924,11 +929,29 @@ export default function TicketDetailModalShell({
                             onChange={(e) => setEscalateType(e.target.value)}
                             className={`${selectCls} border-amber-500/25 text-amber-100`}
                           >
-                            {escalateTypeOptions.map((opt) => (
-                              <option key={opt} value={opt}>
-                                {opt}
-                              </option>
-                            ))}
+                            {TICKET_TYPE_GROUPS.flatMap((group) => {
+                              const buckets = group.subgroups?.length
+                                ? group.subgroups.map((sub) => ({
+                                    label: `${group.label} · ${sub.label}`,
+                                    types: sub.types,
+                                  }))
+                                : [{ label: group.label, types: group.types }];
+                              return buckets
+                                .map((bucket) => {
+                                  const items = bucket.types.filter((type) => escalateTypeOptions.includes(type));
+                                  if (!items.length) return null;
+                                  return (
+                                    <optgroup key={bucket.label} label={bucket.label}>
+                                      {items.map((opt) => (
+                                        <option key={opt} value={opt}>
+                                          {opt}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  );
+                                })
+                                .filter(Boolean);
+                            })}
                           </select>
                         </Field>
                         <button
@@ -937,7 +960,7 @@ export default function TicketDetailModalShell({
                           disabled={saving || !escalateType.trim() || !escalateTypeOptions.includes(escalateType)}
                           className="w-full rounded-xl border border-amber-500/40 px-4 py-2.5 text-sm font-medium text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
                         >
-                          Escalate as {escalateType || '…'}
+                          Move to this group
                         </button>
                       </div>
                     </div>
@@ -947,9 +970,7 @@ export default function TicketDetailModalShell({
                   <section className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
                     <p className="text-[10px] font-semibold tracking-wide text-zinc-500">Escalate</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-                      {ticketAssigneeId
-                        ? 'Only the assigned moderator can escalate this ticket.'
-                        : 'Assign yourself to this ticket before escalating it.'}
+                      Sign in as a moderator or admin to move this ticket.
                     </p>
                   </section>
                 )}

@@ -13,7 +13,7 @@ import {
   type TicketQueueFilter,
   type TicketSortKey,
 } from './ticketFilterUtils';
-import { TICKET_PRIORITY_OPTIONS, TICKET_STATUS_OPTIONS, TICKET_TYPE_GROUPS } from './ticketTypes';
+import { SUPPORT_SUBGROUPS, TICKET_PRIORITY_OPTIONS, TICKET_STATUS_OPTIONS, TICKET_TYPE_GROUPS } from './ticketTypes';
 
 const selectCls =
   'w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none focus:border-white/25';
@@ -28,6 +28,30 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 type Accent = 'rose' | 'sky' | 'violet' | 'emerald';
+
+function renderTypeOptions(types: readonly string[]) {
+  const allowed = new Set(types);
+  const nodes: ReactNode[] = [];
+  for (const group of TICKET_TYPE_GROUPS) {
+    const buckets = group.subgroups?.length
+      ? group.subgroups.map((sub) => ({ label: `${group.label} · ${sub.label}`, types: sub.types }))
+      : [{ label: group.label, types: group.types }];
+    for (const bucket of buckets) {
+      const items = bucket.types.filter((type) => allowed.has(type));
+      if (!items.length) continue;
+      nodes.push(
+        <optgroup key={bucket.label} label={bucket.label}>
+          {items.map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
+        </optgroup>
+      );
+    }
+  }
+  return nodes;
+}
 
 const ACCENT_FOCUS: Record<Accent, string> = {
   rose: 'focus:border-rose-500/40',
@@ -126,6 +150,15 @@ export default function TicketFiltersPanel({
         ? ticketTypes
         : [...TICKET_TYPE_GROUPS.flatMap((g) => g.types)]
       : [...typesForQueue(filters.queue)];
+  const subgroupChoices = SUPPORT_SUBGROUPS
+    .filter((group) => group.types.some((type) => typeChoices.includes(type)))
+    .map((group) => group.label);
+  const visibleTypes =
+    filters.subgroup && filters.subgroup !== 'all'
+      ? typeChoices.filter((type) =>
+          SUPPORT_SUBGROUPS.find((group) => group.label === filters.subgroup)?.types.includes(type)
+        )
+      : typeChoices;
 
   const filteredMods = useMemo(() => {
     const q = moderatorSearch.trim().toLowerCase();
@@ -311,26 +344,37 @@ export default function TicketFiltersPanel({
         </Field>
       )}
 
+      {subgroupChoices.length > 1 && (
+        <Field label="Support group">
+          <select
+            value={filters.subgroup || 'all'}
+            onChange={(e) => {
+              const subgroup = e.target.value;
+              const allowed = subgroup === 'all'
+                ? null
+                : SUPPORT_SUBGROUPS.find((group) => group.label === subgroup)?.types;
+              const type =
+                filters.type !== 'all' && allowed && !(allowed as readonly string[]).includes(filters.type)
+                  ? 'all'
+                  : filters.type;
+              patch({ subgroup, type });
+            }}
+            className={selectCls}
+          >
+            <option value="all">All support groups</option>
+            {subgroupChoices.map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+
       <Field label="Type">
         <select value={filters.type} onChange={(e) => patch({ type: e.target.value })} className={selectCls}>
           <option value="all">All Types</option>
-          {filters.queue === 'all' || filters.queue === 'Admin'
-            ? TICKET_TYPE_GROUPS.map((group) => (
-                <optgroup key={group.label} label={group.label}>
-                  {group.types
-                    .filter((t) => !ticketTypes?.length || ticketTypes.includes(t))
-                    .map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                </optgroup>
-              ))
-            : typeChoices.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
+          {renderTypeOptions(visibleTypes)}
         </select>
       </Field>
 

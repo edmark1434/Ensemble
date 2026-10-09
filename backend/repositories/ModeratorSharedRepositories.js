@@ -234,6 +234,7 @@ async function scopedTicketCounts({ typesIn, typesNotIn, categoriesIn, categorie
       COUNT(*)::int AS total,
       COUNT(*) FILTER (WHERE status = 'Open')::int AS open_count,
       COUNT(*) FILTER (WHERE status = 'In Progress')::int AS in_progress,
+      COUNT(*) FILTER (WHERE status = 'Escalated to Dev')::int AS escalated_dev,
       COUNT(*) FILTER (WHERE status IN ('Resolved', 'Closed'))::int AS resolved,
       COUNT(*) FILTER (
         WHERE priority = 'High'

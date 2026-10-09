@@ -206,7 +206,7 @@ export default function TicketManagementPage() {
   );
 
   const mySummary = useMemo(() => {
-    const open = myTickets.filter((t) => t.status === 'Open' || t.status === 'In Progress');
+    const open = myTickets.filter((t) => t.status !== 'Resolved' && t.status !== 'Closed');
     const unassignedAdmin = myTickets.filter((t) => !t.assignee && isAdminTicket(t)).length;
     return {
       openTickets: open.length,
@@ -589,7 +589,7 @@ function TicketsTab({
   };
 
   const quickCounts = useMemo(() => {
-    const openOnly = allTickets.filter((t) => t.status === 'Open' || t.status === 'In Progress').length;
+    const openOnly = allTickets.filter((t) => t.status !== 'Resolved' && t.status !== 'Closed').length;
     const awaiting = allTickets.filter((t) => t.waitingForResponse).length;
     const escalated = allTickets.filter((t) => t.isEscalated).length;
     const unassigned = allTickets.filter((t) => !t.assignee).length;

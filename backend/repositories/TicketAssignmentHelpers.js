@@ -42,8 +42,8 @@ function buildTicketPermissions(row, staff, sessionStaffId = null) {
     canAssignMyself: Boolean(staffId && designated && !isAssignee && (unassigned || isAdmin)),
     /** Current handler or Admin may release */
     canRelease: Boolean(isAssignee || (isAdmin && Boolean(assigneeId))),
-    /** Escalate only when you own the ticket; Admin may always escalate */
-    canEscalate: Boolean(isAssignee || isAdmin),
+    /** Any moderator or admin can move a ticket to another group. */
+    canEscalate: Boolean(designated),
   };
 }
 

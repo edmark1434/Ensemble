@@ -6,6 +6,7 @@ import {
   MARKETPLACE_TICKET_TYPES,
   SUPPORT_TICKET_TYPES,
   TICKET_TYPE_OPTIONS,
+  subgroupForType,
   ticketTypeOf,
 } from './ticketTypes';
 
@@ -20,6 +21,8 @@ export type TicketFilterState = {
   status: string;
   priority: string;
   type: string;
+  /** Support subgroup label, or all */
+  subgroup: string;
   queue: TicketQueueFilter;
   assignee: TicketAssigneeFilter;
   /** Specific staff id, or 'all' */
@@ -37,6 +40,7 @@ export const DEFAULT_TICKET_FILTERS: TicketFilterState = {
   status: 'all',
   priority: 'all',
   type: 'all',
+  subgroup: 'all',
   queue: 'all',
   assignee: 'all',
   assigneeStaffId: 'all',
@@ -195,6 +199,7 @@ export function filterTickets(tickets: SupportTicket[], filters: TicketFilterSta
     if (filters.priority !== 'all' && t.priority !== filters.priority) return false;
 
     const type = ticketTypeOf(t);
+    if (filters.subgroup && filters.subgroup !== 'all' && subgroupForType(type) !== filters.subgroup) return false;
     if (filters.type !== 'all' && type !== filters.type) return false;
 
     if (filters.assignee === 'assigned' && !t.assignee) return false;
@@ -212,7 +217,7 @@ export function filterTickets(tickets: SupportTicket[], filters: TicketFilterSta
 
     if (filters.flag === 'awaiting' && !t.waitingForResponse) return false;
     if (filters.flag === 'escalated' && !t.isEscalated) return false;
-    if (filters.flag === 'open_only' && t.status !== 'Open' && t.status !== 'In Progress') {
+    if (filters.flag === 'open_only' && (t.status === 'Resolved' || t.status === 'Closed')) {
       return false;
     }
     if (filters.flag === 'overdue' && !t.isOverdue) return false;
@@ -230,6 +235,7 @@ export function countActiveTicketFilters(filters: TicketFilterState): number {
   if (filters.status !== 'all') n += 1;
   if (filters.priority !== 'all') n += 1;
   if (filters.type !== 'all') n += 1;
+  if (filters.subgroup && filters.subgroup !== 'all') n += 1;
   if (filters.queue !== 'all') n += 1;
   if (filters.assignee !== 'all') n += 1;
   if (filters.assigneeStaffId !== 'all') n += 1;
