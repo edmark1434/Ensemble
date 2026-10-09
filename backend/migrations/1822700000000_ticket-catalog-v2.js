@@ -74,11 +74,11 @@ exports.up = async (pgm) => {
   for (const reply of CANNED_REPLIES) {
     await pgm.db.query(
       `INSERT INTO ticket_articles (ticket_type, title, body)
-       SELECT $1, $2, $3
+       SELECT $1::varchar(80), $2::varchar(160), $3::text
        WHERE NOT EXISTS (
          SELECT 1 FROM ticket_articles existing
-         WHERE existing.ticket_type = $1
-           AND existing.title = $2
+         WHERE existing.ticket_type = $1::varchar(80)
+           AND existing.title = $2::varchar(160)
            AND existing.deleted_at IS NULL
        )`,
       [reply.type, reply.title, reply.body]
