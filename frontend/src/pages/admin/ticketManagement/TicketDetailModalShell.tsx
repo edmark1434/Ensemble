@@ -38,6 +38,13 @@ function formatDateTime(value: string | null | undefined) {
   });
 }
 
+function formatFormAnswer(key: string, value: string) {
+  if (value === 'yes') return 'Yes';
+  if (key === 'context_submitted_at') return formatDateTime(value);
+  if (key === 'card_last4') return `•••• ${value}`;
+  return value;
+}
+
 function shortId(value: string | number | null | undefined) {
   if (value == null || value === '') return '—';
   const s = String(value);
@@ -579,6 +586,11 @@ export default function TicketDetailModalShell({
 
   const t = detail?.ticket;
   const typeMeta = detail?.typeDetails?.find((d) => d.label === currentType);
+  const fieldOrder = new Map((typeMeta?.fields || []).map((field, index) => [field.key, index]));
+  const memberAnswers = [...(detail?.formValues || [])]
+    .filter((answer) => !answer.key.startsWith('context_'))
+    .sort((a, b) => (fieldOrder.get(a.key) ?? 99) - (fieldOrder.get(b.key) ?? 99));
+  const capturedAnswers = (detail?.formValues || []).filter((answer) => answer.key.startsWith('context_'));
   const escalateTypeMeta = detail?.typeDetails?.find((d) => d.label === escalateType);
 
   return (
@@ -764,12 +776,28 @@ export default function TicketDetailModalShell({
                       Any moderator can move this ticket to another group below.
                     </p>
                   </div>
-                  {(detail.formValues || []).length > 0 && (
+                  {memberAnswers.length > 0 && (
                     <div className="space-y-2">
-                      {(detail.formValues || []).map((answer) => (
+                      <p className="text-[11px] text-zinc-500">Answers from the member</p>
+                      {memberAnswers.map((answer) => (
                         <div key={answer.key} className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2.5">
                           <p className="text-[11px] text-zinc-500">{answer.label}</p>
-                          <p className="mt-0.5 text-sm text-white">{answer.value}</p>
+                          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-white">
+                            {formatFormAnswer(answer.key, answer.value)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {capturedAnswers.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-zinc-500">Captured with the ticket</p>
+                      {capturedAnswers.map((answer) => (
+                        <div key={answer.key} className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2.5">
+                          <p className="text-[11px] text-zinc-500">{answer.label}</p>
+                          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-white">
+                            {formatFormAnswer(answer.key, answer.value)}
+                          </p>
                         </div>
                       ))}
                     </div>

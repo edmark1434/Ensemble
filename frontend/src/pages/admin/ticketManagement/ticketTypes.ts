@@ -395,7 +395,14 @@ export type TicketsOverview = {
   };
   /** Distinct ticket types from tickets.type enum values */
   types: string[];
-  typeDetails?: { label: string; queueRole: string; description?: string | null; group?: string | null; subgroup?: string | null }[];
+  typeDetails?: {
+    label: string;
+    queueRole: string;
+    description?: string | null;
+    group?: string | null;
+    subgroup?: string | null;
+    fields?: { key: string; label: string; kind?: string; required?: boolean }[];
+  }[];
   escalateByRole?: Record<string, string[]>;
   escalateRoles?: string[];
   statuses?: string[];
@@ -435,7 +442,14 @@ export type TicketDetail = {
   types?: string[];
   statuses?: string[];
   priorities?: string[];
-  typeDetails?: { label: string; queueRole: string; description?: string | null; group?: string | null; subgroup?: string | null }[];
+  typeDetails?: {
+    label: string;
+    queueRole: string;
+    description?: string | null;
+    group?: string | null;
+    subgroup?: string | null;
+    fields?: { key: string; label: string; kind?: string; required?: boolean }[];
+  }[];
   escalateByRole?: Record<string, string[]>;
   escalateRoles?: string[];
   /** @deprecated use types */

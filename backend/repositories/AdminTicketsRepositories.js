@@ -44,6 +44,7 @@ const {
   defaultPriorityForType,
   ticketTypeMeta,
   isClosedStatus,
+  fieldsForType,
 } = require('../lib/TicketEnums');
 const {
   normalizeDisputeType,
@@ -184,6 +185,12 @@ function getTicketCatalog() {
         group: meta?.group || null,
         subgroup: meta?.subgroup || null,
         defaultPriority: defaultPriorityForType(label),
+        fields: fieldsForType(label).map((field) => ({
+          key: field.key,
+          label: field.label,
+          kind: field.kind,
+          required: field.required !== false,
+        })),
       };
     }),
     statuses: [...TICKET_STATUSES],
