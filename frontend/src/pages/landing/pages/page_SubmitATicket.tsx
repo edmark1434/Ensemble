@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Heart, HelpCircle, MessageCircleQuestion, MessageSquare } from "lucide-react";
+import { ChevronDown, Heart, HelpCircle, MessageCircleQuestion, MessageSquare } from "lucide-react";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
@@ -93,7 +94,7 @@ const PageSubmitATicket: React.FC = () => {
           const first = details.find((item: TicketTypeDetail) => item.group === "Support") || details[0];
           setGroup(first.group || "Support");
           setSubgroup(first.subgroup || "Account");
-          setTicketType(first.label);
+          setTicketType("");
           setCatalogError(null);
         } else if (!cancelled) {
           setCatalogError("Ticket types could not be loaded.");
@@ -187,17 +188,15 @@ const PageSubmitATicket: React.FC = () => {
   const chooseGroup = (nextGroup: string) => {
     const inGroup = shownCatalog.filter((item) => item.group === nextGroup);
     const nextSubgroup = inGroup.find((item) => item.subgroup)?.subgroup || "";
-    const nextType = inGroup.find((item) => !nextSubgroup || item.subgroup === nextSubgroup);
     setGroup(nextGroup);
     setSubgroup(nextSubgroup);
-    setTicketType(nextType?.label || "");
+    setTicketType("");
     setFieldValues({});
   };
 
   const chooseSubgroup = (nextSubgroup: string) => {
-    const nextType = shownCatalog.find((item) => item.group === group && item.subgroup === nextSubgroup);
     setSubgroup(nextSubgroup);
-    setTicketType(nextType?.label || "");
+    setTicketType("");
     setFieldValues({});
   };
 
@@ -327,35 +326,69 @@ const PageSubmitATicket: React.FC = () => {
             )}
             <div>
               <label style={labelStyle}>Ticket type</label>
-              <select
-                className="inbox-scroll-thin"
-                value={ticketType}
-                onChange={(e) => {
-                  setTicketType(e.target.value);
-                  setFieldValues({});
-                }}
-                disabled={loadingTypes || submitting || !visibleTypes.length}
-                style={fieldStyle}
-              >
-                {visibleTypes.map((item) => (
-                  <option key={item.label} value={item.label}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
+              {loadingTypes ? (
+                <p className="text-sm text-gray-500 dark:text-zinc-400">Loading types…</p>
+              ) : (
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={`${group}-${subgroup}`}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className="overflow-hidden rounded-xl border border-gray-200 dark:border-white/10"
+                  >
+                    {visibleTypes.map((item) => {
+                      const open = ticketType === item.label;
+                      return (
+                        <div
+                          key={item.label}
+                          className="border-b border-gray-200 last:border-b-0 dark:border-white/10"
+                        >
+                          <button
+                            type="button"
+                            disabled={submitting}
+                            aria-expanded={open}
+                            onClick={() => {
+                              setTicketType(open ? "" : item.label);
+                              setFieldValues({});
+                            }}
+                            className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors duration-200 ${
+                              open
+                                ? "bg-gray-100 dark:bg-white/10"
+                                : "bg-white hover:bg-gray-50 dark:bg-transparent dark:hover:bg-white/5"
+                            }`}
+                          >
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">{item.label}</span>
+                            <ChevronDown
+                              className={`h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200 ease-out dark:text-zinc-400 ${
+                                open ? "rotate-180" : ""
+                              }`}
+                            />
+                          </button>
+                          <div
+                            className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                              open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                            }`}
+                          >
+                            <div className="overflow-hidden" aria-hidden={!open}>
+                              <p
+                                className={`px-3 pb-3 text-sm leading-relaxed text-gray-600 transition-opacity duration-200 dark:text-zinc-300 ${
+                                  open ? "opacity-100" : "opacity-0"
+                                }`}
+                              >
+                                {item.description}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </motion.div>
+                </AnimatePresence>
+              )}
               {catalogError && <p style={{ color: "#f87171", fontSize: 13, marginTop: 8 }}>{catalogError}</p>}
             </div>
-            {selected?.description && (
-              <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
-                  This type is for
-                </p>
-                <p className="mt-2 text-sm leading-relaxed text-gray-800 dark:text-zinc-100">{selected.description}</p>
-                <p className="mt-2 text-xs text-gray-500 dark:text-zinc-400">
-                  {[selected.group === "Forums" ? "Forum" : selected.group, selected.subgroup].filter(Boolean).join(" · ")}
-                </p>
-              </div>
-            )}
             {(selected?.fields || []).filter(fieldShown).map((field) => {
               const pickerKey = field.picker === "project" ? "projects"
                 : field.picker === "order" ? "orders"
