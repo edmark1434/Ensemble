@@ -16,7 +16,8 @@ import {
   ShareIcon,
   CloudCheck,
   CloudOff,
-  Loader2
+  Loader2,
+  MessageSquare
 } from "lucide-react";
 
 import type StateManager from "@designcombo/state";
@@ -36,6 +37,7 @@ import { ModeToggle } from "@/components/ui/mode-toggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import useStore from "./store/use-store";
+import useLayoutStore from "./store/use-layout-store";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 import type * as Y from "yjs";
@@ -50,7 +52,8 @@ import ShareModal from "@/features/editor/modals/share-modal";
 import PresenceAvatars from "@/components/presence-avatars";
 import { useViewOnly } from "@/features/editor/hooks/use-view-only";
 import { useProjectRole } from "@/features/editor/hooks/use-project-role";
-import { canEditWithRole, canManageSharing } from "@/features/editor/types/editor-role";
+import { canManageSharing } from "@/features/editor/types/editor-role";
+import { CommentsSync } from "@/features/editor/comments/comments-sync";
 
 export default function Navbar({
   user,
@@ -75,6 +78,8 @@ export default function Navbar({
   const isSmallScreen = useIsSmallScreen();
   const { isShortcutsModalOpen, setShortcutsModalOpen, projectName, setProjectName, projectId } = useStore();
   const [isShareModalOpen, setShareModalOpen] = useState(false);
+  const { activeRightItem, setActiveRightItem } = useLayoutStore();
+  const commentsOpen = activeRightItem === "comments";
   const [title, setTitle] = useState(projectName);
 
   const projectRole = useProjectRole(projectId);
@@ -148,8 +153,9 @@ export default function Navbar({
         display: "grid",
         gridTemplateColumns: isLargeScreen ? "320px 1fr 320px" : "1fr 1fr 1fr"
       }}
-      className="bg-primary/12 pointer-events-none flex h-16 items-center border-b border-border/80 px-2"
+      className="bg-primary/12 pointer-events-none flex h-16 shrink-0 items-center border-b border-border/80 px-2"
     >
+      <CommentsSync />
       <DownloadProgressModal />
 
       <div className="flex items-center gap-2">
@@ -316,6 +322,21 @@ export default function Navbar({
               </TooltipContent>
             </Tooltip>
           )}
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={() => setActiveRightItem(commentsOpen ? "controls" : "comments")}
+                className={cn("hover:!bg-accent/30", commentsOpen && "bg-accent/30")}
+                variant="ghost"
+                size="icon"
+              >
+                <MessageSquare size={20} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center" sideOffset={1}>
+              {commentsOpen ? "Close comments" : "Comments"}
+            </TooltipContent>
+          </Tooltip>
           <DownloadPopover stateManager={stateManager} />
 
           {canShare && (

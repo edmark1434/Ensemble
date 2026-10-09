@@ -13,6 +13,7 @@ import { TIMELINE_OFFSET_CANVAS_LEFT } from "../constants/constants";
 import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
 import { useTheme } from "next-themes";
 import { useIsDraggingOverTimeline } from "@/features/editor/hooks/is-dragging-over-timeline";
+import { useCommentMarkers } from "@/features/editor/comments/use-comment-markers";
 
 const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
   const playheadRef = useRef<HTMLDivElement>(null);
@@ -27,6 +28,7 @@ const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
 
   const { theme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -38,6 +40,7 @@ const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
   const color = useMemo(() => {
     return currentTheme === "dark" ? "#ffffff" : "#000000";
   }, [currentTheme]);
+
   const handleMouseUp = () => {
     setIsDragging(false);
   };
@@ -99,7 +102,11 @@ const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
 
   const MARKER_SNAP_MS = 1000 / fps - 1;
   const currentTimeMs = (currentFrame / fps) * 1000;
-  const activeMarker = markers.find(m => Math.abs(m.timeMs - currentTimeMs) < MARKER_SNAP_MS);
+
+  const commentMarkers = useCommentMarkers();
+  const activeMarker = [...markers, ...commentMarkers].find(
+    (m) => Math.abs(m.timeMs - currentTimeMs) < MARKER_SNAP_MS,
+  );
 
   const markerColor = activeMarker
     ? (activeMarker.type === "comment" ? "#f43f5e" : "var(--primary)")

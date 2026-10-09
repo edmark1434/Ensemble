@@ -25,6 +25,7 @@ import {
   ISceneTrackItem,
 } from "../types/ensemble-scene";
 import { PLAYER_PAUSE } from "@/features/editor/constants/events";
+import { useCommentsStore } from "@/features/editor/store/use-comments-store";
 
 export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y.UndoManager, viewOnly?: boolean) {
   const viewOnlyRef = useRef(viewOnly);
@@ -130,8 +131,13 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         const { playerRef, fps, markers, duration } = useStore.getState();
         const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
 
-        const sortedMarkers = [...markers]
-          .map((m) => ({ ...m, frame: Math.round((m.timeMs / 1000) * fps) }))
+        // comment markers live in the comments store, not the ydoc-backed `markers`
+        const commentTimes = (useCommentsStore.getState().data?.threads ?? [])
+          .filter((t) => t.timeMs != null)
+          .map((t) => ({ timeMs: t.timeMs as number }));
+
+        const sortedMarkers = [...markers, ...commentTimes]
+          .map((m) => ({ frame: Math.round((m.timeMs / 1000) * fps) }))
           .sort((a, b) => a.frame - b.frame);
 
         if (e.code === "ArrowLeft") {

@@ -332,10 +332,18 @@ const AudioItem = ({
           <span className="text-sm font-semibold truncate mb-0.5 text-zinc-900 dark:text-zinc-300">
             {item.name}
           </span>
-          <span className="text-xs text-muted-foreground">
-            {item.metadata?.author && `${item.metadata.author} · `}{duration}
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span className="min-w-0 truncate">
+              {item.metadata?.author && `${item.metadata.author} · `}{duration}
+            </span>
             {Number((item.metadata as any)?.price_credits) > 0 && (
-              <> · <MarketPriceBadge credits={(item.metadata as any).price_credits} /></>
+              <>
+                <span>·</span>
+                <MarketPriceBadge
+                  className="-my-0.5"
+                  credits={(item.metadata as any).price_credits}
+                />
+              </>
             )}
           </span>
         </div>

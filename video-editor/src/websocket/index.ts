@@ -4,12 +4,13 @@ import type { Server as HttpServer } from "http";
 import type { Socket } from "net";
 import { WebSocketServer } from "ws";
 import { handleCollabConnection } from "./collab";
+import { handleCommentsConnection } from "./comments";
 
 const collabWss = new WebSocketServer({ noServer: true });
 collabWss.on("connection", handleCollabConnection);
 
-// Future: const chatWss = new WebSocketServer({ noServer: true });
-// chatWss.on("connection", handleChatConnection);
+const commentsWss = new WebSocketServer({ noServer: true });
+commentsWss.on("connection", handleCommentsConnection);
 
 export function attachWebSocketServer(httpServer: HttpServer, nextApp: any): void {
   // NOTE: verify getUpgradeHandler exists on your installed Next.js version.
@@ -25,7 +26,12 @@ export function attachWebSocketServer(httpServer: HttpServer, nextApp: any): voi
       return;
     }
 
-    // Future: if (pathname === "/chat") { chatWss.handleUpgrade(...); return; }
+    if (pathname === "/comments") {
+      commentsWss.handleUpgrade(req, socket, head, (ws) => {
+        commentsWss.emit("connection", ws, req);
+      });
+      return;
+    }
 
     if (nextUpgradeHandler) {
       nextUpgradeHandler(req, socket, head);

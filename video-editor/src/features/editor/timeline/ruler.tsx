@@ -10,6 +10,9 @@ import useStore from "../store/use-store";
 import { debounce } from "lodash";
 import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
 import { timeMsToUnits } from "@designcombo/timeline";
+import useLayoutStore from "@/features/editor/store/use-layout-store";
+import { useCommentsStore } from "@/features/editor/store/use-comments-store";
+import { useCommentMarkers } from "@/features/editor/comments/use-comment-markers";
 
 interface RulerProps {
   height?: number;
@@ -41,7 +44,7 @@ const Ruler = (props: RulerProps) => {
     onScroll,
   } = props;
 
-  const { scale, markers } = useStore();
+  const { scale, markers, playerRef, fps } = useStore();
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [canvasContext, setCanvasContext] =
@@ -429,6 +432,16 @@ const Ruler = (props: RulerProps) => {
     handleTouchEnd
   ]);
 
+  const commentMarkers = useCommentMarkers();
+  const setActiveRightItem = useLayoutStore((s) => s.setActiveRightItem);
+  const setFocusedId = useCommentsStore((s) => s.setFocusedId);
+
+  const openComment = (c: { id: string; timeMs: number }) => {
+    playerRef?.current?.seekTo(Math.round((c.timeMs * fps) / 1000));
+    setFocusedId(c.id);
+    setActiveRightItem("comments");
+  };
+
   return (
     <div
       className="border-t border-border"
@@ -493,6 +506,34 @@ const Ruler = (props: RulerProps) => {
           );
         })
       }
+      {commentMarkers.map((c) => {
+        const x = timeMsToUnits(c.timeMs, scale.zoom) - scrollLeft + offsetX;
+        if (x < 0 || x > canvasSize.width) return null;
+        return (
+          <button
+            key={c.id}
+            type="button"
+            title="Click to open comment"
+            onClick={() => openComment(c)}
+            style={{
+              position: "absolute",
+              left: x,
+              top: 0,
+              height: "100%",
+              width: 12,
+              transform: "translateX(-50%)",
+              zIndex: 6,
+              cursor: "pointer",
+              background: "transparent",
+              border: 0,
+              padding: 0,
+            }}
+          >
+            <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 2, transform: "translateX(-50%)", backgroundColor: "#f43f5e" }} />
+            <div style={{ position: "absolute", top: -1, left: "50%", transform: "translateX(-50%)", width: 8, height: "52%", backgroundColor: "#f43f5e", borderRadius: "0 0 4px 4px" }} />
+          </button>
+        );
+      })}
     </div>
   );
 };

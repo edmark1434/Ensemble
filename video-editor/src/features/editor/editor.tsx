@@ -55,6 +55,7 @@ import { useEditorRole } from "@/features/editor/hooks/use-editor-role";
 import { ViewOnlyProvider } from "@/features/editor/hooks/use-view-only";
 import { useProjectFonts } from "@/features/editor/hooks/use-project-fonts";
 import SceneRemovedModal from "./modals/scene-removed-modal";
+import { useCommentsStore } from "@/features/editor/store/use-comments-store";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -119,8 +120,13 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
 
   const durationFrames = Math.round((duration / 1000) * fps);
 
-  const sortedMarkers = [...markers]
-    .map((m) => ({ ...m, frame: Math.round((m.timeMs / 1000) * fps) }))
+  // comment markers live in the comments store, not the ydoc-backed `markers`
+  const commentTimes = (useCommentsStore.getState().data?.threads ?? [])
+    .filter((t) => t.timeMs != null)
+    .map((t) => ({ timeMs: t.timeMs as number }));
+
+  const sortedMarkers = [...markers, ...commentTimes]
+    .map((m) => ({ frame: Math.round((m.timeMs / 1000) * fps) }))
     .sort((a, b) => a.frame - b.frame);
 
   const prevMarker = [...sortedMarkers].reverse().find((m) => m.frame < currentFrame);
@@ -711,7 +717,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
           onForceSave={collab?.forceSave}
         />
 
-        <div className="flex flex-1 h-[calc(100vh-56px)]">
+        <div className="flex flex-1 min-h-0">
           {isLargeScreen ? (
             <ResizablePanelGroup direction="horizontal" className="h-full w-full">
               <ResizablePanel defaultSize={100} minSize={40} className="min-w-0 min-h-0">
