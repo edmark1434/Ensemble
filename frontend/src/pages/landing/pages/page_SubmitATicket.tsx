@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Heart, HelpCircle, MessageCircleQuestion, MessageSquare } from "lucide-react";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
@@ -15,6 +16,33 @@ interface TicketTypeGroup {
   label: string;
   types: string[];
 }
+
+const SUPPORT_LINKS = [
+  {
+    title: "FAQ",
+    description: "Answers about jobs, escrow, fees, and the editor.",
+    to: "/landing/FAQ",
+    icon: HelpCircle,
+  },
+  {
+    title: "Ask our chatbot",
+    description: "Get a quick answer before you file a ticket.",
+    to: "/landing/AskOurChatbot",
+    icon: MessageCircleQuestion,
+  },
+  {
+    title: "Submit feedback",
+    description: "Tell us what to improve. This is not a support ticket.",
+    to: "/landing/SendAFeedback",
+    icon: MessageSquare,
+  },
+  {
+    title: "Support us",
+    description: "Ways to support Ensemble.",
+    to: "/landing/SupportUs",
+    icon: Heart,
+  },
+];
 
 function groupTicketTypes(details: TicketTypeDetail[]): TicketTypeGroup[] {
   const groups = new Map<string, string[]>();
@@ -123,9 +151,31 @@ const PageSubmitATicket: React.FC = () => {
       <UserHeader pageTitle="Get Support" />
       <div style={{ maxWidth: 600, margin: "0 auto", padding: "32px 24px 64px" }}>
         <h1 style={{ fontSize: 42, fontWeight: 800, marginBottom: 16 }}>Submit a Ticket</h1>
-        <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 15, marginBottom: 36 }}>
+        <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 15, marginBottom: 24 }}>
           Encountered a bug or an escrow processing issue? File a support ticket and our team will look into it.
         </p>
+
+        <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {SUPPORT_LINKS.map((link) => {
+            const Icon = link.icon;
+            return (
+              <button
+                key={link.to}
+                type="button"
+                onClick={() => navigate(link.to)}
+                className="rounded-xl border border-gray-200 bg-white p-4 text-left transition hover:bg-gray-50 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+              >
+                <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                  <Icon className="h-4 w-4 text-zinc-500" />
+                  {link.title}
+                </span>
+                <span className="block text-xs leading-relaxed text-gray-500 dark:text-zinc-400">
+                  {link.description}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
         {submitted ? (
           <div
