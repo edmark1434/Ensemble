@@ -30,6 +30,7 @@ const {
     postMyTicketMessage,
     postMyTicketSatisfaction,
     getPublicTicketCatalog,
+    getTicketContext,
     createMyTechnicalReport,
 } = require('../controllers/AdminTicketsControllers');
 
@@ -51,7 +52,8 @@ router.post('/update-personal-details', [checkSession, requireAuth],updatePerson
 
 // Support tickets (Postgres metadata + Mongo chat)
 router.get('/ticket-catalog', getPublicTicketCatalog);
-router.post('/tickets', [checkSession, requireAuth], createPublicTicket);
+router.get('/ticket-context', [checkSession, requireAuth], getTicketContext);
+router.post('/tickets', [checkSession], createPublicTicket);
 router.get('/tickets', [checkSession, requireAuth], listMyTickets);
 router.get('/tickets/:id', [checkSession, requireAuth], getMyTicket);
 router.post('/tickets/:id/messages', [checkSession, requireAuth], postMyTicketMessage);

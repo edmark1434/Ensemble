@@ -315,16 +315,18 @@ async function createSupportTicket(input, session = null) {
 
   const ticketId = insert.rows[0].ticket_id;
 
-  if (formAnswers) {
-    for (const answer of formAnswers) {
-      await pool.query(
-        `INSERT INTO ticket_form_values (ticket_id, field_key, field_label, value)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (ticket_id, field_key) DO UPDATE
-           SET field_label = EXCLUDED.field_label, value = EXCLUDED.value`,
-        [ticketId, answer.field_key, answer.field_label, answer.value]
-      );
-    }
+  const answers = [...(formAnswers || [])];
+  if (requesterAccountId) {
+    answers.push(...(await buildTicketContextRows(requesterAccountId, input.context)));
+  }
+  for (const answer of answers) {
+    await pool.query(
+      `INSERT INTO ticket_form_values (ticket_id, field_key, field_label, value)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (ticket_id, field_key) DO UPDATE
+         SET field_label = EXCLUDED.field_label, value = EXCLUDED.value`,
+      [ticketId, answer.field_key, answer.field_label, answer.value]
+    );
   }
 
   try {
@@ -2266,11 +2268,146 @@ async function getReportDetail(reportId, staffSession = null, options = {}) {
   };
 }
 
+async function safeTicketRows(sql, params) {
+  try {
+    const result = await pool.query(sql, params);
+    return result.rows.map((row) => ({ id: String(row.id), label: String(row.label || row.id) }));
+  } catch (err) {
+    console.warn('Ticket picker query skipped:', err.message);
+    return [];
+  }
+}
+
+async function buildTicketContextRows(accountId, clientContext) {
+  const profile = await pool.query(
+    `
+    SELECT a.handle, u.email_address, COALESCE(p.name, 'Free') AS subscription_plan
+    FROM accounts a
+    LEFT JOIN users u ON u.account_id = a.account_id
+    LEFT JOIN LATERAL (
+      SELECT pl.name
+      FROM subscriptions s
+      INNER JOIN plans pl ON pl.plan_id = s.plan_id
+      WHERE s.user_id = u.user_id
+      ORDER BY s.created_at DESC
+      LIMIT 1
+    ) p ON TRUE
+    WHERE a.account_id = $1
+    `,
+    [accountId]
+  ).catch(() => ({ rows: [] }));
+  const row = profile.rows[0] || {};
+  const pairs = [
+    ['context_account_id', 'Member ID', String(accountId)],
+    ['context_username', 'Username', row.handle || ''],
+    ['context_email', 'Email', row.email_address || ''],
+    ['context_plan', 'Plan', row.subscription_plan || 'Free'],
+    ['context_submitted_at', 'Submitted at', new Date().toISOString()],
+    ['context_browser', 'Browser', clientContext?.browser],
+    ['context_device', 'Device', clientContext?.device],
+    ['context_page', 'Page they came from', clientContext?.page],
+  ];
+  return pairs
+    .filter(([, , value]) => value != null && String(value).trim())
+    .map(([field_key, field_label, value]) => ({
+      field_key,
+      field_label,
+      value: String(value).trim().slice(0, 500),
+    }));
+}
+
+async function findAccountByEmailOrUsername(identifier) {
+  const needle = String(identifier || '').trim();
+  if (!needle) return null;
+  const result = await pool.query(
+    `
+    SELECT a.account_id
+    FROM accounts a
+    LEFT JOIN users u ON u.account_id = a.account_id
+    WHERE a.deleted_at IS NULL
+      AND (
+        LOWER(u.email_address) = LOWER($1)
+        OR LOWER(a.handle) = LOWER($1)
+      )
+    LIMIT 1
+    `,
+    [needle]
+  );
+  return result.rows[0]?.account_id || null;
+}
+
+async function getTicketPickers(accountId) {
+  const [projects, listings, orders, contracts, jobs] = await Promise.all([
+    safeTicketRows(
+      `
+      SELECT p.project_id AS id, p.name AS label
+      FROM projects p
+      JOIN project_members pm ON pm.project_id = p.project_id AND pm.deleted_at IS NULL
+      JOIN users u ON u.user_id = pm.user_id
+      WHERE u.account_id = $1 AND p.deleted_at IS NULL
+      ORDER BY p.updated_at DESC
+      LIMIT 50
+      `,
+      [accountId]
+    ),
+    safeTicketRows(
+      `
+      SELECT listing_id AS id, title AS label
+      FROM marketplace_listings
+      WHERE submitted_by_account_id = $1
+      ORDER BY created_at DESC
+      LIMIT 50
+      `,
+      [accountId]
+    ),
+    safeTicketRows(
+      `
+      SELECT ma.market_asset_id AS id, ma.name AS label
+      FROM user_market_assets uma
+      JOIN users u ON u.user_id = uma.user_id
+      JOIN market_assets ma ON ma.market_asset_id = uma.market_asset_id
+      WHERE u.account_id = $1 AND uma.deleted_at IS NULL
+      ORDER BY uma.created_at DESC
+      LIMIT 50
+      `,
+      [accountId]
+    ),
+    safeTicketRows(
+      `
+      SELECT c.contract_id AS id, COALESCE(j.title, c.contract_id::text) AS label
+      FROM contracts c
+      LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
+      LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+      LEFT JOIN jobs j ON j.job_id = p.job_id
+      WHERE j.client_account_id = $1 OR p.freelancer_account_id = $1
+      ORDER BY c.created_at DESC
+      LIMIT 50
+      `,
+      [accountId]
+    ),
+    safeTicketRows(
+      `
+      SELECT id, label FROM (
+        SELECT job_id AS id, title AS label, created_at FROM jobs WHERE client_account_id = $1
+        UNION ALL
+        SELECT gig_id AS id, title AS label, created_at FROM gigs WHERE freelancer_account_id = $1
+      ) items
+      ORDER BY created_at DESC
+      LIMIT 50
+      `,
+      [accountId]
+    ),
+  ]);
+  return { projects, listings, orders, contracts, jobs };
+}
+
 module.exports = {
   getTicketsOverview,
   getTicketDetail,
   getTicketCatalog,
   createSupportTicket,
+  findAccountByEmailOrUsername,
+  getTicketPickers,
   nextTicketNumber,
   nextDisputeNumber,
   updateTicket,

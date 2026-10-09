@@ -6,12 +6,22 @@ import UserHeader from "@/components/nav/user_header";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import useGlobalState from "@/lib/global_state";
 
+const LOGGED_OUT_TYPES = ["Sign-in and password", "Account compromised"];
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+
 interface TicketField {
   key: string;
   label: string;
-  kind: "text" | "select";
+  kind: "text" | "select" | "multiselect" | "checkbox" | "textarea";
   required?: boolean;
   options?: string[];
+  picker?: "project" | "order" | "listing" | "contract" | "job";
+  when?: { key: string; equals?: string; oneOf?: string[] };
+}
+
+interface PickerOption {
+  id: string;
+  label: string;
 }
 
 interface TicketTypeDetail {
@@ -70,6 +80,7 @@ const PageSubmitATicket: React.FC = () => {
   const [subgroup, setSubgroup] = useState("Account");
   const [loadingTypes, setLoadingTypes] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [pickers, setPickers] = useState<Record<string, PickerOption[]>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -100,10 +111,24 @@ const PageSubmitATicket: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!accountId) return;
+    api.get("/api/users/ticket-context")
+      .then((response) => {
+        if (response.data?.success) setPickers(response.data.data || {});
+      })
+      .catch(() => {});
+  }, [accountId]);
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accountId) {
-      navigate("/login");
+    if (!accountId && !LOGGED_OUT_TYPES.includes(ticketType)) {
+      navigate(`/login?redirect=${encodeURIComponent("/support/ticket")}`);
+      return;
+    }
+    const tooLarge = screenshots.find((file) => file.size > MAX_ATTACHMENT_BYTES);
+    if (tooLarge) {
+      setError("Each attachment must be 8 MB or smaller.");
       return;
     }
     setError(null);
@@ -121,6 +146,11 @@ const PageSubmitATicket: React.FC = () => {
         description: description.trim(),
         attachments,
         fields: fieldValues,
+        context: {
+          browser: navigator.userAgent,
+          device: navigator.platform || "",
+          page: document.referrer || "Direct",
+        },
       });
       if (!response.data?.success) {
         setError(response.data?.message || "Failed to submit ticket");
@@ -138,21 +168,24 @@ const PageSubmitATicket: React.FC = () => {
     }
   };
 
-  const groups = Array.from(new Set(catalog.map((item) => item.group).filter(Boolean))) as string[];
+  const shownCatalog = accountId
+    ? catalog
+    : catalog.filter((item) => LOGGED_OUT_TYPES.includes(item.label));
+  const groups = Array.from(new Set(shownCatalog.map((item) => item.group).filter(Boolean))) as string[];
   const subgroups = Array.from(
     new Set(
-      catalog
+      shownCatalog
         .filter((item) => item.group === group && item.subgroup)
         .map((item) => item.subgroup as string)
     )
   );
-  const visibleTypes = catalog.filter(
+  const visibleTypes = shownCatalog.filter(
     (item) => item.group === group && (group !== "Support" || item.subgroup === subgroup)
   );
   const selected = catalog.find((item) => item.label === ticketType) || null;
 
   const chooseGroup = (nextGroup: string) => {
-    const inGroup = catalog.filter((item) => item.group === nextGroup);
+    const inGroup = shownCatalog.filter((item) => item.group === nextGroup);
     const nextSubgroup = inGroup.find((item) => item.subgroup)?.subgroup || "";
     const nextType = inGroup.find((item) => !nextSubgroup || item.subgroup === nextSubgroup);
     setGroup(nextGroup);
@@ -162,13 +195,19 @@ const PageSubmitATicket: React.FC = () => {
   };
 
   const chooseSubgroup = (nextSubgroup: string) => {
-    const nextType = catalog.find((item) => item.group === group && item.subgroup === nextSubgroup);
+    const nextType = shownCatalog.find((item) => item.group === group && item.subgroup === nextSubgroup);
     setSubgroup(nextSubgroup);
     setTicketType(nextType?.label || "");
     setFieldValues({});
   };
 
-  if (!accountId) return null;
+  const fieldShown = (field: TicketField) => {
+    if (!field.when) return true;
+    const current = fieldValues[field.when.key] || "";
+    if (field.when.equals) return current === field.when.equals;
+    if (field.when.oneOf) return field.when.oneOf.includes(current);
+    return true;
+  };
 
   const fieldStyle = {
     width: "100%",
@@ -196,7 +235,9 @@ const PageSubmitATicket: React.FC = () => {
           Encountered a bug or an escrow processing issue? File a support ticket and our team will look into it.
         </p>
         <p style={{ color: theme === 'dark' ? "#a1a1aa" : "#374151", fontSize: 13, marginBottom: 24 }}>
-          This ticket is filed on the account you are signed in with.
+          {accountId
+            ? "This ticket is filed on the account you are signed in with. We also save your browser and the page you came from."
+            : "Sign-in and compromised-account tickets can be filed while you are locked out. Other tickets need you to sign in."}
         </p>
 
         <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -315,39 +356,88 @@ const PageSubmitATicket: React.FC = () => {
                 </p>
               </div>
             )}
-            {(selected?.fields || []).map((field) => (
-              <div key={field.key}>
-                <label style={labelStyle}>
-                  {field.label}
-                  {field.required === false ? " (optional)" : ""}
-                </label>
-                {field.kind === "select" ? (
-                  <select
-                    required={field.required !== false}
-                    value={fieldValues[field.key] || ""}
-                    onChange={(e) => setFieldValues((current) => ({ ...current, [field.key]: e.target.value }))}
-                    style={fieldStyle}
-                  >
-                    <option value="">Choose one</option>
-                    {(field.options || []).map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    required={field.required !== false}
-                    type="text"
-                    value={fieldValues[field.key] || ""}
-                    onChange={(e) => setFieldValues((current) => ({ ...current, [field.key]: e.target.value }))}
-                    style={fieldStyle}
-                  />
-                )}
-              </div>
-            ))}
+            {(selected?.fields || []).filter(fieldShown).map((field) => {
+              const pickerKey = field.picker === "project" ? "projects"
+                : field.picker === "order" ? "orders"
+                : field.picker === "listing" ? "listings"
+                : field.picker === "contract" ? "contracts"
+                : field.picker === "job" ? "jobs"
+                : "";
+              const pickerOptions = pickerKey ? pickers[pickerKey] || [] : [];
+              const required = field.required !== false;
+              const setValue = (value: string) => setFieldValues((current) => ({ ...current, [field.key]: value }));
+              return (
+                <div key={field.key}>
+                  <label style={labelStyle}>
+                    {field.label}
+                    {required ? " *" : " (optional)"}
+                  </label>
+                  {field.kind === "checkbox" ? (
+                    <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-zinc-300">
+                      <input
+                        type="checkbox"
+                        required={required}
+                        checked={fieldValues[field.key] === "yes"}
+                        onChange={(e) => setValue(e.target.checked ? "yes" : "")}
+                      />
+                      <span>Yes</span>
+                    </label>
+                  ) : field.kind === "multiselect" ? (
+                    <div className="space-y-2">
+                      {(field.options || []).map((option) => {
+                        const selectedValues = (fieldValues[field.key] || "").split(",").map((part) => part.trim()).filter(Boolean);
+                        const checked = selectedValues.includes(option);
+                        return (
+                          <label key={option} className="flex items-center gap-2 text-sm text-gray-700 dark:text-zinc-300">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                const next = checked
+                                  ? selectedValues.filter((part) => part !== option)
+                                  : [...selectedValues, option];
+                                setValue(next.join(", "));
+                              }}
+                            />
+                            {option}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : field.kind === "textarea" ? (
+                    <textarea
+                      required={required}
+                      rows={4}
+                      value={fieldValues[field.key] || ""}
+                      onChange={(e) => setValue(e.target.value)}
+                      style={{ ...fieldStyle, resize: "vertical" }}
+                    />
+                  ) : field.kind === "select" || pickerOptions.length > 0 ? (
+                    <select
+                      required={required}
+                      value={fieldValues[field.key] || ""}
+                      onChange={(e) => setValue(e.target.value)}
+                      style={fieldStyle}
+                    >
+                      <option value="">Choose one</option>
+                      {(pickerOptions.length ? pickerOptions.map((option) => option.label) : field.options || []).map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      required={required}
+                      type="text"
+                      value={fieldValues[field.key] || ""}
+                      onChange={(e) => setValue(e.target.value)}
+                      style={fieldStyle}
+                    />
+                  )}
+                </div>
+              );
+            })}
             <div>
-              <label style={labelStyle}>Issue Subject</label>
+              <label style={labelStyle}>Issue subject *</label>
               <input
                 required
                 type="text"
@@ -357,7 +447,7 @@ const PageSubmitATicket: React.FC = () => {
               />
             </div>
             <div>
-              <label style={labelStyle}>Detailed Description</label>
+              <label style={labelStyle}>Detailed description *</label>
               <textarea
                 required
                 rows={5}
@@ -370,12 +460,12 @@ const PageSubmitATicket: React.FC = () => {
               <label style={labelStyle}>Screenshots</label>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,video/*"
                 multiple
                 onChange={(event) => setScreenshots(Array.from(event.target.files || []).slice(0, 4))}
               />
               <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 12, marginTop: 6 }}>
-                Up to 4 images. Stored in the existing file bucket.
+                Optional. Up to 4 screenshots or screen recordings, 8 MB each.
               </p>
             </div>
             {error && <p style={{ color: "#f87171", fontSize: 13, margin: 0 }}>{error}</p>}

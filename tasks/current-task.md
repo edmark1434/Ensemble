@@ -1,11 +1,11 @@
-# Current Task: Member ticket form
+# Current Task: Member ticket form fields
 
 ## Objective
-Signed-in members file a ticket at `/support/ticket`. The form explains the chosen type and asks only the extra questions for that type.
+The signed-in ticket form asks the shared fields plus the type-specific questions, explains the type, and files the ticket on the session account. Sign-in and account-compromised tickets can be filed while logged out.
 
 ## Acceptance criteria
-- `ticket_form_values` stores one row per extra answer, linked to `tickets`.
-- Type, subject, description, and screenshots stay on the ticket and its chat.
-- The form shows the type description before the extra questions.
-- Staff ticket detail lists the saved answers.
-- Run `cd backend && npm run migrate` so `1822800000000_ticket-form-values` is applied. The earlier catalog migration must already be applied.
+- Extra answers are rows in `ticket_form_values` with primary key `(ticket_id, field_key)`.
+- Required questions are enforced on the server. Conditional questions appear only when they apply.
+- Projects, orders, listings, contracts, and jobs use the member's own records when that list is available.
+- Member id, username, email, plan, time, browser, device, and referring page are saved without asking.
+- Run `cd backend && npm run migrate` so the catalog migration and `1822800000000_ticket-form-values` are applied.

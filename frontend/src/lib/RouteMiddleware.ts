@@ -96,7 +96,8 @@ export default function RouteMiddleware() {
     const isTicketFormRoute = ticketFormPath === '/support/ticket' || ticketFormPath === '/landing/submitaticket';
     const isPublicRoute =
         basePublicRoutes.includes(location.pathname) ||
-        (location.pathname.startsWith('/landing/') && !isTicketFormRoute);
+        (location.pathname.startsWith('/landing/') && !isTicketFormRoute) ||
+        isTicketFormRoute;
     const isOnboardingRoute = location.pathname.startsWith('/setup/');
 
     const isGuestAllowedRoute = isGuestAllowedPath(location.pathname);
@@ -283,11 +284,6 @@ export default function RouteMiddleware() {
 
     useEffect(() => {
         if (isCheckingSession || resolvedUser || isGuestMode || isPublicRoute || isGuestAllowedRoute) {
-            return;
-        }
-
-        if (isTicketFormRoute) {
-            navigate('/login?redirect=%2Fsupport%2Fticket', { replace: true });
             return;
         }
 

@@ -2,6 +2,8 @@ const {
   getTicketsOverview,
   getTicketDetail,
   createSupportTicket,
+  findAccountByEmailOrUsername,
+  getTicketPickers,
   getTicketCatalog,
   updateTicket,
   addTicketMessage,
@@ -236,6 +238,20 @@ async function getAdminReportDetail(req, res) {
 }
 
 /** Public/user ticket intake — uses session account, or looks up account by email. */
+async function getTicketContext(req, res) {
+  try {
+    const accountId = req.session?.account_id || req.session?.accountId;
+    if (!accountId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    const data = await getTicketPickers(accountId);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error loading ticket context:', err);
+    res.status(500).json({ success: false, message: 'Failed to load your projects and orders' });
+  }
+}
+
 async function getPublicTicketCatalog(_req, res) {
   try {
     const { getPublicTicketTypeDetails } = require('../lib/TicketEnums');
@@ -271,7 +287,21 @@ async function createPublicTicket(req, res) {
       return res.status(400).json({ success: false, message: 'Description is required' });
     }
 
-    const requesterAccountId = req.session?.account_id || req.session?.accountId || null;
+    const { LOGGED_OUT_TICKET_TYPES, normalizeTicketType: normalizeType } = {
+      ...require('../lib/TicketFormFields'),
+      normalizeTicketType: require('../lib/TicketEnums').normalizeTicketType,
+    };
+    const normalizedType = normalizeType(type || category || 'Other');
+    let requesterAccountId = req.session?.account_id || req.session?.accountId || null;
+    if (!requesterAccountId && LOGGED_OUT_TICKET_TYPES.includes(normalizedType)) {
+      requesterAccountId = await findAccountByEmailOrUsername(req.body?.fields?.email_or_username);
+      if (!requesterAccountId) {
+        return res.status(400).json({
+          success: false,
+          message: 'No account matches that email or username',
+        });
+      }
+    }
     if (!requesterAccountId) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
@@ -286,6 +316,7 @@ async function createPublicTicket(req, res) {
         description: description.trim(),
         attachments: req.body?.attachments,
         fields: req.body?.fields ?? {},
+        context: req.body?.context,
         requesterAccountId,
       },
       req.session
@@ -522,6 +553,7 @@ module.exports = {
   getAdminReportDetail,
   patchAdminReport,
   getPublicTicketCatalog,
+  getTicketContext,
   createPublicTicket,
   listMyTickets,
   getMyTicket,
