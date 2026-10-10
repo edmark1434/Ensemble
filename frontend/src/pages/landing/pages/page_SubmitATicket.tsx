@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, Heart, HelpCircle, MessageCircleQuestion, MessageSquare } from "lucide-react";
+import { Check, Heart, HelpCircle, MessageCircleQuestion, MessageSquare } from "lucide-react";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
@@ -285,107 +285,124 @@ const PageSubmitATicket: React.FC = () => {
         ) : (
           <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             <div>
-              <label style={labelStyle}>Where is the problem?</label>
-              <div className="flex flex-wrap gap-2">
-                {groups.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => chooseGroup(item)}
-                    className={`rounded-full border px-3 py-1.5 text-sm ${
-                      group === item
-                        ? "border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-zinc-900"
-                        : "border-gray-200 text-gray-700 dark:border-white/10 dark:text-zinc-300"
-                    }`}
-                  >
-                    {item === "Forums" ? "Forum" : item}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {group === "Support" && subgroups.length > 0 && (
-              <div>
-                <label style={labelStyle}>Support area</label>
-                <div className="flex flex-wrap gap-2">
-                  {subgroups.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => chooseSubgroup(item)}
-                      className={`rounded-full border px-3 py-1.5 text-sm ${
-                        subgroup === item
-                          ? "border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-zinc-900"
-                          : "border-gray-200 text-gray-700 dark:border-white/10 dark:text-zinc-300"
-                      }`}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div>
-              <label style={labelStyle}>Ticket type</label>
+              <label style={labelStyle}>What do you need help with?</label>
               {loadingTypes ? (
                 <p className="text-sm text-gray-500 dark:text-zinc-400">Loading types…</p>
               ) : (
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={`${group}-${subgroup}`}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="overflow-hidden rounded-xl border border-gray-200 dark:border-white/10"
-                  >
-                    {visibleTypes.map((item) => {
-                      const open = ticketType === item.label;
+                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/10 dark:bg-[#18181b]">
+                  <div className="flex border-b border-gray-200 dark:border-white/10">
+                    {groups.map((item) => {
+                      const active = group === item;
+                      const label = item === "Forums" ? "Forum" : item === "Jobs and Gigs" ? "Jobs & Gigs" : item;
                       return (
-                        <div
-                          key={item.label}
-                          className="border-b border-gray-200 last:border-b-0 dark:border-white/10"
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => chooseGroup(item)}
+                          className={`relative flex-1 px-2 py-2.5 text-sm font-medium transition-colors ${
+                            active
+                              ? "text-gray-900 dark:text-white"
+                              : "text-gray-500 hover:text-gray-800 dark:text-zinc-500 dark:hover:text-zinc-200"
+                          }`}
                         >
-                          <button
-                            type="button"
-                            disabled={submitting}
-                            aria-expanded={open}
-                            onClick={() => {
-                              setTicketType(open ? "" : item.label);
-                              setFieldValues({});
-                            }}
-                            className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors duration-200 ${
-                              open
-                                ? "bg-gray-100 dark:bg-white/10"
-                                : "bg-white hover:bg-gray-50 dark:bg-transparent dark:hover:bg-white/5"
-                            }`}
-                          >
-                            <span className="text-sm font-medium text-gray-900 dark:text-white">{item.label}</span>
-                            <ChevronDown
-                              className={`h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200 ease-out dark:text-zinc-400 ${
-                                open ? "rotate-180" : ""
-                              }`}
+                          {active && (
+                            <motion.span
+                              layoutId="ticket-group-tab"
+                              className="absolute inset-x-3 bottom-0 h-0.5 bg-gray-900 dark:bg-white"
+                              transition={{ type: "spring", stiffness: 420, damping: 34 }}
                             />
-                          </button>
-                          <div
-                            className={`grid transition-[grid-template-rows] duration-200 ease-out ${
-                              open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-                            }`}
-                          >
-                            <div className="overflow-hidden" aria-hidden={!open}>
-                              <p
-                                className={`px-3 pb-3 text-sm leading-relaxed text-gray-600 transition-opacity duration-200 dark:text-zinc-300 ${
-                                  open ? "opacity-100" : "opacity-0"
-                                }`}
-                              >
-                                {item.description}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
+                          )}
+                          {label}
+                        </button>
                       );
                     })}
-                  </motion.div>
-                </AnimatePresence>
+                  </div>
+                  {group === "Support" && subgroups.length > 0 && (
+                    <div className="flex gap-1 overflow-x-auto border-b border-gray-200 px-2 py-2 dark:border-white/10">
+                      {subgroups.map((item) => {
+                        const active = subgroup === item;
+                        return (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => chooseSubgroup(item)}
+                            className={`relative shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${
+                              active ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-zinc-500"
+                            }`}
+                          >
+                            {active && (
+                              <motion.span
+                                layoutId="ticket-area-tab"
+                                className="absolute inset-0 rounded-md bg-gray-100 dark:bg-white/10"
+                                transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                              />
+                            )}
+                            <span className="relative">{item}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={`${group}-${subgroup}`}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.16, ease: "easeOut" }}
+                      className="p-1.5"
+                      role="listbox"
+                      aria-label="Ticket type"
+                    >
+                      {visibleTypes.map((item) => {
+                        const open = ticketType === item.label;
+                        return (
+                          <button
+                            key={item.label}
+                            type="button"
+                            role="option"
+                            aria-selected={open}
+                            disabled={submitting}
+                            onClick={() => {
+                              if (open) return;
+                              setTicketType(item.label);
+                              setFieldValues({});
+                            }}
+                            className="relative flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left"
+                          >
+                            {open && (
+                              <motion.span
+                                layoutId="ticket-type-selected"
+                                className="absolute inset-0 rounded-lg bg-gray-100 dark:bg-white/10"
+                                transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                              />
+                            )}
+                            <span className={`relative text-sm ${open ? "font-medium text-gray-900 dark:text-white" : "text-gray-700 dark:text-zinc-300"}`}>
+                              {item.label}
+                            </span>
+                            <Check className={`relative h-4 w-4 shrink-0 text-gray-900 transition-opacity dark:text-white ${open ? "opacity-100" : "opacity-0"}`} />
+                          </button>
+                        );
+                      })}
+                    </motion.div>
+                  </AnimatePresence>
+                  <AnimatePresence initial={false}>
+                    {selected?.description && (
+                      <motion.div
+                        key={selected.label}
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                        className="overflow-hidden border-t border-gray-200 dark:border-white/10"
+                      >
+                        <p className="px-4 py-3 text-sm leading-relaxed text-gray-600 dark:text-zinc-400">
+                          {selected.description}
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               )}
               {catalogError && <p style={{ color: "#f87171", fontSize: 13, marginTop: 8 }}>{catalogError}</p>}
             </div>
