@@ -17,11 +17,10 @@ export function CommentsSync() {
     [blockId, projectId],
   );
 
-  const { data, error, post, remove } = useComments(target);
-
+  const { data, error, post, remove, upload, setStatus } = useComments(target);
   useEffect(() => {
-    sync({ data, error, post, remove });
-  }, [data, error, post, remove, sync]);
+    sync({ data, error, post, remove, upload, setStatus });
+  }, [data, error, post, remove, upload, setStatus, sync]);
 
   return null;
 }

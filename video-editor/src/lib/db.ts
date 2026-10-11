@@ -91,6 +91,9 @@ interface BlockCommentsTable {
   user_id: string;
   comment: string;
   time_ms: number | null;
+  status: Generated<"open" | "resolved">;
+  resolved_at: Date | null;
+  resolved_by_user_id: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
   deleted_at: Date | null;
@@ -112,6 +115,9 @@ interface ProjectCommentsTable {
   user_id: string;
   comment: string;
   time_ms: number | null;
+  status: Generated<"open" | "resolved">;
+  resolved_at: Date | null;
+  resolved_by_user_id: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
   deleted_at: Date | null;
@@ -125,6 +131,34 @@ interface ProjectRepliesTable {
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
   deleted_at: Date | null;
+}
+
+interface ProjectCommentAttachmentsTable {
+  project_comment_id: string;
+  file_id: string;
+  index: number;
+  created_at: Generated<Date>;
+}
+
+interface ProjectReplyAttachmentsTable {
+  project_reply_id: string;
+  file_id: string;
+  index: number;
+  created_at: Generated<Date>;
+}
+
+interface BlockCommentAttachmentsTable {
+  block_comment_id: string;
+  file_id: string;
+  index: number;
+  created_at: Generated<Date>;
+}
+
+interface BlockReplyAttachmentsTable {
+  block_reply_id: string;
+  file_id: string;
+  index: number;
+  created_at: Generated<Date>;
 }
 
 interface SessionsTable {
@@ -221,6 +255,11 @@ interface Database {
   block_replies: BlockRepliesTable;
   project_comments: ProjectCommentsTable;
   project_replies: ProjectRepliesTable;
+
+  project_comment_attachments: ProjectCommentAttachmentsTable;
+  project_reply_attachments: ProjectReplyAttachmentsTable;
+  block_comment_attachments: BlockCommentAttachmentsTable;
+  block_reply_attachments: BlockReplyAttachmentsTable;
 
   sessions: SessionsTable;
   session_activities: SessionActivitiesTable;

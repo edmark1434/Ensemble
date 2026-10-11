@@ -8,6 +8,7 @@ import CaptionPresetPicker from "./caption-preset-picker";
 import FontFamilyPicker from "./font-family-picker";
 import TextPresetPicker from "./text-preset-picker";
 import AccessPicker from "./access-picker";
+import CommentThreadControl from "@/features/editor/control-item/floating-controls/comment-thread";
 
 // Above the scene presence overlay (z 200 in interactions.tsx), below popovers (250) and dialogs (300).
 const FLOATING_CONTROL_Z_INDEX = 210;
@@ -20,7 +21,10 @@ export default function FloatingControl({ anchorRef }: { anchorRef: React.RefObj
   const measureRef = useRef<HTMLDivElement>(null);
   const dragStartSetRef = useRef(false);
 
-  const hasTarget = !!trackItem || (floatingControlIds && floatingControlIds.length > 0);
+  const hasTarget =
+    !!trackItem ||
+    (floatingControlIds && floatingControlIds.length > 0) ||
+    floatingControl === "comment-thread";
 
   useEffect(() => {
     if (!floatingControl || !anchorRef.current) {
@@ -48,6 +52,7 @@ export default function FloatingControl({ anchorRef }: { anchorRef: React.RefObj
   else if (floatingControl === "animation-caption") content = <AnimationCaption />;
   else if (floatingControl === "caption-preset-picker") content = <CaptionPresetPicker trackItem={trackItem} />;
   else if (floatingControl === "access-picker") content = <AccessPicker />;
+  else if (floatingControl === "comment-thread") content = <CommentThreadControl />;
 
   useEffect(() => {
     if (!spawnPos || !measureRef.current || dragStartSetRef.current) return;

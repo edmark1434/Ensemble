@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CollabTarget } from "@/features/editor/collab/collab-target";
-import type { CommentsPayload } from "@/features/editor/types/comments";
+import type {
+  CommentAttachment,
+  CommentStatus,
+  CommentsPayload,
+} from "@/features/editor/types/comments";
 
 const REJECTED_CLOSE_CODES = new Set([4000, 4001, 4003, 4004]);
 
@@ -70,12 +74,20 @@ export function useComments(target: CollabTarget | null) {
   }, [base, kind, id, load]);
 
   const post = useCallback(
-    async (body: string, parentId?: string, timeMs?: number) => {
+    async (
+      body: string,
+      opts?: { parentId?: string; timeMs?: number; fileIds?: string[] },
+    ) => {
       if (!base) return;
       const res = await fetch(base, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body, parentId, timeMs }),
+        body: JSON.stringify({
+          body,
+          parentId: opts?.parentId,
+          timeMs: opts?.timeMs,
+          fileIds: opts?.fileIds,
+        }),
       });
       if (!res.ok) throw new Error(`comment failed (${res.status})`);
       await load();
@@ -93,5 +105,31 @@ export function useComments(target: CollabTarget | null) {
     [base, load],
   );
 
-  return { data, error, post, remove };
+  const setStatus = useCallback(
+    async (commentId: string, status: CommentStatus) => {
+      if (!base) return;
+      const res = await fetch(base, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentId, status }),
+      });
+      if (!res.ok) throw new Error(`status change failed (${res.status})`);
+      await load();
+    },
+    [base, load],
+  );
+
+  const upload = useCallback(
+    async (file: File): Promise<CommentAttachment> => {
+      if (!base) throw new Error("no comments target");
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`${base}/attachments`, { method: "POST", body: form });
+      if (!res.ok) throw new Error(`upload failed (${res.status})`);
+      return (await res.json()) as CommentAttachment;
+    },
+    [base],
+  );
+
+  return { data, error, post, remove, setStatus, upload };
 }
