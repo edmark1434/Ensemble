@@ -1,6 +1,7 @@
 import { useCurrentPlayerFrame } from "../hooks/use-current-frame";
 import useStore from "../store/use-store";
 import {
+  CSSProperties,
   MouseEvent,
   TouchEvent,
   useEffect,
@@ -14,6 +15,11 @@ import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
 import { useTheme } from "next-themes";
 import { useIsDraggingOverTimeline } from "@/features/editor/hooks/is-dragging-over-timeline";
 import { useCommentMarkers } from "@/features/editor/comments/use-comment-markers";
+import {
+  MARKER_HEIGHT,
+  MARKER_WIDTH,
+  NORMAL_MARKER_CLIP
+} from "./ruler";
 
 const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
   const playheadRef = useRef<HTMLDivElement>(null);
@@ -104,16 +110,39 @@ const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
   const currentTimeMs = (currentFrame / fps) * 1000;
 
   const commentMarkers = useCommentMarkers();
-  const activeMarker = [...markers, ...commentMarkers].find(
-    (m) => Math.abs(m.timeMs - currentTimeMs) < MARKER_SNAP_MS,
-  );
+  const isNear = (m: { timeMs: number }) =>
+    Math.abs(m.timeMs - currentTimeMs) < MARKER_SNAP_MS;
+  const nearComment =
+    commentMarkers.some(isNear) ||
+    markers.some((m) => m.type === "comment" && isNear(m));
+  const nearNormal = markers.some((m) => m.type !== "comment" && isNear(m));
 
-  const markerColor = activeMarker
-    ? (activeMarker.type === "comment" ? "#f43f5e" : "var(--primary)")
-    : null;
+  // normal markers are pink, comment markers use the primary color;
+  // when both sit on the playhead, the normal marker wins
+  const markerColor = nearNormal
+    ? "#f43f5e"
+    : nearComment
+      ? "var(--primary)"
+      : null;
   const playheadColor = playheadSnapped
     ? `color-mix(in oklch, var(--primary) 50%, var(--card))`
     : markerColor ?? color;
+
+  // only normal markers change the playhead shape (also wins when both sit on it);
+  // on a comment marker the playhead keeps its shape and is just recolored
+  const handleStyle: CSSProperties = nearNormal
+    ? {
+      width: MARKER_WIDTH,
+      height: MARKER_HEIGHT,
+      clipPath: NORMAL_MARKER_CLIP,
+      backgroundColor: playheadColor
+    }
+    : {
+      width: 8,
+      height: 16,
+      borderRadius: "0 0 4px 4px",
+      backgroundColor: playheadColor
+    };
 
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
 
@@ -138,11 +167,8 @@ const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
     >
       <div
         id="playhead-handle"
-        style={{
-          borderRadius: "0 0 4px 4px",
-          backgroundColor: playheadColor,
-        }}
-        className="absolute top-0 h-4 w-2 -translate-x-1/2 transform text-xs font-semibold text-zinc-800"
+        style={handleStyle}
+        className="absolute top-0 -translate-x-1/2 transform text-xs font-semibold text-zinc-800"
       />
       <div className="relative h-full">
         <div className="absolute top-0 h-full w-3 -translate-x-1/2 transform" />

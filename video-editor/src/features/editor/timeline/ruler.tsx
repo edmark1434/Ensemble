@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   PREVIEW_FRAME_WIDTH,
@@ -13,6 +13,18 @@ import { timeMsToUnits } from "@designcombo/timeline";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
 import { useCommentsStore } from "@/features/editor/store/use-comments-store";
 import { useCommentMarkers } from "@/features/editor/comments/use-comment-markers";
+import { commentPreview } from "@/features/editor/comments/comments-panel";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+
+export const RULER_HEIGHT = 32;
+export const MARKER_WIDTH = 12;
+export const MARKER_HEIGHT = RULER_HEIGHT * 0.52;
+// normal marker: flat top, point facing down (hangs from the top of the ruler)
+export const NORMAL_MARKER_CLIP =
+  "polygon(0 0, 100% 0, 100% 62%, 50% 100%, 0 62%)";
+// comment marker: the same shape flipped (sits on the bottom of the ruler)
+export const COMMENT_MARKER_CLIP =
+  "polygon(50% 0, 100% 38%, 100% 100%, 0 100%, 0 38%)";
 
 interface RulerProps {
   height?: number;
@@ -33,7 +45,7 @@ const getUIFont = () =>
 const Ruler = (props: RulerProps) => {
   const timelineOffsetX = useTimelineOffsetX();
   const {
-    height = 32, // Increased height to give space for the text
+    height = RULER_HEIGHT, // Increased height to give space for the text
     longLineSize = 8,
     shortLineSize = 10,
     offsetX = timelineOffsetX + TIMELINE_OFFSET_CANVAS_LEFT,
@@ -435,6 +447,12 @@ const Ruler = (props: RulerProps) => {
   const commentMarkers = useCommentMarkers();
   const setActiveRightItem = useLayoutStore((s) => s.setActiveRightItem);
   const setFocusedId = useCommentsStore((s) => s.setFocusedId);
+  const commentThreads = useCommentsStore((s) => s.data?.threads);
+  const commentPreviews = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of commentThreads ?? []) map.set(t.id, commentPreview(t.body));
+    return map;
+  }, [commentThreads]);
 
   const openComment = (c: { id: string; timeMs: number }) => {
     playerRef?.current?.seekTo(Math.round((c.timeMs * fps) / 1000));
@@ -475,8 +493,7 @@ const Ruler = (props: RulerProps) => {
         .map((marker) => {
           const x = timeMsToUnits(marker.timeMs, scale.zoom) - scrollLeft + offsetX;
           if (x < 0 || x > canvasSize.width) return null;
-          const color = marker.color
-            ?? (marker.type === "comment" ? "#f43f5e" : "var(--primary)");
+          const color = marker.type === "comment" ? "var(--primary)" : "#f43f5e";
           return (
             <div
               key={marker.id}
@@ -484,23 +501,25 @@ const Ruler = (props: RulerProps) => {
                 position: "absolute",
                 left: x,
                 bottom: 0,
-                top: "0%",
+                top: 0,
                 width: 2,
-                backgroundColor: color,
                 pointerEvents: "none",
-                zIndex: 5,
+                zIndex: marker.type === "comment" ? 3 : 5,
                 transform: "translateX(-50%)",
               }}
             >
               <div style={{
                 position: "absolute",
-                top: -1,
+                ...(marker.type === "comment" ? { bottom: 0 } : { top: -1 }),
                 left: 1,
                 transform: "translateX(-50%)",
-                width: 8,
+                width: MARKER_WIDTH,
                 height: "52%",
                 backgroundColor: color,
-                borderRadius: "0 0 4px 4px",
+                clipPath:
+                  marker.type === "comment"
+                    ? COMMENT_MARKER_CLIP
+                    : NORMAL_MARKER_CLIP,
               }} />
             </div>
           );
@@ -509,29 +528,65 @@ const Ruler = (props: RulerProps) => {
       {commentMarkers.map((c) => {
         const x = timeMsToUnits(c.timeMs, scale.zoom) - scrollLeft + offsetX;
         if (x < 0 || x > canvasSize.width) return null;
-        return (
+        const preview = commentPreviews.get(c.id);
+        const markerVisual = (
+          <div
+            style={{
+              position: "absolute",
+              left: x,
+              bottom: 0,
+              width: MARKER_WIDTH,
+              height: "52%",
+              transform: "translateX(-50%)",
+              zIndex: 4,
+              pointerEvents: "none",
+              backgroundColor: "var(--primary)",
+              clipPath: COMMENT_MARKER_CLIP,
+            }}
+          />
+        );
+        // invisible hit target above the playhead, so hover/click still work when it sits on a comment
+        const markerButton = (
           <button
-            key={c.id}
             type="button"
-            title="Click to open comment"
+            aria-label="Open comment"
             onClick={() => openComment(c)}
             style={{
               position: "absolute",
               left: x,
-              top: 0,
-              height: "100%",
-              width: 12,
+              bottom: 0,
+              height: "52%",
+              width: MARKER_WIDTH + 4,
               transform: "translateX(-50%)",
-              zIndex: 6,
+              zIndex: 11,
               cursor: "pointer",
               background: "transparent",
               border: 0,
               padding: 0,
             }}
-          >
-            <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 2, transform: "translateX(-50%)", backgroundColor: "#f43f5e" }} />
-            <div style={{ position: "absolute", top: -1, left: "50%", transform: "translateX(-50%)", width: 8, height: "52%", backgroundColor: "#f43f5e", borderRadius: "0 0 4px 4px" }} />
-          </button>
+          />
+        );
+        if (!preview) {
+          return (
+            <Fragment key={c.id}>
+              {markerVisual}
+              {markerButton}
+            </Fragment>
+          );
+        }
+        return (
+          <Fragment key={c.id}>
+            {markerVisual}
+            <Tooltip delayDuration={100}>
+              <TooltipTrigger asChild>{markerButton}</TooltipTrigger>
+              <TooltipContent
+                side="top"
+                className="max-w-[260px] text-wrap break-words bg-primary text-primary-foreground [&_svg]:bg-primary [&_svg]:fill-primary"
+              >
+                {preview}
+              </TooltipContent>
+            </Tooltip>
+          </Fragment>
         );
       })}
     </div>

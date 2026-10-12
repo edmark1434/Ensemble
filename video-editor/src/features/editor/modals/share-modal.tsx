@@ -18,7 +18,6 @@ import {
 import { ChevronDown, Check, Search } from "lucide-react";
 import { debounce } from "lodash";
 import useBlockMembersStore from "@/features/editor/store/use-block-members-store";
-import { onAccessChanged } from "@/features/editor/collab/access-events";
 import { useAccessRefresh } from "@/features/editor/hooks/use-access-refresh";
 import { Avatar } from "@/components/user-avatar";
 
@@ -222,6 +221,11 @@ export function ShareModal({ open, onOpenChange, projectId }: ShareModalProps) {
   }, [open, projectId]);
 
   useAccessRefresh(open, () => void load(true));
+
+  // lost the right to grant Manager while "Add as: Manager" was selected
+  useEffect(() => {
+    if (!canGrantManager && newUserRole === "Manager") setNewUserRole("Viewer");
+  }, [canGrantManager, newUserRole]);
 
   const searchUsers = useMemo(
     () =>

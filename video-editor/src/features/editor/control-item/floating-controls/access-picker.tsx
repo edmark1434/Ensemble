@@ -189,6 +189,11 @@ export default function AccessPicker() {
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [newUserRole, setNewUserRole] = useState<AssignableBlockRole>("Viewer");
 
+  // lost the right to grant Manager while "Add as: Manager" was selected
+  useEffect(() => {
+    if (!canGrantManager && newUserRole === "Manager") setNewUserRole("Viewer");
+  }, [canGrantManager, newUserRole]);
+
   useEffect(() => {
     if (!blockId) return;
     void load(blockId);

@@ -26,10 +26,18 @@ import {
 } from "../types/ensemble-scene";
 import { PLAYER_PAUSE } from "@/features/editor/constants/events";
 import { useCommentsStore } from "@/features/editor/store/use-comments-store";
+import { startComment } from "@/features/editor/comments/start-comment";
 
-export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y.UndoManager, viewOnly?: boolean) {
+export function useKeyboardShortcuts(
+  stateManager: StateManager,
+  undoManager?: Y.UndoManager,
+  viewOnly?: boolean,
+  canComment?: boolean,
+) {
   const viewOnlyRef = useRef(viewOnly);
   viewOnlyRef.current = viewOnly;
+  const canCommentRef = useRef(canComment);
+  canCommentRef.current = canComment;
 
   const timelineOffsetX = useTimelineOffsetX();
   const timelineOffsetXRef = useRef(timelineOffsetX);
@@ -40,6 +48,8 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
 
   const mKeyDownRef = useRef(false);
   const mComboUsedRef = useRef(false);
+  const cKeyDownRef = useRef(false);
+  const cComboUsedRef = useRef(false);
 
   const applyScale = (newScale: ITimelineScaleState) => {
     const { fps, scale, timeline, playerRef } = useStore.getState();
@@ -151,6 +161,39 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
           const targetFrame = nextMarker ? nextMarker.frame : lastFrame;
           playerRef?.current?.seekTo(targetFrame);
           scrollTimelineToFrame(targetFrame, nextMarker ? "marker" : "end", timelineOffsetXRef.current);
+        }
+        return;
+      }
+
+      // track C key hold state; tapped on its own it starts a comment (see keyup effect below)
+      if (!e.repeat && !mod && !e.shiftKey && !e.altKey && e.code === "KeyC" && canCommentRef.current) {
+        cKeyDownRef.current = true;
+        cComboUsedRef.current = false;
+      }
+
+      // jump to previous / next comment (hold C + left / right)
+      if (cKeyDownRef.current && (e.code === "ArrowLeft" || e.code === "ArrowRight")) {
+        e.preventDefault();
+        cComboUsedRef.current = true;
+        const { playerRef, fps, duration } = useStore.getState();
+        const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
+
+        const frames = (useCommentsStore.getState().data?.threads ?? [])
+          .filter((t) => t.timeMs != null)
+          .map((t) => Math.round(((t.timeMs as number) / 1000) * fps))
+          .sort((a, b) => a - b);
+
+        if (e.code === "ArrowLeft") {
+          const prev = [...frames].reverse().find((f) => f < currentFrame);
+          const targetFrame = prev ?? 0;
+          playerRef?.current?.seekTo(targetFrame);
+          scrollTimelineToFrame(targetFrame, prev !== undefined ? "marker" : "start", timelineOffsetXRef.current);
+        } else {
+          const lastFrame = Math.round((duration / 1000) * fps);
+          const next = frames.find((f) => f > currentFrame);
+          const targetFrame = next ?? lastFrame;
+          playerRef?.current?.seekTo(targetFrame);
+          scrollTimelineToFrame(targetFrame, next !== undefined ? "marker" : "end", timelineOffsetXRef.current);
         }
         return;
       }
@@ -539,6 +582,22 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
 
       mKeyDownRef.current = false;
       mComboUsedRef.current = false;
+    };
+
+    window.addEventListener("keyup", onKeyUp);
+    return () => window.removeEventListener("keyup", onKeyUp);
+  }, []);
+
+  useEffect(() => {
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== "KeyC") return;
+
+      if (cKeyDownRef.current && !cComboUsedRef.current && canCommentRef.current) {
+        startComment();
+      }
+
+      cKeyDownRef.current = false;
+      cComboUsedRef.current = false;
     };
 
     window.addEventListener("keyup", onKeyUp);

@@ -31,6 +31,10 @@ interface CommentsState {
   setFilter: (f: CommentFilter) => void;
   sort: CommentSort;
   setSort: (s: CommentSort) => void;
+  // "start a comment" request (header button / C shortcut) for the panel to pick up
+  pendingCompose: boolean;
+  requestCompose: () => void;
+  consumeCompose: () => void;
   sync: (
     s: Partial<Pick<CommentsState, "data" | "error" | "post" | "remove" | "upload" | "setStatus">>,
   ) => void;
@@ -55,5 +59,8 @@ export const useCommentsStore = create<CommentsState>((set) => ({
   setFilter: (filter) => set({ filter }),
   sort: "date",
   setSort: (sort) => set({ sort }),
+  pendingCompose: false,
+  requestCompose: () => set({ pendingCompose: true }),
+  consumeCompose: () => set({ pendingCompose: false }),
   sync: (s) => set(s),
 }));
