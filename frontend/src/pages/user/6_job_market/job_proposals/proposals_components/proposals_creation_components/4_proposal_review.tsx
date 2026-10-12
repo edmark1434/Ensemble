@@ -203,12 +203,16 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
             </div>
             <Link to="/credits" className="px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">Buy Credits</Link>
           </div>
-        ) : walletBalance !== null ? (
+        ) : (
           <div className="flex flex-col gap-4 p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
             <div>
               <h4 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight flex items-center justify-between">
-                Checkout Summary
-                {walletBalance === null && <span className="text-[10px] font-normal text-gray-400 animate-pulse">Loading balance...</span>}
+                <span>Checkout Summary</span>
+                {walletBalance === null && (
+                  <span className="text-[10px] font-medium text-blue-500 dark:text-blue-400 animate-pulse">
+                    Checking wallet balance...
+                  </span>
+                )}
               </h4>
               <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5 max-w-sm">
                 To maintain a high-quality marketplace, a small fee is required to submit proposals.
@@ -242,16 +246,17 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
               <input
                 type="checkbox"
                 id="fee-agreement"
+                disabled={walletBalance === null}
                 checked={agreedToFee}
                 onChange={(e) => setAgreedToFee(e.target.checked)}
-                className="mt-0.5 rounded border-gray-300 dark:border-white/20 bg-white dark:bg-white/5 text-blue-500 focus:ring-blue-500/30"
+                className="mt-0.5 rounded border-gray-300 dark:border-white/20 bg-white dark:bg-white/5 text-blue-500 focus:ring-blue-500/30 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
               />
               <label htmlFor="fee-agreement" className="text-[11px] text-gray-500 dark:text-zinc-400 select-none cursor-pointer leading-tight">
                 I agree to the <strong className="text-gray-900 dark:text-white">10 Credits</strong> deduction to submit this proposal.
               </label>
             </div>
           </div>
-        ) : null}
+        )}
 
         <div className="flex gap-2.5">
           <button
@@ -264,14 +269,22 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
           <button
             type="button"
             onClick={onSubmit}
-            disabled={isSubmitting || (walletBalance !== null && walletBalance < 10) || (walletBalance !== null && !agreedToFee)}
+            disabled={isSubmitting || walletBalance === null || walletBalance < 10 || !agreedToFee}
             className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition focus:outline-none ${
-                isSubmitting || (walletBalance !== null && walletBalance < 10) || (walletBalance !== null && !agreedToFee)
+                isSubmitting || walletBalance === null || walletBalance < 10 || !agreedToFee
                  ? 'bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-zinc-600 cursor-not-allowed'
                  : 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/20'
               }`}
           >
-            {isSubmitting ? 'Submitting...' : 'Confirm & Submit Proposal'} <Check className="h-3.5 w-3.5" />
+            {isSubmitting ? (
+              'Submitting...'
+            ) : walletBalance === null ? (
+              'Checking Balance...'
+            ) : (
+              <>
+                Confirm & Submit Proposal <Check className="h-3.5 w-3.5" />
+              </>
+            )}
           </button>
         </div>
       </div>
