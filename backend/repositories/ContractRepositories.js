@@ -418,6 +418,17 @@ async function getContractsByUserId(accountIds) {
             j.job_id,
             j.title as job_title,
             j.description as job_description,
+            j.hiring_type as job_hiring_type,
+            jm.title as target_milestone_title,
+            jm.description as target_milestone_description,
+            COALESCE(jm.tasks, '[]'::jsonb) as target_milestone_tasks,
+            (SELECT json_agg(json_build_object(
+                'id', all_jm.job_milestone_id,
+                'title', all_jm.title,
+                'description', all_jm.description,
+                'tasks', COALESCE(all_jm.tasks, '[]'::jsonb),
+                'credits', all_jm.budget_credits
+            ) ORDER BY all_jm.order_index ASC) FROM job_milestones all_jm WHERE all_jm.job_id = j.job_id) as job_all_milestones,
             COALESCE(c.deadline_at, j.rough_deadline) as job_deadline,
             j.rate_credits_min,
             j.rate_credits_max,
@@ -442,6 +453,7 @@ async function getContractsByUserId(accountIds) {
         JOIN job_contracts jc ON c.contract_id = jc.contract_id
         JOIN proposals p ON jc.proposal_id = p.proposal_id
         JOIN jobs j ON p.job_id = j.job_id
+        LEFT JOIN job_milestones jm ON p.job_milestone_id = jm.job_milestone_id
         JOIN accounts client_acc ON j.client_account_id = client_acc.account_id
         LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
         JOIN accounts free_acc ON p.freelancer_account_id = free_acc.account_id
@@ -464,6 +476,11 @@ async function getContractsByUserId(accountIds) {
             g.gig_id as job_id,
             g.title as job_title,
             g.description as job_description,
+            'gig' as job_hiring_type,
+            gt.title as target_milestone_title,
+            gt.description as target_milestone_description,
+            '[]'::jsonb as target_milestone_tasks,
+            '[]'::json as job_all_milestones,
             c.deadline_at as job_deadline,
             gt.rate_credits as rate_credits_min,
             gt.rate_credits as rate_credits_max,

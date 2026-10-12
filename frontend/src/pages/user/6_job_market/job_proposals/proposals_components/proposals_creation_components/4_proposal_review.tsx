@@ -1,11 +1,25 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import api from "@/lib/axios.ts";
-import { Check, Layers, FileText, Percent, RefreshCcw, Send, Edit2, Clock, HelpCircle } from "lucide-react";
+import { Check, Layers, FileText, Percent, RefreshCcw, Send, Edit2, Clock, HelpCircle, User } from "lucide-react";
 import { JobRichText } from "../../../job_components/JobRichText";
 import type { Job } from "../../../job_components/job_lists";
 import type { Milestone } from "./3_proposal_milestones";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import useGlobalState from "@/lib/global_state";
+
+const constructAvatarUrl = (path: string | undefined): string | undefined => {
+  if (!path) return undefined;
+  if (path.startsWith("http")) return path;
+  const presetMatch = path.match(/p\d+\.png$/i);
+  if (presetMatch) {
+    return `/profile_presets/${presetMatch[0]}`;
+  }
+  const cloudfrontUrl = import.meta.env.VITE_CLOUDFRONT_URL;
+  if (!cloudfrontUrl) return path.startsWith("/") ? path : `/${path}`;
+  const cleanPath = path.startsWith("/") ? path.substring(1) : path;
+  return `${cloudfrontUrl}/${cleanPath}`;
+};
 
 interface ProposalReviewProps {
   job: Job | null;
@@ -34,6 +48,31 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
 }) => {
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [agreedToFee, setAgreedToFee] = useState(false);
+  const user = useGlobalState((state) => state.user);
+  const [profileAvatar, setProfileAvatar] = useState<string | undefined>(() => {
+    const raw = user?.avatar_preset_url || user?.avatar_url || user?.profile_photo || user?.avatar;
+    return constructAvatarUrl(raw);
+  });
+
+  useEffect(() => {
+    const raw = user?.avatar_preset_url || user?.avatar_url || user?.profile_photo || user?.avatar;
+    if (raw) {
+      setProfileAvatar(constructAvatarUrl(raw));
+    } else {
+      const accountId = user?.account_id || user?.accountId || user?.id;
+      if (accountId) {
+        api.get(`/api/accounts/profile/${accountId}`)
+          .then((res) => {
+            const data = res.data?.data || res.data?.profile || res.data || {};
+            const fetched = data.avatar_preset_url || data.avatar_url;
+            if (fetched) {
+              setProfileAvatar(constructAvatarUrl(fetched));
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [user]);
 
   useEffect(() => {
     let mounted = true;
@@ -189,6 +228,46 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
               </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* 04. Applicant Identity */}
+        <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white/[0.01] space-y-3">
+          <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-2">
+            <span className="font-bold text-blue-400 uppercase tracking-wider text-[10px]">
+              04. Applicant Identity
+            </span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-200/50 dark:border-blue-500/20">
+              <Check className="h-3 w-3" /> Individual Freelancer
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3.5 p-3.5 rounded-xl border border-gray-200/80 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02]">
+            {profileAvatar ? (
+              <img
+                src={profileAvatar}
+                alt={user?.name || user?.username || "Freelancer"}
+                onError={() => setProfileAvatar(undefined)}
+                className="w-11 h-11 rounded-full object-cover border border-gray-200 dark:border-white/10 shadow-xs shrink-0"
+              />
+            ) : (
+              <div className="w-11 h-11 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-base shadow-xs shrink-0">
+                {user?.name ? user.name.charAt(0).toUpperCase() : user?.username ? user.username.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                  {user?.name || user?.username || "Freelancer Profile"}
+                </p>
+                <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-zinc-400 text-[9px] font-semibold border border-gray-200 dark:border-white/10">
+                  Freelancer
+                </span>
+              </div>
+              <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate mt-0.5">
+                Submitting directly from your individual freelancer profile {user?.email ? `(${user.email})` : ""}
+              </p>
+            </div>
           </div>
         </div>
       </div>

@@ -236,13 +236,13 @@ const JobList: React.FC<JobListProps> = ({
                       {/* Bottom-left Hiring Type Tag */}
                       <div className="absolute bottom-2 left-2 z-10">
                         {Boolean(job.hiring_type === "team" || (Array.isArray(job.milestones) && job.milestones.length > 0)) ? (
-                          <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/95 dark:bg-black/70 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30 backdrop-blur-md text-[10px] font-bold shadow-xs">
-                            <Users className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                            <Users className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
                             <span>Team</span>
                           </span>
                         ) : (
-                          <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/95 dark:bg-black/70 text-gray-700 dark:text-zinc-200 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[10px] font-bold shadow-xs">
-                            <User className="h-3 w-3 text-blue-500 dark:text-blue-400" />
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                            <User className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
                             <span>Individual</span>
                           </span>
                         )}
@@ -394,13 +394,13 @@ const JobList: React.FC<JobListProps> = ({
                 {/* Bottom-left Hiring Type Tag on Thumbnail */}
                 <div className="absolute bottom-2 left-2 z-10">
                   {Boolean(job.hiring_type === "team" || (Array.isArray(job.milestones) && job.milestones.length > 0)) ? (
-                    <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/95 dark:bg-black/70 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30 backdrop-blur-md text-[10px] font-bold shadow-xs">
-                      <Users className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                      <Users className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
                       <span>Team</span>
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/95 dark:bg-black/70 text-gray-700 dark:text-zinc-200 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[10px] font-bold shadow-xs">
-                      <User className="h-3 w-3 text-blue-500 dark:text-blue-400" />
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                      <User className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
                       <span>Individual</span>
                     </span>
                   )}

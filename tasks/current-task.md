@@ -25,5 +25,16 @@ Enable clients to create multi-position team jobs with structured milestone role
    - Advance Validation:
      - Cannot proceed if any milestone has 0 hours or hours below the minimum threshold.
      - Cannot proceed if total allocated hours do not match total project timeline hours.
-5. **Frontend Proposal Review UX**:
-   - Two-phase selection funnel: Pending -> Shortlisted -> Accepted (Slotting).
+5. **Frontend Proposal Review UX & Team Roster Selection**:
+   - Two-phase selection funnel: Pending -> Shortlisted -> Hired & Slotted.
+   - Clicking "Slot & Accept" on candidate cards or selecting from the role dropdown navigates the client to `/jobs/proposals/received/:proposalId` to review deliverables, agree to terms, deposit escrow, and send the contract offer.
+   - Candidate is only marked and occupied in the milestone slot once the freelancer accepts the contract offer (status becomes `Hired`).
+   - If offer has been sent but not yet accepted, card displays "Offer Sent (Awaiting Acceptance)" without pre-filling the slot.
+6. **Contract Details, Deliverable Tasks Checklist & Progress Indicators**:
+   - Backend contract repository (`ContractRepositories.js`) and proposal repository (`JobRepositories.js`) expose `target_milestone_tasks` (`jsonb` array of tasks from `job_milestones`) and `job_all_milestones`.
+   - Proposal offer view ([`proposals_view_details_as_applicant.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_applicant.tsx)) and Formal Contract modal ([`contracts.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/contracts/contracts.tsx)) render the assigned role's Deliverables / Tasks Checklist in Section II (Scope of Work).
+   - Contract list cards in [`contracts.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/contracts/contracts.tsx) redesigned with:
+     - Role badge (`Users` icon + milestone role title).
+     - Smooth milestone progress bar with completion percentage and segmented milestone dots.
+     - Dedicated Deliverables & Tasks preview container displaying the checklist items and completion status.
+     - Light/dark mode friendly tooltips and action buttons.

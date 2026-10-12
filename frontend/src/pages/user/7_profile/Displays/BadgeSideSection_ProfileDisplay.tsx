@@ -55,7 +55,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
   ];
 
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/90 p-4 text-gray-800 dark:text-zinc-300 shadow-xl font-['Plus Jakarta Sans',sans-serif] space-y-3 relative z-20">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/90 p-4 text-gray-800 dark:text-zinc-300 shadow-xl font-['Plus Jakarta Sans',sans-serif] space-y-3 relative z-40">
 
       {/* Header Panel */}
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">
@@ -70,7 +70,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
               <HelpCircle className="h-3 w-3" />
             </button>
 
-            <div className="absolute left-full top-0 ml-4 w-80 p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.8)] opacity-0 scale-95 pointer-events-none transition-all duration-200 ease-out group-hover/help:opacity-100 group-hover/help:scale-100 z-50 text-left space-y-3 origin-top-left">
+            <div className="absolute left-full top-0 ml-4 w-80 p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.8)] opacity-0 scale-95 pointer-events-none transition-all duration-200 ease-out group-hover/help:opacity-100 group-hover/help:scale-100 z-[100] text-left space-y-3 origin-top-left">
               <div className="absolute right-full top-3.5 border-[6px] border-transparent border-r-white dark:border-r-[#070913]" />
               <div className="absolute right-full top-3.5 -mr-[1px] border-[6px] border-transparent border-r-gray-200 dark:border-r-white/10 -z-10" />
 
@@ -159,7 +159,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                     </div>
 
                     {/* Tooltip */}
-                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 w-80 p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-[0_25px_60px_-10px_rgba(0,0,0,0.1)] dark:shadow-[0_25px_60px_-10px_rgba(0,0,0,0.85)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-50 text-left space-y-4 origin-left">
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 w-80 p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-[0_25px_60px_-10px_rgba(0,0,0,0.1)] dark:shadow-[0_25px_60px_-10px_rgba(0,0,0,0.85)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-[100] text-left space-y-4 origin-left">
                       <div className="absolute right-full top-1/2 -translate-y-1/2 border-[6px] border-transparent border-r-white dark:border-r-[#070913]" />
                       <div className="absolute right-full top-1/2 -translate-y-1/2 -mr-[1px] border-[6px] border-transparent border-r-gray-200 dark:border-r-white/10 -z-10" />
                       <div className="flex items-center gap-4 border-b border-gray-200 dark:border-white/5 pb-3">
@@ -223,7 +223,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                     </div>
 
                     {/* Tooltip */}
-                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 w-80 p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-[0_25px_60px_-10px_rgba(0,0,0,0.1)] dark:shadow-[0_25px_60px_-10px_rgba(0,0,0,0.85)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-50 text-left space-y-4 origin-left">
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 w-80 p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-[0_25px_60px_-10px_rgba(0,0,0,0.1)] dark:shadow-[0_25px_60px_-10px_rgba(0,0,0,0.85)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-[100] text-left space-y-4 origin-left">
                       <div className="absolute right-full top-1/2 -translate-y-1/2 border-[6px] border-transparent border-r-white dark:border-r-[#070913]" />
                       <div className="absolute right-full top-1/2 -translate-y-1/2 -mr-[1px] border-[6px] border-transparent border-r-gray-200 dark:border-r-white/10 -z-10" />
                       <div className="flex items-center gap-4 border-b border-gray-200 dark:border-white/5 pb-3">

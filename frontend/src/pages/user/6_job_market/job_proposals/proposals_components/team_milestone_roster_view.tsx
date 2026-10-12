@@ -16,6 +16,8 @@ import {
   Check,
   Clock,
   Lock,
+  Percent,
+  RefreshCcw,
 } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { useNavigate } from "react-router-dom";
@@ -40,44 +42,54 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
   // Per-milestone filter state: `${milestoneId}` -> "all" | "pending" | "shortlisted" | "accepted"
   const [filterByMilestone, setFilterByMilestone] = useState<{ [milestoneId: string]: string }>({});
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [isConfirming, setIsConfirming] = useState(false);
 
   const milestones = job?.milestones || [];
 
-  // Synchronize already Accepted proposals into slotted slots on mount or proposal changes
+  // Synchronize already Hired/Accepted proposals into slotted slots on mount or proposal changes
+  // Only officially hired proposals (where other side accepted the contract) are slotted
   useEffect(() => {
-    const acceptedProposals = proposals.filter((p) => p.status === "Accepted");
-    if (acceptedProposals.length > 0) {
-      setSlottedProposals((prev) => {
-        const next = { ...prev };
-        let changed = false;
-        acceptedProposals.forEach((p) => {
-          if (!Object.values(next).includes(p.id)) {
-            const targetM = milestones.find(
-              (m: any) => m.job_milestone_id === p.job_milestone_id || m.title === p.target_milestone_title
-            );
-            if (targetM) {
-              const count = Math.max(1, targetM.slots_count || 1);
-              for (let i = 0; i < count; i++) {
-                const key = `${targetM.job_milestone_id}-slot-${i}`;
-                if (!next[key]) {
-                  next[key] = p.id;
-                  changed = true;
-                  break;
-                }
+    const hiredProposals = proposals.filter((p) => p.status === "Hired" || p.status === "Accepted");
+    setSlottedProposals((prev) => {
+      const next: { [slotKey: string]: string } = {};
+      let changed = false;
+
+      // Keep existing valid slots if the candidate is still hired
+      Object.entries(prev).forEach(([key, propId]) => {
+        if (hiredProposals.some((p) => p.id === propId)) {
+          next[key] = propId;
+        } else {
+          changed = true;
+        }
+      });
+
+      // Map any newly hired proposals into available slots for their target milestone
+      hiredProposals.forEach((p) => {
+        if (!Object.values(next).includes(p.id)) {
+          const targetM = milestones.find(
+            (m: any) => m.job_milestone_id === p.job_milestone_id || m.title === p.target_milestone_title
+          );
+          if (targetM) {
+            const count = Math.max(1, targetM.slots_count || 1);
+            for (let i = 0; i < count; i++) {
+              const key = `${targetM.job_milestone_id}-slot-${i}`;
+              if (!next[key]) {
+                next[key] = p.id;
+                changed = true;
+                break;
               }
             }
           }
-        });
-        return changed ? next : prev;
+        }
       });
-    }
+
+      return changed ? next : prev;
+    });
   }, [proposals, milestones]);
 
   // Phase 1: Shortlist / Un-shortlist candidate
   const handleShortlistToggle = async (p: any) => {
-    if (p.status === "Accepted") {
-      toast.error("This candidate is currently Accepted and slotted. Please vacate their slot first to return them to Shortlist.");
+    if (p.status === "Hired" || p.status === "Accepted") {
+      toast.error("This candidate has already accepted their contract and is slotted.");
       return;
     }
     setProcessingId(p.id);
@@ -96,38 +108,12 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
     }
   };
 
-  // Phase 2: Slot & Accept candidate
-  const handleSlotCandidate = async (slotKey: string, p: any) => {
-    if (p.status !== "Shortlisted" && p.status !== "Accepted") {
-      toast.error("Candidate must be Shortlisted before slotting into a role.");
-      return;
-    }
-    setProcessingId(p.id);
-    try {
-      // If someone else was previously occupying this slot, revert them back to Shortlisted
-      const previousProposalId = slottedProposals[slotKey];
-      if (previousProposalId && previousProposalId !== p.id) {
-        await onUpdateStatus(previousProposalId, "Shortlisted");
-      }
-
-      // Mark candidate as Accepted on backend
-      if (p.status !== "Accepted") {
-        await onUpdateStatus(p.id, "Accepted");
-      }
-
-      setSlottedProposals((prev) => ({
-        ...prev,
-        [slotKey]: p.id,
-      }));
-      toast.success(`${p.partyName || "Candidate"} slotted and Accepted!`);
-    } catch (err: any) {
-      toast.error("Failed to slot and accept candidate.");
-    } finally {
-      setProcessingId(null);
-    }
+  // Phase 2: Slot & Accept navigates to the proposal details review page to confirm and send offer
+  const handleSlotCandidate = (slotKey: string, p: any) => {
+    navigate(`/jobs/proposals/received/${p.id}`);
   };
 
-  // Vacate slot -> reverts candidate status back to Shortlisted
+  // Vacate slot -> reverts candidate status back to Shortlisted if applicable
   const handleVacateSlot = async (slotKey: string, proposalId: string) => {
     setProcessingId(proposalId);
     try {
@@ -164,31 +150,11 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
   };
 
   // Calculate selected total
+  // Calculate slotted total (only officially hired proposals where contract was accepted)
   const selectedProposalIds = Object.values(slottedProposals);
-  const selectedProposalsList = proposals.filter((p) => selectedProposalIds.includes(p.id) || p.status === "Accepted");
+  const selectedProposalsList = proposals.filter((p) => selectedProposalIds.includes(p.id) || p.status === "Hired" || p.status === "Accepted");
   const totalCartCost = selectedProposalsList.reduce((sum, p) => sum + (Number(p.bidAmount) || 0), 0);
   const totalJobSlots = milestones.reduce((sum: number, m: any) => sum + Math.max(1, m.slots_count || 1), 0);
-
-  const handleHireSelectedTeam = async () => {
-    if (selectedProposalsList.length === 0) {
-      toast.error("Please slot and accept at least one freelancer for a milestone slot.");
-      return;
-    }
-    setIsConfirming(true);
-    try {
-      // Ensure all slotted candidates are marked Accepted
-      for (const p of selectedProposalsList) {
-        if (p.status !== "Accepted") {
-          await onUpdateStatus(p.id, "Accepted");
-        }
-      }
-      toast.success(`${selectedProposalsList.length} candidate(s) accepted and confirmed for your team roster!`);
-    } catch (err: any) {
-      toast.error("Failed to confirm team slots.");
-    } finally {
-      setIsConfirming(false);
-    }
-  };
 
   return (
     <div className="space-y-6 text-left">
@@ -205,12 +171,12 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
             </span>
           </div>
           <h3 className="text-base font-bold text-gray-900 dark:text-white">
-            Pending &rarr; Shortlisted &rarr; Accepted (Slotted)
+            Pending &rarr; Shortlisted &rarr; Hired (Slotted)
           </h3>
           <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
             <strong>1. Pending:</strong> Review &amp; Shortlist applicants. &nbsp;&bull;&nbsp;{" "}
-            <strong>2. Shortlisted:</strong> Interview candidates in chat. &nbsp;&bull;&nbsp;{" "}
-            <strong>3. Accepted:</strong> Slot the shortlisted winner to accept them into the role.
+            <strong>2. Shortlisted:</strong> Interview candidates &amp; click Slot &amp; Accept to form contract. &nbsp;&bull;&nbsp;{" "}
+            <strong>3. Slotted:</strong> Candidate is officially slotted once they accept the contract.
           </p>
         </div>
 
@@ -218,7 +184,7 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
         <div className="flex items-center gap-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 p-3 rounded-xl shadow-sm shrink-0">
           <div>
             <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-zinc-400 block">
-              Slots Accepted
+              Slots Filled
             </span>
             <span className="text-sm font-extrabold text-gray-900 dark:text-white">
               {selectedProposalsList.length} / {totalJobSlots}
@@ -248,7 +214,7 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
           const pendingCount = milestoneApplicants.filter((p) => p.status === "Pending").length;
           const shortlistedCount = milestoneApplicants.filter((p) => p.status === "Shortlisted").length;
           const acceptedCount = milestoneApplicants.filter(
-            (p) => p.status === "Accepted" || Object.values(slottedProposals).includes(p.id)
+            (p) => p.status === "Hired" || p.status === "Accepted" || Object.values(slottedProposals).includes(p.id)
           ).length;
 
           const currentFilter = filterByMilestone[m.job_milestone_id] || "all";
@@ -256,9 +222,9 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
           // Applicants matching current active filter
           const displayedApplicants = milestoneApplicants.filter((p) => {
             const isSlotted = Object.values(slottedProposals).includes(p.id);
-            const isAccepted = p.status === "Accepted" || isSlotted;
+            const isAccepted = p.status === "Hired" || p.status === "Accepted" || isSlotted;
             if (currentFilter === "pending") return p.status === "Pending" && !isSlotted;
-            if (currentFilter === "shortlisted") return p.status === "Shortlisted" && !isSlotted;
+            if (currentFilter === "shortlisted") return (p.status === "Shortlisted" || p.status === "Approved") && !isSlotted;
             if (currentFilter === "accepted") return isAccepted;
             return true;
           });
@@ -307,7 +273,7 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-400 block mb-2">
                   Role Slots for this Milestone ({slotsCount} Needed) &bull;{" "}
-                  <span className="text-purple-600 dark:text-purple-400 font-normal">Slotting a shortlisted candidate accepts them</span>
+                  <span className="text-purple-600 dark:text-purple-400 font-normal">Candidate is slotted once they accept the contract</span>
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   {Array.from({ length: slotsCount }).map((_, slotIdx) => {
@@ -335,7 +301,7 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
                           </span>
                           {assignedProposal ? (
                             <span className="text-[9px] font-bold text-green-600 dark:text-green-400 flex items-center gap-0.5">
-                              <CheckCircle2 className="h-3 w-3" /> Accepted &amp; Slotted
+                              <CheckCircle2 className="h-3 w-3" /> Hired &amp; Slotted
                             </span>
                           ) : (
                             <span className="text-[9px] font-bold text-gray-400 dark:text-zinc-500">
@@ -371,11 +337,10 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
                               </div>
                               <button
                                 type="button"
-                                disabled={processingId === assignedProposal.id}
-                                onClick={() => handleVacateSlot(slotKey, assignedProposal.id)}
-                                className="text-[10px] text-red-500 hover:underline font-bold shrink-0 disabled:opacity-50"
+                                onClick={() => navigate(`/jobs/proposals/received/${assignedProposal.id}`)}
+                                className="text-[10px] text-purple-600 dark:text-purple-400 hover:underline font-bold shrink-0"
                               >
-                                Vacate
+                                View
                               </button>
                             </div>
 
@@ -389,8 +354,7 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
                                   value=""
                                   onChange={(e) => {
                                     if (e.target.value) {
-                                      const cand = milestoneApplicants.find((ap) => ap.id === e.target.value);
-                                      if (cand) handleSlotCandidate(slotKey, cand);
+                                      navigate(`/jobs/proposals/received/${e.target.value}`);
                                     }
                                   }}
                                   className="text-[10px] font-semibold bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded px-1.5 py-0.5 text-gray-700 dark:text-zinc-200"
@@ -419,8 +383,7 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
                                   value=""
                                   onChange={(e) => {
                                     if (e.target.value) {
-                                      const cand = milestoneApplicants.find((ap) => ap.id === e.target.value);
-                                      if (cand) handleSlotCandidate(slotKey, cand);
+                                      navigate(`/jobs/proposals/received/${e.target.value}`);
                                     }
                                   }}
                                   className="text-[10px] font-bold bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 text-purple-600 dark:text-purple-400 rounded px-2 py-0.5"
@@ -533,7 +496,8 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
                       const currentSlotEntry = Object.entries(slottedProposals).find(
                         ([, val]) => val === p.id
                       );
-                      const isAccepted = p.status === "Accepted" || isSlotted;
+                      const isAccepted = p.status === "Hired" || p.status === "Accepted" || isSlotted;
+                      const isApproved = p.status === "Approved" && !isSlotted;
                       const isShortlisted = p.status === "Shortlisted" && !isSlotted;
                       const isPending = p.status === "Pending" && !isSlotted;
                       const isBusy = processingId === p.id;
@@ -544,8 +508,10 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
                           className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between ${
                             isAccepted
                               ? "border-green-500/50 bg-green-50/30 dark:bg-green-500/5 shadow-sm"
-                              : isShortlisted
+                              : isApproved
                               ? "border-amber-500/40 bg-amber-50/30 dark:bg-amber-500/5"
+                              : isShortlisted
+                              ? "border-blue-500/40 bg-blue-50/30 dark:bg-blue-500/5"
                               : "border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] hover:border-gray-300 dark:hover:border-white/20"
                           }`}
                         >
@@ -580,14 +546,18 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
                                 </span>
                                 {isAccepted ? (
                                   <span className="text-[9px] font-bold uppercase tracking-wider text-green-600 dark:text-green-400 flex items-center gap-0.5 justify-end">
-                                    <CheckCircle2 className="h-2.5 w-2.5" /> Accepted &amp; Slotted
+                                    <CheckCircle2 className="h-2.5 w-2.5" /> Hired &amp; Slotted
+                                  </span>
+                                ) : isApproved ? (
+                                  <span className="text-[9px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-0.5 justify-end">
+                                    <Clock className="h-2.5 w-2.5" /> Offer Sent (Awaiting)
                                   </span>
                                 ) : isShortlisted ? (
-                                  <span className="text-[9px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-0.5 justify-end">
-                                    <Star className="h-2.5 w-2.5 fill-amber-500" /> Shortlisted
+                                  <span className="text-[9px] font-bold uppercase tracking-wider text-blue-500 flex items-center gap-0.5 justify-end">
+                                    <Star className="h-2.5 w-2.5 fill-blue-500" /> Shortlisted
                                   </span>
                                 ) : (
-                                  <span className="text-[9px] font-bold uppercase tracking-wider text-blue-500 block">
+                                  <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400 block">
                                     Pending Review
                                   </span>
                                 )}
@@ -595,13 +565,35 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
                             </div>
 
                             {p.coverLetter && (
-                              <p className="text-[11px] text-gray-600 dark:text-zinc-300 line-clamp-2 leading-relaxed mb-3">
+                              <p className="text-[11px] text-gray-600 dark:text-zinc-300 line-clamp-2 leading-relaxed mb-2.5">
                                 {p.coverLetter}
                               </p>
                             )}
+
+                            {/* Work Rate and Revisions Information */}
+                            <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-500 dark:text-zinc-400 mb-2 py-1.5 px-2 rounded-lg bg-gray-50 dark:bg-white/[0.03] border border-gray-100 dark:border-white/5">
+                              <span className="flex items-center gap-1">
+                                <Percent className="h-3 w-3 text-purple-500" />
+                                Work Rate:{" "}
+                                <strong className="text-gray-700 dark:text-zinc-200">
+                                  +{Number(p.additionalWorkRate) || 0}% / extra pass
+                                </strong>
+                              </span>
+                              <span>&bull;</span>
+                              <span className="flex items-center gap-1">
+                                <RefreshCcw className="h-3 w-3 text-emerald-500" />
+                                Revisions:{" "}
+                                <strong className="text-gray-700 dark:text-zinc-200">
+                                  {p.milestones?.length
+                                    ? p.milestones.reduce((acc: number, m: any) => acc + (Number(m.revisions) || 0), 0)
+                                    : (Number(p.revisions) || 0)}{" "}
+                                  pass{(p.milestones?.reduce((acc: number, m: any) => acc + (Number(m.revisions) || 0), 0) ?? p.revisions) === 1 ? "" : "es"}
+                                </strong>
+                              </span>
+                            </div>
                           </div>
 
-                          {/* Action Buttons: Pending -> Shortlisted -> Accepted */}
+                          {/* Action Buttons: Pending -> Shortlisted -> Slot & Accept */}
                           <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-gray-100 dark:border-white/5">
                             <div className="flex items-center gap-2">
                               <button
@@ -646,7 +638,7 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
                                 </>
                               )}
 
-                              {/* If Shortlisted: Can un-shortlist OR Slot into Role (which Accepts them) */}
+                              {/* If Shortlisted: Can un-shortlist OR Slot & Accept (navigates to confirm proposal and form contract) */}
                               {isShortlisted && (
                                 <>
                                   <button
@@ -661,19 +653,9 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
                                   <button
                                     type="button"
                                     disabled={isBusy}
-                                    onClick={() => {
-                                      // Find first empty slot in this milestone
-                                      for (let i = 0; i < slotsCount; i++) {
-                                        const key = `${m.job_milestone_id}-slot-${i}`;
-                                        if (!slottedProposals[key]) {
-                                          handleSlotCandidate(key, p);
-                                          return;
-                                        }
-                                      }
-                                      // Replace slot 0 if all occupied
-                                      handleSlotCandidate(`${m.job_milestone_id}-slot-0`, p);
-                                    }}
+                                    onClick={() => navigate(`/jobs/proposals/received/${p.id}`)}
                                     className="px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition flex items-center gap-1 shadow-sm disabled:opacity-50"
+                                    title="Review proposal, confirm, and send contract offer"
                                   >
                                     <UserCheck className="h-3.5 w-3.5" />
                                     <span>Slot &amp; Accept</span>
@@ -681,20 +663,27 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
                                 </>
                               )}
 
-                              {/* If Accepted (Slotted): Show Slotted badge & Vacate button */}
+                              {/* If Approved: Offer Sent and awaiting freelancer signature */}
+                              {isApproved && (
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/jobs/proposals/received/${p.id}`)}
+                                  className="px-3 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold transition flex items-center gap-1"
+                                >
+                                  <Clock className="h-3.5 w-3.5" />
+                                  <span>View Offer</span>
+                                </button>
+                              )}
+
+                              {/* If Accepted/Hired (Slotted): View Contract / Slotted status */}
                               {isAccepted && (
                                 <button
                                   type="button"
-                                  disabled={isBusy}
-                                  onClick={() => {
-                                    if (currentSlotEntry) {
-                                      handleVacateSlot(currentSlotEntry[0], p.id);
-                                    }
-                                  }}
-                                  className="px-3 py-1 rounded-lg bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 text-xs font-bold hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 transition flex items-center gap-1"
+                                  onClick={() => navigate(`/jobs/proposals/received/${p.id}`)}
+                                  className="px-3 py-1 rounded-lg bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 text-xs font-bold hover:bg-green-500/20 transition flex items-center gap-1"
                                 >
                                   <CheckCircle2 className="h-3.5 w-3.5" />
-                                  <span>Accepted (Click to Vacate)</span>
+                                  <span>Hired &amp; Slotted</span>
                                 </button>
                               )}
                             </div>
@@ -719,9 +708,9 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
             </div>
             <div>
               <h4 className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
-                <span>Selected Team Cart</span>
+                <span>Active Team Roster</span>
                 <span className="px-2 py-0.2 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 text-[10px] font-bold">
-                  {selectedProposalsList.length} of {totalJobSlots} Slots Accepted
+                  {selectedProposalsList.length} of {totalJobSlots} Slots Filled
                 </span>
               </h4>
               <p className="text-[11px] text-gray-500 dark:text-zinc-400">
@@ -736,19 +725,10 @@ export const TeamMilestoneRosterView: React.FC<TeamMilestoneRosterViewProps> = (
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={isConfirming}
-              onClick={() => setSlottedProposals({})}
-              className="px-3.5 py-2 rounded-xl text-xs font-semibold text-gray-500 hover:text-gray-700 dark:hover:text-zinc-200 transition"
+              onClick={() => navigate(`/jobs/proposals/incoming/${job?.job_id || ""}`)}
+              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition shadow-lg shadow-purple-600/20"
             >
-              Clear Cart
-            </button>
-            <button
-              type="button"
-              disabled={isConfirming}
-              onClick={handleHireSelectedTeam}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition shadow-lg shadow-purple-600/20 disabled:opacity-50"
-            >
-              <span>{isConfirming ? "Confirming..." : "Confirm Accepted Team"}</span>
+              <span>Manage Applications</span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>

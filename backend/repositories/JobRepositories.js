@@ -568,6 +568,8 @@ async function getProposalByIdRepositories(proposalId, accountIds) {
             SELECT 
                 p.*,
                 j.title as job_title,
+                j.description as job_description,
+                j.hiring_type as job_hiring_type,
                 j.category as job_category,
                 j.client_account_id as client_account_id,
                 COALESCE(j.team_id, (SELECT ct.team_id FROM teams ct WHERE ct.account_id = j.client_account_id AND ct.deleted_at IS NULL LIMIT 1)) as client_team_id,
@@ -588,6 +590,14 @@ async function getProposalByIdRepositories(proposalId, accountIds) {
                 (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max)) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id) as milestones,
                 jm.title as target_milestone_title,
                 jm.description as target_milestone_description,
+                COALESCE(jm.tasks, '[]'::jsonb) as target_milestone_tasks,
+                (SELECT json_agg(json_build_object(
+                    'id', all_jm.job_milestone_id,
+                    'title', all_jm.title,
+                    'description', all_jm.description,
+                    'tasks', COALESCE(all_jm.tasks, '[]'::jsonb),
+                    'credits', all_jm.budget_credits
+                ) ORDER BY all_jm.order_index ASC) FROM job_milestones all_jm WHERE all_jm.job_id = j.job_id) as job_all_milestones,
                 jm.budget_credits as target_milestone_budget,
                 jm.slots_count as target_milestone_slots,
                 jm.duration_hours as target_milestone_duration_hours,

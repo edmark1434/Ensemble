@@ -57,7 +57,10 @@ export interface ProposalItemData {
   status: ProposalStatus | string;
   type: "incoming" | "sent";
   rejectionReason?: string;
+  jobDescription?: string;
+  jobHiringType?: string;
   job_milestone_id?: string;
+  target_milestone_tasks?: string[];
   target_milestone_title?: string;
   target_milestone_description?: string;
   target_milestone_budget?: number;

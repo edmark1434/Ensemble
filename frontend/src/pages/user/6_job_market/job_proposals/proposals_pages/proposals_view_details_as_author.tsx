@@ -357,7 +357,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
         prev
           ? {
               ...prev,
-              status: "Accepted",
+              status: "Approved",
               updatedAt: new Date().toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
@@ -370,6 +370,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
           : null
       );
       setIsAcceptConfirmOpen(false);
+      showSuccessToast("Job offer sent! Awaiting freelancer acceptance.");
       // Stay on the same page instead of navigating away
     } catch (err: any) {
       console.error("Failed to send job offer", err);
@@ -1010,7 +1011,13 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                 </>
               )}
 
-              {proposal.status === "Accepted" && (
+              {proposal.status === "Approved" && (
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-4 py-2.5 rounded-xl">
+                  <Clock className="h-4 w-4" /> Offer Sent &mdash; Awaiting Freelancer Acceptance
+                </div>
+              )}
+
+              {(proposal.status === "Accepted" || proposal.status === "Hired") && (
                 <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 rounded-xl">
                   <CheckCircle2 className="h-4 w-4" /> Contract Formed and Active in Escrow
                 </div>
