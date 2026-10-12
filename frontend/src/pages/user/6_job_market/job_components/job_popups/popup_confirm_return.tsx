@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 interface PopupConfirmReturnProps {
   isOpen: boolean;
   onConfirm: () => void;
-  onCancel: () => void;
+  onCancel?: () => void;
+  onClose?: () => void;
   title?: string;
   subtitle?: string;
   description?: string;
@@ -18,6 +19,7 @@ const PopupConfirmReturn: React.FC<PopupConfirmReturnProps> = ({
   isOpen,
   onConfirm,
   onCancel,
+  onClose,
   title = "Unsaved Changes",
   subtitle = "Are you sure you want to leave?",
   description = "All unsaved inputs and draft details for this job post will be permanently lost if you return now.",
@@ -25,6 +27,7 @@ const PopupConfirmReturn: React.FC<PopupConfirmReturnProps> = ({
   cancelText = "Continue Editing",
   variant = "warning",
 }) => {
+  const handleCancel = onCancel || onClose || (() => {});
   const isDestructive = variant === "destructive";
 
   return (
@@ -37,7 +40,7 @@ const PopupConfirmReturn: React.FC<PopupConfirmReturnProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 bg-gray-900/40 dark:bg-black/75 backdrop-blur-sm"
-            onClick={onCancel}
+            onClick={handleCancel}
           />
 
           {/* Modal Container */}
@@ -64,8 +67,9 @@ const PopupConfirmReturn: React.FC<PopupConfirmReturnProps> = ({
                 </div>
               </div>
               <button
-                onClick={onCancel}
-                className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white transition shrink-0"
+                type="button"
+                onClick={handleCancel}
+                className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white transition shrink-0 cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -80,8 +84,8 @@ const PopupConfirmReturn: React.FC<PopupConfirmReturnProps> = ({
             <div className="flex gap-2.5">
               <button
                 type="button"
-                onClick={onCancel}
-                className="flex-1 py-2 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-xs font-bold text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition"
+                onClick={handleCancel}
+                className="flex-1 py-2 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-xs font-bold text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/10 transition cursor-pointer"
               >
                 {cancelText}
               </button>

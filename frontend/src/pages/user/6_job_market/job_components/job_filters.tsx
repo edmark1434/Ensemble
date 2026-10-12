@@ -1,11 +1,13 @@
 import React from "react";
-import { ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUp, ArrowDown, User, Users } from "lucide-react";
 
 export interface FilterState {
   minPrice: string;
   maxPrice: string;
   priceSort: "inc" | "dec" | null;
   selectedDiffs: string[];
+  selectedHiringTypes: string[];
+  matchMySkills: boolean;
   posValue: string;
   posSort: "inc" | "dec" | null;
   ratingSort: boolean;
@@ -16,6 +18,8 @@ export interface FilterSetters {
   setMaxPrice: (v: string) => void;
   setPriceSort: (v: "inc" | "dec" | null) => void;
   setSelectedDifficulty: (v: (prev: string[]) => string[]) => void;
+  setSelectedHiringTypes: (v: (prev: string[]) => string[]) => void;
+  setMatchMySkills: (v: boolean | ((prev: boolean) => boolean)) => void;
   setPosValue: (v: string) => void;
   setPosSort: (v: "inc" | "dec" | null) => void;
   setRatingSort: (v: boolean) => void;
@@ -24,6 +28,8 @@ export interface FilterSetters {
 interface JobFiltersProps {
   filters: FilterState;
   setters: FilterSetters;
+  userSkills?: string[];
+  isLoadingSkills?: boolean;
   onClear: () => void;
 }
 
@@ -66,7 +72,15 @@ const SortToggle: React.FC<{ value: Sort; onChange: (v: Sort) => void; upTitle: 
   </div>
 );
 
-const JobFilters: React.FC<JobFiltersProps> = ({ filters, setters, onClear }) => {
+const JobFilters: React.FC<JobFiltersProps> = ({
+  filters,
+  setters,
+  userSkills = [],
+  isLoadingSkills = false,
+  onClear,
+}) => {
+  const hasSkills = userSkills.length > 0;
+
   return (
     <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-5 space-y-4">
       <div className="flex items-center justify-between">
@@ -80,6 +94,47 @@ const JobFilters: React.FC<JobFiltersProps> = ({ filters, setters, onClear }) =>
       </div>
 
       <Section>
+        <button
+          type="button"
+          onClick={() => hasSkills && setters.setMatchMySkills((prev) => !prev)}
+          disabled={!hasSkills}
+          className={`w-full flex items-center justify-between text-left ${!hasSkills ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+        >
+          <span className={labelClass}>Match My Skills</span>
+          <div
+            className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors ${
+              filters.matchMySkills ? "bg-blue-500" : "bg-gray-300 dark:bg-white/20"
+            }`}
+          >
+            <div
+              className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${
+                filters.matchMySkills ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </div>
+        </button>
+
+        <p className="text-[11px] leading-snug text-gray-500 dark:text-zinc-400">
+          {hasSkills
+            ? "Shows jobs matching the skills declared on your profile."
+            : "No declared skills found on your profile."}
+        </p>
+
+        {hasSkills && filters.matchMySkills && (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {userSkills.map((skill) => (
+              <span
+                key={skill}
+                className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10"
+              >
+                {skill}
+              </span>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      <Section>
         <div className="flex items-center justify-between">
           <span className={labelClass}>Price Range (Credits)</span>
           <SortToggle value={filters.priceSort} onChange={setters.setPriceSort} upTitle="Lowest price first" downTitle="Highest price first" />
@@ -87,6 +142,34 @@ const JobFilters: React.FC<JobFiltersProps> = ({ filters, setters, onClear }) =>
         <div className="flex gap-2">
           <input type="number" placeholder="Min" value={filters.minPrice} onChange={(e) => setters.setMinPrice(e.target.value)} className={inputClass} />
           <input type="number" placeholder="Max" value={filters.maxPrice} onChange={(e) => setters.setMaxPrice(e.target.value)} className={inputClass} />
+        </div>
+      </Section>
+
+      <Section>
+        <span className={`${labelClass} block`}>Project Type</span>
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            { id: "individual", label: "Individual", icon: User },
+            { id: "team", label: "Team", icon: Users },
+          ].map(({ id, label, icon: Icon }) => {
+            const isSelected = filters.selectedHiringTypes.includes(id);
+            return (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() =>
+                  setters.setSelectedHiringTypes((prev) =>
+                    prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+                  )
+                }
+                className={`${chipBase} px-2.5 py-1.5 flex items-center gap-1.5 ${isSelected ? chipActive : chipIdle}`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                <span>{label}</span>
+              </button>
+            );
+          })}
         </div>
       </Section>
 

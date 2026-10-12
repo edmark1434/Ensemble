@@ -49,7 +49,7 @@ const JobMyPostPage: React.FC = () => {
             You haven't posted any jobs yet. Post a job to start receiving proposals from talented freelancers!
           </p>
           <button
-            onClick={() => continueIfAccountVerified(() => navigate("/jobs/create"))}
+            onClick={() => continueIfAccountVerified(() => navigate("/jobs/postings/choose"))}
             className="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
           >
             <Plus className="h-4 w-4" />

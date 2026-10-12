@@ -35,9 +35,13 @@ export const HomeQuickActButtons: React.FC = () => {
     }
     if (isGuestMode && restrictedLabels.includes(label)) {
       setIsModalOpen(true);
-    } else {
-      navigate(path);
+      return;
     }
+    if (label === "Post a Job") {
+      navigate("/jobs/postings/choose");
+      return;
+    }
+    navigate(path);
   };
 
   const actions = [
