@@ -44,7 +44,7 @@ interface CreateCoreInfoProps {
   setDifficulty: (val: string) => void;
   previewUrl: string | null;
   setPreviewUrl: (val: string | null) => void;
-  setThumbnail: (val: string | null) => void;
+  setThumbnail?: (val: string | null) => void;
   setThumbnailFile?: (file: File | null) => void;
   isDragging: boolean;
   setIsDragging: (val: boolean) => void;
@@ -198,7 +198,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
     }
     const localUrl = URL.createObjectURL(file);
     setPreviewUrl(localUrl);
-    setThumbnail(localUrl);
+    if (setThumbnail) setThumbnail(localUrl);
     if (setThumbnailFile) setThumbnailFile(file);
     clearError("thumbnail");
   };
