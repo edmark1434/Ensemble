@@ -410,8 +410,9 @@ const JobCreatePostPage: React.FC = () => {
                   errors={errors}
                   setErrors={setErrors}
                   formatCommaString={formatCommaString}
+                  isLockedToSingle={true}
                   onBack={() => setCurrentSlide(1)}
-                  onAdvance={handleSlide2Advance}
+                  onAdvance={() => handleSlide2Advance(false)}
                 />
               </motion.div>
             )}
@@ -439,7 +440,7 @@ const JobCreatePostPage: React.FC = () => {
                   setRequireNDA={setRequireNDA}
                   errors={errors}
                   onBack={() => setCurrentSlide(2)}
-                  onAdvance={handleSlide3Advance}
+                  onAdvance={() => handleSlide3Advance(false)}
                 />
               </motion.div>
             )}

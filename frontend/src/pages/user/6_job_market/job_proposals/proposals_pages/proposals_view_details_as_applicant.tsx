@@ -23,7 +23,12 @@ import {
   Send,
   UserCheck2,
   Check,
-  TrendingUp
+  TrendingUp,
+  Users,
+  AlertCircle,
+  ShieldCheck,
+  Sparkles,
+  ListTodo
 } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
@@ -123,9 +128,19 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
       avgBid: parseFloat(p.avg_bid) || 0,
             jobStatus: p.job_status,
             jobDeletedAt: p.job_deleted_at,
+            jobDescription: p.job_description,
+            jobHiringType: p.job_hiring_type || (p.job_milestone_id ? "multiple" : "single"),
             status: p.status,
             type: isIncoming ? "incoming" : "sent",
             rejectionReason: p.reject_reason,
+            job_milestone_id: p.job_milestone_id,
+            target_milestone_title: p.target_milestone_title,
+            target_milestone_description: p.target_milestone_description,
+            target_milestone_tasks: Array.isArray(p.target_milestone_tasks)
+              ? p.target_milestone_tasks
+              : (typeof p.target_milestone_tasks === "string" ? JSON.parse(p.target_milestone_tasks || "[]") : []),
+            target_milestone_budget: p.target_milestone_budget ? parseFloat(p.target_milestone_budget) : undefined,
+            target_milestone_slots: p.target_milestone_slots ? parseInt(p.target_milestone_slots, 10) : undefined,
             milestones: (p.milestones || [])
               .filter((m: any) => m && m.id)
               .map((m: any) => ({
@@ -626,9 +641,9 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
                 <div>
                   <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Proposed Bid</span>
-                  <p className="text-base font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1 mt-0.5">
+                  <div className="text-base font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1 mt-0.5">
                     <CreditIcon className="h-4 w-4" /> {proposal.bidAmount.toLocaleString()}
-                  </p>
+                  </div>
                   <span className="text-[10px] text-gray-500 dark:text-zinc-500 mt-1 block">
                     You earn <strong className="text-gray-600 dark:text-zinc-400">{(Math.floor(proposal.bidAmount * 0.9)).toLocaleString()}</strong> (-10% platform fee)
                   </span>
@@ -689,9 +704,9 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-[10px] text-blue-500/70 font-semibold uppercase">Avg. Bid</p>
-                  <p className="text-lg font-extrabold text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                  <div className="text-lg font-extrabold text-blue-700 dark:text-blue-300 flex items-center gap-1">
                     <CreditIcon className="h-4 w-4" /> {(proposal.avgBid || 0).toLocaleString()}
-                  </p>
+                  </div>
                 </div>
               </div>
               <p className="text-xs text-blue-600 dark:text-blue-300/80 leading-relaxed pt-2 border-t border-blue-500/10">
@@ -705,46 +720,104 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
           {/* ================= RIGHT COLUMN (5/12) ================= */}
           <div className="lg:col-span-5 space-y-6">
 
-            {/* SECTION 3: Milestone Roadmap */}
+            {/* SECTION 3: Milestone Roadmap / Selected Team Milestone Role */}
             <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 backdrop-blur-xl shadow-2xl space-y-4">
               <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
                 <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Layers className="h-4 w-4 text-emerald-400" /> Milestone Roadmap
+                  <Layers className="h-4 w-4 text-emerald-400" />
+                  {proposal.target_milestone_title || proposal.job_milestone_id
+                    ? "Selected Milestone for Team Proposal View"
+                    : "Milestone Roadmap"}
                 </h3>
                 <span className="text-xs font-mono text-gray-500 dark:text-zinc-400">{totalHours}h Total</span>
               </div>
 
-              <div className="space-y-3">
-                {proposal.milestones.map((m, idx) => (
-                  <div key={m.id || idx} className="p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] space-y-2 text-xs">
-                    <div className="flex items-center justify-between font-bold text-gray-900 dark:text-white">
-                      <span>Step {idx + 1}: {m.name}</span>
-                      <div className="flex flex-col items-end">
-                        <span className="text-amber-500 dark:text-amber-400 font-mono flex items-center">
-                          <CreditIcon className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400 inline mr-1 shrink-0" />
-                          {milestonePayout.toLocaleString()}
-                        </span>
-                        <span className="text-[9px] text-gray-600 dark:text-zinc-400">Net: {(Math.floor(milestonePayout * 0.9)).toLocaleString()}</span>
-                      </div>
+              {(proposal.target_milestone_title || proposal.job_milestone_id) && (
+                <div className="p-4 rounded-2xl border border-purple-500/30 bg-purple-500/[0.04] space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 mb-1.5">
+                        Team Role Milestone
+                      </span>
+                      <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                        {proposal.target_milestone_title || "Designated Team Role"}
+                      </h4>
                     </div>
-
-                    {m.description && <p className="text-gray-500 dark:text-zinc-400 text-[11px] leading-relaxed">{m.description}</p>}
-
-                    <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-500 dark:text-zinc-500 pt-2 border-t border-gray-100 dark:border-white/5">
-                      <span>Est. Hours: <strong className="text-gray-600 dark:text-zinc-300">{m.hours} hrs</strong></span>
-                      <span className="flex items-center gap-1">
-                        <RefreshCcw className="h-2.5 w-2.5 text-emerald-400" /> Revisions: <strong className="text-gray-600 dark:text-zinc-300">{m.revisions} pass</strong>
+                    <div className="text-right shrink-0">
+                      <span className="text-xs font-mono font-extrabold text-green-600 dark:text-green-400 flex items-center justify-end">
+                        <CreditIcon className="h-3.5 w-3.5 text-yellow-500 inline mr-1 shrink-0" />
+                        {(proposal.target_milestone_budget || proposal.bidAmount).toLocaleString()}
                       </span>
-                      <span className="flex items-center gap-1">
-                        Added Overage Rate:
-                        <strong className="text-amber-500 dark:text-amber-400 font-mono flex items-center">
-                          +<CreditIcon className="h-3 w-3 text-amber-500 dark:text-amber-400 inline mx-0.5 shrink-0" />
-                          {addedOverageAmount.toLocaleString()} (+{proposal.additionalWorkRate}%)
-                        </strong>
-                      </span>
+                      <span className="text-[10px] text-gray-500 dark:text-zinc-400 block">Fixed Role Budget</span>
                     </div>
                   </div>
-                ))}
+                  {proposal.target_milestone_description && (
+                    <p className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed">
+                      {proposal.target_milestone_description}
+                    </p>
+                  )}
+                  {(proposal.target_milestone_slots || proposal.target_milestone_duration_hours) && (
+                    <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-purple-500/10 text-[11px] font-semibold">
+                      {proposal.target_milestone_slots && (
+                        <div className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400">
+                          <Users className="h-3.5 w-3.5" />
+                          <span>Role Slots Allocation: {proposal.target_milestone_slots} slot{proposal.target_milestone_slots > 1 ? "s" : ""}</span>
+                        </div>
+                      )}
+                      {proposal.target_milestone_duration_hours && (
+                        <div className="flex items-center gap-1.5 text-gray-600 dark:text-zinc-300">
+                          <Clock className="h-3.5 w-3.5 text-purple-500" />
+                          <span>Milestone Timeline: {proposal.target_milestone_duration_hours} hrs (~{(proposal.target_milestone_duration_hours / 24).toFixed(1)} days)</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {proposal.milestones && proposal.milestones.length > 0 ? (
+                  proposal.milestones.map((m, idx) => (
+                    <div key={m.id || idx} className="p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] space-y-2 text-xs">
+                      <div className="flex items-center justify-between font-bold text-gray-900 dark:text-white">
+                        <span>Step {idx + 1}: {m.name}</span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-amber-500 dark:text-amber-400 font-mono flex items-center">
+                            <CreditIcon className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400 inline mr-1 shrink-0" />
+                            {milestonePayout.toLocaleString()}
+                          </span>
+                          <span className="text-[9px] text-gray-600 dark:text-zinc-400">Net: {(Math.floor(milestonePayout * 0.9)).toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      {m.description && <p className="text-gray-500 dark:text-zinc-400 text-[11px] leading-relaxed">{m.description}</p>}
+
+                      <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-500 dark:text-zinc-500 pt-2 border-t border-gray-100 dark:border-white/5">
+                        <span>Est. Hours: <strong className="text-gray-600 dark:text-zinc-300">{m.hours} hrs</strong></span>
+                        <span className="flex items-center gap-1">
+                          <RefreshCcw className="h-2.5 w-2.5 text-emerald-400" /> Revisions: <strong className="text-gray-600 dark:text-zinc-300">{m.revisions} pass</strong>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          Added Overage Rate:
+                          <strong className="text-amber-500 dark:text-amber-400 font-mono flex items-center">
+                            +<CreditIcon className="h-3 w-3 text-amber-500 dark:text-amber-400 inline mx-0.5 shrink-0" />
+                            {addedOverageAmount.toLocaleString()} (+{proposal.additionalWorkRate}%)
+                          </strong>
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  proposal.target_milestone_title ? (
+                    <p className="text-xs text-gray-400 dark:text-zinc-500 italic p-3 text-center">
+                      Execution milestones are mapped to the designated milestone role deliverables above.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-400 dark:text-zinc-500 italic p-3 text-center">
+                      No additional milestone steps provided.
+                    </p>
+                  )
+                )}
               </div>
             </div>
 
@@ -951,88 +1024,305 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               exit={{ opacity: 0, scale: 0.95 }}
               className="w-full max-w-2xl rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-2xl space-y-6 text-left my-8"
             >
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-4">
-                <h3 className="text-lg font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-emerald-400" /> Formal Contract Details
-                </h3>
+              {/* Header with Type of Contract */}
+              <div className="flex items-start justify-between border-b border-gray-200 dark:border-white/10 pb-4">
+                <div className="space-y-1.5 text-left">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-emerald-500" />
+                    <h3 className="text-lg font-extrabold text-gray-900 dark:text-white">
+                      Formal Contract Details
+                    </h3>
+                  </div>
+                  {/* Type of Contract (Job / Gigs) */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-zinc-500">
+                      Type of Contract:
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30">
+                      Job Contract ({proposal.jobHiringType === 'multiple' || proposal.target_milestone_title ? 'Team Milestone Job' : 'Individual Freelancer Job'})
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30">
+                      Fixed Price Escrow
+                    </span>
+                  </div>
+                </div>
                 <button
                   onClick={() => navigate(-1)}
-                  className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white transition-colors"
+                  className="text-gray-400 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-white transition p-1"
                 >
                   <XCircle className="h-5 w-5" />
                 </button>
               </div>
 
-              <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-                {/* I. Parties Involved */}
+              <div className="space-y-6 max-h-[62vh] overflow-y-auto pr-2 custom-scrollbar">
+                {/* I. PARTIES INVOLVED */}
                 <div className="space-y-2">
-                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">I. Parties Involved</h4>
-                  <div className="grid grid-cols-2 gap-4 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4 rounded-xl border border-gray-100 dark:border-white/5">
-                    <div>
-                      <p className="text-[10px] text-gray-500 dark:text-zinc-500 font-semibold mb-1">CLIENT</p>
-                      <p className="text-xs text-gray-900 dark:text-white font-medium">{proposal.clientName}</p>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                    I. Parties Involved
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 dark:bg-white/[0.02] p-4 rounded-2xl border border-gray-200 dark:border-white/10">
+                    <div className="flex items-center gap-3">
+                      {proposal.clientAvatar ? (
+                        <img src={proposal.clientAvatar} alt="" className="h-10 w-10 rounded-full object-cover border border-purple-500/30 shrink-0" />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 font-bold text-sm flex items-center justify-center shrink-0">
+                          {proposal.clientName?.charAt(0) || "C"}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-gray-400 dark:text-zinc-400 font-bold uppercase tracking-wider block">
+                          Client (Hirer)
+                        </span>
+                        <p className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                          {proposal.clientName}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[10px] text-gray-500 dark:text-zinc-500 font-semibold mb-1">FREELANCER</p>
-                      <p className="text-xs text-gray-900 dark:text-white font-medium">{proposal.freelancerName}</p>
+
+                    <div className="flex items-center gap-3">
+                      {proposal.freelancerAvatar ? (
+                        <img src={proposal.freelancerAvatar} alt="" className="h-10 w-10 rounded-full object-cover border border-emerald-500/30 shrink-0" />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-sm flex items-center justify-center shrink-0">
+                          {proposal.freelancerName?.charAt(0) || "F"}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-gray-400 dark:text-zinc-400 font-bold uppercase tracking-wider block">
+                          Freelancer (Contractor)
+                        </span>
+                        <p className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                          {proposal.freelancerName}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* II. Scope of Work */}
+                {/* II. SCOPE OF WORK */}
                 <div className="space-y-2">
-                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">II. Scope of Work</h4>
-                  <div className="bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4 rounded-xl border border-gray-100 dark:border-white/5">
-                    <p className="text-xs font-semibold text-gray-900 dark:text-white mb-2">{proposal.jobTitle}</p>
-                    <p className="text-xs text-gray-500 dark:text-zinc-400 leading-relaxed whitespace-pre-wrap">
-                      {targetJob?.description || "Description not available. The scope is defined by the job posting and subsequent communications."}
-                    </p>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                      II. Scope of Work
+                    </h4>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                      {proposal.jobHiringType === 'multiple' || proposal.target_milestone_title ? 'Team Position' : 'Individual Scope'}
+                    </span>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-white/[0.02] p-4 rounded-2xl border border-gray-200 dark:border-white/10 space-y-3">
+                    <div>
+                      <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block mb-0.5">
+                        Job Posting Title
+                      </span>
+                      <p className="text-xs font-bold text-gray-900 dark:text-white">
+                        {proposal.jobTitle}
+                      </p>
+                    </div>
+
+                    {(proposal.jobHiringType === 'multiple' || proposal.target_milestone_title) && (
+                      <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-2">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 block mb-0.5">
+                            Assigned Milestone Role
+                          </span>
+                          <p className="text-xs font-bold text-gray-900 dark:text-white">
+                            {proposal.target_milestone_title || "Designated Team Role"}
+                          </p>
+                          {proposal.target_milestone_description && (
+                            <p className="text-[11px] text-gray-600 dark:text-zinc-300 mt-1 leading-relaxed">
+                              {proposal.target_milestone_description}
+                            </p>
+                          )}
+                        </div>
+
+                        {proposal.target_milestone_tasks && proposal.target_milestone_tasks.length > 0 && (
+                          <div className="pt-2 border-t border-purple-500/20 space-y-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                              <ListTodo className="h-3 w-3" />
+                              Assigned Deliverables / Tasks Checklist ({proposal.target_milestone_tasks.length})
+                            </span>
+                            <div className="grid gap-1">
+                              {proposal.target_milestone_tasks.map((task: string, tIdx: number) => (
+                                <div key={tIdx} className="flex items-start gap-2 text-xs text-gray-800 dark:text-zinc-200 bg-white/60 dark:bg-black/20 p-2 rounded-lg border border-purple-500/10 shadow-xs">
+                                  <span className="text-purple-500 font-bold text-xs mt-0.5">✓</span>
+                                  <span className="leading-snug">{task}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div>
+                      <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block mb-0.5">
+                        Job Post Description
+                      </span>
+                      <p className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                        {proposal.jobDescription || targetJob?.description || "Description not available. The scope is defined by the job posting and subsequent communications."}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                {/* III. Locked Milestones */}
+                {/* III. LOCKED MILESTONES */}
                 <div className="space-y-2">
-                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">III. Locked Milestones</h4>
-                  <div className="bg-white dark:bg-white/5 shadow-sm dark:shadow-none rounded-xl border border-gray-100 dark:border-white/5 overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                      III. Locked Milestones
+                    </h4>
+                    {(proposal.jobHiringType === 'multiple' || proposal.target_milestone_title) && (
+                      <span className="text-[10px] font-semibold text-purple-600 dark:text-purple-400">
+                        (Showing deliverables for your assigned part)
+                      </span>
+                    )}
+                  </div>
+                  <div className="bg-gray-50 dark:bg-white/[0.02] rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden">
                     {proposal.milestones.length > 0 ? (
                       <table className="w-full text-left">
-                        <thead className="border-b border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-black/20">
+                        <thead className="border-b border-gray-200 dark:border-white/10 bg-gray-100/70 dark:bg-white/[0.04]">
                           <tr>
-                            <th className="px-4 py-2 text-[10px] font-semibold text-gray-500 dark:text-zinc-400 uppercase">Phase</th>
-                            <th className="px-4 py-2 text-[10px] font-semibold text-gray-500 dark:text-zinc-400 uppercase text-right">Revisions</th>
-                            <th className="px-4 py-2 text-[10px] font-semibold text-gray-500 dark:text-zinc-400 uppercase text-right">Hours</th>
+                            <th className="px-4 py-2.5 text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase">Phase</th>
+                            <th className="px-4 py-2.5 text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase text-center">Revisions</th>
+                            <th className="px-4 py-2.5 text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase text-right">Hours</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                           {proposal.milestones.map((m, i) => (
-                            <tr key={i} className="hover:bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition-colors">
-                              <td className="px-4 py-2 text-xs text-gray-600 dark:text-zinc-300 font-medium">{m.name}</td>
-                              <td className="px-4 py-2 text-xs text-gray-500 dark:text-zinc-400 text-right">{m.revisions}</td>
-                              <td className="px-4 py-2 text-xs text-emerald-400 font-medium text-right">{m.hours}h</td>
+                            <tr key={i} className="hover:bg-white dark:bg-white/5 transition-colors">
+                              <td className="px-4 py-2.5 text-xs text-gray-700 dark:text-zinc-200 font-medium">{m.name}</td>
+                              <td className="px-4 py-2.5 text-xs text-gray-500 dark:text-zinc-400 text-center">{m.revisions} pass{m.revisions === 1 ? '' : 'es'}</td>
+                              <td className="px-4 py-2.5 text-xs text-emerald-500 dark:text-emerald-400 font-bold text-right">{m.hours}h</td>
                             </tr>
                           ))}
                         </tbody>
-                        <tfoot className="border-t border-gray-200 dark:border-white/10 bg-gray-200 dark:bg-black/20">
+                        <tfoot className="border-t border-gray-200 dark:border-white/10 bg-gray-100/50 dark:bg-white/[0.02]">
                           <tr>
                             <td className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-white" colSpan={3}>
-                              Agreed Bid Amount: <span className="text-emerald-400">{proposal.bidAmount.toLocaleString()}</span>
+                              <div className="flex items-center justify-between">
+                                <span>Agreed Escrow Amount:</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 text-sm font-extrabold flex items-center gap-1">
+                                  <CreditIcon className="h-3.5 w-3.5 text-yellow-500" />
+                                  {proposal.bidAmount.toLocaleString()} Credits
+                                </span>
+                              </div>
                             </td>
                           </tr>
                         </tfoot>
                       </table>
                     ) : (
-                      <div className="p-4 text-xs text-gray-500 dark:text-zinc-400 text-center">No milestone phases defined.</div>
+                      <div className="p-4 text-xs text-gray-500 dark:text-zinc-400 text-center">
+                        Single Phase Delivery &bull; Agreed Escrow: {proposal.bidAmount.toLocaleString()} Credits
+                      </div>
                     )}
                   </div>
                 </div>
 
-                {/* IV. Agreed TOS */}
+                {/* IV. AGREED TERMS OF SERVICE */}
                 <div className="space-y-2">
-                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">IV. Agreed Terms of Service (TOS)</h4>
-                  <div className="bg-gray-50 dark:bg-zinc-950 p-4 rounded-xl border border-gray-200 dark:border-white/5 space-y-2">
-                    <h5 className="text-xs font-bold text-gray-900 dark:text-white">{proposal.tosTitle}</h5>
-                    <p className="text-[11px] text-gray-600 dark:text-zinc-400 leading-relaxed font-mono whitespace-pre-wrap">{proposal.tosContent}</p>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                      IV. Agreed Terms of Service (TOS)
+                    </h4>
+                    <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase">
+                      Preset: {proposal.tosTitle}
+                    </span>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-white/[0.02] p-4 rounded-2xl border border-gray-200 dark:border-white/10 space-y-2">
+                    <div className="text-[11px] text-gray-600 dark:text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap">
+                      {proposal.tosContent}
+                    </div>
+                  </div>
+                </div>
+
+                {/* V. WORKFLOW & TERMS */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                    V. Workflow &amp; Terms
+                  </h4>
+                  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] p-4 sm:p-5 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <XCircle className="w-5 h-5 text-slate-400 dark:text-zinc-500 shrink-0 mt-0.5" />
+                      <div>
+                        <h5 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">
+                          Client initiates the project?
+                        </h5>
+                        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                          No, the freelancer is expected to create the project.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <XCircle className="w-5 h-5 text-slate-400 dark:text-zinc-500 shrink-0 mt-0.5" />
+                      <div>
+                        <h5 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">
+                          Client linked an existing project?
+                        </h5>
+                        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                          No, a project has not been linked yet.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+                      <div>
+                        <h5 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">
+                          Require Confidentiality (NDA)?
+                        </h5>
+                        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                          Yes, freelancers cannot share details about this project during development.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+                      <div>
+                        <h5 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">
+                          Allow Portfolio Use?
+                        </h5>
+                        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                          Yes, allowed to use output for portfolio (Up to 45 secs).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* VI. PLATFORM POLICIES */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                    VI. Platform Policies
+                  </h4>
+                  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] p-4 sm:p-5 space-y-4 text-xs leading-relaxed">
+                    <div className="space-y-1">
+                      <h5 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
+                        Review Window &amp; Inaction Rule
+                      </h5>
+                      <p className="text-gray-600 dark:text-zinc-300 text-[11px] sm:text-xs leading-relaxed">
+                        Clients have <strong>5 days</strong> (Jobs) or <strong>3 days</strong> (Gigs) to review submitted deliverables. If no review, revision request, or dispute is submitted within this window, the milestone <strong>automatically approves</strong> and escrow releases.
+                      </p>
+                    </div>
+
+                    <div className="border-t border-gray-200/80 dark:border-white/10 pt-3 space-y-1">
+                      <h5 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
+                        Overdue &amp; Refund Policy
+                      </h5>
+                      <p className="text-gray-600 dark:text-zinc-300 text-[11px] sm:text-xs leading-relaxed">
+                        If a freelancer misses an agreed milestone deadline without client extension, the client can <strong>extend the deadline</strong> or <strong>cancel for a 100% escrow refund</strong> returned directly to their wallet.
+                      </p>
+                    </div>
+
+                    <div className="border-t border-gray-200/80 dark:border-white/10 pt-3 space-y-1">
+                      <h5 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
+                        Manual Cancellation Policy
+                      </h5>
+                      <p className="text-gray-600 dark:text-zinc-300 text-[11px] sm:text-xs leading-relaxed">
+                        Either party may submit a mutual cancellation request with a <strong>72-hour review window</strong>. Completed milestones remain with the freelancer, and unfinished escrow refunds to the client.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -5,7 +5,8 @@ interface CreationSuccessProps {
   isOpen: boolean;
   title?: string;
   message?: string;
-  onConfirm: () => void;
+  onConfirm?: () => void;
+  onClose?: () => void;
   autoCloseMs?: number;
 }
 
@@ -14,18 +15,24 @@ export const CreationSuccess: React.FC<CreationSuccessProps> = ({
   title = "Successfully Posted!",
   message = "Your job post is now live. Freelancers can now send their applications and you'll be notified.",
   onConfirm,
+  onClose,
   autoCloseMs = 2800,
 }) => {
+  const handleAction = () => {
+    if (onConfirm) onConfirm();
+    else if (onClose) onClose();
+  };
+
   useEffect(() => {
     if (!isOpen) return;
 
     // Auto-close timer
     const timer = setTimeout(() => {
-      onConfirm();
+      handleAction();
     }, autoCloseMs);
 
     return () => clearTimeout(timer);
-  }, [isOpen, autoCloseMs, onConfirm]);
+  }, [isOpen, autoCloseMs, onConfirm, onClose]);
 
   if (!isOpen) return null;
 
@@ -36,7 +43,7 @@ export const CreationSuccess: React.FC<CreationSuccessProps> = ({
         isOpen={isOpen}
         title={title}
         message={message}
-        onConfirm={onConfirm}
+        onConfirm={handleAction}
       />
     </div>
   );

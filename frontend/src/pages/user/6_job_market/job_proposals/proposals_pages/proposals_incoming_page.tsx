@@ -1,10 +1,13 @@
 import React, { useState } from "react";
 import { useOutletContext, useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Briefcase, ExternalLink } from "lucide-react";
+import { ArrowLeft, Briefcase, ExternalLink, ShoppingCart, List, Layers } from "lucide-react";
 import ProposalsList, { type ProposalStatus } from "../proposals_components/proposals_list";
+import TeamMilestoneRosterView from "../proposals_components/team_milestone_roster_view";
 import { useJobs } from "@/hooks/useJobs";
 import type { ProposalsMainContext } from "../proposals_main";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
+
+import toast from "react-hot-toast";
 
 export const ProposalsIncomingPage: React.FC = () => {
   const { jobPostId } = useParams<{ jobPostId: string }>();
@@ -26,8 +29,9 @@ export const ProposalsIncomingPage: React.FC = () => {
 
   const [proposals, setProposals] = useState<any[]>([]);
   const [targetJob, setTargetJob] = useState<any>(null);
+  const [activeViewTab, setActiveViewTab] = useState<"roster" | "list">("roster");
   const [isLoading, setIsLoading] = useState(true);
-  const { fetchProposalsByJob, fetchJobs } = useJobs();
+  const { fetchProposalsByJob, fetchJobs, updateProposalStatus } = useJobs();
 
   React.useEffect(() => {
     const loadData = async () => {
@@ -50,6 +54,11 @@ export const ProposalsIncomingPage: React.FC = () => {
           coverLetter: p.letter || "",
           rejectionReason: p.reject_reason,
           milestones: p.milestones || [],
+          job_milestone_id: p.job_milestone_id,
+          target_milestone_title: p.target_milestone_title,
+          target_milestone_budget: p.target_milestone_budget,
+          target_milestone_slots: p.target_milestone_slots,
+          target_milestone_order: p.target_milestone_order,
           type: "incoming"
         }));
         setProposals(mapped);
@@ -58,12 +67,18 @@ export const ProposalsIncomingPage: React.FC = () => {
         const jobs = await fetchJobs();
         const found = jobs.find((j: any) => j.job_id === jobPostId);
         if (found) {
+          const isTeam = Boolean(found.hiring_type === "team" || (found.milestones && found.milestones.length > 0));
           setTargetJob({ 
             title: found.title,
+            hiring_type: found.hiring_type || "single",
+            milestones: found.milestones || [],
             thumbnail: found.thumbnail_path 
               ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${found.thumbnail_path}` 
               : "/placeholder.svg"
           });
+          if (isTeam) {
+            setActiveViewTab("roster");
+          }
         }
 
         // Calculate and report status counts to parent
@@ -86,18 +101,34 @@ export const ProposalsIncomingPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobPostId]);
 
-  const handleUpdateStatus = (
+  const handleUpdateStatus = async (
     id: string,
     newStatus: ProposalStatus,
     reason?: string
   ) => {
-    setProposals((prev) =>
-      prev.map((p) =>
-        p.id === id
-          ? { ...p, status: newStatus, rejectionReason: reason || p.rejectionReason }
-          : p
-      )
-    );
+    try {
+      await updateProposalStatus(id, {
+        status: newStatus,
+        rejectReason: reason,
+      });
+      setProposals((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, status: newStatus, rejectionReason: reason || p.rejectionReason }
+            : p
+        )
+      );
+      setChildProposalsCounts((prevCounts: any) => {
+        if (!prevCounts) return prevCounts;
+        return {
+          ...prevCounts,
+          [newStatus]: (prevCounts[newStatus] || 0) + 1,
+        };
+      });
+    } catch (err: any) {
+      console.error("Failed to persist proposal status:", err);
+      toast.error(err.response?.data?.message || err.message || "Failed to update proposal status");
+    }
   };
 
   const filtered = proposals
@@ -208,23 +239,64 @@ export const ProposalsIncomingPage: React.FC = () => {
           </div>
         </div>
 
-        <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 rounded-xl border border-gray-100 dark:border-white/5 shrink-0">
-          {filtered.length} Total Applicants
-        </span>
+        <div className="flex items-center gap-2">
+          {targetJob?.milestones && targetJob.milestones.length > 0 && (
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10">
+              <button
+                type="button"
+                onClick={() => setActiveViewTab("roster")}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                  activeViewTab === "roster"
+                    ? "bg-purple-600 text-white shadow-sm"
+                    : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                }`}
+              >
+                <ShoppingCart className="h-3.5 w-3.5" />
+                <span>Roster & Cart</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveViewTab("list")}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                  activeViewTab === "list"
+                    ? "bg-purple-600 text-white shadow-sm"
+                    : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                }`}
+              >
+                <List className="h-3.5 w-3.5" />
+                <span>List View</span>
+              </button>
+            </div>
+          )}
+
+          <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 rounded-xl border border-gray-100 dark:border-white/5 shrink-0">
+            {filtered.length} Total Applicants
+          </span>
+        </div>
       </div>
 
-      <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-2 mt-4">
-        <h2 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
-          Received Proposal Applications ({filtered.length})
-        </h2>
-        <span className="text-xs text-gray-500 dark:text-zinc-400 font-mono">Incoming</span>
-      </div>
+      {targetJob?.milestones && targetJob.milestones.length > 0 && activeViewTab === "roster" ? (
+        <TeamMilestoneRosterView
+          job={targetJob}
+          proposals={filtered}
+          onUpdateStatus={handleUpdateStatus}
+        />
+      ) : (
+        <>
+          <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-2 mt-4">
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+              Received Proposal Applications ({filtered.length})
+            </h2>
+            <span className="text-xs text-gray-500 dark:text-zinc-400 font-mono">Incoming</span>
+          </div>
 
-      <ProposalsList
-        proposals={filtered}
-        viewType={viewType}
-        onUpdateStatus={handleUpdateStatus}
-      />
+          <ProposalsList
+            proposals={filtered}
+            viewType={viewType}
+            onUpdateStatus={handleUpdateStatus}
+          />
+        </>
+      )}
     </div>
   );
 };

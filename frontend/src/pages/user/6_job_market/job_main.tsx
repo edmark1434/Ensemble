@@ -11,9 +11,9 @@ import JobFilters from "./job_components/job_filters";
 import JobListViewType from "./job_components/job_list_viewtype";
 import JobViewDetails from "./job_components/job_viewdetails";
 import PopupReportJob from "./job_components/job_popups/popup_report_job";
-import type { ViewType } from "./job_components/job_list_viewtype";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
+import api from "@/lib/axios";
 
 // Datasets & Types
 import { sampleJobs, sampleCategories } from "./job_datasets";
@@ -89,9 +89,39 @@ const JobMain: React.FC = () => {
   const [maxPrice, setMaxPrice] = useState<string>("");
   const [priceSort, setPriceSort] = useState<"inc" | "dec" | null>(null);
   const [selectedDiffs, setSelectedDifficulty] = useState<string[]>([]);
+  const [selectedHiringTypes, setSelectedHiringTypes] = useState<string[]>([]);
+  const [matchMySkills, setMatchMySkills] = useState<boolean>(false);
   const [posValue, setPosValue] = useState<string>("");
   const [posSort, setPosSort] = useState<"inc" | "dec" | null>(null);
   const [ratingSort, setRatingSort] = useState<boolean>(false);
+
+  // User Profile Skills State
+  const [userSkills, setUserSkills] = useState<string[]>([]);
+  const [loadingUserSkills, setLoadingUserSkills] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchUserSkills = async () => {
+      if (!userInfo?.account_id) {
+        setUserSkills([]);
+        return;
+      }
+      setLoadingUserSkills(true);
+      try {
+        const res = await api.get(`/api/tags/users/${userInfo.account_id}/tags`);
+        const tags = res.data?.data || [];
+        const skillNames = tags
+          .map((t: any) => t.tag_name || t.name)
+          .filter((name: any): name is string => typeof name === "string" && name.trim().length > 0);
+        setUserSkills(skillNames);
+      } catch (err) {
+        console.error("Failed to fetch user skills for matching:", err);
+      } finally {
+        setLoadingUserSkills(false);
+      }
+    };
+
+    fetchUserSkills();
+  }, [userInfo?.account_id]);
 
   useEffect(() => {
     const loadJobs = async () => {
@@ -109,7 +139,9 @@ const JobMain: React.FC = () => {
           status: j.status,
           category: j.category,
           difficulty: j.experience_level,
-          priceRange: `${j.rate_credits_min?.toLocaleString() || 0} ~ ${j.rate_credits_max?.toLocaleString() || 0}`,
+          priceRange: (j.rate_credits_min && j.rate_credits_min === j.rate_credits_max)
+            ? `${j.rate_credits_min.toLocaleString()}`
+            : `${j.rate_credits_min?.toLocaleString() || 0} ~ ${j.rate_credits_max?.toLocaleString() || 0}`,
           minBudget: j.rate_credits_min || 0,
           maxBudget: j.rate_credits_max || 0,
           postedBy: j.client_name || j.client_handle || "Unknown",
@@ -143,6 +175,8 @@ const JobMain: React.FC = () => {
           is_team: Boolean(j.is_team || j.posted_as === 'Team' || j.team_id),
           isTeam: Boolean(j.is_team || j.posted_as === 'Team' || j.team_id),
           posted_as: j.posted_as,
+          hiring_type: j.hiring_type || (Array.isArray(j.milestones) && j.milestones.length > 0 ? "team" : "single"),
+          milestones: Array.isArray(j.milestones) ? j.milestones : [],
           deadline: j.rough_deadline ? new Date(j.rough_deadline).toLocaleDateString() : undefined,
           requireNDA: j.require_nda || false,
           portfolioUseAllowed: j.portfolio_use_allowed || false,
@@ -223,6 +257,8 @@ const JobMain: React.FC = () => {
     setMaxPrice("");
     setPriceSort(null);
     setSelectedDifficulty([]);
+    setSelectedHiringTypes([]);
+    setMatchMySkills(false);
     setPosValue("");
     setPosSort(null);
     setRatingSort(false);
@@ -267,6 +303,27 @@ const JobMain: React.FC = () => {
       const matchesMaxPrice = maxPrice === "" || job.minBudget <= parseInt(maxPrice);
       const matchesDiff = selectedDiffs.length === 0 || selectedDiffs.includes(job.difficulty);
       const matchesPos = posValue === "" || job.positionsNeeded === parseInt(posValue);
+      const isTeam = Boolean(job.hiring_type === "team" || (Array.isArray(job.milestones) && job.milestones.length > 0));
+      const jobHiringType = isTeam ? "team" : "individual";
+      const matchesHiringType = selectedHiringTypes.length === 0 || selectedHiringTypes.includes(jobHiringType);
+
+      // Skills Matching: Check if any declared profile skill matches job tags or appears in job title/description
+      const matchesSkills = !matchMySkills || userSkills.length === 0 || (() => {
+        const normalizedUserSkills = userSkills.map((s) => s.toLowerCase().trim());
+        const jobSkills = Array.isArray(job.skills) ? job.skills.map((s) => s.toLowerCase().trim()) : [];
+        const titleLower = job.title.toLowerCase();
+        const descLower = job.description.toLowerCase();
+
+        return normalizedUserSkills.some((userSkill) => {
+          if (!userSkill) return false;
+          // Exact or substring match in job tags
+          const inJobTags = jobSkills.some((js) => js === userSkill || js.includes(userSkill) || userSkill.includes(js));
+          if (inJobTags) return true;
+
+          // Word boundary or containment check in title/description for key skills
+          return titleLower.includes(userSkill) || descLower.includes(userSkill);
+        });
+      })();
 
       return (
         matchesSearch &&
@@ -274,7 +331,9 @@ const JobMain: React.FC = () => {
         matchesMinPrice &&
         matchesMaxPrice &&
         matchesDiff &&
-        matchesPos
+        matchesPos &&
+        matchesHiringType &&
+        matchesSkills
       );
     });
 
@@ -296,6 +355,9 @@ const JobMain: React.FC = () => {
     maxPrice,
     priceSort,
     selectedDiffs,
+    selectedHiringTypes,
+    matchMySkills,
+    userSkills,
     posValue,
     posSort,
     ratingSort,
@@ -353,6 +415,8 @@ const JobMain: React.FC = () => {
                       maxPrice,
                       priceSort,
                       selectedDiffs,
+                      selectedHiringTypes,
+                      matchMySkills,
                       posValue,
                       posSort,
                       ratingSort,
@@ -362,10 +426,14 @@ const JobMain: React.FC = () => {
                       setMaxPrice,
                       setPriceSort,
                       setSelectedDifficulty,
+                      setSelectedHiringTypes,
+                      setMatchMySkills,
                       setPosValue,
                       setPosSort,
                       setRatingSort,
                     }}
+                    userSkills={userSkills}
+                    isLoadingSkills={loadingUserSkills}
                     onClear={handleClearFilters}
                   />
                 </>

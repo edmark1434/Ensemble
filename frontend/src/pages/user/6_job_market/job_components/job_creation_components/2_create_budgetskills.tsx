@@ -23,6 +23,10 @@ interface CreateBudgetSkillsProps {
   errors: { [key: string]: string };
   setErrors: React.Dispatch<React.SetStateAction<{ [key: string]: string }>>;
   formatCommaString: (val: string) => string;
+  isLockedToSingle?: boolean;
+  minPositions?: number;
+  isFixedBudget?: boolean;
+  hidePositions?: boolean;
   onBack: () => void;
   onAdvance: () => void;
 }
@@ -47,9 +51,23 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
   errors,
   setErrors,
   formatCommaString,
+  isLockedToSingle = false,
+  minPositions,
+  isFixedBudget = false,
+  hidePositions = false,
   onBack,
   onAdvance,
 }) => {
+  const effectiveMin = minPositions ?? (isLockedToSingle ? 1 : 1);
+
+  React.useEffect(() => {
+    if (isLockedToSingle && positions !== 1) {
+      setPositions(1);
+    } else if (positions < effectiveMin) {
+      setPositions(effectiveMin);
+    }
+  }, [isLockedToSingle, positions, setPositions, effectiveMin]);
+
   React.useEffect(() => {
     if (skills.length >= 3 && errors.skills) {
       setErrors(prev => {
@@ -67,73 +85,182 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
       </div>
 
       {/* 1. Positions Count Block */}
-      <div className="p-3.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">Positions Needed <span className="text-red-500">*</span></label>
-            <div className="group relative flex items-center">
-              <HelpCircle className="h-3 w-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
-                The number of freelancers you want to hire for this specific job post.
+      {!hidePositions && (
+        <>
+          <div className="p-3.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">Positions Needed <span className="text-red-500">*</span></label>
+                <div className="group relative flex items-center">
+                  <HelpCircle className="h-3 w-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
+                    The number of freelancers you want to hire for this specific job post.
+                  </div>
+                </div>
               </div>
+              <span className="text-[10px] text-gray-600 dark:text-zinc-400">
+                {isLockedToSingle ? "Individual hire (1 assignment slot)." : "Number of open assignment slots."}
+              </span>
             </div>
+            {isLockedToSingle ? (
+              <div className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 font-bold text-xs select-none">
+                1 Position (Individual)
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-dark-base p-1">
+                <button
+                  type="button"
+                  disabled={positions <= effectiveMin}
+                  onClick={() => setPositions(prev => Math.max(effectiveMin, prev - 1))}
+                  className={`h-7 w-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-900 dark:text-white focus:outline-none transition-all ${
+                    positions <= effectiveMin
+                      ? "opacity-30 cursor-not-allowed"
+                      : "hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95"
+                  }`}
+                >
+                  <Minus className="h-3 w-3" />
+                </button>
+                <span className="w-6 text-center font-mono font-bold text-xs select-none">{positions}</span>
+                <button
+                  type="button"
+                  onClick={() => setPositions(prev => prev + 1)}
+                  className="h-7 w-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-900 dark:text-white focus:outline-none hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              </div>
+            )}
           </div>
-          <span className="text-[10px] text-gray-600 dark:text-zinc-400">Number of open assignment slots.</span>
-        </div>
-        <div className="flex items-center gap-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-dark-base p-1">
-          <button type="button" onClick={() => setPositions(prev => Math.max(1, prev - 1))} className="h-7 w-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-900 dark:text-white focus:outline-none"><Minus className="h-3 w-3" /></button>
-          <span className="w-6 text-center font-mono font-bold text-xs select-none">{positions}</span>
-          <button type="button" onClick={() => setPositions(prev => prev + 1)} className="h-7 w-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-900 dark:text-white focus:outline-none"><Plus className="h-3 w-3" /></button>
-        </div>
-      </div>
 
-      <hr className="border-gray-100 dark:border-white/5" />
+          <hr className="border-gray-100 dark:border-white/5" />
+        </>
+      )}
 
-      {/* 2. Budget Estimate Range */}
+      {/* 2. Budget Estimate Range or Fixed Project Budget */}
       <div className="space-y-1.5">
-        <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">Budget Estimate Range <span className="text-red-500">*</span></label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="relative">
-            <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
-              <CreditIcon className="h-4 w-4" />
+        {isFixedBudget ? (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">
+                Total Project Budget <span className="text-red-500">*</span>
+              </label>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                Fixed Allocation
+              </span>
             </div>
-            <input type="text" placeholder="Min Value" value={formatCommaString(minBudget)} onChange={e => { setMinBudget(e.target.value.replace(/\D/g, "")); setErrors(prev => { const {minBudget, ...r} = prev; return r; }); }} className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${errors.minBudget ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"}`} />
-            <div className="group absolute right-2.5 top-2.5 flex items-center">
-              <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
-                The minimum credits you are willing to spend for this job.
+            <p className="text-[11px] text-gray-500 dark:text-zinc-400 mb-2">
+              The total credits to be distributed across milestone roles in Step 4. No freelancer bidding is required.
+            </p>
+            <div className="relative">
+              <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
+                <CreditIcon className="h-4 w-4" />
               </div>
+              <input
+                type="text"
+                placeholder="e.g. 1,000"
+                value={formatCommaString(maxBudget || minBudget)}
+                onChange={e => {
+                  const val = e.target.value.replace(/\D/g, "");
+                  setMinBudget(val);
+                  setMaxBudget(val);
+                  setErrors(prev => {
+                    const { minBudget: _a, maxBudget: _b, ...r } = prev;
+                    return r;
+                  });
+                }}
+                className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-4 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
+                  errors.minBudget || errors.maxBudget
+                    ? "border-red-500/50 focus:border-red-500"
+                    : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
+                }`}
+              />
             </div>
-            {errors.minBudget && <p className="text-[11px] text-red-400 mt-1">{errors.minBudget}</p>}
+            {(errors.minBudget || errors.maxBudget) && (
+              <p className="text-[11px] text-red-400 mt-1">{errors.minBudget || errors.maxBudget}</p>
+            )}
           </div>
-          <div className="relative">
-            <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
-              <CreditIcon className="h-4 w-4" />
-            </div>
-            <input type="text" placeholder="Max Value" value={formatCommaString(maxBudget)} onChange={e => { setMaxBudget(e.target.value.replace(/\D/g, "")); setErrors(prev => { const {maxBudget, ...r} = prev; return r; }); }} className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${errors.maxBudget ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"}`} />
-            <div className="group absolute right-2.5 top-2.5 flex items-center">
-              <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
-                The maximum credits you are willing to spend for this job.
+        ) : (
+          <div>
+            <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">
+              Budget Estimate Range <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="relative">
+                <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
+                  <CreditIcon className="h-4 w-4" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Min Value"
+                  value={formatCommaString(minBudget)}
+                  onChange={e => {
+                    setMinBudget(e.target.value.replace(/\D/g, ""));
+                    setErrors(prev => {
+                      const { minBudget, ...r } = prev;
+                      return r;
+                    });
+                  }}
+                  className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
+                    errors.minBudget ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
+                  }`}
+                />
+                <div className="group absolute right-2.5 top-2.5 flex items-center">
+                  <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
+                    The minimum credits you are willing to spend for this job.
+                  </div>
+                </div>
+                {errors.minBudget && <p className="text-[11px] text-red-400 mt-1">{errors.minBudget}</p>}
+              </div>
+              <div className="relative">
+                <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
+                  <CreditIcon className="h-4 w-4" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Max Value"
+                  value={formatCommaString(maxBudget)}
+                  onChange={e => {
+                    setMaxBudget(e.target.value.replace(/\D/g, ""));
+                    setErrors(prev => {
+                      const { maxBudget, ...r } = prev;
+                      return r;
+                    });
+                  }}
+                  className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
+                    errors.maxBudget ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
+                  }`}
+                />
+                <div className="group absolute right-2.5 top-2.5 flex items-center">
+                  <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
+                    The maximum credits you are willing to spend for this job.
+                  </div>
+                </div>
+                {errors.maxBudget && <p className="text-[11px] text-red-400 mt-1">{errors.maxBudget}</p>}
               </div>
             </div>
-            {errors.maxBudget && <p className="text-[11px] text-red-400 mt-1">{errors.maxBudget}</p>}
-          </div>
-        </div>
-        {(minBudget || maxBudget) && (
-          <div className="mt-2 p-3 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/10">
-            <div className="flex items-start gap-2 text-gray-700 dark:text-zinc-300">
-              <Info className="h-4 w-4 mt-0.5 text-gray-400" />
-              <div className="text-xs">
-                <span className="block font-medium mb-0.5 text-gray-900 dark:text-white">Total Budget Preview</span>
-                {minBudget ? formatCommaString(minBudget) : "0"} - {maxBudget ? formatCommaString(maxBudget) : "0"} credits
-                {positions > 1 && (
-                  <span className="block mt-1 text-[11px] text-gray-500 dark:text-zinc-400">
-                    That's approx. <strong className="text-gray-700 dark:text-gray-300">{formatCommaString(String(Math.floor(parseInt(minBudget.replace(/\D/g, "") || "0") / positions)))} - {formatCommaString(String(Math.floor(parseInt(maxBudget.replace(/\D/g, "") || "0") / positions)))} credits</strong> per person
-                  </span>
-                )}
+            {(minBudget || maxBudget) && (
+              <div className="mt-2 p-3 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/10">
+                <div className="flex items-start gap-2 text-gray-700 dark:text-zinc-300">
+                  <Info className="h-4 w-4 mt-0.5 text-gray-400" />
+                  <div className="text-xs">
+                    <span className="block font-medium mb-0.5 text-gray-900 dark:text-white">Total Budget Preview</span>
+                    {minBudget ? formatCommaString(minBudget) : "0"} - {maxBudget ? formatCommaString(maxBudget) : "0"} credits
+                    {positions > 1 && (
+                      <span className="block mt-1 text-[11px] text-gray-500 dark:text-zinc-400">
+                        That's approx.{" "}
+                        <strong className="text-gray-700 dark:text-gray-300">
+                          {formatCommaString(String(Math.floor(parseInt(minBudget.replace(/\D/g, "") || "0") / positions)))} -{" "}
+                          {formatCommaString(String(Math.floor(parseInt(maxBudget.replace(/\D/g, "") || "0") / positions)))} credits
+                        </strong>{" "}
+                        per person
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>
@@ -241,40 +368,109 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
           )}
         </div>
 
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">
-            Project Timeline Range (Days) <span className="text-red-500">*</span>
-          </label>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {isFixedBudget ? (
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">
+              Project Timeline (Days) <span className="text-red-500">*</span>
+            </label>
             <div className="relative">
-              <input type="number" placeholder="Min Days" value={minTimeline} onChange={e => { setMinTimeline(e.target.value); setErrors(prev => { const {minTimeline, ...r} = prev; return r; }); }} className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-3.5 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${errors.minTimeline ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"}`} />
+              <input
+                type="number"
+                placeholder="e.g. 3 Days"
+                min="1"
+                value={maxTimeline}
+                onChange={e => {
+                  const val = e.target.value;
+                  setMaxTimeline(val);
+                  setMinTimeline(val);
+                  setErrors(prev => {
+                    const { maxTimeline, minTimeline, ...r } = prev;
+                    return r;
+                  });
+                }}
+                className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-3.5 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
+                  errors.maxTimeline || errors.minTimeline
+                    ? "border-red-500/50 focus:border-red-500"
+                    : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
+                }`}
+              />
               <div className="group absolute right-2.5 top-2.5 flex items-center">
                 <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
-                  The minimum days expected to complete the project (e.g. 1 for a rush job).
+                <div className="absolute bottom-full right-0 mb-2 hidden w-56 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2.5 py-1.5 text-left text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-50 pointer-events-none shadow-xl">
+                  The expected timeline in days. Total hours (days × 24) will be distributed across milestone deliverables in Step 4.
                 </div>
               </div>
-              {errors.minTimeline && <p className="text-[11px] text-red-400 mt-1">{errors.minTimeline}</p>}
-            </div>
-            <div className="relative">
-              <input type="number" placeholder="Max Days" value={maxTimeline} onChange={e => { setMaxTimeline(e.target.value); setErrors(prev => { const {maxTimeline, ...r} = prev; return r; }); }} className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-3.5 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${errors.maxTimeline ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"}`} />
-              <div className="group absolute right-2.5 top-2.5 flex items-center">
-                <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
-                  The absolute maximum days allowed to complete the project.
-                </div>
-              </div>
-              {errors.maxTimeline && <p className="text-[11px] text-red-400 mt-1">{errors.maxTimeline}</p>}
+              {(errors.maxTimeline || errors.minTimeline) && (
+                <p className="text-[11px] text-red-400 mt-1">{errors.maxTimeline || errors.minTimeline}</p>
+              )}
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">
+              Project Timeline Range (Days) <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="relative">
+                <input
+                  type="number"
+                  placeholder="Min Days"
+                  min="1"
+                  value={minTimeline}
+                  onChange={e => {
+                    setMinTimeline(e.target.value);
+                    setErrors(prev => {
+                      const { minTimeline, ...r } = prev;
+                      return r;
+                    });
+                  }}
+                  className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-3.5 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
+                    errors.minTimeline ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
+                  }`}
+                />
+                <div className="group absolute right-2.5 top-2.5 flex items-center">
+                  <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-50 pointer-events-none shadow-xl">
+                    The minimum days expected to complete the project (e.g. 1 for a rush job).
+                  </div>
+                </div>
+                {errors.minTimeline && <p className="text-[11px] text-red-400 mt-1">{errors.minTimeline}</p>}
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  placeholder="Max Days"
+                  min="1"
+                  value={maxTimeline}
+                  onChange={e => {
+                    setMaxTimeline(e.target.value);
+                    setErrors(prev => {
+                      const { maxTimeline, ...r } = prev;
+                      return r;
+                    });
+                  }}
+                  className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-3.5 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
+                    errors.maxTimeline ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
+                  }`}
+                />
+                <div className="group absolute right-2.5 top-2.5 flex items-center">
+                  <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
+                  <div className="absolute bottom-full right-0 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-50 pointer-events-none shadow-xl">
+                    The absolute maximum days allowed to complete the project.
+                  </div>
+                </div>
+                {errors.maxTimeline && <p className="text-[11px] text-red-400 mt-1">{errors.maxTimeline}</p>}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Actions */}
       <div className="pt-4 border-t border-gray-100 dark:border-white/5 flex gap-2.5 mt-2">
         <button type="button" onClick={onBack} className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 font-bold hover:text-gray-900 dark:text-white transition text-xs focus:outline-none">Go Back</button>
         <button type="button" onClick={onAdvance} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-2.5 text-xs font-bold text-white hover:bg-blue-600 transition focus:outline-none shadow-lg shadow-blue-500/20">
-          Confirm and Review <ArrowRight className="h-3.5 w-3.5" />
+          Continue to Terms <ArrowRight className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

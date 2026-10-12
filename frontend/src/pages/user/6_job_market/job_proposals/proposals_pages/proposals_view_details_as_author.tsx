@@ -22,6 +22,7 @@ import {
   User,
   Send,
   UserCheck2,
+  Users,
 } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
@@ -128,6 +129,11 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
             status: p.status,
             type: isIncoming ? "incoming" : "sent",
             rejectionReason: p.reject_reason,
+            job_milestone_id: p.job_milestone_id,
+            target_milestone_title: p.target_milestone_title,
+            target_milestone_description: p.target_milestone_description,
+            target_milestone_budget: p.target_milestone_budget ? parseFloat(p.target_milestone_budget) : undefined,
+            target_milestone_slots: p.target_milestone_slots ? parseInt(p.target_milestone_slots, 10) : undefined,
             milestones: (p.milestones || [])
               .filter((m: any) => m && m.id)
               .map((m: any) => ({
@@ -351,7 +357,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
         prev
           ? {
               ...prev,
-              status: "Accepted",
+              status: "Approved",
               updatedAt: new Date().toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
@@ -364,6 +370,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
           : null
       );
       setIsAcceptConfirmOpen(false);
+      showSuccessToast("Job offer sent! Awaiting freelancer acceptance.");
       // Stay on the same page instead of navigating away
     } catch (err: any) {
       console.error("Failed to send job offer", err);
@@ -446,6 +453,12 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
     milestonePayout * (proposal.additionalWorkRate / 100)
   );
   const totalHours = proposal.milestones.reduce((acc, m) => acc + m.hours, 0);
+  const isTeamJob = Boolean(
+    proposal.job_milestone_id ||
+    proposal.target_milestone_title ||
+    (targetJob?.milestones && targetJob.milestones.length > 0) ||
+    targetJob?.hiring_type === "team"
+  );
 
   return (
     <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-clip pt-6 pb-40">
@@ -692,10 +705,12 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
               {/* Financial Metrics Row */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
                 <div>
-                  <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Proposed Bid</span>
-                  <p className="text-base font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1 mt-0.5">
+                  <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">
+                    {isTeamJob ? "Milestone Payout (Fixed)" : "Proposed Bid"}
+                  </span>
+                  <div className="text-base font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1 mt-0.5">
                     <CreditIcon className="h-4 w-4" /> {proposal.bidAmount.toLocaleString()}
-                  </p>
+                  </div>
                   <span className="text-[10px] text-gray-500 dark:text-zinc-500 mt-1 block">
                     Applicant net: <strong className="text-gray-600 dark:text-zinc-400">{(Math.floor(proposal.bidAmount * 0.9)).toLocaleString()}</strong> (-10% platform fee)
                   </span>
@@ -749,46 +764,104 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
           {/* ================= RIGHT COLUMN (5/12) ================= */}
           <div className="lg:col-span-5 space-y-6">
 
-            {/* SECTION 3: Milestone Roadmap */}
+            {/* SECTION 3: Milestone Roadmap / Selected Team Milestone Role */}
             <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 backdrop-blur-xl shadow-2xl space-y-4">
               <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
                 <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Layers className="h-4 w-4 text-emerald-400" /> Milestone Roadmap
+                  <Layers className="h-4 w-4 text-emerald-400" />
+                  {proposal.target_milestone_title || proposal.job_milestone_id
+                    ? "Selected Milestone for Team Proposal View"
+                    : "Milestone Roadmap"}
                 </h3>
                 <span className="text-xs font-mono text-gray-500 dark:text-zinc-400">{totalHours}h Total</span>
               </div>
 
-              <div className="space-y-3">
-                {proposal.milestones.map((m, idx) => (
-                  <div key={m.id} className="p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] space-y-2 text-xs">
-                    <div className="flex items-center justify-between font-bold text-gray-900 dark:text-white">
-                      <span>Step {idx + 1}: {m.name}</span>
-                      <div className="flex flex-col items-end">
-                        <span className="text-amber-500 dark:text-amber-400 font-mono flex items-center">
-                          <CreditIcon className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400 inline mr-1 shrink-0" />
-                          {milestonePayout.toLocaleString()}
-                        </span>
-                        <span className="text-[9px] text-gray-600 dark:text-zinc-400">Applicant Net: {(Math.floor(milestonePayout * 0.9)).toLocaleString()}</span>
-                      </div>
+              {(proposal.target_milestone_title || proposal.job_milestone_id) && (
+                <div className="p-4 rounded-2xl border border-purple-500/30 bg-purple-500/[0.04] space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 mb-1.5">
+                        Team Role Milestone
+                      </span>
+                      <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                        {proposal.target_milestone_title || "Designated Team Role"}
+                      </h4>
                     </div>
-
-                    {m.description && <p className="text-gray-500 dark:text-zinc-400 text-[11px] leading-relaxed">{m.description}</p>}
-
-                    <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-500 dark:text-zinc-500 pt-2 border-t border-gray-100 dark:border-white/5">
-                      <span>Est. Hours: <strong className="text-gray-600 dark:text-zinc-300">{m.hours} hrs</strong></span>
-                      <span className="flex items-center gap-1">
-                        <RefreshCcw className="h-2.5 w-2.5 text-emerald-400" /> Revisions: <strong className="text-gray-600 dark:text-zinc-300">{m.revisions} pass</strong>
+                    <div className="text-right shrink-0">
+                      <span className="text-xs font-mono font-extrabold text-green-600 dark:text-green-400 flex items-center justify-end">
+                        <CreditIcon className="h-3.5 w-3.5 text-yellow-500 inline mr-1 shrink-0" />
+                        {(proposal.target_milestone_budget || proposal.bidAmount).toLocaleString()}
                       </span>
-                      <span className="flex items-center gap-1">
-                        Added Overage Rate:
-                        <strong className="text-amber-500 dark:text-amber-400 font-mono flex items-center">
-                          +<CreditIcon className="h-3 w-3 text-amber-500 dark:text-amber-400 inline mx-0.5 shrink-0" />
-                          {addedOverageAmount.toLocaleString()} (+{proposal.additionalWorkRate}%)
-                        </strong>
-                      </span>
+                      <span className="text-[10px] text-gray-500 dark:text-zinc-400 block">Fixed Role Budget</span>
                     </div>
                   </div>
-                ))}
+                  {proposal.target_milestone_description && (
+                    <p className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed">
+                      {proposal.target_milestone_description}
+                    </p>
+                  )}
+                  {(proposal.target_milestone_slots || proposal.target_milestone_duration_hours) && (
+                    <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-purple-500/10 text-[11px] font-semibold">
+                      {proposal.target_milestone_slots && (
+                        <div className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400">
+                          <Users className="h-3.5 w-3.5" />
+                          <span>Role Slots Allocation: {proposal.target_milestone_slots} slot{proposal.target_milestone_slots > 1 ? "s" : ""}</span>
+                        </div>
+                      )}
+                      {proposal.target_milestone_duration_hours && (
+                        <div className="flex items-center gap-1.5 text-gray-600 dark:text-zinc-300">
+                          <Clock className="h-3.5 w-3.5 text-purple-500" />
+                          <span>Milestone Timeline: {proposal.target_milestone_duration_hours} hrs (~{(proposal.target_milestone_duration_hours / 24).toFixed(1)} days)</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {proposal.milestones && proposal.milestones.length > 0 ? (
+                  proposal.milestones.map((m, idx) => (
+                    <div key={m.id} className="p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] space-y-2 text-xs">
+                      <div className="flex items-center justify-between font-bold text-gray-900 dark:text-white">
+                        <span>Step {idx + 1}: {m.name}</span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-amber-500 dark:text-amber-400 font-mono flex items-center">
+                            <CreditIcon className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400 inline mr-1 shrink-0" />
+                            {milestonePayout.toLocaleString()}
+                          </span>
+                          <span className="text-[9px] text-gray-600 dark:text-zinc-400">Applicant Net: {(Math.floor(milestonePayout * 0.9)).toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      {m.description && <p className="text-gray-500 dark:text-zinc-400 text-[11px] leading-relaxed">{m.description}</p>}
+
+                      <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-500 dark:text-zinc-500 pt-2 border-t border-gray-100 dark:border-white/5">
+                        <span>Est. Hours: <strong className="text-gray-600 dark:text-zinc-300">{m.hours} hrs</strong></span>
+                        <span className="flex items-center gap-1">
+                          <RefreshCcw className="h-2.5 w-2.5 text-emerald-400" /> Revisions: <strong className="text-gray-600 dark:text-zinc-300">{m.revisions} pass</strong>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          Added Overage Rate:
+                          <strong className="text-amber-500 dark:text-amber-400 font-mono flex items-center">
+                            +<CreditIcon className="h-3 w-3 text-amber-500 dark:text-amber-400 inline mx-0.5 shrink-0" />
+                            {addedOverageAmount.toLocaleString()} (+{proposal.additionalWorkRate}%)
+                          </strong>
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  proposal.target_milestone_title ? (
+                    <p className="text-xs text-gray-400 dark:text-zinc-500 italic p-3 text-center">
+                      Execution milestones are mapped to the designated milestone role deliverables above.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-400 dark:text-zinc-500 italic p-3 text-center">
+                      No additional milestone steps provided.
+                    </p>
+                  )
+                )}
               </div>
             </div>
 
@@ -938,7 +1011,13 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                 </>
               )}
 
-              {proposal.status === "Accepted" && (
+              {proposal.status === "Approved" && (
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-4 py-2.5 rounded-xl">
+                  <Clock className="h-4 w-4" /> Offer Sent &mdash; Awaiting Freelancer Acceptance
+                </div>
+              )}
+
+              {(proposal.status === "Accepted" || proposal.status === "Hired") && (
                 <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 rounded-xl">
                   <CheckCircle2 className="h-4 w-4" /> Contract Formed and Active in Escrow
                 </div>

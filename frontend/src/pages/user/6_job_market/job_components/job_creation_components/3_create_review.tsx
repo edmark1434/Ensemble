@@ -5,12 +5,20 @@ import { Check, User, Users, ChevronDown, HelpCircle } from "lucide-react";
 import { JobRichText } from "../JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
-import MarketplaceIdentitySelector from "@/components/marketplace/MarketplaceIdentitySelector";
+import useGlobalState from "@/lib/global_state";
 
-export const sampleUserTeams = [
-  { id: "team-01", name: "Alpha Developers Lab" },
-  { id: "team-02", name: "Nexus Design Studio" },
-];
+const constructAvatarUrl = (path: string | undefined): string | undefined => {
+  if (!path) return undefined;
+  if (path.startsWith("http")) return path;
+  const presetMatch = path.match(/p\d+\.png$/i);
+  if (presetMatch) {
+    return `/profile_presets/${presetMatch[0]}`;
+  }
+  const cloudfrontUrl = import.meta.env.VITE_CLOUDFRONT_URL;
+  if (!cloudfrontUrl) return path.startsWith("/") ? path : `/${path}`;
+  const cleanPath = path.startsWith("/") ? path.substring(1) : path;
+  return `${cloudfrontUrl}/${cleanPath}`;
+};
 
 interface CreateReviewProps {
   title: string;
@@ -168,6 +176,40 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
 }) => {
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [agreedToFee, setAgreedToFee] = useState(false);
+  const user = useGlobalState((state) => state.user);
+  const [profileAvatar, setProfileAvatar] = useState<string | undefined>(() => {
+    const raw = user?.avatar_preset_url || user?.avatar_url || user?.profile_photo || user?.avatar;
+    return constructAvatarUrl(raw);
+  });
+
+  useEffect(() => {
+    const raw = user?.avatar_preset_url || user?.avatar_url || user?.profile_photo || user?.avatar;
+    if (raw) {
+      setProfileAvatar(constructAvatarUrl(raw));
+    } else {
+      const accountId = user?.account_id || user?.accountId || user?.id;
+      if (accountId) {
+        api.get(`/api/accounts/profile/${accountId}`)
+          .then((res) => {
+            const data = res.data?.data || res.data?.profile || res.data || {};
+            const fetched = data.avatar_preset_url || data.avatar_url;
+            if (fetched) {
+              setProfileAvatar(constructAvatarUrl(fetched));
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (postingAs !== "self") {
+      setPostingAs("self");
+    }
+    if (selectedTeam) {
+      setSelectedTeam("");
+    }
+  }, [postingAs, setPostingAs, selectedTeam, setSelectedTeam]);
 
   useEffect(() => {
     let mounted = true;
@@ -189,13 +231,6 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   };
 
   const handlePublishClick = () => {
-    if (postingAs === "team" && !selectedTeam) {
-      setErrors((prev) => ({
-        ...prev,
-        selectedTeam: "Please select a studio team to post on behalf of.",
-      }));
-      return;
-    }
     onSubmit();
   };
 
@@ -339,54 +374,44 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           </div>
         </div>
 
-        {/* Posting Identity Selection (Moved to Review & Post Step, Defaults to Self) */}
+        {/* SECTION 4: Posting Identity */}
         <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white/[0.01] space-y-3">
-          <span className="font-bold text-blue-400 uppercase tracking-wider text-[10px] block border-b border-gray-200 dark:border-white/10 pb-2">04. Posting Identity</span>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div
-              onClick={() => {
-                setPostingAs("self");
-                clearError("selectedTeam");
-              }}
-              className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${postingAs === 'self' ? 'border-blue-500 bg-blue-500/10' : 'border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:border-white/20'}`}
-            >
-              <div className={`p-2 rounded-lg border ${postingAs === 'self' ? 'bg-blue-500/20 border-blue-500/30 text-blue-400' : 'bg-white dark:bg-white/5 shadow-sm dark:shadow-none border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400'}`}>
-                <User className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-900 dark:text-white">Individual (Self)</p>
-                <p className="text-[10px] text-gray-600 dark:text-zinc-400">Post directly from your profile</p>
-              </div>
-            </div>
-
-            <div
-              onClick={() => setPostingAs("team")}
-              className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${postingAs === 'team' ? 'border-blue-500 bg-blue-500/10' : 'border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:border-white/20'}`}
-            >
-              <div className={`p-2 rounded-lg border ${postingAs === 'team' ? 'bg-blue-500/20 border-blue-500/30 text-blue-400' : 'bg-white dark:bg-white/5 shadow-sm dark:shadow-none border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400'}`}>
-                <Users className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-900 dark:text-white">Shared Studio Team</p>
-                <p className="text-[10px] text-gray-600 dark:text-zinc-400">Post on behalf of a team</p>
-              </div>
-            </div>
+          <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-2">
+            <span className="font-bold text-blue-400 uppercase tracking-wider text-[10px]">
+              04. Posting Identity
+            </span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-200/50 dark:border-blue-500/20">
+              <Check className="h-3 w-3" /> Individual Client
+            </span>
           </div>
 
-          {postingAs === "team" && (
-            <div className="pt-2">
-              <MarketplaceIdentitySelector
-                label="Select team"
-                teamId={selectedTeam}
-                teamsOnly
-                requireTeamVerification={false}
-                onChange={(teamId) => {
-                  setSelectedTeam(teamId);
-                  if (teamId) clearError("selectedTeam");
-                }}
+          <div className="flex items-center gap-3.5 p-3.5 rounded-xl border border-gray-200/80 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02]">
+            {profileAvatar ? (
+              <img
+                src={profileAvatar}
+                alt={user?.name || user?.username || "Client"}
+                onError={() => setProfileAvatar(undefined)}
+                className="w-11 h-11 rounded-full object-cover border border-gray-200 dark:border-white/10 shadow-xs shrink-0"
               />
+            ) : (
+              <div className="w-11 h-11 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-base shadow-xs shrink-0">
+                {user?.name ? user.name.charAt(0).toUpperCase() : user?.username ? user.username.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                  {user?.name || user?.username || "Client Profile"}
+                </p>
+                <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-zinc-400 text-[9px] font-semibold border border-gray-200 dark:border-white/10">
+                  Client
+                </span>
+              </div>
+              <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate mt-0.5">
+                Posting directly from your individual client profile {user?.email ? `(${user.email})` : ""}
+              </p>
             </div>
-          )}
+          </div>
         </div>
       </div>
 

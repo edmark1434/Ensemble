@@ -7,6 +7,25 @@ async function createJobServices(jobData) {
     if (!jobData.title || !jobData.description) {
         throw new Error('Title and description are required.');
     }
+    if (jobData.hiring_type === 'team') {
+        if (!Array.isArray(jobData.milestones) || jobData.milestones.length === 0) {
+            throw new Error('At least one milestone is required for team job postings.');
+        }
+        let totalSlots = 0;
+        let totalPercentage = 0;
+        for (const m of jobData.milestones) {
+            if (!m.title || !m.title.trim()) {
+                throw new Error('Each milestone must have a title.');
+            }
+            const slots = Math.max(1, parseInt(m.slots_count) || 1);
+            totalSlots += slots;
+            totalPercentage += Number(m.budget_percentage) || 0;
+        }
+        if (jobData.milestones.length > 0 && Math.abs(totalPercentage - 100) > 0.5) {
+            throw new Error('Milestone budget percentages must total 100%.');
+        }
+        jobData.no_of_hires = totalSlots;
+    }
     return await JobRepositories.createJobRepositories(jobData);
 }
 

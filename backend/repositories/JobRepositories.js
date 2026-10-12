@@ -60,11 +60,13 @@ async function createJobRepositories(jobData) {
                 timeline_min, timeline_max, posted_as, team_id, status,
                 rough_deadline, rough_no_of_revisions,
                 portfolio_use_allowed, portfolio_use_duration_seconds,
-                is_existing_project, existing_project_id, initiator_role, require_nda
+                is_existing_project, existing_project_id, initiator_role, require_nda,
+                hiring_type
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                 $15, 0,
-                $16, $17, $18, $19, $20, $21
+                $16, $17, $18, $19, $20, $21,
+                $22
             ) RETURNING job_id;
         `;
         
@@ -86,7 +88,8 @@ async function createJobRepositories(jobData) {
             jobData.is_existing_project || false,
             jobData.existing_project_id || null,
             jobData.initiator_role || null,
-            jobData.require_nda || false
+            jobData.require_nda || false,
+            jobData.hiring_type || 'single'
         ];
         
         const res = await client.query(jobQuery, jobValues);
@@ -118,6 +121,27 @@ async function createJobRepositories(jobData) {
                 await client.query(
                     `INSERT INTO job_tags (job_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
                     [jobId, tagId]
+                );
+            }
+        }
+
+        // 4. Insert Milestones (for team/multi-hire jobs)
+        if (jobData.milestones && Array.isArray(jobData.milestones) && jobData.milestones.length > 0) {
+            for (let i = 0; i < jobData.milestones.length; i++) {
+                const m = jobData.milestones[i];
+                if (!m || !m.title) continue;
+
+                const tasksJson = JSON.stringify(Array.isArray(m.tasks) ? m.tasks : []);
+                const budgetPercentage = Number(m.budget_percentage) || 0;
+                const budgetCredits = Number(m.budget_credits) || 0;
+                const slotsCount = Math.max(1, parseInt(m.slots_count) || 1);
+                const durationHours = Math.max(1, parseInt(m.duration_hours) || 24);
+
+                await client.query(
+                    `INSERT INTO job_milestones (
+                        job_id, title, description, tasks, budget_percentage, budget_credits, slots_count, duration_hours, order_index
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                    [jobId, m.title.trim(), m.description || '', tasksJson, budgetPercentage, budgetCredits, slotsCount, durationHours, i]
                 );
             }
         }
@@ -154,7 +178,29 @@ async function getAllJobsRepositories(filters = {}, accountId = null, actorIds =
                 (SELECT ARRAY_AGG(t.name) FROM job_tags jt JOIN tags t ON jt.tag_id = t.tag_id WHERE jt.job_id = j.job_id) as tags,
                 COALESCE(j.team_id, tm.team_id) as team_id,
                 tm.visibility as team_visibility,
-                (j.posted_as = 'Team' OR j.team_id IS NOT NULL OR tm.team_id IS NOT NULL) as is_team
+                (j.posted_as = 'Team' OR j.team_id IS NOT NULL OR tm.team_id IS NOT NULL) as is_team,
+                (
+                    SELECT COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'job_milestone_id', jm.job_milestone_id,
+                                'title', jm.title,
+                                'description', jm.description,
+                                'tasks', jm.tasks,
+                                'budget_percentage', jm.budget_percentage,
+                                'budget_credits', jm.budget_credits,
+                                'slots_count', jm.slots_count,
+                                'duration_hours', jm.duration_hours,
+                                'order_index', jm.order_index,
+                                'applicant_count', (SELECT COUNT(*) FROM proposals p WHERE p.job_milestone_id = jm.job_milestone_id AND p.deleted_at IS NULL),
+                                'hired_count', (SELECT COUNT(*) FROM proposals p WHERE p.job_milestone_id = jm.job_milestone_id AND p.status = 'Hired' AND p.deleted_at IS NULL)
+                            ) ORDER BY jm.order_index ASC
+                        ),
+                        '[]'::json
+                    )
+                    FROM job_milestones jm
+                    WHERE jm.job_id = j.job_id
+                ) as milestones
             FROM jobs j
             LEFT JOIN accounts a ON j.client_account_id = a.account_id
             LEFT JOIN teams tm ON (
@@ -406,15 +452,15 @@ async function createProposalRepositories(proposalData) {
         const query = `
             INSERT INTO proposals (
                 job_id, freelancer_account_id, letter, rate_credits, 
-                revision_price_credits, terms_id, status
+                revision_price_credits, terms_id, status, job_milestone_id
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7
+                $1, $2, $3, $4, $5, $6, $7, $8
             ) RETURNING proposal_id;
         `;
         const values = [
             proposalData.job_id, proposalData.freelancer_account_id, proposalData.letter,
             proposalData.rate_credits, proposalData.revision_price_credits, 
-            termsId, 'Pending'
+            termsId, 'Pending', proposalData.job_milestone_id || null
         ];
         const res = await client.query(query, values);
         const proposalId = res.rows[0].proposal_id;
@@ -457,11 +503,17 @@ async function getProposalsByJobIdRepositories(jobId, accountIds) {
                 t.terms_title, t.terms_type,
                 j.title as job_title,
                 j.category as job_category,
-                (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max)) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id) as milestones
+                (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max)) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id) as milestones,
+                jm.title as target_milestone_title,
+                jm.budget_credits as target_milestone_budget,
+                jm.slots_count as target_milestone_slots,
+                jm.duration_hours as target_milestone_duration_hours,
+                jm.order_index as target_milestone_order
             FROM proposals p
             LEFT JOIN accounts a ON p.freelancer_account_id = a.account_id
             LEFT JOIN jobs j ON p.job_id = j.job_id
             LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
+            LEFT JOIN job_milestones jm ON p.job_milestone_id = jm.job_milestone_id
             WHERE p.job_id = $1 AND j.client_account_id = ANY($2::uuid[]) AND p.deleted_at IS NULL AND p.status != 'Archived'
             ORDER BY p.created_at DESC
         `;
@@ -488,11 +540,17 @@ async function getProposalsByFreelancerRepositories(accountIds) {
                 c.handle as client_handle,
                 (SELECT f.path FROM files f WHERE f.file_id = c.avatar_file_id LIMIT 1) as client_avatar_path,
                 t.terms_title, t.terms_type,
-                (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max)) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id) as milestones
+                (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max)) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id) as milestones,
+                jm.title as target_milestone_title,
+                jm.budget_credits as target_milestone_budget,
+                jm.slots_count as target_milestone_slots,
+                jm.duration_hours as target_milestone_duration_hours,
+                jm.order_index as target_milestone_order
             FROM proposals p
             LEFT JOIN jobs j ON p.job_id = j.job_id
             LEFT JOIN accounts c ON j.client_account_id = c.account_id
             LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
+            LEFT JOIN job_milestones jm ON p.job_milestone_id = jm.job_milestone_id
             WHERE p.freelancer_account_id = ANY($1::uuid[]) AND p.deleted_at IS NULL AND p.status != 'Archived'
             ORDER BY p.created_at DESC
         `;
@@ -510,6 +568,8 @@ async function getProposalByIdRepositories(proposalId, accountIds) {
             SELECT 
                 p.*,
                 j.title as job_title,
+                j.description as job_description,
+                j.hiring_type as job_hiring_type,
                 j.category as job_category,
                 j.client_account_id as client_account_id,
                 COALESCE(j.team_id, (SELECT ct.team_id FROM teams ct WHERE ct.account_id = j.client_account_id AND ct.deleted_at IS NULL LIMIT 1)) as client_team_id,
@@ -528,6 +588,20 @@ async function getProposalByIdRepositories(proposalId, accountIds) {
                 (SELECT f.path FROM files f WHERE f.file_id = f_acc.avatar_file_id LIMIT 1) as freelancer_avatar_path,
                 t.terms_title, t.terms_type, t.terms_description as terms_content,
                 (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max)) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id) as milestones,
+                jm.title as target_milestone_title,
+                jm.description as target_milestone_description,
+                COALESCE(jm.tasks, '[]'::jsonb) as target_milestone_tasks,
+                (SELECT json_agg(json_build_object(
+                    'id', all_jm.job_milestone_id,
+                    'title', all_jm.title,
+                    'description', all_jm.description,
+                    'tasks', COALESCE(all_jm.tasks, '[]'::jsonb),
+                    'credits', all_jm.budget_credits
+                ) ORDER BY all_jm.order_index ASC) FROM job_milestones all_jm WHERE all_jm.job_id = j.job_id) as job_all_milestones,
+                jm.budget_credits as target_milestone_budget,
+                jm.slots_count as target_milestone_slots,
+                jm.duration_hours as target_milestone_duration_hours,
+                jm.order_index as target_milestone_order,
                 (SELECT jc.contract_id FROM job_contracts jc JOIN contracts ct ON jc.contract_id = ct.contract_id WHERE jc.proposal_id = p.proposal_id ORDER BY ct.created_at DESC LIMIT 1) as contract_id,
                 (SELECT COUNT(*) FROM proposals p2 WHERE p2.job_id = p.job_id AND p2.deleted_at IS NULL AND p2.status != 'Archived') as total_applicants,
                 (SELECT COALESCE(AVG(p2.rate_credits), 0) FROM proposals p2 WHERE p2.job_id = p.job_id AND p2.deleted_at IS NULL AND p2.status != 'Archived') as avg_bid
@@ -536,6 +610,7 @@ async function getProposalByIdRepositories(proposalId, accountIds) {
             LEFT JOIN accounts c ON j.client_account_id = c.account_id
             LEFT JOIN accounts f_acc ON p.freelancer_account_id = f_acc.account_id
             LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
+            LEFT JOIN job_milestones jm ON p.job_milestone_id = jm.job_milestone_id
             WHERE p.proposal_id = $1
               AND p.deleted_at IS NULL
               AND (p.freelancer_account_id = ANY($2::uuid[]) OR j.client_account_id = ANY($2::uuid[]))

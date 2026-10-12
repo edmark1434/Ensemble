@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ArrowRight, ChevronDown, Check, Percent, Bold, Italic, List, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, ChevronDown, Check, Percent, Bold, Italic, List, Eye, EyeOff, Layers, CheckCircle2, Users, CheckSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Job } from "../../../job_components/job_lists";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -24,6 +24,8 @@ interface ProposalPitchProps {
   setAdditionalWorkRate: (val: number) => void;
   coverLetter: string;
   setCoverLetter: (val: string) => void;
+  selectedMilestoneId?: string;
+  setSelectedMilestoneId?: (id: string) => void;
   errors: { [key: string]: string };
   setErrors: React.Dispatch<React.SetStateAction<{ [key: string]: string }>>;
   onNext: () => void;
@@ -38,6 +40,8 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
   setAdditionalWorkRate,
   coverLetter,
   setCoverLetter,
+  selectedMilestoneId,
+  setSelectedMilestoneId,
   errors,
   setErrors,
   onNext,
@@ -47,6 +51,37 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
   const coverLetterRef = useRef<HTMLTextAreaElement>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [errorCountdown, setErrorCountdown] = useState<number | null>(null);
+
+  const isTeamJob = Boolean(job?.milestones && job.milestones.length > 0);
+  const currentMilestone = isTeamJob
+    ? (job?.milestones?.find((m: any) => m.job_milestone_id === selectedMilestoneId) || job?.milestones?.[0])
+    : null;
+
+  useEffect(() => {
+    if (isTeamJob && !selectedMilestoneId && job?.milestones?.[0]?.job_milestone_id && setSelectedMilestoneId) {
+      setSelectedMilestoneId(job.milestones[0].job_milestone_id);
+    }
+  }, [isTeamJob, selectedMilestoneId, job?.milestones, setSelectedMilestoneId]);
+
+  const activeMinBudget = currentMilestone && job
+    ? Math.round(((job.minBudget * (Number(currentMilestone.budget_percentage) || 0)) / 100) / Math.max(1, currentMilestone.slots_count || 1))
+    : (job?.minBudget || 0);
+
+  const activeMaxBudget = currentMilestone && job
+    ? (currentMilestone.budget_credits
+        ? Math.round(Number(currentMilestone.budget_credits) / Math.max(1, currentMilestone.slots_count || 1))
+        : Math.round(((job.maxBudget * (Number(currentMilestone.budget_percentage) || 0)) / 100) / Math.max(1, currentMilestone.slots_count || 1)))
+    : (job?.maxBudget || 0);
+
+  // Automatically lock bid to fixed milestone payout for team jobs
+  useEffect(() => {
+    if (isTeamJob && currentMilestone) {
+      const fixedAmt = activeMaxBudget > 0 ? activeMaxBudget : (activeMinBudget > 0 ? activeMinBudget : 0);
+      if (fixedAmt > 0) {
+        setBidAmount(fixedAmt.toString());
+      }
+    }
+  }, [isTeamJob, currentMilestone, activeMaxBudget, activeMinBudget, setBidAmount]);
 
   useEffect(() => {
     if (errorCountdown !== null && errorCountdown > 0) {
@@ -110,70 +145,117 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
         <p className="text-xs text-gray-500 dark:text-zinc-400">Specify your proposal bid within the client's budget and state your pitch.</p>
       </div>
       
+      {/* Team Job: Informative Notice (on top & gray) */}
+      {isTeamJob && (
+        <div className="p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/80 dark:bg-white/[0.03] flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-gray-200/70 dark:bg-white/10 flex items-center justify-center text-gray-600 dark:text-zinc-400 shrink-0">
+            <Layers className="h-4 w-4" />
+          </div>
+          <div className="text-xs">
+            <div className="font-bold text-gray-900 dark:text-white">Team Project (1 Milestone Role per Contributor)</div>
+            <div className="text-gray-500 dark:text-zinc-400 text-[11px] leading-relaxed">
+              To promote collaborative specialization, each applicant may apply for <strong>one role</strong> per team project. You will select your role in <strong>Step 3 (Milestones)</strong>.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Target Client Budget Banner */}
       {job && (
         <div className="p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 flex items-center justify-between">
-          <span className="text-xs text-gray-500 dark:text-zinc-400 font-medium">Client's Budget Range</span>
+          <span className="text-xs text-gray-500 dark:text-zinc-400 font-medium">
+            {isTeamJob ? "Total Project Budget (Fixed)" : "Client's Budget Range"}
+          </span>
           <span className="text-sm font-extrabold text-gray-900 dark:text-white flex items-center gap-1.5">
-            <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400" /> {job.priceRange}
+            <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400" />
+            {job.minBudget === job.maxBudget ? `${job.minBudget.toLocaleString()} Credits` : job.priceRange}
           </span>
         </div>
       )}
 
       {/* Bid Input & Additional Rate Dropdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
-        {/* Bid Input */}
+        {/* Bid Input or Fixed Milestone Compensation */}
         <div className="space-y-1.5 w-full">
-          <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block h-[15px]">
-            Your Bid <span className="text-red-500">*</span>
-          </label>
-          <div className="relative">
-            <CreditIcon className="absolute left-3.5 top-3 h-4 w-4 text-amber-500 dark:text-amber-400 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="e.g. 12,000"
-              value={formatCommaString(bidAmount)}
-              onChange={(e) => {
-                const raw = e.target.value.replace(/\D/g, "");
-                setBidAmount(raw);
-                setErrors((prev) => {
-                  const { bidAmount: _, ...rest } = prev;
-                  return rest;
-                });
-              }}
-              onBlur={() => {
-                if (!bidAmount) return;
-                const num = parseInt(bidAmount);
-                if (job && num < job.minBudget) {
-                  setBidAmount(job.minBudget.toString());
-                  setErrors((prev) => ({
-                    ...prev,
-                    bidAmount: `You cannot input under ${job.minBudget.toLocaleString()}, so it's been adjusted.`
-                  }));
-                  setErrorCountdown(3);
-                } else if (job && num > job.maxBudget) {
-                  setBidAmount(job.maxBudget.toString());
-                  setErrors((prev) => ({
-                    ...prev,
-                    bidAmount: `You cannot input over ${job.maxBudget.toLocaleString()}, so it's been adjusted.`
-                  }));
-                  setErrorCountdown(3);
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.currentTarget.blur();
-                }
-              }}
-              className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-3.5 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
-                errors.bidAmount ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
-              }`}
-            />
-          </div>
-          {errors.bidAmount && (
-            <p className="text-[11px] text-red-400">
-              {errors.bidAmount} {errorCountdown !== null && errors.bidAmount.includes("adjusted") ? `(disappears in ${errorCountdown}s)` : ''}
-            </p>
+          {isTeamJob ? (
+            <>
+              <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block h-[15px]">
+                Milestone Compensation <span className="text-gray-400 dark:text-zinc-500 font-bold">(Fixed Payout)</span>
+              </label>
+              <div className="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.03] flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-8 w-8 rounded-lg bg-gray-200/70 dark:bg-white/10 flex items-center justify-center text-gray-600 dark:text-zinc-400">
+                    <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1">
+                      <span>{formatCommaString(bidAmount || activeMaxBudget.toString())}</span>
+                      <span className="text-[10px] font-semibold text-gray-500 dark:text-zinc-400">Credits</span>
+                    </div>
+                    <div className="text-[10px] text-gray-500 dark:text-zinc-400 truncate max-w-[200px]">
+                      {currentMilestone?.title || "Selected Milestone"}
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-400 border border-gray-200 dark:border-white/10">
+                  Fixed Rate
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block h-[15px]">
+                Your Bid <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <CreditIcon className="absolute left-3.5 top-3 h-4 w-4 text-amber-500 dark:text-amber-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder={`e.g. ${activeMinBudget.toLocaleString()}`}
+                  value={formatCommaString(bidAmount)}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/\D/g, "");
+                    setBidAmount(raw);
+                    setErrors((prev) => {
+                      const { bidAmount: _, ...rest } = prev;
+                      return rest;
+                    });
+                  }}
+                  onBlur={() => {
+                    if (!bidAmount) return;
+                    const num = parseInt(bidAmount);
+                    if (activeMinBudget > 0 && num < activeMinBudget) {
+                      setBidAmount(activeMinBudget.toString());
+                      setErrors((prev) => ({
+                        ...prev,
+                        bidAmount: `You cannot input under ${activeMinBudget.toLocaleString()}, so it's been adjusted.`
+                      }));
+                      setErrorCountdown(3);
+                    } else if (activeMaxBudget > 0 && num > activeMaxBudget) {
+                      setBidAmount(activeMaxBudget.toString());
+                      setErrors((prev) => ({
+                        ...prev,
+                        bidAmount: `You cannot input over ${activeMaxBudget.toLocaleString()}, so it's been adjusted.`
+                      }));
+                      setErrorCountdown(3);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-3.5 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
+                    errors.bidAmount ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
+                  }`}
+                />
+              </div>
+              {errors.bidAmount && (
+                <p className="text-[11px] text-red-400">
+                  {errors.bidAmount} {errorCountdown !== null && errors.bidAmount.includes("adjusted") ? `(disappears in ${errorCountdown}s)` : ''}
+                </p>
+              )}
+            </>
           )}
           
           {/* Platform Fee Indicator */}

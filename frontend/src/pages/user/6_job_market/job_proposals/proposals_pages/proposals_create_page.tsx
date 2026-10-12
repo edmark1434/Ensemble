@@ -6,7 +6,6 @@ import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
 import { requireVerifiedAccount } from "@/lib/accountVerification";
-import MarketplaceIdentitySelector from "@/components/marketplace/MarketplaceIdentitySelector";
 
 // Sub-components & Wizard Steps
 import ProposalCreateHeader from "../proposals_components/proposals_creation_components/proposal_create_header";
@@ -35,6 +34,7 @@ const ProposalsCreatePage: React.FC = () => {
   const { createProposal, fetchJobs } = useJobs();
 
   // Step 1: Pitch & Pricing States
+  const [selectedMilestoneId, setSelectedMilestoneId] = useState<string>("");
   const [bidAmount, setBidAmount] = useState("");
   const [additionalWorkRate, setAdditionalWorkRate] = useState<number>(20);
   const [coverLetter, setCoverLetter] = useState("");
@@ -78,7 +78,9 @@ const ProposalsCreatePage: React.FC = () => {
             status: found.status,
             category: found.category,
             difficulty: found.experience_level,
-            priceRange: `${found.rate_credits_min?.toLocaleString() || 0} ~ ${found.rate_credits_max?.toLocaleString() || 0}`,
+            priceRange: (found.rate_credits_min && found.rate_credits_min === found.rate_credits_max)
+              ? `${found.rate_credits_min.toLocaleString()}`
+              : `${found.rate_credits_min?.toLocaleString() || 0} ~ ${found.rate_credits_max?.toLocaleString() || 0}`,
             minBudget: found.rate_credits_min || 0,
             maxBudget: found.rate_credits_max || 0,
             postedBy: found.client_name || found.client_handle || "Unknown",
@@ -94,8 +96,13 @@ const ProposalsCreatePage: React.FC = () => {
             thumbnail: found.thumbnail_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${found.thumbnail_path}` : "/placeholder.svg",
             skills: found.tags || [],
             isSaved: found.is_saved || false,
-            isOwnPost: false // Ignore for proposal creation
+            isOwnPost: false,
+            hiring_type: found.hiring_type || "single",
+            milestones: found.milestones || []
           });
+          if (found.milestones && found.milestones.length > 0) {
+            setSelectedMilestoneId(found.milestones[0].job_milestone_id);
+          }
         }
       } catch (err) {
         console.error("Failed to load job for proposal", err);
@@ -107,6 +114,7 @@ const ProposalsCreatePage: React.FC = () => {
   }, [id, fetchJobs]);
 
   const hasUnsavedChanges = Boolean(bidAmount || coverLetter);
+  const isTeamJob = Boolean(job?.hiring_type === "team" || (Array.isArray(job?.milestones) && job.milestones.length > 0));
 
   const handleReturnTrigger = () => {
     if (hasUnsavedChanges) {
@@ -120,12 +128,23 @@ const ProposalsCreatePage: React.FC = () => {
     const stepErrors: { [key: string]: string } = {};
     const rawBid = parseInt(bidAmount) || 0;
 
-    if (!bidAmount || rawBid <= 0) {
-      stepErrors.bidAmount = "A valid bid amount is required.";
-    } else if (job && rawBid < job.minBudget) {
-      stepErrors.bidAmount = `Please increase your bid to the minimum budget of ${job.minBudget.toLocaleString()}.`;
-    } else if (job && rawBid > job.maxBudget) {
-      stepErrors.bidAmount = `Please do not exceed the maximum budget of ${job.maxBudget.toLocaleString()}.`;
+    const currentMs = job?.milestones?.find((m: any) => m.job_milestone_id === selectedMilestoneId) || job?.milestones?.[0];
+    const minBound = currentMs && job ? Math.round(((job.minBudget * Number(currentMs.budget_percentage)) / 100) / Math.max(1, currentMs.slots_count || 1)) : (job?.minBudget || 0);
+    const maxBound = currentMs && job ? Math.round(((job.maxBudget * Number(currentMs.budget_percentage)) / 100) / Math.max(1, currentMs.slots_count || 1)) : (job?.maxBudget || 0);
+
+    if (!isTeamJob) {
+      if (!bidAmount || rawBid <= 0) {
+        stepErrors.bidAmount = "A valid bid amount is required.";
+      } else if (minBound > 0 && rawBid < minBound) {
+        stepErrors.bidAmount = `Please increase your bid to the minimum budget of ${minBound.toLocaleString()}.`;
+      } else if (maxBound > 0 && rawBid > maxBound) {
+        stepErrors.bidAmount = `Please do not exceed the maximum budget of ${maxBound.toLocaleString()}.`;
+      }
+    } else {
+      if (!bidAmount || rawBid <= 0) {
+        const fallbackBid = maxBound || minBound || 0;
+        setBidAmount(fallbackBid.toString());
+      }
     }
     if (!coverLetter.trim() || coverLetter.length < 50) {
       stepErrors.coverLetter = "Cover pitch must be at least 50 characters long.";
@@ -145,6 +164,16 @@ const ProposalsCreatePage: React.FC = () => {
   };
 
   const handleMilestonesAdvance = () => {
+    if (isTeamJob) {
+      if (!selectedMilestoneId || milestones.length === 0) {
+        setErrors({ milestones: "Please select a milestone role to propose for." });
+        return;
+      }
+      setErrors({});
+      setCurrentSlide(4);
+      return;
+    }
+
     if (milestones.length === 0) {
       setErrors({ milestones: "You must create at least 1 milestone." });
       return;
@@ -187,6 +216,7 @@ const ProposalsCreatePage: React.FC = () => {
         tos_content: tosContent,
         terms_id: selectedTosId || null,  
         acting_team_id: actingTeamId || null,
+        job_milestone_id: selectedMilestoneId || null,
         milestones: milestones.map(m => ({
           title: m.name,
           description: m.description,
@@ -249,6 +279,8 @@ const ProposalsCreatePage: React.FC = () => {
                   setAdditionalWorkRate={setAdditionalWorkRate}
                   coverLetter={coverLetter}
                   setCoverLetter={setCoverLetter}
+                  selectedMilestoneId={selectedMilestoneId}
+                  setSelectedMilestoneId={setSelectedMilestoneId}
                   errors={errors}
                   setErrors={setErrors}
                   onNext={handlePitchAdvance}
@@ -273,10 +305,14 @@ const ProposalsCreatePage: React.FC = () => {
             {currentSlide === 3 && (
               <motion.div key="step-3" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
                 <ProposalMilestonesStep
+                  job={job}
                   bidAmount={bidAmount}
+                  setBidAmount={setBidAmount}
                   additionalWorkRate={additionalWorkRate}
                   milestones={milestones}
                   setMilestones={setMilestones}
+                  selectedMilestoneId={selectedMilestoneId}
+                  setSelectedMilestoneId={setSelectedMilestoneId}
                   errors={errors}
                   setErrors={setErrors}
                   onBack={() => setCurrentSlide(2)}
@@ -288,14 +324,6 @@ const ProposalsCreatePage: React.FC = () => {
 
             {currentSlide === 4 && (
               <motion.div key="step-4" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
-                <div className="mb-5 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.02]">
-                  <MarketplaceIdentitySelector
-                    teamId={actingTeamId}
-                    onChange={setActingTeamId}
-                    label="Submit this proposal as"
-                    requireTeamVerification={false}
-                  />
-                </div>
                 <ProposalReviewStep
                   job={job}
                   bidAmount={bidAmount}

@@ -30,6 +30,10 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
   const teamVisibility = String(selectedJob?.team_visibility || selectedJob?.teamVisibility || '').toLowerCase();
   const isPrivateTeam = isTeam && teamVisibility === 'private';
   const targetTeamId = selectedJob?.team_id || selectedJob?.teamId;
+  const isTeamHiring = Boolean(
+    selectedJob?.hiring_type === "team" ||
+    (Array.isArray(selectedJob?.milestones) && selectedJob.milestones.length > 0)
+  );
 
   const handleViewProfile = () => {
     if (!selectedJob) return;
@@ -116,6 +120,17 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                     <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300">
                       {selectedJob.category}
                     </span>
+                    {isTeamHiring ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30 flex items-center gap-1">
+                        <Users className="h-2.5 w-2.5" />
+                        Team Project
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30 flex items-center gap-1">
+                        <User className="h-2.5 w-2.5" />
+                        Individual
+                      </span>
+                    )}
                   </div>
 
                   {!selectedJob.isOwnPost && !isGuestMode && (
@@ -156,9 +171,9 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                 <div>
                   <div className="flex items-center gap-1.5 mb-0.5">
                     <p className="text-[9px] uppercase font-bold text-gray-500 dark:text-zinc-500">
-                      Budget Range {selectedJob.positionsNeeded > 1 ? "(Divided)" : ""}
+                      {isTeamHiring ? "Total Project Budget" : `Budget Range ${selectedJob.positionsNeeded > 1 ? "(Divided)" : ""}`}
                     </p>
-                    {selectedJob.positionsNeeded > 1 && (
+                    {!isTeamHiring && selectedJob.positionsNeeded > 1 && (
                       <div className="group relative flex items-center">
                         <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
                         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1.5 hidden group-hover:block w-48 bg-white dark:bg-gray-900 text-gray-800 dark:text-white border border-gray-200 dark:border-gray-800 text-[10px] p-2 rounded-lg shadow-xl text-center z-10 before:content-[''] before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-white dark:before:border-t-gray-900">
@@ -168,22 +183,36 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                     )}
                   </div>
                   <div className="flex flex-col">
-                    {selectedJob.positionsNeeded > 1 ? (
+                    {isTeamHiring ? (
+                      <div>
+                        <p className="text-lg font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1.5 leading-none">
+                          <CreditIcon className="h-5 w-5 text-amber-500 dark:text-amber-400 shrink-0" />
+                          <span>{selectedJob.minBudget ? selectedJob.minBudget.toLocaleString() : selectedJob.priceRange}</span>
+                        </p>
+                        <p className="text-[10px] text-gray-500 dark:text-zinc-400 mt-1">
+                          Pool distributed across {selectedJob.milestones?.length || 0} milestones
+                        </p>
+                      </div>
+                    ) : selectedJob.positionsNeeded > 1 ? (
                       <>
-                        <p className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 line-through mb-0.5 flex items-center gap-1">
+                        <div className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 line-through mb-0.5 flex items-center gap-1">
                           <CreditIcon className="h-3 w-3 shrink-0" />
                           <span>{selectedJob.priceRange}</span>
-                        </p>
-                        <p className="text-lg font-extrabold text-blue-500 flex items-center gap-1.5 leading-none">
+                        </div>
+                        <div className="text-lg font-extrabold text-blue-500 flex items-center gap-1.5 leading-none">
                           <CreditIcon className="h-5 w-5 text-blue-500 shrink-0" />
-                          <span>{`${(selectedJob.minBudget / selectedJob.positionsNeeded).toFixed(0).toLocaleString()} ~ ${(selectedJob.maxBudget / selectedJob.positionsNeeded).toFixed(0).toLocaleString()}`}</span>
-                        </p>
+                          <span>
+                            {Math.round(selectedJob.minBudget / selectedJob.positionsNeeded) === Math.round((selectedJob.maxBudget || selectedJob.minBudget) / selectedJob.positionsNeeded)
+                              ? Math.round(selectedJob.minBudget / selectedJob.positionsNeeded).toLocaleString()
+                              : `${Math.round(selectedJob.minBudget / selectedJob.positionsNeeded).toLocaleString()} ~ ${Math.round((selectedJob.maxBudget || selectedJob.minBudget) / selectedJob.positionsNeeded).toLocaleString()}`}
+                          </span>
+                        </div>
                       </>
                     ) : (
-                      <p className="text-lg font-extrabold text-yellow-500 flex items-center gap-1.5 leading-none">
+                      <div className="text-lg font-extrabold text-yellow-500 flex items-center gap-1.5 leading-none">
                         <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
                         <span>{selectedJob.priceRange}</span>
-                      </p>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -218,6 +247,108 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   <JobRichText content={selectedJob.description} />
                 </div>
               </div>
+
+              {/* Team Milestones Section */}
+              {isTeamHiring && Array.isArray(selectedJob.milestones) && selectedJob.milestones.length > 0 && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400 flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5 text-purple-500" />
+                      Milestones & Roles Allocation ({selectedJob.milestones.length})
+                    </h4>
+                    <span className="text-[11px] font-semibold text-gray-600 dark:text-zinc-400">
+                      {selectedJob.positionsNeeded || selectedJob.milestones.reduce((acc: number, m: any) => acc + (Number(m.slots_count) || 1), 0)} Total Openings
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {selectedJob.milestones.map((m: any, idx: number) => {
+                      const taskList: string[] = Array.isArray(m.tasks)
+                        ? m.tasks
+                        : typeof m.tasks === "string"
+                        ? (() => {
+                            try {
+                              const parsed = JSON.parse(m.tasks);
+                              return Array.isArray(parsed) ? parsed : [m.tasks];
+                            } catch {
+                              return [m.tasks];
+                            }
+                          })()
+                        : [];
+
+                      const slots = Math.max(1, Number(m.slots_count) || 1);
+                      const hiredCount = Number(m.hired_count) || 0;
+                      const credits = Number(m.budget_credits) || 0;
+                      const percentage = Number(m.budget_percentage) || 0;
+
+                      return (
+                        <div
+                          key={m.job_milestone_id || idx}
+                          className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] space-y-2.5 transition hover:border-gray-300 dark:hover:border-white/20"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300">
+                                  Milestone #{idx + 1}
+                                </span>
+                                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 flex items-center gap-1">
+                                  <Users className="w-3 h-3 text-gray-500 dark:text-zinc-400" />
+                                  {slots} {slots === 1 ? "Slot" : "Slots"}
+                                </span>
+                                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200/50 dark:border-blue-500/20 flex items-center gap-1">
+                                  <Send className="w-2.5 h-2.5 text-blue-500 dark:text-blue-400" />
+                                  {Number(m.applicant_count || 0)} {Number(m.applicant_count || 0) === 1 ? "Proposal" : "Proposals"}
+                                </span>
+                                {hiredCount > 0 && (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                                    {hiredCount} / {slots} Hired
+                                  </span>
+                                )}
+                              </div>
+                              <h5 className="text-sm font-bold text-gray-900 dark:text-white pt-0.5">
+                                {m.title}
+                              </h5>
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              <div className="flex items-center gap-1 justify-end font-bold text-amber-500 dark:text-amber-400 text-sm">
+                                <CreditIcon className="w-3.5 h-3.5 shrink-0" />
+                                <span>{credits.toLocaleString()} Credits</span>
+                              </div>
+                              <span className="text-[10px] font-medium text-gray-500 dark:text-zinc-500">
+                                {percentage}% share
+                              </span>
+                            </div>
+                          </div>
+
+                          {m.description && (
+                            <p className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed whitespace-pre-line">
+                              {m.description}
+                            </p>
+                          )}
+
+                          {taskList.length > 0 && (
+                            <div className="pt-2 border-t border-gray-200/60 dark:border-white/5 space-y-1.5">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                                Deliverables & Tasks ({taskList.length})
+                              </p>
+                              <div className="space-y-1.5 pl-0.5">
+                                {taskList.map((task, tIdx) => (
+                                  <div key={tIdx} className="flex items-start gap-2 text-xs text-gray-700 dark:text-zinc-300">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
+                                    <span className="leading-tight">{task}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Required Skills Section */}
               {selectedJob.skills && selectedJob.skills.length > 0 && (
@@ -360,12 +491,19 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                 </div>
               ) : !selectedJob.isOwnPost ? (
                 selectedJob.hasProposed ? (
-                  <button
-                    onClick={() => navigate(`/jobs/proposals/sent/${selectedJob.myProposalId}`)}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 py-3 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/20 transition active:scale-[0.98]"
-                  >
-                    <FileText className="h-3.5 w-3.5" /> View your Proposal
-                  </button>
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => navigate(`/jobs/proposals/sent/${selectedJob.myProposalId}`)}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 py-3 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/20 transition active:scale-[0.98]"
+                    >
+                      <FileText className="h-3.5 w-3.5" /> View your Proposal
+                    </button>
+                    {isTeamHiring && (
+                      <span className="text-[10px] text-gray-500 dark:text-zinc-400 text-center block">
+                        You have applied for a milestone role on this team project (1 role limit per contributor).
+                      </span>
+                    )}
+                  </div>
                 ) : (
                   <button
                         onClick={() => {

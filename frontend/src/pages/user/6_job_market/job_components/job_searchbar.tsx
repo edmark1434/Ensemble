@@ -13,13 +13,17 @@ interface JobSearchbarProps {
 const JobSearchbar: React.FC<JobSearchbarProps> = ({ searchQuery, setSearchQuery }) => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
 
   const handlePostClick = () => {
     if (isGuestMode) {
-      setIsModalOpen(true);
+      setIsGuestModalOpen(true);
     } else {
-      continueIfAccountVerified(() => navigate("/jobs/create"));
+      continueIfAccountVerified(
+        () => navigate("/jobs/postings/choose"),
+        false,
+        "Account Verification is required to access Job Creation. Please verify your identity to proceed."
+      );
     }
   };
 
@@ -28,7 +32,7 @@ const JobSearchbar: React.FC<JobSearchbarProps> = ({ searchQuery, setSearchQuery
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
         <button
           onClick={handlePostClick}
-          className="shrink-0 flex items-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105"
+          className="shrink-0 flex items-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition-all duration-200 hover:scale-105 active:scale-95 shadow-sm hover:shadow-md cursor-pointer select-none"
         >
           <Plus className="h-4 w-4" /> <span>Post a Job</span>
         </button>
@@ -43,7 +47,7 @@ const JobSearchbar: React.FC<JobSearchbarProps> = ({ searchQuery, setSearchQuery
           />
         </div>
       </div>
-      <GuestLoginModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <GuestLoginModal isOpen={isGuestModalOpen} onClose={() => setIsGuestModalOpen(false)} />
     </>
   );
 };

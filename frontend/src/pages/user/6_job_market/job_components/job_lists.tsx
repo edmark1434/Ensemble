@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Star, Clock, Bookmark, Edit2, Flag, Wrench, Send, Users } from "lucide-react";
+import { Star, Clock, Bookmark, Edit2, Flag, Wrench, Send, Users, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { JobRichText } from "./JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,6 +16,7 @@ export interface Job {
   difficulty: "Beginner" | "Intermediate" | "Expert";
   priceRange: string;
   minBudget: number;
+  maxBudget?: number;
   postedBy: string;
   client_account_id?: string;
   clientAvatar?: string;
@@ -48,9 +49,11 @@ export interface Job {
   portfolioUseAllowed?: boolean;
   portfolioDuration?: number | null;
   isExistingProject?: boolean;
-    requireNDA?: boolean;
+  requireNDA?: boolean;
   existingProjectId?: string | null;
   initiatorRole?: string;
+  hiring_type?: "single" | "team" | string;
+  milestones?: any[];
 }
 
 interface JobListProps {
@@ -230,6 +233,21 @@ const JobList: React.FC<JobListProps> = ({
                         </div>
                       </div>
 
+                      {/* Bottom-left Hiring Type Tag */}
+                      <div className="absolute bottom-2 left-2 z-10">
+                        {Boolean(job.hiring_type === "team" || (Array.isArray(job.milestones) && job.milestones.length > 0)) ? (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                            <Users className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
+                            <span>Team</span>
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                            <User className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
+                            <span>Individual</span>
+                          </span>
+                        )}
+                      </div>
+
                     <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
                       {!job.isOwnPost && !isGuestMode && (
                         <button
@@ -282,7 +300,6 @@ const JobList: React.FC<JobListProps> = ({
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                       {job.difficulty || "Beginner"}
                     </span>
-                    
                   </div>
 
                   {/* Price & Title */}
@@ -373,6 +390,21 @@ const JobList: React.FC<JobListProps> = ({
                     </button>
                   )}
                 </div>
+
+                {/* Bottom-left Hiring Type Tag on Thumbnail */}
+                <div className="absolute bottom-2 left-2 z-10">
+                  {Boolean(job.hiring_type === "team" || (Array.isArray(job.milestones) && job.milestones.length > 0)) ? (
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                      <Users className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
+                      <span>Team</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                      <User className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
+                      <span>Individual</span>
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="flex-1 flex flex-col justify-between min-w-0">
@@ -397,7 +429,6 @@ const JobList: React.FC<JobListProps> = ({
                         <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                           {job.difficulty || "Beginner"}
                         </span>
-                        
                       </div>
                   </div>
 
