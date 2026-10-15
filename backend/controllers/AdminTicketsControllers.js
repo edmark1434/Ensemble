@@ -1,6 +1,9 @@
 const {
   getTicketsOverview,
   getTicketDetail,
+  listParticipantTicketIds,
+  addTicketParticipant,
+  removeTicketParticipant,
   createSupportTicket,
   getTicketPickers,
   getTicketCatalog,
@@ -362,21 +365,31 @@ async function createPublicTicket(req, res) {
   }
 }
 
+function sessionCanReadTicket(data, accountId) {
+  if (!data?.ticket || !accountId) return false;
+  if (String(data.ticket.requester?.accountId) === String(accountId)) return true;
+  return (data.participants || []).some(
+    (person) => String(person.accountId) === String(accountId) && person.status === 'active'
+  );
+}
+
 async function listMyTickets(req, res) {
   try {
     const accountId = req.session?.account_id || req.session?.accountId;
     if (!accountId) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
+    const participantTicketIds = await listParticipantTicketIds(accountId);
     const result = await pool.query(
       `
       SELECT ticket_id, ticket_number, reason, type, priority, status,
              message_count, last_message_at, created_at, updated_at, resolved_at
       FROM tickets
-      WHERE account_id = $1 AND deleted_at IS NULL
+      WHERE deleted_at IS NULL
+        AND (account_id = $1 OR ticket_id = ANY($2::uuid[]))
       ORDER BY updated_at DESC NULLS LAST, created_at DESC
       `,
-      [accountId]
+      [accountId, participantTicketIds]
     );
     res.status(200).json({
       success: true,
@@ -411,7 +424,7 @@ async function getMyTicket(req, res) {
     }
     const data = await getTicketDetail(req.params.id);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
-    if (String(data.ticket.requester.accountId) !== String(accountId)) {
+    if (!sessionCanReadTicket(data, accountId)) {
       return res.status(403).json({ success: false, message: 'Not your ticket' });
     }
     // Hide staff internal notes from requesters.
@@ -442,7 +455,7 @@ async function postMyTicketMessage(req, res) {
     }
     const existing = await getTicketDetail(req.params.id);
     if (!existing) return res.status(404).json({ success: false, message: 'Ticket not found' });
-    if (String(existing.ticket.requester.accountId) !== String(accountId)) {
+    if (!sessionCanReadTicket(existing, accountId)) {
       return res.status(403).json({ success: false, message: 'Not your ticket' });
     }
     const data = await addTicketMessage(req.params.id, body?.trim() || '', req.session, false, req.body?.attachments);
@@ -555,6 +568,35 @@ async function postTicketCreditAdjustment(req, res) {
   }
 }
 
+async function postTicketParticipant(req, res) {
+  try {
+    const accountId = req.body?.accountId || req.body?.account_id;
+    const data = await addTicketParticipant(req.params.id, accountId, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data, message: 'User added to the ticket' });
+  } catch (err) {
+    console.error('Error adding ticket participant:', err);
+    res.status(err.statusCode || 400).json({
+      success: false,
+      message: err.message || 'Failed to add user',
+    });
+  }
+}
+
+async function deleteTicketParticipant(req, res) {
+  try {
+    const data = await removeTicketParticipant(req.params.id, req.params.accountId, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data, message: 'User removed from the ticket' });
+  } catch (err) {
+    console.error('Error removing ticket participant:', err);
+    res.status(err.statusCode || 400).json({
+      success: false,
+      message: err.message || 'Failed to remove user',
+    });
+  }
+}
+
 async function postMyTicketSatisfaction(req, res) {
   try {
     const accountId = req.session?.account_id || req.session?.accountId;
@@ -591,5 +633,7 @@ module.exports = {
   postAdminTicketArticle,
   deleteAdminTicketArticle,
   postTicketCreditAdjustment,
+  postTicketParticipant,
+  deleteTicketParticipant,
   postMyTicketSatisfaction,
 };

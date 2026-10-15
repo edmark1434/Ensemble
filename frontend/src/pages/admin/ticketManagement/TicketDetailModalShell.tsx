@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { FileText, Hand, Loader2, Lock, MessageSquare, Paperclip, Pencil, Send, ShieldAlert, Trash2, UserRound, X } from 'lucide-react';
+import { FileText, Hand, Loader2, Lock, MessageSquare, Paperclip, Send, ShieldAlert, Trash2, UserMinus, UserPlus, UserRound, X } from 'lucide-react';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
@@ -85,7 +85,6 @@ function MessageBubble({
   accentSoft,
   own,
   busy,
-  onEdit,
   onDelete,
   onToggleInternal,
 }: {
@@ -93,7 +92,6 @@ function MessageBubble({
   accentSoft: string;
   own: boolean;
   busy: boolean;
-  onEdit: (body: string) => Promise<boolean>;
   onDelete: () => Promise<void>;
   onToggleInternal: (isInternal: boolean) => Promise<void>;
 }) {
@@ -127,8 +125,6 @@ function MessageBubble({
       : kind === 'staff'
         ? 'border-white/20 bg-white/10 text-zinc-100'
         : 'border-sky-400/30 bg-sky-500/15 text-sky-100';
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(message.body || '');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const staffReply = kind === 'staff' || kind === 'internal';
 
@@ -159,18 +155,16 @@ function MessageBubble({
               Visible to staff only
             </p>
           )}
-          {editing ? (
-            <textarea
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              rows={3}
-              className="w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-2.5 py-2 text-sm text-white outline-none focus:border-white/25"
-            />
-          ) : message.body ? (
+          {message.isUnsent && (
+            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+              Deleted message
+            </p>
+          )}
+          {message.body ? (
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-100">{message.body}</p>
           ) : null}
           {(message.attachments || []).length > 0 && (
-            <div className={`flex flex-col gap-1.5 ${message.body || editing ? 'mt-2' : ''}`}>
+            <div className={`flex flex-col gap-1.5 ${message.body ? 'mt-2' : ''}`}>
               {message.attachments!.map((file) => {
                 const src = chatAttachmentUrl(file.attachment_key || file.attachment_url || '');
                 const kindOfFile = attachmentKind(file);
@@ -202,46 +196,7 @@ function MessageBubble({
           )}
           {(own || staffReply) && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {own && !editing && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setDraft(message.body || '');
-                    setEditing(true);
-                    setConfirmDelete(false);
-                  }}
-                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
-                >
-                  <Pencil className="h-3 w-3" />
-                  Edit
-                </button>
-              )}
-              {own && editing && (
-                <>
-                  <button
-                    type="button"
-                    disabled={busy || (!draft.trim() && !(message.attachments || []).length)}
-                    onClick={() => {
-                      void onEdit(draft.trim()).then((saved) => {
-                        if (saved) setEditing(false);
-                      });
-                    }}
-                    className="rounded-lg border border-white/15 bg-white/10 px-2 py-1 text-[11px] text-white disabled:opacity-50"
-                  >
-                    Save
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => setEditing(false)}
-                    className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-400"
-                  >
-                    Cancel
-                  </button>
-                </>
-              )}
-              {own && !editing && !confirmDelete && (
+              {own && !message.isUnsent && !confirmDelete && (
                 <button
                   type="button"
                   disabled={busy}
@@ -272,7 +227,7 @@ function MessageBubble({
                   </button>
                 </>
               )}
-              {staffReply && !editing && (
+              {staffReply && !message.isUnsent && (
                 <button
                   type="button"
                   disabled={busy}
@@ -395,6 +350,10 @@ export default function TicketDetailModalShell({
   const [escalateType, setEscalateType] = useState<string>('');
   const [confirmEscalate, setConfirmEscalate] = useState(false);
   const [confirmEscalateAdmin, setConfirmEscalateAdmin] = useState(false);
+  const [personQuery, setPersonQuery] = useState('');
+  const [personResults, setPersonResults] = useState<{ accountId: string; name: string; handle: string }[]>([]);
+  const [searchingPeople, setSearchingPeople] = useState(false);
+  const [personBusy, setPersonBusy] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const realtimeRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -482,6 +441,59 @@ export default function TicketDetailModalShell({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId, endpointBase]);
+
+  useEffect(() => {
+    const query = personQuery.replace(/^@/, '').trim();
+    if (!detail?.canManageParticipants || query.length < 1) {
+      setPersonResults([]);
+      setSearchingPeople(false);
+      return;
+    }
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      setSearchingPeople(true);
+      try {
+        const response = await api.get('/api/accounts/search-users', { params: { handle: query } });
+        const results = (response.data?.data || []).map((account: {
+          account_id: string;
+          display_name?: string;
+          full_name?: string;
+          handle?: string;
+        }) => ({
+          accountId: String(account.account_id),
+          name: account.display_name || account.full_name || account.handle || 'User',
+          handle: account.handle ? `@${account.handle}` : '',
+        }));
+        if (!cancelled) setPersonResults(results);
+      } catch {
+        if (!cancelled) setPersonResults([]);
+      } finally {
+        if (!cancelled) setSearchingPeople(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [personQuery, detail?.canManageParticipants]);
+
+  const changeParticipant = async (accountId: string, action: 'add' | 'remove') => {
+    setPersonBusy(true);
+    try {
+      const response = action === 'add'
+        ? await api.post(`/api/staff/tickets/${ticketId}/participants`, { accountId })
+        : await api.delete(`/api/staff/tickets/${ticketId}/participants/${accountId}`);
+      if (response.data?.data) setDetail(response.data.data as TicketDetail);
+      setPersonQuery('');
+      setPersonResults([]);
+      showSuccessToast(action === 'add' ? 'User added to the ticket' : 'User removed from the ticket');
+      onUpdated();
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, action === 'add' ? 'Failed to add user' : 'Failed to remove user'));
+    } finally {
+      setPersonBusy(false);
+    }
+  };
 
   useEffect(() => {
     const chatId = detail?.chatId;
@@ -827,6 +839,110 @@ export default function TicketDetailModalShell({
                       <dd>{formatDateTime(t.updatedAt)}</dd>
                     </div>
                   </dl>
+                </section>
+
+                <section className="space-y-3 rounded-xl border border-white/10 bg-[#14151c] p-4">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Involved</p>
+                    <p className="mt-1 text-[11px] text-zinc-500">People who joined this ticket and sent a reply.</p>
+                  </div>
+                  {(detail.involved || []).length === 0 ? (
+                    <p className="text-xs text-zinc-500">No one has replied yet.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {(detail.involved || []).map((person) => (
+                        <li key={`involved-${person.accountId}`} className="rounded-lg border border-white/10 px-3 py-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-white">{person.name}</p>
+                              <p className="truncate text-[11px] text-zinc-500">
+                                {person.handle ? `@${person.handle}` : 'No handle'}
+                                {person.isRequester ? ' · Opened ticket' : ''}
+                                {person.isStaff ? ' · Staff' : ''}
+                                {person.status !== 'active' ? ' · Removed' : ''}
+                              </p>
+                            </div>
+                            <p className="shrink-0 text-[11px] text-zinc-400">
+                              {person.replyCount} {person.replyCount === 1 ? 'reply' : 'replies'}
+                            </p>
+                          </div>
+                          <p className="mt-1 text-[11px] text-zinc-600">Last reply {formatDateTime(person.lastReplyAt)}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <div className="border-t border-white/10 pt-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">On this ticket</p>
+                    <ul className="mt-2 space-y-1.5">
+                      {(detail.participants || []).map((person) => (
+                        <li key={`member-${person.accountId}`} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="min-w-0 truncate text-zinc-300">
+                            {person.name}
+                            <span className="text-zinc-600">
+                              {person.isRequester ? ' · requester' : person.isStaff ? ' · staff' : ''}
+                            </span>
+                          </span>
+                          {detail.canManageParticipants && !person.isRequester && person.status === 'active' ? (
+                            <button
+                              type="button"
+                              disabled={personBusy}
+                              onClick={() => void changeParticipant(person.accountId, 'remove')}
+                              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+                            >
+                              <UserMinus className="h-3 w-3" />
+                              Remove
+                            </button>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                    {detail.canManageParticipants ? (
+                      <p className="mt-2 text-[11px] text-zinc-600">The person who opened the ticket stays on it.</p>
+                    ) : null}
+                  </div>
+
+                  {detail.canManageParticipants && (
+                    <div className="space-y-2">
+                      <label className="block text-[11px] text-zinc-500" htmlFor="ticket-add-user">
+                        Add a user
+                      </label>
+                      <input
+                        id="ticket-add-user"
+                        value={personQuery}
+                        onChange={(event) => setPersonQuery(event.target.value)}
+                        placeholder="Search by name or handle"
+                        className="w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-white/25"
+                      />
+                      {searchingPeople && <p className="text-[11px] text-zinc-500">Searching…</p>}
+                      {personResults.length > 0 && (
+                        <ul className="max-h-40 space-y-1 overflow-y-auto">
+                          {personResults.map((person) => (
+                            <li key={person.accountId}>
+                              <button
+                                type="button"
+                                disabled={personBusy}
+                                onClick={() => void changeParticipant(person.accountId, 'add')}
+                                className="flex w-full items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2 text-left text-xs hover:bg-white/5 disabled:opacity-50"
+                              >
+                                <span className="min-w-0">
+                                  <span className="block truncate text-white">{person.name}</span>
+                                  <span className="block truncate text-zinc-500">{person.handle}</span>
+                                </span>
+                                <span className="inline-flex shrink-0 items-center gap-1 text-zinc-300">
+                                  <UserPlus className="h-3.5 w-3.5" />
+                                  Add
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {!searchingPeople && personQuery.trim().length > 0 && personResults.length === 0 && (
+                        <p className="text-[11px] text-zinc-500">No users found.</p>
+                      )}
+                    </div>
+                  )}
                 </section>
 
                 {(detail.articles || []).length > 0 && (
@@ -1194,16 +1310,22 @@ export default function TicketDetailModalShell({
                   </div>
                 )}
                 {detail.messages.map((m) => (
-                  <MessageBubble
-                    key={m.id}
-                    message={m}
-                    accentSoft={tone.soft}
-                    own={Boolean(viewerAccountId) && String(m.senderId || '') === String(viewerAccountId)}
-                    busy={saving}
-                    onEdit={(body) => changeMessage(m.id, { body })}
-                    onDelete={() => removeMessage(m.id)}
-                    onToggleInternal={(isInternal) => changeMessage(m.id, { isInternal })}
-                  />
+                  String(m.authorType).toLowerCase() === 'system' ? (
+                    <p key={m.id} className="py-1 text-center text-[11px] text-zinc-500">
+                      {m.body}
+                      <span className="ml-2 text-zinc-600">{formatDateTime(m.createdAt)}</span>
+                    </p>
+                  ) : (
+                    <MessageBubble
+                      key={m.id}
+                      message={m}
+                      accentSoft={tone.soft}
+                      own={Boolean(viewerAccountId) && String(m.senderId || '') === String(viewerAccountId)}
+                      busy={saving}
+                      onDelete={() => removeMessage(m.id)}
+                      onToggleInternal={(isInternal) => changeMessage(m.id, { isInternal })}
+                    />
+                  )
                 ))}
                 <div ref={threadEndRef} />
               </div>

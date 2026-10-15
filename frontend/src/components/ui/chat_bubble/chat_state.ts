@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import api from "@/lib/axios";
 import socket from "@/lib/socket";
+import useGlobalState from "@/lib/global_state";
 import toast from "react-hot-toast";
 import type {
   Attachment,
@@ -906,6 +907,14 @@ function bindSocketListeners() {
                   is_deleted: true,
                   is_unsent: true,
                   deleted_at,
+                  ...(useGlobalState.getState().user?.type === "Staff"
+                    ? {}
+                    : {
+                        message_content: "",
+                        attachments: [],
+                        links: [],
+                        message_react: [],
+                      }),
                 }
               : message
           ),

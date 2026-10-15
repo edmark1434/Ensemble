@@ -105,9 +105,25 @@ export type TicketMessage = {
   attachments?: TicketAttachment[];
   isInternal: boolean;
   isEdited?: boolean;
+  isUnsent?: boolean;
+  messageType?: string;
   audience?: 'staff' | 'author_and_staff' | 'parties' | 'public' | string;
   publishedAt?: string | null;
   createdAt: string;
+};
+
+export type TicketPerson = {
+  accountId: string;
+  name: string;
+  handle?: string | null;
+  email?: string | null;
+  role: string;
+  status: 'active' | 'removed' | 'left' | string;
+  isRequester: boolean;
+  isStaff: boolean;
+  replyCount: number;
+  lastReplyAt?: string | null;
+  joinedAt?: string | null;
 };
 
 export type DisputeCreditHold = {
@@ -449,6 +465,9 @@ export type TicketDetail = {
   payments?: TicketPaymentEvidence | null;
   canAdjustCredits?: boolean;
   formValues?: { key: string; label: string; value: string }[];
+  participants?: TicketPerson[];
+  involved?: TicketPerson[];
+  canManageParticipants?: boolean;
 };
 
 export function ticketTypeOf(t: { type?: string; category?: string }) {

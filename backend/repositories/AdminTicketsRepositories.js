@@ -903,17 +903,228 @@ async function ensureTicketChat(ticketId, ticketRow) {
 }
 
 function mapMongoTicketMessage(m, senderNames = new Map()) {
+  const messageType = String(m.message_type || 'text').toLowerCase();
+  const unsent = Boolean(m.is_deleted || m.deleted_at || m.is_unsent);
   return {
     id: String(m._id),
     senderId: m.sender_id ? String(m.sender_id) : null,
-    authorType: m.author_type || (m.is_internal ? 'staff' : 'user'),
+    authorType: messageType === 'system' ? 'system' : (m.author_type || (m.is_internal ? 'staff' : 'user')),
     authorName: m.author_name || senderNames.get(String(m.sender_id)) || 'Unknown',
     body: m.message_content || m.body || '',
     attachments: Array.isArray(m.attachments) ? m.attachments : [],
     isInternal: Boolean(m.is_internal),
     isEdited: Boolean(m.is_edited),
+    isUnsent: unsent,
+    messageType,
     createdAt: m.created_at || m.createdAt || null,
   };
+}
+
+const TICKET_ACCOUNT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function ticketMemberIsActive(member) {
+  return Boolean(member) && !['left', 'removed'].includes(String(member.status || 'active').toLowerCase());
+}
+
+function ticketError(message, statusCode) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+async function loadTicketInbox(chatId) {
+  const db = mongoDb();
+  if (!db || !chatId || !ObjectId.isValid(chatId)) return null;
+  return db.collection('inbox').findOne({ _id: new ObjectId(chatId) });
+}
+
+async function upsertTicketMember(chatId, accountId, role, status) {
+  const db = mongoDb();
+  if (!db || !ObjectId.isValid(chatId)) {
+    throw ticketError('Ticket chat is unavailable', 503);
+  }
+  const now = new Date();
+  const inboxId = new ObjectId(chatId);
+  const inbox = await db.collection('inbox').findOne(
+    { _id: inboxId },
+    { projection: { members: 1 } }
+  );
+  const current = (inbox?.members || []).find((member) => String(member.account_id) === String(accountId));
+  if (current) {
+    await db.collection('inbox').updateOne(
+      { _id: inboxId, 'members.account_id': String(accountId) },
+      {
+        $set: {
+          'members.$.role': role,
+          'members.$.status': status,
+          'members.$.joined_at': status === 'active' ? now : current.joined_at || now,
+          updated_at: now,
+        },
+      }
+    );
+    return;
+  }
+  if (status !== 'active') return;
+  await db.collection('inbox').updateOne(
+    { _id: inboxId },
+    {
+      $push: {
+        members: {
+          account_id: String(accountId),
+          role,
+          status: 'active',
+          joined_at: now,
+        },
+      },
+      $set: { updated_at: now },
+    }
+  );
+}
+
+async function writeTicketMembershipNote(chatId, staffSession, body) {
+  const now = new Date();
+  const accountId = sessionAccountId(staffSession);
+  const insertedMessageId = await createMessageRepositories({
+    conversation_id: String(chatId),
+    sender_id: accountId,
+    message_type: 'system',
+    message_content: body,
+    message_id_reply: null,
+    attachments: [],
+    links: [],
+    message_react: [],
+    read_by: accountId ? [{ account_id: accountId, read_at: now }] : [],
+    is_edited: false,
+    is_deleted: false,
+    is_internal: false,
+    author_type: 'system',
+    author_name: sessionDisplayName(staffSession) || 'Staff',
+    created_at: now,
+    updated_at: now,
+  });
+  const createdMessage = await getMessageByIdRepositories(insertedMessageId);
+  const db = mongoDb();
+  if (db && ObjectId.isValid(chatId)) {
+    await db.collection('inbox').updateOne(
+      { _id: new ObjectId(chatId) },
+      { $set: { updated_at: now, last_message: body, last_message_time: now } }
+    );
+  }
+  try {
+    const { getIo } = require('../lib/WebSocket');
+    const io = getIo();
+    if (io && createdMessage) io.to(String(chatId)).emit('newMessage', createdMessage);
+  } catch (error) {
+    console.error('Ticket membership note saved without realtime delivery:', error.message);
+  }
+}
+
+async function buildTicketPeople({ requesterAccountId, members, messages, includeEmail }) {
+  const replyByAccount = new Map();
+  for (const message of messages || []) {
+    if (message.isInternal || message.isUnsent) continue;
+    if (String(message.messageType || message.authorType || '').toLowerCase() === 'system') continue;
+    const senderId = String(message.senderId || '');
+    if (!TICKET_ACCOUNT_UUID.test(senderId)) continue;
+    const createdAt = message.createdAt || null;
+    const current = replyByAccount.get(senderId) || { replyCount: 0, lastReplyAt: null };
+    current.replyCount += 1;
+    if (createdAt && (!current.lastReplyAt || new Date(createdAt) > new Date(current.lastReplyAt))) {
+      current.lastReplyAt = createdAt;
+    }
+    replyByAccount.set(senderId, current);
+  }
+
+  const memberByAccount = new Map();
+  for (const member of members || []) {
+    if (!member?.account_id) continue;
+    memberByAccount.set(String(member.account_id), member);
+  }
+  if (requesterAccountId && !memberByAccount.has(String(requesterAccountId))) {
+    memberByAccount.set(String(requesterAccountId), {
+      account_id: String(requesterAccountId),
+      role: 'member',
+      status: 'active',
+      joined_at: null,
+    });
+  }
+
+  const accountIds = [...new Set([...memberByAccount.keys(), ...replyByAccount.keys()])]
+    .filter((id) => TICKET_ACCOUNT_UUID.test(id));
+  const profiles = new Map();
+  if (accountIds.length) {
+    const result = await pool.query(
+      `SELECT
+         a.account_id,
+         a.handle,
+         COALESCE(
+           a.display_name,
+           NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''),
+           NULLIF(TRIM(CONCAT(s.first_name, ' ', s.last_name)), ''),
+           a.handle,
+           'Unknown'
+         ) AS name,
+         u.email_address,
+         (s.staff_id IS NOT NULL) AS is_staff
+       FROM accounts a
+       LEFT JOIN users u ON u.account_id = a.account_id
+       LEFT JOIN staff s ON s.account_id = a.account_id
+       WHERE a.account_id = ANY($1::uuid[])`,
+      [accountIds]
+    );
+    result.rows.forEach((row) => profiles.set(String(row.account_id), row));
+  }
+
+  const people = accountIds.map((accountId) => {
+    const member = memberByAccount.get(accountId);
+    const profile = profiles.get(accountId);
+    const replies = replyByAccount.get(accountId) || { replyCount: 0, lastReplyAt: null };
+    const rawStatus = member ? String(member.status || 'active').toLowerCase() : 'removed';
+    return {
+      accountId,
+      name: profile?.name || 'Unknown',
+      handle: profile?.handle || null,
+      ...(includeEmail ? { email: profile?.email_address || null } : {}),
+      role: member?.role || 'member',
+      status: ['left', 'removed', 'active'].includes(rawStatus) ? rawStatus : 'active',
+      isRequester: requesterAccountId != null && String(requesterAccountId) === accountId,
+      isStaff: Boolean(profile?.is_staff),
+      replyCount: replies.replyCount,
+      lastReplyAt: replies.lastReplyAt,
+      joinedAt: member?.joined_at || null,
+    };
+  });
+
+  const participants = people
+    .filter((person) => person.status === 'active' || person.isRequester)
+    .sort((a, b) => Number(b.isRequester) - Number(a.isRequester) || a.name.localeCompare(b.name));
+  const involved = people
+    .filter((person) => person.replyCount > 0)
+    .sort((a, b) => new Date(b.lastReplyAt || 0) - new Date(a.lastReplyAt || 0));
+  return { participants, involved };
+}
+
+async function listParticipantTicketIds(accountId) {
+  const db = mongoDb();
+  if (!db || !accountId) return [];
+  const rows = await db.collection('inbox').find(
+    {
+      conversation_type: 'ticket',
+      members: {
+        $elemMatch: {
+          account_id: String(accountId),
+          status: { $nin: ['left', 'removed'] },
+        },
+      },
+    },
+    { projection: { ticket_id: 1, support_ticket_id: 1 } }
+  ).toArray();
+  return [...new Set(
+    rows
+      .map((row) => row.ticket_id || row.support_ticket_id)
+      .filter((id) => TICKET_ACCOUNT_UUID.test(String(id || '')))
+      .map((id) => String(id))
+  )];
 }
 
 async function getTicketDetail(ticketId, staffSession = null, options = {}) {
@@ -949,6 +1160,7 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
   });
 
   let messages = [];
+  let inboxMembers = [];
   let chatId = null;
   let chatAvailable = Boolean(getMongoClient());
   const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
@@ -977,10 +1189,13 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
           }
         );
       }
-      const { Messages } = await getConversationByConvoId(chatId);
-      const activeMessages = (Messages || []).filter(
-        (message) => !message.is_deleted && !message.deleted_at
-      );
+      const { Messages } = await getConversationByConvoId(chatId, {
+        includeDeleted: Boolean(staffSession),
+      });
+      const activeMessages = (Messages || []).filter((message) => {
+        const unsent = message.is_deleted || message.deleted_at || message.is_unsent;
+        return !unsent || Boolean(staffSession);
+      });
       const senderIds = [
         ...new Set(
           activeMessages
@@ -1008,10 +1223,32 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
       messages = activeMessages
         .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
         .map((message) => mapMongoTicketMessage(message, senderNames));
+      if (db) {
+        const inboxDoc = await db.collection('inbox').findOne(
+          { _id: new ObjectId(chatId) },
+          { projection: { members: 1 } }
+        );
+        inboxMembers = inboxDoc?.members || [];
+      }
     }
   } catch (err) {
     console.error('Error loading ticket chat from MongoDB:', err.message);
     chatAvailable = false;
+  }
+
+  let participants = [];
+  let involved = [];
+  try {
+    const people = await buildTicketPeople({
+      requesterAccountId: row.account_id,
+      members: inboxMembers,
+      messages,
+      includeEmail: Boolean(staffSession),
+    });
+    participants = people.participants;
+    involved = people.involved;
+  } catch (err) {
+    console.error('Error loading ticket people:', err.message);
   }
 
   const catalog = await getTicketCatalog();
@@ -1072,7 +1309,244 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
       value: answer.value,
     })),
     canAdjustCredits: Boolean(staffSession) && canAdjustTicketCredits(role, ticket.type),
+    participants,
+    involved,
+    canManageParticipants: Boolean(staffSession) && isStaffSession(staffSession),
   };
+}
+
+async function notifyTicketParticipant(accountId, message, prefix, ticketId, chatId) {
+  try {
+    const notification = await createNotificationServices({
+      account_id: String(accountId),
+      message,
+      is_read: false,
+      reference_table: 'inbox',
+      reference_prefix: prefix,
+      reference_path: chatId ? `/inbox/direct?conversation=${chatId}` : `/tickets/${ticketId}`,
+      reference_id: randomUUID(),
+    });
+    const { getIo } = require('../lib/WebSocket');
+    const io = getIo();
+    if (io && notification) io.to(String(accountId)).emit('notification', notification);
+  } catch (error) {
+    console.error('Error notifying ticket participant:', error.message);
+  }
+}
+
+async function lookupAccountIdentity(accountId) {
+  const result = await pool.query(
+    `SELECT
+       a.handle,
+       COALESCE(
+         a.display_name,
+         NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''),
+         NULLIF(TRIM(CONCAT(s.first_name, ' ', s.last_name)), ''),
+         a.handle,
+         'Someone'
+       ) AS name
+     FROM accounts a
+     LEFT JOIN users u ON u.account_id = a.account_id
+     LEFT JOIN staff s ON s.account_id = a.account_id
+     WHERE a.account_id = $1`,
+    [accountId]
+  );
+  return result.rows[0] || { name: 'Someone', handle: null };
+}
+
+function formatAccountIdentity(identity) {
+  const name = identity?.name || 'Someone';
+  return identity?.handle ? `${name} (@${identity.handle})` : name;
+}
+
+async function lookupStaffCard(staffId) {
+  if (!staffId) return null;
+  const result = await pool.query(
+    `SELECT
+       s.role,
+       a.handle,
+       COALESCE(
+         a.display_name,
+         NULLIF(TRIM(CONCAT(s.first_name, ' ', s.last_name)), ''),
+         'Staff'
+       ) AS name
+     FROM staff s
+     LEFT JOIN accounts a ON a.account_id = s.account_id
+     WHERE s.staff_id = $1`,
+    [staffId]
+  );
+  return result.rows[0] || null;
+}
+
+function formatStaffIdentity(card) {
+  const name = card?.name || 'A staff member';
+  const handle = card?.handle ? ` (@${card.handle})` : '';
+  const role = card?.role ? ` (${card.role})` : '';
+  return `${name}${handle}${role}`;
+}
+
+async function actingStaffIdentity(staffSession) {
+  const staffId = (await resolveDisputeStaffId(staffSession))?.staff_id || null;
+  const card = await lookupStaffCard(staffId);
+  if (card) return { staffId, label: formatStaffIdentity(card) };
+  return {
+    staffId,
+    label: sessionDisplayName(staffSession) || 'A staff member',
+  };
+}
+
+async function announceInTicketChat({
+  ticketId,
+  ticket,
+  staffSession,
+  body,
+  prefix,
+  extraAccountIds = [],
+  skipMessage = false,
+}) {
+  const chatId = await ensureTicketChat(ticketId, ticket);
+  if (!skipMessage) await writeTicketMembershipNote(chatId, staffSession, body);
+  const inbox = await loadTicketInbox(chatId);
+  const actorId = sessionAccountId(staffSession);
+  const recipients = new Set(extraAccountIds.filter(Boolean).map(String));
+  if (ticket?.account_id) recipients.add(String(ticket.account_id));
+  for (const member of inbox?.members || []) {
+    if (!ticketMemberIsActive(member)) continue;
+    if (['admin', 'staff', 'moderator'].includes(String(member.role || '').toLowerCase())) continue;
+    recipients.add(String(member.account_id));
+  }
+  if (actorId) recipients.delete(String(actorId));
+  await Promise.all(
+    [...recipients].map((accountId) => notifyTicketParticipant(accountId, body, prefix, ticketId, chatId))
+  );
+}
+
+async function announceTicketAssignment(ticketId, staffId, staffSession) {
+  try {
+    const ticketResult = await pool.query(
+      `SELECT * FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+      [ticketId]
+    );
+    if (!ticketResult.rows.length || !staffId) return;
+    const card = await lookupStaffCard(staffId);
+    const body = `${formatStaffIdentity(card)} has been assigned to this ticket.`;
+    await announceInTicketChat({
+      ticketId,
+      ticket: ticketResult.rows[0],
+      staffSession,
+      body,
+      prefix: 'TICKET_HANDLER_ASSIGNED',
+    });
+  } catch (error) {
+    console.error('Error announcing ticket assignment:', error.message);
+  }
+}
+
+async function addTicketParticipant(ticketId, rawAccountId, staffSession) {
+  if (!isStaffSession(staffSession)) {
+    throw ticketError('Only staff can add someone to a ticket', 403);
+  }
+  const accountId = String(rawAccountId || '').trim();
+  if (!TICKET_ACCOUNT_UUID.test(accountId)) {
+    throw ticketError('Choose a user to add', 400);
+  }
+  const ticketResult = await pool.query(
+    `SELECT * FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  if (!ticketResult.rows.length) return null;
+
+  const userResult = await pool.query(
+    `SELECT a.account_id,
+            a.handle,
+            COALESCE(a.display_name, NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), a.handle) AS name
+     FROM accounts a
+     INNER JOIN users u ON u.account_id = a.account_id
+     WHERE a.account_id = $1 AND a.deleted_at IS NULL`,
+    [accountId]
+  );
+  if (!userResult.rows.length) {
+    throw ticketError('That user account was not found', 404);
+  }
+
+  const ticket = ticketResult.rows[0];
+  const chatId = await ensureTicketChat(ticketId, ticket);
+  const inbox = await loadTicketInbox(chatId);
+  const existing = (inbox?.members || []).find((member) => String(member.account_id) === accountId);
+  if (ticketMemberIsActive(existing)) {
+    throw ticketError('That user is already on this ticket', 409);
+  }
+
+  await upsertTicketMember(chatId, accountId, 'member', 'active');
+  const actor = await actingStaffIdentity(staffSession);
+  const personName = formatAccountIdentity(userResult.rows[0]);
+  const body = `${actor.label} added ${personName} to this ticket.`;
+  await announceInTicketChat({
+    ticketId,
+    ticket,
+    staffSession,
+    body,
+    prefix: 'TICKET_PARTICIPANT_ADDED',
+  });
+  await recordTicketEvent({
+    ticketId,
+    eventType: 'participant_add',
+    summary: body,
+    actorStaffId: actor.staffId,
+    actorAccountId: sessionAccountId(staffSession),
+    metadata: { accountId },
+  });
+  return getTicketDetail(ticketId, staffSession);
+}
+
+async function removeTicketParticipant(ticketId, rawAccountId, staffSession) {
+  if (!isStaffSession(staffSession)) {
+    throw ticketError('Only staff can remove someone from a ticket', 403);
+  }
+  const accountId = String(rawAccountId || '').trim();
+  if (!TICKET_ACCOUNT_UUID.test(accountId)) {
+    throw ticketError('Choose a user to remove', 400);
+  }
+  const ticketResult = await pool.query(
+    `SELECT * FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  if (!ticketResult.rows.length) return null;
+  const ticket = ticketResult.rows[0];
+  if (String(ticket.account_id) === accountId) {
+    throw ticketError('The person who opened the ticket stays on it', 400);
+  }
+
+  const chatId = await getTicketChatId(ticketId);
+  const inbox = chatId ? await loadTicketInbox(chatId) : null;
+  const existing = (inbox?.members || []).find((member) => String(member.account_id) === accountId);
+  if (!ticketMemberIsActive(existing)) {
+    throw ticketError('That person is not on this ticket', 404);
+  }
+
+  const actor = await actingStaffIdentity(staffSession);
+  const personName = formatAccountIdentity(await lookupAccountIdentity(accountId));
+  const body = `${actor.label} removed ${personName} from this ticket.`;
+  await writeTicketMembershipNote(chatId, staffSession, body);
+  await upsertTicketMember(chatId, accountId, existing.role || 'member', 'removed');
+  await announceInTicketChat({
+    ticketId,
+    ticket,
+    staffSession,
+    body,
+    prefix: 'TICKET_PARTICIPANT_REMOVED',
+    extraAccountIds: [accountId],
+    skipMessage: true,
+  });
+  await recordTicketEvent({
+    ticketId,
+    eventType: 'participant_remove',
+    summary: body,
+    actorStaffId: actor.staffId,
+    actorAccountId: sessionAccountId(staffSession),
+    metadata: { accountId },
+  });
+  return getTicketDetail(ticketId, staffSession);
 }
 
 async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
@@ -1109,6 +1583,7 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
       summary: 'Assigned the ticket to themselves',
       actorStaffId: staff.staff_id,
     });
+    await announceTicketAssignment(ticketId, staff.staff_id, staffSession);
     return getTicketDetail(ticketId, staffSession);
   }
 
@@ -1338,6 +1813,9 @@ async function updateTicket(ticketId, patch, staffSession) {
       // 1. Notify assignee on ticket assignment
       const nextAssignee = patch.handled_by_staff_id !== undefined ? patch.handled_by_staff_id : null;
       const isNewlyAssigned = nextAssignee && normalizeStaffId(nextAssignee) !== normalizeStaffId(currentAssignee);
+      if (isNewlyAssigned) {
+        await announceTicketAssignment(ticketId, nextAssignee, staffSession);
+      }
       if (isNewlyAssigned && notifSettings?.notifyAssigneeOnTicket !== false) {
         const staffRes = await pool.query(`SELECT account_id FROM staff WHERE staff_id = $1`, [nextAssignee]);
         if (staffRes.rows.length && staffRes.rows[0].account_id) {
@@ -1593,11 +2071,7 @@ async function updateTicketMessage(ticketId, messageId, patch, staffSession) {
   const wasInternal = Boolean(message.is_internal);
 
   if (wantsBody) {
-    assertOwnTicketReply(message, staffSession);
-    const body = String(patch.body || '').trim();
-    const hasFiles = Array.isArray(message.attachments) && message.attachments.length > 0;
-    if (!body && !hasFiles) throw new Error('Message body is required');
-    await editMessageRepositories(messageId, body);
+    throw new Error('Ticket messages cannot be edited. Use an internal note instead.');
   }
 
   if (wantsInternal) {
@@ -2557,6 +3031,9 @@ async function getTicketPickers(accountId) {
 module.exports = {
   getTicketsOverview,
   getTicketDetail,
+  listParticipantTicketIds,
+  addTicketParticipant,
+  removeTicketParticipant,
   getTicketCatalog,
   createSupportTicket,
   findAccountByEmailOrUsername,
