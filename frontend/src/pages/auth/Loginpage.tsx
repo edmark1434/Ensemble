@@ -8,7 +8,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import useGlobalState from "@/lib/global_state";
 import { API_BASE_URL } from "@/lib/api";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Shield } from "lucide-react";
 import { AccountRestrictionCard, standingFromPayload, type AccountStanding } from "@/components/ui/AccountStanding";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -350,6 +350,7 @@ export default function LoginPage({
   interface LoginErrors {
     email?: string;
     password?: string;
+    twoFactorCode?: string;
   }
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
@@ -358,6 +359,10 @@ export default function LoginPage({
   const [errors, setErrors]     = useState<LoginErrors>({});
   const [restriction, setRestriction] = useState<AccountStanding | null>(null);
   const [pageLoaded, setPageLoaded] = useState(false);
+  const [require2fa, setRequire2fa] = useState(false);
+  const [twoFactorPendingToken, setTwoFactorPendingToken] = useState<string | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const { setUser, setIsAuthenticated, setSignUpData, theme } = useGlobalState();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -432,15 +437,30 @@ export default function LoginPage({
   };
 
   const handleSignIn = async() => {
-    const e = validate();
-    if (Object.keys(e).length) { setErrors(e); return; }
+    if (require2fa) {
+      if (!twoFactorCode.trim()) {
+        setErrors({ twoFactorCode: useRecoveryCode ? "Recovery code is required." : "Authentication code is required." });
+        return;
+      }
+    } else {
+      const e = validate();
+      if (Object.keys(e).length) { setErrors(e); return; }
+    }
     setErrors({});
     setRestriction(null);
     setLoading(true);
     try{
+      const payload: any = { email, password };
+      if (require2fa) {
+        payload.twoFactorCode = twoFactorCode.trim();
+        if (twoFactorPendingToken) {
+          payload.twoFactorPendingToken = twoFactorPendingToken;
+        }
+      }
+
       const result = await axios.post(
         `${API_BASE_URL}/api/users/login`,
-        { email, password },
+        payload,
         { withCredentials: true,
         headers: {
             "ngrok-skip-browser-warning": "true",
@@ -449,18 +469,27 @@ export default function LoginPage({
         }
       );
       if (result.status === 200 && result.data.success) {
-
         if (result.data.existSession) {
           console.log("Existing session found. Redirecting to email verification...",result.data.credentials);
           setSignUpData(result.data.credentials);
           navigate("/setup/verify-email");
           return;
         }
+
+        if (result.data.require2fa) {
+          setRequire2fa(true);
+          setTwoFactorPendingToken(result.data.twoFactorPendingToken || null);
+          setTwoFactorCode("");
+          setErrors({});
+          setLoading(false);
+          return;
+        }
+
         setUser(result.data.credentials ?? result.data.user);
         setIsAuthenticated(true);
         onSuccess ? onSuccess() : navigate(redirectUrl || '/');
       }else{
-        setErrors({ password: result.data.message || "Login failed. Please try again." });
+        setErrors({ [require2fa ? 'twoFactorCode' : 'password']: result.data.message || "Login failed. Please try again." });
       }
     }catch(err){
       setLoading(false);
@@ -470,9 +499,9 @@ export default function LoginPage({
           setRestriction(standing);
           return;
         }
-        setErrors({ password: err.response?.data?.message || "An error occurred. Please try again." });
+        setErrors({ [require2fa ? 'twoFactorCode' : 'password']: err.response?.data?.message || "An error occurred. Please try again." });
       } else {
-        setErrors({ password: "An error occurred. Please try again." });
+        setErrors({ [require2fa ? 'twoFactorCode' : 'password']: "An error occurred. Please try again." });
       }
     }finally{
       setLoading(false);
@@ -650,101 +679,181 @@ export default function LoginPage({
             marginBottom: 8,
             letterSpacing: -.5,
           }}>
-            Welcome back
+            {require2fa ? "Two-Factor Verification" : "Welcome back"}
           </h1>
           <p className="fade-in-up delay-400" style={{ color: T.muted, fontSize: 14, marginBottom: 32, fontFamily: T.fontBody }}>
-            Sign in to continue to Ensemble.
+            {require2fa
+              ? (useRecoveryCode
+                  ? "Enter one of your emergency recovery codes to complete sign in."
+                  : "Enter the 6-digit verification code from your authenticator app.")
+              : "Sign in to continue to Ensemble."}
           </p>
 
           {restriction?.blocked ? (
             <LoginBlockedNotice standing={restriction} onUseAnother={() => setRestriction(null)} />
           ) : null}
 
-          {/* Form */}
-          <div className="fade-in-up delay-500" onKeyDown={handleKeyDown}>
-            <Input
-              label="Email or Username"
-              type="text"
-              placeholder="Enter your email or username"
-              value={email}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-              error={errors.email}
-              icon={
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/>
-                  <polyline points="22,6 12,13 2,6"/>
-                </svg>
-              }
-            />
-            <Input
-              label="Password"
-              type={showPassword ? "text" : "password"}
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-              error={errors.password}
-              icon={
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
-              }
-              showPasswordToggle={true}
-              onTogglePassword={toggleShowPassword}
-            />
-          </div>
+          {require2fa ? (
+            <div className="fade-in-up delay-500" onKeyDown={handleKeyDown}>
+              <Input
+                label={useRecoveryCode ? "Emergency Recovery Code" : "6-Digit Authentication Code"}
+                type="text"
+                placeholder={useRecoveryCode ? "XXXX-XXXX" : "000000"}
+                value={twoFactorCode}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                  const val = useRecoveryCode
+                    ? e.target.value.toUpperCase()
+                    : e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setTwoFactorCode(val);
+                  setErrors({});
+                }}
+                error={errors.twoFactorCode}
+                icon={useRecoveryCode ? <KeyRound size={16} /> : <Shield size={16} />}
+              />
 
-          {/* Forgot password */}
-          <div className="fade-in-up delay-500" style={{ textAlign: "right", marginBottom: 24 }}>
-            <button
-              onClick={() => navigate("/forgot-password")}
-              style={{
-                background: "none",
-                border: "none",
-                color: T.accent,
-                fontSize: 12,
-                cursor: "pointer",
-                fontFamily: T.fontBody,
-                transition: "color .15s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#7aadde")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = T.accent)}
-            >
-              Forgot password?
-            </button>
-          </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4, marginBottom: 24 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseRecoveryCode(!useRecoveryCode);
+                    setTwoFactorCode("");
+                    setErrors({});
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: T.accent,
+                    fontSize: 12,
+                    cursor: "pointer",
+                    fontFamily: T.fontBody,
+                    transition: "color .15s",
+                    padding: 0,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#7aadde")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = T.accent)}
+                >
+                  {useRecoveryCode ? "Use authenticator app instead" : "Use backup recovery code"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRequire2fa(false);
+                    setTwoFactorCode("");
+                    setTwoFactorPendingToken(null);
+                    setErrors({});
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: T.muted,
+                    fontSize: 12,
+                    cursor: "pointer",
+                    fontFamily: T.fontBody,
+                    transition: "color .15s",
+                    padding: 0,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#bbb")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = T.muted)}
+                >
+                  ← Back to login
+                </button>
+              </div>
 
-          {/* Sign in btn */}
-          <div className="fade-in-up delay-500">
-            <PrimaryBtn onClick={handleSignIn} loading={loading} fullWidth>
-              Sign In
-            </PrimaryBtn>
-          </div>
+              <div>
+                <PrimaryBtn onClick={handleSignIn} loading={loading} fullWidth>
+                  Verify & Sign In
+                </PrimaryBtn>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Form */}
+              <div className="fade-in-up delay-500" onKeyDown={handleKeyDown}>
+                <Input
+                  label="Email or Username"
+                  type="text"
+                  placeholder="Enter your email or username"
+                  value={email}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+                  error={errors.email}
+                  icon={
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                  }
+                />
+                <Input
+                  label="Password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                  error={errors.password}
+                  icon={
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                  }
+                  showPasswordToggle={true}
+                  onTogglePassword={toggleShowPassword}
+                />
+              </div>
 
-          {/* Sign up link */}
-          <p className="fade-in-up delay-500" style={{ color: T.dim, fontSize: 13, marginTop: 24, textAlign: "center", fontFamily: T.fontBody }}>
-            Don't have an account?{" "}
-            <button
-              onClick={() => navigate(redirectUrl ? `/signup?redirect=${encodeURIComponent(redirectUrl)}` : '/signup')}
-              style={{
-                background: "none",
-                border: "none",
-                color: T.accent,
-                fontSize: 13,
-                cursor: "pointer",
-                padding: 0,
-                fontWeight: 500,
-                fontFamily: T.fontBody,
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#7aadde")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = T.accent)}
-            >
-              Sign up
-            </button>
-          </p>
+              {/* Forgot password */}
+              <div className="fade-in-up delay-500" style={{ textAlign: "right", marginBottom: 24 }}>
+                <button
+                  onClick={() => navigate("/forgot-password")}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: T.accent,
+                    fontSize: 12,
+                    cursor: "pointer",
+                    fontFamily: T.fontBody,
+                    transition: "color .15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#7aadde")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = T.accent)}
+                >
+                  Forgot password?
+                </button>
+              </div>
 
-          <Divider />
-          <GoogleBtn onRestricted={setRestriction} />
+              {/* Sign in btn */}
+              <div className="fade-in-up delay-500">
+                <PrimaryBtn onClick={handleSignIn} loading={loading} fullWidth>
+                  Sign In
+                </PrimaryBtn>
+              </div>
+
+              {/* Sign up link */}
+              <p className="fade-in-up delay-500" style={{ color: T.dim, fontSize: 13, marginTop: 24, textAlign: "center", fontFamily: T.fontBody }}>
+                Don't have an account?{" "}
+                <button
+                  onClick={() => navigate(redirectUrl ? `/signup?redirect=${encodeURIComponent(redirectUrl)}` : '/signup')}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: T.accent,
+                    fontSize: 13,
+                    cursor: "pointer",
+                    padding: 0,
+                    fontWeight: 500,
+                    fontFamily: T.fontBody,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#7aadde")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = T.accent)}
+                >
+                  Sign up
+                </button>
+              </p>
+
+              <Divider />
+              <GoogleBtn onRestricted={setRestriction} />
+            </>
+          )}
         </div>
 
         {/* ── Right: Dynamic Video Player Layout Panel ── */}

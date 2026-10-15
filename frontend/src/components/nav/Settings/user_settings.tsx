@@ -250,6 +250,7 @@ export default function UserSettings() {
       });
 
       toast.success("Account details updated successfully!", { id: toastId });
+      window.dispatchEvent(new CustomEvent("ensemble:account-updated"));
       setPassword("");
       setConfirmPassword("");
       setIsDirty(false);

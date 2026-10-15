@@ -21,7 +21,12 @@ const {
     checkUsernameUniqueness,
     forgotPasswordController,
     verifyResetTokenController,
-    resetPasswordController
+    resetPasswordController,
+    get2FAStatusController,
+    setup2FAController,
+    enable2FAController,
+    disable2FAController,
+    regenerateRecoveryCodesController,
 } = require('../controllers/UserControllers');
 const {
     createPublicTicket,
@@ -41,6 +46,13 @@ router.get('/me', [checkSession],getCurrentUser);
 router.post('/signup', signup);
 
 router.post('/login', loginCredentials);
+
+// Two-Factor Authentication routes
+router.get('/2fa/status', [checkSession, requireAuth], get2FAStatusController);
+router.post('/2fa/setup', [checkSession, requireAuth], setup2FAController);
+router.post('/2fa/enable', [checkSession, requireAuth], enable2FAController);
+router.post('/2fa/disable', [checkSession, requireAuth], disable2FAController);
+router.post('/2fa/regenerate-recovery-codes', [checkSession, requireAuth], regenerateRecoveryCodesController);
 
 router.post('/refresh-token',checkSession, refreshToken);
 
