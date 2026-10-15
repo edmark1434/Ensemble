@@ -893,7 +893,7 @@ export default function TicketDetailModalShell({
     try {
       const response = await api.post(`/api/staff/tickets/${ticketId}/transcript`);
       if (response.data?.data) setDetail(response.data.data as TicketDetail);
-      showSuccessToast('Transcript saved');
+      showSuccessToast('Transcript is ready in this window');
     } catch (err: unknown) {
       showErrorToast(apiErrorMessage(err, 'Failed to generate transcript'));
     } finally {
@@ -1744,8 +1744,10 @@ export default function TicketDetailModalShell({
                   <h3 className="mt-1 text-lg font-semibold text-white">{t.number}</h3>
                   <p className="mt-1 text-sm text-zinc-400">{t.subject}</p>
                   {detail.savedTranscript?.createdAt ? (
-                    <p className="mt-1 text-[11px] text-zinc-500">Saved when this ticket closed · {formatDateTime(detail.savedTranscript.createdAt)}</p>
-                  ) : null}
+                    <p className="mt-1 text-[11px] text-emerald-200/80">Saved transcript · {formatDateTime(detail.savedTranscript.createdAt)}</p>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-zinc-500">Generate transcript to save a copy you can read, copy, or download here.</p>
+                  )}
                 </div>
                 <button type="button" onClick={() => setShowTranscript(false)} aria-label="Close transcript" className="text-zinc-400 hover:text-white">
                   <X className="h-4 w-4" />
@@ -1787,6 +1789,18 @@ export default function TicketDetailModalShell({
                     )}
                   </div>
                 </div>
+                {detail.savedTranscript?.text ? (
+                  /^\s*<!doctype html/i.test(detail.savedTranscript.text) || /^\s*<html/i.test(detail.savedTranscript.text) ? (
+                    <iframe
+                      title="Saved ticket transcript"
+                      sandbox=""
+                      srcDoc={detail.savedTranscript.text}
+                      className="h-[28rem] w-full rounded-xl border border-white/10 bg-white"
+                    />
+                  ) : (
+                    <pre className="whitespace-pre-wrap rounded-xl border border-white/10 bg-[#0f1016] p-4 text-sm leading-relaxed text-zinc-100">{detail.savedTranscript.text}</pre>
+                  )
+                ) : (
                 <div className="space-y-3">
                   {detail.messages.filter((message) => !message.isUnsent).map((message) => (
                     <div key={`transcript-${message.id}`} className="border-b border-white/5 pb-3">
@@ -1799,6 +1813,7 @@ export default function TicketDetailModalShell({
                     </div>
                   ))}
                 </div>
+                )}
               </div>
               <div className="flex justify-end gap-2 border-t border-white/10 px-5 py-3">
                 <button
@@ -1809,6 +1824,23 @@ export default function TicketDetailModalShell({
                 >
                   {savingTranscript ? 'Saving…' : 'Generate transcript'}
                 </button>
+                {detail.savedTranscript?.text ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const blob = new Blob([detail.savedTranscript?.text || ''], { type: 'text/html' });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.download = `${t.number || 'ticket'}-transcript.html`;
+                      link.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-200 hover:bg-white/5"
+                  >
+                    Download
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {

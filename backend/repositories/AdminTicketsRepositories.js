@@ -1362,7 +1362,15 @@ async function latestTicketTranscript(ticketId) {
       [ticketId]
     );
     const row = result.rows[0];
-    const text = row?.metadata?.transcript;
+    let metadata = row?.metadata;
+    if (typeof metadata === 'string') {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch (error) {
+        metadata = null;
+      }
+    }
+    const text = metadata?.transcript;
     if (!text) return null;
     return { text: String(text), createdAt: row.created_at };
   } catch (error) {
@@ -1370,36 +1378,99 @@ async function latestTicketTranscript(ticketId) {
   }
 }
 
+function escapeTranscriptHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function transcriptPersonLabel(person) {
+  const handle = person.handle ? ` (@${person.handle})` : '';
+  if (person.isRequester) return `${person.name}${handle} — opened the ticket`;
+  if (person.isStaff) return `${person.name}${handle} — staff`;
+  return `${person.name}${handle}`;
+}
+
+function buildTicketSummary(detail, staff, users, messages) {
+  const ticket = detail.ticket || {};
+  const opener = users.find((person) => person.isRequester) || users[0];
+  const publicMessages = messages.filter((message) => !message.isInternal && String(message.authorType || '').toLowerCase() !== 'system');
+  const first = publicMessages[0];
+  const last = publicMessages[publicMessages.length - 1];
+  const staffNames = staff.map((person) => person.name).filter(Boolean);
+  const userNames = users.map((person) => person.name).filter(Boolean);
+  const sentences = [];
+  sentences.push(`${opener ? opener.name : 'A member'} opened ticket ${ticket.number || ''} about ${ticket.subject || 'a support request'}.`.replace(/\s+/g, ' ').trim());
+  sentences.push(`Status: ${ticket.status || 'In Progress'}. Priority: ${ticket.priority || 'Medium'}.`);
+  sentences.push(staffNames.length ? `Staff involved: ${staffNames.join(', ')}.` : 'No staff member is listed on this ticket.');
+  sentences.push(userNames.length ? `Users involved: ${userNames.join(', ')}.` : 'No other users are listed on this ticket.');
+  sentences.push(`${publicMessages.length} message${publicMessages.length === 1 ? '' : 's'} are in this transcript.`);
+  if (first?.body) sentences.push(`It started with: ${String(first.body).replace(/\s+/g, ' ').trim().slice(0, 240)}`);
+  if (last?.body && last !== first) sentences.push(`The latest reply from ${last.authorName || 'someone'} was: ${String(last.body).replace(/\s+/g, ' ').trim().slice(0, 240)}`);
+  return sentences.join(' ');
+}
+
 function renderTicketTranscript(detail) {
   const people = (detail.participants || []).filter((person) => person.status === 'active' || person.isRequester);
   const staff = people.filter((person) => person.isStaff);
   const users = people.filter((person) => !person.isStaff);
-  const lines = [
-    `Ticket ${detail.ticket?.number || ''}`.trim(),
-    detail.ticket?.subject || '',
-    '',
-    'Staff',
-    ...(staff.length
-      ? staff.map((person) => `- ${person.name}${person.handle ? ` (@${person.handle})` : ''}`)
-      : ['- None']),
-    '',
-    'Users',
-    ...(users.length
-      ? users.map((person) => `- ${person.name}${person.handle ? ` (@${person.handle})` : ''}${person.isRequester ? ' (opened ticket)' : ''}`)
-      : ['- None']),
-    '',
-    'Transcript',
-  ];
-  for (const message of detail.messages || []) {
-    if (message.isUnsent) continue;
+  const messages = (detail.messages || []).filter((message) => !message.isUnsent);
+  const ticket = detail.ticket || {};
+  const summary = buildTicketSummary(detail, staff, users, messages);
+  const personItems = (group) => (
+    group.length
+      ? group.map((person) => `<li>${escapeTranscriptHtml(transcriptPersonLabel(person))}</li>`).join('')
+      : '<li>None</li>'
+  );
+  const messageBlocks = messages.map((message) => {
     const kind = message.isInternal
-      ? 'internal note'
+      ? 'Internal note'
       : String(message.authorType || '').toLowerCase() === 'system'
-        ? 'system'
-        : 'message';
-    lines.push(`[${message.createdAt || ''}] ${message.authorName || 'Unknown'} (${kind}): ${message.body || (message.attachments?.length ? 'Attachment' : '')}`);
-  }
-  return lines.join('\n');
+        ? 'System'
+        : message.isStaff || String(message.authorType || '').toLowerCase() === 'staff'
+          ? 'Staff'
+          : 'User';
+    const when = message.createdAt ? new Date(message.createdAt).toLocaleString() : '';
+    const body = message.body || (message.attachments?.length ? 'Attachment' : '');
+    return `<article class="message"><p class="meta">${escapeTranscriptHtml(when)} · ${escapeTranscriptHtml(message.authorName || 'Unknown')} · ${kind}</p><p>${escapeTranscriptHtml(body).replace(/\n/g, '<br>')}</p></article>`;
+  }).join('');
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${escapeTranscriptHtml(ticket.number || 'Ticket')} transcript</title>
+  <style>
+    body { margin: 0; background: #f4f4f5; color: #18181b; font: 15px/1.5 Georgia, serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1, h2 { font-family: system-ui, sans-serif; }
+    h1 { margin-bottom: 4px; font-size: 28px; }
+    .sub { margin-top: 0; color: #52525b; }
+    .message { margin: 0 0 16px; padding-bottom: 12px; border-bottom: 1px solid #e4e4e7; }
+    .meta { margin: 0 0 4px; color: #71717a; font: 12px/1.4 system-ui, sans-serif; }
+    .end { margin-top: 28px; padding: 16px; background: #fff; border: 1px solid #e4e4e7; }
+    ul { margin: 8px 0 0; padding-left: 18px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>${escapeTranscriptHtml(ticket.number || 'Ticket')}</h1>
+    <p class="sub">${escapeTranscriptHtml(ticket.subject || '')}</p>
+    <h2>Conversation</h2>
+    ${messageBlocks || '<p>No messages.</p>'}
+    <section class="end">
+      <h2>People involved</h2>
+      <h3>Staff</h3>
+      <ul>${personItems(staff)}</ul>
+      <h3>Users</h3>
+      <ul>${personItems(users)}</ul>
+      <h2>Summary</h2>
+      <p>${escapeTranscriptHtml(summary)}</p>
+    </section>
+  </main>
+</body>
+</html>`;
 }
 
 async function saveTicketCloseTranscript(ticketId, { reason = 'closed', actorStaffId = null, actorAccountId = null } = {}) {
