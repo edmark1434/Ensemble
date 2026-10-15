@@ -1512,7 +1512,7 @@ async function notifyTicketClosed({ ticketId, ticketNumber, requesterAccountId, 
   const body = reason === 'auto'
     ? 'This ticket was closed automatically after 7 days without a reply. A transcript was saved.'
     : reason === 'scheduled'
-      ? 'This ticket is now closed, 24 hours after staff scheduled it. A transcript was saved.'
+      ? 'This ticket is now closed at the time staff scheduled. A transcript was saved.'
       : 'This ticket was closed. A transcript was saved.';
   if (chatId) {
     await writeTicketMembershipNote(chatId, staffSession || {}, body);
@@ -1617,10 +1617,34 @@ async function autoCloseInactiveTickets() {
   return { closed };
 }
 
-const TICKET_SCHEDULED_CLOSE_MS = 24 * 60 * 60 * 1000;
+const TICKET_SCHEDULE_MIN_MS = 5 * 60 * 1000;
+const TICKET_SCHEDULE_MAX_MS = 90 * 24 * 60 * 60 * 1000;
 
-async function scheduleTicketClose(ticketId, staffSession) {
+function describeCloseDelay(closesAt) {
+  const minutes = Math.max(1, Math.round((new Date(closesAt).getTime() - Date.now()) / 60000));
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.floor(minutes / 60);
+  const remain = minutes % 60;
+  if (hours < 48) {
+    if (!remain) return `${hours} hour${hours === 1 ? '' : 's'}`;
+    return `${hours} hour${hours === 1 ? '' : 's'} ${remain} minute${remain === 1 ? '' : 's'}`;
+  }
+  const days = Math.max(1, Math.round(minutes / (60 * 24)));
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
+function parseScheduledCloseAt(value) {
+  const closesAt = new Date(value);
+  if (!value || Number.isNaN(closesAt.getTime())) throw ticketError('Choose when this ticket should close', 400);
+  const delta = closesAt.getTime() - Date.now();
+  if (delta < TICKET_SCHEDULE_MIN_MS) throw ticketError('Choose a time at least 5 minutes from now', 400);
+  if (delta > TICKET_SCHEDULE_MAX_MS) throw ticketError('Choose a time within 90 days', 400);
+  return closesAt;
+}
+
+async function scheduleTicketClose(ticketId, staffSession, closesAtInput) {
   if (!isStaffSession(staffSession)) throw ticketError('Only staff can schedule a close', 403);
+  const closesAt = parseScheduledCloseAt(closesAtInput);
   const existing = await pool.query(
     `SELECT ticket_id, status, ticket_number, account_id
      FROM tickets
@@ -1630,7 +1654,6 @@ async function scheduleTicketClose(ticketId, staffSession) {
   if (!existing.rows.length) return null;
   const row = existing.rows[0];
   if (isClosedStatus(row.status)) throw ticketError('This ticket is already closed', 400);
-  const closesAt = new Date(Date.now() + TICKET_SCHEDULED_CLOSE_MS);
   try {
     await pool.query(
       `UPDATE tickets
@@ -1643,10 +1666,11 @@ async function scheduleTicketClose(ticketId, staffSession) {
     throw error;
   }
   const name = sessionDisplayName(staffSession) || 'Staff';
+  const delay = describeCloseDelay(closesAt);
   await recordTicketEvent({
     ticketId,
     eventType: 'status',
-    summary: `${name} scheduled this ticket to close in 24 hours`,
+    summary: `${name} scheduled this ticket to close in ${delay}`,
     actorStaffId: (await resolveDisputeStaffId(staffSession))?.staff_id || null,
     actorAccountId: sessionAccountId(staffSession),
   });
@@ -1654,7 +1678,7 @@ async function scheduleTicketClose(ticketId, staffSession) {
     ticketId,
     ticket: row,
     staffSession,
-    body: `${name} set this ticket to close in 24 hours. You will be notified again when it closes.`,
+    body: `${name} set this ticket to close in ${delay}. You will be notified again when it closes.`,
     prefix: 'TICKET_CLOSE_SCHEDULED',
   });
   return getTicketDetail(ticketId, staffSession);
@@ -1733,7 +1757,7 @@ async function closeScheduledTickets() {
     await recordTicketEvent({
       ticketId: row.ticket_id,
       eventType: 'status',
-      summary: 'Closed 24 hours after staff scheduled it',
+      summary: 'Closed at the time staff scheduled',
     });
     await saveTicketCloseTranscript(row.ticket_id, { reason: 'scheduled' });
     await notifyTicketClosed({

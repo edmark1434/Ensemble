@@ -649,9 +649,9 @@ async function postTicketTranscript(req, res) {
 
 async function postTicketScheduleClose(req, res) {
   try {
-    const data = await scheduleTicketClose(req.params.id, req.session);
+    const data = await scheduleTicketClose(req.params.id, req.session, req.body?.closesAt);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
-    res.status(200).json({ success: true, data, message: 'This ticket will close in 24 hours' });
+    res.status(200).json({ success: true, data, message: 'Close time saved' });
   } catch (err) {
     console.error('Error scheduling ticket close:', err);
     res.status(err.statusCode || 400).json({

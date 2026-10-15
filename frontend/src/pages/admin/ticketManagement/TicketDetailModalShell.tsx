@@ -460,6 +460,8 @@ export default function TicketDetailModalShell({
   const [showTranscript, setShowTranscript] = useState(false);
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [confirmSchedule, setConfirmSchedule] = useState(false);
+  const [scheduleChoice, setScheduleChoice] = useState('24');
+  const [customCloseAt, setCustomCloseAt] = useState('');
   const [schedulingClose, setSchedulingClose] = useState(false);
   const [confirmPerson, setConfirmPerson] = useState<{
     accountId: string;
@@ -894,15 +896,43 @@ export default function TicketDetailModalShell({
     target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
+  const toDatetimeLocal = (date: Date) => {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
+  const chosenCloseIso = () => {
+    if (scheduleChoice === 'custom') {
+      const parsed = new Date(customCloseAt);
+      return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+    }
+    const hours = Number(scheduleChoice);
+    if (!Number.isFinite(hours) || hours <= 0) return null;
+    return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+  };
+
+  const openSchedule = () => {
+    const existing = detail?.scheduledCloseAt ? new Date(detail.scheduledCloseAt) : new Date(Date.now() + 24 * 60 * 60 * 1000);
+    setCustomCloseAt(toDatetimeLocal(existing));
+    setScheduleChoice(detail?.scheduledCloseAt ? 'custom' : '24');
+    setConfirmSchedule(true);
+  };
+
   const scheduleClose = async (cancel = false) => {
+    const closesAt = cancel ? null : chosenCloseIso();
+    if (!cancel && !closesAt) {
+      showErrorToast('Choose when this ticket should close');
+      return;
+    }
     setSchedulingClose(true);
     try {
       const response = cancel
         ? await api.delete(`/api/staff/tickets/${ticketId}/schedule-close`)
-        : await api.post(`/api/staff/tickets/${ticketId}/schedule-close`);
+        : await api.post(`/api/staff/tickets/${ticketId}/schedule-close`, { closesAt });
       setDetail(response.data?.data || null);
       setConfirmSchedule(false);
-      showSuccessToast(response.data?.message || (cancel ? 'Scheduled close cancelled' : 'This ticket will close in 24 hours'));
+      const savedAt = response.data?.data?.scheduledCloseAt;
+      showSuccessToast(cancel ? 'Scheduled close cancelled' : `Closes ${formatDateTime(savedAt)}`);
       onUpdated();
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -1376,25 +1406,26 @@ export default function TicketDetailModalShell({
                       />
                     ) : null}
                     {t.status !== 'Closed' ? (
-                      detail.scheduledCloseAt ? (
+                      <div className="flex flex-wrap gap-1.5">
                         <button
                           type="button"
                           disabled={schedulingClose}
-                          onClick={() => void scheduleClose(true)}
-                          className="w-fit rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-50"
-                        >
-                          {schedulingClose ? 'Cancelling…' : 'Cancel 24 hour close'}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={schedulingClose}
-                          onClick={() => setConfirmSchedule(true)}
+                          onClick={openSchedule}
                           className="w-fit rounded-lg border border-amber-400/40 px-2.5 py-1.5 text-xs text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
                         >
-                          Close in 24 hours
+                          {detail.scheduledCloseAt ? 'Change close time' : 'Schedule close'}
                         </button>
-                      )
+                        {detail.scheduledCloseAt ? (
+                          <button
+                            type="button"
+                            disabled={schedulingClose}
+                            onClick={() => void scheduleClose(true)}
+                            className="w-fit rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-50"
+                          >
+                            {schedulingClose ? 'Cancelling…' : 'Cancel scheduled close'}
+                          </button>
+                        ) : null}
+                      </div>
                     ) : null}
                     {statusControl === 'buttons' ? (
                       <div
@@ -1970,9 +2001,43 @@ export default function TicketDetailModalShell({
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
             <div className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-[#14151c] p-5 shadow-2xl">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">Schedule close</p>
-              <h3 className="mt-2 text-lg font-semibold text-white">Close this ticket in 24 hours?</h3>
+              <h3 className="mt-2 text-lg font-semibold text-white">When should this ticket close?</h3>
               <p className="mt-2 text-sm text-zinc-400">
                 The chat and the people on this ticket are notified now. They are notified again when it closes, and a transcript is saved.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {[
+                  ['1', '1 hour'],
+                  ['6', '6 hours'],
+                  ['24', '1 day'],
+                  ['72', '3 days'],
+                  ['168', '7 days'],
+                  ['custom', 'Custom'],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setScheduleChoice(value)}
+                    className={`rounded-lg border px-2.5 py-1.5 text-xs ${
+                      scheduleChoice === value
+                        ? 'border-amber-400/50 bg-amber-500/15 text-amber-100'
+                        : 'border-white/10 text-zinc-300 hover:bg-white/5'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {scheduleChoice === 'custom' ? (
+                <input
+                  type="datetime-local"
+                  value={customCloseAt}
+                  onChange={(event) => setCustomCloseAt(event.target.value)}
+                  className="mt-3 w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white"
+                />
+              ) : null}
+              <p className="mt-3 text-xs text-zinc-400">
+                Closes {formatDateTime(chosenCloseIso())}
               </p>
               <div className="mt-4 flex justify-end gap-2">
                 <button
@@ -1989,7 +2054,7 @@ export default function TicketDetailModalShell({
                   onClick={() => void scheduleClose(false)}
                   className="rounded-xl bg-amber-500 px-3 py-2 text-sm font-medium text-black disabled:opacity-50"
                 >
-                  {schedulingClose ? 'Scheduling…' : 'Close in 24 hours'}
+                  {schedulingClose ? 'Scheduling…' : 'Set close time'}
                 </button>
               </div>
             </div>
