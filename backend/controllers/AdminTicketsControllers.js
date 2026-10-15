@@ -2,7 +2,6 @@ const {
   getTicketsOverview,
   getTicketDetail,
   createSupportTicket,
-  findAccountByEmailOrUsername,
   getTicketPickers,
   getTicketCatalog,
   updateTicket,
@@ -271,6 +270,11 @@ async function getPublicTicketCatalog(_req, res) {
 
 async function createPublicTicket(req, res) {
   try {
+    const requesterAccountId = req.session?.account_id || req.session?.accountId || null;
+    if (!requesterAccountId) {
+      return res.status(401).json({ success: false, message: 'Authentication required to submit a ticket' });
+    }
+
     const {
       subject,
       reason,
@@ -285,25 +289,6 @@ async function createPublicTicket(req, res) {
     }
     if (!description?.trim()) {
       return res.status(400).json({ success: false, message: 'Description is required' });
-    }
-
-    const { LOGGED_OUT_TICKET_TYPES, normalizeTicketType: normalizeType } = {
-      ...require('../lib/TicketFormFields'),
-      normalizeTicketType: require('../lib/TicketEnums').normalizeTicketType,
-    };
-    const normalizedType = normalizeType(type || category || 'Other');
-    let requesterAccountId = req.session?.account_id || req.session?.accountId || null;
-    if (!requesterAccountId && LOGGED_OUT_TICKET_TYPES.includes(normalizedType)) {
-      requesterAccountId = await findAccountByEmailOrUsername(req.body?.fields?.email_or_username);
-      if (!requesterAccountId) {
-        return res.status(400).json({
-          success: false,
-          message: 'No account matches that email or username',
-        });
-      }
-    }
-    if (!requesterAccountId) {
-      return res.status(401).json({ success: false, message: 'Authentication required' });
     }
 
     const data = await createSupportTicket(
