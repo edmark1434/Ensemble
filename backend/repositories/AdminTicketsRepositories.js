@@ -16,6 +16,8 @@ const {
   createInboxRepositories,
   createMessageRepositories,
   getMessageByIdRepositories,
+  editMessageRepositories,
+  deleteMessageRepositories,
   getConversationByConvoId,
 } = require('./InboxRepositories');
 const { createNotificationServices } = require('../services/NotificationServices');
@@ -909,6 +911,7 @@ function mapMongoTicketMessage(m, senderNames = new Map()) {
     body: m.message_content || m.body || '',
     attachments: Array.isArray(m.attachments) ? m.attachments : [],
     isInternal: Boolean(m.is_internal),
+    isEdited: Boolean(m.is_edited),
     createdAt: m.created_at || m.createdAt || null,
   };
 }
@@ -1038,10 +1041,10 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
       `SELECT field_key, field_label, value
        FROM ticket_form_values
        WHERE ticket_id = $1
-       ORDER BY created_at ASC`,
+       ORDER BY ticket_form_value_id ASC`,
       [ticketId]
     ).catch((err) => {
-      if (err?.code === '42P01') return { rows: [] };
+      if (err?.code === '42P01' || err?.code === '42703') return { rows: [] };
       throw err;
     }),
   ]);
@@ -1516,6 +1519,156 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
       );
     }
   }
+
+  return getTicketDetail(ticketId, staffSession);
+}
+
+function emitTicketChat(event, chatId, payload) {
+  try {
+    const { getIo } = require('../lib/WebSocket');
+    const io = getIo();
+    if (io && chatId) io.to(String(chatId)).emit(event, payload);
+  } catch (error) {
+    console.error('Ticket message saved without realtime delivery:', error.message);
+  }
+}
+
+async function refreshTicketInboxPreview(chatId) {
+  const db = mongoDb();
+  if (!db || !ObjectId.isValid(String(chatId))) return;
+  const latest = await db.collection('messages').find({
+    conversation_id: String(chatId),
+    is_deleted: { $ne: true },
+    deleted_at: null,
+    is_internal: { $ne: true },
+  }).sort({ created_at: -1, _id: -1 }).limit(1).next();
+  const preview = latest
+    ? String(latest.message_content || (Array.isArray(latest.attachments) && latest.attachments.length ? 'Attachment' : '')).slice(0, 180)
+    : '';
+  await db.collection('inbox').updateOne(
+    { _id: new ObjectId(chatId) },
+    {
+      $set: {
+        last_message: preview,
+        last_message_time: latest?.created_at || new Date(),
+        updated_at: new Date(),
+      },
+    }
+  );
+}
+
+async function loadOwnedTicketMessage(ticketId, messageId) {
+  if (!ObjectId.isValid(String(messageId))) {
+    throw new Error('Message not found');
+  }
+  const chatId = await getTicketChatId(ticketId);
+  const message = chatId ? await getMessageByIdRepositories(messageId) : null;
+  if (!message || String(message.conversation_id) !== String(chatId) || message.is_deleted || message.deleted_at) {
+    throw new Error('Message not found');
+  }
+  return { chatId, message };
+}
+
+function assertOwnTicketReply(message, staffSession) {
+  const accountId = sessionAccountId(staffSession);
+  if (!accountId || String(message.sender_id) !== String(accountId)) {
+    throw new Error('You can only change your own replies');
+  }
+}
+
+async function updateTicketMessage(ticketId, messageId, patch, staffSession) {
+  if (!getMongoClient()) throw new Error('MongoDB is not connected — cannot update ticket chat messages');
+  if (!isStaffSession(staffSession)) throw new Error('Only staff can change ticket replies');
+  const ticketResult = await pool.query(
+    `SELECT ticket_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  if (!ticketResult.rows.length) return null;
+
+  const wantsBody = Object.prototype.hasOwnProperty.call(patch || {}, 'body');
+  const wantsInternal = Object.prototype.hasOwnProperty.call(patch || {}, 'isInternal');
+  if (!wantsBody && !wantsInternal) throw new Error('Nothing to update');
+
+  const { chatId, message } = await loadOwnedTicketMessage(ticketId, messageId);
+  const wasInternal = Boolean(message.is_internal);
+
+  if (wantsBody) {
+    assertOwnTicketReply(message, staffSession);
+    const body = String(patch.body || '').trim();
+    const hasFiles = Array.isArray(message.attachments) && message.attachments.length > 0;
+    if (!body && !hasFiles) throw new Error('Message body is required');
+    await editMessageRepositories(messageId, body);
+  }
+
+  if (wantsInternal) {
+    const author = String(message.author_type || (wasInternal ? 'staff' : 'user')).toLowerCase();
+    if (author !== 'staff') throw new Error('Only staff replies can be internal notes');
+    const db = mongoDb();
+    await db.collection('messages').updateOne(
+      { _id: new ObjectId(messageId) },
+      { $set: { is_internal: Boolean(patch.isInternal), updated_at: new Date() } }
+    );
+  }
+
+  const updated = await getMessageByIdRepositories(messageId);
+  const isInternal = Boolean(updated?.is_internal);
+  await refreshTicketInboxPreview(chatId);
+  if (!isInternal && wasInternal) {
+    emitTicketChat('newMessage', chatId, updated);
+  } else if (!isInternal) {
+    emitTicketChat('messageUpdated', chatId, updated);
+  } else if (!wasInternal) {
+    emitTicketChat('messageDeleted', chatId, {
+      conversation_id: String(chatId),
+      message_id: String(messageId),
+      deleted_at: new Date(),
+    });
+  }
+  if (isInternal || wasInternal) {
+    emitTicketChat('ticketInternalMessage', chatId, updated);
+  }
+
+  const staff = await resolveDisputeStaffId(staffSession);
+  await recordTicketEvent({
+    ticketId,
+    eventType: wantsInternal ? 'note' : 'reply',
+    summary: wantsInternal
+      ? (isInternal ? 'Marked a reply as an internal note' : 'Made an internal note visible to the member')
+      : 'Edited a ticket reply',
+    actorStaffId: staff?.staff_id || null,
+    actorAccountId: sessionAccountId(staffSession),
+  });
+
+  return getTicketDetail(ticketId, staffSession);
+}
+
+async function deleteTicketMessage(ticketId, messageId, staffSession) {
+  if (!getMongoClient()) throw new Error('MongoDB is not connected — cannot delete ticket chat messages');
+  if (!isStaffSession(staffSession)) throw new Error('Only staff can change ticket replies');
+  const ticketResult = await pool.query(
+    `SELECT ticket_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  if (!ticketResult.rows.length) return null;
+
+  const { chatId, message } = await loadOwnedTicketMessage(ticketId, messageId);
+  assertOwnTicketReply(message, staffSession);
+  const deleted = await deleteMessageRepositories(messageId);
+  await refreshTicketInboxPreview(chatId);
+  emitTicketChat('messageDeleted', chatId, {
+    conversation_id: String(chatId),
+    message_id: String(deleted?._id || messageId),
+    deleted_at: deleted?.deleted_at || new Date(),
+  });
+
+  const staff = await resolveDisputeStaffId(staffSession);
+  await recordTicketEvent({
+    ticketId,
+    eventType: 'reply',
+    summary: 'Deleted a ticket reply',
+    actorStaffId: staff?.staff_id || null,
+    actorAccountId: sessionAccountId(staffSession),
+  });
 
   return getTicketDetail(ticketId, staffSession);
 }
@@ -2412,6 +2565,8 @@ module.exports = {
   nextDisputeNumber,
   updateTicket,
   addTicketMessage,
+  updateTicketMessage,
+  deleteTicketMessage,
   updateDispute,
   getDisputeDetail,
   addDisputeMessage,

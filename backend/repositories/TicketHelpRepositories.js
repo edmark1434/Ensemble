@@ -26,16 +26,24 @@ const JOBS_PAYMENT_TYPES = new Set([
   'Cancellations and refunds',
 ]);
 
+function ticketAttachmentType(name, hintedType) {
+  const hint = String(hintedType || '').toLowerCase();
+  if (hint === 'image' || hint === 'video' || hint === 'file') return hint;
+  if (hint.startsWith('video') || /\.(mp4|webm|mov|m4v)$/i.test(name)) return 'video';
+  if (hint.startsWith('image') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name)) return 'image';
+  return 'file';
+}
+
 function normalizeTicketScreenshots(raw) {
   if (!Array.isArray(raw)) return [];
   const out = [];
   for (const item of raw.slice(0, 4)) {
     const key = String(item?.key || item?.attachment_key || '').replace(/^\/+/, '').trim();
     if (!/^(?:ticket-attachments|chat-attachments)\/[A-Za-z0-9._/-]+$/.test(key) || key.includes('..')) continue;
-    const name = String(item?.name || item?.attachment_name || 'screenshot').slice(0, 180);
+    const name = String(item?.name || item?.attachment_name || 'Attachment').slice(0, 180);
     out.push({
       attachment_id: crypto.randomUUID(),
-      attachment_type: 'image',
+      attachment_type: ticketAttachmentType(name, item?.type || item?.attachment_type || item?.mime),
       attachment_key: key,
       attachment_url: key,
       attachment_name: name,

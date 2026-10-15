@@ -1238,6 +1238,13 @@ async function getConversationByConvoIdServices(conversationId, accountId) {
         accountId
     );
     const conversation = await getConversationByConvoId(conversationId);
+    const viewerMember = (memberInbox?.members || []).find(
+        (member) => String(member.account_id) === String(viewerAccountId)
+    );
+    const viewerRole = String(viewerMember?.role || '').toLowerCase();
+    if (!['admin', 'staff', 'moderator'].includes(viewerRole)) {
+        conversation.Messages = (conversation.Messages || []).filter((message) => !message.is_internal);
+    }
     const [normalizedInbox] = await normalizeLinkedConversations([
         conversation.Inbox,
     ]);

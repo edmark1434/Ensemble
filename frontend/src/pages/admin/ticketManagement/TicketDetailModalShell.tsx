@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Hand, ImagePlus, Loader2, Lock, MessageSquare, Send, ShieldAlert, UserRound, X } from 'lucide-react';
+import { FileText, Hand, Loader2, Lock, MessageSquare, Paperclip, Pencil, Send, ShieldAlert, Trash2, UserRound, X } from 'lucide-react';
 import api from '@/lib/axios';
+import useGlobalState from '@/lib/global_state';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
 import { chatAttachmentUrl } from '@/components/ui/inbox/inbox_functions/inbox_upload_image';
 import socket from '@/lib/socket';
@@ -72,12 +73,29 @@ function messageKind(m: TicketMessage): 'internal' | 'staff' | 'user' {
   return 'user';
 }
 
+function attachmentKind(file: { attachment_type?: string; attachment_name?: string }) {
+  const hint = `${file.attachment_type || ''} ${file.attachment_name || ''}`.toLowerCase();
+  if (hint.includes('video') || /\.(mp4|webm|mov|m4v)\b/.test(hint)) return 'video';
+  if (hint.includes('image') || /\.(png|jpe?g|gif|webp|bmp|svg)\b/.test(hint)) return 'image';
+  return 'file';
+}
+
 function MessageBubble({
   message,
   accentSoft,
+  own,
+  busy,
+  onEdit,
+  onDelete,
+  onToggleInternal,
 }: {
   message: TicketMessage;
   accentSoft: string;
+  own: boolean;
+  busy: boolean;
+  onEdit: (body: string) => Promise<boolean>;
+  onDelete: () => Promise<void>;
+  onToggleInternal: (isInternal: boolean) => Promise<void>;
 }) {
   const kind = messageKind(message);
   const isStaffSide = kind === 'staff' || kind === 'internal';
@@ -109,6 +127,10 @@ function MessageBubble({
       : kind === 'staff'
         ? 'border-white/20 bg-white/10 text-zinc-100'
         : 'border-sky-400/30 bg-sky-500/15 text-sky-100';
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(message.body || '');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const staffReply = kind === 'staff' || kind === 'internal';
 
   return (
     <div className={`flex gap-2.5 ${isStaffSide ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -128,6 +150,7 @@ function MessageBubble({
             {roleLabel}
           </span>
           <span className="text-[10px] text-zinc-600">{formatDateTime(message.createdAt)}</span>
+          {message.isEdited ? <span className="text-[10px] text-zinc-500">edited</span> : null}
         </div>
 
         <div className={`w-full rounded-2xl border px-3.5 py-2.5 shadow-sm ${shell} ${isStaffSide ? 'rounded-tr-md' : 'rounded-tl-md'}`}>
@@ -136,19 +159,130 @@ function MessageBubble({
               Visible to staff only
             </p>
           )}
-          {message.body ? (
+          {editing ? (
+            <textarea
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              rows={3}
+              className="w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-2.5 py-2 text-sm text-white outline-none focus:border-white/25"
+            />
+          ) : message.body ? (
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-100">{message.body}</p>
           ) : null}
           {(message.attachments || []).length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className={`flex flex-col gap-1.5 ${message.body || editing ? 'mt-2' : ''}`}>
               {message.attachments!.map((file) => {
                 const src = chatAttachmentUrl(file.attachment_key || file.attachment_url || '');
+                const kindOfFile = attachmentKind(file);
+                const name = file.attachment_name || 'Attachment';
+                if (kindOfFile === 'image') {
+                  return (
+                    <a key={file.attachment_id || src} href={src} target="_blank" rel="noreferrer" className="block w-fit">
+                      <img src={src} alt="" className="max-h-40 rounded-lg object-cover" />
+                    </a>
+                  );
+                }
+                if (kindOfFile === 'video') {
+                  return <video key={file.attachment_id || src} src={src} controls className="max-h-40 rounded-lg" />;
+                }
                 return (
-                  <a key={src} href={src} target="_blank" rel="noreferrer">
-                    <img src={src} alt={file.attachment_name || 'Screenshot'} className="h-24 w-24 rounded-lg object-cover" />
+                  <a
+                    key={file.attachment_id || src}
+                    href={src}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-zinc-100"
+                  >
+                    <FileText className="h-4 w-4 shrink-0 text-sky-300" />
+                    <span className="truncate">{name}</span>
                   </a>
                 );
               })}
+            </div>
+          )}
+          {(own || staffReply) && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {own && !editing && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setDraft(message.body || '');
+                    setEditing(true);
+                    setConfirmDelete(false);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+                >
+                  <Pencil className="h-3 w-3" />
+                  Edit
+                </button>
+              )}
+              {own && editing && (
+                <>
+                  <button
+                    type="button"
+                    disabled={busy || (!draft.trim() && !(message.attachments || []).length)}
+                    onClick={() => {
+                      void onEdit(draft.trim()).then((saved) => {
+                        if (saved) setEditing(false);
+                      });
+                    }}
+                    className="rounded-lg border border-white/15 bg-white/10 px-2 py-1 text-[11px] text-white disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setEditing(false)}
+                    className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-400"
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+              {own && !editing && !confirmDelete && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setConfirmDelete(true)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Delete
+                </button>
+              )}
+              {own && confirmDelete && (
+                <>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void onDelete()}
+                    className="rounded-lg border border-red-500/40 bg-red-500/15 px-2 py-1 text-[11px] text-red-100 disabled:opacity-50"
+                  >
+                    Delete reply
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setConfirmDelete(false)}
+                    className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-400"
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+              {staffReply && !editing && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void onToggleInternal(!message.isInternal)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 px-2 py-1 text-[11px] text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
+                >
+                  <Lock className="h-3 w-3" />
+                  {message.isInternal ? 'Show to member' : 'Internal note'}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -244,11 +378,12 @@ export default function TicketDetailModalShell({
   onUpdated: () => void;
 }) {
   const tone = ACCENT[accent] || ACCENT.rose;
+  const viewerAccountId = useGlobalState((state) => state.user?.account_id ?? state.user?.accountId ?? null);
   const [detail, setDetail] = useState<TicketDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [reply, setReply] = useState('');
-  const [screenshots, setScreenshots] = useState<{ key: string; name: string }[]>([]);
+  const [screenshots, setScreenshots] = useState<{ key: string; name: string; type: 'image' | 'video' }[]>([]);
   const [creditAmount, setCreditAmount] = useState('');
   const [creditNote, setCreditNote] = useState('');
   const [internalNote, setInternalNote] = useState(false);
@@ -520,9 +655,15 @@ export default function TicketDetailModalShell({
     try {
       const next = [...screenshots];
       for (const file of Array.from(list).slice(0, 4 - next.length)) {
-        if (!file.type.startsWith('image/')) continue;
+        const isImage = file.type.startsWith('image/');
+        const isVideo = file.type.startsWith('video/');
+        if (!isImage && !isVideo) continue;
         const uploaded = await uploadFileWithIntent(file, 'ticket-attachments');
-        next.push({ key: uploaded.key, name: file.name });
+        next.push({
+          key: uploaded.key,
+          name: file.name,
+          type: isVideo ? 'video' : 'image',
+        });
       }
       setScreenshots(next.slice(0, 4));
     } catch (err: unknown) {
@@ -563,7 +704,7 @@ export default function TicketDetailModalShell({
       await api.post(`${endpointBase}/${ticketId}/messages`, {
         body: reply.trim(),
         isInternal: internalNote,
-        attachments: screenshots.map((file) => ({ key: file.key, name: file.name })),
+        attachments: screenshots.map((file) => ({ key: file.key, name: file.name, type: file.type })),
       });
       setReply('');
       setScreenshots([]);
@@ -572,6 +713,36 @@ export default function TicketDetailModalShell({
       onUpdated();
     } catch (err: unknown) {
       showErrorToast(apiErrorMessage(err, 'Failed to send message'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const changeMessage = async (messageId: string | number, patch: { body?: string; isInternal?: boolean }) => {
+    setSaving(true);
+    try {
+      await api.patch(`${endpointBase}/${ticketId}/messages/${messageId}`, patch);
+      showSuccessToast(patch.isInternal === true ? 'Marked as an internal note' : patch.isInternal === false ? 'Reply is visible to the member' : 'Reply updated');
+      await load();
+      onUpdated();
+      return true;
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to update reply'));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeMessage = async (messageId: string | number) => {
+    setSaving(true);
+    try {
+      await api.delete(`${endpointBase}/${ticketId}/messages/${messageId}`);
+      showSuccessToast('Reply deleted');
+      await load();
+      onUpdated();
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to delete reply'));
     } finally {
       setSaving(false);
     }
@@ -1023,7 +1194,16 @@ export default function TicketDetailModalShell({
                   </div>
                 )}
                 {detail.messages.map((m) => (
-                  <MessageBubble key={m.id} message={m} accentSoft={tone.soft} />
+                  <MessageBubble
+                    key={m.id}
+                    message={m}
+                    accentSoft={tone.soft}
+                    own={Boolean(viewerAccountId) && String(m.senderId || '') === String(viewerAccountId)}
+                    busy={saving}
+                    onEdit={(body) => changeMessage(m.id, { body })}
+                    onDelete={() => removeMessage(m.id)}
+                    onToggleInternal={(isInternal) => changeMessage(m.id, { isInternal })}
+                  />
                 ))}
                 <div ref={threadEndRef} />
               </div>
@@ -1060,12 +1240,15 @@ export default function TicketDetailModalShell({
                     Internal Note (hidden from requester)
                   </label>
                   <div className="flex items-center gap-2">
-                    <label className="inline-flex cursor-pointer items-center gap-1 rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300">
-                      <ImagePlus className="h-3.5 w-3.5" />
-                      Screenshot
+                    <label
+                      title="Attach a file"
+                      className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-white/10 text-zinc-300 hover:bg-white/5"
+                    >
+                      <Paperclip className="h-4 w-4" />
+                      <span className="sr-only">Attach a file</span>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,video/*"
                         multiple
                         className="hidden"
                         disabled={detail.chatAvailable === false || screenshots.length >= 4}

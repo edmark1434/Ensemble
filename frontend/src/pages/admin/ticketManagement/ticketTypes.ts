@@ -40,6 +40,7 @@ export type SupportTicket = {
 };
 
 export type TicketAttachment = {
+  attachment_id?: string;
   attachment_key?: string;
   attachment_url?: string;
   attachment_name?: string;
@@ -103,6 +104,7 @@ export type TicketMessage = {
   body: string;
   attachments?: TicketAttachment[];
   isInternal: boolean;
+  isEdited?: boolean;
   audience?: 'staff' | 'author_and_staff' | 'parties' | 'public' | string;
   publishedAt?: string | null;
   createdAt: string;

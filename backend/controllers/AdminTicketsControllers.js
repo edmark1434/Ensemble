@@ -6,6 +6,8 @@ const {
   getTicketCatalog,
   updateTicket,
   addTicketMessage,
+  updateTicketMessage,
+  deleteTicketMessage,
   updateDispute,
   getDisputeDetail,
   addDisputeMessage,
@@ -131,6 +133,45 @@ async function postAdminTicketMessage(req, res) {
     console.error('Error adding ticket message:', err);
     const msg = err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
     res.status(err?.message?.includes('MongoDB') ? 503 : 500).json({ success: false, message: msg });
+  }
+}
+
+function ticketMessageClientError(message) {
+  return /only change your own|only staff|not found|required|nothing to update|mongodb/i.test(String(message || ''));
+}
+
+async function patchAdminTicketMessage(req, res) {
+  try {
+    const patch = {};
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'body')) patch.body = req.body.body;
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'isInternal')) patch.isInternal = Boolean(req.body.isInternal);
+    const data = await updateTicketMessage(req.params.id, req.params.messageId, patch, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error updating ticket message:', err);
+    const message = err?.message || 'Failed to update message';
+    const client = ticketMessageClientError(message);
+    res.status(message.includes('MongoDB') ? 503 : client ? 400 : 500).json({
+      success: false,
+      message: client || message.includes('MongoDB') ? message : 'Failed to update message',
+    });
+  }
+}
+
+async function deleteAdminTicketMessage(req, res) {
+  try {
+    const data = await deleteTicketMessage(req.params.id, req.params.messageId, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error deleting ticket message:', err);
+    const message = err?.message || 'Failed to delete message';
+    const client = ticketMessageClientError(message);
+    res.status(message.includes('MongoDB') ? 503 : client ? 400 : 500).json({
+      success: false,
+      message: client || message.includes('MongoDB') ? message : 'Failed to delete message',
+    });
   }
 }
 
@@ -531,6 +572,8 @@ module.exports = {
   createAdminTicket,
   patchAdminTicket,
   postAdminTicketMessage,
+  patchAdminTicketMessage,
+  deleteAdminTicketMessage,
   getAdminDisputeDetail,
   patchAdminDispute,
   postAdminDisputeMessage,
