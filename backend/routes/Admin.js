@@ -41,7 +41,12 @@ const {
   postAdminModerationCaseAssignMyself,
   postAdminModerationActivityReverse,
 } = require('../controllers/AdminModerationControllers');
-const { getAdminAnalyticsOverview } = require('../controllers/AdminAnalyticsControllers');
+const {
+  getAdminAnalyticsOverview,
+  getAdminPlatformTransactions,
+  getAdminUserTransactions,
+  getAdminTopupTransactions,
+} = require('../controllers/AdminAnalyticsControllers');
 const {
   getAdminTicketsOverview,
   getAdminTicketDetail,
@@ -96,6 +101,9 @@ router.delete('/moderation/cases/:id', [checkSession, requireAdmin], deleteAdmin
 router.post('/moderation/cases/:id/assign-myself', [checkSession, requireAdmin], postAdminModerationCaseAssignMyself);
 router.post('/moderation/activity/:id/reverse', [checkSession, requireAdmin], postAdminModerationActivityReverse);
 router.get('/analytics-overview', [checkSession, requireAdmin], getAdminAnalyticsOverview);
+router.get('/analytics/platform-transactions', [checkSession, requireAdmin], getAdminPlatformTransactions);
+router.get('/analytics/user-transactions', [checkSession, requireAdmin], getAdminUserTransactions);
+router.get('/analytics/topup-transactions', [checkSession, requireAdmin], getAdminTopupTransactions);
 router.get('/tickets-overview', [checkSession, requireAdmin], getAdminTicketsOverview);
 router.post('/tickets', [checkSession, requireAdmin], createAdminTicket);
 router.get('/tickets/:id', [checkSession, requireAdmin], getAdminTicketDetail);

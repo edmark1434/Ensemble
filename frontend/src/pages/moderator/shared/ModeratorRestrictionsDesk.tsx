@@ -9,6 +9,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import api from '@/lib/axios';
+import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import type { AccountActivityItem } from '@/pages/admin/userTeam/userTeamTypes';
 import { StatCard, type Accent } from './ui';
 
@@ -139,11 +140,13 @@ export default function ModeratorRestrictionsDesk({
     try {
       const res = await api.patch(`${endpointBase}/accounts/${accountId}`, { status });
       setData(res.data?.data || null);
+      showSuccessToast(`Account status set to ${status.charAt(0).toUpperCase() + status.slice(1)}`);
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         'Failed to update account status';
       setError(message);
+      showErrorToast(message);
     } finally {
       setBusyId(null);
     }
@@ -163,11 +166,13 @@ export default function ModeratorRestrictionsDesk({
       });
       setData(res.data?.data || null);
       setWarnForm((prev) => ({ ...prev, reason: '', points: '1' }));
+      showSuccessToast('Warning issued successfully');
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         'Failed to issue violation';
       setError(message);
+      showErrorToast(message);
     } finally {
       setSubmittingWarn(false);
     }
@@ -366,6 +371,14 @@ export default function ModeratorRestrictionsDesk({
                       className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-200 disabled:opacity-50"
                     >
                       Suspend account
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busyId === v.account.accountId}
+                      onClick={() => void setAccountStatus(v.account.accountId, 'locked')}
+                      className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-300 disabled:opacity-50"
+                    >
+                      Lock account
                     </button>
                     <button
                       type="button"

@@ -117,6 +117,11 @@ export const NOTIFICATION_ICONS: Record<string, NotificationIconDef> = {
   SUSPEND:                    tone("red", i(XCircle)),
   MARKETPLACE:                tone("orange", i(Shield)),
   BADGE_GRANTED:              tone("amber", i(Award)),
+  WARNING:                    tone("amber", i(AlertCircle)),
+  ACCOUNT_WARNING:            tone("amber", i(AlertCircle)),
+  ACCOUNT_BANNED:             tone("rose", i(XCircle)),
+  ACCOUNT_LOCKED:             tone("rose", i(XCircle)),
+  RESTORE:                    tone("green", i(CheckCircle2)),
   // Tickets
   TICKET_ASSIGNED:            tone("indigo", i(Ticket)),
   TICKET_RESOLVED:            tone("green", i(CheckCircle2)),
@@ -167,6 +172,9 @@ export const NOTIFICATION_LABELS: Record<string, string> = {
   VERIFICATION: "Verified", BUSINESS_VERIFICATION: "Business Verified",
   IDENTITY_REVERIFICATION: "Re-verify Required", SUSPEND: "Account Suspended",
   MARKETPLACE: "Marketplace Notice", BADGE_GRANTED: "Badge Awarded",
+  WARNING: "Account Warning", ACCOUNT_WARNING: "Account Warning",
+  ACCOUNT_BANNED: "Account Banned", ACCOUNT_LOCKED: "Account Locked",
+  RESTORE: "Standing Restored",
   TICKET_ASSIGNED: "Ticket Assigned", TICKET_RESOLVED: "Ticket Resolved",
   TICKET_REPLY: "Ticket Reply", TICKET_INTERNAL_REPLY: "Internal Reply",
 };

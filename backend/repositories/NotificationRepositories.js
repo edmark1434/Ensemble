@@ -25,16 +25,19 @@ async function createNotification(notification) {
             accountId = accountResult.rows[0].account_id;
         }
 
-        // Defensive resolution for reference_id: must not be null due to database NOT NULL constraint
+        // Defensive resolution for reference_id: must not be null and must be a valid UUID due to database column type
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
         let referenceId = notification.reference_id;
-        if (!referenceId && notification.reference_path) {
-            const uuidMatch = String(notification.reference_path).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-            if (uuidMatch) {
-                referenceId = uuidMatch[0];
+        if (!referenceId || !UUID_REGEX.test(String(referenceId))) {
+            if (notification.reference_path) {
+                const uuidMatch = String(notification.reference_path).match(UUID_REGEX);
+                if (uuidMatch) {
+                    referenceId = uuidMatch[0];
+                }
             }
-        }
-        if (!referenceId) {
-            referenceId = accountId;
+            if (!referenceId || !UUID_REGEX.test(String(referenceId))) {
+                referenceId = accountId;
+            }
         }
 
         const referenceTable = notification.reference_table || (notification.reference_path?.includes('/contracts') ? 'contracts' : 'accounts');
