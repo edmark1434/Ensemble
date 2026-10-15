@@ -401,6 +401,15 @@ async function reverseModerationActivity(activityId, staffSession = null) {
   if (code === 'ACCOUNT_STATUS_CHANGED') {
     const restoreTo = meta.previousStatus || 'Active';
     await pool.query(`UPDATE accounts SET status = $1 WHERE account_id = $2`, [restoreTo, accountId]);
+    try {
+      const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
+      await notifyAccountStatusChanged(accountId, {
+        status: restoreTo,
+        previousStatus: meta.status || 'Suspended',
+        action: 'reverse_status',
+        reason: 'Account status change was reversed by moderation',
+      });
+    } catch (_e) {}
   } else if (code === 'ACCOUNT_WARNED' || code === 'VIOLATION_ISSUED') {
     const violationId = activity.referenceId;
     if (violationId) {

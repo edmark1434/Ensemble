@@ -125,7 +125,26 @@ async function issueViolation(accountId, { type, reason, points, expiresAt }, st
   });
 
   const { maybeAutoSuspendAfterWarning } = require('../lib/ModerationPolicy');
-  await maybeAutoSuspendAfterWarning(accountId, staffId);
+  const autoSuspend = await maybeAutoSuspendAfterWarning(accountId, staffId);
+
+  try {
+    const { notifyAccountWarned } = require('../services/AccountStandingServices');
+    const { countActiveWarnings } = require('../lib/ModerationPolicy');
+    const activeCount = await countActiveWarnings(accountId);
+    await notifyAccountWarned(accountId, {
+      violationId: inserted.rows[0]?.violation_id || null,
+      violationNumber,
+      type: violationType,
+      reason: reason || null,
+      points: warnPoints,
+      expiresAt: expiry,
+      activeWarnings: activeCount,
+      autoSuspended: Boolean(autoSuspend?.suspended),
+      maxWarningsBeforeSuspend: autoSuspend?.max ?? null,
+    });
+  } catch (notifyErr) {
+    console.warn('Failed to broadcast moderator warning notification:', notifyErr.message);
+  }
 
   return getViolationsAndRestrictions();
 }
@@ -207,6 +226,18 @@ async function updateAccountRestriction(accountId, status, staffSession = null) 
       source: 'moderator_restrictions',
     },
   });
+
+  try {
+    const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
+    await notifyAccountStatusChanged(accountId, {
+      status: nextStatus,
+      previousStatus: previous.rows[0].status,
+      action: normalized,
+      actorStaffId: staffId,
+    });
+  } catch (notifyErr) {
+    console.warn('Failed to broadcast moderator account status change:', notifyErr.message);
+  }
 
   return getViolationsAndRestrictions();
 }

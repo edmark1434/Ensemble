@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
+  BadgeDollarSign,
   BarChart3,
   CheckCircle2,
   Coins,
@@ -35,14 +36,16 @@ import AnalyticsFilters, {
   isFilterActive,
   type AnalyticsFilterState,
 } from './components/AnalyticsFilters';
+import PlatformEconomyAnalytics from './components/PlatformEconomyAnalytics';
 
-type TabId = 'overview' | 'growth' | 'community' | 'economy' | 'health';
+type TabId = 'overview' | 'growth' | 'community' | 'economy' | 'finance' | 'health';
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'growth', label: 'Growth & members', icon: TrendingUp },
   { id: 'community', label: 'Community', icon: MessageSquare },
   { id: 'economy', label: 'Credits & merit', icon: Coins },
+  { id: 'finance', label: 'Platform finance & transactions', icon: BadgeDollarSign },
   { id: 'health', label: 'Platform health', icon: Shield },
 ];
 
@@ -69,8 +72,8 @@ function KpiCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
-          <p className="mt-1.5 truncate text-2xl font-semibold tabular-nums tracking-tight text-white">{value}</p>
-          {sub && <p className="mt-1 truncate text-xs text-zinc-500">{sub}</p>}
+          <p className="mt-1.5 break-words text-2xl font-semibold tabular-nums tracking-tight text-white">{value}</p>
+          {sub && <p className="mt-1 break-words text-xs text-zinc-500">{sub}</p>}
         </div>
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-500/10">
           <Icon className="h-4 w-4 text-rose-400" />
@@ -133,7 +136,7 @@ export default function AnalyticsPage() {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
-  const valid: TabId[] = ['overview', 'growth', 'community', 'economy', 'health'];
+  const valid: TabId[] = ['overview', 'growth', 'community', 'economy', 'finance', 'health'];
   const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'overview';
 
   const [data, setData] = useState<PlatformAnalytics | null>(null);
@@ -338,6 +341,7 @@ export default function AnalyticsPage() {
         )}
         {tab === 'community' && <CommunityTab data={data} />}
         {tab === 'economy' && <EconomyTab data={data} filteredMembers={filteredMembers} />}
+        {tab === 'finance' && <PlatformEconomyAnalytics data={data} filteredMembers={filteredMembers} />}
         {tab === 'health' && <HealthTab data={data} filteredMembers={filteredMembers} />}
       </div>
     </main>

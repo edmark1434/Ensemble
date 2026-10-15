@@ -15,6 +15,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import toast from "react-hot-toast";
 import AccountAvatar from "@/components/ui/AccountAvatar";
 import { getNotificationIcon, getNotificationLabel } from "@/lib/notificationTypes";
+import { showAccountWarningToast } from "@/components/ui/AccountStanding";
 
 interface UserHeaderProps {
   pageTitle: string;
@@ -512,6 +513,13 @@ useEffect(() => {
                 </div>
               </div>
             ), { duration: 5000 });
+          } else if (notification.reference_prefix === 'WARNING' || notification.reference_prefix === 'ACCOUNT_WARNING') {
+            showAccountWarningToast({
+              violationId: notification.reference_id,
+              type: 'Account Warning',
+              message: notification.message,
+              onNavigate: () => navigate('/notifications'),
+            });
           } else {
             const def = getNotificationIcon(notification.reference_prefix);
             toast.custom((t) => (

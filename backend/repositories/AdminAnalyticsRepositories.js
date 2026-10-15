@@ -453,6 +453,7 @@ async function getAnalyticsOverview() {
     creditTotals,
     pendingVerify,
     activityTrend,
+    platformEconomy,
   ] = await Promise.all([
       fetchPlatformMembers(),
       fetchStaffSummary(),
@@ -491,6 +492,7 @@ async function getAnalyticsOverview() {
         )
         .catch(() => ({ rows: [{ c: 0 }] })),
       fetchActivityTrend(),
+      fetchPlatformEconomyDetails(),
     ]);
 
   const counts = accountCounts.rows[0];
@@ -712,6 +714,12 @@ async function getAnalyticsOverview() {
       distribution: buildMeritTiers(members),
       creditBuckets,
       creditTransactions: liveModules.creditTransactions,
+      platformRevenue: platformEconomy.platformRevenue,
+      platformPayout: platformEconomy.platformPayout,
+      platformTransactions: platformEconomy.platformTransactions,
+      userTransactions: platformEconomy.userTransactions,
+      subscriptionAnalytics: platformEconomy.subscriptionAnalytics,
+      topupAnalytics: platformEconomy.topupAnalytics,
     },
     operations: {
       moderationTeam: staffRoles,
@@ -900,4 +908,757 @@ function buildInsights(members, forum, growth, engagement, liveModules = {}) {
   return insights.slice(0, 6);
 }
 
-module.exports = { getAnalyticsOverview };
+async function fetchPlatformEconomyDetails() {
+  const pwRes = await pool.query(`
+    SELECT wallet_id, balance_credits, frozen_balance_credits, status
+    FROM wallets
+    WHERE type = 'platform wallets'
+    LIMIT 1
+  `);
+  const platformWallet = pwRes.rows[0] || null;
+  const platformWalletId = platformWallet?.wallet_id || null;
+
+  const [
+    feesRes,
+    cashoutStatsRes,
+    paymentsStatsRes,
+    platformTxRes,
+    userTxRes,
+    recentCashoutsRes,
+    plansRes,
+    subsStatsRes,
+    invoicesRes,
+    userSubsRes,
+    topupStatsRes,
+    topupTxRes,
+  ] = await Promise.all([
+    pool.query(`
+      SELECT
+        type,
+        status,
+        COUNT(*)::int AS count,
+        COALESCE(SUM(amount_credits), 0)::bigint AS total_credits
+      FROM credit_transactions
+      WHERE destination_wallet_id = $1
+         OR type IN ('Fee', 'Job Posting Fee', 'Proposal Fee')
+      GROUP BY type, status
+    `, [platformWalletId]).catch(() => ({ rows: [] })),
+
+    pool.query(`
+      SELECT
+        status,
+        COUNT(*)::int AS count,
+        COALESCE(SUM(amount_credits), 0)::bigint AS total_credits,
+        COALESCE(SUM(fee_php_cents), 0)::bigint AS total_fee_cents,
+        COALESCE(SUM(net_amount_php_cents), 0)::bigint AS total_net_cents
+      FROM cashouts
+      GROUP BY status
+    `).catch(() => ({ rows: [] })),
+
+    pool.query(`
+      SELECT
+        payment_type,
+        status,
+        COUNT(*)::int AS count,
+        COALESCE(SUM(amount), 0)::numeric(12,2) AS total_amount,
+        COALESCE(SUM(credits), 0)::bigint AS total_credits
+      FROM payments
+      GROUP BY payment_type, status
+    `).catch(() => ({ rows: [] })),
+
+    pool.query(`
+      SELECT
+        ct.credit_transaction_id AS id,
+        CASE
+          WHEN ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee') THEN ct.type
+          WHEN ct.reference_table = 'payments' OR p.payment_type = 'TOPUP' THEN 'Top-up Grant'
+          ELSE ct.type
+        END AS type,
+        ct.amount_credits AS "amountCredits",
+        ct.status,
+        ct.created_at AS "createdAt",
+        ct.reference_table AS "referenceTable",
+        ct.reference_id AS "referenceId",
+        p.amount::numeric(10,2) AS "fiatAmountPhp",
+        p.channel_code AS "fiatChannelCode",
+        CASE
+          WHEN ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee') THEN 'inflow'
+          WHEN ct.reference_table = 'payments' OR p.payment_type = 'TOPUP' THEN 'inflow'
+          WHEN ct.destination_wallet_id = $1 THEN 'inflow'
+          WHEN ct.source_wallet_id = $1 THEN 'outflow'
+          ELSE 'inflow'
+        END AS direction,
+        CASE
+          WHEN ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee') THEN ct.amount_credits
+          WHEN ct.destination_wallet_id = $1 THEN ct.amount_credits
+          ELSE 0
+        END AS "revenueCredits",
+        CASE
+          WHEN ct.destination_wallet_id = $1 THEN
+            COALESCE(sa.display_name, sa.handle, 'System')
+          ELSE
+            COALESCE(da.display_name, da.handle, 'System')
+        END AS "counterpartyName",
+        CASE
+          WHEN ct.destination_wallet_id = $1 THEN sa.handle
+          ELSE da.handle
+        END AS "counterpartyHandle",
+        CASE
+          WHEN ct.destination_wallet_id = $1 THEN COALESCE(sa.type, 'User')
+          ELSE COALESCE(da.type, 'User')
+        END AS "counterpartyType"
+      FROM credit_transactions ct
+      LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
+      LEFT JOIN account_wallets saw ON saw.wallet_id = sw.wallet_id
+      LEFT JOIN accounts sa ON sa.account_id = saw.account_id
+      LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
+      LEFT JOIN account_wallets daw ON daw.wallet_id = dw.wallet_id
+      LEFT JOIN accounts da ON da.account_id = daw.account_id
+      LEFT JOIN payments p ON (ct.reference_table = 'payments' AND ct.reference_id = p.id)
+      WHERE ct.source_wallet_id = $1
+         OR ct.destination_wallet_id = $1
+         OR ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee')
+      ORDER BY ct.created_at DESC
+      LIMIT 100
+    `, [platformWalletId]).catch(() => ({ rows: [] })),
+
+    pool.query(`
+      SELECT
+        ct.credit_transaction_id AS id,
+        ct.type,
+        ct.amount_credits AS "amountCredits",
+        ct.status,
+        ct.created_at AS "createdAt",
+        ct.reference_table AS "referenceTable",
+        ct.reference_id AS "referenceId",
+        ct.fee_transaction_id AS "feeTransactionId",
+        sw.type AS "sourceWalletType",
+        dw.type AS "destWalletType",
+        COALESCE(sa.display_name, sa.handle, CASE WHEN sw.type = 'platform wallets' THEN 'Platform Wallet' ELSE 'Unknown' END) AS "sourceName",
+        sa.handle AS "sourceHandle",
+        COALESCE(sa.type, 'User') AS "sourceType",
+        COALESCE(da.display_name, da.handle, CASE WHEN dw.type = 'platform wallets' THEN 'Platform Wallet' ELSE 'Unknown' END) AS "destinationName",
+        da.handle AS "destinationHandle",
+        COALESCE(da.type, 'User') AS "destinationType"
+      FROM credit_transactions ct
+      LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
+      LEFT JOIN account_wallets saw ON saw.wallet_id = sw.wallet_id
+      LEFT JOIN accounts sa ON sa.account_id = saw.account_id
+      LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
+      LEFT JOIN account_wallets daw ON daw.wallet_id = dw.wallet_id
+      LEFT JOIN accounts da ON da.account_id = daw.account_id
+      WHERE sw.type = 'account wallets'
+         OR dw.type = 'account wallets'
+      ORDER BY ct.created_at DESC
+      LIMIT 100
+    `).catch(() => ({ rows: [] })),
+
+    pool.query(`
+      SELECT
+        c.cashout_id AS id,
+        c.reference_id AS "referenceId",
+        c.xendit_channel_code AS "channelCode",
+        c.account_no AS "accountNo",
+        c.account_name AS "accountName",
+        c.amount_credits AS "amountCredits",
+        (c.fee_php_cents / 100.0)::numeric(10,2) AS "feePhp",
+        (c.net_amount_php_cents / 100.0)::numeric(10,2) AS "netAmountPhp",
+        c.status,
+        c.created_at AS "createdAt",
+        COALESCE(a.display_name, a.handle, 'User') AS "userName",
+        a.handle AS "userHandle"
+      FROM cashouts c
+      LEFT JOIN users u ON u.user_id = c.user_id
+      LEFT JOIN accounts a ON a.account_id = u.account_id
+      ORDER BY c.created_at DESC
+      LIMIT 50
+    `).catch(() => ({ rows: [] })),
+
+    // Subscription Plans
+    pool.query(`
+      SELECT plan_id, name, description, billing_period, (amount_php_cents / 100.0)::numeric(10,2) AS amount_php, days_of_trials
+      FROM plans
+      WHERE deleted_at IS NULL
+      ORDER BY amount_php_cents ASC
+    `).catch(() => ({ rows: [] })),
+
+    // Subscription Stats
+    pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE LOWER(s.status) = 'active' AND LOWER(p.name) != 'free')::int AS active_paid_subscribers,
+        COUNT(*) FILTER (WHERE LOWER(s.status) = 'active')::int AS total_active_subscriptions,
+        COUNT(*) FILTER (WHERE LOWER(s.status) = 'active' AND LOWER(p.name) != 'free' AND s.cancel_at_period_end = FALSE)::int AS recurring_members,
+        COUNT(*) FILTER (WHERE LOWER(s.status) = 'active' AND LOWER(p.name) != 'free' AND s.cancel_at_period_end = TRUE)::int AS canceling_members,
+        COUNT(*) FILTER (WHERE LOWER(p.name) = 'free' OR s.subscription_id IS NULL)::int AS free_members
+      FROM subscriptions s
+      JOIN plans p ON p.plan_id = s.plan_id
+    `).catch(() => ({ rows: [{ active_paid_subscribers: 0, total_active_subscriptions: 0, recurring_members: 0, canceling_members: 0, free_members: 0 }] })),
+
+    // Subscription Invoices (Platform Subscription Transactions)
+    pool.query(`
+      SELECT
+        si.subscription_invoice_id AS id,
+        si.subscription_id AS "subscriptionId",
+        p.name AS "planName",
+        (si.amount_php_cents / 100.0)::numeric(10,2) AS "amountPhp",
+        si.status,
+        si.paid_at AS "paidAt",
+        si.billing_period_start AS "periodStart",
+        si.billing_period_end AS "periodEnd",
+        si.created_at AS "createdAt",
+        COALESCE(a.display_name, u.first_name || ' ' || u.last_name, a.handle, 'Unknown') AS "subscriberName",
+        a.handle AS "subscriberHandle",
+        u.email_address AS "subscriberEmail"
+      FROM subscription_invoices si
+      JOIN subscriptions s ON s.subscription_id = si.subscription_id
+      JOIN plans p ON p.plan_id = s.plan_id
+      JOIN users u ON u.user_id = s.user_id
+      JOIN accounts a ON a.account_id = u.account_id
+      ORDER BY si.created_at DESC
+      LIMIT 100
+    `).catch(() => ({ rows: [] })),
+
+    // All Users with Subscription Status (Subscribed vs Not Subscribed)
+    pool.query(`
+      SELECT
+        u.user_id AS "userId",
+        COALESCE(a.display_name, u.first_name || ' ' || u.last_name, a.handle, 'Unknown') AS name,
+        a.handle AS username,
+        u.email_address AS email,
+        a.created_at AS "joinedAt",
+        s.subscription_id AS "subscriptionId",
+        COALESCE(s.status, 'INACTIVE') AS "subscriptionStatus",
+        COALESCE(p.name, 'Free') AS "planName",
+        p.plan_id AS "planId",
+        COALESCE((p.amount_php_cents / 100.0)::numeric(10,2), 0) AS "planAmountPhp",
+        COALESCE(p.billing_period, 'MONTH') AS "billingPeriod",
+        CASE
+          WHEN s.subscription_id IS NOT NULL AND LOWER(s.status) = 'active' AND LOWER(COALESCE(p.name, '')) != 'free' THEN TRUE
+          ELSE FALSE
+        END AS "isSubscribed",
+        CASE
+          WHEN s.subscription_id IS NOT NULL AND LOWER(s.status) = 'active' AND LOWER(COALESCE(p.name, '')) != 'free' AND s.cancel_at_period_end = FALSE THEN TRUE
+          ELSE FALSE
+        END AS recurring,
+        s.current_period_start AS "currentPeriodStart",
+        s.current_period_end AS "currentPeriodEnd",
+        s.next_billing_at AS "nextBillingAt",
+        COALESCE((
+          SELECT (SUM(amount_php_cents) / 100.0)::numeric(10,2)
+          FROM subscription_invoices inv
+          WHERE inv.subscription_id = s.subscription_id AND LOWER(inv.status) = 'paid'
+        ), 0) AS "totalSpentPhp"
+      FROM users u
+      JOIN accounts a ON a.account_id = u.account_id
+      LEFT JOIN LATERAL (
+        SELECT *
+        FROM subscriptions sub
+        WHERE sub.user_id = u.user_id
+        ORDER BY
+          CASE WHEN LOWER(sub.status) = 'active' THEN 0 ELSE 1 END,
+          sub.created_at DESC
+        LIMIT 1
+      ) s ON TRUE
+      LEFT JOIN plans p ON p.plan_id = s.plan_id
+      WHERE a.deleted_at IS NULL
+      ORDER BY "isSubscribed" DESC, a.created_at DESC
+    `).catch(() => ({ rows: [] })),
+
+    // Top-up Stats
+    pool.query(`
+      SELECT
+        COUNT(*)::int AS "totalCount",
+        COUNT(*) FILTER (WHERE LOWER(status) = 'paid')::int AS "paidCount",
+        COALESCE(SUM(amount) FILTER (WHERE LOWER(status) = 'paid'), 0)::numeric(12,2) AS "totalPaidPhp",
+        COALESCE(SUM(credits) FILTER (WHERE LOWER(status) = 'paid'), 0)::bigint AS "totalCreditsIssued"
+      FROM payments
+      WHERE payment_type = 'TOPUP'
+    `).catch(() => ({ rows: [{ totalCount: 0, paidCount: 0, totalPaidPhp: 0, totalCreditsIssued: 0 }] })),
+
+    // Top-up Transactions
+    pool.query(`
+      SELECT
+        p.id,
+        p.reference_id AS "referenceId",
+        p.payment_id AS "paymentId",
+        p.channel_code AS "channelCode",
+        p.amount::numeric(10,2) AS "amountPhp",
+        p.credits AS "creditsGranted",
+        p.currency,
+        p.status,
+        p.description,
+        p.created_at AS "createdAt",
+        p.processed_at AS "processedAt",
+        COALESCE(a.display_name, u.first_name || ' ' || u.last_name, a.handle, 'User') AS "userName",
+        a.handle AS "userHandle",
+        u.email_address AS "userEmail",
+        ct.credit_transaction_id AS "creditTransactionId"
+      FROM payments p
+      LEFT JOIN users u ON u.user_id = p.user_id
+      LEFT JOIN accounts a ON a.account_id = u.account_id
+      LEFT JOIN credit_transactions ct ON ct.reference_table = 'payments' AND ct.reference_id = p.id
+      WHERE p.payment_type = 'TOPUP'
+      ORDER BY p.created_at DESC
+      LIMIT 100
+    `).catch(() => ({ rows: [] }))
+  ]);
+
+  let milestoneFeesCredits = 0;
+  let jobPostingFeesCredits = 0;
+  let proposalFeesCredits = 0;
+  let escrowHeldCredits = 0;
+  let otherFeesCredits = 0;
+
+  for (const r of feesRes.rows) {
+    const credits = Number(r.total_credits || 0);
+    const type = String(r.type || '').toLowerCase();
+    const status = String(r.status || '').toLowerCase();
+
+    if (type === 'fee') {
+      if (status === 'completed') milestoneFeesCredits += credits;
+    } else if (type === 'job posting fee') {
+      if (status === 'completed') jobPostingFeesCredits += credits;
+    } else if (type === 'proposal fee') {
+      if (status === 'completed') proposalFeesCredits += credits;
+    } else if (type === 'escrow hold') {
+      if (status === 'held') escrowHeldCredits += credits;
+    } else if (status === 'completed') {
+      otherFeesCredits += credits;
+    }
+  }
+
+  const totalFeeCredits = milestoneFeesCredits + jobPostingFeesCredits + proposalFeesCredits + otherFeesCredits;
+
+  let totalPayoutCredits = 0;
+  let totalPayoutPhp = 0;
+  let cashoutFeesPhp = 0;
+  let pendingPayoutCredits = 0;
+  let pendingPayoutPhp = 0;
+  let failedPayoutCredits = 0;
+  let failedPayoutPhp = 0;
+
+  let succeededCount = 0;
+  let pendingCount = 0;
+  let failedCount = 0;
+
+  for (const r of cashoutStatsRes.rows) {
+    const status = String(r.status || '').toUpperCase();
+    const count = Number(r.count || 0);
+    const credits = Number(r.total_credits || 0);
+    const netPhp = Number(r.total_net_cents || 0) / 100.0;
+    const feePhp = Number(r.total_fee_cents || 0) / 100.0;
+
+    if (status === 'SUCCEEDED' || status === 'COMPLETED') {
+      succeededCount += count;
+      totalPayoutCredits += credits;
+      totalPayoutPhp += netPhp;
+      cashoutFeesPhp += feePhp;
+    } else if (status === 'PENDING' || status === 'PROCESSING') {
+      pendingCount += count;
+      pendingPayoutCredits += credits;
+      pendingPayoutPhp += netPhp;
+    } else if (status === 'FAILED' || status === 'REJECTED') {
+      failedCount += count;
+      failedPayoutCredits += credits;
+      failedPayoutPhp += netPhp;
+    }
+  }
+
+  const totalPayoutCount = succeededCount + pendingCount + failedCount;
+  const avgPayoutPhp = succeededCount > 0 ? Math.round((totalPayoutPhp / succeededCount) * 100) / 100 : 0;
+
+  let topupRevenuePhp = 0;
+  let subscriptionRevenuePhp = 0;
+  let pendingPaymentsPhp = 0;
+
+  for (const r of paymentsStatsRes.rows) {
+    const type = String(r.payment_type || '').toUpperCase();
+    const status = String(r.status || '').toUpperCase();
+    const amount = Number(r.total_amount || 0);
+
+    if (status === 'PAID' || status === 'COMPLETED') {
+      if (type === 'TOPUP') topupRevenuePhp += amount;
+      else if (type === 'SUBSCRIPTION') subscriptionRevenuePhp += amount;
+    } else if (status === 'PENDING') {
+      pendingPaymentsPhp += amount;
+    }
+  }
+
+  // Add paid invoices to subscription revenue if payments table didn't record them
+  const invoicePaidPhp = invoicesRes.rows
+    .filter((inv) => String(inv.status).toLowerCase() === 'paid')
+    .reduce((sum, inv) => sum + Number(inv.amountPhp || 0), 0);
+
+  const effectiveSubscriptionRevenuePhp = Math.max(subscriptionRevenuePhp, invoicePaidPhp);
+  const totalRevenuePhp = topupRevenuePhp + effectiveSubscriptionRevenuePhp + cashoutFeesPhp;
+
+  const subsStats = subsStatsRes.rows[0] || {
+    active_paid_subscribers: 0,
+    total_active_subscriptions: 0,
+    recurring_members: 0,
+    canceling_members: 0,
+    free_members: 0,
+  };
+
+  const subscriptionAnalytics = {
+    summary: {
+      activePaidSubscribers: Number(subsStats.active_paid_subscribers || 0),
+      totalActiveSubscriptions: Number(subsStats.total_active_subscriptions || 0),
+      recurringMembers: Number(subsStats.recurring_members || 0),
+      cancelingMembers: Number(subsStats.canceling_members || 0),
+      freeMembers: Number(subsStats.free_members || 0),
+      subscriptionPlatformEarnPhp: Math.round(effectiveSubscriptionRevenuePhp * 100) / 100,
+      availablePlans: plansRes.rows.map((p) => ({
+        planId: p.plan_id,
+        name: p.name,
+        amountPhp: Number(p.amount_php || 0),
+        billingPeriod: p.billing_period,
+      })),
+    },
+    transactions: invoicesRes.rows,
+    userSubscriptions: userSubsRes.rows,
+  };
+
+  return {
+    platformRevenue: {
+      platformWalletBalance: Number(platformWallet?.balance_credits || 0),
+      platformWalletStatus: platformWallet?.status || 'active',
+      totalRevenueCredits: totalFeeCredits,
+      totalRevenuePhp: Math.round(totalRevenuePhp * 100) / 100,
+      milestoneFeesCredits,
+      jobPostingFeesCredits,
+      proposalFeesCredits,
+      otherFeesCredits,
+      cashoutFeesPhp: Math.round(cashoutFeesPhp * 100) / 100,
+      subscriptionRevenuePhp: Math.round(effectiveSubscriptionRevenuePhp * 100) / 100,
+      topupRevenuePhp: Math.round(topupRevenuePhp * 100) / 100,
+      escrowHeldCredits,
+      pendingPaymentsPhp: Math.round(pendingPaymentsPhp * 100) / 100,
+    },
+    platformPayout: {
+      totalPayoutCredits,
+      totalPayoutPhp: Math.round(totalPayoutPhp * 100) / 100,
+      pendingPayoutCredits,
+      pendingPayoutPhp: Math.round(pendingPayoutPhp * 100) / 100,
+      failedPayoutCredits,
+      failedPayoutPhp: Math.round(failedPayoutPhp * 100) / 100,
+      payoutCounts: {
+        total: totalPayoutCount,
+        succeeded: succeededCount,
+        pending: pendingCount,
+        failed: failedCount,
+      },
+      averagePayoutPhp: avgPayoutPhp,
+      recentCashouts: recentCashoutsRes.rows,
+    },
+    platformTransactions: platformTxRes.rows,
+    userTransactions: userTxRes.rows,
+    subscriptionAnalytics,
+    topupAnalytics: {
+      summary: {
+        totalCount: Number(topupStatsRes.rows[0]?.totalCount || 0),
+        paidCount: Number(topupStatsRes.rows[0]?.paidCount || 0),
+        totalPaidPhp: Number(topupStatsRes.rows[0]?.totalPaidPhp || 0),
+        totalCreditsIssued: Number(topupStatsRes.rows[0]?.totalCreditsIssued || 0),
+      },
+      transactions: topupTxRes.rows,
+    },
+  };
+}
+
+async function fetchPlatformTransactionsList({ page = 1, limit = 50, type, status, search, direction } = {}) {
+  const pwRes = await pool.query("SELECT wallet_id FROM wallets WHERE type = 'platform wallets' LIMIT 1");
+  const platformWalletId = pwRes.rows[0]?.wallet_id;
+  if (!platformWalletId) return { items: [], total: 0, page, limit };
+
+  const conditions = [
+    `(ct.source_wallet_id = $1 OR ct.destination_wallet_id = $1 OR ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee'))`
+  ];
+  const params = [platformWalletId];
+  let pIdx = 2;
+
+  if (type && type !== 'all') {
+    conditions.push(`LOWER(ct.type) = LOWER($${pIdx})`);
+    params.push(type);
+    pIdx++;
+  }
+
+  if (status && status !== 'all') {
+    conditions.push(`LOWER(ct.status) = LOWER($${pIdx})`);
+    params.push(status);
+    pIdx++;
+  }
+
+  if (direction && direction !== 'all') {
+    if (direction === 'inflow') {
+      conditions.push(`(ct.destination_wallet_id = $1 OR ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee'))`);
+    } else if (direction === 'outflow') {
+      conditions.push(`ct.source_wallet_id = $1`);
+    }
+  }
+
+  if (search && search.trim()) {
+    conditions.push(`(
+      ct.credit_transaction_id::text ILIKE $${pIdx} OR
+      COALESCE(sa.handle, '') ILIKE $${pIdx} OR
+      COALESCE(sa.display_name, '') ILIKE $${pIdx} OR
+      COALESCE(da.handle, '') ILIKE $${pIdx} OR
+      COALESCE(da.display_name, '') ILIKE $${pIdx}
+    )`);
+    params.push(`%${search.trim()}%`);
+    pIdx++;
+  }
+
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
+  const countQuery = `
+    SELECT COUNT(*)::int AS total
+    FROM credit_transactions ct
+    LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
+    LEFT JOIN account_wallets saw ON saw.wallet_id = sw.wallet_id
+    LEFT JOIN accounts sa ON sa.account_id = saw.account_id
+    LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
+    LEFT JOIN account_wallets daw ON daw.wallet_id = dw.wallet_id
+    LEFT JOIN accounts da ON da.account_id = daw.account_id
+    ${whereClause}
+  `;
+
+  const offset = (Math.max(1, page) - 1) * limit;
+  const listQuery = `
+    SELECT
+      ct.credit_transaction_id AS id,
+      ct.type,
+      ct.amount_credits AS "amountCredits",
+      ct.status,
+      ct.created_at AS "createdAt",
+      ct.reference_table AS "referenceTable",
+      CASE
+        WHEN ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee') THEN 'inflow'
+        WHEN ct.destination_wallet_id = $1 THEN 'inflow'
+        WHEN ct.source_wallet_id = $1 THEN 'outflow'
+        ELSE 'inflow'
+      END AS direction,
+      CASE
+        WHEN ct.type IN ('Fee', 'Job Posting Fee', 'Proposal Fee') THEN ct.amount_credits
+        WHEN ct.destination_wallet_id = $1 THEN ct.amount_credits
+        ELSE 0
+      END AS "revenueCredits",
+      CASE
+        WHEN ct.destination_wallet_id = $1 THEN
+          COALESCE(sa.display_name, sa.handle, 'System')
+        ELSE
+          COALESCE(da.display_name, da.handle, 'System')
+      END AS "counterpartyName",
+      CASE
+        WHEN ct.destination_wallet_id = $1 THEN sa.handle
+        ELSE da.handle
+      END AS "counterpartyHandle",
+      CASE
+        WHEN ct.destination_wallet_id = $1 THEN COALESCE(sa.type, 'User')
+        ELSE COALESCE(da.type, 'User')
+      END AS "counterpartyType"
+    FROM credit_transactions ct
+    LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
+    LEFT JOIN account_wallets saw ON saw.wallet_id = sw.wallet_id
+    LEFT JOIN accounts sa ON sa.account_id = saw.account_id
+    LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
+    LEFT JOIN account_wallets daw ON daw.wallet_id = dw.wallet_id
+    LEFT JOIN accounts da ON da.account_id = daw.account_id
+    ${whereClause}
+    ORDER BY ct.created_at DESC
+    LIMIT $${pIdx} OFFSET $${pIdx + 1}
+  `;
+
+  params.push(limit, offset);
+
+  const [totalRes, listRes] = await Promise.all([
+    pool.query(countQuery, params.slice(0, pIdx - 1)),
+    pool.query(listQuery, params)
+  ]);
+
+  return {
+    items: listRes.rows,
+    total: totalRes.rows[0]?.total || 0,
+    page: Number(page),
+    limit: Number(limit)
+  };
+}
+
+async function fetchUserTransactionsList({ page = 1, limit = 50, type, status, search } = {}) {
+  const conditions = [
+    `(sw.type = 'account wallets' OR dw.type = 'account wallets')`
+  ];
+  const params = [];
+  let pIdx = 1;
+
+  if (type && type !== 'all') {
+    conditions.push(`LOWER(ct.type) = LOWER($${pIdx})`);
+    params.push(type);
+    pIdx++;
+  }
+
+  if (status && status !== 'all') {
+    conditions.push(`LOWER(ct.status) = LOWER($${pIdx})`);
+    params.push(status);
+    pIdx++;
+  }
+
+  if (search && search.trim()) {
+    conditions.push(`(
+      ct.credit_transaction_id::text ILIKE $${pIdx} OR
+      COALESCE(sa.handle, '') ILIKE $${pIdx} OR
+      COALESCE(sa.display_name, '') ILIKE $${pIdx} OR
+      COALESCE(da.handle, '') ILIKE $${pIdx} OR
+      COALESCE(da.display_name, '') ILIKE $${pIdx}
+    )`);
+    params.push(`%${search.trim()}%`);
+    pIdx++;
+  }
+
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
+  const countQuery = `
+    SELECT COUNT(*)::int AS total
+    FROM credit_transactions ct
+    LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
+    LEFT JOIN account_wallets saw ON saw.wallet_id = sw.wallet_id
+    LEFT JOIN accounts sa ON sa.account_id = saw.account_id
+    LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
+    LEFT JOIN account_wallets daw ON daw.wallet_id = dw.wallet_id
+    LEFT JOIN accounts da ON da.account_id = daw.account_id
+    ${whereClause}
+  `;
+
+  const offset = (Math.max(1, page) - 1) * limit;
+  const listQuery = `
+    SELECT
+      ct.credit_transaction_id AS id,
+      ct.type,
+      ct.amount_credits AS "amountCredits",
+      ct.status,
+      ct.created_at AS "createdAt",
+      ct.reference_table AS "referenceTable",
+      ct.reference_id AS "referenceId",
+      ct.fee_transaction_id AS "feeTransactionId",
+      sw.type AS "sourceWalletType",
+      dw.type AS "destWalletType",
+      COALESCE(sa.display_name, sa.handle, CASE WHEN sw.type = 'platform wallets' THEN 'Platform Wallet' ELSE 'Unknown' END) AS "sourceName",
+      sa.handle AS "sourceHandle",
+      COALESCE(sa.type, 'User') AS "sourceType",
+      COALESCE(da.display_name, da.handle, CASE WHEN dw.type = 'platform wallets' THEN 'Platform Wallet' ELSE 'Unknown' END) AS "destinationName",
+      da.handle AS "destinationHandle",
+      COALESCE(da.type, 'User') AS "destinationType"
+    FROM credit_transactions ct
+    LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
+    LEFT JOIN account_wallets saw ON saw.wallet_id = sw.wallet_id
+    LEFT JOIN accounts sa ON sa.account_id = saw.account_id
+    LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
+    LEFT JOIN account_wallets daw ON daw.wallet_id = dw.wallet_id
+    LEFT JOIN accounts da ON da.account_id = daw.account_id
+    ${whereClause}
+    ORDER BY ct.created_at DESC
+    LIMIT $${pIdx} OFFSET $${pIdx + 1}
+  `;
+
+  params.push(limit, offset);
+
+  const [totalRes, listRes] = await Promise.all([
+    pool.query(countQuery, params.slice(0, pIdx - 1)),
+    pool.query(listQuery, params)
+  ]);
+
+  return {
+    items: listRes.rows,
+    total: totalRes.rows[0]?.total || 0,
+    page: Number(page),
+    limit: Number(limit)
+  };
+}
+
+async function fetchTopupTransactionsList({ page = 1, limit = 50, status, channel, search } = {}) {
+  const conditions = [`p.payment_type = 'TOPUP'`];
+  const params = [];
+  let pIdx = 1;
+
+  if (status && status !== 'all') {
+    conditions.push(`LOWER(p.status) = LOWER($${pIdx})`);
+    params.push(status);
+    pIdx++;
+  }
+
+  if (channel && channel !== 'all') {
+    conditions.push(`LOWER(p.channel_code) = LOWER($${pIdx})`);
+    params.push(channel);
+    pIdx++;
+  }
+
+  if (search && search.trim()) {
+    const q = `%${search.trim().toLowerCase()}%`;
+    conditions.push(`(
+      LOWER(p.id::text) LIKE $${pIdx}
+      OR LOWER(p.reference_id) LIKE $${pIdx}
+      OR LOWER(COALESCE(p.payment_id, '')) LIKE $${pIdx}
+      OR LOWER(COALESCE(a.display_name, '')) LIKE $${pIdx}
+      OR LOWER(COALESCE(a.handle, '')) LIKE $${pIdx}
+      OR LOWER(COALESCE(u.email_address, '')) LIKE $${pIdx}
+      OR LOWER(COALESCE(p.channel_code, '')) LIKE $${pIdx}
+    )`);
+    params.push(q);
+    pIdx++;
+  }
+
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+  const countQuery = `
+    SELECT COUNT(*)::int AS total
+    FROM payments p
+    LEFT JOIN users u ON u.user_id = p.user_id
+    LEFT JOIN accounts a ON a.account_id = u.account_id
+    ${whereClause}
+  `;
+  const countRes = await pool.query(countQuery, params);
+  const total = countRes.rows[0]?.total || 0;
+
+  const offset = (Math.max(1, page) - 1) * limit;
+  params.push(limit, offset);
+
+  const query = `
+    SELECT
+      p.id,
+      p.reference_id AS "referenceId",
+      p.payment_id AS "paymentId",
+      p.channel_code AS "channelCode",
+      p.amount::numeric(10,2) AS "amountPhp",
+      p.credits AS "creditsGranted",
+      p.currency,
+      p.status,
+      p.description,
+      p.created_at AS "createdAt",
+      p.processed_at AS "processedAt",
+      COALESCE(a.display_name, u.first_name || ' ' || u.last_name, a.handle, 'User') AS "userName",
+      a.handle AS "userHandle",
+      u.email_address AS "userEmail",
+      ct.credit_transaction_id AS "creditTransactionId"
+    FROM payments p
+    LEFT JOIN users u ON u.user_id = p.user_id
+    LEFT JOIN accounts a ON a.account_id = u.account_id
+    LEFT JOIN credit_transactions ct ON ct.reference_table = 'payments' AND ct.reference_id = p.id
+    ${whereClause}
+    ORDER BY p.created_at DESC
+    LIMIT $${pIdx} OFFSET $${pIdx + 1}
+  `;
+
+  const itemsRes = await pool.query(query, params);
+  return {
+    items: itemsRes.rows,
+    total,
+    page: Number(page),
+    limit: Number(limit),
+  };
+}
+
+module.exports = {
+  getAnalyticsOverview,
+  fetchPlatformEconomyDetails,
+  fetchPlatformTransactionsList,
+  fetchUserTransactionsList,
+  fetchTopupTransactionsList,
+};
