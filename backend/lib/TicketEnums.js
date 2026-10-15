@@ -114,10 +114,7 @@ const TICKET_TYPES = Object.freeze([
 const SPECIALIST_TYPES = Object.freeze([...FORUM_TYPES, ...MARKETPLACE_TYPES, ...JOBS_TYPES]);
 
 const TICKET_STATUSES = Object.freeze([
-  'Open',
   'In Progress',
-  'Escalated to Dev',
-  'Resolved',
   'Closed',
 ]);
 const TICKET_PRIORITIES = Object.freeze(['Low', 'Medium', 'High']);
@@ -240,15 +237,15 @@ const LEGACY_TYPE_MAP = Object.freeze({
 });
 
 const LEGACY_STATUS_MAP = Object.freeze({
-  open: 'Open',
+  open: 'In Progress',
   in_progress: 'In Progress',
   'in progress': 'In Progress',
-  resolved: 'Resolved',
+  resolved: 'Closed',
   closed: 'Closed',
   escalated: 'In Progress',
   under_review: 'In Progress',
   in_review: 'In Progress',
-  'escalated to dev': 'Escalated to Dev',
+  'escalated to dev': 'In Progress',
 });
 
 const LEGACY_PRIORITY_MAP = Object.freeze({
@@ -353,7 +350,7 @@ function normalizeTicketType(value, fallback = 'Other') {
   return exact || fallback;
 }
 
-function normalizeTicketStatus(value, fallback = 'Open') {
+function normalizeTicketStatus(value, fallback = 'In Progress') {
   if (value == null || value === '') return fallback;
   const raw = String(value).trim();
   if (TICKET_STATUSES.includes(raw)) return raw;
@@ -405,8 +402,7 @@ function isValidTicketPriority(value) {
 }
 
 function isClosedStatus(status) {
-  const s = normalizeTicketStatus(status);
-  return s === 'Resolved' || s === 'Closed';
+  return normalizeTicketStatus(status) === 'Closed';
 }
 
 /** Previous member-facing groups. The public form keeps these until that page is redesigned. */

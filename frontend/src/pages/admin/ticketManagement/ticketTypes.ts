@@ -222,7 +222,7 @@ export type TicketActivity = {
 
 export type ChartSegment = { label: string; value: number; color?: string };
 
-export const TICKET_STATUS_OPTIONS = ['Open', 'In Progress', 'Escalated to Dev', 'Resolved', 'Closed'] as const;
+export const TICKET_STATUS_OPTIONS = ['In Progress', 'Closed'] as const;
 export const TICKET_PRIORITY_OPTIONS = ['Low', 'Medium', 'High'] as const;
 
 export const SUPPORT_SUBGROUPS: { label: string; types: readonly string[] }[] = [
@@ -472,6 +472,7 @@ export type TicketDetail = {
   pendingInvites?: { accountId: string; name: string; handle?: string | null }[];
   invitePending?: boolean;
   canManageParticipants?: boolean;
+  savedTranscript?: { text: string; createdAt?: string | null } | null;
 };
 
 export function ticketTypeOf(t: { type?: string; category?: string }) {

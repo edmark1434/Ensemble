@@ -504,6 +504,21 @@ function startPaymentReconciliationJob() {
         }
     });
 
+    let isTicketAutoCloseRunning = false;
+    cron.schedule("20 * * * *", async () => {
+        if (isTicketAutoCloseRunning) return;
+        isTicketAutoCloseRunning = true;
+        try {
+            const { autoCloseInactiveTickets } = require("../repositories/AdminTicketsRepositories");
+            const result = await autoCloseInactiveTickets();
+            if (result.closed) console.log(`Ticket auto-close: closed ${result.closed}`);
+        } catch (err) {
+            console.error("Ticket auto-close failed:", err.message);
+        } finally {
+            isTicketAutoCloseRunning = false;
+        }
+    });
+
     // Job 6: Expired cancellation auto-approval — runs every 10 minutes
     let isCancellationAutoApproveRunning = false;
     cron.schedule("*/10 * * * *", async () => {

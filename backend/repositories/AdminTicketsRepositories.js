@@ -277,7 +277,7 @@ async function createSupportTicket(input, session = null) {
 
   const type = normalizeTicketType(input?.type || input?.category || 'Other');
   const priority = resolveTicketPriority(type, input?.priority);
-  const status = normalizeTicketStatus(input?.status || 'Open');
+  const status = normalizeTicketStatus(input?.status || 'In Progress');
   const requesterAccountId = input?.requesterAccountId || sessionAccountId(session);
   if (!requesterAccountId) throw new Error('Requester account is required');
 
@@ -453,8 +453,8 @@ async function getTicketsOverview(staffSession = null) {
     pool.query(`
       SELECT
         COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE status = 'Open')::int AS open_count,
-        COUNT(*) FILTER (WHERE status = 'In Progress')::int AS in_progress,
+        COUNT(*) FILTER (WHERE status NOT IN ('Resolved', 'Closed'))::int AS open_count,
+        COUNT(*) FILTER (WHERE status NOT IN ('Resolved', 'Closed'))::int AS in_progress,
         COUNT(*) FILTER (WHERE status = 'Escalated to Dev')::int AS escalated_dev,
         COUNT(*) FILTER (WHERE status IN ('Resolved', 'Closed'))::int AS resolved,
         COUNT(*) FILTER (
@@ -532,10 +532,8 @@ async function getTicketsOverview(staffSession = null) {
   const rc = reportCounts.rows[0];
 
   const statusChart = [
-    { label: 'Open', value: Number(tc.open_count), color: '#f87171' },
     { label: 'In Progress', value: Number(tc.in_progress), color: '#fbbf24' },
-    { label: 'Escalated to Dev', value: Number(tc.escalated_dev), color: '#38bdf8' },
-    { label: 'Resolved', value: Number(tc.resolved), color: '#34d399' },
+    { label: 'Closed', value: Number(tc.resolved), color: '#a1a1aa' },
   ].filter((x) => x.value > 0);
 
   const catalog = await getTicketCatalog();
@@ -1348,7 +1346,134 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     involved,
     pendingInvites,
     canManageParticipants: Boolean(staffSession) && isStaffSession(staffSession),
+    savedTranscript: await latestTicketTranscript(ticketId),
   };
+}
+
+async function latestTicketTranscript(ticketId) {
+  try {
+    const result = await pool.query(
+      `SELECT metadata, created_at
+       FROM ticket_events
+       WHERE ticket_id = $1 AND event_type = 'transcript'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [ticketId]
+    );
+    const row = result.rows[0];
+    const text = row?.metadata?.transcript;
+    if (!text) return null;
+    return { text: String(text), createdAt: row.created_at };
+  } catch (error) {
+    return null;
+  }
+}
+
+function renderTicketTranscript(detail) {
+  const people = (detail.participants || []).filter((person) => person.status === 'active' || person.isRequester);
+  const staff = people.filter((person) => person.isStaff);
+  const users = people.filter((person) => !person.isStaff);
+  const lines = [
+    `Ticket ${detail.ticket?.number || ''}`.trim(),
+    detail.ticket?.subject || '',
+    '',
+    'Staff',
+    ...(staff.length
+      ? staff.map((person) => `- ${person.name}${person.handle ? ` (@${person.handle})` : ''}`)
+      : ['- None']),
+    '',
+    'Users',
+    ...(users.length
+      ? users.map((person) => `- ${person.name}${person.handle ? ` (@${person.handle})` : ''}${person.isRequester ? ' (opened ticket)' : ''}`)
+      : ['- None']),
+    '',
+    'Transcript',
+  ];
+  for (const message of detail.messages || []) {
+    if (message.isUnsent) continue;
+    const kind = message.isInternal
+      ? 'internal note'
+      : String(message.authorType || '').toLowerCase() === 'system'
+        ? 'system'
+        : 'message';
+    lines.push(`[${message.createdAt || ''}] ${message.authorName || 'Unknown'} (${kind}): ${message.body || (message.attachments?.length ? 'Attachment' : '')}`);
+  }
+  return lines.join('\n');
+}
+
+async function saveTicketCloseTranscript(ticketId, { reason = 'closed', actorStaffId = null, actorAccountId = null } = {}) {
+  try {
+    const detail = await getTicketDetail(ticketId);
+    if (!detail) return null;
+    const transcript = renderTicketTranscript(detail);
+    await recordTicketEvent({
+      ticketId,
+      eventType: 'transcript',
+      summary: reason === 'auto'
+        ? 'Auto-closed the ticket and saved the transcript'
+        : 'Saved the transcript when the ticket closed',
+      actorStaffId,
+      actorAccountId,
+      metadata: { transcript, reason },
+    });
+    return transcript;
+  } catch (error) {
+    console.error('Ticket transcript was not saved:', error.message);
+    return null;
+  }
+}
+
+async function autoCloseInactiveTickets() {
+  const result = await pool.query(
+    `SELECT ticket_id, account_id, ticket_number
+     FROM tickets
+     WHERE deleted_at IS NULL
+       AND status NOT IN ('Closed', 'Resolved')
+       AND COALESCE(last_message_at, updated_at, created_at) < NOW() - INTERVAL '7 days'
+     ORDER BY COALESCE(last_message_at, updated_at, created_at) ASC
+     LIMIT 25`
+  );
+  let closed = 0;
+  for (const row of result.rows) {
+    const updated = await pool.query(
+      `UPDATE tickets
+       SET status = 'Closed',
+           resolved_at = COALESCE(resolved_at, NOW()),
+           updated_at = NOW()
+       WHERE ticket_id = $1
+         AND deleted_at IS NULL
+         AND status NOT IN ('Closed', 'Resolved')
+       RETURNING ticket_id`,
+      [row.ticket_id]
+    );
+    if (!updated.rows.length) continue;
+    await recordTicketEvent({
+      ticketId: row.ticket_id,
+      eventType: 'status',
+      summary: 'Auto-closed after 7 days without activity',
+    });
+    await saveTicketCloseTranscript(row.ticket_id, { reason: 'auto' });
+    if (row.account_id) {
+      try {
+        const notification = await createNotificationServices({
+          account_id: String(row.account_id),
+          message: `Your ticket #${row.ticket_number} was closed after 7 days without activity.`,
+          is_read: false,
+          reference_table: 'tickets',
+          reference_prefix: 'TICKET_CLOSED',
+          reference_path: `/tickets/${row.ticket_id}`,
+          reference_id: randomUUID(),
+        });
+        const { getIo } = require('../lib/WebSocket');
+        const io = getIo();
+        if (io && notification) io.to(String(row.account_id)).emit('notification', notification);
+      } catch (error) {
+        console.error('Auto-close notification failed:', error.message);
+      }
+    }
+    closed += 1;
+  }
+  return { closed };
 }
 
 async function saveTicketInvite(chatId, invite) {
@@ -2032,13 +2157,21 @@ async function updateTicket(ticketId, patch, staffSession) {
     );
 
     const actorStaffId = staff?.staff_id || null;
-    if (patch.status && normalizeTicketStatus(patch.status) !== normalizeTicketStatus(currentStatus)) {
+    const nextStatus = patch.status ? normalizeTicketStatus(patch.status) : null;
+    if (nextStatus && nextStatus !== normalizeTicketStatus(currentStatus)) {
       await recordTicketEvent({
         ticketId,
         eventType: 'status',
-        summary: `Status changed from ${currentStatus} to ${normalizeTicketStatus(patch.status)}`,
+        summary: `Status changed from ${normalizeTicketStatus(currentStatus)} to ${nextStatus}`,
         actorStaffId,
       });
+      if (nextStatus === 'Closed' && !isClosedStatus(currentStatus)) {
+        await saveTicketCloseTranscript(ticketId, {
+          reason: 'closed',
+          actorStaffId,
+          actorAccountId: sessionAccountId(staffSession),
+        });
+      }
     }
     if (patch.priority) {
       await recordTicketEvent({
@@ -3323,6 +3456,7 @@ module.exports = {
   nextTicketNumber,
   nextDisputeNumber,
   updateTicket,
+  autoCloseInactiveTickets,
   addTicketMessage,
   updateTicketMessage,
   deleteTicketMessage,

@@ -377,10 +377,7 @@ function statusButtonClass(label: string, active: boolean) {
   if (!active) {
     return 'border-white/10 bg-transparent text-zinc-400 hover:border-white/20 hover:bg-white/[0.04] hover:text-zinc-200';
   }
-  if (s === 'open') return 'border-red-500/40 bg-red-500/20 text-red-200';
   if (s === 'in progress') return 'border-amber-500/40 bg-amber-500/20 text-amber-200';
-  if (s === 'escalated to dev') return 'border-sky-500/40 bg-sky-500/20 text-sky-200';
-  if (s === 'resolved') return 'border-emerald-500/40 bg-emerald-500/20 text-emerald-200';
   if (s === 'closed') return 'border-zinc-500/40 bg-zinc-500/25 text-zinc-200';
   return 'border-white/25 bg-white/10 text-white';
 }
@@ -469,7 +466,8 @@ export default function TicketDetailModalShell({
     return escalateTypesForRole(escalateRole);
   }, [detail, escalateRole]);
 
-  const statusOptions = detail?.statuses?.length ? detail.statuses : [...TICKET_STATUS_OPTIONS];
+  const statusOptions = (detail?.statuses?.length ? detail.statuses : [...TICKET_STATUS_OPTIONS])
+    .filter((label) => label === 'In Progress' || label === 'Closed');
   const priorityOptions = detail?.priorities?.length ? detail.priorities : [...TICKET_PRIORITY_OPTIONS];
   const perms = detail?.permissions;
   const myStaffId = perms?.staffId != null ? String(perms.staffId) : '';
@@ -1438,9 +1436,7 @@ export default function TicketDetailModalShell({
                     <div>
                       <p className="text-[10px] font-semibold tracking-wide text-amber-200/80">Move to another group</p>
                       <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-                        {allowEscalateToAdmin
-                          ? 'Any moderator can move this ticket to the right group and type. Moving it unassigns the current handler. Use Escalated to Dev when engineering needs to fix it without closing the ticket.'
-                          : 'Any moderator can move this ticket to the right group and type. Moving it unassigns the current handler.'}
+                        Any moderator can move this ticket to the right group and type. Moving it unassigns the current handler.
                       </p>
                     </div>
                     {allowEscalateToAdmin && (
@@ -1717,6 +1713,9 @@ export default function TicketDetailModalShell({
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Ticket transcript</p>
                   <h3 className="mt-1 text-lg font-semibold text-white">{t.number}</h3>
                   <p className="mt-1 text-sm text-zinc-400">{t.subject}</p>
+                  {detail.savedTranscript?.createdAt ? (
+                    <p className="mt-1 text-[11px] text-zinc-500">Saved when this ticket closed · {formatDateTime(detail.savedTranscript.createdAt)}</p>
+                  ) : null}
                 </div>
                 <button type="button" onClick={() => setShowTranscript(false)} aria-label="Close transcript" className="text-zinc-400 hover:text-white">
                   <X className="h-4 w-4" />
@@ -1775,6 +1774,13 @@ export default function TicketDetailModalShell({
                 <button
                   type="button"
                   onClick={() => {
+                    if (detail.savedTranscript?.text) {
+                      void navigator.clipboard.writeText(detail.savedTranscript.text).then(
+                        () => showSuccessToast('Transcript copied'),
+                        () => showErrorToast('Could not copy the transcript')
+                      );
+                      return;
+                    }
                     const lines = [
                       `Ticket ${t.number}`,
                       t.subject,
