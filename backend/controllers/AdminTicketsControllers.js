@@ -5,6 +5,7 @@ const {
   searchTicketParticipants,
   addTicketParticipant,
   removeTicketParticipant,
+  respondTicketInvite,
   createSupportTicket,
   getTicketPickers,
   getTicketCatalog,
@@ -130,13 +131,21 @@ async function postAdminTicketMessage(req, res) {
     if (!body?.trim() && !screenshots.length) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
     }
-    const data = await addTicketMessage(req.params.id, body?.trim() || '', req.session, Boolean(isInternal), req.body?.attachments);
+    const data = await addTicketMessage(
+      req.params.id,
+      body?.trim() || '',
+      req.session,
+      Boolean(isInternal),
+      req.body?.attachments,
+      req.body?.replyToMessageId
+    );
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error adding ticket message:', err);
-    const msg = err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
-    res.status(err?.message?.includes('MongoDB') ? 503 : 500).json({ success: false, message: msg });
+    const status = err?.statusCode || (err?.message?.includes('MongoDB') ? 503 : 500);
+    const msg = status < 500 || err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
+    res.status(status).json({ success: false, message: msg });
   }
 }
 
@@ -459,18 +468,22 @@ async function postMyTicketMessage(req, res) {
     if (!sessionCanReadTicket(existing, accountId)) {
       return res.status(403).json({ success: false, message: 'Not your ticket' });
     }
-    const data = await addTicketMessage(req.params.id, body?.trim() || '', req.session, false, req.body?.attachments);
-    data.messages = (data.messages || []).filter((m) => !m.isInternal);
-    delete data.assignableStaff;
-    delete data.timeline;
-    delete data.payments;
-    delete data.articles;
-    delete data.canAdjustCredits;
+    const data = await addTicketMessage(
+      req.params.id,
+      body?.trim() || '',
+      req.session,
+      false,
+      req.body?.attachments,
+      req.body?.replyToMessageId
+    );
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    if (data.isInternal) return res.status(403).json({ success: false, message: 'Not your ticket' });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error adding user ticket message:', err);
-    const msg = err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
-    res.status(err?.message?.includes('MongoDB') ? 503 : 500).json({ success: false, message: msg });
+    const status = err?.statusCode || (err?.message?.includes('MongoDB') ? 503 : 500);
+    const msg = status < 500 || err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
+    res.status(status).json({ success: false, message: msg });
   }
 }
 
@@ -587,7 +600,13 @@ async function postTicketParticipant(req, res) {
     const accountId = req.body?.accountId || req.body?.account_id;
     const data = await addTicketParticipant(req.params.id, accountId, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
-    res.status(200).json({ success: true, data, message: 'User added to the ticket' });
+    res.status(200).json({
+      success: true,
+      data,
+      message: data.invitePending
+        ? 'Invite sent. They need to accept before they can open the ticket.'
+        : 'User added to the ticket',
+    });
   } catch (err) {
     console.error('Error adding ticket participant:', err);
     res.status(err.statusCode || 400).json({
@@ -607,6 +626,22 @@ async function deleteTicketParticipant(req, res) {
     res.status(err.statusCode || 400).json({
       success: false,
       message: err.message || 'Failed to remove user',
+    });
+  }
+}
+
+async function postMyTicketInvite(req, res) {
+  try {
+    const accountId = req.session?.account_id || req.session?.accountId;
+    if (!accountId) return res.status(401).json({ success: false, message: 'Authentication required' });
+    const data = await respondTicketInvite(req.params.id, accountId, req.body?.action);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error responding to ticket invite:', err);
+    res.status(err.statusCode || 400).json({
+      success: false,
+      message: err.message || 'Failed to respond to the invite',
     });
   }
 }
@@ -642,6 +677,7 @@ module.exports = {
   listMyTickets,
   getMyTicket,
   postMyTicketMessage,
+  postMyTicketInvite,
   createMyTechnicalReport,
   getAdminTicketArticles,
   postAdminTicketArticle,

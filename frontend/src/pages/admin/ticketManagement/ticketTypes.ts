@@ -107,6 +107,7 @@ export type TicketMessage = {
   isEdited?: boolean;
   isUnsent?: boolean;
   messageType?: string;
+  replyToId?: string | null;
   audience?: 'staff' | 'author_and_staff' | 'parties' | 'public' | string;
   publishedAt?: string | null;
   createdAt: string;
@@ -467,6 +468,8 @@ export type TicketDetail = {
   formValues?: { key: string; label: string; value: string }[];
   participants?: TicketPerson[];
   involved?: TicketPerson[];
+  pendingInvites?: { accountId: string; name: string; handle?: string | null }[];
+  invitePending?: boolean;
   canManageParticipants?: boolean;
 };
 

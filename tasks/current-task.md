@@ -1,12 +1,10 @@
-# Current Task: Ticket participants
+# Current Task: Ticket invite confirmation
 
 ## Objective
-Let any staff member add or remove a user on a support ticket, and show who has joined the ticket conversation and sent a reply.
+Staff confirm before adding someone to a ticket. Regular users must accept a notification before they can open it. Staff accounts are added immediately.
 
 ## Acceptance Criteria
-1. Any staff session can add a user account to a ticket chat and remove anyone except the person who opened the ticket.
-2. Ticket detail returns current participants and an involved list of people who sent a non-internal reply.
-3. The staff ticket modal shows both lists, with search to add a user and a remove action.
-4. Added users can open and reply on that ticket. Removed users lose chat membership.
-5. Assigning a moderator or admin posts a chat line and notification that include that staff member's name, handle, and role.
-6. Adding or removing a user posts the same kind of chat line, naming both the staff member and the user.
+1. Choosing a person in the ticket modal asks for confirmation before the add is sent.
+2. Adding a regular user creates a pending invite and a notification with Accept and Decline. They cannot open the ticket until they accept.
+3. Accepting adds them to the ticket chat and opens that conversation. Declining leaves them off the ticket.
+4. Adding a staff account puts them on the ticket immediately, with no accept step.

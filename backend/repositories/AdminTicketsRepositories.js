@@ -916,6 +916,7 @@ function mapMongoTicketMessage(m, senderNames = new Map()) {
     isEdited: Boolean(m.is_edited),
     isUnsent: unsent,
     messageType,
+    replyToId: m.message_id_reply ? String(m.message_id_reply) : null,
     createdAt: m.created_at || m.createdAt || null,
   };
 }
@@ -1161,6 +1162,7 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
 
   let messages = [];
   let inboxMembers = [];
+  let pendingInviteRows = [];
   let chatId = null;
   let chatAvailable = Boolean(getMongoClient());
   const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
@@ -1226,9 +1228,10 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
       if (db) {
         const inboxDoc = await db.collection('inbox').findOne(
           { _id: new ObjectId(chatId) },
-          { projection: { members: 1 } }
+          { projection: { members: 1, pending_invites: 1 } }
         );
         inboxMembers = inboxDoc?.members || [];
+        pendingInviteRows = inboxDoc?.pending_invites || [];
       }
     }
   } catch (err) {
@@ -1249,6 +1252,37 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     involved = people.involved;
   } catch (err) {
     console.error('Error loading ticket people:', err.message);
+  }
+
+  let pendingInvites = [];
+  if (staffSession && pendingInviteRows.length) {
+    const inviteIds = [...new Set(pendingInviteRows.map((invite) => String(invite.account_id || '')).filter((id) => TICKET_ACCOUNT_UUID.test(id)))];
+    if (inviteIds.length) {
+      const inviteResult = await pool.query(
+        `SELECT
+           a.account_id,
+           a.handle,
+           COALESCE(
+             a.display_name,
+             NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''),
+             a.handle,
+             'Unknown'
+           ) AS name
+         FROM accounts a
+         LEFT JOIN users u ON u.account_id = a.account_id
+         WHERE a.account_id = ANY($1::uuid[])`,
+        [inviteIds]
+      );
+      const inviteNames = new Map(inviteResult.rows.map((row) => [String(row.account_id), row]));
+      pendingInvites = inviteIds.map((accountId) => {
+        const profile = inviteNames.get(accountId);
+        return {
+          accountId,
+          name: profile?.name || 'Unknown',
+          handle: profile?.handle || null,
+        };
+      });
+    }
   }
 
   const catalog = await getTicketCatalog();
@@ -1311,8 +1345,54 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     canAdjustCredits: Boolean(staffSession) && canAdjustTicketCredits(role, ticket.type),
     participants,
     involved,
+    pendingInvites,
     canManageParticipants: Boolean(staffSession) && isStaffSession(staffSession),
   };
+}
+
+async function saveTicketInvite(chatId, invite) {
+  const db = mongoDb();
+  if (!db || !ObjectId.isValid(chatId)) throw ticketError('Ticket chat is unavailable', 503);
+  const now = new Date();
+  await db.collection('inbox').updateOne(
+    { _id: new ObjectId(chatId) },
+    { $pull: { pending_invites: { account_id: String(invite.account_id) } } }
+  );
+  await db.collection('inbox').updateOne(
+    { _id: new ObjectId(chatId) },
+    { $push: { pending_invites: { ...invite, invited_at: now } }, $set: { updated_at: now } }
+  );
+}
+
+async function clearTicketInvite(chatId, accountId) {
+  const db = mongoDb();
+  if (!db || !ObjectId.isValid(chatId)) return;
+  await db.collection('inbox').updateOne(
+    { _id: new ObjectId(chatId) },
+    {
+      $pull: { pending_invites: { account_id: String(accountId) } },
+      $set: { updated_at: new Date() },
+    }
+  );
+}
+
+async function notifyTicketInvite(accountId, message, ticketId) {
+  try {
+    const notification = await createNotificationServices({
+      account_id: String(accountId),
+      message,
+      is_read: false,
+      reference_table: 'tickets',
+      reference_prefix: 'TICKET_INVITE',
+      reference_path: '/notifications',
+      reference_id: String(ticketId),
+    });
+    const { getIo } = require('../lib/WebSocket');
+    const io = getIo();
+    if (io && notification) io.to(String(accountId)).emit('notification', notification);
+  } catch (error) {
+    console.error('Error notifying ticket invite:', error.message);
+  }
 }
 
 async function notifyTicketParticipant(accountId, message, prefix, ticketId, chatId) {
@@ -1555,12 +1635,34 @@ async function addTicketParticipant(ticketId, rawAccountId, staffSession) {
     throw ticketError('That person is already on this ticket', 409);
   }
 
-  const memberRole = person.staff_id ? 'admin' : 'member';
-  await upsertTicketMember(chatId, accountId, memberRole, 'active');
   const actor = await actingStaffIdentity(staffSession);
   const personName = person.staff_id
     ? formatStaffIdentity({ name: person.name, handle: person.handle, role: person.staff_role })
     : formatAccountIdentity(person);
+
+  if (!person.staff_id) {
+    const alreadyInvited = (inbox?.pending_invites || []).some((invite) => String(invite.account_id) === accountId);
+    if (alreadyInvited) throw ticketError('That person already has an invite waiting', 409);
+    await saveTicketInvite(chatId, {
+      account_id: accountId,
+      invited_by: sessionAccountId(staffSession),
+    });
+    const inviteMessage = `${actor.label} invited you to ticket #${ticket.ticket_number}. Accept the invite before you can open it.`;
+    await notifyTicketInvite(accountId, inviteMessage, ticketId);
+    await recordTicketEvent({
+      ticketId,
+      eventType: 'participant_invite',
+      summary: `${actor.label} invited ${personName} to this ticket.`,
+      actorStaffId: actor.staffId,
+      actorAccountId: sessionAccountId(staffSession),
+      metadata: { accountId },
+    });
+    const detail = await getTicketDetail(ticketId, staffSession);
+    return detail ? { ...detail, invitePending: true } : null;
+  }
+
+  const memberRole = 'admin';
+  await upsertTicketMember(chatId, accountId, memberRole, 'active');
   const body = `${actor.label} added ${personName} to this ticket.`;
   await announceInTicketChat({
     ticketId,
@@ -1578,7 +1680,48 @@ async function addTicketParticipant(ticketId, rawAccountId, staffSession) {
     actorAccountId: sessionAccountId(staffSession),
     metadata: { accountId },
   });
-  return getTicketDetail(ticketId, staffSession);
+  const detail = await getTicketDetail(ticketId, staffSession);
+  return detail ? { ...detail, invitePending: false } : null;
+}
+
+async function respondTicketInvite(ticketId, rawAccountId, action) {
+  const accountId = String(rawAccountId || '').trim();
+  if (!TICKET_ACCOUNT_UUID.test(accountId)) throw ticketError('Authentication required', 401);
+  const decision = String(action || '').trim().toLowerCase();
+  if (!['accept', 'decline'].includes(decision)) throw ticketError('Choose accept or decline', 400);
+
+  const ticketResult = await pool.query(
+    `SELECT * FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  if (!ticketResult.rows.length) return null;
+  const ticket = ticketResult.rows[0];
+  const chatId = await ensureTicketChat(ticketId, ticket);
+  const inbox = await loadTicketInbox(chatId);
+  const pending = (inbox?.pending_invites || []).some((invite) => String(invite.account_id) === accountId);
+  const member = (inbox?.members || []).find((item) => String(item.account_id) === accountId);
+
+  if (decision === 'decline') {
+    if (!pending) throw ticketError('This invite is no longer available', 404);
+    await clearTicketInvite(chatId, accountId);
+    return { chatId: null, joined: false };
+  }
+
+  if (ticketMemberIsActive(member)) {
+    await clearTicketInvite(chatId, accountId);
+    return { chatId, joined: true };
+  }
+  if (!pending) throw ticketError('This invite is no longer available', 404);
+
+  await upsertTicketMember(chatId, accountId, 'member', 'active');
+  await clearTicketInvite(chatId, accountId);
+  const person = await lookupAccountIdentity(accountId);
+  await writeTicketMembershipNote(
+    chatId,
+    { account_id: accountId, accountId },
+    `${formatAccountIdentity(person)} joined this ticket.`
+  );
+  return { chatId, joined: true };
 }
 
 async function removeTicketParticipant(ticketId, rawAccountId, staffSession) {
@@ -1602,6 +1745,21 @@ async function removeTicketParticipant(ticketId, rawAccountId, staffSession) {
   const chatId = await getTicketChatId(ticketId);
   const inbox = chatId ? await loadTicketInbox(chatId) : null;
   const existing = (inbox?.members || []).find((member) => String(member.account_id) === accountId);
+  const pending = (inbox?.pending_invites || []).some((invite) => String(invite.account_id) === accountId);
+  if (!ticketMemberIsActive(existing) && pending && chatId) {
+    await clearTicketInvite(chatId, accountId);
+    const actor = await actingStaffIdentity(staffSession);
+    const personName = formatAccountIdentity(await lookupAccountIdentity(accountId));
+    await recordTicketEvent({
+      ticketId,
+      eventType: 'participant_invite_cancel',
+      summary: `${actor.label} cancelled the invite for ${personName}.`,
+      actorStaffId: actor.staffId,
+      actorAccountId: sessionAccountId(staffSession),
+      metadata: { accountId },
+    });
+    return getTicketDetail(ticketId, staffSession);
+  }
   if (!ticketMemberIsActive(existing)) {
     throw ticketError('That person is not on this ticket', 404);
   }
@@ -1946,7 +2104,7 @@ async function updateTicket(ticketId, patch, staffSession) {
   return getTicketDetail(ticketId, staffSession);
 }
 
-async function addTicketMessage(ticketId, body, staffSession, isInternal = false, rawAttachments = []) {
+async function addTicketMessage(ticketId, body, staffSession, isInternal = false, rawAttachments = [], replyToMessageId = null) {
   if (!getMongoClient()) {
     throw new Error('MongoDB is not connected — cannot send ticket chat messages');
   }
@@ -1981,12 +2139,21 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
   if (!messageBody && !screenshots.length) {
     throw new Error('Message body is required');
   }
+  let replyParentId = null;
+  const requestedReply = String(replyToMessageId || '').trim();
+  if (requestedReply) {
+    const parent = await getMessageByIdRepositories(requestedReply);
+    if (!parent || String(parent.conversation_id) !== String(chatId) || parent.is_deleted || parent.deleted_at) {
+      throw ticketError('That message is no longer in this ticket', 400);
+    }
+    replyParentId = String(parent._id);
+  }
   const insertedMessageId = await createMessageRepositories({
     conversation_id: String(chatId),
     sender_id: accountId,
     message_type: screenshots.length ? 'image' : 'text',
     message_content: messageBody,
-    message_id_reply: null,
+    message_id_reply: replyParentId,
     attachments: screenshots,
     links: [],
     message_react: [],
@@ -2057,7 +2224,7 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
         io.to(String(chatId)).emit('newMessage', createdMessage);
       }
 
-      await Promise.all(
+      void Promise.all(
         recipients.map(async (member) => {
           try {
             const notification = await createNotificationServices({
@@ -2080,7 +2247,18 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
     }
   }
 
-  return getTicketDetail(ticketId, staffSession);
+  return mapMongoTicketMessage(createdMessage || {
+    _id: insertedMessageId,
+    sender_id: accountId,
+    message_type: screenshots.length ? 'image' : 'text',
+    message_content: messageBody,
+    attachments: screenshots,
+    is_internal: staff ? Boolean(isInternal) : false,
+    author_type: staff ? 'staff' : 'user',
+    author_name: sessionDisplayName(staffSession) || (staff ? 'Staff' : 'User'),
+    message_id_reply: replyParentId,
+    created_at: now,
+  });
 }
 
 function emitTicketChat(event, chatId, payload) {
@@ -3117,6 +3295,7 @@ module.exports = {
   searchTicketParticipants,
   addTicketParticipant,
   removeTicketParticipant,
+  respondTicketInvite,
   getTicketCatalog,
   createSupportTicket,
   findAccountByEmailOrUsername,

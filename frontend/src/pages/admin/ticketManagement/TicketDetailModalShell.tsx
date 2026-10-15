@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { FileText, Hand, Loader2, Lock, MessageSquare, Paperclip, Send, ShieldAlert, Trash2, UserMinus, UserPlus, UserRound, X } from 'lucide-react';
+import { CornerDownRight, FileText, Hand, Loader2, Lock, MessageSquare, Paperclip, Send, ShieldAlert, Trash2, UserMinus, UserPlus, UserRound, X } from 'lucide-react';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
@@ -73,6 +73,52 @@ function messageKind(m: TicketMessage): 'internal' | 'staff' | 'user' {
   return 'user';
 }
 
+function fromSocketMessage(raw: {
+  _id?: string;
+  id?: string;
+  sender_id?: string;
+  senderId?: string;
+  message_type?: string;
+  messageType?: string;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
+  is_unsent?: boolean;
+  isUnsent?: boolean;
+  author_type?: string;
+  authorType?: string;
+  is_internal?: boolean;
+  isInternal?: boolean;
+  author_name?: string;
+  authorName?: string;
+  message_content?: string;
+  body?: string;
+  attachments?: TicketMessage['attachments'];
+  message_id_reply?: string | null;
+  replyToId?: string | null;
+  created_at?: string;
+  createdAt?: string;
+} | null): TicketMessage | null {
+  if (!raw) return null;
+  const id = raw._id || raw.id;
+  if (!id) return null;
+  const messageType = String(raw.message_type || raw.messageType || 'text').toLowerCase();
+  return {
+    id: String(id),
+    senderId: raw.sender_id || raw.senderId ? String(raw.sender_id || raw.senderId) : null,
+    authorType: messageType === 'system'
+      ? 'system'
+      : String(raw.author_type || raw.authorType || (raw.is_internal ? 'staff' : 'user')),
+    authorName: String(raw.author_name || raw.authorName || 'Unknown'),
+    body: String(raw.message_content || raw.body || ''),
+    attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
+    isInternal: Boolean(raw.is_internal || raw.isInternal),
+    isUnsent: Boolean(raw.is_deleted || raw.deleted_at || raw.is_unsent || raw.isUnsent),
+    messageType,
+    replyToId: raw.message_id_reply || raw.replyToId ? String(raw.message_id_reply || raw.replyToId) : null,
+    createdAt: String(raw.created_at || raw.createdAt || new Date().toISOString()),
+  };
+}
+
 function attachmentKind(file: { attachment_type?: string; attachment_name?: string }) {
   const hint = `${file.attachment_type || ''} ${file.attachment_name || ''}`.toLowerCase();
   if (hint.includes('video') || /\.(mp4|webm|mov|m4v)\b/.test(hint)) return 'video';
@@ -85,6 +131,9 @@ function MessageBubble({
   accentSoft,
   own,
   busy,
+  replyQuote,
+  onReply,
+  onJumpToReply,
   onDelete,
   onToggleInternal,
 }: {
@@ -92,6 +141,9 @@ function MessageBubble({
   accentSoft: string;
   own: boolean;
   busy: boolean;
+  replyQuote: { id: string; author: string; body: string } | null;
+  onReply: () => void;
+  onJumpToReply: (messageId: string) => void;
   onDelete: () => Promise<void>;
   onToggleInternal: (isInternal: boolean) => Promise<void>;
 }) {
@@ -133,7 +185,7 @@ function MessageBubble({
   const staffReply = kind === 'staff' || kind === 'internal';
 
   return (
-    <div className={`flex gap-2.5 ${isStaffSide ? 'flex-row-reverse' : 'flex-row'}`}>
+    <div data-message-id={String(message.id)} className={`flex gap-2.5 ${isStaffSide ? 'flex-row-reverse' : 'flex-row'}`}>
       <div
         className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ring-1 ${avatar}`}
         title={displayName}
@@ -154,6 +206,19 @@ function MessageBubble({
         </div>
 
         <div className={`w-full rounded-2xl border px-3.5 py-2.5 shadow-sm ${shell} ${isStaffSide ? 'rounded-tr-md' : 'rounded-tl-md'}`}>
+          {replyQuote && (
+            <button
+              type="button"
+              onClick={() => onJumpToReply(replyQuote.id)}
+              className="mb-2 flex w-full items-start gap-1.5 rounded-lg border-l-2 border-sky-400 bg-black/25 px-2.5 py-1.5 text-left"
+            >
+              <CornerDownRight className="mt-0.5 h-3 w-3 shrink-0 text-sky-300" />
+              <span className="min-w-0">
+                <span className="block text-[10px] font-semibold text-sky-200">{replyQuote.author}</span>
+                <span className="block truncate text-[11px] text-zinc-300">{replyQuote.body}</span>
+              </span>
+            </button>
+          )}
           {kind === 'internal' && (
             <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-amber-200/80">
               Visible to staff only
@@ -198,9 +263,18 @@ function MessageBubble({
               })}
             </div>
           )}
-          {(own || staffReply) && (
+          {!message.isUnsent && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {own && !message.isUnsent && !confirmDelete && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onReply}
+                className="inline-flex items-center gap-1 rounded-lg border border-sky-400/30 px-2 py-1 text-[11px] text-sky-100 hover:bg-sky-500/10 disabled:opacity-50"
+              >
+                <CornerDownRight className="h-3 w-3" />
+                Reply
+              </button>
+              {(own || staffReply) && own && !confirmDelete && (
                 <button
                   type="button"
                   disabled={busy}
@@ -346,6 +420,7 @@ export default function TicketDetailModalShell({
   const [creditAmount, setCreditAmount] = useState('');
   const [creditNote, setCreditNote] = useState('');
   const [internalNote, setInternalNote] = useState(false);
+  const [replyTarget, setReplyTarget] = useState<TicketMessage | null>(null);
   const [status, setStatus] = useState('');
   const [priority, setPriority] = useState('');
   const [currentType, setCurrentType] = useState('');
@@ -365,8 +440,16 @@ export default function TicketDetailModalShell({
   }[]>([]);
   const [searchingPeople, setSearchingPeople] = useState(false);
   const [personBusy, setPersonBusy] = useState(false);
+  const [confirmPerson, setConfirmPerson] = useState<{
+    accountId: string;
+    name: string;
+    handle: string;
+    email: string;
+    kind: 'user' | 'staff';
+    role: string;
+  } | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
-  const realtimeRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
 
   const isAdminQueue = (role: string) => {
     const r = String(role || '').toLowerCase();
@@ -459,6 +542,23 @@ export default function TicketDetailModalShell({
     }
   };
 
+  const placeMessage = (message: TicketMessage, pendingId?: string) => {
+    setDetail((current) => {
+      if (!current) return current;
+      const withoutPending = current.messages.filter(
+        (item) => String(item.id) !== String(pendingId || '') && String(item.id) !== String(message.id)
+      );
+      return { ...current, messages: [...withoutPending, message] };
+    });
+  };
+
+  const dropMessage = (messageId: string) => {
+    setDetail((current) => {
+      if (!current) return current;
+      return { ...current, messages: current.messages.filter((item) => String(item.id) !== String(messageId)) };
+    });
+  };
+
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -517,7 +617,8 @@ export default function TicketDetailModalShell({
       if (response.data?.data) setDetail(response.data.data as TicketDetail);
       setPersonQuery('');
       setPersonResults([]);
-      showSuccessToast(action === 'add' ? 'User added to the ticket' : 'User removed from the ticket');
+      setConfirmPerson(null);
+      showSuccessToast(response.data?.message || (action === 'add' ? 'User added to the ticket' : 'User removed from the ticket'));
       onUpdated();
     } catch (err: unknown) {
       showErrorToast(apiErrorMessage(err, action === 'add' ? 'Failed to add user' : 'Failed to remove user'));
@@ -530,32 +631,24 @@ export default function TicketDetailModalShell({
     const chatId = detail?.chatId;
     if (!chatId) return;
 
-    const scheduleRefresh = () => {
-      if (realtimeRefreshRef.current) {
-        clearTimeout(realtimeRefreshRef.current);
-      }
-      realtimeRefreshRef.current = setTimeout(() => {
-        realtimeRefreshRef.current = null;
-        void refreshThread();
-      }, 75);
+    const appendLiveMessage = (message: { conversation_id?: string }) => {
+      if (String(message?.conversation_id || '') !== String(chatId)) return;
+      const mapped = fromSocketMessage(message);
+      if (mapped) placeMessage(mapped);
     };
-    const refreshTicketThread = (message: { conversation_id?: string }) => {
-      if (String(message?.conversation_id) === String(chatId)) {
-        scheduleRefresh();
-      }
-    };
-    const refreshFromNotification = (notification: {
-      reference_path?: string | null;
-      reference_prefix?: string | null;
-    }) => {
-      const referencePath = String(notification?.reference_path || '');
-      const referencePrefix = String(notification?.reference_prefix || '');
-      if (
-        referencePath.includes(`conversation=${chatId}`) &&
-        (referencePrefix.includes('CHAT_') || referencePrefix.includes('TICKET_'))
-      ) {
-        scheduleRefresh();
-      }
+    const markDeleted = (payload: { message_id?: string; messageId?: string; conversation_id?: string }) => {
+      if (payload?.conversation_id && String(payload.conversation_id) !== String(chatId)) return;
+      const messageId = payload?.message_id || payload?.messageId;
+      if (!messageId) return;
+      setDetail((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          messages: current.messages.map((item) =>
+            String(item.id) === String(messageId) ? { ...item, isUnsent: true } : item
+          ),
+        };
+      });
     };
     const joinTicketRoom = () => {
       socket.emit('joinRoom', { conversation_id: String(chatId) });
@@ -564,24 +657,18 @@ export default function TicketDetailModalShell({
     if (!socket.connected) socket.connect();
     joinTicketRoom();
     socket.on('connect', joinTicketRoom);
-    socket.on('newMessage', refreshTicketThread);
-    socket.on('messageReplied', refreshTicketThread);
-    socket.on('conversationMessageNotification', refreshTicketThread);
-    socket.on('ticketInternalMessage', refreshTicketThread);
-    socket.on('notification', refreshFromNotification);
+    socket.on('newMessage', appendLiveMessage);
+    socket.on('messageReplied', appendLiveMessage);
+    socket.on('ticketInternalMessage', appendLiveMessage);
+    socket.on('messageDeleted', markDeleted);
 
     return () => {
       socket.off('connect', joinTicketRoom);
-      socket.off('newMessage', refreshTicketThread);
-      socket.off('messageReplied', refreshTicketThread);
-      socket.off('conversationMessageNotification', refreshTicketThread);
-      socket.off('ticketInternalMessage', refreshTicketThread);
-      socket.off('notification', refreshFromNotification);
+      socket.off('newMessage', appendLiveMessage);
+      socket.off('messageReplied', appendLiveMessage);
+      socket.off('ticketInternalMessage', appendLiveMessage);
+      socket.off('messageDeleted', markDeleted);
       socket.emit('leaveRoom', { conversation_id: String(chatId) });
-      if (realtimeRefreshRef.current) {
-        clearTimeout(realtimeRefreshRef.current);
-        realtimeRefreshRef.current = null;
-      }
     };
     // The room changes only when another ticket is opened.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -740,24 +827,62 @@ export default function TicketDetailModalShell({
     }
   };
 
+  const quoteFor = (replyToId?: string | null) => {
+    if (!replyToId) return null;
+    const parent = detail?.messages.find((item) => String(item.id) === String(replyToId));
+    if (!parent) return { id: String(replyToId), author: 'Message', body: 'Original message unavailable' };
+    return {
+      id: String(parent.id),
+      author: parent.authorName || 'Message',
+      body: parent.body || (parent.attachments?.length ? 'Attachment' : 'Message'),
+    };
+  };
+
+  const jumpToMessage = (messageId: string) => {
+    const target = threadRef.current?.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   const sendReply = async () => {
-    if (!reply.trim() && screenshots.length === 0) return;
-    setSaving(true);
+    const text = reply.trim();
+    const files = screenshots;
+    const target = replyTarget;
+    if (!text && files.length === 0) return;
+    const pendingId = `pending-${Date.now()}`;
+    placeMessage({
+      id: pendingId,
+      senderId: viewerAccountId ? String(viewerAccountId) : null,
+      authorType: internalNote ? 'staff' : 'staff',
+      authorName: 'You',
+      body: text,
+      attachments: files.map((file) => ({
+        attachment_key: file.key,
+        attachment_name: file.name,
+        attachment_type: file.type,
+      })),
+      isInternal: internalNote,
+      replyToId: target ? String(target.id) : null,
+      createdAt: new Date().toISOString(),
+    });
+    setReply('');
+    setScreenshots([]);
+    setReplyTarget(null);
     try {
       const res = await api.post(`${endpointBase}/${ticketId}/messages`, {
-        body: reply.trim(),
+        body: text,
         isInternal: internalNote,
-        attachments: screenshots.map((file) => ({ key: file.key, name: file.name, type: file.type })),
+        replyToMessageId: target ? String(target.id) : null,
+        attachments: files.map((file) => ({ key: file.key, name: file.name, type: file.type })),
       });
-      setReply('');
-      setScreenshots([]);
-      if (res.data?.data) applyLoadedTicket(res.data.data as TicketDetail, false);
-      showSuccessToast(internalNote ? 'Internal note added' : 'Reply sent');
-      onUpdated();
+      const saved = fromSocketMessage(res.data?.data) || (res.data?.data as TicketMessage | undefined);
+      if (saved?.id) placeMessage(saved, pendingId);
+      else dropMessage(pendingId);
     } catch (err: unknown) {
+      dropMessage(pendingId);
+      setReply(text);
+      setScreenshots(files);
+      setReplyTarget(target);
       showErrorToast(apiErrorMessage(err, 'Failed to send message'));
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -933,6 +1058,32 @@ export default function TicketDetailModalShell({
                     ) : null}
                   </div>
 
+                  {(detail.pendingInvites || []).length > 0 && (
+                    <div className="border-t border-white/10 pt-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">Waiting to accept</p>
+                      <ul className="mt-2 space-y-1.5">
+                        {detail.pendingInvites!.map((person) => (
+                          <li key={`invite-${person.accountId}`} className="flex items-center justify-between gap-2 text-xs">
+                            <span className="min-w-0 truncate text-zinc-300">
+                              {person.name}
+                              <span className="text-zinc-600">{person.handle ? ` · @${person.handle}` : ''}</span>
+                            </span>
+                            {detail.canManageParticipants ? (
+                              <button
+                                type="button"
+                                disabled={personBusy}
+                                onClick={() => void changeParticipant(person.accountId, 'remove')}
+                                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+                              >
+                                Cancel
+                              </button>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   {detail.canManageParticipants && (
                     <div className="space-y-2">
                       <label className="block text-[11px] text-zinc-500" htmlFor="ticket-add-user">
@@ -956,12 +1107,15 @@ export default function TicketDetailModalShell({
                             const alreadyOnTicket = (detail.participants || []).some(
                               (member) => member.accountId === person.accountId && member.status === 'active'
                             );
+                            const alreadyInvited = (detail.pendingInvites || []).some(
+                              (invite) => invite.accountId === person.accountId
+                            );
                             return (
                               <li key={person.accountId}>
                                 <button
                                   type="button"
-                                  disabled={personBusy || alreadyOnTicket}
-                                  onClick={() => void changeParticipant(person.accountId, 'add')}
+                                  disabled={personBusy || alreadyOnTicket || alreadyInvited}
+                                  onClick={() => setConfirmPerson(person)}
                                   className="flex w-full items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2 text-left text-xs hover:bg-white/5 disabled:opacity-50"
                                 >
                                   <span className="min-w-0">
@@ -977,7 +1131,7 @@ export default function TicketDetailModalShell({
                                     </span>
                                     <span className="inline-flex items-center gap-1">
                                       <UserPlus className="h-3.5 w-3.5" />
-                                      {alreadyOnTicket ? 'On ticket' : 'Add'}
+                                      {alreadyOnTicket ? 'On ticket' : alreadyInvited ? 'Invited' : 'Add'}
                                     </span>
                                   </span>
                                 </button>
@@ -1327,7 +1481,7 @@ export default function TicketDetailModalShell({
                 )}
               </div>
 
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+              <div ref={threadRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
                 {detail.chatAvailable === false && (
                   <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
                     MongoDB is not connected — chats unavailable until MONGODB_URI is set. Status updates still work.
@@ -1353,6 +1507,9 @@ export default function TicketDetailModalShell({
                       accentSoft={tone.soft}
                       own={Boolean(viewerAccountId) && String(m.senderId || '') === String(viewerAccountId)}
                       busy={saving}
+                      replyQuote={quoteFor(m.replyToId)}
+                      onReply={() => setReplyTarget(m)}
+                      onJumpToReply={jumpToMessage}
                       onDelete={() => removeMessage(m.id)}
                       onToggleInternal={(isInternal) => changeMessage(m.id, { isInternal })}
                     />
@@ -1390,6 +1547,20 @@ export default function TicketDetailModalShell({
                     </div>
                   );
                 })()}
+                {replyTarget && (
+                  <div className="mb-2 flex items-start gap-2 rounded-lg border border-sky-400/40 bg-sky-500/10 px-3 py-2">
+                    <CornerDownRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-300" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200">
+                        Replying to {replyTarget.authorName}
+                      </p>
+                      <p className="truncate text-xs text-sky-50">{replyTarget.body || 'Attachment'}</p>
+                    </div>
+                    <button type="button" onClick={() => setReplyTarget(null)} aria-label="Cancel reply" className="text-sky-100">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
                 <textarea
                   value={reply}
                   onChange={(e) => setReply(e.target.value)}
@@ -1455,6 +1626,43 @@ export default function TicketDetailModalShell({
           </div>
         ) : (
           <p className="py-16 text-center text-zinc-500">Ticket not found.</p>
+        )}
+
+        {confirmPerson && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-sky-500/30 bg-[#14151c] p-5 shadow-2xl">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200/80">Confirm add</p>
+              <h3 className="mt-2 text-lg font-semibold text-white">Add {confirmPerson.name}?</h3>
+              <p className="mt-2 text-sm text-zinc-400">
+                {confirmPerson.kind === 'staff'
+                  ? 'Staff are added immediately and can open this ticket.'
+                  : 'They get a notification and have to accept before they can open this ticket.'}
+              </p>
+              <p className="mt-2 text-xs text-zinc-500">
+                {confirmPerson.handle || 'No handle'}
+                {confirmPerson.email ? ` · ${confirmPerson.email}` : ''}
+                {` · ${confirmPerson.role}`}
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={personBusy}
+                  onClick={() => setConfirmPerson(null)}
+                  className="rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={personBusy}
+                  onClick={() => void changeParticipant(confirmPerson.accountId, 'add')}
+                  className="rounded-xl bg-sky-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  {personBusy ? 'Adding…' : confirmPerson.kind === 'staff' ? 'Add staff' : 'Send invite'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {confirmEscalate && (
