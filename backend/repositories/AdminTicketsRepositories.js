@@ -1387,13 +1387,6 @@ function escapeTranscriptHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
-function transcriptPersonLabel(person) {
-  const handle = person.handle ? ` (@${person.handle})` : '';
-  if (person.isRequester) return `${person.name}${handle} — opened the ticket`;
-  if (person.isStaff) return `${person.name}${handle} — staff`;
-  return `${person.name}${handle}`;
-}
-
 function buildTicketSummary(detail, staff, users, messages) {
   const ticket = detail.ticket || {};
   const opener = users.find((person) => person.isRequester) || users[0];
@@ -1413,6 +1406,57 @@ function buildTicketSummary(detail, staff, users, messages) {
   return sentences.join(' ');
 }
 
+function transcriptInitials(name) {
+  const parts = String(name || '?').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  const letters = parts.map((part) => part[0]).join('').toUpperCase();
+  return letters || '?';
+}
+
+function transcriptSpeaker(message) {
+  if (message.isInternal) return { side: 'note', label: 'Internal note' };
+  const type = String(message.authorType || message.messageType || '').toLowerCase();
+  if (type === 'system') return { side: 'system', label: 'System' };
+  if (type === 'staff' || message.isStaff) return { side: 'staff', label: 'Staff' };
+  return { side: 'user', label: 'User' };
+}
+
+function formatTranscriptWhen(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function transcriptDayKey(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function transcriptReadableText(value) {
+  const escaped = escapeTranscriptHtml(value);
+  return escaped
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')
+    .replace(/\n/g, '<br>');
+}
+
+function transcriptAttachmentName(file) {
+  if (!file || typeof file !== 'object') return 'Attachment';
+  return file.attachment_name || file.name || file.filename || 'Attachment';
+}
+
 function renderTicketTranscript(detail) {
   const people = (detail.participants || []).filter((person) => person.status === 'active' || person.isRequester);
   const staff = people.filter((person) => person.isStaff);
@@ -1420,54 +1464,142 @@ function renderTicketTranscript(detail) {
   const messages = (detail.messages || []).filter((message) => !message.isUnsent);
   const ticket = detail.ticket || {};
   const summary = buildTicketSummary(detail, staff, users, messages);
-  const personItems = (group) => (
-    group.length
-      ? group.map((person) => `<li>${escapeTranscriptHtml(transcriptPersonLabel(person))}</li>`).join('')
-      : '<li>None</li>'
-  );
-  const messageBlocks = messages.map((message) => {
-    const kind = message.isInternal
-      ? 'Internal note'
-      : String(message.authorType || '').toLowerCase() === 'system'
-        ? 'System'
-        : message.isStaff || String(message.authorType || '').toLowerCase() === 'staff'
-          ? 'Staff'
-          : 'User';
-    const when = message.createdAt ? new Date(message.createdAt).toLocaleString() : '';
-    const body = message.body || (message.attachments?.length ? 'Attachment' : '');
-    return `<article class="message"><p class="meta">${escapeTranscriptHtml(when)} · ${escapeTranscriptHtml(message.authorName || 'Unknown')} · ${kind}</p><p>${escapeTranscriptHtml(body).replace(/\n/g, '<br>')}</p></article>`;
+  const byId = new Map(messages.map((message) => [String(message.id), message]));
+  let lastDay = '';
+  const thread = messages.map((message) => {
+    const speaker = transcriptSpeaker(message);
+    const name = message.authorName || 'Unknown';
+    const when = formatTranscriptWhen(message.createdAt);
+    const day = transcriptDayKey(message.createdAt);
+    const dayBreak = day && day !== lastDay ? `<div class="day"><span>${escapeTranscriptHtml(day)}</span></div>` : '';
+    if (day) lastDay = day;
+    const body = message.body || (message.attachments?.length ? '' : '');
+    const parent = message.replyToId ? byId.get(String(message.replyToId)) : null;
+    const quote = parent
+      ? `<blockquote><strong>${escapeTranscriptHtml(parent.authorName || 'Message')}</strong><span>${transcriptReadableText(String(parent.body || 'Attachment').replace(/\s+/g, ' ').trim().slice(0, 180))}</span></blockquote>`
+      : '';
+    const files = (message.attachments || []).map((file) => (
+      `<li>${escapeTranscriptHtml(transcriptAttachmentName(file))}</li>`
+    )).join('');
+    const fileList = files ? `<ul class="files">${files}</ul>` : '';
+    if (speaker.side === 'system') {
+      return `${dayBreak}<p class="system"><span>System</span> ${transcriptReadableText(body || 'Update')}</p>`;
+    }
+    return `${dayBreak}<div class="row ${speaker.side}">
+      <article class="bubble ${speaker.side}">
+        <header>
+          <span class="avatar" aria-hidden="true">${escapeTranscriptHtml(transcriptInitials(name))}</span>
+          <span class="name">${escapeTranscriptHtml(name)}</span>
+          <span class="chip">${speaker.label}</span>
+          ${message.isEdited ? '<span class="chip quiet">Edited</span>' : ''}
+          <time>${escapeTranscriptHtml(when)}</time>
+        </header>
+        ${quote}
+        ${body ? `<p>${transcriptReadableText(body)}</p>` : ''}
+        ${fileList}
+      </article>
+    </div>`;
   }).join('');
+  const personCard = (person) => {
+    const note = person.isRequester ? 'Opened the ticket' : person.isStaff ? 'Staff' : 'User';
+    const handle = person.handle ? `@${person.handle}` : 'No handle';
+    return `<article class="person">
+      <span class="avatar" aria-hidden="true">${escapeTranscriptHtml(transcriptInitials(person.name))}</span>
+      <div>
+        <strong>${escapeTranscriptHtml(person.name || 'Unknown')}</strong>
+        <p>${escapeTranscriptHtml(handle)} · ${escapeTranscriptHtml(note)}</p>
+      </div>
+    </article>`;
+  };
+  const summaryHtml = String(summary)
+    .split(/(?<=\.)\s+/)
+    .filter(Boolean)
+    .map((sentence) => `<p>${escapeTranscriptHtml(sentence)}</p>`)
+    .join('');
+  const meta = [
+    ticket.status,
+    ticket.priority ? `${ticket.priority} priority` : '',
+    ticket.type || '',
+    `${messages.length} message${messages.length === 1 ? '' : 's'}`,
+  ].filter(Boolean);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeTranscriptHtml(ticket.number || 'Ticket')} transcript</title>
   <style>
-    body { margin: 0; background: #f4f4f5; color: #18181b; font: 15px/1.5 Georgia, serif; }
-    main { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
-    h1, h2 { font-family: system-ui, sans-serif; }
-    h1 { margin-bottom: 4px; font-size: 28px; }
-    .sub { margin-top: 0; color: #52525b; }
-    .message { margin: 0 0 16px; padding-bottom: 12px; border-bottom: 1px solid #e4e4e7; }
-    .meta { margin: 0 0 4px; color: #71717a; font: 12px/1.4 system-ui, sans-serif; }
-    .end { margin-top: 28px; padding: 16px; background: #fff; border: 1px solid #e4e4e7; }
-    ul { margin: 8px 0 0; padding-left: 18px; }
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #eef1f4; color: #1c1c1f; font: 15px/1.55 system-ui, sans-serif; }
+    main { max-width: 820px; margin: 0 auto; padding: 28px 16px 72px; }
+    header.ticket { margin-bottom: 18px; padding: 20px; background: #fff; border: 1px solid #e4e4e7; border-radius: 16px; }
+    h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.02em; }
+    .subject { margin: 0; color: #3f3f46; font-size: 16px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+    .meta li { padding: 4px 8px; border-radius: 999px; background: #f4f4f5; color: #3f3f46; font-size: 12px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; color: #52525b; font-size: 12px; }
+    .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 999px; vertical-align: -1px; }
+    .legend .user { background: #fff; border: 1px solid #d4d4d8; }
+    .legend .staff { background: #dbe7f6; }
+    .legend .note { background: #f6e7c1; }
+    .thread { display: flex; flex-direction: column; gap: 10px; }
+    .day { display: flex; justify-content: center; margin: 8px 0; }
+    .day span { padding: 4px 10px; border-radius: 999px; background: #fff; color: #71717a; font-size: 12px; }
+    .row { display: flex; }
+    .row.user { justify-content: flex-start; }
+    .row.staff { justify-content: flex-end; }
+    .row.note { justify-content: center; }
+    .bubble { width: min(100%, 520px); padding: 12px 14px; border-radius: 16px; background: #fff; border: 1px solid #e4e4e7; }
+    .bubble.staff { background: #e7f0fb; border-color: #c9daf0; }
+    .bubble.note { width: min(100%, 640px); background: #fff8e8; border-color: #ead7a2; }
+    .bubble header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+    .avatar { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; background: #18181b; color: #fff; font-size: 11px; font-weight: 700; }
+    .bubble.staff .avatar { background: #1d4f91; }
+    .bubble.note .avatar { background: #8a5a12; }
+    .name { font-weight: 650; }
+    .chip { padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,0.06); font-size: 11px; }
+    .chip.quiet { color: #71717a; }
+    time { margin-left: auto; color: #71717a; font-size: 12px; }
+    .bubble p { margin: 0; white-space: normal; overflow-wrap: anywhere; }
+    blockquote { margin: 0 0 8px; padding: 8px 10px; border-left: 3px solid #a1a1aa; background: rgba(255,255,255,0.65); border-radius: 8px; color: #3f3f46; font-size: 13px; }
+    blockquote strong { display: block; font-size: 12px; }
+    .files { margin: 8px 0 0; padding-left: 18px; color: #3f3f46; font-size: 13px; }
+    .system { align-self: center; max-width: 640px; margin: 0; padding: 8px 12px; border-radius: 999px; background: #fff; color: #52525b; text-align: center; font-size: 13px; }
+    .system span { margin-right: 6px; font-weight: 650; }
+    a { color: #1d4f91; }
+    .end { margin-top: 28px; padding: 18px; background: #fff; border: 1px solid #e4e4e7; border-radius: 16px; }
+    .end h2 { margin: 18px 0 8px; font-size: 18px; }
+    .end h2:first-child { margin-top: 0; }
+    .people { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+    .person { display: flex; gap: 10px; align-items: center; padding: 10px; border: 1px solid #e4e4e7; border-radius: 12px; }
+    .person p { margin: 2px 0 0; color: #52525b; font-size: 13px; }
+    .summary p { margin: 0 0 8px; }
+    @media print {
+      body { background: #fff; }
+      .bubble, .person, header.ticket, .end { break-inside: avoid; }
+    }
   </style>
 </head>
 <body>
   <main>
-    <h1>${escapeTranscriptHtml(ticket.number || 'Ticket')}</h1>
-    <p class="sub">${escapeTranscriptHtml(ticket.subject || '')}</p>
-    <h2>Conversation</h2>
-    ${messageBlocks || '<p>No messages.</p>'}
+    <header class="ticket">
+      <h1>${escapeTranscriptHtml(ticket.number || 'Ticket')}</h1>
+      <p class="subject">${escapeTranscriptHtml(ticket.subject || 'Support ticket')}</p>
+      <ul class="meta">${meta.map((item) => `<li>${escapeTranscriptHtml(item)}</li>`).join('')}</ul>
+    </header>
+    <p class="legend"><span><i class="user"></i>User</span><span><i class="staff"></i>Staff</span><span><i class="note"></i>Internal note</span></p>
+    <section class="thread">
+      ${thread || '<p class="system">No messages.</p>'}
+    </section>
     <section class="end">
       <h2>People involved</h2>
       <h3>Staff</h3>
-      <ul>${personItems(staff)}</ul>
+      <div class="people">${staff.length ? staff.map(personCard).join('') : '<p>None</p>'}</div>
       <h3>Users</h3>
-      <ul>${personItems(users)}</ul>
+      <div class="people">${users.length ? users.map(personCard).join('') : '<p>None</p>'}</div>
       <h2>Summary</h2>
-      <p>${escapeTranscriptHtml(summary)}</p>
+      <div class="summary">${summaryHtml}</div>
     </section>
   </main>
 </body>
