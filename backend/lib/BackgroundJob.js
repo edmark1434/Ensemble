@@ -504,6 +504,21 @@ function startPaymentReconciliationJob() {
         }
     });
 
+    let isTicketScheduledCloseRunning = false;
+    cron.schedule("*/10 * * * *", async () => {
+        if (isTicketScheduledCloseRunning) return;
+        isTicketScheduledCloseRunning = true;
+        try {
+            const { closeScheduledTickets } = require("../repositories/AdminTicketsRepositories");
+            const result = await closeScheduledTickets();
+            if (result.closed) console.log(`Ticket scheduled close: closed ${result.closed}`);
+        } catch (err) {
+            console.error("Ticket scheduled close failed:", err.message);
+        } finally {
+            isTicketScheduledCloseRunning = false;
+        }
+    });
+
     let isTicketAutoCloseRunning = false;
     cron.schedule("20 * * * *", async () => {
         if (isTicketAutoCloseRunning) return;

@@ -7,6 +7,8 @@ const {
   removeTicketParticipant,
   respondTicketInvite,
   generateTicketTranscript,
+  scheduleTicketClose,
+  cancelScheduledTicketClose,
   createSupportTicket,
   getTicketPickers,
   getTicketCatalog,
@@ -645,6 +647,34 @@ async function postTicketTranscript(req, res) {
   }
 }
 
+async function postTicketScheduleClose(req, res) {
+  try {
+    const data = await scheduleTicketClose(req.params.id, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data, message: 'This ticket will close in 24 hours' });
+  } catch (err) {
+    console.error('Error scheduling ticket close:', err);
+    res.status(err.statusCode || 400).json({
+      success: false,
+      message: err.statusCode ? err.message : 'Failed to schedule the close',
+    });
+  }
+}
+
+async function deleteTicketScheduleClose(req, res) {
+  try {
+    const data = await cancelScheduledTicketClose(req.params.id, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data, message: 'Scheduled close cancelled' });
+  } catch (err) {
+    console.error('Error cancelling scheduled ticket close:', err);
+    res.status(err.statusCode || 400).json({
+      success: false,
+      message: err.statusCode ? err.message : 'Failed to cancel the scheduled close',
+    });
+  }
+}
+
 async function postMyTicketInvite(req, res) {
   try {
     const accountId = req.session?.account_id || req.session?.accountId;
@@ -702,5 +732,7 @@ module.exports = {
   postTicketParticipant,
   deleteTicketParticipant,
   postTicketTranscript,
+  postTicketScheduleClose,
+  deleteTicketScheduleClose,
   postMyTicketSatisfaction,
 };

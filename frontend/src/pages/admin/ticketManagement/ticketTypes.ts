@@ -474,6 +474,7 @@ export type TicketDetail = {
   canManageParticipants?: boolean;
   savedTranscript?: { text: string; createdAt?: string | null } | null;
   autoClosesAt?: string | null;
+  scheduledCloseAt?: string | null;
 };
 
 export function ticketTypeOf(t: { type?: string; category?: string }) {

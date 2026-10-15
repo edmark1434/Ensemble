@@ -1348,6 +1348,7 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     canManageParticipants: Boolean(staffSession) && isStaffSession(staffSession),
     savedTranscript: await latestTicketTranscript(ticketId),
     autoClosesAt: ticketAutoClosesAt(ticket),
+    scheduledCloseAt: row.scheduled_close_at || null,
   };
 }
 
@@ -1510,7 +1511,9 @@ async function notifyTicketClosed({ ticketId, ticketNumber, requesterAccountId, 
   const chatId = await getTicketChatId(ticketId);
   const body = reason === 'auto'
     ? 'This ticket was closed automatically after 7 days without a reply. A transcript was saved.'
-    : 'This ticket was closed. A transcript was saved.';
+    : reason === 'scheduled'
+      ? 'This ticket is now closed, 24 hours after staff scheduled it. A transcript was saved.'
+      : 'This ticket was closed. A transcript was saved.';
   if (chatId) {
     await writeTicketMembershipNote(chatId, staffSession || {}, body);
   }
@@ -1526,7 +1529,9 @@ async function notifyTicketClosed({ ticketId, ticketNumber, requesterAccountId, 
   if (actorId) recipients.delete(String(actorId));
   const message = reason === 'auto'
     ? `Your ticket #${ticketNumber} was closed after 7 days without a reply. Open it to read the transcript.`
-    : `Your ticket #${ticketNumber} is closed. Open it to read the transcript.`;
+    : reason === 'scheduled'
+      ? `Your ticket #${ticketNumber} is now closed. Open it to read the transcript.`
+      : `Your ticket #${ticketNumber} is closed. Open it to read the transcript.`;
   const referencePath = chatId ? `/inbox/direct?conversation=${chatId}` : '/notifications';
   await Promise.all([...recipients].map(async (accountId) => {
     try {
@@ -1588,6 +1593,12 @@ async function autoCloseInactiveTickets() {
       [row.ticket_id]
     );
     if (!updated.rows.length) continue;
+    await pool.query(
+      `UPDATE tickets SET scheduled_close_at = NULL WHERE ticket_id = $1`,
+      [row.ticket_id]
+    ).catch((error) => {
+      if (error?.code !== '42703') throw error;
+    });
     await recordTicketEvent({
       ticketId: row.ticket_id,
       eventType: 'status',
@@ -1599,6 +1610,137 @@ async function autoCloseInactiveTickets() {
       ticketNumber: row.ticket_number,
       requesterAccountId: row.account_id,
       reason: 'auto',
+      staffSession: null,
+    });
+    closed += 1;
+  }
+  return { closed };
+}
+
+const TICKET_SCHEDULED_CLOSE_MS = 24 * 60 * 60 * 1000;
+
+async function scheduleTicketClose(ticketId, staffSession) {
+  if (!isStaffSession(staffSession)) throw ticketError('Only staff can schedule a close', 403);
+  const existing = await pool.query(
+    `SELECT ticket_id, status, ticket_number, account_id
+     FROM tickets
+     WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  if (!existing.rows.length) return null;
+  const row = existing.rows[0];
+  if (isClosedStatus(row.status)) throw ticketError('This ticket is already closed', 400);
+  const closesAt = new Date(Date.now() + TICKET_SCHEDULED_CLOSE_MS);
+  try {
+    await pool.query(
+      `UPDATE tickets
+       SET scheduled_close_at = $2, updated_at = NOW()
+       WHERE ticket_id = $1 AND deleted_at IS NULL`,
+      [ticketId, closesAt]
+    );
+  } catch (error) {
+    if (error?.code === '42703') throw ticketError('Run the latest database migration, then try again', 503);
+    throw error;
+  }
+  const name = sessionDisplayName(staffSession) || 'Staff';
+  await recordTicketEvent({
+    ticketId,
+    eventType: 'status',
+    summary: `${name} scheduled this ticket to close in 24 hours`,
+    actorStaffId: (await resolveDisputeStaffId(staffSession))?.staff_id || null,
+    actorAccountId: sessionAccountId(staffSession),
+  });
+  await announceInTicketChat({
+    ticketId,
+    ticket: row,
+    staffSession,
+    body: `${name} set this ticket to close in 24 hours. You will be notified again when it closes.`,
+    prefix: 'TICKET_CLOSE_SCHEDULED',
+  });
+  return getTicketDetail(ticketId, staffSession);
+}
+
+async function cancelScheduledTicketClose(ticketId, staffSession) {
+  if (!isStaffSession(staffSession)) throw ticketError('Only staff can cancel a scheduled close', 403);
+  const existing = await pool.query(
+    `SELECT ticket_id, status, ticket_number, account_id, scheduled_close_at
+     FROM tickets
+     WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  ).catch((error) => {
+    if (error?.code === '42703') throw ticketError('Run the latest database migration, then try again', 503);
+    throw error;
+  });
+  if (!existing.rows.length) return null;
+  const row = existing.rows[0];
+  if (!row.scheduled_close_at) throw ticketError('This ticket is not scheduled to close', 400);
+  await pool.query(
+    `UPDATE tickets SET scheduled_close_at = NULL, updated_at = NOW() WHERE ticket_id = $1`,
+    [ticketId]
+  );
+  const name = sessionDisplayName(staffSession) || 'Staff';
+  await recordTicketEvent({
+    ticketId,
+    eventType: 'status',
+    summary: `${name} cancelled the scheduled close`,
+    actorStaffId: (await resolveDisputeStaffId(staffSession))?.staff_id || null,
+    actorAccountId: sessionAccountId(staffSession),
+  });
+  await announceInTicketChat({
+    ticketId,
+    ticket: row,
+    staffSession,
+    body: `${name} cancelled the scheduled close. This ticket stays open.`,
+    prefix: 'TICKET_CLOSE_SCHEDULED',
+  });
+  return getTicketDetail(ticketId, staffSession);
+}
+
+async function closeScheduledTickets() {
+  let result;
+  try {
+    result = await pool.query(
+      `SELECT ticket_id, account_id, ticket_number
+       FROM tickets
+       WHERE deleted_at IS NULL
+         AND scheduled_close_at IS NOT NULL
+         AND scheduled_close_at <= NOW()
+         AND status NOT IN ('Closed', 'Resolved')
+       ORDER BY scheduled_close_at ASC
+       LIMIT 25`
+    );
+  } catch (error) {
+    if (error?.code === '42703') return { closed: 0 };
+    throw error;
+  }
+  let closed = 0;
+  for (const row of result.rows) {
+    const updated = await pool.query(
+      `UPDATE tickets
+       SET status = 'Closed',
+           scheduled_close_at = NULL,
+           resolved_at = COALESCE(resolved_at, NOW()),
+           updated_at = NOW()
+       WHERE ticket_id = $1
+         AND deleted_at IS NULL
+         AND scheduled_close_at IS NOT NULL
+         AND scheduled_close_at <= NOW()
+         AND status NOT IN ('Closed', 'Resolved')
+       RETURNING ticket_id`,
+      [row.ticket_id]
+    );
+    if (!updated.rows.length) continue;
+    await recordTicketEvent({
+      ticketId: row.ticket_id,
+      eventType: 'status',
+      summary: 'Closed 24 hours after staff scheduled it',
+    });
+    await saveTicketCloseTranscript(row.ticket_id, { reason: 'scheduled' });
+    await notifyTicketClosed({
+      ticketId: row.ticket_id,
+      ticketNumber: row.ticket_number,
+      requesterAccountId: row.account_id,
+      reason: 'scheduled',
       staffSession: null,
     });
     closed += 1;
@@ -2296,6 +2438,12 @@ async function updateTicket(ticketId, patch, staffSession) {
         actorStaffId,
       });
       if (nextStatus === 'Closed' && !isClosedStatus(currentStatus)) {
+        await pool.query(
+          `UPDATE tickets SET scheduled_close_at = NULL WHERE ticket_id = $1`,
+          [ticketId]
+        ).catch((error) => {
+          if (error?.code !== '42703') throw error;
+        });
         await saveTicketCloseTranscript(ticketId, {
           reason: 'closed',
           actorStaffId,
@@ -3582,6 +3730,9 @@ module.exports = {
   nextDisputeNumber,
   updateTicket,
   autoCloseInactiveTickets,
+  scheduleTicketClose,
+  cancelScheduledTicketClose,
+  closeScheduledTickets,
   generateTicketTranscript,
   addTicketMessage,
   updateTicketMessage,

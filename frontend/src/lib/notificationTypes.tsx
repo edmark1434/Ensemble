@@ -127,6 +127,8 @@ export const NOTIFICATION_ICONS: Record<string, NotificationIconDef> = {
   TICKET_RESOLVED:            tone("green", i(CheckCircle2)),
   TICKET_REPLY:               tone("indigo", i(Ticket)),
   TICKET_INVITE:              tone("blue", i(Ticket)),
+  TICKET_CLOSED:              tone("gray", i(Ticket)),
+  TICKET_CLOSE_SCHEDULED:     tone("amber", i(Ticket)),
   TICKET_INTERNAL_REPLY:      tone("gray", i(Ticket)),
 };
 
@@ -178,6 +180,7 @@ export const NOTIFICATION_LABELS: Record<string, string> = {
   RESTORE: "Standing Restored",
   TICKET_ASSIGNED: "Ticket Assigned", TICKET_RESOLVED: "Ticket Resolved",
   TICKET_CLOSED: "Ticket Closed",
+  TICKET_CLOSE_SCHEDULED: "Ticket Closing Soon",
   TICKET_REPLY: "Ticket Reply", TICKET_INTERNAL_REPLY: "Internal Reply",
   TICKET_INVITE: "Ticket Invite",
 };

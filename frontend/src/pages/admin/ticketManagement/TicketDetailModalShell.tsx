@@ -372,7 +372,7 @@ function Field({
 const selectCls =
   'rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none focus:border-white/25';
 
-function CloseTimer({ closesAt }: { closesAt?: string | null }) {
+function CloseTimer({ closesAt, scheduled = false }: { closesAt?: string | null; scheduled?: boolean }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!closesAt) return undefined;
@@ -381,9 +381,13 @@ function CloseTimer({ closesAt }: { closesAt?: string | null }) {
   }, [closesAt]);
   if (!closesAt) return null;
   const remaining = new Date(closesAt).getTime() - now;
+  const hours = Math.floor(remaining / 3600000);
+  const minutes = Math.floor((remaining % 3600000) / 60000);
   const label = remaining <= 0
-    ? 'Due to close automatically now'
-    : `Closes automatically in ${Math.floor(remaining / 86400000)}d ${Math.floor((remaining % 86400000) / 3600000)}h if nobody replies`;
+    ? scheduled ? 'Scheduled close is due now' : 'Due to close automatically now'
+    : scheduled
+      ? `Closes in ${hours}h ${minutes}m`
+      : `Closes automatically in ${Math.floor(remaining / 86400000)}d ${hours % 24}h if nobody replies`;
   return <p className="text-[11px] text-amber-200/80">{label}</p>;
 }
 
@@ -455,6 +459,8 @@ export default function TicketDetailModalShell({
   const [confirmRemove, setConfirmRemove] = useState<{ accountId: string; name: string } | null>(null);
   const [showTranscript, setShowTranscript] = useState(false);
   const [savingTranscript, setSavingTranscript] = useState(false);
+  const [confirmSchedule, setConfirmSchedule] = useState(false);
+  const [schedulingClose, setSchedulingClose] = useState(false);
   const [confirmPerson, setConfirmPerson] = useState<{
     accountId: string;
     name: string;
@@ -886,6 +892,24 @@ export default function TicketDetailModalShell({
   const jumpToMessage = (messageId: string) => {
     const target = threadRef.current?.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
     target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const scheduleClose = async (cancel = false) => {
+    setSchedulingClose(true);
+    try {
+      const response = cancel
+        ? await api.delete(`/api/staff/tickets/${ticketId}/schedule-close`)
+        : await api.post(`/api/staff/tickets/${ticketId}/schedule-close`);
+      setDetail(response.data?.data || null);
+      setConfirmSchedule(false);
+      showSuccessToast(response.data?.message || (cancel ? 'Scheduled close cancelled' : 'This ticket will close in 24 hours'));
+      onUpdated();
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      showErrorToast(message || 'Could not update the scheduled close');
+    } finally {
+      setSchedulingClose(false);
+    }
   };
 
   const saveTranscript = async () => {
@@ -1345,7 +1369,33 @@ export default function TicketDetailModalShell({
                     </div>
                   )}
                   <Field label="Status" hint={t.status === 'Closed' ? 'This ticket is closed. A transcript is saved when it closes.' : undefined}>
-                    {t.status !== 'Closed' ? <CloseTimer closesAt={detail.autoClosesAt} /> : null}
+                    {t.status !== 'Closed' ? (
+                      <CloseTimer
+                        closesAt={detail.scheduledCloseAt || detail.autoClosesAt}
+                        scheduled={Boolean(detail.scheduledCloseAt)}
+                      />
+                    ) : null}
+                    {t.status !== 'Closed' ? (
+                      detail.scheduledCloseAt ? (
+                        <button
+                          type="button"
+                          disabled={schedulingClose}
+                          onClick={() => void scheduleClose(true)}
+                          className="w-fit rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-50"
+                        >
+                          {schedulingClose ? 'Cancelling…' : 'Cancel 24 hour close'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={schedulingClose}
+                          onClick={() => setConfirmSchedule(true)}
+                          className="w-fit rounded-lg border border-amber-400/40 px-2.5 py-1.5 text-xs text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
+                        >
+                          Close in 24 hours
+                        </button>
+                      )
+                    ) : null}
                     {statusControl === 'buttons' ? (
                       <div
                         className="flex flex-wrap gap-1.5"
@@ -1910,6 +1960,36 @@ export default function TicketDetailModalShell({
                   className="rounded-xl bg-red-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
                   {personBusy ? 'Removing…' : 'Remove'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {confirmSchedule && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-[#14151c] p-5 shadow-2xl">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">Schedule close</p>
+              <h3 className="mt-2 text-lg font-semibold text-white">Close this ticket in 24 hours?</h3>
+              <p className="mt-2 text-sm text-zinc-400">
+                The chat and the people on this ticket are notified now. They are notified again when it closes, and a transcript is saved.
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={schedulingClose}
+                  onClick={() => setConfirmSchedule(false)}
+                  className="rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={schedulingClose}
+                  onClick={() => void scheduleClose(false)}
+                  className="rounded-xl bg-amber-500 px-3 py-2 text-sm font-medium text-black disabled:opacity-50"
+                >
+                  {schedulingClose ? 'Scheduling…' : 'Close in 24 hours'}
                 </button>
               </div>
             </div>
