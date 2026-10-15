@@ -26,16 +26,24 @@ const JOBS_PAYMENT_TYPES = new Set([
   'Cancellations and refunds',
 ]);
 
+function ticketAttachmentType(name, hintedType) {
+  const hint = String(hintedType || '').toLowerCase();
+  if (hint === 'image' || hint === 'video' || hint === 'file') return hint;
+  if (hint.startsWith('video') || /\.(mp4|webm|mov|m4v)$/i.test(name)) return 'video';
+  if (hint.startsWith('image') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name)) return 'image';
+  return 'file';
+}
+
 function normalizeTicketScreenshots(raw) {
   if (!Array.isArray(raw)) return [];
   const out = [];
   for (const item of raw.slice(0, 4)) {
     const key = String(item?.key || item?.attachment_key || '').replace(/^\/+/, '').trim();
     if (!/^(?:ticket-attachments|chat-attachments)\/[A-Za-z0-9._/-]+$/.test(key) || key.includes('..')) continue;
-    const name = String(item?.name || item?.attachment_name || 'screenshot').slice(0, 180);
+    const name = String(item?.name || item?.attachment_name || 'Attachment').slice(0, 180);
     out.push({
       attachment_id: crypto.randomUUID(),
-      attachment_type: 'image',
+      attachment_type: ticketAttachmentType(name, item?.type || item?.attachment_type || item?.mime),
       attachment_key: key,
       attachment_url: key,
       attachment_name: name,
@@ -146,6 +154,33 @@ async function listTicketTimeline(ticketId, accountId, since) {
   return timeline.slice(0, 40);
 }
 
+function openingReplyGuides(ticketType) {
+  const subject = String(ticketType || 'this request').trim() || 'this request';
+  return [
+    {
+      id: `guide-ack-${subject}`,
+      ticketType: subject,
+      title: 'Acknowledge',
+      body: `Thanks for writing in about ${subject}. I have this ticket open and I am looking at it now. Reply here with anything else I should know.`,
+      updatedAt: null,
+    },
+    {
+      id: `guide-next-${subject}`,
+      ticketType: subject,
+      title: 'What happens next',
+      body: `Thanks for contacting us. I will follow up in this thread with the next step for ${subject}. You can keep replying here if something changes.`,
+      updatedAt: null,
+    },
+    {
+      id: `guide-detail-${subject}`,
+      ticketType: subject,
+      title: 'Ask for detail',
+      body: `Thanks for the report. To sort out ${subject}, tell me the page you were on, what you expected, and what happened instead. A screenshot helps if you have one.`,
+      updatedAt: null,
+    },
+  ];
+}
+
 async function listTicketArticles(ticketType) {
   const params = [];
   let where = 'deleted_at IS NULL';
@@ -162,13 +197,21 @@ async function listTicketArticles(ticketType) {
       params
     )
     .catch(() => ({ rows: [] }));
-  return result.rows.map((row) => ({
+  const stored = result.rows.map((row) => ({
     id: row.article_id,
     ticketType: row.ticket_type,
     title: row.title,
     body: row.body,
     updatedAt: row.updated_at,
   }));
+  if (!ticketType) return stored;
+  const guides = stored.slice(0, 3);
+  for (const extra of openingReplyGuides(ticketType)) {
+    if (guides.length >= 3) break;
+    if (guides.some((guide) => guide.title === extra.title)) continue;
+    guides.push(extra);
+  }
+  return guides.slice(0, 3);
 }
 
 async function saveTicketArticle({ articleId, ticketType, title, body, staffId }) {

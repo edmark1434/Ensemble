@@ -86,13 +86,14 @@ async function postTicketMessage(req, res) {
     if (!body?.trim() && !(Array.isArray(attachments) && attachments.length)) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
     }
-    const data = await addTicketMessage(req.params.id, (body || '').trim(), req.session, Boolean(isInternal), attachments);
+    const data = await addTicketMessage(req.params.id, (body || '').trim(), req.session, Boolean(isInternal), attachments, req.body?.replyToMessageId);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error adding ticket message:', err);
-    const msg = err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
-    res.status(err?.message?.includes('MongoDB') ? 503 : 500).json({ success: false, message: msg });
+    const status = err?.statusCode || (err?.message?.includes('MongoDB') ? 503 : 500);
+    const msg = status < 500 || err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
+    res.status(status).json({ success: false, message: msg });
   }
 }
 

@@ -993,7 +993,10 @@ async function unpinMessageServices(conversationId, messageId, accountId) {
 }
 
 async function editMessageServices(messageId, messageContent, accountId) {
-    const { message, actorAccountId } = await requireMessageMember(messageId, accountId);
+    const { inbox, message, actorAccountId } = await requireMessageMember(messageId, accountId);
+    if (String(inbox?.conversation_type || '').toLowerCase() === 'ticket') {
+        throw new ChatServiceError('Ticket messages cannot be edited. Use an internal note instead.', 403);
+    }
     if (String(message.sender_id) !== actorAccountId) {
         throw new ChatServiceError('You can only edit your own messages', 403);
     }
@@ -1231,13 +1234,50 @@ async function removeGroupMemberServices(conversationId, targetAccountId, accoun
     );
 }
 
+function messageWasUnsent(message) {
+    return Boolean(message?.is_deleted || message?.deleted_at || message?.is_unsent);
+}
+
+function presentDeletedMessage(message) {
+    if (!messageWasUnsent(message)) return message;
+    return {
+        ...message,
+        is_deleted: true,
+        is_unsent: true,
+    };
+}
+
+async function accountIsStaff(accountId) {
+    if (!accountId) return false;
+    const result = await pool.query(
+        `SELECT 1 FROM staff WHERE account_id = $1 LIMIT 1`,
+        [accountId]
+    );
+    return result.rows.length > 0;
+}
+
 async function getConversationByConvoIdServices(conversationId, accountId) {
     const memberInbox = await requireConversationMember(conversationId, accountId);
     const viewerAccountId = await resolveConversationActorAccountId(
         memberInbox,
         accountId
     );
-    const conversation = await getConversationByConvoId(conversationId);
+    const staffViewer = await accountIsStaff(viewerAccountId);
+    const conversation = await getConversationByConvoId(conversationId, {
+        includeDeleted: staffViewer,
+    });
+    const viewerMember = (memberInbox?.members || []).find(
+        (member) => String(member.account_id) === String(viewerAccountId)
+    );
+    const viewerRole = String(viewerMember?.role || '').toLowerCase();
+    const canReadInternal = ['admin', 'staff', 'moderator'].includes(viewerRole);
+    conversation.Messages = (conversation.Messages || []).flatMap((message) => {
+        if (messageWasUnsent(message)) {
+            return staffViewer ? [presentDeletedMessage(message)] : [];
+        }
+        if (!canReadInternal && message.is_internal) return [];
+        return [message];
+    });
     const [normalizedInbox] = await normalizeLinkedConversations([
         conversation.Inbox,
     ]);
