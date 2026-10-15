@@ -441,6 +441,7 @@ export default function TicketDetailModalShell({
   const [searchingPeople, setSearchingPeople] = useState(false);
   const [personBusy, setPersonBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<{ accountId: string; name: string } | null>(null);
+  const [showTranscript, setShowTranscript] = useState(false);
   const [confirmPerson, setConfirmPerson] = useState<{
     accountId: string;
     name: string;
@@ -947,6 +948,25 @@ export default function TicketDetailModalShell({
   };
 
   const t = detail?.ticket;
+  const involvedGroups = useMemo(() => {
+    const people = [...(detail?.participants || [])].filter((person) => person.status === 'active' || person.isRequester);
+    const assigneeId = t?.assignee?.accountId ? String(t.assignee.accountId) : '';
+    if (assigneeId && t?.assignee && !people.some((person) => String(person.accountId) === assigneeId)) {
+      people.push({
+        accountId: assigneeId,
+        name: t.assignee.name,
+        role: t.assignee.role,
+        status: 'active',
+        isRequester: false,
+        isStaff: true,
+        replyCount: 0,
+      });
+    }
+    const staff = people.filter((person) => person.isStaff || (assigneeId && String(person.accountId) === assigneeId));
+    const staffIds = new Set(staff.map((person) => String(person.accountId)));
+    const users = people.filter((person) => !staffIds.has(String(person.accountId)));
+    return { staff, users };
+  }, [detail?.participants, t?.assignee]);
   const typeMeta = detail?.typeDetails?.find((d) => d.label === currentType);
   const escalateTypeMeta = detail?.typeDetails?.find((d) => d.label === escalateType);
 
@@ -1029,34 +1049,50 @@ export default function TicketDetailModalShell({
 
                 <section className="space-y-3 rounded-xl border border-white/10 bg-[#14151c] p-4">
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Involved</p>
-                    <p className="mt-1 text-[11px] text-zinc-500">People who joined this ticket and sent a reply.</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Who's involved</p>
+                    <p className="mt-1 text-[11px] text-zinc-500">Staff and other users on this ticket.</p>
                   </div>
-                  {(detail.involved || []).length === 0 ? (
-                    <p className="text-xs text-zinc-500">No one has replied yet.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {(detail.involved || []).map((person) => (
-                        <li key={`involved-${person.accountId}`} className="rounded-lg border border-white/10 px-3 py-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-white">{person.name}</p>
-                              <p className="truncate text-[11px] text-zinc-500">
-                                {person.handle ? `@${person.handle}` : 'No handle'}
-                                {person.isRequester ? ' · Opened ticket' : ''}
-                                {person.isStaff ? ' · Staff' : ''}
-                                {person.status !== 'active' ? ' · Removed' : ''}
-                              </p>
-                            </div>
-                            <p className="shrink-0 text-[11px] text-zinc-400">
-                              {person.replyCount} {person.replyCount === 1 ? 'reply' : 'replies'}
-                            </p>
-                          </div>
-                          <p className="mt-1 text-[11px] text-zinc-600">Last reply {formatDateTime(person.lastReplyAt)}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-200/80">Staff</p>
+                    {involvedGroups.staff.length === 0 ? (
+                      <p className="mt-1 text-xs text-zinc-500">No staff on this ticket yet.</p>
+                    ) : (
+                      <ul className="mt-1.5 space-y-1.5">
+                        {involvedGroups.staff.map((person) => {
+                          const isAssignee = Boolean(t?.assignee?.accountId) && String(person.accountId) === String(t?.assignee?.accountId);
+                          return (
+                            <li key={`staff-${person.accountId}`} className="text-xs text-zinc-200">
+                              <span className="font-medium text-white">{person.name}</span>
+                              <span className="text-zinc-500">
+                                {person.handle ? ` · @${person.handle}` : ''}
+                                {isAssignee ? ` · ${t?.assignee?.role || 'Assigned'}` : ' · Staff'}
+                                {person.replyCount > 0 ? ` · ${person.replyCount} ${person.replyCount === 1 ? 'reply' : 'replies'}` : ''}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200/80">Users</p>
+                    {involvedGroups.users.length === 0 ? (
+                      <p className="mt-1 text-xs text-zinc-500">No other users on this ticket.</p>
+                    ) : (
+                      <ul className="mt-1.5 space-y-1.5">
+                        {involvedGroups.users.map((person) => (
+                          <li key={`user-${person.accountId}`} className="text-xs text-zinc-200">
+                            <span className="font-medium text-white">{person.name}</span>
+                            <span className="text-zinc-500">
+                              {person.handle ? ` · @${person.handle}` : ''}
+                              {person.isRequester ? ' · Opened ticket' : ' · Added'}
+                              {person.replyCount > 0 ? ` · ${person.replyCount} ${person.replyCount === 1 ? 'reply' : 'replies'}` : ''}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
 
                   <div className="border-t border-white/10 pt-3">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">On this ticket</p>
@@ -1511,9 +1547,19 @@ export default function TicketDetailModalShell({
                     </span>
                   )}
                 </div>
-                {t.lastMessageAt && (
-                  <p className="text-[11px] text-zinc-600">Last {formatDateTime(t.lastMessageAt)}</p>
-                )}
+                <div className="flex items-center gap-3">
+                  {t.lastMessageAt && (
+                    <p className="text-[11px] text-zinc-600">Last {formatDateTime(t.lastMessageAt)}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowTranscript(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-zinc-200 hover:bg-white/5"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    Transcript
+                  </button>
+                </div>
               </div>
 
               <div ref={threadRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
@@ -1661,6 +1707,109 @@ export default function TicketDetailModalShell({
           </div>
         ) : (
           <p className="py-16 text-center text-zinc-500">Ticket not found.</p>
+        )}
+
+        {showTranscript && t && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 p-4">
+            <div className="flex max-h-[85%] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#14151c] shadow-2xl">
+              <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Ticket transcript</p>
+                  <h3 className="mt-1 text-lg font-semibold text-white">{t.number}</h3>
+                  <p className="mt-1 text-sm text-zinc-400">{t.subject}</p>
+                </div>
+                <button type="button" onClick={() => setShowTranscript(false)} aria-label="Close transcript" className="text-zinc-400 hover:text-white">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-violet-400/30 bg-violet-500/10 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-200">Staff</p>
+                    {involvedGroups.staff.length === 0 ? (
+                      <p className="mt-2 text-xs text-zinc-400">None</p>
+                    ) : (
+                      <ul className="mt-2 space-y-1">
+                        {involvedGroups.staff.map((person) => (
+                          <li key={`transcript-staff-${person.accountId}`} className="text-sm text-white">
+                            {person.name}
+                            <span className="text-xs text-violet-100/70">{person.handle ? ` @${person.handle}` : ''}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="rounded-xl border border-sky-400/30 bg-sky-500/10 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200">Users</p>
+                    {involvedGroups.users.length === 0 ? (
+                      <p className="mt-2 text-xs text-zinc-400">None</p>
+                    ) : (
+                      <ul className="mt-2 space-y-1">
+                        {involvedGroups.users.map((person) => (
+                          <li key={`transcript-user-${person.accountId}`} className="text-sm text-white">
+                            {person.name}
+                            <span className="text-xs text-sky-100/70">
+                              {person.handle ? ` @${person.handle}` : ''}
+                              {person.isRequester ? ' · opened ticket' : ''}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {detail.messages.filter((message) => !message.isUnsent).map((message) => (
+                    <div key={`transcript-${message.id}`} className="border-b border-white/5 pb-3">
+                      <p className="text-[11px] text-zinc-500">
+                        {formatDateTime(message.createdAt)} · {message.authorName}
+                        {message.isInternal ? ' · internal note' : ''}
+                        {String(message.authorType).toLowerCase() === 'system' ? ' · system' : ''}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-100">{message.body || (message.attachments?.length ? 'Attachment' : '')}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 border-t border-white/10 px-5 py-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const lines = [
+                      `Ticket ${t.number}`,
+                      t.subject,
+                      '',
+                      'Staff',
+                      ...(involvedGroups.staff.length ? involvedGroups.staff.map((person) => `- ${person.name}${person.handle ? ` (@${person.handle})` : ''}`) : ['- None']),
+                      '',
+                      'Users',
+                      ...(involvedGroups.users.length ? involvedGroups.users.map((person) => `- ${person.name}${person.handle ? ` (@${person.handle})` : ''}${person.isRequester ? ' (opened ticket)' : ''}`) : ['- None']),
+                      '',
+                      'Transcript',
+                      ...detail.messages.filter((message) => !message.isUnsent).map((message) => {
+                        const label = message.isInternal ? 'internal note' : String(message.authorType).toLowerCase() === 'system' ? 'system' : 'message';
+                        return `[${formatDateTime(message.createdAt)}] ${message.authorName} (${label}): ${message.body || (message.attachments?.length ? 'Attachment' : '')}`;
+                      }),
+                    ];
+                    void navigator.clipboard.writeText(lines.join('\n')).then(
+                      () => showSuccessToast('Transcript copied'),
+                      () => showErrorToast('Could not copy the transcript')
+                    );
+                  }}
+                  className="rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-200 hover:bg-white/5"
+                >
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTranscript(false)}
+                  className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-black"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {confirmRemove && (
