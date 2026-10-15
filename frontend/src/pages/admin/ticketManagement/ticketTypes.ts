@@ -10,6 +10,7 @@ export type TicketAssignee = {
   staffId: number | string;
   name: string;
   role: string;
+  accountId?: string | null;
 };
 
 export type SupportTicket = {

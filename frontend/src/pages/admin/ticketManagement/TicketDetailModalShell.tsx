@@ -440,6 +440,7 @@ export default function TicketDetailModalShell({
   }[]>([]);
   const [searchingPeople, setSearchingPeople] = useState(false);
   const [personBusy, setPersonBusy] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<{ accountId: string; name: string } | null>(null);
   const [confirmPerson, setConfirmPerson] = useState<{
     accountId: string;
     name: string;
@@ -618,6 +619,7 @@ export default function TicketDetailModalShell({
       setPersonQuery('');
       setPersonResults([]);
       setConfirmPerson(null);
+      setConfirmRemove(null);
       showSuccessToast(response.data?.message || (action === 'add' ? 'User added to the ticket' : 'User removed from the ticket'));
       onUpdated();
     } catch (err: unknown) {
@@ -635,6 +637,32 @@ export default function TicketDetailModalShell({
       if (String(message?.conversation_id || '') !== String(chatId)) return;
       const mapped = fromSocketMessage(message);
       if (mapped) placeMessage(mapped);
+    };
+    const refreshPeople = (payload: { conversation_id?: string; account_id?: string; status?: string }) => {
+      if (payload?.conversation_id && String(payload.conversation_id) !== String(chatId)) return;
+      const accountId = String(payload?.account_id || '');
+      if (accountId) {
+        setDetail((current) => {
+          if (!current) return current;
+          const invited = (current.pendingInvites || []).find((person) => person.accountId === accountId);
+          const pendingInvites = (current.pendingInvites || []).filter((person) => person.accountId !== accountId);
+          const alreadyThere = (current.participants || []).some((person) => person.accountId === accountId);
+          const participants = payload.status === 'active' && invited && !alreadyThere
+            ? [...(current.participants || []), {
+                accountId,
+                name: invited.name,
+                handle: invited.handle,
+                role: 'User',
+                status: 'active',
+                isRequester: false,
+                isStaff: false,
+                replyCount: 0,
+              }]
+            : current.participants;
+          return { ...current, pendingInvites, participants };
+        });
+      }
+      void refreshThread();
     };
     const markDeleted = (payload: { message_id?: string; messageId?: string; conversation_id?: string }) => {
       if (payload?.conversation_id && String(payload.conversation_id) !== String(chatId)) return;
@@ -661,6 +689,7 @@ export default function TicketDetailModalShell({
     socket.on('messageReplied', appendLiveMessage);
     socket.on('ticketInternalMessage', appendLiveMessage);
     socket.on('messageDeleted', markDeleted);
+    socket.on('ticketMembershipUpdated', refreshPeople);
 
     return () => {
       socket.off('connect', joinTicketRoom);
@@ -668,6 +697,7 @@ export default function TicketDetailModalShell({
       socket.off('messageReplied', appendLiveMessage);
       socket.off('ticketInternalMessage', appendLiveMessage);
       socket.off('messageDeleted', markDeleted);
+      socket.off('ticketMembershipUpdated', refreshPeople);
       socket.emit('leaveRoom', { conversation_id: String(chatId) });
     };
     // The room changes only when another ticket is opened.
@@ -1031,19 +1061,23 @@ export default function TicketDetailModalShell({
                   <div className="border-t border-white/10 pt-3">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">On this ticket</p>
                     <ul className="mt-2 space-y-1.5">
-                      {(detail.participants || []).map((person) => (
+                      {(detail.participants || []).map((person) => {
+                        const isAssignee = Boolean(t.assignee?.accountId) && String(person.accountId) === String(t.assignee?.accountId);
+                        const locked = person.isRequester || isAssignee;
+                        return (
                         <li key={`member-${person.accountId}`} className="flex items-center justify-between gap-2 text-xs">
                           <span className="min-w-0 truncate text-zinc-300">
                             {person.name}
                             <span className="text-zinc-600">
-                              {person.isRequester ? ' · requester' : person.isStaff ? ' · staff' : ''}
+                              {person.isRequester ? ' · opened ticket' : ''}
+                              {isAssignee ? ' · assigned' : person.isStaff && !isAssignee ? ' · staff' : ''}
                             </span>
                           </span>
-                          {detail.canManageParticipants && !person.isRequester && person.status === 'active' ? (
+                          {detail.canManageParticipants && !locked && person.status === 'active' ? (
                             <button
                               type="button"
                               disabled={personBusy}
-                              onClick={() => void changeParticipant(person.accountId, 'remove')}
+                              onClick={() => setConfirmRemove({ accountId: person.accountId, name: person.name })}
                               className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
                             >
                               <UserMinus className="h-3 w-3" />
@@ -1051,10 +1085,11 @@ export default function TicketDetailModalShell({
                             </button>
                           ) : null}
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
                     {detail.canManageParticipants ? (
-                      <p className="mt-2 text-[11px] text-zinc-600">The person who opened the ticket stays on it.</p>
+                      <p className="mt-2 text-[11px] text-zinc-600">The person who opened the ticket and the assigned staff member stay on it.</p>
                     ) : null}
                   </div>
 
@@ -1626,6 +1661,34 @@ export default function TicketDetailModalShell({
           </div>
         ) : (
           <p className="py-16 text-center text-zinc-500">Ticket not found.</p>
+        )}
+
+        {confirmRemove && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-red-500/30 bg-[#14151c] p-5 shadow-2xl">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-red-200/80">Confirm remove</p>
+              <h3 className="mt-2 text-lg font-semibold text-white">Remove {confirmRemove.name}?</h3>
+              <p className="mt-2 text-sm text-zinc-400">They will leave this ticket and will not be able to open it.</p>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={personBusy}
+                  onClick={() => setConfirmRemove(null)}
+                  className="rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={personBusy}
+                  onClick={() => void changeParticipant(confirmRemove.accountId, 'remove')}
+                  className="rounded-xl bg-red-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  {personBusy ? 'Removing…' : 'Remove'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {confirmPerson && (

@@ -1138,6 +1138,7 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
       ru.email_address AS requester_email,
       ru.user_id AS requester_user_id,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
+      st.account_id AS assignee_account_id,
       st.role AS assignee_role,
       COALESCE(ea.display_name, es.first_name || ' ' || es.last_name) AS escalated_by_name,
       es.role AS escalated_by_role
@@ -1704,6 +1705,11 @@ async function respondTicketInvite(ticketId, rawAccountId, action) {
   if (decision === 'decline') {
     if (!pending) throw ticketError('This invite is no longer available', 404);
     await clearTicketInvite(chatId, accountId);
+    emitTicketChat('ticketMembershipUpdated', chatId, {
+      conversation_id: String(chatId),
+      account_id: accountId,
+      status: 'declined',
+    });
     return { chatId: null, joined: false };
   }
 
@@ -1721,6 +1727,11 @@ async function respondTicketInvite(ticketId, rawAccountId, action) {
     { account_id: accountId, accountId },
     `${formatAccountIdentity(person)} joined this ticket.`
   );
+  emitTicketChat('ticketMembershipUpdated', chatId, {
+    conversation_id: String(chatId),
+    account_id: accountId,
+    status: 'active',
+  });
   return { chatId, joined: true };
 }
 
@@ -1740,6 +1751,15 @@ async function removeTicketParticipant(ticketId, rawAccountId, staffSession) {
   const ticket = ticketResult.rows[0];
   if (String(ticket.account_id) === accountId) {
     throw ticketError('The person who opened the ticket stays on it', 400);
+  }
+  if (ticket.handled_by_staff_id) {
+    const assignee = await pool.query(
+      `SELECT account_id FROM staff WHERE staff_id = $1`,
+      [ticket.handled_by_staff_id]
+    );
+    if (assignee.rows[0] && String(assignee.rows[0].account_id) === accountId) {
+      throw ticketError('The assigned staff member stays on this ticket', 400);
+    }
   }
 
   const chatId = await getTicketChatId(ticketId);

@@ -55,6 +55,7 @@ function mapTicketRow(row) {
           staffId: row.handled_by_staff_id || row.assigned_staff_id,
           name: row.assignee_name || 'Unassigned',
           role: row.assignee_role || 'Support Moderator',
+          accountId: row.assignee_account_id || null,
         }
       : null,
     escalatedBy: row.escalated_by_staff_id
