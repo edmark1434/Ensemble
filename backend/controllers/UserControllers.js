@@ -152,38 +152,89 @@ async function getUserByEmail(req, res) {
 }
 
 async function loginCredentials(req, res) {
-    const { loginIdentifier, email, username, password } = req.body;
+    const { loginIdentifier, email, username, password, twoFactorCode, recoveryCode, twoFactorPendingToken } = req.body;
     const resolvedIdentifier = loginIdentifier ?? email ?? username;
     const requestContext = {
         ip: req.ip,
         userAgent: req.get('user-agent') || 'unknown',
     };
 
-    if (!resolvedIdentifier || !password) {
-        return res.status(400).json({
-            success: false,
-            message: 'Login identifier and password are required',
-        });
-    }
-
     try {
-        const credentials = await LoginUserOrEmail(resolvedIdentifier, password, requestContext);
-        if (credentials.existSession) {
-            return res.status(200).json({
-                success: true,
-                message: 'Need to verify email before logging in',
-                credentials,
-                existSession: true,
-            });
+        let credentials;
+        const submitted2fa = twoFactorCode || recoveryCode || req.body.code;
+
+        // If resuming a pending 2FA login challenge with the pending token
+        if (twoFactorPendingToken && submitted2fa && !password) {
+            const rawPending = await redis.get(`pending_login_2fa:${twoFactorPendingToken}`);
+            if (!rawPending) {
+                return res.status(401).json({
+                    success: false,
+                    require2fa: true,
+                    message: 'Two-factor authentication session expired. Please sign in again.',
+                });
+            }
+            credentials = JSON.parse(rawPending);
+        } else {
+            if (!resolvedIdentifier || !password) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Login identifier and password are required',
+                });
+            }
+
+            credentials = await LoginUserOrEmail(resolvedIdentifier, password, requestContext);
+            if (credentials.existSession) {
+                return res.status(200).json({
+                    success: true,
+                    message: 'Need to verify email before logging in',
+                    credentials,
+                    existSession: true,
+                });
+            }
+        }
+
+        // Check if account has 2FA enabled
+        const accountId = credentials.account_id || credentials.accountId;
+        const { getAuthenticationSecret } = require('../repositories/AccountRepositories');
+        const twoFactorSecret = await getAuthenticationSecret(accountId);
+
+        if (twoFactorSecret) {
+            if (!submitted2fa) {
+                const crypto = require('crypto');
+                const pendingToken = crypto.randomBytes(32).toString('hex');
+                // Store pending credentials in Redis for 5 minutes
+                await redis.set(`pending_login_2fa:${pendingToken}`, JSON.stringify(credentials), { EX: 5 * 60 });
+                return res.status(200).json({
+                    success: true,
+                    require2fa: true,
+                    twoFactorPendingToken: pendingToken,
+                    message: 'Two-factor authentication code required',
+                });
+            }
+
+            // Verify the 2FA code or recovery code
+            const { verify2FACodeOrRecoveryService } = require('../services/AccountServices');
+            const verification = await verify2FACodeOrRecoveryService(accountId, submitted2fa);
+            if (!verification.verified) {
+                return res.status(401).json({
+                    success: false,
+                    require2fa: true,
+                    twoFactorPendingToken: twoFactorPendingToken || null,
+                    message: verification.error || 'Invalid two-factor code or recovery code',
+                });
+            }
+
+            if (twoFactorPendingToken) {
+                await redis.del(`pending_login_2fa:${twoFactorPendingToken}`).catch(() => null);
+            }
         }
 
         // Check if staff 2FA is dynamically required
         if (credentials.type === 'Staff') {
             const { getSecuritySettings } = require('../lib/ModerationPolicy');
             const security = await getSecuritySettings();
-            if (security?.requireStaff2fa) {
+            if (security?.requireStaff2fa && !twoFactorSecret) {
                 const staffEmail = (credentials.email_address || credentials.email || '').toLowerCase();
-                const submitted2fa = req.body.twoFactorCode;
                 const expected2fa = await redis.get(`staff2fa:${staffEmail}`);
                 if (!submitted2fa) {
                     const crypto = require('crypto');
@@ -705,6 +756,94 @@ async function resetPasswordController(req, res) {
     }
 }
 
+async function get2FAStatusController(req, res) {
+    try {
+        const accountId = req.session?.account_id || req.session?.accountId;
+        if (!accountId) {
+            return res.status(401).json({ success: false, message: 'Authentication required' });
+        }
+        const { get2FAStatusService } = require('../services/AccountServices');
+        const status = await get2FAStatusService(accountId);
+        return res.status(200).json({ success: true, ...status });
+    } catch (err) {
+        console.error('Error fetching 2FA status:', err);
+        return res.status(500).json({ success: false, message: err.message || 'Failed to fetch 2FA status' });
+    }
+}
+
+async function setup2FAController(req, res) {
+    try {
+        const accountId = req.session?.account_id || req.session?.accountId;
+        if (!accountId) {
+            return res.status(401).json({ success: false, message: 'Authentication required' });
+        }
+        const { setup2FASecretService } = require('../services/AccountServices');
+        const setup = await setup2FASecretService(accountId);
+        return res.status(200).json({ success: true, data: setup });
+    } catch (err) {
+        console.error('Error setting up 2FA:', err);
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message || 'Failed to set up 2FA' });
+    }
+}
+
+async function enable2FAController(req, res) {
+    try {
+        const accountId = req.session?.account_id || req.session?.accountId;
+        if (!accountId) {
+            return res.status(401).json({ success: false, message: 'Authentication required' });
+        }
+        const { token } = req.body;
+        if (!token) {
+            return res.status(400).json({ success: false, message: '6-digit verification code is required' });
+        }
+        const { verifyAndEnable2FAService } = require('../services/AccountServices');
+        const result = await verifyAndEnable2FAService(accountId, token);
+        return res.status(200).json(result);
+    } catch (err) {
+        console.error('Error enabling 2FA:', err);
+        return res.status(400).json({ success: false, message: err.message || 'Failed to enable 2FA' });
+    }
+}
+
+async function disable2FAController(req, res) {
+    try {
+        const accountId = req.session?.account_id || req.session?.accountId;
+        if (!accountId) {
+            return res.status(401).json({ success: false, message: 'Authentication required' });
+        }
+        const { code, verificationCode } = req.body;
+        const inputCode = code || verificationCode;
+        if (!inputCode) {
+            return res.status(400).json({ success: false, message: 'Verification code or recovery code is required to disable 2FA' });
+        }
+        const { disable2FAService } = require('../services/AccountServices');
+        const result = await disable2FAService(accountId, inputCode);
+        return res.status(200).json(result);
+    } catch (err) {
+        console.error('Error disabling 2FA:', err);
+        return res.status(400).json({ success: false, message: err.message || 'Failed to disable 2FA' });
+    }
+}
+
+async function regenerateRecoveryCodesController(req, res) {
+    try {
+        const accountId = req.session?.account_id || req.session?.accountId;
+        if (!accountId) {
+            return res.status(401).json({ success: false, message: 'Authentication required' });
+        }
+        const { token } = req.body;
+        if (!token) {
+            return res.status(400).json({ success: false, message: '6-digit authenticator code is required' });
+        }
+        const { regenerateRecoveryCodesService } = require('../services/AccountServices');
+        const result = await regenerateRecoveryCodesService(accountId, token);
+        return res.status(200).json(result);
+    } catch (err) {
+        console.error('Error regenerating recovery codes:', err);
+        return res.status(400).json({ success: false, message: err.message || 'Failed to regenerate recovery codes' });
+    }
+}
+
 module.exports = {
     getAllUsers,
     signup,
@@ -725,4 +864,9 @@ module.exports = {
     forgotPasswordController,
     verifyResetTokenController,
     resetPasswordController,
+    get2FAStatusController,
+    setup2FAController,
+    enable2FAController,
+    disable2FAController,
+    regenerateRecoveryCodesController,
 };

@@ -1,26 +1,25 @@
-# Current Task: Restrict Support Ticket Submission to Logged-in Users Only
+# Current Task: Require Account Password Before Enabling 2FA
 
 ## Objective
-Disallow and do not display support ticket fields and forms to public (unauthenticated) users. Support ticket submission must be strictly accessible only to authenticated users who are logged in.
+Enforce validation requiring users (especially those signed up via Google OAuth who do not yet have a password) to set an account password before they can enable Two-Factor Authentication (2FA).
 
 ## Acceptance Criteria
+1. **Repository Layer (`backend/repositories/AccountRepositories.js`)**:
+   - Implement `checkAccountHasPassword(accountId)` to query `users` (and `staff`) table for a valid, non-empty `password_hash`.
 
-1. **Frontend Disallowance & Form Suppression (`page_SubmitATicket.tsx`)**:
-   - When no authenticated user session is detected (`!accountId`):
-     - Hide/suppress all ticket form inputs and submission fields (problem category tabs, subgroup tabs, ticket type dropdown, custom questions/fields, issue subject, description textarea, screenshot file inputs, and submit button).
-     - Display a prominent, styled "Sign In Required" card informing the user that filing a ticket requires an active account session.
-     - Provide actionable navigation buttons: "Log In to Submit a Ticket" (redirecting to `/login?redirect=/support/ticket`) and "Create an Account" (`/signup`).
-     - Keep self-service support links (FAQ, Chatbot, Feedback, Support us) visible and accessible so public visitors still have self-help channels.
-   - When user is logged in (`accountId` exists):
-     - Render the full ticket creation form.
-     - All categories and ticket types from the catalog are selectable without logged-out restriction filtering.
+2. **Service Layer (`backend/services/AccountServices.js`)**:
+   - `get2FAStatusService(accountId)` returns `hasPassword: boolean`.
+   - `setup2FASecretService(accountId)` validates that the account has a password set; throws an informative 400 error if missing.
+   - `verifyAndEnable2FAService(accountId, token)` verifies that the account has a password set before enabling 2FA.
 
-2. **Backend Authentication Enforcement (`routes/User.js` & `AdminTicketsControllers.js`)**:
-   - Protect `POST /api/users/tickets` with `requireAuth` middleware alongside `checkSession`.
-   - In `createPublicTicket`, strictly verify that `req.session?.account_id || req.session?.accountId` exists.
-   - Reject unauthenticated ticket submissions with HTTP 401 Unauthorized.
-   - Remove logged-out ticket bypass logic (`LOGGED_OUT_TICKET_TYPES` resolution via username/email).
+3. **Controller Layer (`backend/controllers/UserControllers.js`)**:
+   - `setup2FAController` and `enable2FAController` return 400 with the service error message when a password is required.
 
-3. **Design & Code Standards**:
-   - Follow existing dark/light visual theme and styling rules (no gradients).
-   - Ensure clean build verification (`npm run build` in frontend).
+4. **Frontend Settings UI (`TwoFactorSettingsSection.tsx` & `user_settings.tsx`)**:
+   - Show a warning / guidance banner when `!status.enabled && !status.hasPassword` explaining that a password must be set first.
+   - Disable or block 2FA setup toggle / button with clear toast notification if `!status.hasPassword`.
+   - Dispatch `ensemble:account-updated` when user sets a password in `UserSettingsAccountDetails` so the 2FA section automatically refreshes its `hasPassword` status.
+
+5. **Verification**:
+   - Run backend check validating password existence check on accounts with and without passwords.
+   - Run frontend `npm run build` to ensure zero compilation or typing errors.

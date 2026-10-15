@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { User, Calendar, Mail, MapPin, Camera, Lock, Save, ShieldCheck, Send, CheckCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
 import api from "@/lib/axios";
 import { showErrorToast } from "@/components/utility/toast";
+import { TwoFactorSettingsSection } from "./TwoFactorSettingsSection";
 
 interface AccountDetailsProps {
   fullName: string;
@@ -258,7 +259,8 @@ export const UserSettingsAccountDetails: React.FC<AccountDetailsProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Account Details</h2>
         <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">Manage your identity and profile credentials.</p>
@@ -517,5 +519,8 @@ export const UserSettingsAccountDetails: React.FC<AccountDetailsProps> = ({
         </button>
       </div>
     </form>
-  );
+
+    <TwoFactorSettingsSection />
+  </div>
+);
 };
