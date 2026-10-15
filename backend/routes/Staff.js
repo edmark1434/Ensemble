@@ -6,6 +6,7 @@ const {
   getTicketParticipantSearch,
   postTicketParticipant,
   deleteTicketParticipant,
+  postTicketTranscript,
 } = require('../controllers/AdminTicketsControllers');
 
 function requireAnyStaff(req, res, next) {
@@ -21,6 +22,7 @@ function requireAnyStaff(req, res, next) {
 router.get('/check-staff-role', [checkSession, requireAuth], checkStaffRole);
 router.get('/tickets/people', [checkSession, requireAnyStaff], getTicketParticipantSearch);
 router.post('/tickets/:id/participants', [checkSession, requireAnyStaff], postTicketParticipant);
+router.post('/tickets/:id/transcript', [checkSession, requireAnyStaff], postTicketTranscript);
 router.delete('/tickets/:id/participants/:accountId', [checkSession, requireAnyStaff], deleteTicketParticipant);
 
 module.exports = router;

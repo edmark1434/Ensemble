@@ -1347,6 +1347,7 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     pendingInvites,
     canManageParticipants: Boolean(staffSession) && isStaffSession(staffSession),
     savedTranscript: await latestTicketTranscript(ticketId),
+    autoClosesAt: ticketAutoClosesAt(ticket),
   };
 }
 
@@ -1411,7 +1412,9 @@ async function saveTicketCloseTranscript(ticketId, { reason = 'closed', actorSta
       eventType: 'transcript',
       summary: reason === 'auto'
         ? 'Auto-closed the ticket and saved the transcript'
-        : 'Saved the transcript when the ticket closed',
+        : reason === 'manual'
+          ? 'Saved a transcript of this ticket'
+          : 'Saved the transcript when the ticket closed',
       actorStaffId,
       actorAccountId,
       metadata: { transcript, reason },
@@ -1423,14 +1426,81 @@ async function saveTicketCloseTranscript(ticketId, { reason = 'closed', actorSta
   }
 }
 
+const TICKET_AUTO_CLOSE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function ticketAutoClosesAt(ticket) {
+  if (!ticket || isClosedStatus(ticket.status)) return null;
+  const last = ticket.lastMessageAt || ticket.createdAt;
+  if (!last) return null;
+  return new Date(new Date(last).getTime() + TICKET_AUTO_CLOSE_MS).toISOString();
+}
+
+async function notifyTicketClosed({ ticketId, ticketNumber, requesterAccountId, reason, staffSession }) {
+  const chatId = await getTicketChatId(ticketId);
+  const body = reason === 'auto'
+    ? 'This ticket was closed automatically after 7 days without a reply. A transcript was saved.'
+    : 'This ticket was closed. A transcript was saved.';
+  if (chatId) {
+    await writeTicketMembershipNote(chatId, staffSession || {}, body);
+  }
+  const inbox = chatId ? await loadTicketInbox(chatId) : null;
+  const recipients = new Set();
+  if (requesterAccountId) recipients.add(String(requesterAccountId));
+  for (const member of inbox?.members || []) {
+    if (!ticketMemberIsActive(member)) continue;
+    if (['admin', 'staff', 'moderator'].includes(String(member.role || '').toLowerCase())) continue;
+    recipients.add(String(member.account_id));
+  }
+  const actorId = sessionAccountId(staffSession);
+  if (actorId) recipients.delete(String(actorId));
+  const message = reason === 'auto'
+    ? `Your ticket #${ticketNumber} was closed after 7 days without a reply. Open it to read the transcript.`
+    : `Your ticket #${ticketNumber} is closed. Open it to read the transcript.`;
+  const referencePath = chatId ? `/inbox/direct?conversation=${chatId}` : '/notifications';
+  await Promise.all([...recipients].map(async (accountId) => {
+    try {
+      const notification = await createNotificationServices({
+        account_id: accountId,
+        message,
+        is_read: false,
+        reference_table: 'tickets',
+        reference_prefix: 'TICKET_CLOSED',
+        reference_path: referencePath,
+        reference_id: String(ticketId),
+      });
+      const { getIo } = require('../lib/WebSocket');
+      const io = getIo();
+      if (io && notification) io.to(accountId).emit('notification', notification);
+    } catch (error) {
+      console.error('Ticket close notification failed:', error.message);
+    }
+  }));
+}
+
+async function generateTicketTranscript(ticketId, staffSession) {
+  if (!isStaffSession(staffSession)) throw ticketError('Only staff can generate a transcript', 403);
+  const existing = await pool.query(
+    `SELECT ticket_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  if (!existing.rows.length) return null;
+  const staff = await resolveDisputeStaffId(staffSession);
+  await saveTicketCloseTranscript(ticketId, {
+    reason: 'manual',
+    actorStaffId: staff?.staff_id || null,
+    actorAccountId: sessionAccountId(staffSession),
+  });
+  return getTicketDetail(ticketId, staffSession);
+}
+
 async function autoCloseInactiveTickets() {
   const result = await pool.query(
     `SELECT ticket_id, account_id, ticket_number
      FROM tickets
      WHERE deleted_at IS NULL
        AND status NOT IN ('Closed', 'Resolved')
-       AND COALESCE(last_message_at, updated_at, created_at) < NOW() - INTERVAL '7 days'
-     ORDER BY COALESCE(last_message_at, updated_at, created_at) ASC
+       AND COALESCE(last_message_at, created_at) < NOW() - INTERVAL '7 days'
+     ORDER BY COALESCE(last_message_at, created_at) ASC
      LIMIT 25`
   );
   let closed = 0;
@@ -1453,24 +1523,13 @@ async function autoCloseInactiveTickets() {
       summary: 'Auto-closed after 7 days without activity',
     });
     await saveTicketCloseTranscript(row.ticket_id, { reason: 'auto' });
-    if (row.account_id) {
-      try {
-        const notification = await createNotificationServices({
-          account_id: String(row.account_id),
-          message: `Your ticket #${row.ticket_number} was closed after 7 days without activity.`,
-          is_read: false,
-          reference_table: 'tickets',
-          reference_prefix: 'TICKET_CLOSED',
-          reference_path: `/tickets/${row.ticket_id}`,
-          reference_id: randomUUID(),
-        });
-        const { getIo } = require('../lib/WebSocket');
-        const io = getIo();
-        if (io && notification) io.to(String(row.account_id)).emit('notification', notification);
-      } catch (error) {
-        console.error('Auto-close notification failed:', error.message);
-      }
-    }
+    await notifyTicketClosed({
+      ticketId: row.ticket_id,
+      ticketNumber: row.ticket_number,
+      requesterAccountId: row.account_id,
+      reason: 'auto',
+      staffSession: null,
+    });
     closed += 1;
   }
   return { closed };
@@ -2230,19 +2289,14 @@ async function updateTicket(ticketId, patch, staffSession) {
 
       // 2. Notify requester on ticket resolution
       const isResolving = patch.status && isClosedStatus(patch.status) && !isClosedStatus(currentStatus);
-      if (isResolving && currentTicket.account_id && notifSettings?.notifyRequesterOnResolution !== false) {
-        const notif = await createNotificationServices({
-          account_id: String(currentTicket.account_id),
-          message: `Your ticket #${currentTicket.ticket_number} has been resolved.`,
-          is_read: false,
-          reference_table: 'tickets',
-          reference_prefix: 'TICKET_RESOLVED',
-          reference_path: `/tickets/${ticketId}`,
-          reference_id: randomUUID(),
+      if (isResolving && currentTicket.account_id) {
+        await notifyTicketClosed({
+          ticketId,
+          ticketNumber: currentTicket.ticket_number,
+          requesterAccountId: currentTicket.account_id,
+          reason: 'closed',
+          staffSession,
         });
-        if (io) {
-          io.to(String(currentTicket.account_id)).emit('notification', notif);
-        }
       }
     } catch (notifErr) {
       console.error('Error dispatching ticket configuration-based notifications:', notifErr.message);
@@ -3457,6 +3511,7 @@ module.exports = {
   nextDisputeNumber,
   updateTicket,
   autoCloseInactiveTickets,
+  generateTicketTranscript,
   addTicketMessage,
   updateTicketMessage,
   deleteTicketMessage,

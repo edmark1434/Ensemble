@@ -6,6 +6,7 @@ const {
   addTicketParticipant,
   removeTicketParticipant,
   respondTicketInvite,
+  generateTicketTranscript,
   createSupportTicket,
   getTicketPickers,
   getTicketCatalog,
@@ -630,6 +631,20 @@ async function deleteTicketParticipant(req, res) {
   }
 }
 
+async function postTicketTranscript(req, res) {
+  try {
+    const data = await generateTicketTranscript(req.params.id, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data, message: 'Transcript saved' });
+  } catch (err) {
+    console.error('Error generating ticket transcript:', err);
+    res.status(err.statusCode || 400).json({
+      success: false,
+      message: err.message || 'Failed to generate transcript',
+    });
+  }
+}
+
 async function postMyTicketInvite(req, res) {
   try {
     const accountId = req.session?.account_id || req.session?.accountId;
@@ -686,5 +701,6 @@ module.exports = {
   getTicketParticipantSearch,
   postTicketParticipant,
   deleteTicketParticipant,
+  postTicketTranscript,
   postMyTicketSatisfaction,
 };

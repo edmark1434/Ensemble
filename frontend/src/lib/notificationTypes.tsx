@@ -177,6 +177,7 @@ export const NOTIFICATION_LABELS: Record<string, string> = {
   ACCOUNT_BANNED: "Account Banned", ACCOUNT_LOCKED: "Account Locked",
   RESTORE: "Standing Restored",
   TICKET_ASSIGNED: "Ticket Assigned", TICKET_RESOLVED: "Ticket Resolved",
+  TICKET_CLOSED: "Ticket Closed",
   TICKET_REPLY: "Ticket Reply", TICKET_INTERNAL_REPLY: "Internal Reply",
   TICKET_INVITE: "Ticket Invite",
 };

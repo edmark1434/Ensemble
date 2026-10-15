@@ -473,6 +473,7 @@ export type TicketDetail = {
   invitePending?: boolean;
   canManageParticipants?: boolean;
   savedTranscript?: { text: string; createdAt?: string | null } | null;
+  autoClosesAt?: string | null;
 };
 
 export function ticketTypeOf(t: { type?: string; category?: string }) {

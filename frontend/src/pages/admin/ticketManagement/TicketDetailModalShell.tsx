@@ -372,6 +372,21 @@ function Field({
 const selectCls =
   'rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none focus:border-white/25';
 
+function CloseTimer({ closesAt }: { closesAt?: string | null }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!closesAt) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, [closesAt]);
+  if (!closesAt) return null;
+  const remaining = new Date(closesAt).getTime() - now;
+  const label = remaining <= 0
+    ? 'Due to close automatically now'
+    : `Closes automatically in ${Math.floor(remaining / 86400000)}d ${Math.floor((remaining % 86400000) / 3600000)}h if nobody replies`;
+  return <p className="text-[11px] text-amber-200/80">{label}</p>;
+}
+
 function statusButtonClass(label: string, active: boolean) {
   const s = label.toLowerCase().replace(/_/g, ' ');
   if (!active) {
@@ -439,6 +454,7 @@ export default function TicketDetailModalShell({
   const [personBusy, setPersonBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<{ accountId: string; name: string } | null>(null);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [savingTranscript, setSavingTranscript] = useState(false);
   const [confirmPerson, setConfirmPerson] = useState<{
     accountId: string;
     name: string;
@@ -870,6 +886,19 @@ export default function TicketDetailModalShell({
   const jumpToMessage = (messageId: string) => {
     const target = threadRef.current?.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
     target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const saveTranscript = async () => {
+    setSavingTranscript(true);
+    try {
+      const response = await api.post(`/api/staff/tickets/${ticketId}/transcript`);
+      if (response.data?.data) setDetail(response.data.data as TicketDetail);
+      showSuccessToast('Transcript saved');
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to generate transcript'));
+    } finally {
+      setSavingTranscript(false);
+    }
   };
 
   const sendReply = async () => {
@@ -1315,7 +1344,8 @@ export default function TicketDetailModalShell({
                       ))}
                     </div>
                   )}
-                  <Field label="Status">
+                  <Field label="Status" hint={t.status === 'Closed' ? 'This ticket is closed. A transcript is saved when it closes.' : undefined}>
+                    {t.status !== 'Closed' ? <CloseTimer closesAt={detail.autoClosesAt} /> : null}
                     {statusControl === 'buttons' ? (
                       <div
                         className="flex flex-wrap gap-1.5"
@@ -1771,6 +1801,14 @@ export default function TicketDetailModalShell({
                 </div>
               </div>
               <div className="flex justify-end gap-2 border-t border-white/10 px-5 py-3">
+                <button
+                  type="button"
+                  disabled={savingTranscript}
+                  onClick={() => void saveTranscript()}
+                  className="rounded-xl border border-sky-400/40 px-3 py-2 text-sm text-sky-100 hover:bg-sky-500/10 disabled:opacity-50"
+                >
+                  {savingTranscript ? 'Saving…' : 'Generate transcript'}
+                </button>
                 <button
                   type="button"
                   onClick={() => {
