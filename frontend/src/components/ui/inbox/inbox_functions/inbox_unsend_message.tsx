@@ -44,19 +44,19 @@ export const InboxUnsentMessage: React.FC<InboxUnsentMessageProps & { body?: str
 }) => {
   return (
     <div
-      className={`max-w-[75%] rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2 text-xs text-gray-600 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 ${
+      className={`max-w-[75%] rounded-2xl border border-red-500/60 bg-red-500/15 px-4 py-2.5 text-xs text-red-50 shadow-sm ${
         isSender ? "rounded-br-none" : "rounded-bl-none"
       }`}
       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
     >
-      <p className="mb-1 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-zinc-500">
+      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-red-200">
         <Undo2 className="h-3.5 w-3.5 flex-shrink-0" />
         Deleted message
       </p>
       {body?.trim() ? (
-        <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-zinc-100">{body}</p>
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-red-50">{body}</p>
       ) : (
-        <p className="italic text-gray-500 dark:text-zinc-500">No text was saved with this message.</p>
+        <p className="italic text-red-200/80">No text was saved with this message.</p>
       )}
     </div>
   );

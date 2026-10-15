@@ -154,6 +154,33 @@ async function listTicketTimeline(ticketId, accountId, since) {
   return timeline.slice(0, 40);
 }
 
+function openingReplyGuides(ticketType) {
+  const subject = String(ticketType || 'this request').trim() || 'this request';
+  return [
+    {
+      id: `guide-ack-${subject}`,
+      ticketType: subject,
+      title: 'Acknowledge',
+      body: `Thanks for writing in about ${subject}. I have this ticket open and I am looking at it now. Reply here with anything else I should know.`,
+      updatedAt: null,
+    },
+    {
+      id: `guide-next-${subject}`,
+      ticketType: subject,
+      title: 'What happens next',
+      body: `Thanks for contacting us. I will follow up in this thread with the next step for ${subject}. You can keep replying here if something changes.`,
+      updatedAt: null,
+    },
+    {
+      id: `guide-detail-${subject}`,
+      ticketType: subject,
+      title: 'Ask for detail',
+      body: `Thanks for the report. To sort out ${subject}, tell me the page you were on, what you expected, and what happened instead. A screenshot helps if you have one.`,
+      updatedAt: null,
+    },
+  ];
+}
+
 async function listTicketArticles(ticketType) {
   const params = [];
   let where = 'deleted_at IS NULL';
@@ -170,13 +197,21 @@ async function listTicketArticles(ticketType) {
       params
     )
     .catch(() => ({ rows: [] }));
-  return result.rows.map((row) => ({
+  const stored = result.rows.map((row) => ({
     id: row.article_id,
     ticketType: row.ticket_type,
     title: row.title,
     body: row.body,
     updatedAt: row.updated_at,
   }));
+  if (!ticketType) return stored;
+  const guides = stored.slice(0, 3);
+  for (const extra of openingReplyGuides(ticketType)) {
+    if (guides.length >= 3) break;
+    if (guides.some((guide) => guide.title === extra.title)) continue;
+    guides.push(extra);
+  }
+  return guides.slice(0, 3);
 }
 
 async function saveTicketArticle({ articleId, ticketType, title, body, staffId }) {

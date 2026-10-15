@@ -98,29 +98,33 @@ function MessageBubble({
   const kind = messageKind(message);
   const isStaffSide = kind === 'staff' || kind === 'internal';
   const displayName = titleCaseLabel(message.authorName);
-  const roleLabel =
-    kind === 'internal'
+  const roleLabel = message.isUnsent
+    ? 'Deleted'
+    : kind === 'internal'
       ? 'Internal Note'
       : kind === 'staff'
         ? 'Staff'
         : 'Requester';
 
-  const shell =
-    kind === 'internal'
+  const shell = message.isUnsent
+    ? 'border-red-500/60 bg-red-500/15'
+    : kind === 'internal'
       ? 'border-amber-500/30 bg-gradient-to-br from-amber-500/15 to-amber-500/[0.04]'
       : kind === 'staff'
         ? `border-white/10 ${accentSoft}`
         : 'border-white/10 bg-[#14151c]';
 
-  const avatar =
-    kind === 'internal'
+  const avatar = message.isUnsent
+    ? 'bg-red-500/25 text-red-100 ring-red-500/40'
+    : kind === 'internal'
       ? 'bg-amber-500/20 text-amber-200 ring-amber-500/30'
       : kind === 'staff'
         ? 'bg-white/10 text-white ring-white/15'
         : 'bg-sky-500/15 text-sky-200 ring-sky-500/25';
 
-  const tag =
-    kind === 'internal'
+  const tag = message.isUnsent
+    ? 'border-red-400/50 bg-red-500/25 text-red-50'
+    : kind === 'internal'
       ? 'border-amber-400/40 bg-amber-500/20 text-amber-100'
       : kind === 'staff'
         ? 'border-white/20 bg-white/10 text-zinc-100'
@@ -156,12 +160,12 @@ function MessageBubble({
             </p>
           )}
           {message.isUnsent && (
-            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-red-200">
               Deleted message
             </p>
           )}
           {message.body ? (
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-100">{message.body}</p>
+            <p className={`whitespace-pre-wrap text-sm leading-relaxed ${message.isUnsent ? 'text-red-50' : 'text-zinc-100'}`}>{message.body}</p>
           ) : null}
           {(message.attachments || []).length > 0 && (
             <div className={`flex flex-col gap-1.5 ${message.body ? 'mt-2' : ''}`}>
@@ -351,7 +355,14 @@ export default function TicketDetailModalShell({
   const [confirmEscalate, setConfirmEscalate] = useState(false);
   const [confirmEscalateAdmin, setConfirmEscalateAdmin] = useState(false);
   const [personQuery, setPersonQuery] = useState('');
-  const [personResults, setPersonResults] = useState<{ accountId: string; name: string; handle: string }[]>([]);
+  const [personResults, setPersonResults] = useState<{
+    accountId: string;
+    name: string;
+    handle: string;
+    email: string;
+    kind: 'user' | 'staff';
+    role: string;
+  }[]>([]);
   const [searchingPeople, setSearchingPeople] = useState(false);
   const [personBusy, setPersonBusy] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
@@ -409,31 +420,42 @@ export default function TicketDetailModalShell({
     setEscalateType(opts[0]);
   };
 
+  const applyLoadedTicket = (data: TicketDetail, resetFields: boolean) => {
+    setDetail(data);
+    if (!resetFields) return;
+    setStatus(data.ticket.status);
+    setPriority(data.ticket.priority);
+    const t = ticketTypeOf(data.ticket);
+    setCurrentType(t);
+    setAssigneeId(data.ticket.assignee?.staffId?.toString() || '');
+    const ownerRole =
+      data.typeDetails?.find((d) => d.label === t)?.queueRole ||
+      Object.entries(data.escalateByRole || {}).find(([, types]) => types.includes(t))?.[0] ||
+      'Support Moderator';
+    const modRole = isAdminQueue(ownerRole) ? 'Support Moderator' : ownerRole;
+    setEscalateRole(modRole);
+    const opts = data.escalateByRole?.[modRole] || escalateTypesForRole(modRole);
+    setEscalateType(opts.includes(t) ? t : opts[0] || '');
+  };
+
   const load = async () => {
     setLoading(true);
     try {
       const res = await api.get(`${endpointBase}/${ticketId}`);
-      if (res.data?.success) {
-        const data = res.data.data as TicketDetail;
-        setDetail(data);
-        setStatus(data.ticket.status);
-        setPriority(data.ticket.priority);
-        const t = ticketTypeOf(data.ticket);
-        setCurrentType(t);
-        setAssigneeId(data.ticket.assignee?.staffId?.toString() || '');
-        const ownerRole =
-          data.typeDetails?.find((d) => d.label === t)?.queueRole ||
-          Object.entries(data.escalateByRole || {}).find(([, types]) => types.includes(t))?.[0] ||
-          'Support Moderator';
-        const modRole = isAdminQueue(ownerRole) ? 'Support Moderator' : ownerRole;
-        setEscalateRole(modRole);
-        const opts = data.escalateByRole?.[modRole] || escalateTypesForRole(modRole);
-        setEscalateType(opts.includes(t) ? t : opts[0] || '');
-      }
+      if (res.data?.success) applyLoadedTicket(res.data.data as TicketDetail, true);
     } catch {
       showErrorToast('Failed to load ticket');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const refreshThread = async () => {
+    try {
+      const res = await api.get(`${endpointBase}/${ticketId}`);
+      if (res.data?.success) applyLoadedTicket(res.data.data as TicketDetail, false);
+    } catch {
+      // Keep the open ticket in place if a background refresh fails.
     }
   };
 
@@ -444,36 +466,45 @@ export default function TicketDetailModalShell({
 
   useEffect(() => {
     const query = personQuery.replace(/^@/, '').trim();
-    if (!detail?.canManageParticipants || query.length < 1) {
+    if (!detail?.canManageParticipants || query.length < 2) {
       setPersonResults([]);
       setSearchingPeople(false);
       return;
     }
-    let cancelled = false;
+    const controller = new AbortController();
     const timeout = window.setTimeout(async () => {
       setSearchingPeople(true);
       try {
-        const response = await api.get('/api/accounts/search-users', { params: { handle: query } });
+        const response = await api.get('/api/staff/tickets/people', {
+          params: { q: query },
+          signal: controller.signal,
+        });
         const results = (response.data?.data || []).map((account: {
-          account_id: string;
-          display_name?: string;
-          full_name?: string;
-          handle?: string;
+          accountId: string;
+          name?: string;
+          handle?: string | null;
+          email?: string | null;
+          kind?: 'user' | 'staff';
+          role?: string;
         }) => ({
-          accountId: String(account.account_id),
-          name: account.display_name || account.full_name || account.handle || 'User',
+          accountId: String(account.accountId),
+          name: account.name || account.handle || 'Unknown',
           handle: account.handle ? `@${account.handle}` : '',
+          email: account.email || '',
+          kind: account.kind === 'staff' ? 'staff' as const : 'user' as const,
+          role: account.role || (account.kind === 'staff' ? 'Staff' : 'User'),
         }));
-        if (!cancelled) setPersonResults(results);
-      } catch {
-        if (!cancelled) setPersonResults([]);
+        setPersonResults(results);
+      } catch (err: unknown) {
+        if ((err as { code?: string; name?: string })?.code === 'ERR_CANCELED' || (err as { name?: string })?.name === 'CanceledError') return;
+        setPersonResults([]);
       } finally {
-        if (!cancelled) setSearchingPeople(false);
+        if (!controller.signal.aborted) setSearchingPeople(false);
       }
-    }, 300);
+    }, 250);
     return () => {
-      cancelled = true;
       window.clearTimeout(timeout);
+      controller.abort();
     };
   }, [personQuery, detail?.canManageParticipants]);
 
@@ -505,7 +536,7 @@ export default function TicketDetailModalShell({
       }
       realtimeRefreshRef.current = setTimeout(() => {
         realtimeRefreshRef.current = null;
-        void load();
+        void refreshThread();
       }, 75);
     };
     const refreshTicketThread = (message: { conversation_id?: string }) => {
@@ -700,7 +731,7 @@ export default function TicketDetailModalShell({
       setCreditAmount('');
       setCreditNote('');
       showSuccessToast('Credit change recorded on the ticket');
-      await load();
+      await refreshThread();
       onUpdated();
     } catch (err: unknown) {
       showErrorToast(apiErrorMessage(err, 'Failed to record credit change'));
@@ -713,15 +744,15 @@ export default function TicketDetailModalShell({
     if (!reply.trim() && screenshots.length === 0) return;
     setSaving(true);
     try {
-      await api.post(`${endpointBase}/${ticketId}/messages`, {
+      const res = await api.post(`${endpointBase}/${ticketId}/messages`, {
         body: reply.trim(),
         isInternal: internalNote,
         attachments: screenshots.map((file) => ({ key: file.key, name: file.name, type: file.type })),
       });
       setReply('');
       setScreenshots([]);
+      if (res.data?.data) applyLoadedTicket(res.data.data as TicketDetail, false);
       showSuccessToast(internalNote ? 'Internal note added' : 'Reply sent');
-      await load();
       onUpdated();
     } catch (err: unknown) {
       showErrorToast(apiErrorMessage(err, 'Failed to send message'));
@@ -733,9 +764,9 @@ export default function TicketDetailModalShell({
   const changeMessage = async (messageId: string | number, patch: { body?: string; isInternal?: boolean }) => {
     setSaving(true);
     try {
-      await api.patch(`${endpointBase}/${ticketId}/messages/${messageId}`, patch);
+      const res = await api.patch(`${endpointBase}/${ticketId}/messages/${messageId}`, patch);
+      if (res.data?.data) applyLoadedTicket(res.data.data as TicketDetail, false);
       showSuccessToast(patch.isInternal === true ? 'Marked as an internal note' : patch.isInternal === false ? 'Reply is visible to the member' : 'Reply updated');
-      await load();
       onUpdated();
       return true;
     } catch (err: unknown) {
@@ -749,9 +780,9 @@ export default function TicketDetailModalShell({
   const removeMessage = async (messageId: string | number) => {
     setSaving(true);
     try {
-      await api.delete(`${endpointBase}/${ticketId}/messages/${messageId}`);
+      const res = await api.delete(`${endpointBase}/${ticketId}/messages/${messageId}`);
+      if (res.data?.data) applyLoadedTicket(res.data.data as TicketDetail, false);
       showSuccessToast('Reply deleted');
-      await load();
       onUpdated();
     } catch (err: unknown) {
       showErrorToast(apiErrorMessage(err, 'Failed to delete reply'));
@@ -905,62 +936,62 @@ export default function TicketDetailModalShell({
                   {detail.canManageParticipants && (
                     <div className="space-y-2">
                       <label className="block text-[11px] text-zinc-500" htmlFor="ticket-add-user">
-                        Add a user
+                        Add a moderator or member
                       </label>
                       <input
                         id="ticket-add-user"
                         value={personQuery}
                         onChange={(event) => setPersonQuery(event.target.value)}
-                        placeholder="Search by name or handle"
+                        placeholder="Name, @handle, or email"
+                        autoComplete="off"
                         className="w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-white/25"
                       />
+                      {personQuery.replace(/^@/, '').trim().length === 1 && (
+                        <p className="text-[11px] text-zinc-500">Type at least 2 characters.</p>
+                      )}
                       {searchingPeople && <p className="text-[11px] text-zinc-500">Searching…</p>}
                       {personResults.length > 0 && (
-                        <ul className="max-h-40 space-y-1 overflow-y-auto">
-                          {personResults.map((person) => (
-                            <li key={person.accountId}>
-                              <button
-                                type="button"
-                                disabled={personBusy}
-                                onClick={() => void changeParticipant(person.accountId, 'add')}
-                                className="flex w-full items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2 text-left text-xs hover:bg-white/5 disabled:opacity-50"
-                              >
-                                <span className="min-w-0">
-                                  <span className="block truncate text-white">{person.name}</span>
-                                  <span className="block truncate text-zinc-500">{person.handle}</span>
-                                </span>
-                                <span className="inline-flex shrink-0 items-center gap-1 text-zinc-300">
-                                  <UserPlus className="h-3.5 w-3.5" />
-                                  Add
-                                </span>
-                              </button>
-                            </li>
-                          ))}
+                        <ul className="max-h-48 space-y-1 overflow-y-auto">
+                          {personResults.map((person) => {
+                            const alreadyOnTicket = (detail.participants || []).some(
+                              (member) => member.accountId === person.accountId && member.status === 'active'
+                            );
+                            return (
+                              <li key={person.accountId}>
+                                <button
+                                  type="button"
+                                  disabled={personBusy || alreadyOnTicket}
+                                  onClick={() => void changeParticipant(person.accountId, 'add')}
+                                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2 text-left text-xs hover:bg-white/5 disabled:opacity-50"
+                                >
+                                  <span className="min-w-0">
+                                    <span className="block truncate text-white">{person.name}</span>
+                                    <span className="block truncate text-zinc-500">
+                                      {person.handle || 'No handle'}
+                                      {person.email ? ` · ${person.email}` : ''}
+                                    </span>
+                                  </span>
+                                  <span className="inline-flex shrink-0 flex-col items-end gap-1 text-zinc-300">
+                                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${person.kind === 'staff' ? 'border-violet-400/40 text-violet-200' : 'border-white/15 text-zinc-400'}`}>
+                                      {person.role}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1">
+                                      <UserPlus className="h-3.5 w-3.5" />
+                                      {alreadyOnTicket ? 'On ticket' : 'Add'}
+                                    </span>
+                                  </span>
+                                </button>
+                              </li>
+                            );
+                          })}
                         </ul>
                       )}
-                      {!searchingPeople && personQuery.trim().length > 0 && personResults.length === 0 && (
-                        <p className="text-[11px] text-zinc-500">No users found.</p>
+                      {!searchingPeople && personQuery.replace(/^@/, '').trim().length >= 2 && personResults.length === 0 && (
+                        <p className="text-[11px] text-zinc-500">No matching moderators or members.</p>
                       )}
                     </div>
                   )}
                 </section>
-
-                {(detail.articles || []).length > 0 && (
-                  <section className="space-y-2 rounded-xl border border-white/10 bg-[#14151c] p-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Reply guides</p>
-                    {detail.articles!.map((article) => (
-                      <button
-                        key={article.id}
-                        type="button"
-                        onClick={() => setReply(article.body)}
-                        className="block w-full rounded-lg border border-white/10 px-3 py-2 text-left text-xs text-zinc-300 hover:bg-white/5"
-                      >
-                        <span className="font-medium text-white">{article.title}</span>
-                        <span className="mt-1 line-clamp-2 block text-zinc-500">{article.body}</span>
-                      </button>
-                    ))}
-                  </section>
-                )}
 
                 {detail.payments && (
                   <section className="space-y-2 rounded-xl border border-white/10 bg-[#14151c] p-4">
@@ -1331,6 +1362,34 @@ export default function TicketDetailModalShell({
               </div>
 
               <div className="shrink-0 border-t border-white/10 bg-[#0f1016] p-4">
+                {(() => {
+                  const thread = (detail.messages || []).filter(
+                    (message) =>
+                      !message.isInternal &&
+                      !message.isUnsent &&
+                      String(message.authorType).toLowerCase() !== 'system'
+                  );
+                  const showGuides = thread.length <= 1 && (detail.articles || []).length > 0;
+                  if (!showGuides) return null;
+                  return (
+                    <div className="mb-3 rounded-xl border border-sky-400/40 bg-sky-500/10 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200">Reply guides</p>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                        {detail.articles!.slice(0, 3).map((article) => (
+                          <button
+                            key={article.id}
+                            type="button"
+                            onClick={() => setReply(article.body)}
+                            className="rounded-lg border border-sky-300/30 bg-sky-400/10 px-3 py-2 text-left text-xs text-sky-50 hover:bg-sky-400/20"
+                          >
+                            <span className="font-semibold text-white">{article.title}</span>
+                            <span className="mt-1 line-clamp-3 block text-sky-100/80">{article.body}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 <textarea
                   value={reply}
                   onChange={(e) => setReply(e.target.value)}

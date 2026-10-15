@@ -3,6 +3,7 @@ const checkSession = require('../middleware/CheckSession');
 const requireAuth = require('../middleware/RequireAuth');
 const { checkStaffRole } = require('../controllers/StaffControllers');
 const {
+  getTicketParticipantSearch,
   postTicketParticipant,
   deleteTicketParticipant,
 } = require('../controllers/AdminTicketsControllers');
@@ -18,6 +19,7 @@ function requireAnyStaff(req, res, next) {
 }
 
 router.get('/check-staff-role', [checkSession, requireAuth], checkStaffRole);
+router.get('/tickets/people', [checkSession, requireAnyStaff], getTicketParticipantSearch);
 router.post('/tickets/:id/participants', [checkSession, requireAnyStaff], postTicketParticipant);
 router.delete('/tickets/:id/participants/:accountId', [checkSession, requireAnyStaff], deleteTicketParticipant);
 

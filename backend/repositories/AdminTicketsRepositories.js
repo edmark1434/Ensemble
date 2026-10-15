@@ -1442,13 +1442,95 @@ async function announceTicketAssignment(ticketId, staffId, staffSession) {
   }
 }
 
+function escapeTicketSearch(value) {
+  return String(value || '').replace(/[\\%_]/g, '\\$&');
+}
+
+async function searchTicketParticipants(rawQuery) {
+  const query = String(rawQuery || '').replace(/^@/, '').trim();
+  if (query.length < 2) return [];
+  if (query.length > 80) throw ticketError('Search is too long', 400);
+  const escaped = escapeTicketSearch(query);
+  const result = await pool.query(
+    `SELECT
+       a.account_id,
+       a.handle,
+       a.status,
+       COALESCE(
+         a.display_name,
+         NULLIF(TRIM(CONCAT(COALESCE(u.first_name, s.first_name, ''), ' ', COALESCE(u.last_name, s.last_name, ''))), ''),
+         a.handle
+       ) AS name,
+       s.staff_id,
+       s.role AS staff_role,
+       COALESCE(u.email_address, s.email_address) AS email
+     FROM accounts a
+     LEFT JOIN users u ON u.account_id = a.account_id
+     LEFT JOIN staff s ON s.account_id = a.account_id
+     WHERE a.deleted_at IS NULL
+       AND (u.account_id IS NOT NULL OR s.staff_id IS NOT NULL)
+       AND (a.status IS NULL OR LOWER(a.status) = 'active')
+       AND (
+         LOWER(a.handle) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
+         OR LOWER(COALESCE(a.display_name, '')) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
+         OR LOWER(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')))) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
+         OR LOWER(TRIM(CONCAT(COALESCE(s.first_name, ''), ' ', COALESCE(s.last_name, '')))) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
+         OR LOWER(COALESCE(u.email_address, '')) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
+         OR LOWER(COALESCE(s.email_address, '')) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
+       )
+     ORDER BY
+       CASE
+         WHEN LOWER(a.handle) = LOWER($2) THEN 0
+         WHEN LOWER(COALESCE(u.email_address, s.email_address, '')) = LOWER($2) THEN 0
+         WHEN LOWER(a.handle) LIKE (LOWER($1) || '%') ESCAPE '\\' THEN 1
+         ELSE 2
+       END,
+       name ASC
+     LIMIT 8`,
+    [escaped, query]
+  );
+  return result.rows.map((row) => ({
+    accountId: String(row.account_id),
+    name: row.name || 'Unknown',
+    handle: row.handle || null,
+    email: row.email || null,
+    kind: row.staff_id ? 'staff' : 'user',
+    role: row.staff_id ? (row.staff_role || 'Staff') : 'User',
+  }));
+}
+
+async function findTicketParticipantAccount(accountId) {
+  const result = await pool.query(
+    `SELECT
+       a.account_id,
+       a.handle,
+       a.deleted_at,
+       a.status,
+       COALESCE(
+         a.display_name,
+         NULLIF(TRIM(CONCAT(COALESCE(u.first_name, s.first_name, ''), ' ', COALESCE(u.last_name, s.last_name, ''))), ''),
+         a.handle,
+         'Someone'
+       ) AS name,
+       u.user_id,
+       s.staff_id,
+       s.role AS staff_role
+     FROM accounts a
+     LEFT JOIN users u ON u.account_id = a.account_id
+     LEFT JOIN staff s ON s.account_id = a.account_id
+     WHERE a.account_id = $1`,
+    [accountId]
+  );
+  return result.rows[0] || null;
+}
+
 async function addTicketParticipant(ticketId, rawAccountId, staffSession) {
   if (!isStaffSession(staffSession)) {
     throw ticketError('Only staff can add someone to a ticket', 403);
   }
   const accountId = String(rawAccountId || '').trim();
   if (!TICKET_ACCOUNT_UUID.test(accountId)) {
-    throw ticketError('Choose a user to add', 400);
+    throw ticketError('Choose someone from the search results', 400);
   }
   const ticketResult = await pool.query(
     `SELECT * FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
@@ -1456,17 +1538,13 @@ async function addTicketParticipant(ticketId, rawAccountId, staffSession) {
   );
   if (!ticketResult.rows.length) return null;
 
-  const userResult = await pool.query(
-    `SELECT a.account_id,
-            a.handle,
-            COALESCE(a.display_name, NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), a.handle) AS name
-     FROM accounts a
-     INNER JOIN users u ON u.account_id = a.account_id
-     WHERE a.account_id = $1 AND a.deleted_at IS NULL`,
-    [accountId]
-  );
-  if (!userResult.rows.length) {
-    throw ticketError('That user account was not found', 404);
+  const person = await findTicketParticipantAccount(accountId);
+  if (!person || person.deleted_at || (!person.user_id && !person.staff_id)) {
+    throw ticketError('Choose a moderator or a member account', 404);
+  }
+  const status = String(person.status || 'active').toLowerCase();
+  if (status && status !== 'active') {
+    throw ticketError('That account cannot be added to a ticket', 400);
   }
 
   const ticket = ticketResult.rows[0];
@@ -1474,12 +1552,15 @@ async function addTicketParticipant(ticketId, rawAccountId, staffSession) {
   const inbox = await loadTicketInbox(chatId);
   const existing = (inbox?.members || []).find((member) => String(member.account_id) === accountId);
   if (ticketMemberIsActive(existing)) {
-    throw ticketError('That user is already on this ticket', 409);
+    throw ticketError('That person is already on this ticket', 409);
   }
 
-  await upsertTicketMember(chatId, accountId, 'member', 'active');
+  const memberRole = person.staff_id ? 'admin' : 'member';
+  await upsertTicketMember(chatId, accountId, memberRole, 'active');
   const actor = await actingStaffIdentity(staffSession);
-  const personName = formatAccountIdentity(userResult.rows[0]);
+  const personName = person.staff_id
+    ? formatStaffIdentity({ name: person.name, handle: person.handle, role: person.staff_role })
+    : formatAccountIdentity(person);
   const body = `${actor.label} added ${personName} to this ticket.`;
   await announceInTicketChat({
     ticketId,
@@ -1487,6 +1568,7 @@ async function addTicketParticipant(ticketId, rawAccountId, staffSession) {
     staffSession,
     body,
     prefix: 'TICKET_PARTICIPANT_ADDED',
+    extraAccountIds: [accountId],
   });
   await recordTicketEvent({
     ticketId,
@@ -3032,6 +3114,7 @@ module.exports = {
   getTicketsOverview,
   getTicketDetail,
   listParticipantTicketIds,
+  searchTicketParticipants,
   addTicketParticipant,
   removeTicketParticipant,
   getTicketCatalog,

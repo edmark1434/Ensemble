@@ -2,6 +2,7 @@ const {
   getTicketsOverview,
   getTicketDetail,
   listParticipantTicketIds,
+  searchTicketParticipants,
   addTicketParticipant,
   removeTicketParticipant,
   createSupportTicket,
@@ -568,6 +569,19 @@ async function postTicketCreditAdjustment(req, res) {
   }
 }
 
+async function getTicketParticipantSearch(req, res) {
+  try {
+    const people = await searchTicketParticipants(req.query.q || req.query.handle || '');
+    res.status(200).json({ success: true, data: people });
+  } catch (err) {
+    console.error('Error searching ticket participants:', err);
+    res.status(err.statusCode || 500).json({
+      success: false,
+      message: err.statusCode ? err.message : 'Failed to search people',
+    });
+  }
+}
+
 async function postTicketParticipant(req, res) {
   try {
     const accountId = req.body?.accountId || req.body?.account_id;
@@ -633,6 +647,7 @@ module.exports = {
   postAdminTicketArticle,
   deleteAdminTicketArticle,
   postTicketCreditAdjustment,
+  getTicketParticipantSearch,
   postTicketParticipant,
   deleteTicketParticipant,
   postMyTicketSatisfaction,
