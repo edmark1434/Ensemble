@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import socket from "@/lib/socket";
 import api from "@/lib/axios";
 import { getFollower, getNotificationIcon, getNotificationLabel } from "@/lib/notificationTypes";
+import TicketInviteActions from "@/components/nav/TicketInviteActions";
 import { useAccountAvatars } from "@/lib/accountAvatars";
 import AccountAvatar from "@/components/ui/AccountAvatar";
 
@@ -160,10 +161,20 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
             const followerName = follower?.name ?? null;
             const avatarUrl = isFollow ? avatars[notification.reference_id] : null;
 
+            const isTicketInvite = notification.reference_prefix === "TICKET_INVITE";
             return (
-              <button
+              <div
                 key={notification.notification_id}
-                onClick={() => handleNotificationClick(notification)}
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  if (isTicketInvite) return;
+                  handleNotificationClick(notification);
+                }}
+                onKeyDown={(event) => {
+                  if (isTicketInvite) return;
+                  if (event.key === 'Enter' || event.key === ' ') handleNotificationClick(notification);
+                }}
                 className={`w-full flex items-start gap-3 rounded-xl border p-3 mb-2 text-left transition hover:bg-gray-50 dark:hover:bg-white/5 ${
                   notification.is_read
                     ? "border-transparent opacity-70"
@@ -198,6 +209,20 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
                       {notification.message}
                     </p>
                   )}
+                  {isTicketInvite && notification.reference_id ? (
+                    <TicketInviteActions
+                      ticketId={notification.reference_id}
+                      compact
+                      onDone={(result, chatId) => {
+                        setNotifications((prev) => prev.map((item) => item.notification_id === notification.notification_id ? { ...item, is_read: true } : item));
+                        void api.patch(`/api/notifications/${notification.notification_id}/read`).catch(() => undefined);
+                        if (result === 'accepted' && chatId) {
+                          onClose();
+                          navigate('/inbox/direct', { state: { conversationId: chatId } });
+                        }
+                      }}
+                    />
+                  ) : null}
                 </div>
 
                 <div className="relative flex-shrink-0 pt-0.5">
@@ -212,7 +237,7 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
                     <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-blue-500 ring-2 ring-white dark:ring-dark-surface" />
                   )}
                 </div>
-              </button>
+              </div>
             );
           })
         )}

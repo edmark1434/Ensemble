@@ -38,16 +38,26 @@ interface InboxUnsentMessageProps {
   isSender: boolean;
 }
 
-export const InboxUnsentMessage: React.FC<InboxUnsentMessageProps> = ({ isSender }) => {
+export const InboxUnsentMessage: React.FC<InboxUnsentMessageProps & { body?: string }> = ({
+  isSender,
+  body,
+}) => {
   return (
     <div
-      className={`flex items-center gap-1.5 rounded-2xl px-4 py-2 text-xs italic text-gray-500 dark:text-zinc-400 border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 shadow-sm ${
+      className={`max-w-[75%] rounded-2xl border border-red-500/60 bg-red-500/15 px-4 py-2.5 text-xs text-red-50 shadow-sm ${
         isSender ? "rounded-br-none" : "rounded-bl-none"
       }`}
       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
     >
-      <Undo2 className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-500 flex-shrink-0" />
-      <span>{isSender ? "You unsent a message" : "This message was unsent"}</span>
+      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-red-200">
+        <Undo2 className="h-3.5 w-3.5 flex-shrink-0" />
+        Deleted message
+      </p>
+      {body?.trim() ? (
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-red-50">{body}</p>
+      ) : (
+        <p className="italic text-red-200/80">No text was saved with this message.</p>
+      )}
     </div>
   );
 };

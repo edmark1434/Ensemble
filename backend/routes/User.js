@@ -33,6 +33,7 @@ const {
     listMyTickets,
     getMyTicket,
     postMyTicketMessage,
+    postMyTicketInvite,
     postMyTicketSatisfaction,
     getPublicTicketCatalog,
     getTicketContext,
@@ -69,6 +70,7 @@ router.post('/tickets', [checkSession, requireAuth], createPublicTicket);
 router.get('/tickets', [checkSession, requireAuth], listMyTickets);
 router.get('/tickets/:id', [checkSession, requireAuth], getMyTicket);
 router.post('/tickets/:id/messages', [checkSession, requireAuth], postMyTicketMessage);
+router.post('/tickets/:id/invite', [checkSession, requireAuth], postMyTicketInvite);
 router.post('/tickets/:id/satisfaction', [checkSession, requireAuth], postMyTicketSatisfaction);
 router.post('/reports', [checkSession, requireAuth], createMyTechnicalReport);
 router.get('/check-username', [checkSession, requireAuth], checkUsernameUniqueness);

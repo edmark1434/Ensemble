@@ -40,6 +40,7 @@ export type SupportTicket = {
 };
 
 export type TicketAttachment = {
+  attachment_id?: string;
   attachment_key?: string;
   attachment_url?: string;
   attachment_name?: string;
@@ -103,9 +104,27 @@ export type TicketMessage = {
   body: string;
   attachments?: TicketAttachment[];
   isInternal: boolean;
+  isEdited?: boolean;
+  isUnsent?: boolean;
+  messageType?: string;
+  replyToId?: string | null;
   audience?: 'staff' | 'author_and_staff' | 'parties' | 'public' | string;
   publishedAt?: string | null;
   createdAt: string;
+};
+
+export type TicketPerson = {
+  accountId: string;
+  name: string;
+  handle?: string | null;
+  email?: string | null;
+  role: string;
+  status: 'active' | 'removed' | 'left' | string;
+  isRequester: boolean;
+  isStaff: boolean;
+  replyCount: number;
+  lastReplyAt?: string | null;
+  joinedAt?: string | null;
 };
 
 export type DisputeCreditHold = {
@@ -447,6 +466,11 @@ export type TicketDetail = {
   payments?: TicketPaymentEvidence | null;
   canAdjustCredits?: boolean;
   formValues?: { key: string; label: string; value: string }[];
+  participants?: TicketPerson[];
+  involved?: TicketPerson[];
+  pendingInvites?: { accountId: string; name: string; handle?: string | null }[];
+  invitePending?: boolean;
+  canManageParticipants?: boolean;
 };
 
 export function ticketTypeOf(t: { type?: string; category?: string }) {

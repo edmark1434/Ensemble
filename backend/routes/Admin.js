@@ -53,6 +53,8 @@ const {
   createAdminTicket,
   patchAdminTicket,
   postAdminTicketMessage,
+  patchAdminTicketMessage,
+  deleteAdminTicketMessage,
   postTicketCreditAdjustment,
   getAdminTicketArticles,
   postAdminTicketArticle,
@@ -109,6 +111,8 @@ router.post('/tickets', [checkSession, requireAdmin], createAdminTicket);
 router.get('/tickets/:id', [checkSession, requireAdmin], getAdminTicketDetail);
 router.patch('/tickets/:id', [checkSession, requireAdmin], patchAdminTicket);
 router.post('/tickets/:id/messages', [checkSession, requireAdmin], postAdminTicketMessage);
+router.patch('/tickets/:id/messages/:messageId', [checkSession, requireAdmin], patchAdminTicketMessage);
+router.delete('/tickets/:id/messages/:messageId', [checkSession, requireAdmin], deleteAdminTicketMessage);
 router.post('/tickets/:id/credit-adjustment', [checkSession, requireUserTeamFullWrite], postTicketCreditAdjustment);
 router.get('/ticket-articles', [checkSession, requireAdmin], getAdminTicketArticles);
 router.post('/ticket-articles', [checkSession, requireAdmin], postAdminTicketArticle);

@@ -26,6 +26,10 @@ const {
 const SupportModerator = require('../controllers/SupportModeratorControllers');
 const ForumModerator = require('../controllers/ForumModeratorControllers');
 const JobsModerator = require('../controllers/JobsModeratorControllers');
+const {
+  patchAdminTicketMessage,
+  deleteAdminTicketMessage,
+} = require('../controllers/AdminTicketsControllers');
 
 const marketplaceModerator = requireStaffRole(['Marketplace Moderator']);
 const supportModerator = requireStaffRole(['Support Moderator']);
@@ -42,6 +46,8 @@ router.get('/marketplace/tickets', [checkSession, marketplaceModerator], getTick
 router.get('/marketplace/tickets/:id', [checkSession, marketplaceModerator], getTicket);
 router.patch('/marketplace/tickets/:id', [checkSession, marketplaceModerator], patchTicket);
 router.post('/marketplace/tickets/:id/messages', [checkSession, marketplaceModerator], postTicketMessage);
+router.patch('/marketplace/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], patchAdminTicketMessage);
+router.delete('/marketplace/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], deleteAdminTicketMessage);
 router.get('/marketplace/reports', [checkSession, marketplaceModerator], getMarketplaceReports);
 router.get('/marketplace/reports/:id', [checkSession, marketplaceModerator], getMarketplaceReport);
 router.patch('/marketplace/reports/:id', [checkSession, marketplaceModerator], patchMarketplaceReport);
@@ -62,6 +68,8 @@ router.patch(
 router.get('/tickets/:id', [checkSession, marketplaceModerator], getTicket);
 router.patch('/tickets/:id', [checkSession, marketplaceModerator], patchTicket);
 router.post('/tickets/:id/messages', [checkSession, marketplaceModerator], postTicketMessage);
+router.patch('/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], patchAdminTicketMessage);
+router.delete('/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], deleteAdminTicketMessage);
 
 router.get('/restrictions', [checkSession, marketplaceModerator], getRestrictions);
 router.post('/restrictions/violations', [checkSession, marketplaceModerator], postViolation);
@@ -73,6 +81,8 @@ router.get('/support/tickets', [checkSession, supportModerator], SupportModerato
 router.get('/support/tickets/:id', [checkSession, supportModerator], SupportModerator.getTicket);
 router.patch('/support/tickets/:id', [checkSession, supportModerator], SupportModerator.patchTicket);
 router.post('/support/tickets/:id/messages', [checkSession, supportModerator], SupportModerator.postTicketMessage);
+router.patch('/support/tickets/:id/messages/:messageId', [checkSession, supportModerator], SupportModerator.patchTicketMessage);
+router.delete('/support/tickets/:id/messages/:messageId', [checkSession, supportModerator], SupportModerator.deleteTicketMessage);
 router.post('/support/tickets/:id/credit-adjustment', [checkSession, supportModerator], SupportModerator.postTicketCreditAdjustment);
 router.get('/support/reports', [checkSession, supportModerator], SupportModerator.getReports);
 router.get('/support/reports/:id', [checkSession, supportModerator], SupportModerator.getReport);
@@ -92,6 +102,8 @@ router.get('/forum/tickets', [checkSession, forumModerator], ForumModerator.getT
 router.get('/forum/tickets/:id', [checkSession, forumModerator], ForumModerator.getTicket);
 router.patch('/forum/tickets/:id', [checkSession, forumModerator], ForumModerator.patchTicket);
 router.post('/forum/tickets/:id/messages', [checkSession, forumModerator], ForumModerator.postTicketMessage);
+router.patch('/forum/tickets/:id/messages/:messageId', [checkSession, forumModerator], patchAdminTicketMessage);
+router.delete('/forum/tickets/:id/messages/:messageId', [checkSession, forumModerator], deleteAdminTicketMessage);
 router.get('/forum/reports', [checkSession, forumModerator], ForumModerator.getReports);
 router.get('/forum/reports/:id', [checkSession, forumModerator], ForumModerator.getReport);
 router.patch('/forum/reports/:id', [checkSession, forumModerator], ForumModerator.patchReport);
@@ -121,6 +133,8 @@ router.get('/jobs/tickets', [checkSession, jobsModerator], JobsModerator.getTick
 router.get('/jobs/tickets/:id', [checkSession, jobsModerator], JobsModerator.getTicket);
 router.patch('/jobs/tickets/:id', [checkSession, jobsModerator], JobsModerator.patchTicket);
 router.post('/jobs/tickets/:id/messages', [checkSession, jobsModerator], JobsModerator.postTicketMessage);
+router.patch('/jobs/tickets/:id/messages/:messageId', [checkSession, jobsModerator], patchAdminTicketMessage);
+router.delete('/jobs/tickets/:id/messages/:messageId', [checkSession, jobsModerator], deleteAdminTicketMessage);
 router.get('/jobs/reports', [checkSession, jobsModerator], JobsModerator.getReports);
 router.get('/jobs/reports/:id', [checkSession, jobsModerator], JobsModerator.getReport);
 router.patch('/jobs/reports/:id', [checkSession, jobsModerator], JobsModerator.patchReport);

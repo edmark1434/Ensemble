@@ -455,13 +455,14 @@ async function refreshLatestMessagePreview(conversationId) {
     return latestMessage;
 }
 
-async function getConversationByConvoId(convoId) {
+async function getConversationByConvoId(convoId, options = {}) {
     try{
+        const messageFilter = options.includeDeleted
+            ? { conversation_id: String(convoId) }
+            : activeMessageFilter({ conversation_id: String(convoId) });
         const [Inbox, Messages] = await Promise.all([
             InboxCollection.findOne({ _id: inboxObjectId(convoId), deleted_at: null }),
-            MessageCollection.find(activeMessageFilter({
-                conversation_id: String(convoId),
-            })).sort({ created_at: 1, _id: 1 }).toArray()
+            MessageCollection.find(messageFilter).sort({ created_at: 1, _id: 1 }).toArray()
         ]);
         return { Inbox, Messages };
     }catch(err){
