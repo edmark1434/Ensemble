@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Ban, Lock, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, Ban, Bell, Lock, ShieldAlert } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useGlobalState from '@/lib/global_state';
 import socket from '@/lib/socket';
@@ -211,29 +211,34 @@ function SuspensionBanner({
   standing: AccountStanding;
   onOpenNotifications: () => void;
 }) {
-  const { Icon, detail, tone } = restrictionCopy(standing);
+  const { Icon, detail } = restrictionCopy(standing);
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[4.75rem] z-[45] px-3 sm:px-5">
+    <div className="pointer-events-none fixed inset-x-0 top-[4.25rem] sm:top-[4.75rem] z-[45] flex justify-center px-3 sm:px-4 animate-enter">
       <div
         role="alert"
-        className={`pointer-events-auto mx-auto flex w-full max-w-6xl flex-col gap-3 rounded-2xl border px-4 py-3 shadow-sm backdrop-blur-md sm:flex-row sm:items-center ${tone.border} ${tone.wash}`}
+        className="pointer-events-auto flex w-full max-w-xl items-center justify-between gap-2.5 rounded-xl border border-amber-400/60 bg-amber-50/95 dark:bg-[#201908]/95 px-3 py-1.5 shadow-md backdrop-blur-md transition-all text-amber-950 dark:text-amber-200"
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
-        <div className="flex min-w-0 flex-1 items-start gap-3">
-          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone.icon}`}>
-            <Icon className="h-4 w-4" />
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+            <Icon className="h-3.5 w-3.5" />
           </span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Your account is suspended</p>
-            <p className="mt-0.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{detail}</p>
+          <div className="min-w-0 flex-1 flex items-center gap-1.5">
+            <span className="text-xs font-bold text-amber-900 dark:text-amber-200 shrink-0">
+              Account Suspended:
+            </span>
+            <p className="text-xs text-amber-800/90 dark:text-amber-300/90 truncate font-medium" title={detail}>
+              {detail}
+            </p>
           </div>
         </div>
         <button
           type="button"
           onClick={onOpenNotifications}
-          className="inline-flex shrink-0 items-center justify-center rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/20 hover:bg-amber-500/30 text-amber-950 dark:text-amber-100 px-2.5 py-1 text-xs font-semibold transition-colors"
         >
-          Notifications
+          <Bell className="h-3 w-3" />
+          <span>Notifications</span>
         </button>
       </div>
     </div>
@@ -344,6 +349,7 @@ export function AccountRestrictionHost() {
     const onRestricted = (event: Event) => {
       const standing = standingFromPayload((event as CustomEvent).detail);
       if (!standing) return;
+      if (standing.suspended || standing.code === 'ACCOUNT_SUSPENDED' || String(standing.status || '').toLowerCase() === 'suspended') return;
       const path = window.location.pathname;
       if (path === '/login' || path === '/admin' || path === '/staff') return;
       setBlocked(standing);
@@ -363,6 +369,29 @@ export function AccountRestrictionHost() {
     socket.emit('joinRoom', accountId);
 
     const handleRestricted = (payload: any) => {
+      const code = String(payload?.code || payload?.restriction?.code || '');
+      const status = String(payload?.status || payload?.restriction?.status || '').toLowerCase();
+      // Suspended accounts MUST NEVER be blocked or logged out; they stay signed in with the yellow banner
+      if (code === 'ACCOUNT_SUSPENDED' || status === 'suspended') {
+        const standing: AccountStanding = payload?.restriction || {
+          status: 'Suspended',
+          suspended: true,
+          blocked: false,
+          code: 'ACCOUNT_SUSPENDED',
+          message: payload?.message,
+        };
+        setBlocked(null);
+        const currentUser = useGlobalState.getState().user;
+        if (currentUser) {
+          useGlobalState.getState().setUser({
+            ...currentUser,
+            status: 'Suspended',
+            restriction: standing,
+          });
+        }
+        return;
+      }
+
       const standing = standingFromPayload(payload) || {
         status: payload?.status || (payload?.code === 'ACCOUNT_BANNED' ? 'Banned' : 'Locked'),
         blocked: true,
@@ -390,6 +419,7 @@ export function AccountRestrictionHost() {
           }
         }).catch(() => {});
       } else if (status === 'suspended') {
+        setBlocked(null);
         const standing: AccountStanding = payload?.restriction || {
           status: 'Suspended',
           suspended: true,
@@ -397,9 +427,10 @@ export function AccountRestrictionHost() {
           code: 'ACCOUNT_SUSPENDED',
           message: payload?.message,
         };
-        if (user) {
+        const currentUser = useGlobalState.getState().user;
+        if (currentUser) {
           useGlobalState.getState().setUser({
-            ...user,
+            ...currentUser,
             status: 'Suspended',
             restriction: standing,
           });
