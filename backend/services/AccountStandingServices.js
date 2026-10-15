@@ -186,13 +186,6 @@ async function notifyAccountStatusChanged(accountId, statusData = {}) {
       const io = getIo();
       if (io) {
         if (notification) io.to(String(accountId)).emit('notification', notification);
-        io.to(String(accountId)).emit('account:restricted', {
-          code: 'ACCOUNT_SUSPENDED',
-          status: 'Suspended',
-          message: msg,
-          reason: statusData.reason || null,
-          restriction: access,
-        });
         io.to(String(accountId)).emit('account:status_changed', {
           accountId,
           status: 'Suspended',
