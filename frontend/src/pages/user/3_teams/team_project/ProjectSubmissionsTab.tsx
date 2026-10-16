@@ -26,6 +26,7 @@ import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 import useGlobalState from '@/lib/global_state';
+import type { TaskItem } from './ProjectTaskboardTab';
 
 interface SubmissionItem {
   id?: string;
@@ -64,15 +65,17 @@ interface ProjectSubmissionsTabProps {
   teamId: string;
   milestones: MilestoneData[];
   contracts: any[];
+  tasks?: TaskItem[];
   currentUserAccountId: string;
   isClient: boolean;
-  onUpdated: () => void;
+  onUpdated: (silent?: boolean) => void;
 }
 
 export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
   teamId,
   milestones,
   contracts,
+  tasks,
   currentUserAccountId,
   isClient,
   onUpdated,
@@ -137,6 +140,22 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
       : messageText;
 
     const attachments = linkText ? [linkText] : [];
+
+    // Milestone Task Completion Gate: cannot submit for review unless all tasks for this milestone are done
+    if (isReadyForReview) {
+      const milestoneTasks = (tasks || []).filter(
+        (t) => t.job_milestone_id && String(t.job_milestone_id) === String(m.job_milestone_id)
+      );
+      const incompleteTasks = milestoneTasks.filter(
+        (t) => t.status !== 'completed' && t.status !== 'review'
+      );
+      if (incompleteTasks.length > 0) {
+        showErrorToast(
+          `Cannot submit deliverable for review: All milestone tasks must be completed first (${incompleteTasks.length} task(s) still open).`
+        );
+        return;
+      }
+    }
 
     setIsSubmitting(true);
     try {
@@ -614,36 +633,86 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between pt-2">
-                            <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-zinc-300 cursor-pointer select-none">
-                              <input
-                                type="checkbox"
-                                checked={isReadyForReview}
-                                onChange={(e) => setIsReadyForReview(e.target.checked)}
-                                className="rounded border-slate-300 text-blue-600 focus:ring-0"
-                              />
-                              <span>Mark deliverable as Ready for Client Review</span>
-                            </label>
+                          {(() => {
+                            const milestoneTasks = (tasks || []).filter(
+                              (t) => t.job_milestone_id && String(t.job_milestone_id) === String(m.job_milestone_id)
+                            );
+                            const incompleteTasks = milestoneTasks.filter(
+                              (t) => t.status !== 'completed' && t.status !== 'review'
+                            );
+                            const hasIncompleteTasks = incompleteTasks.length > 0;
 
-                            <button
-                              type="button"
-                              disabled={isSubmitting || (!submissionMessage.trim() && !submissionLink.trim())}
-                              onClick={() => handleDeliverableSubmit(m)}
-                              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-98 transition shadow-xs disabled:opacity-50 cursor-pointer"
-                            >
-                              {isSubmitting ? (
-                                <span className="flex items-center gap-1.5">
-                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                  Submitting...
-                                </span>
-                              ) : (
-                                <>
-                                  <Send className="w-3.5 h-3.5" />
-                                  <span>{isReadyForReview ? 'Submit Deliverable' : 'Send Progress Update'}</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
+                            return (
+                              <>
+                                {isReadyForReview && hasIncompleteTasks && (
+                                  <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 space-y-2">
+                                    <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
+                                      <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                                      <span>Milestone Tasks Must Be Completed Before Client Review</span>
+                                    </div>
+                                    <p className="text-[11px] leading-relaxed">
+                                      You cannot submit this milestone deliverable for client review until all tasks assigned to this milestone are marked as completed.
+                                    </p>
+                                    <div className="pt-0.5">
+                                      <span className="font-semibold text-[11px] text-amber-900 dark:text-amber-200">
+                                        Remaining tasks to complete ({incompleteTasks.length}):
+                                      </span>
+                                      <ul className="list-disc list-inside mt-1 space-y-0.5 text-[11px] opacity-95">
+                                        {incompleteTasks.map((task) => (
+                                          <li key={task.task_id} className="truncate">
+                                            <span className="font-semibold text-slate-900 dark:text-white">{task.title}</span>
+                                            <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-400 font-bold uppercase">
+                                              [{task.status === 'in_progress' ? 'IN PROGRESS' : 'TO DO'}]
+                                            </span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center justify-between pt-2">
+                                  <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-zinc-300 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={isReadyForReview}
+                                      onChange={(e) => setIsReadyForReview(e.target.checked)}
+                                      className="rounded border-slate-300 text-blue-600 focus:ring-0"
+                                    />
+                                    <span>Mark deliverable as Ready for Client Review</span>
+                                  </label>
+
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      isSubmitting ||
+                                      (!submissionMessage.trim() && !submissionLink.trim()) ||
+                                      (isReadyForReview && hasIncompleteTasks)
+                                    }
+                                    onClick={() => handleDeliverableSubmit(m)}
+                                    title={
+                                      isReadyForReview && hasIncompleteTasks
+                                        ? 'All tasks for this milestone must be completed before submitting for client review'
+                                        : undefined
+                                    }
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-98 transition shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                  >
+                                    {isSubmitting ? (
+                                      <span className="flex items-center gap-1.5">
+                                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                        Submitting...
+                                      </span>
+                                    ) : (
+                                      <>
+                                        <Send className="w-3.5 h-3.5" />
+                                        <span>{isReadyForReview ? 'Submit Deliverable' : 'Send Progress Update'}</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
                     )}

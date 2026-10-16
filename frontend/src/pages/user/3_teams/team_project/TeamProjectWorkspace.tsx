@@ -120,10 +120,10 @@ export const TeamProjectWorkspace: React.FC = () => {
     setSearchParams({ tab });
   };
 
-  const loadProjectData = useCallback(async () => {
+  const loadProjectData = useCallback(async (silent = false) => {
     if (!id) return;
     try {
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
       const [projRes, tasksRes, contractsRes, historyRes, membersRes, milestonesRes] = await Promise.all([
         api.get(`/api/team-projects/${id}`),
         api.get(`/api/team-projects/${id}/taskboard`),
@@ -147,7 +147,7 @@ export const TeamProjectWorkspace: React.FC = () => {
       console.error('Error loading team project workspace:', err);
       showErrorToast(err?.response?.data?.message || 'Failed to load project workspace');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, [id]);
 
@@ -618,7 +618,7 @@ export const TeamProjectWorkspace: React.FC = () => {
               members={members}
               contracts={contracts}
               milestones={milestones}
-              onTasksUpdated={loadProjectData}
+              onTasksUpdated={(silent?: boolean) => loadProjectData(silent)}
             />
           )}
 
@@ -627,9 +627,10 @@ export const TeamProjectWorkspace: React.FC = () => {
               teamId={project.team_id}
               milestones={milestones}
               contracts={contracts}
+              tasks={taskboardTasks}
               currentUserAccountId={currentUserAccountId}
               isClient={isClient}
-              onUpdated={loadProjectData}
+              onUpdated={(silent?: boolean) => loadProjectData(silent)}
             />
           )}
 

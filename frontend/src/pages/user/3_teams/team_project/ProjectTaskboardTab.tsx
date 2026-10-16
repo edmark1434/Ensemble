@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   AlertCircle,
   AlignLeft,
@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  FileText,
   Filter,
   Flag,
   Grid,
@@ -50,7 +51,7 @@ export interface TaskItem {
   job_milestone_id?: string;
   title: string;
   description?: string;
-  status: 'todo' | 'in_progress' | 'review' | 'completed';
+  status: 'todo' | 'in_progress' | 'review' | 'in_review' | 'completed';
   priority: 'urgent' | 'high' | 'normal' | 'low';
   is_locked: boolean;
   checklist?: TaskChecklistItem[];
@@ -63,6 +64,8 @@ export interface TaskItem {
   assignee_handle?: string;
   assignee_avatar_path?: string;
   created_at: string;
+  created_by_account_id?: string;
+  is_contract_task?: boolean;
 }
 
 interface ProjectTaskboardTabProps {
@@ -73,7 +76,7 @@ interface ProjectTaskboardTabProps {
   members: any[];
   contracts: any[];
   milestones?: any[];
-  onTasksUpdated: () => void;
+  onTasksUpdated?: (silent?: boolean) => void;
 }
 
 type DisplayMode = 'board' | 'list' | 'table' | 'gantt';
@@ -95,7 +98,7 @@ const COLUMNS = [
   },
   {
     id: 'review',
-    label: 'REVIEW',
+    label: 'ON REVIEW',
     badgeClass: 'bg-amber-600 text-white border border-amber-500',
     iconColor: 'text-amber-500',
     dotType: 'solid-amber',
@@ -108,6 +111,71 @@ const COLUMNS = [
     dotType: 'solid-green',
   },
 ] as const;
+
+export const normalizeStatus = (status?: string): 'todo' | 'in_progress' | 'review' | 'completed' => {
+  if (status === 'review' || status === 'in_review') return 'review';
+  if (status === 'in_progress') return 'in_progress';
+  if (status === 'completed') return 'completed';
+  return 'todo';
+};
+
+export const getStatusBadgeConfig = (status?: string) => {
+  const norm = normalizeStatus(status);
+  switch (norm) {
+    case 'completed':
+      return {
+        label: 'COMPLETE',
+        btnClass: 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-950/60',
+        icon: <Check className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 shrink-0" />,
+      };
+    case 'review':
+      return {
+        label: 'ON REVIEW',
+        btnClass: 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-950/60',
+        icon: <Clock className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400 shrink-0" />,
+      };
+    case 'in_progress':
+      return {
+        label: 'IN PROGRESS',
+        btnClass: 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-950/60',
+        icon: <div className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400 shrink-0" />,
+      };
+    case 'todo':
+    default:
+      return {
+        label: 'TO DO',
+        btnClass: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700 hover:bg-slate-200 dark:hover:bg-zinc-700',
+        icon: <div className="w-2 h-2 rounded-full border border-dashed border-slate-500 dark:border-zinc-400 shrink-0" />,
+      };
+  }
+};
+
+export const STATUS_OPTIONS = [
+  {
+    id: 'todo' as const,
+    label: 'TO DO',
+    icon: <div className="w-2 h-2 rounded-full border border-dashed border-slate-500 dark:border-zinc-400 shrink-0" />,
+    textColor: 'text-slate-800 dark:text-zinc-200',
+  },
+  {
+    id: 'in_progress' as const,
+    label: 'IN PROGRESS',
+    icon: <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />,
+    textColor: 'text-blue-600 dark:text-blue-400',
+  },
+  {
+    id: 'review' as const,
+    label: 'ON REVIEW',
+    icon: <Clock className="w-3 h-3 text-amber-500 shrink-0" />,
+    textColor: 'text-amber-600 dark:text-amber-400',
+  },
+  {
+    id: 'completed' as const,
+    label: 'COMPLETE',
+    icon: <Check className="w-3 h-3 text-emerald-500 shrink-0" />,
+    textColor: 'text-emerald-600 dark:text-emerald-400',
+  },
+];
 
 const PRIORITY_FLAGS: Record<string, { color: string; label: string }> = {
   urgent: { color: 'text-rose-500', label: 'Urgent' },
@@ -126,6 +194,13 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   milestones = [],
   onTasksUpdated,
 }) => {
+  // Local optimistic state for zero-latency seamless taskboard updates
+  const [localTasks, setLocalTasks] = useState<TaskItem[]>(tasks);
+
+  useEffect(() => {
+    setLocalTasks(tasks);
+  }, [tasks]);
+
   // 4 Display Modes (Default is 'board')
   const [displayMode, setDisplayMode] = useState<DisplayMode>('board');
   const [filterAssignee, setFilterAssignee] = useState<string>('all');
@@ -147,8 +222,79 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   const [newTaskMilestone, setNewTaskMilestone] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
 
-  // Status popover state
+  // Popover menus state
   const [activeStatusMenuTaskId, setActiveStatusMenuTaskId] = useState<string | null>(null);
+  const [activePriorityMenuTaskId, setActivePriorityMenuTaskId] = useState<string | null>(null);
+
+  // Helper to locate milestone attached to a task
+  const getTaskMilestone = (task: TaskItem) => {
+    if (!milestones || milestones.length === 0) return null;
+    return milestones.find((m: any) =>
+      (task.job_milestone_id && String(m.job_milestone_id) === String(task.job_milestone_id)) ||
+      (task.milestone_title && m.milestone_title && task.milestone_title.trim().toLowerCase() === m.milestone_title.trim().toLowerCase())
+    );
+  };
+
+  // Extract min and max timeline bounds strictly for THIS individual milestone
+  const getMilestoneTimelineBounds = (task: TaskItem) => {
+    const milestone = getTaskMilestone(task);
+    let minDate = '';
+    let maxDate = '';
+
+    if (milestone) {
+      const sortedMilestones = [...(milestones || [])].sort(
+        (a: any, b: any) => (Number(a.order_index) || 0) - (Number(b.order_index) || 0)
+      );
+
+      // Base project/contract start timestamp
+      const baseStart =
+        milestone.contract_starts_at ||
+        milestone.contract_created_at ||
+        milestones?.[0]?.started_at ||
+        milestones?.[0]?.contract_starts_at ||
+        milestone.started_at;
+      const referenceStartTime = baseStart ? new Date(baseStart).getTime() : Date.now();
+
+      // Accumulate durations of earlier milestones
+      let cumulativeOffsetHours = 0;
+      let targetMilestoneHours = Number(milestone.duration_hours || 72);
+
+      for (const m of sortedMilestones) {
+        const mHours = Number(m.duration_hours || 72);
+        if (String(m.job_milestone_id) === String(milestone.job_milestone_id)) {
+          targetMilestoneHours = mHours;
+          break;
+        }
+        cumulativeOffsetHours += mHours;
+      }
+
+      // Calculate milestone start and deadline
+      const milestoneStartTime = referenceStartTime + cumulativeOffsetHours * 3600 * 1000;
+      const milestoneEndTime = milestoneStartTime + targetMilestoneHours * 3600 * 1000;
+
+      const computedStartIso = new Date(milestoneStartTime).toISOString().substring(0, 10);
+      const computedDeadlineIso = new Date(milestoneEndTime).toISOString().substring(0, 10);
+
+      // minDate: milestone start date
+      minDate = milestone.started_at
+        ? new Date(milestone.started_at).toISOString().substring(0, 10)
+        : computedStartIso;
+
+      // maxDate: milestone deadline (never exceed this milestone's own timeline into subsequent milestones)
+      if (milestone.deadline_at) {
+        const explicitIso = new Date(milestone.deadline_at).toISOString().substring(0, 10);
+        maxDate = explicitIso <= computedDeadlineIso ? explicitIso : computedDeadlineIso;
+      } else {
+        maxDate = computedDeadlineIso;
+      }
+    }
+
+    return {
+      milestone,
+      minDate: minDate || undefined,
+      maxDate: maxDate || undefined,
+    };
+  };
 
   const toggleExpand = (taskId: string) => {
     setExpandedTasks((prev) => ({ ...prev, [taskId]: !prev[taskId] }));
@@ -174,14 +320,24 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       return;
     }
 
+    const prevStatus = task.status;
+    // Optimistic seamless update
+    setLocalTasks((prev) =>
+      prev.map((t) => (t.task_id === task.task_id ? { ...t, status: newStatus } : t))
+    );
+    setActiveStatusMenuTaskId(null);
+
     try {
       await api.patch(`/api/team-projects/${teamId}/tasks/${task.task_id}`, {
         status: newStatus,
       });
-      showSuccessToast(`Task moved to ${newStatus.replace('_', ' ')}`);
-      setActiveStatusMenuTaskId(null);
-      onTasksUpdated();
+      showSuccessToast(`Task moved to ${newStatus === 'review' ? 'On Review' : newStatus.replace('_', ' ')}`);
+      onTasksUpdated?.(true);
     } catch (err: any) {
+      // Revert optimistic update
+      setLocalTasks((prev) =>
+        prev.map((t) => (t.task_id === task.task_id ? { ...t, status: prevStatus } : t))
+      );
       showErrorToast(err?.response?.data?.message || 'Failed to update task');
     }
   };
@@ -193,31 +349,64 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       return;
     }
 
+    const prevPriority = task.priority;
+    // Optimistic seamless update
+    setLocalTasks((prev) =>
+      prev.map((t) => (t.task_id === task.task_id ? { ...t, priority: newPriority } : t))
+    );
+    setActivePriorityMenuTaskId(null);
+
     try {
       await api.patch(`/api/team-projects/${teamId}/tasks/${task.task_id}`, {
         priority: newPriority,
       });
       showSuccessToast(`Priority updated to ${newPriority}`);
-      onTasksUpdated();
+      onTasksUpdated?.(true);
     } catch (err: any) {
+      // Revert optimistic update
+      setLocalTasks((prev) =>
+        prev.map((t) => (t.task_id === task.task_id ? { ...t, priority: prevPriority } : t))
+      );
       showErrorToast(err?.response?.data?.message || 'Failed to update priority');
     }
   };
 
-  // Assignees can set due date for their tasks themselves
+  // Assignees can set due date for their tasks themselves, constrained by milestone timeline
   const handleUpdateDueDate = async (task: TaskItem, newDueDate: string) => {
     if (!isTaskAssignee(task)) {
       showErrorToast('Only the assigned team member can set the due date.');
       return;
     }
 
+    if (newDueDate) {
+      const { milestone, minDate, maxDate } = getMilestoneTimelineBounds(task);
+      if (maxDate && newDueDate > maxDate) {
+        showErrorToast(`Task due date cannot exceed the milestone deadline (${new Date(milestone.deadline_at).toLocaleDateString()})`);
+        return;
+      }
+      if (minDate && newDueDate < minDate) {
+        showErrorToast(`Task due date cannot precede the milestone start date (${new Date(milestone.started_at).toLocaleDateString()})`);
+        return;
+      }
+    }
+
+    const prevDueDate = task.due_at;
+    // Optimistic seamless update
+    setLocalTasks((prev) =>
+      prev.map((t) => (t.task_id === task.task_id ? { ...t, due_at: newDueDate ? new Date(newDueDate).toISOString() : undefined } : t))
+    );
+
     try {
       await api.patch(`/api/team-projects/${teamId}/tasks/${task.task_id}`, {
         due_at: newDueDate ? new Date(newDueDate).toISOString() : 'CLEAR',
       });
       showSuccessToast(newDueDate ? 'Due date updated' : 'Due date cleared');
-      onTasksUpdated();
+      onTasksUpdated?.(true);
     } catch (err: any) {
+      // Revert optimistic update
+      setLocalTasks((prev) =>
+        prev.map((t) => (t.task_id === task.task_id ? { ...t, due_at: prevDueDate } : t))
+      );
       showErrorToast(err?.response?.data?.message || 'Failed to update due date');
     }
   };
@@ -235,23 +424,36 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     const currentChecklist: TaskChecklistItem[] = Array.isArray(task.checklist) ? [...task.checklist] : [];
     if (!currentChecklist[itemIndex]) return;
 
+    const originalChecklist = [...currentChecklist];
     currentChecklist[itemIndex] = {
       ...currentChecklist[itemIndex],
       completed: !currentChecklist[itemIndex].completed,
     };
 
+    // Optimistic seamless update
+    setLocalTasks((prev) =>
+      prev.map((t) => (t.task_id === task.task_id ? { ...t, checklist: currentChecklist } : t))
+    );
+
     try {
       await api.patch(`/api/team-projects/${teamId}/tasks/${task.task_id}`, {
         checklist: currentChecklist,
       });
-      onTasksUpdated();
+      onTasksUpdated?.(true);
     } catch (err: any) {
+      setLocalTasks((prev) =>
+        prev.map((t) => (t.task_id === task.task_id ? { ...t, checklist: originalChecklist } : t))
+      );
       showErrorToast(err?.response?.data?.message || 'Failed to update subtask');
     }
   };
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isClient) {
+      showErrorToast('Clients cannot add tasks to the team workspace.');
+      return;
+    }
     if (!newTaskTitle.trim()) {
       showErrorToast('Please enter a task title');
       return;
@@ -263,7 +465,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
         title: newTaskTitle.trim(),
         description: newTaskDesc.trim(),
         priority: newTaskPriority,
-        assignee_account_id: newTaskAssignee || null,
+        assignee_account_id: currentUserAccountId,
         job_milestone_id: newTaskMilestone || null,
         status: defaultColForAdd,
         due_at: newTaskDueDate ? new Date(newTaskDueDate).toISOString() : null,
@@ -273,11 +475,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       setNewTaskTitle('');
       setNewTaskDesc('');
       setNewTaskPriority('normal');
-      setNewTaskAssignee('');
+      setNewTaskAssignee(currentUserAccountId || '');
       setNewTaskMilestone('');
       setNewTaskDueDate('');
       setIsAddModalOpen(false);
-      onTasksUpdated();
+      onTasksUpdated?.(false);
     } catch (err: any) {
       showErrorToast(err?.response?.data?.message || 'Failed to create task');
     } finally {
@@ -286,14 +488,34 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   };
 
   const openAddTaskModal = (columnId?: 'todo' | 'in_progress' | 'review' | 'completed') => {
+    if (isClient) return;
     if (columnId) setDefaultColForAdd(columnId);
     else setDefaultColForAdd('todo');
+
+    setNewTaskTitle('');
+    setNewTaskDesc('');
+    setNewTaskPriority('normal');
+    setNewTaskDueDate('');
+
+    // Default to the current contributor's assigned milestone
+    const myMilestone = milestones?.find(
+      (m: any) => String(m.assignee_account_id) === String(currentUserAccountId)
+    );
+    if (myMilestone) {
+      setNewTaskMilestone(String(myMilestone.job_milestone_id));
+    } else if (milestones && milestones.length > 0) {
+      setNewTaskMilestone(String(milestones[0].job_milestone_id));
+    } else {
+      setNewTaskMilestone('');
+    }
+
+    setNewTaskAssignee(currentUserAccountId || '');
     setIsAddModalOpen(true);
   };
 
   // Filter tasks based on search & assignee filter
   const filteredTasks = useMemo(() => {
-    return tasks.filter((t) => {
+    return localTasks.filter((t) => {
       if (filterAssignee === 'me') {
         if (String(t.assignee_account_id) !== String(currentUserAccountId)) return false;
       } else if (filterAssignee !== 'all') {
@@ -311,7 +533,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
       return true;
     });
-  }, [tasks, filterAssignee, currentUserAccountId, searchQuery]);
+  }, [localTasks, filterAssignee, currentUserAccountId, searchQuery]);
 
   return (
     <div className="space-y-4">
@@ -473,15 +695,17 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
           </div>
 
           {/* Primary + Task Button with Dropdown Chevron */}
-          <button
-            type="button"
-            onClick={() => openAddTaskModal()}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 active:scale-98 transition shadow-xs cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Task</span>
-            <ChevronDown className="w-3 h-3 ml-0.5 opacity-80" />
-          </button>
+          {!isClient && (
+            <button
+              type="button"
+              onClick={() => openAddTaskModal()}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 active:scale-98 transition shadow-xs cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Task</span>
+              <ChevronDown className="w-3 h-3 ml-0.5 opacity-80" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -489,14 +713,9 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       {/* 3. DISPLAY 1: BOARD VIEW (Matching Reference 1)         */}
       {/* ======================================================== */}
       {displayMode === 'board' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
-          {COLUMNS.filter((c) => c.id !== 'review').map((col) => {
-            // Group 'review' under in_progress or separate column
-            const colTasks = filteredTasks.filter((t) => {
-              const s = t.status || 'todo';
-              if (col.id === 'in_progress') return s === 'in_progress' || s === 'review';
-              return s === col.id;
-            });
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+          {COLUMNS.map((col) => {
+            const colTasks = filteredTasks.filter((t) => normalizeStatus(t.status) === col.id);
 
             return (
               <div
@@ -513,6 +732,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           ? 'bg-zinc-800 text-zinc-200 border border-zinc-700'
                           : col.id === 'in_progress'
                           ? 'bg-blue-600 text-white'
+                          : col.id === 'review'
+                          ? 'bg-amber-600 text-white'
                           : 'bg-emerald-600 text-white'
                       }`}
                     >
@@ -520,6 +741,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         <div className="w-2.5 h-2.5 rounded-full border border-dashed border-zinc-300" />
                       ) : col.id === 'in_progress' ? (
                         <div className="w-2 h-2 rounded-full bg-white ring-2 ring-blue-300" />
+                      ) : col.id === 'review' ? (
+                        <Clock className="w-3 h-3 text-white" />
                       ) : (
                         <Check className="w-3 h-3 text-white" />
                       )}
@@ -539,19 +762,21 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     >
                       <MoreHorizontal className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => openAddTaskModal(col.id as any)}
-                      className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-zinc-800 transition cursor-pointer"
-                      title="Add Task"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
+                    {!isClient && (
+                      <button
+                        type="button"
+                        onClick={() => openAddTaskModal(col.id as any)}
+                        className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-zinc-800 transition cursor-pointer"
+                        title="Add Task"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 {/* Cards Container */}
-                <div className="space-y-3 flex-1 overflow-y-auto">
+                <div className="space-y-3 flex-1">
                   {colTasks.length === 0 ? (
                     <div className="h-28 flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-zinc-800/80 rounded-xl text-xs text-slate-400 dark:text-zinc-500 font-medium">
                       No tasks in {col.label}
@@ -564,11 +789,15 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                       const completedCount = checklist.filter((item) => item.completed).length;
                       const hasSubtasks = checklist.length > 0;
                       const isExpanded = Boolean(expandedTasks[task.task_id]);
+                      const isCardActive =
+                        activeStatusMenuTaskId === task.task_id || activePriorityMenuTaskId === task.task_id;
 
                       return (
                         <div
                           key={task.task_id}
                           className={`bg-white dark:bg-[#181a24] p-4 rounded-xl border transition-all duration-150 shadow-xs relative ${
+                            isCardActive ? 'z-20' : 'z-0'
+                          } ${
                             task.is_locked
                               ? 'border-slate-300 dark:border-zinc-700/60 opacity-80'
                               : 'border-slate-200 dark:border-zinc-700/80 hover:border-slate-300 dark:hover:border-zinc-600'
@@ -637,9 +866,12 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
                           {/* Quick Actions Row: Assignee, Due date, Priority flag, Tag (Reference 1) */}
                           <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-zinc-800/80 text-slate-400 dark:text-zinc-500">
-                            <div className="flex items-center gap-3">
-                              {/* Assignee Icon */}
-                              <div className="flex items-center gap-1" title={task.assignee_name ? `Assigned to: ${task.assignee_name}` : 'Unassigned'}>
+                            <div className="flex items-center gap-2">
+                              {/* Assignee Icon: Fixed circular container so it NEVER flattens */}
+                              <div
+                                className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 flex items-center justify-center"
+                                title={task.assignee_name ? `Assigned to: ${task.assignee_name}` : 'Unassigned'}
+                              >
                                 {task.assignee_avatar_path ? (
                                   <img
                                     src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
@@ -647,93 +879,217 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     onError={(e) => {
                                       (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
                                     }}
-                                    className="w-4 h-4 rounded-full object-cover border border-slate-200 dark:border-zinc-700"
+                                    className="w-full h-full object-cover block shrink-0"
                                   />
                                 ) : (
-                                  <User className="w-4 h-4" />
+                                  <User className="w-3 h-3 text-slate-400 shrink-0" />
                                 )}
                               </div>
 
-                              {/* Due Date: Editable by assignee, read-only for others */}
+                              {/* Due Date: Editable by assignee, bounded by milestone timeline. No "Set date" text */}
+                              {(() => {
+                                const { minDate, maxDate } = getMilestoneTimelineBounds(task);
+                                return isOwner ? (
+                                  <div
+                                    className="relative flex items-center cursor-pointer p-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 transition group/date"
+                                    title={
+                                      maxDate
+                                        ? task.due_at
+                                          ? `Due: ${new Date(task.due_at).toLocaleDateString()} (Milestone deadline: ${new Date(maxDate).toLocaleDateString()})`
+                                          : `Set due date (Milestone deadline: ${new Date(maxDate).toLocaleDateString()})`
+                                        : task.due_at
+                                        ? `Due: ${new Date(task.due_at).toLocaleDateString()}`
+                                        : 'Set due date'
+                                    }
+                                  >
+                                    <Calendar className={`w-3.5 h-3.5 shrink-0 ${task.due_at ? 'text-blue-500' : 'text-slate-400 hover:text-blue-500'}`} />
+                                    {task.due_at && (
+                                      <span className="text-[10px] text-slate-700 dark:text-zinc-300 font-semibold ml-1 whitespace-nowrap">
+                                        {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                      </span>
+                                    )}
+                                    <input
+                                      type="date"
+                                      min={minDate}
+                                      max={maxDate}
+                                      value={task.due_at ? task.due_at.substring(0, 10) : ''}
+                                      onChange={(e) => handleUpdateDueDate(task, e.target.value)}
+                                      onClick={(e) => {
+                                        try {
+                                          (e.target as any).showPicker?.();
+                                        } catch {}
+                                      }}
+                                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div
+                                    className="flex items-center gap-1 text-slate-400 dark:text-zinc-500 p-1"
+                                    title={task.due_at ? `Due: ${new Date(task.due_at).toLocaleDateString()}` : 'No due date'}
+                                  >
+                                    <Calendar className="w-3.5 h-3.5 shrink-0 opacity-70" />
+                                    {task.due_at && (
+                                      <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-medium whitespace-nowrap">
+                                        {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Priority Flag: Click flag only, no text label */}
                               {isOwner ? (
-                                <label
-                                  className="flex items-center gap-1 cursor-pointer p-0.5 rounded hover:bg-slate-100 dark:hover:bg-zinc-800 transition"
-                                  title="Click to set/change due date"
-                                >
-                                  <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                                  <span className="text-[10px] text-slate-700 dark:text-zinc-300 font-medium">
-                                    {task.due_at ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Set date'}
-                                  </span>
-                                  <input
-                                    type="date"
-                                    className="sr-only"
-                                    value={task.due_at ? task.due_at.substring(0, 10) : ''}
-                                    onChange={(e) => handleUpdateDueDate(task, e.target.value)}
-                                  />
-                                </label>
-                              ) : (
-                                <div
-                                  className="flex items-center gap-1 text-slate-400 dark:text-zinc-500"
-                                  title={task.due_at ? `Due: ${new Date(task.due_at).toLocaleDateString()}` : 'No due date'}
-                                >
-                                  <Calendar className="w-3.5 h-3.5" />
-                                  {task.due_at && (
-                                    <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-medium">
-                                      {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                                    </span>
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActivePriorityMenuTaskId(activePriorityMenuTaskId === task.task_id ? null : task.task_id);
+                                      setActiveStatusMenuTaskId(null);
+                                    }}
+                                    className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer flex items-center justify-center"
+                                    title={`Priority: ${priorityConfig.label} (Click flag to change)`}
+                                  >
+                                    <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
+                                  </button>
+
+                                  {activePriorityMenuTaskId === task.task_id && (
+                                    <>
+                                      <div
+                                        className="fixed inset-0 z-20 cursor-default"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActivePriorityMenuTaskId(null);
+                                        }}
+                                      />
+                                      <div
+                                        className="absolute left-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                                          Priority
+                                        </div>
+                                        {[
+                                          { id: 'urgent', label: 'Urgent', color: 'text-rose-500' },
+                                          { id: 'high', label: 'High', color: 'text-amber-500' },
+                                          { id: 'normal', label: 'Normal', color: 'text-blue-500' },
+                                          { id: 'low', label: 'Low', color: 'text-slate-400' },
+                                        ].map((p) => (
+                                          <button
+                                            key={p.id}
+                                            type="button"
+                                            onClick={() => {
+                                              handleUpdatePriority(task, p.id as any);
+                                              setActivePriorityMenuTaskId(null);
+                                            }}
+                                            className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <Flag className={`w-3.5 h-3.5 shrink-0 ${p.color}`} />
+                                              <span>{p.label}</span>
+                                            </div>
+                                            {task.priority === p.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </>
                                   )}
                                 </div>
-                              )}
-
-                              {/* Priority Flag: Editable by assignee, read-only for others */}
-                              {isOwner ? (
-                                <div className="flex items-center gap-0.5" title="Change task priority">
-                                  <Flag className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
-                                  <select
-                                    value={task.priority}
-                                    onChange={(e) => handleUpdatePriority(task, e.target.value as any)}
-                                    className="text-[10px] font-bold bg-transparent border-0 text-slate-700 dark:text-zinc-300 focus:outline-hidden cursor-pointer"
-                                  >
-                                    <option value="urgent" className="bg-white dark:bg-zinc-900 text-rose-500">Urgent</option>
-                                    <option value="high" className="bg-white dark:bg-zinc-900 text-amber-500">High</option>
-                                    <option value="normal" className="bg-white dark:bg-zinc-900 text-blue-500">Normal</option>
-                                    <option value="low" className="bg-white dark:bg-zinc-900 text-slate-400">Low</option>
-                                  </select>
-                                </div>
                               ) : (
-                                <div title={`Priority: ${priorityConfig.label} (View only)`}>
-                                  <Flag className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
+                                <div className="p-1" title={`Priority: ${priorityConfig.label} (View only)`}>
+                                  <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
                                 </div>
                               )}
 
-                              {/* Milestone Tag */}
-                              {task.milestone_title && (
-                                <div title={`Milestone: ${task.milestone_title}`}>
-                                  <Tag className="w-3.5 h-3.5 text-blue-500" />
-                                </div>
-                              )}
+                              {/* Status Tag Icon: ONLY assignee can change; others view only. No "IN PROGRESS" text */}
+                              {(() => {
+                                const statusCfg = getStatusBadgeConfig(task.status);
+                                const normStatus = normalizeStatus(task.status);
+                                const tagColorClass =
+                                  normStatus === 'completed'
+                                    ? 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                                    : normStatus === 'review'
+                                    ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                                    : normStatus === 'in_progress'
+                                    ? 'text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/40'
+                                    : 'text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-800';
+
+                                const tooltipText = isOwner
+                                  ? `Status: ${statusCfg.label}${task.milestone_title ? ` (Milestone: ${task.milestone_title})` : ''} - Click to change`
+                                  : `Status: ${statusCfg.label}${task.milestone_title ? ` (Milestone: ${task.milestone_title})` : ''} (Assigned to ${task.assignee_name || 'member'})`;
+
+                                return isOwner ? (
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      disabled={task.is_locked && !isClient}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveStatusMenuTaskId(activeStatusMenuTaskId === task.task_id ? null : task.task_id);
+                                        setActivePriorityMenuTaskId(null);
+                                      }}
+                                      className={`p-1 rounded-md transition cursor-pointer flex items-center justify-center ${tagColorClass}`}
+                                      title={tooltipText}
+                                    >
+                                      <Tag className="w-3.5 h-3.5 shrink-0" />
+                                    </button>
+
+                                    {activeStatusMenuTaskId === task.task_id && (
+                                      <>
+                                        <div
+                                          className="fixed inset-0 z-20 cursor-default"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveStatusMenuTaskId(null);
+                                          }}
+                                        />
+                                        <div
+                                          className="absolute right-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                                            Status
+                                          </div>
+                                          {STATUS_OPTIONS.map((s) => (
+                                            <button
+                                              key={s.id}
+                                              type="button"
+                                              onClick={() => {
+                                                handleUpdateStatus(task, s.id as any);
+                                                setActiveStatusMenuTaskId(null);
+                                              }}
+                                              className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                            >
+                                              <div className="flex items-center gap-2">
+                                                {s.icon}
+                                                <span className={normStatus === s.id ? s.textColor : ''}>{s.label}</span>
+                                              </div>
+                                              {normStatus === s.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div
+                                    className={`p-1 rounded-md ${tagColorClass} cursor-default`}
+                                    title={tooltipText}
+                                  >
+                                    <Tag className="w-3.5 h-3.5 shrink-0 opacity-70" />
+                                  </div>
+                                );
+                              })()}
                             </div>
 
-                            {/* Status Selector: ONLY assignee can change; others only view */}
-                            {isOwner ? (
-                              <select
-                                value={task.status || 'todo'}
-                                disabled={task.is_locked && !isClient}
-                                onChange={(e) => handleUpdateStatus(task, e.target.value as any)}
-                                className="text-[10px] font-bold bg-slate-100 dark:bg-zinc-800 text-slate-800 dark:text-zinc-200 border border-slate-200 dark:border-zinc-700 rounded px-1.5 py-0.5 focus:outline-hidden cursor-pointer hover:border-blue-500 transition"
+                            {/* Right side contract task indicator - icon only */}
+                            {task.is_contract_task && (
+                              <div
+                                className="p-1 rounded-md text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 transition flex items-center justify-center shrink-0 cursor-default"
+                                title="Contract Task (Defined by contract agreement - scope & title fixed)"
                               >
-                                <option value="todo">TO DO</option>
-                                <option value="in_progress">IN PROGRESS</option>
-                                <option value="completed">COMPLETE</option>
-                              </select>
-                            ) : (
-                              <span
-                                title={`Assigned to ${task.assignee_name || 'team member'} (View only)`}
-                                className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-800/80 text-slate-500 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700/60 cursor-default"
-                              >
-                                <Lock className="w-2.5 h-2.5 opacity-60" />
-                                <span>{task.status === 'in_progress' ? 'IN PROGRESS' : task.status === 'completed' ? 'COMPLETE' : 'TO DO'}</span>
-                              </span>
+                                <FileText className="w-3.5 h-3.5" />
+                              </div>
                             )}
                           </div>
                         </div>
@@ -742,14 +1098,16 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   )}
 
                   {/* + Add Task at Bottom of Column */}
-                  <button
-                    type="button"
-                    onClick={() => openAddTaskModal(col.id as any)}
-                    className="w-full flex items-center gap-1.5 p-2 rounded-xl text-xs font-bold text-slate-500 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-200/50 dark:hover:bg-zinc-800/50 transition cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Task</span>
-                  </button>
+                  {!isClient && (
+                    <button
+                      type="button"
+                      onClick={() => openAddTaskModal(col.id as any)}
+                      className="w-full flex items-center gap-1.5 p-2 rounded-xl text-xs font-bold text-slate-500 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-200/50 dark:hover:bg-zinc-800/50 transition cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Task</span>
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -762,12 +1120,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       {/* ======================================================== */}
       {displayMode === 'list' && (
         <div className="space-y-6">
-          {COLUMNS.filter((c) => c.id !== 'review').map((group) => {
-            const groupTasks = filteredTasks.filter((t) => {
-              const s = t.status || 'todo';
-              if (group.id === 'in_progress') return s === 'in_progress' || s === 'review';
-              return s === group.id;
-            });
+          {COLUMNS.map((group) => {
+            const groupTasks = filteredTasks.filter((t) => normalizeStatus(t.status) === group.id);
             const isCollapsed = Boolean(collapsedGroups[group.id]);
 
             return (
@@ -789,6 +1143,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           ? 'bg-zinc-800 text-zinc-200 border border-zinc-700'
                           : group.id === 'in_progress'
                           ? 'bg-blue-600 text-white'
+                          : group.id === 'review'
+                          ? 'bg-amber-600 text-white'
                           : 'bg-emerald-600 text-white'
                       }`}
                     >
@@ -796,6 +1152,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         <div className="w-2.5 h-2.5 rounded-full border border-dashed border-zinc-300" />
                       ) : group.id === 'in_progress' ? (
                         <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                      ) : group.id === 'review' ? (
+                        <Clock className="w-3 h-3 text-white" />
                       ) : (
                         <Check className="w-3 h-3 text-white" />
                       )}
@@ -807,17 +1165,19 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openAddTaskModal(group.id as any);
-                    }}
-                    className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-800"
-                    title="Add Task to Group"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
+                  {!isClient && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openAddTaskModal(group.id as any);
+                      }}
+                      className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-800"
+                      title="Add Task to Group"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Group Rows Table */}
@@ -853,7 +1213,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                   <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
                                     <Check className="w-2.5 h-2.5 text-white" />
                                   </div>
-                                ) : task.status === 'in_progress' || task.status === 'review' ? (
+                                ) : normalizeStatus(task.status) === 'review' ? (
+                                  <div className="w-3.5 h-3.5 rounded-full border-2 border-amber-500 flex items-center justify-center shrink-0">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                  </div>
+                                ) : task.status === 'in_progress' ? (
                                   <div className="w-3.5 h-3.5 rounded-full border-2 border-blue-500 flex items-center justify-center shrink-0">
                                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                                   </div>
@@ -868,105 +1232,208 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
                               {/* Assignee */}
                               <div className="col-span-2 flex items-center gap-1.5 truncate">
-                                {task.assignee_avatar_path ? (
-                                  <img
-                                    src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
-                                    alt={task.assignee_name || 'User'}
-                                    onError={(e) => {
-                                      (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
-                                    }}
-                                    className="w-4 h-4 rounded-full object-cover shrink-0"
-                                  />
-                                ) : (
-                                  <User className="w-3.5 h-3.5 text-slate-400" />
-                                )}
+                                <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 flex items-center justify-center">
+                                  {task.assignee_avatar_path ? (
+                                    <img
+                                      src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
+                                      alt={task.assignee_name || 'User'}
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
+                                      }}
+                                      className="w-full h-full object-cover block shrink-0"
+                                    />
+                                  ) : (
+                                    <User className="w-3 h-3 text-slate-400 shrink-0" />
+                                  )}
+                                </div>
                                 <span className="text-slate-600 dark:text-zinc-300 truncate">
                                   {task.assignee_name ? task.assignee_name.split(' ')[0] : 'Unassigned'}
                                 </span>
                               </div>
 
-                              {/* Due Date: Editable by assignee, read-only for others */}
-                              {isTaskAssignee(task) ? (
-                                <label
-                                  className="col-span-2 flex items-center gap-1 text-slate-700 dark:text-zinc-300 cursor-pointer hover:text-blue-500 transition"
-                                  title="Click to set/change due date"
-                                >
-                                  <Calendar className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                                  <span className="text-[11px] font-medium">
-                                    {task.due_at ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Set date'}
-                                  </span>
-                                  <input
-                                    type="date"
-                                    className="sr-only"
-                                    value={task.due_at ? task.due_at.substring(0, 10) : ''}
-                                    onChange={(e) => handleUpdateDueDate(task, e.target.value)}
-                                  />
-                                </label>
-                              ) : (
-                                <div className="col-span-2 flex items-center gap-1 text-slate-500 dark:text-zinc-400">
-                                  <Calendar className="w-3.5 h-3.5 shrink-0" />
-                                  <span className="text-[11px]">
-                                    {task.due_at ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '-'}
-                                  </span>
-                                </div>
-                              )}
+                              {/* Due Date: Editable by assignee, bounded by milestone timeline. No "Set date" text */}
+                              {(() => {
+                                const { minDate, maxDate } = getMilestoneTimelineBounds(task);
+                                return isTaskAssignee(task) ? (
+                                  <div
+                                    className="col-span-2 relative flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-zinc-300 hover:text-blue-500 transition group/date w-fit p-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800"
+                                    title={
+                                      maxDate
+                                        ? task.due_at
+                                          ? `Due: ${new Date(task.due_at).toLocaleDateString()} (Milestone deadline: ${new Date(maxDate).toLocaleDateString()})`
+                                          : `Set due date (Milestone deadline: ${new Date(maxDate).toLocaleDateString()})`
+                                        : task.due_at
+                                        ? `Due: ${new Date(task.due_at).toLocaleDateString()}`
+                                        : 'Set due date'
+                                    }
+                                  >
+                                    <Calendar className={`w-3.5 h-3.5 shrink-0 ${task.due_at ? 'text-blue-500' : 'text-slate-400 group-hover/date:text-blue-500'}`} />
+                                    {task.due_at ? (
+                                      <span className="text-[11px] font-semibold whitespace-nowrap">
+                                        {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[11px] text-slate-400 group-hover/date:text-blue-500 whitespace-nowrap font-medium">
+                                        --
+                                      </span>
+                                    )}
+                                    <input
+                                      type="date"
+                                      min={minDate}
+                                      max={maxDate}
+                                      value={task.due_at ? task.due_at.substring(0, 10) : ''}
+                                      onChange={(e) => handleUpdateDueDate(task, e.target.value)}
+                                      onClick={(e) => {
+                                        try {
+                                          (e.target as any).showPicker?.();
+                                        } catch {}
+                                      }}
+                                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="col-span-2 flex items-center gap-1 text-slate-500 dark:text-zinc-400 p-1">
+                                    <Calendar className="w-3.5 h-3.5 shrink-0 opacity-70" />
+                                    <span className="text-[11px] whitespace-nowrap">
+                                      {task.due_at ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '-'}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
 
                               {/* Priority: Editable by assignee, read-only for others */}
                               {isTaskAssignee(task) ? (
-                                <div className="col-span-1 flex items-center gap-1">
-                                  <Flag className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
-                                  <select
-                                    value={task.priority}
-                                    onChange={(e) => handleUpdatePriority(task, e.target.value as any)}
-                                    className="text-[10px] font-bold bg-transparent border-0 text-slate-700 dark:text-zinc-300 focus:outline-hidden cursor-pointer"
+                                <div className="col-span-1 relative flex items-center">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActivePriorityMenuTaskId(activePriorityMenuTaskId === task.task_id ? null : task.task_id);
+                                      setActiveStatusMenuTaskId(null);
+                                    }}
+                                    className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer flex items-center gap-1.5"
+                                    title={`Priority: ${priorityConfig.label} (Click flag to change)`}
                                   >
-                                    <option value="urgent" className="bg-white dark:bg-zinc-900 text-rose-500">Urgent</option>
-                                    <option value="high" className="bg-white dark:bg-zinc-900 text-amber-500">High</option>
-                                    <option value="normal" className="bg-white dark:bg-zinc-900 text-blue-500">Normal</option>
-                                    <option value="low" className="bg-white dark:bg-zinc-900 text-slate-400">Low</option>
-                                  </select>
+                                    <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
+                                  </button>
+
+                                  {activePriorityMenuTaskId === task.task_id && (
+                                    <>
+                                      <div
+                                        className="fixed inset-0 z-20 cursor-default"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActivePriorityMenuTaskId(null);
+                                        }}
+                                      />
+                                      <div
+                                        className="absolute left-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                                          Priority
+                                        </div>
+                                        {[
+                                          { id: 'urgent', label: 'Urgent', color: 'text-rose-500' },
+                                          { id: 'high', label: 'High', color: 'text-amber-500' },
+                                          { id: 'normal', label: 'Normal', color: 'text-blue-500' },
+                                          { id: 'low', label: 'Low', color: 'text-slate-400' },
+                                        ].map((p) => (
+                                          <button
+                                            key={p.id}
+                                            type="button"
+                                            onClick={() => {
+                                              handleUpdatePriority(task, p.id as any);
+                                              setActivePriorityMenuTaskId(null);
+                                            }}
+                                            className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <Flag className={`w-3.5 h-3.5 shrink-0 ${p.color}`} />
+                                              <span>{p.label}</span>
+                                            </div>
+                                            {task.priority === p.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
                               ) : (
                                 <div className="col-span-1 flex items-center gap-1" title={`Priority: ${priorityConfig.label} (View only)`}>
-                                  <Flag className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
-                                  <span className="text-[10px] font-medium text-slate-500 dark:text-zinc-400">{priorityConfig.label}</span>
+                                  <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
                                 </div>
                               )}
 
                               {/* Status Pill: ONLY assignee can change; others view only */}
                               <div className="col-span-2 flex items-center justify-end">
-                                {isTaskAssignee(task) ? (
-                                  <select
-                                    value={task.status || 'todo'}
-                                    disabled={task.is_locked && !isClient}
-                                    onChange={(e) => handleUpdateStatus(task, e.target.value as any)}
-                                    className={`text-[11px] font-bold px-2 py-0.5 rounded-md border focus:outline-hidden cursor-pointer ${
-                                      task.status === 'completed'
-                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                                        : task.status === 'in_progress' || task.status === 'review'
-                                        ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
-                                        : 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
-                                    }`}
-                                  >
-                                    <option value="todo">TO DO</option>
-                                    <option value="in_progress">IN PROGRESS</option>
-                                    <option value="completed">COMPLETE</option>
-                                  </select>
-                                ) : (
-                                  <span
-                                    title={`Assigned to ${task.assignee_name || 'member'} (View only)`}
-                                    className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border ${
-                                      task.status === 'completed'
-                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                                        : task.status === 'in_progress' || task.status === 'review'
-                                        ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
-                                        : 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700'
-                                    }`}
-                                  >
-                                    <Lock className="w-2.5 h-2.5 opacity-60" />
-                                    <span>{task.status === 'in_progress' ? 'IN PROGRESS' : task.status === 'completed' ? 'COMPLETE' : 'TO DO'}</span>
-                                  </span>
-                                )}
+                                {(() => {
+                                  const statusCfg = getStatusBadgeConfig(task.status);
+                                  return isTaskAssignee(task) ? (
+                                    <div className="relative">
+                                      <button
+                                        type="button"
+                                        disabled={task.is_locked && !isClient}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveStatusMenuTaskId(activeStatusMenuTaskId === task.task_id ? null : task.task_id);
+                                          setActivePriorityMenuTaskId(null);
+                                        }}
+                                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold border transition cursor-pointer ${statusCfg.btnClass}`}
+                                        title="Click to change status"
+                                      >
+                                        {statusCfg.icon}
+                                        <span>{statusCfg.label}</span>
+                                        <ChevronDown className="w-2.5 h-2.5 opacity-60 shrink-0" />
+                                      </button>
+
+                                      {activeStatusMenuTaskId === task.task_id && (
+                                        <>
+                                          <div
+                                            className="fixed inset-0 z-20 cursor-default"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setActiveStatusMenuTaskId(null);
+                                            }}
+                                          />
+                                          <div
+                                            className="absolute right-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                                              Status
+                                            </div>
+                                            {STATUS_OPTIONS.map((s) => (
+                                              <button
+                                                key={s.id}
+                                                type="button"
+                                                onClick={() => {
+                                                  handleUpdateStatus(task, s.id as any);
+                                                  setActiveStatusMenuTaskId(null);
+                                                }}
+                                                className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                              >
+                                                <div className="flex items-center gap-2">
+                                                  {s.icon}
+                                                  <span className={normalizeStatus(task.status) === s.id ? s.textColor : ''}>{s.label}</span>
+                                                </div>
+                                                {normalizeStatus(task.status) === s.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span
+                                      title={`Assigned to ${task.assignee_name || 'member'} (View only)`}
+                                      className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border ${statusCfg.btnClass}`}
+                                    >
+                                      <Lock className="w-2.5 h-2.5 opacity-60" />
+                                      <span>{statusCfg.label}</span>
+                                    </span>
+                                  );
+                                })()}
                               </div>
                             </div>
                           );
@@ -975,16 +1442,18 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     </div>
 
                     {/* Bottom + Add Task Link */}
-                    <div className="p-3 border-t border-slate-100 dark:border-zinc-800/80">
-                      <button
-                        type="button"
-                        onClick={() => openAddTaskModal(group.id as any)}
-                        className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-zinc-400 hover:text-blue-600 transition cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Add Task</span>
-                      </button>
-                    </div>
+                    {!isClient && (
+                      <div className="p-3 border-t border-slate-100 dark:border-zinc-800/80">
+                        <button
+                          type="button"
+                          onClick={() => openAddTaskModal(group.id as any)}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-zinc-400 hover:text-blue-600 transition cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Task</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1042,7 +1511,9 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           <div className="flex items-center gap-2">
                             {task.status === 'completed' ? (
                               <div className="w-3 h-3 rounded-full bg-emerald-500 shrink-0" />
-                            ) : task.status === 'in_progress' || task.status === 'review' ? (
+                            ) : normalizeStatus(task.status) === 'review' ? (
+                              <div className="w-3 h-3 rounded-full border-2 border-amber-500 bg-amber-500 shrink-0" />
+                            ) : task.status === 'in_progress' ? (
                               <div className="w-3 h-3 rounded-full border-2 border-blue-500 bg-blue-500 shrink-0" />
                             ) : (
                               <div className="w-3 h-3 rounded-full border border-dashed border-slate-400 shrink-0" />
@@ -1054,18 +1525,20 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         </td>
                         <td className="py-2.5 px-4 border-r border-slate-100 dark:border-zinc-800/80">
                           <div className="flex items-center gap-1.5">
-                            {task.assignee_avatar_path ? (
-                              <img
-                                src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
-                                alt={task.assignee_name || 'User'}
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
-                                }}
-                                className="w-4 h-4 rounded-full object-cover shrink-0"
-                              />
-                            ) : (
-                              <User className="w-3.5 h-3.5 text-slate-400" />
-                            )}
+                            <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 flex items-center justify-center">
+                              {task.assignee_avatar_path ? (
+                                <img
+                                  src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
+                                  alt={task.assignee_name || 'User'}
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
+                                  }}
+                                  className="w-full h-full object-cover block shrink-0"
+                                />
+                              ) : (
+                                <User className="w-3 h-3 text-slate-400 shrink-0" />
+                              )}
+                            </div>
                             <span className="text-slate-700 dark:text-zinc-300">
                               {task.assignee_name || 'Unassigned'}
                             </span>
@@ -1073,82 +1546,188 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         </td>
                         {/* Status Column */}
                         <td className="py-2.5 px-4 border-r border-slate-100 dark:border-zinc-800/80">
-                          {isTaskAssignee(task) ? (
-                            <select
-                              value={task.status || 'todo'}
-                              disabled={task.is_locked && !isClient}
-                              onChange={(e) => handleUpdateStatus(task, e.target.value as any)}
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded border focus:outline-hidden cursor-pointer ${
-                                task.status === 'completed'
-                                  ? 'bg-emerald-600 text-white border-emerald-500'
-                                  : task.status === 'in_progress' || task.status === 'review'
-                                  ? 'bg-blue-600 text-white border-blue-500'
-                                  : 'bg-zinc-800 text-zinc-300 border-zinc-700'
-                              }`}
-                            >
-                              <option value="todo">TO DO</option>
-                              <option value="in_progress">IN PROGRESS</option>
-                              <option value="completed">COMPLETE</option>
-                            </select>
-                          ) : (
-                            <span
-                              title={`Assigned to ${task.assignee_name || 'member'} (View only)`}
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                                task.status === 'completed'
-                                  ? 'bg-emerald-600 text-white'
-                                  : task.status === 'in_progress' || task.status === 'review'
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-zinc-800 text-zinc-300'
-                              }`}
-                            >
-                              <Lock className="w-2.5 h-2.5 opacity-60" />
-                              <span>{task.status === 'in_progress' ? 'IN PROGRESS' : task.status === 'completed' ? 'COMPLETE' : 'TO DO'}</span>
-                            </span>
-                          )}
+                          {(() => {
+                            const statusCfg = getStatusBadgeConfig(task.status);
+                            return isTaskAssignee(task) ? (
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  disabled={task.is_locked && !isClient}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveStatusMenuTaskId(activeStatusMenuTaskId === task.task_id ? null : task.task_id);
+                                    setActivePriorityMenuTaskId(null);
+                                  }}
+                                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border transition cursor-pointer ${statusCfg.btnClass}`}
+                                  title="Click to change status"
+                                >
+                                  {statusCfg.icon}
+                                  <span>{statusCfg.label}</span>
+                                  <ChevronDown className="w-2.5 h-2.5 opacity-60 shrink-0" />
+                                </button>
+
+                                {activeStatusMenuTaskId === task.task_id && (
+                                  <>
+                                    <div
+                                      className="fixed inset-0 z-20 cursor-default"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveStatusMenuTaskId(null);
+                                      }}
+                                    />
+                                    <div
+                                      className="absolute left-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                                        Status
+                                      </div>
+                                      {STATUS_OPTIONS.map((s) => (
+                                        <button
+                                          key={s.id}
+                                          type="button"
+                                          onClick={() => {
+                                            handleUpdateStatus(task, s.id as any);
+                                            setActiveStatusMenuTaskId(null);
+                                          }}
+                                          className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            {s.icon}
+                                            <span className={normalizeStatus(task.status) === s.id ? s.textColor : ''}>{s.label}</span>
+                                          </div>
+                                          {normalizeStatus(task.status) === s.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            ) : (
+                              <span
+                                title={`Assigned to ${task.assignee_name || 'member'} (View only)`}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${statusCfg.btnClass}`}
+                              >
+                                <Lock className="w-2.5 h-2.5 opacity-60" />
+                                <span>{statusCfg.label}</span>
+                              </span>
+                            );
+                          })()}
                         </td>
 
                         {/* Due Date Column */}
                         <td className="py-2.5 px-4 border-r border-slate-100 dark:border-zinc-800/80 text-slate-600 dark:text-zinc-400">
-                          {isTaskAssignee(task) ? (
-                            <label className="flex items-center gap-1 cursor-pointer hover:text-blue-500 transition" title="Click to set/change due date">
-                              <Calendar className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                              <span className="text-[11px] font-medium text-slate-700 dark:text-zinc-300">
-                                {task.due_at ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Set date'}
+                          {(() => {
+                            const { minDate, maxDate } = getMilestoneTimelineBounds(task);
+                            return isTaskAssignee(task) ? (
+                              <div
+                                className="relative flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-zinc-300 hover:text-blue-500 transition group/date w-fit p-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800"
+                                title={
+                                  maxDate
+                                    ? task.due_at
+                                      ? `Due: ${new Date(task.due_at).toLocaleDateString()} (Milestone deadline: ${new Date(maxDate).toLocaleDateString()})`
+                                      : `Set due date (Milestone deadline: ${new Date(maxDate).toLocaleDateString()})`
+                                    : task.due_at
+                                    ? `Due: ${new Date(task.due_at).toLocaleDateString()}`
+                                    : 'Set due date'
+                                }
+                              >
+                                <Calendar className={`w-3.5 h-3.5 shrink-0 ${task.due_at ? 'text-blue-500' : 'text-slate-400 group-hover/date:text-blue-500'}`} />
+                                {task.due_at ? (
+                                  <span className="text-[11px] font-semibold whitespace-nowrap">
+                                    {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] text-slate-400 group-hover/date:text-blue-500 whitespace-nowrap font-medium">
+                                    --
+                                  </span>
+                                )}
+                                <input
+                                  type="date"
+                                  min={minDate}
+                                  max={maxDate}
+                                  value={task.due_at ? task.due_at.substring(0, 10) : ''}
+                                  onChange={(e) => handleUpdateDueDate(task, e.target.value)}
+                                  onClick={(e) => {
+                                    try {
+                                      (e.target as any).showPicker?.();
+                                    } catch {}
+                                  }}
+                                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                />
+                              </div>
+                            ) : (
+                              <span className="text-[11px] whitespace-nowrap">
+                                {task.due_at ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '-'}
                               </span>
-                              <input
-                                type="date"
-                                className="sr-only"
-                                value={task.due_at ? task.due_at.substring(0, 10) : ''}
-                                onChange={(e) => handleUpdateDueDate(task, e.target.value)}
-                              />
-                            </label>
-                          ) : (
-                            <span>
-                              {task.due_at ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '-'}
-                            </span>
-                          )}
+                            );
+                          })()}
                         </td>
 
                         {/* Priority Column */}
                         <td className="py-2.5 px-4 border-r border-slate-100 dark:border-zinc-800/80">
                           {isTaskAssignee(task) ? (
-                            <div className="flex items-center gap-1">
-                              <Flag className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
-                              <select
-                                value={task.priority}
-                                onChange={(e) => handleUpdatePriority(task, e.target.value as any)}
-                                className="text-[10px] font-bold bg-transparent border-0 text-slate-700 dark:text-zinc-300 focus:outline-hidden cursor-pointer"
+                            <div className="relative flex items-center">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActivePriorityMenuTaskId(activePriorityMenuTaskId === task.task_id ? null : task.task_id);
+                                  setActiveStatusMenuTaskId(null);
+                                }}
+                                className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer flex items-center gap-1.5"
+                                title={`Priority: ${priorityConfig.label} (Click flag to change)`}
                               >
-                                <option value="urgent" className="bg-white dark:bg-zinc-900 text-rose-500">Urgent</option>
-                                <option value="high" className="bg-white dark:bg-zinc-900 text-amber-500">High</option>
-                                <option value="normal" className="bg-white dark:bg-zinc-900 text-blue-500">Normal</option>
-                                <option value="low" className="bg-white dark:bg-zinc-900 text-slate-400">Low</option>
-                              </select>
+                                <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
+                                <span className="text-[10px] font-bold text-slate-700 dark:text-zinc-300">{priorityConfig.label}</span>
+                              </button>
+
+                              {activePriorityMenuTaskId === task.task_id && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-20 cursor-default"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActivePriorityMenuTaskId(null);
+                                    }}
+                                  />
+                                  <div
+                                    className="absolute left-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                                      Priority
+                                    </div>
+                                    {[
+                                      { id: 'urgent', label: 'Urgent', color: 'text-rose-500' },
+                                      { id: 'high', label: 'High', color: 'text-amber-500' },
+                                      { id: 'normal', label: 'Normal', color: 'text-blue-500' },
+                                      { id: 'low', label: 'Low', color: 'text-slate-400' },
+                                    ].map((p) => (
+                                      <button
+                                        key={p.id}
+                                        type="button"
+                                        onClick={() => {
+                                          handleUpdatePriority(task, p.id as any);
+                                          setActivePriorityMenuTaskId(null);
+                                        }}
+                                        className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <Flag className={`w-3.5 h-3.5 shrink-0 ${p.color}`} />
+                                          <span>{p.label}</span>
+                                        </div>
+                                        {task.priority === p.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
                             </div>
                           ) : (
                             <span className="inline-flex items-center gap-1 font-medium" title={`Priority: ${priorityConfig.label} (View only)`}>
-                              <Flag className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
-                              <span>{priorityConfig.label}</span>
+                              <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
+                              <span className="text-[10px] text-slate-600 dark:text-zinc-400">{priorityConfig.label}</span>
                             </span>
                           )}
                         </td>
@@ -1160,18 +1739,20 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   })
                 )}
                 {/* Add Row Button at Table Bottom */}
-                <tr className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition">
-                  <td colSpan={8} className="py-2.5 px-4">
-                    <button
-                      type="button"
-                      onClick={() => openAddTaskModal()}
-                      className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-blue-600 transition cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Add row / task</span>
-                    </button>
-                  </td>
-                </tr>
+                {!isClient && (
+                  <tr className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition">
+                    <td colSpan={8} className="py-2.5 px-4">
+                      <button
+                        type="button"
+                        onClick={() => openAddTaskModal()}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-blue-600 transition cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Add row / task</span>
+                      </button>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -1311,20 +1892,20 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
                           {/* Assigned Contributor */}
                           <div className="col-span-6 flex items-center gap-1.5 truncate">
-                            {m.assignee_avatar_path ? (
-                              <img
-                                src={constructAvatarUrl(m.assignee_avatar_path, m.assignee_name || 'Contributor')}
-                                alt={m.assignee_name || 'Contributor'}
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = getFallbackAvatarUrl(m.assignee_name);
-                                }}
-                                className="w-5 h-5 rounded-full object-cover shrink-0 border border-slate-200 dark:border-zinc-700"
-                              />
-                            ) : (
-                              <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-zinc-800 flex items-center justify-center shrink-0">
-                                <User className="w-3 h-3 text-slate-400" />
-                              </div>
-                            )}
+                            <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 flex items-center justify-center">
+                              {m.assignee_avatar_path ? (
+                                <img
+                                  src={constructAvatarUrl(m.assignee_avatar_path, m.assignee_name || 'Contributor')}
+                                  alt={m.assignee_name || 'Contributor'}
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = getFallbackAvatarUrl(m.assignee_name);
+                                  }}
+                                  className="w-full h-full object-cover block shrink-0"
+                                />
+                              ) : (
+                                <User className="w-3 h-3 text-slate-400 shrink-0" />
+                              )}
+                            </div>
                             <div className="min-w-0">
                               <span className="text-xs font-semibold text-slate-800 dark:text-zinc-200 truncate block">
                                 {m.assignee_name || 'Unassigned'}
@@ -1412,13 +1993,15 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   </div>
                 ) : (
                   filteredTasks.map((task, idx) => {
-                    const isDone = task.status === 'completed';
-                    const isInProg = task.status === 'in_progress' || task.status === 'review';
+                    const normStatus = normalizeStatus(task.status);
+                    const isDone = normStatus === 'completed';
+                    const isReview = normStatus === 'review';
+                    const isInProg = normStatus === 'in_progress';
                     const priorityConfig = PRIORITY_FLAGS[task.priority] || PRIORITY_FLAGS.normal;
 
                     // Calculate timeline start and span
                     const startCol = (idx % 4) + 1;
-                    const colSpan = isDone ? 2 : isInProg ? 4 : 3;
+                    const colSpan = isDone ? 2 : isReview ? 5 : isInProg ? 4 : 3;
 
                     return (
                       <div
@@ -1431,6 +2014,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           <div className="col-span-6 min-w-0 flex items-center gap-2">
                             {isDone ? (
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                            ) : isReview ? (
+                              <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                             ) : isInProg ? (
                               <div className="w-3 h-3 rounded-full bg-blue-500 shrink-0" />
                             ) : (
@@ -1451,18 +2036,20 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           {/* Assigned Member */}
                           <div className="col-span-6 flex items-center justify-between gap-1.5 truncate">
                             <div className="flex items-center gap-1.5 truncate">
-                              {task.assignee_avatar_path ? (
-                                <img
-                                  src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
-                                  alt={task.assignee_name || 'User'}
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
-                                  }}
-                                  className="w-4 h-4 rounded-full object-cover shrink-0 border border-slate-200 dark:border-zinc-700"
-                                />
-                              ) : (
-                                <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                              )}
+                              <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 flex items-center justify-center">
+                                {task.assignee_avatar_path ? (
+                                  <img
+                                    src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
+                                    alt={task.assignee_name || 'User'}
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
+                                    }}
+                                    className="w-full h-full object-cover block shrink-0"
+                                  />
+                                ) : (
+                                  <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                )}
+                              </div>
                               <span className="text-xs font-medium text-slate-800 dark:text-zinc-200 truncate">
                                 {task.assignee_name || 'Unassigned'}
                               </span>
@@ -1482,6 +2069,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                             className={`h-full rounded-md text-[10px] font-bold text-white px-2 flex items-center justify-between shadow-2xs ${
                               isDone
                                 ? 'bg-emerald-600'
+                                : isReview
+                                ? 'bg-amber-600'
                                 : isInProg
                                 ? 'bg-blue-600'
                                 : 'bg-zinc-700'
@@ -1489,7 +2078,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           >
                             <span className="truncate">{task.title}</span>
                             <span className="text-[9px] opacity-80 shrink-0 ml-1 font-mono">
-                              {isDone ? '100%' : isInProg ? '50%' : '0%'}
+                              {isDone ? '100%' : isReview ? '80%' : isInProg ? '50%' : '0%'}
                             </span>
                           </div>
                         </div>
@@ -1571,31 +2160,57 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 uppercase mb-1">
                     Assignee
                   </label>
-                  <select
-                    value={newTaskAssignee}
-                    onChange={(e) => setNewTaskAssignee(e.target.value)}
-                    className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-hidden cursor-pointer"
-                  >
-                    <option value="">Unassigned</option>
-                    {members.map((m: any) => (
-                      <option key={m.account_id} value={m.account_id}>
-                        {m.display_name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="w-full text-xs px-3 py-2 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-800 dark:text-zinc-200 font-semibold flex items-center gap-2 border border-slate-200 dark:border-zinc-700">
+                    <User className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                    <span>You (Auto-assigned)</span>
+                  </div>
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 uppercase mb-1">
-                  Due Date
+                  Associated Milestone
                 </label>
-                <input
-                  type="date"
-                  value={newTaskDueDate}
-                  onChange={(e) => setNewTaskDueDate(e.target.value)}
+                <select
+                  value={newTaskMilestone}
+                  onChange={(e) => {
+                    setNewTaskMilestone(e.target.value);
+                  }}
                   className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-hidden cursor-pointer"
-                />
+                >
+                  <option value="">No Milestone Linked</option>
+                  {milestones?.map((m: any, idx: number) => {
+                    const isMyM = String(m.assignee_account_id) === String(currentUserAccountId);
+                    return (
+                      <option key={m.job_milestone_id || idx} value={m.job_milestone_id}>
+                        M{m.order_index || idx + 1}: {m.milestone_title} {isMyM ? '★ (Your Assigned Milestone)' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div>
+                {(() => {
+                  const bounds = getMilestoneTimelineBounds({ job_milestone_id: newTaskMilestone } as any);
+                  const minD = bounds.minDate;
+                  const maxD = bounds.maxDate;
+                  return (
+                    <>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 uppercase mb-1">
+                        Due Date {maxD ? `(Milestone deadline: ${new Date(maxD).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})` : ''}
+                      </label>
+                      <input
+                        type="date"
+                        min={minD}
+                        max={maxD}
+                        value={newTaskDueDate}
+                        onChange={(e) => setNewTaskDueDate(e.target.value)}
+                        className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-hidden cursor-pointer"
+                      />
+                    </>
+                  );
+                })()}
               </div>
 
               <div className="flex justify-end gap-2 pt-2">

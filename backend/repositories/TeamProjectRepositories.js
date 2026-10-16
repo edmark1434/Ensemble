@@ -285,9 +285,13 @@ async function getTeamProjectDetails(projectIdentifier, viewerAccountId) {
 async function getProjectTaskboard(teamId, viewerAccountId) {
   const query = `
     SELECT twt.task_id, twt.workspace_id, twt.job_milestone_id,
-           twt.title, twt.description, twt.status, twt.priority,
+           twt.title, twt.description,
+           CASE WHEN twt.status = 'in_review' THEN 'review' ELSE twt.status END as status,
+           twt.priority,
            twt.is_locked, twt.sort_order, twt.checklist, twt.starts_at, twt.due_at,
            twt.completed_at, twt.created_at,
+           twt.created_by_account_id,
+           CASE WHEN twt.created_by_account_id = j.client_account_id THEN true ELSE false END as is_contract_task,
            jm.title as milestone_title, jm.order_index as milestone_order,
            jm.budget_credits as milestone_budget,
            assignee_acc.account_id as assignee_account_id,
@@ -295,6 +299,8 @@ async function getProjectTaskboard(teamId, viewerAccountId) {
            assignee_acc.handle as assignee_handle,
            assignee_f.path as assignee_avatar_path
       FROM team_contract_workspaces tcw
+      JOIN teams t ON t.team_id = tcw.team_id
+      JOIN jobs j ON j.job_id = t.job_id
       JOIN team_workspace_tasks twt ON twt.workspace_id = tcw.workspace_id
       LEFT JOIN job_milestones jm ON jm.job_milestone_id = twt.job_milestone_id
       LEFT JOIN team_workspace_task_assignees twta ON twta.task_id = twt.task_id
@@ -315,7 +321,7 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
   // Verify permissions: Viewer must be assigned to task OR be the client owner
   const permRes = await pool.query(`
     SELECT twt.task_id, t.account_id as team_account_id, j.client_account_id,
-           twta.account_id as assignee_account_id, twt.is_locked
+           twta.account_id as assignee_account_id, twt.is_locked, twt.created_by_account_id
       FROM team_workspace_tasks twt
       JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
       JOIN teams t ON t.team_id = tcw.team_id
@@ -328,12 +334,18 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     throw new Error('Task not found in this team project.');
   }
 
-  const { client_account_id, assignee_account_id, is_locked } = permRes.rows[0];
+  const { client_account_id, assignee_account_id, is_locked, created_by_account_id } = permRes.rows[0];
   const isAssignee = String(viewerAccountId) === String(assignee_account_id);
   const isClient = String(viewerAccountId) === String(client_account_id);
+  const isContractTask = String(created_by_account_id) === String(client_account_id);
 
   if (!isAssignee && !isClient) {
     throw new Error('You do not have permission to modify this task.');
+  }
+
+  // Contract task title/description cannot be modified by contributors
+  if (isContractTask && (title !== undefined && title !== null)) {
+    throw new Error('Contract-defined milestone tasks cannot be edited.');
   }
 
   // Only the person assigned to the task can change its status
@@ -344,6 +356,8 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
   if (is_locked && !isClient) {
     throw new Error('This task is locked waiting for previous milestones to be completed.');
   }
+
+  const normalizedStatus = status === 'review' ? 'in_review' : status;
 
   const updateRes = await pool.query(`
     UPDATE team_workspace_tasks
@@ -360,7 +374,7 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
   `, [
     title || null,
     description !== undefined ? description : null,
-    status || null,
+    normalizedStatus || null,
     checklist ? JSON.stringify(checklist) : null,
     priority || null,
     due_at !== undefined ? due_at : null,
@@ -386,8 +400,9 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
 
 /**
  * Create a new task on the taskboard.
+ * Auto-assigns to the creator (the contributor). Clients cannot create tasks.
  */
-async function createProjectTask(teamId, viewerAccountId, { title, description, priority, job_milestone_id, assignee_account_id, checklist }) {
+async function createProjectTask(teamId, viewerAccountId, { title, description, priority, job_milestone_id, checklist }) {
   const wsRes = await pool.query(`
     SELECT tcw.workspace_id, j.client_account_id
       FROM team_contract_workspaces tcw
@@ -399,6 +414,13 @@ async function createProjectTask(teamId, viewerAccountId, { title, description, 
 
   if (wsRes.rows.length === 0) throw new Error('Project workspace not found');
   const { workspace_id, client_account_id } = wsRes.rows[0];
+
+  // Clients cannot create tasks on the taskboard
+  if (String(viewerAccountId) === String(client_account_id)) {
+    const error = new Error('Clients cannot add tasks to the team workspace; tasks are managed by assigned contributors.');
+    error.statusCode = 403;
+    throw error;
+  }
 
   const taskRes = await pool.query(`
     INSERT INTO team_workspace_tasks (
@@ -417,13 +439,12 @@ async function createProjectTask(teamId, viewerAccountId, { title, description, 
 
   const task = taskRes.rows[0];
 
-  if (assignee_account_id) {
-    await pool.query(`
-      INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (task_id, account_id) DO NOTHING
-    `, [task.task_id, assignee_account_id, viewerAccountId]);
-  }
+  // The creator is automatically the assigned contributor (members cannot assign tasks to someone else)
+  await pool.query(`
+    INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (task_id, account_id) DO NOTHING
+  `, [task.task_id, viewerAccountId, viewerAccountId]);
 
   await pool.query(`
     INSERT INTO team_workspace_activity (workspace_id, task_id, actor_account_id, action, metadata)
@@ -435,6 +456,7 @@ async function createProjectTask(teamId, viewerAccountId, { title, description, 
 
 /**
  * Delete a task card (soft delete).
+ * Contract-defined tasks cannot be deleted.
  */
 async function deleteProjectTask(teamId, taskId, viewerAccountId) {
   const permRes = await pool.query(`
@@ -448,7 +470,14 @@ async function deleteProjectTask(teamId, taskId, viewerAccountId) {
 
   if (permRes.rows.length === 0) throw new Error('Task not found');
   const { client_account_id, created_by_account_id } = permRes.rows[0];
-  const isAuthorized = String(viewerAccountId) === String(client_account_id) ||
+  const isContractTask = String(created_by_account_id) === String(client_account_id);
+
+  if (isContractTask) {
+    throw new Error('Contract-defined milestone tasks cannot be deleted.');
+  }
+
+  const isCreator = String(viewerAccountId) === String(created_by_account_id);
+  if (!isCreator) throw new Error('Unauthorized to delete this task; only its creator can remove it.');
                        String(viewerAccountId) === String(created_by_account_id);
 
   if (!isAuthorized) throw new Error('Unauthorized to delete this task');
@@ -696,8 +725,16 @@ async function getProjectMilestones(teamId, viewerAccountId) {
       -- Contract details
       c.contract_id,
       c.status as contract_status,
-      c.rate_credits as contract_credits,
-      COALESCE(cm.deadline_at, c.deadline_at) as deadline_at,
+      c.starts_at as contract_starts_at,
+      c.created_at as contract_created_at,
+      c.deadline_at as contract_overall_deadline,
+      COALESCE(
+        cm.deadline_at,
+        cm.started_at + (COALESCE(jm.duration_hours, 72) || ' hours')::interval,
+        c.starts_at + (COALESCE(jm.duration_hours, 72) || ' hours')::interval,
+        c.created_at + (COALESCE(jm.duration_hours, 72) || ' hours')::interval,
+        c.deadline_at
+      ) as deadline_at,
       cm.contract_milestone_id,
       COALESCE(cm.status, c.status, 'pending') as milestone_status,
       cm.credits as milestone_credits,

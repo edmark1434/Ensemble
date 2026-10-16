@@ -1,23 +1,32 @@
-# Current Task: Assignee-Only Task Permissions & Dual Gantt Chart (Milestones & Tasks)
+# Current Task: Seamless Optimistic Task Updates, "On Review" Status & Milestone Task Completion Gate
 
 ## Objective
-1. **Assignee-Only Status Permissions**:
-   - Backend (`TeamProjectRepositories.js`): Enforced that only the user assigned to a task can update its `status` (`status !== undefined && !isAssignee`). Non-assignees are rejected with an error.
-   - Frontend (`ProjectTaskboardTab.tsx`): 
-     - Only the assigned team member sees interactive status controls (`<select>`).
-     - Non-assignees see a read-only status pill with a lock indicator and tooltip (`Assigned to <Name> (View only)`).
-2. **Assignees Set Due Date & Priority**:
-   - Assignees can set and update `due_at` and `priority` for their tasks directly.
-   - Frontend supports inline editing of due date (via calendar button / date input) and priority (via flag selector) across Board, List, and Table views.
-   - Backend supports persisting `due_at` and `priority` updates.
-3. **Dual Gantt Chart**:
-   - Updated Gantt View to show two distinct charts:
-     - **Milestones Overall Schedule**: shows all contract deliverables, order index, escrow budget credits, assigned contributor (avatar, name, handle), milestone status, and horizontal timeline bars with completion percentages.
-     - **Tasks Detailed Schedule**: shows all tasks, milestone tags, assigned members (avatar, name), priority flags, due dates, and schedule timeline bars.
-   - Added sub-filter pills: `All Schedules`, `Milestones (<count>)`, and `Tasks (<count>)`.
+1. **Optimistic & Seamless Taskboard Updates (Zero Skeleton Reload)**:
+   - Eliminate full-screen skeleton flash when setting status, priority, or due dates on tasks.
+   - Local optimistic state in `ProjectTaskboardTab.tsx` for immediate 0ms UI card transitions.
+   - Reconcile data in background with `loadProjectData(true)` without triggering `isLoading = true`.
+2. **"On Review" Task Status**:
+   - Added `"On Review"` across Board, List, Table, and Gantt views.
+   - Milestone submissions automatically transition tasks to `"On Review"`.
+   - Milestone deliverables cannot be submitted for client review unless all tasks for that milestone are completed.
+3. **Task Creation, Assignment & Contract Protection Rules**:
+   - **Auto-Assignment to Creator**: Whenever a contributor creates a task, the assignee is automatically the creator (`currentUserAccountId`). Other members cannot create tasks and assign them to you.
+   - **Clients Cannot Create Tasks**: Clients cannot add tasks to the taskboard (hidden in UI, rejected with HTTP 403 in backend).
+   - **Default Milestone**: Pre-selected to the contributor's currently assigned milestone.
+   - **Contract Immutability**: Tasks originating from the contract (`is_contract_task = true`) cannot have their title or scope edited, nor can they be deleted by contributors. Only user-created tasks can be edited and deleted by their creator.
+   - **Card Status Display Polish**: Removed the bulky text button (`[• IN PROGRESS ⌄]`) from the card footer that wrapped onto two lines. Made the existing compact `<Tag />` icon the interactive status trigger (colored by status), keeping card footers clean and single-line.
+   - **Milestone-Specific Due Date Picker**: When setting a task due date, min and max dates are strictly bounded to that specific milestone's start and deadline (calculated from sequential `duration_hours`), preventing dates from spilling into other milestones.
 
-## Status: Complete
-
-## Verification
-- Frontend build: `npm run build` in `frontend/` completed successfully with 0 errors (`✓ built in 4.17s`).
-- Backend query & permission verification completed.
+## Acceptance Criteria
+- [x] Changing task status, priority, due date, or checklists updates immediately with 0ms delay and never triggers full skeleton loading.
+- [x] Taskboard Board view has 4 columns including "ON REVIEW".
+- [x] Taskboard List and Table views support "ON REVIEW" with high-contrast amber styling.
+- [x] Submitting milestone deliverable or sending submission update automatically sets associated milestone tasks to "On Review".
+- [x] Contributors cannot submit milestone deliverable for client review if any tasks for that milestone are incomplete (blocked with warning banner and backend check).
+- [x] Creating a task auto-assigns it to the creator. Other members and clients cannot assign tasks to you.
+- [x] Clients cannot create tasks on the taskboard.
+- [x] Contract-defined tasks cannot have their title modified or be deleted.
+- [x] The bulky "IN PROGRESS" text button is replaced by the clickable Tag icon with status coloring.
+- [x] Due date picker is strictly bounded to the specific milestone's duration/timeline.
+- [x] Status dropdown menu in Board view is aligned `right-0` and column overflow clipping is removed, preventing text from clipping (`IN PROGRESS`, `ON REVIEW`, `COMPLETE`).
+- [x] `cd frontend && npm run build` compiles cleanly with zero TypeScript or Vite errors.
