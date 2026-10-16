@@ -19,7 +19,11 @@ import {
   Check,
   Calendar,
   ChevronRight,
-  BookOpen
+  BookOpen,
+  Clock,
+  Layers,
+  FileCheck2,
+  XCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -28,7 +32,7 @@ import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 import { ContractsTerminologyGuide } from "./ContractsTerminologyGuide";
 
 export type ContractType = "Job" | "Gig";
-export type ContractStatus = "Active" | "Waiting" | "Done" | "Cancelled" | "Closed";
+export type ContractStatus = "Active" | "Waiting" | "Done" | "Cancelled" | "Closed" | "Pending Signature";
 export type MilestoneStatus = "Claimed" | "In Progress" | "Locked" | "Overdue" | "Stalled" | "Abandoned" | "Under Review" | "Cancelled";
 
 export interface CancellationRequest {
@@ -63,6 +67,7 @@ export interface MilestoneItem {
 
 export interface DetailedContract {
   id: string;
+  proposalId?: string;
   title: string;
   contractType: ContractType;
   clientName: string;
@@ -187,7 +192,7 @@ export const Contracts: React.FC = () => {
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isVerified = useGlobalState((state) => state.isVerified);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"active" | "archived" | "guide">("active");
+  const [activeTab, setActiveTab] = useState<"active" | "pending" | "archived" | "guide">("active");
   const [contracts, setContracts] = useState<DetailedContract[]>([]);
 
   const mapBackendContracts = useCallback((data: any[]): DetailedContract[] => {
@@ -219,6 +224,8 @@ export const Contracts: React.FC = () => {
       let derivedStatus = c.status;
       if (derivedStatus === 'Completed') {
         derivedStatus = 'Closed';
+      } else if (derivedStatus === 'Pending Signature') {
+        derivedStatus = 'Pending Signature';
       } else if (allMilestonesDone) {
         if (c.client_rating && c.freelancer_rating) {
           derivedStatus = 'Closed';
@@ -229,6 +236,7 @@ export const Contracts: React.FC = () => {
 
       return {
         id: c.contract_id,
+        proposalId: c.proposal_id,
         title: c.job_title || c.contract_type,
         contractType: c.contract_type === 'job' ? 'Job' : 'Gig',
         clientName: c.client_name || c.client_handle,
@@ -287,7 +295,7 @@ export const Contracts: React.FC = () => {
       const res = await api.get('/api/contracts');
       if (res.data?.success) {
         const mapped = mapBackendContracts(res.data.data);
-        const validStatuses = ["Active", "Waiting", "Done", "Closed", "Cancelled"];
+        const validStatuses = ["Active", "Waiting", "Done", "Closed", "Cancelled", "Pending Signature"];
         const filtered = mapped.filter((c: DetailedContract) => validStatuses.includes(c.status));
         setContracts(filtered);
         return mapped;
@@ -319,14 +327,24 @@ export const Contracts: React.FC = () => {
     };
   }, [fetchContracts]);
 
-  const filteredContracts = contracts.filter((c) =>
-    activeTab === "active" ? !c.isArchived : c.isArchived
-  );  
+  const activeContracts = contracts.filter((c) => !c.isArchived && c.status !== "Pending Signature");
+  const pendingContracts = contracts.filter((c) => c.status === "Pending Signature");
+  const archivedContracts = contracts.filter((c) => c.isArchived && c.status !== "Pending Signature");
+
+  const filteredContracts = contracts.filter((c) => {
+    if (activeTab === "active") return !c.isArchived && c.status !== "Pending Signature";
+    if (activeTab === "pending") return c.status === "Pending Signature";
+    if (activeTab === "archived") return c.isArchived && c.status !== "Pending Signature";
+    return false;
+  });
 
   const getStatusBadge = (status: ContractStatus) => {
     let color = 'bg-zinc-100 text-zinc-900 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-700';
     let dotColor = 'bg-zinc-500';
-    if (status === 'Active') {
+    if (status === 'Pending Signature') {
+      color = 'bg-amber-100 text-amber-950 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800';
+      dotColor = 'bg-amber-500 animate-ping';
+    } else if (status === 'Active') {
       color = 'bg-emerald-100 text-emerald-950 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-800';
       dotColor = 'bg-emerald-600 animate-pulse';
     } else if (status === 'Waiting') {
@@ -343,7 +361,7 @@ export const Contracts: React.FC = () => {
     return (
       <span className={`inline-flex items-center gap-1.5 text-xs uppercase font-bold px-2.5 py-1 rounded-full border shadow-2xs ${color}`}>
         <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
-        {status}
+        {status === 'Pending Signature' ? 'Pending Offer' : status}
       </span>
     );
   };
@@ -382,18 +400,18 @@ export const Contracts: React.FC = () => {
 
           {/* Tab Navigation */}
           <div className="border-b border-zinc-200 dark:border-white/10 flex justify-between items-end relative">
-            <div className="flex gap-1 relative">
+            <div className="flex gap-1 relative overflow-x-auto no-scrollbar">
               <button
                 onClick={() => setActiveTab("active")}
-                className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+                className={`relative flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors duration-200 shrink-0 ${
                   activeTab === "active" ? "text-blue-600 dark:text-blue-400 font-bold" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-t-lg"
                 }`}
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 <span className="relative z-10 flex items-center gap-2">
-                  <ScrollText className="h-4 w-4" /> Active Contracts
+                  <ScrollText className="h-4 w-4" /> Active
                   <span className="rounded-full bg-zinc-100 dark:bg-white/10 border border-zinc-200 dark:border-transparent px-2 py-0.5 text-[10px] font-bold text-zinc-700 dark:text-zinc-300">
-                    {contracts.filter((c) => !c.isArchived).length}
+                    {activeContracts.length}
                   </span>
                 </span>
 
@@ -414,16 +432,50 @@ export const Contracts: React.FC = () => {
               </button>
 
               <button
+                onClick={() => setActiveTab("pending")}
+                className={`relative flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors duration-200 shrink-0 ${
+                  activeTab === "pending" ? "text-blue-600 dark:text-blue-400 font-bold" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-t-lg"
+                }`}
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                <span className="relative z-10 flex items-center gap-2">
+                  <Clock className="h-4 w-4" /> Pending
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+                    pendingContracts.length > 0
+                      ? 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/70 dark:text-blue-200 dark:border-blue-700'
+                      : 'bg-zinc-100 dark:bg-white/10 border-zinc-200 dark:border-transparent text-zinc-700 dark:text-zinc-300'
+                  }`}>
+                    {pendingContracts.length}
+                  </span>
+                </span>
+
+                {activeTab === "pending" && (
+                  <>
+                    <motion.div
+                      layoutId="activeContractTabGlow"
+                      className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                    />
+                    <motion.div
+                      layoutId="activeContractTabUnderline"
+                      className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-600 dark:bg-blue-500 z-10"
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                    />
+                  </>
+                )}
+              </button>
+
+              <button
                 onClick={() => setActiveTab("archived")}
-                className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+                className={`relative flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors duration-200 shrink-0 ${
                   activeTab === "archived" ? "text-blue-600 dark:text-blue-400 font-bold" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-t-lg"
                 }`}
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 <span className="relative z-10 flex items-center gap-2">
-                  <Archive className="h-4 w-4" /> Archived Contracts
+                  <Archive className="h-4 w-4" /> Archived
                   <span className="rounded-full bg-zinc-100 dark:bg-white/10 border border-zinc-200 dark:border-transparent px-2 py-0.5 text-[10px] font-bold text-zinc-700 dark:text-zinc-300">
-                    {contracts.filter((c) => c.isArchived).length}
+                    {archivedContracts.length}
                   </span>
                 </span>
 
@@ -445,13 +497,13 @@ export const Contracts: React.FC = () => {
 
               <button
                 onClick={() => setActiveTab("guide")}
-                className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+                className={`relative flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors duration-200 shrink-0 ${
                   activeTab === "guide" ? "text-blue-600 dark:text-blue-400 font-bold" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-t-lg"
                 }`}
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 <span className="relative z-10 flex items-center gap-2">
-                  <BookOpen className="h-4 w-4" /> Contract Terms & Guide
+                  <BookOpen className="h-4 w-4" /> Terms & Guide
                 </span>
 
                 {activeTab === "guide" && (
@@ -473,7 +525,7 @@ export const Contracts: React.FC = () => {
 
             <button
               onClick={() => navigate('/contracts/dispute-form')}
-              className="flex items-center justify-center gap-1.5 rounded-lg border border-red-300 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors mb-2 mr-2 md:mr-0 shadow-2xs"
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-red-300 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors mb-2 mr-2 md:mr-0 shadow-2xs shrink-0"
             >
               <AlertCircle className="h-3.5 w-3.5" />
               Report a Dispute
@@ -491,10 +543,183 @@ export const Contracts: React.FC = () => {
             >
               {activeTab === "guide" ? (
                 <ContractsTerminologyGuide />
+              ) : activeTab === "pending" ? (
+                pendingContracts.length === 0 ? (
+                  <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-12 text-center shadow-xs">
+                    <div className="h-12 w-12 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center mx-auto mb-3">
+                      <Clock className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-base font-bold text-zinc-900 dark:text-white">No Pending Contract Offers</h3>
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto">
+                      Contracts sent to you for your decision (accept or reject) or offers you extended to freelancers will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-5 md:grid-cols-2">
+                    {pendingContracts.map((contract) => {
+                      const isFreelancer = user?.account_id === contract.freelancerAccountId;
+                      const otherPartyName = isFreelancer ? contract.clientName : contract.freelancerName;
+                      const otherPartyAvatar = isFreelancer ? contract.clientAvatar : contract.freelancerAvatar;
+                      const otherPartyRole = isFreelancer ? "Client (Hirer)" : "Freelancer (Contractor)";
+                      const avatarUrl = constructAvatarUrl(otherPartyAvatar, otherPartyName);
+
+                      const handleCardClick = () => {
+                        if (contract.proposalId) {
+                          navigate(`/jobs/proposals/sent/${contract.proposalId}/offer/${contract.id}`);
+                        } else {
+                          navigate(`/contracts/${contract.id}`);
+                        }
+                      };
+
+                      return (
+                        <motion.div
+                          key={contract.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.98 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ duration: 0.2 }}
+                          onClick={handleCardClick}
+                          className="group relative cursor-pointer overflow-hidden rounded-2xl border-2 border-amber-500/40 dark:border-amber-500/30 bg-white dark:bg-dark-surface/60 shadow-sm hover:shadow-xl hover:shadow-amber-500/10 hover:border-amber-500 dark:hover:border-amber-500 transition-all duration-300"
+                        >
+                          {/* Top amber accent line */}
+                          <div className="h-1.5 w-full bg-amber-500" />
+
+                          <div className="p-6 space-y-4">
+                            {/* Header pill & Escrow amount */}
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-950 border border-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-700 shadow-2xs">
+                                <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+                                {isFreelancer ? "Action Required • Offer Received" : "Awaiting Freelancer Review"}
+                              </span>
+
+                              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-950 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-200 dark:border-emerald-800">
+                                <CreditIcon className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                <span>{contract.totalValueCredits.toLocaleString()} Credits Escrow</span>
+                              </div>
+                            </div>
+
+                            {/* Job Title & Badges */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-300">
+                                  {contract.contractType} Contract
+                                </span>
+                                {contract.targetMilestoneTitle ? (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-100 dark:bg-purple-950/50 border border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                                    <Users className="h-2.5 w-2.5" /> Team Position
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-100 dark:bg-blue-950/50 border border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300">
+                                    Fixed Price
+                                  </span>
+                                )}
+                              </div>
+
+                              <h3 className="font-extrabold text-zinc-900 dark:text-white text-lg tracking-tight group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors leading-snug line-clamp-2">
+                                {contract.title}
+                              </h3>
+                            </div>
+
+                            {/* Sender / Counterparty card */}
+                            <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200/80 dark:border-white/5">
+                              <img
+                                src={avatarUrl}
+                                alt={otherPartyName}
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = getFallbackAvatarUrl(otherPartyName);
+                                }}
+                                className="h-10 w-10 rounded-full object-cover border-2 border-zinc-200 dark:border-zinc-700 bg-zinc-200 dark:bg-zinc-800 shrink-0"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] uppercase font-bold text-zinc-500 dark:text-zinc-400">
+                                    {otherPartyRole}
+                                  </span>
+                                  <span className="text-[10px] text-zinc-400">
+                                    Sent {new Date(contract.dateCreated).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+                                  </span>
+                                </div>
+                                <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">{otherPartyName}</p>
+                              </div>
+                            </div>
+
+                            {/* Assigned Milestone & Checklist (if Team Project) */}
+                            {contract.targetMilestoneTitle && (
+                              <div className="p-3.5 rounded-xl bg-purple-500/5 dark:bg-purple-500/10 border border-purple-500/20 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                                    <Layers className="h-3 w-3" /> Assigned Milestone Role
+                                  </span>
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                    {contract.targetMilestoneTasks?.length || 0} Deliverables
+                                  </span>
+                                </div>
+                                <p className="text-xs font-bold text-zinc-900 dark:text-white">{contract.targetMilestoneTitle}</p>
+                                {contract.targetMilestoneDescription && (
+                                  <p className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-relaxed line-clamp-2">
+                                    {contract.targetMilestoneDescription}
+                                  </p>
+                                )}
+
+                                {contract.targetMilestoneTasks && contract.targetMilestoneTasks.length > 0 && (
+                                  <div className="pt-2 border-t border-purple-500/15 space-y-1.5">
+                                    {contract.targetMilestoneTasks.slice(0, 3).map((task, idx) => (
+                                      <div
+                                        key={idx}
+                                        className="flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-800/80 border border-purple-500/10 dark:border-white/5 text-zinc-800 dark:text-zinc-200 font-medium"
+                                      >
+                                        <Check className="h-3 w-3 text-purple-500 shrink-0" />
+                                        <span className="truncate flex-1">{task}</span>
+                                      </div>
+                                    ))}
+                                    {contract.targetMilestoneTasks.length > 3 && (
+                                      <p className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 pl-1">
+                                        +{contract.targetMilestoneTasks.length - 3} more assigned tasks
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Action CTA */}
+                            <div className="pt-3 border-t border-zinc-200 dark:border-white/10 flex items-center justify-between gap-3">
+                              <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
+                                {isFreelancer ? "Decision required to form contract" : "Awaiting signature"}
+                              </span>
+                              <div className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md shadow-amber-500/20 group-hover:translate-x-0.5 transition-transform">
+                                <span>{isFreelancer ? "Review Offer & Decide" : "View Sent Offer"}</span>
+                                <ArrowRight className="h-3.5 w-3.5" />
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )
               ) : filteredContracts.length === 0 ? (
-                <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-12 text-center text-xs text-zinc-500 dark:text-zinc-400 shadow-xs">
-                  No contracts found under this tab.
-                </div>
+                activeTab === "active" ? (
+                  <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-12 text-center shadow-xs">
+                    <div className="h-12 w-12 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center mx-auto mb-3">
+                      <ScrollText className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-base font-bold text-zinc-900 dark:text-white">No Active Contracts</h3>
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto">
+                      You currently have no active or in-progress contracts. When a contract offer is accepted and funded, it will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-12 text-center shadow-xs">
+                    <div className="h-12 w-12 rounded-full bg-zinc-500/10 text-zinc-500 dark:text-zinc-400 flex items-center justify-center mx-auto mb-3">
+                      <Archive className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-base font-bold text-zinc-900 dark:text-white">No Archived Contracts</h3>
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto">
+                      Completed and closed contracts that have finished all milestones and ratings will be safely archived here.
+                    </p>
+                  </div>
+                )
               ) : (
                 <div className="grid gap-5 md:grid-cols-2">
                   {filteredContracts.map((contract) => {

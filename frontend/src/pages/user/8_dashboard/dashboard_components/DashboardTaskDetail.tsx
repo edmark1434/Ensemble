@@ -43,6 +43,10 @@ export const DashboardTaskDetail = () => {
             const response = await api.get(`/api/dashboard/tasks/${id}`);
             if (response.data.success) {
                 const fetchedTask = response.data.data;
+                if (fetchedTask.team_project_id || fetchedTask.job_hiring_type === 'team' || Number(fetchedTask.job_no_of_hires) > 1) {
+                    navigate(`/team-project/${fetchedTask.team_project_id || fetchedTask.job_id}`, { replace: true });
+                    return;
+                }
                 setTask(fetchedTask);
                 setActiveMilestoneId((curr) => resolveActiveMilestoneId(fetchedTask, curr));
             }

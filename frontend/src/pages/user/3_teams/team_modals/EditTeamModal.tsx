@@ -1,15 +1,13 @@
-import { useState } from "react";
-import { X, Upload, Image as ImageIcon, Globe, Lock } from "lucide-react";
+import React, { useState } from "react";
+import { X, Upload, Image as ImageIcon, Lock, Users } from "lucide-react";
 
 interface EditTeamModalProps {
   isOpen: boolean;
   onClose: () => void;
   teamName?: string;
-  teamHandle?: string;
   teamTagline?: string;
   teamDescription?: string;
   teamBanner?: string;
-  teamVisibility?: "Public" | "Private";
   onSave?: (values: TeamFormValues) => void;
   mode?: "edit" | "create";
   saving?: boolean;
@@ -19,21 +17,19 @@ interface EditTeamModalProps {
 
 export interface TeamFormValues {
   name: string;
-  handle: string;
+  handle?: string;
   tagline: string;
   description: string;
-  visibility: "Public" | "Private";
+  visibility?: "Public" | "Private";
   photo?: File;
 }
 
 const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
   onClose,
   teamName,
-  teamHandle,
   teamTagline,
   teamDescription,
   teamBanner,
-  teamVisibility,
   onSave,
   mode = "edit",
   saving = false,
@@ -41,12 +37,8 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
   onCreate,
 }) => {
   const [name, setName] = useState(teamName || "");
-  const [handle, setHandle] = useState(teamHandle || "");
   const [tagline, setTagline] = useState(teamTagline || "");
   const [description, setDescription] = useState(teamDescription || "");
-  const [visibility, setVisibility] = useState<"Public" | "Private">(
-    teamVisibility === "Private" ? "Private" : "Public",
-  );
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState(teamBanner || "");
   const [photoError, setPhotoError] = useState("");
@@ -55,7 +47,6 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
     if (
       mode === "create" &&
       name.trim() &&
-      handle.trim() &&
       tagline.trim() &&
       description.trim() &&
       photo &&
@@ -63,25 +54,24 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
     ) {
       onCreate({
         name: name.trim(),
-        handle: handle.trim(),
+        handle: "",
         tagline: tagline.trim(),
         description: description.trim(),
-        visibility,
+        visibility: "Private",
         photo,
       });
     } else if (
       name.trim() &&
-      handle.trim() &&
       tagline.trim() &&
       description.trim() &&
       onSave
     ) {
       onSave({
         name: name.trim(),
-        handle: handle.trim(),
+        handle: "",
         tagline: tagline.trim(),
         description: description.trim(),
-        visibility,
+        visibility: "Private",
         photo: photo || undefined,
       });
     }
@@ -99,7 +89,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      setPhotoError("The Team photo must be 5 MB or smaller.");
+      setPhotoError("The team photo must be 5 MB or smaller.");
       return;
     }
 
@@ -118,245 +108,216 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fade-in">
-      <div className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl animate-scale-in">
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 dark:border-white/10 px-6 py-5">
-          <h3
-            className="text-xl font-semibold text-gray-900 dark:text-white"
-            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-          >
-            {mode === "create" ? "Create a Team" : "Edit Team"}
-          </h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#151720] shadow-2xl">
+        {/* Modal Header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-zinc-800 px-6 py-4">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              {mode === "create" ? "Create a Team" : "Edit Team Details"}
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+              {mode === "create"
+                ? "Set up a private collaborative team space for your projects"
+                : "Update your team's visual identity and info"}
+            </p>
+          </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white"
+            className="rounded-xl p-1.5 text-slate-400 hover:text-slate-600 dark:text-zinc-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="inbox-scroll-thin flex-1 overflow-y-auto px-6 py-5">
-          <div className="space-y-5">
-            <label className="block text-sm font-medium text-gray-600 dark:text-zinc-300">
-              Team Name <span className="text-red-400">*</span>
-              <input
-                type="text"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Enter Team name"
-                className="mt-2 w-full rounded-lg border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 dark:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-gray-600 dark:text-zinc-300">
-              Handle <span className="text-red-400">*</span>
-              <input
-                value={handle}
-                onChange={(event) =>
-                  setHandle(event.target.value.replace(/^@/, ""))
-                }
-                className="mt-2 w-full rounded-lg border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-gray-900 dark:text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
-                placeholder="team-handle"
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-gray-600 dark:text-zinc-300">
-              Tagline <span className="text-red-400">*</span>
-              <input
-                value={tagline}
-                onChange={(event) => setTagline(event.target.value)}
-                maxLength={50}
-                placeholder="A short description of your Team"
-                className="mt-2 w-full rounded-lg border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-gray-900 dark:text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-gray-600 dark:text-zinc-300">
-              Description <span className="text-red-400">*</span>
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                rows={4}
-                placeholder="Tell people about your Team"
-                className="mt-2 w-full resize-none rounded-lg border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-gray-900 dark:text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
-              />
-            </label>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-600 dark:text-zinc-300">
-                Team Photo{" "}
-                {mode === "create" && <span className="text-red-400">*</span>}
-              </label>
-              <div className="relative h-36 w-full overflow-hidden rounded-xl border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5">
-                {photoPreview ? (
-                  <img
-                    src={photoPreview}
-                    alt="Team photo preview"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-2 text-gray-500 dark:text-zinc-500">
-                    <ImageIcon className="h-8 w-8" />
-                    <span className="text-xs">No Team photo selected</span>
-                  </div>
-                )}
-                <label className="absolute inset-0 flex cursor-pointer items-center justify-center bg-white/80 dark:bg-black/55 opacity-0 transition-opacity hover:opacity-100">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePhotoUpload}
-                    className="hidden"
-                  />
-                  <Upload className="h-5 w-5 text-gray-900 dark:text-white" />
-                  <span className="ml-2 text-sm text-gray-900 dark:text-white">
-                    {photoPreview ? "Change Photo" : "Choose Photo"}
-                  </span>
-                </label>
-              </div>
-              <div className="mt-2 flex items-center justify-between">
-                <p className="text-xs text-gray-500 dark:text-zinc-500">Image file, up to 5 MB</p>
-                {photoPreview && mode === "create" && (
-                  <button
-                    type="button"
-                    onClick={removePhoto}
-                    className="text-xs text-red-400 hover:text-red-300"
-                  >
-                    Remove photo
-                  </button>
-                )}
-              </div>
-              {photoError && (
-                <p className="mt-1 text-xs text-red-400">{photoError}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-600 dark:text-zinc-300">
-                Team Visibility
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setVisibility("Public")}
-                  className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition ${
-                    visibility === "Public"
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-white ring-1 ring-blue-500/30"
-                      : "border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-zinc-400 hover:border-white/20 hover:text-zinc-200"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Globe
-                      className={`h-4 w-4 ${
-                        visibility === "Public" ? "text-blue-400" : "text-gray-500 dark:text-zinc-400"
-                      }`}
-                    />
-                    <span className="text-sm font-semibold">Public</span>
-                  </div>
-                  <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-zinc-400">
-                    Visible to everyone. Discoverable in search and directory.
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setVisibility("Private")}
-                  className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition ${
-                    visibility === "Private"
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-white ring-1 ring-blue-500/30"
-                      : "border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-zinc-400 hover:border-white/20 hover:text-zinc-200"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Lock
-                      className={`h-4 w-4 ${
-                        visibility === "Private" ? "text-blue-400" : "text-gray-500 dark:text-zinc-400"
-                      }`}
-                    />
-                    <span className="text-sm font-semibold">Private</span>
-                  </div>
-                  <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-zinc-400">
-                    Hidden from directory. Accessible only to members or via join code.
-                  </p>
-                </button>
-              </div>
-            </div>
-
-            {mode === "create" && (
+        {/* Modal Body: 2 Columns (Left: Preview, Right: Inputs) */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+            {/* Left Column: Live Card Preview & Info (md:col-span-5) */}
+            <div className="md:col-span-5 space-y-4">
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-zinc-500">
-                  Live Preview
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-2">
+                  Live Card Preview
                 </p>
-                <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-4">
-                  <div className="flex gap-3">
-                    {photoPreview && (
+                
+                {/* Preview Card */}
+                <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1c1f2b] overflow-hidden shadow-xs">
+                  <div className="h-32 w-full bg-slate-100 dark:bg-zinc-800 relative overflow-hidden">
+                    {photoPreview ? (
                       <img
                         src={photoPreview}
-                        className="h-16 w-16 rounded-lg object-cover"
+                        className="h-full w-full object-cover"
                         alt="Team preview"
                       />
-                    )}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate font-semibold text-gray-900 dark:text-white">
-                          {name || "Team name"}
-                        </p>
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
-                            visibility === "Private"
-                              ? "border border-amber-400/30 bg-amber-500/15 text-amber-300"
-                              : "border border-blue-400/30 bg-blue-500/15 text-blue-300"
-                          }`}
-                        >
-                          {visibility === "Private" ? (
-                            <Lock className="h-2.5 w-2.5" />
-                          ) : (
-                            <Globe className="h-2.5 w-2.5" />
-                          )}
-                          {visibility}
-                        </span>
+                    ) : (
+                      <div className="flex flex-col h-full items-center justify-center text-xs font-bold text-slate-400 dark:text-zinc-500 gap-1.5">
+                        <ImageIcon className="h-6 w-6 text-slate-300 dark:text-zinc-600" />
+                        <span>Team Banner Preview</span>
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-zinc-500">
-                        @{handle || "handle"}
-                      </p>
-                      <p className="text-sm text-blue-300">
-                        {tagline || "Team tagline"}
-                      </p>
+                    )}
+                  </div>
+                  
+                  <div className="p-4 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate">
+                        {name || "Team Name"}
+                      </h4>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-900 border border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800 shrink-0">
+                        Owner
+                      </span>
+                    </div>
+                    <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 truncate">
+                      {tagline || "Your team tagline will appear here"}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 line-clamp-3 leading-relaxed">
+                      {description || "A concise description of your team's mission, skillsets, and collaborative projects."}
+                    </p>
+                    <div className="pt-2 border-t border-slate-100 dark:border-zinc-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400">
+                      <span className="inline-flex items-center gap-1 font-medium">
+                        <Users className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
+                        1 member (You)
+                      </span>
+                      <span className="font-semibold text-blue-600 dark:text-blue-400">
+                        Open Space &rarr;
+                      </span>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-gray-500 dark:text-zinc-400">
-                    {description || "Team description"}
-                  </p>
                 </div>
               </div>
-            )}
+
+              {/* Privacy Notice */}
+              <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-slate-50 dark:bg-zinc-900/40 border border-slate-200 dark:border-zinc-800 text-xs text-slate-600 dark:text-zinc-400">
+                <Lock className="w-4 h-4 text-slate-500 dark:text-zinc-400 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">
+                  All teams are <strong>Private</strong>. Only invited collaborators and colleagues with your team join code can participate.
+                </span>
+              </div>
+            </div>
+
+            {/* Right Column: Form Inputs (md:col-span-7) */}
+            <div className="md:col-span-7 space-y-4">
+              {/* Team Name */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 mb-1.5">
+                  Team Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="e.g. Creative Velocity Studio"
+                  maxLength={50}
+                  className="w-full rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900/60 px-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition shadow-xs"
+                />
+              </div>
+
+              {/* Tagline */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 mb-1.5">
+                  Tagline <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={tagline}
+                  onChange={(event) => setTagline(event.target.value)}
+                  maxLength={50}
+                  placeholder="e.g. High-performance video production and post-processing"
+                  className="w-full rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900/60 px-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition shadow-xs"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 mb-1.5">
+                  Description <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  rows={4}
+                  placeholder="Share what your team works on, skillsets, and collaboration objectives..."
+                  className="w-full resize-none rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900/60 px-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition shadow-xs"
+                />
+              </div>
+
+              {/* Team Photo */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                    Team Photo {mode === "create" && <span className="text-rose-500">*</span>}
+                  </label>
+                  {photoPreview && (
+                    <button
+                      type="button"
+                      onClick={removePhoto}
+                      className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                    >
+                      Remove photo
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative h-28 w-full overflow-hidden rounded-xl border border-dashed border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900/50">
+                  {photoPreview ? (
+                    <img
+                      src={photoPreview}
+                      alt="Team preview"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-1 text-slate-500 dark:text-zinc-500">
+                      <ImageIcon className="h-6 w-6 text-slate-400 dark:text-zinc-500" />
+                      <span className="text-xs font-medium">Upload banner or profile image</span>
+                      <span className="text-[10px] text-slate-400 dark:text-zinc-500">PNG, JPG, WebP up to 5 MB</span>
+                    </div>
+                  )}
+                  <label className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/50 opacity-0 transition-opacity hover:opacity-100">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                    />
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/90 text-slate-900 text-xs font-bold shadow-md">
+                      <Upload className="h-4 w-4" />
+                      <span>{photoPreview ? "Change Photo" : "Choose File"}</span>
+                    </div>
+                  </label>
+                </div>
+                {photoError && (
+                  <p className="mt-1 text-xs text-rose-500">{photoError}</p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="flex shrink-0 gap-3 border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface px-6 py-4">
+        {/* Modal Footer */}
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/30 px-6 py-3.5">
           <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
             onClick={handleSave}
             disabled={
               saving ||
               !name.trim() ||
-              !handle.trim() ||
               !tagline.trim() ||
               !description.trim() ||
               (mode === "create" && !photo)
             }
-            className="flex-1 cursor-pointer rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white transition hover:bg-blue-500 active:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving
               ? savingLabel || "Saving..."
               : mode === "create"
-                ? "Create Team"
-                : "Save Changes"}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 cursor-pointer rounded-lg border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-zinc-300 transition hover:border-gray-300 dark:hover:border-white/25 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
-          >
-            Cancel
+              ? "Create Team"
+              : "Save Changes"}
           </button>
         </div>
       </div>
@@ -366,10 +327,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
 
 const EditTeamModal: React.FC<EditTeamModalProps> = (props) => {
   if (!props.isOpen) return null;
-
   return <EditTeamModalContent {...props} />;
 };
 
 export default EditTeamModal;
-
-

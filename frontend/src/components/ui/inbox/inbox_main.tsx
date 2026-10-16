@@ -21,7 +21,7 @@ import api from "@/lib/axios";
 
 import type { Inbox, Message } from "./inbox_dataset";
 import useChatState, { formatCallCardText } from "../chat_bubble/chat_state";
-import { MARKETPLACE_CONVERSATION_TYPES } from "../chat_bubble/useInboxUnreadTotals";
+import { MARKETPLACE_CONVERSATION_TYPES, isMarketplaceConversation } from "../chat_bubble/useInboxUnreadTotals";
 
 import { InboxTab } from "./inbox_components/inbox_tab";
 import { InboxSearch } from "./inbox_components/inbox_search";
@@ -477,10 +477,8 @@ const InboxMain = () => {
     () =>
       inboxList.filter((inbox) =>
         isMarketplace
-          ? MARKETPLACE_CONVERSATION_TYPES.has(inbox.conversation_type)
-          : ["direct", "group", "ticket", "dispute"].includes(
-              inbox.conversation_type
-            )
+          ? isMarketplaceConversation(inbox)
+          : !isMarketplaceConversation(inbox)
       ),
     [inboxList, isMarketplace]
   );
@@ -513,7 +511,10 @@ const InboxMain = () => {
     ) {
       void selectConversation(requestedConversationId)
         .then(() => {
-          navigate(location.pathname, { replace: true, state: null });
+          const targetConvo = inboxList.find(c => String(c._id) === requestedConversationId);
+          const shouldBeMarketplace = targetConvo ? isMarketplaceConversation(targetConvo) : isMarketplace;
+          const targetPath = shouldBeMarketplace ? '/inbox/marketplace' : '/inbox/direct';
+          navigate(targetPath, { replace: true, state: null });
         })
         .catch((error: unknown) => {
           console.error("Unable to open requested conversation:", error);
@@ -521,7 +522,10 @@ const InboxMain = () => {
         });
       return;
     } else if (requestedConversationId) {
-      navigate(location.pathname, { replace: true, state: null });
+      const targetConvo = inboxList.find(c => String(c._id) === requestedConversationId);
+      const shouldBeMarketplace = targetConvo ? isMarketplaceConversation(targetConvo) : isMarketplace;
+      const targetPath = shouldBeMarketplace ? '/inbox/marketplace' : '/inbox/direct';
+      navigate(targetPath, { replace: true, state: null });
       return;
     } else if (!activeIsVisible && tabConversations[0]) {
       void handleSelectConversation(tabConversations[0]);
@@ -580,10 +584,8 @@ const InboxMain = () => {
     if (!selectedConversation) return filteredConversations;
 
     const selectedBelongsToTab = isMarketplace
-      ? MARKETPLACE_CONVERSATION_TYPES.has(selectedConversation.conversation_type)
-      : ["direct", "group", "ticket", "dispute"].includes(
-          selectedConversation.conversation_type
-        );
+      ? isMarketplaceConversation(selectedConversation)
+      : !isMarketplaceConversation(selectedConversation);
 
     if (!selectedBelongsToTab) return filteredConversations;
 

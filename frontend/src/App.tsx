@@ -83,6 +83,7 @@ const StaffLoginPage = lazyPage(() => import('./pages/auth/StaffLoginPage'));
 const SignupPage = lazyPage(() => import('./pages/auth/Signuppage'));
 const EmailVerification = lazyPage(() => import('./pages/EmailVerification'));
 const NotFound = lazyPage(() => import('@/pages/user/0_misc/NotFound.tsx'));
+const TeamProjectWorkspace = lazyPage(() => import('@/pages/user/3_teams/team_project/TeamProjectWorkspace'));
 const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage.tsx'));
 const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPage.tsx'));
 const NotificationsPage = lazyPage(() => import('@/pages/user/notifications/notifications_page.tsx'));
@@ -246,6 +247,8 @@ function App() {
             <Route path=':id' element={<SelectedTeam />} />
           </Route>
 
+          <Route path='/team-project/:id' element={<TeamProjectWorkspace />} />
+
           <Route path='/discovery' element={<DiscoveryPage />} />
           <Route path='/discovery/:tab' element={<DiscoveryPage />} />
           <Route path='/assets' element={<AssetsLibrary />} />
@@ -311,6 +314,7 @@ function App() {
           <Route path='/my-orders' element={<SectionPlaceholder title='MY ORDERS' />} />
           <Route path='/terms-of-services' element={<TosMain />} />
           <Route path='/contracts' element={<Contracts />} />
+          <Route path='/contract' element={<Navigate to="/contracts" replace />} />
           <Route path='/contracts/dispute-form' element={<DisputeFormPage />} />
           <Route path='/contracts/:id' element={<ContractDetailsPage />} />
           <Route path='/dashboard' element={<DashboardMain />} />

@@ -253,6 +253,9 @@ interface DashboardTask {
     job_banner?: string;
     job_category?: string;
     job_difficulty?: string;
+    job_hiring_type?: string;
+    job_no_of_hires?: number;
+    team_project_id?: string;
     client_rating?: ReviewData | null;
     freelancer_rating?: ReviewData | null;
     user_role?: {
@@ -347,7 +350,9 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                                         {computedStatus}
                                     </span>
                                     <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded border bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
-                                        {task.contract_type?.toLowerCase() === 'gig' ? 'Gig' : 'Job'}
+                                        {task.contract_type?.toLowerCase() === 'gig' 
+                                            ? 'Gig' 
+                                            : (task.team_project_id || task.job_hiring_type === 'team' || Number(task.job_no_of_hires) > 1 ? 'Team Job' : 'Job')}
                                     </span>
                                 </div>
                             </div>
@@ -476,33 +481,50 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                                 )}
 
                                 {/* View Progress / Update Milestones Button */}
-                                <button 
-                                    onClick={() => navigate(isFreelancerRole ? `/dashboard/tasks/${task.contract_id}` : `/dashboard/review/${task.contract_id}`)}
-                                    className={(isArchivedTab || computedStatus === 'Done' || computedStatus === 'Completed')
-                                        ? "group inline-flex items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-98"
-                                        : "group inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-98"
-                                    }
-                                >
-                                    {(isArchivedTab || computedStatus === 'Done' || computedStatus === 'Completed') ? (
-                                        <>
-                                            <Eye className="w-3.5 h-3.5 shrink-0 text-gray-300 dark:text-zinc-600 group-hover:text-white dark:group-hover:text-zinc-900 transition-colors" />
-                                            <span>View Progress Details</span>
-                                            <ArrowRight className="w-3 h-3 shrink-0 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                                        </>
-                                    ) : isFreelancerRole ? (
-                                        <>
-                                            <ListChecks className="w-3.5 h-3.5 shrink-0 text-emerald-200" />
-                                            <span>Update Milestones</span>
-                                            <ArrowRight className="w-3 h-3 shrink-0 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Eye className="w-3.5 h-3.5 shrink-0 text-emerald-200" />
-                                            <span>View Progress</span>
-                                            <ArrowRight className="w-3 h-3 shrink-0 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                                        </>
-                                    )}
-                                </button>
+                                {(() => {
+                                    const isTeamJob = Boolean(task.team_project_id || task.job_hiring_type === 'team' || Number(task.job_no_of_hires) > 1);
+                                    const targetPath = isTeamJob
+                                        ? `/team-project/${task.team_project_id || task.job_id}`
+                                        : (isFreelancerRole ? `/dashboard/tasks/${task.contract_id}` : `/dashboard/review/${task.contract_id}`);
+
+                                    return (
+                                        <button 
+                                            onClick={() => navigate(targetPath)}
+                                            className={(isArchivedTab || computedStatus === 'Done' || computedStatus === 'Completed')
+                                                ? "group inline-flex items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-98"
+                                                : isTeamJob
+                                                ? "group inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-98"
+                                                : "group inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-98"
+                                            }
+                                        >
+                                            {isTeamJob ? (
+                                                <>
+                                                    <ListChecks className="w-3.5 h-3.5 shrink-0 text-blue-200" />
+                                                    <span>Open Team Project Workspace</span>
+                                                    <ArrowRight className="w-3 h-3 shrink-0 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                                                </>
+                                            ) : (isArchivedTab || computedStatus === 'Done' || computedStatus === 'Completed') ? (
+                                                <>
+                                                    <Eye className="w-3.5 h-3.5 shrink-0 text-gray-300 dark:text-zinc-600 group-hover:text-white dark:group-hover:text-zinc-900 transition-colors" />
+                                                    <span>View Progress Details</span>
+                                                    <ArrowRight className="w-3 h-3 shrink-0 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                                                </>
+                                            ) : isFreelancerRole ? (
+                                                <>
+                                                    <ListChecks className="w-3.5 h-3.5 shrink-0 text-emerald-200" />
+                                                    <span>Update Milestones</span>
+                                                    <ArrowRight className="w-3 h-3 shrink-0 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Eye className="w-3.5 h-3.5 shrink-0 text-emerald-200" />
+                                                    <span>View Progress</span>
+                                                    <ArrowRight className="w-3 h-3 shrink-0 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                                                </>
+                                            )}
+                                        </button>
+                                    );
+                                })()}
                             </div>
                         </div>
                         </div>

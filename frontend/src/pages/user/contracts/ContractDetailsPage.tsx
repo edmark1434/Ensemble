@@ -39,6 +39,8 @@ import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
 import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { DetailedContract, MilestoneItem, MilestoneStatus, ContractStatus, CancellationRequest } from "./contracts";
 
 // ============================================================================
@@ -207,13 +209,29 @@ const PaperContractDocument: React.FC<{ contract: DetailedContract }> = ({ contr
               </div>
             </div>
 
-            <div className="avoid-break space-y-0.5">
+            <div className="avoid-break space-y-1">
               <span className="font-bold text-zinc-900 block">
                 2.2 Detailed Statement of Work (SOW):
               </span>
-              <p className="text-xs text-zinc-800 whitespace-pre-wrap leading-relaxed">
-                {contract.jobDescription}
-              </p>
+              <div className="text-xs text-zinc-800 leading-relaxed font-normal">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    p: ({ node, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
+                    strong: ({ node, ...props }) => <strong className="font-bold text-zinc-900" {...props} />,
+                    em: ({ node, ...props }) => <em className="italic text-zinc-800" {...props} />,
+                    ul: ({ node, ...props }) => <ul className="list-disc list-outside ml-4 my-2 space-y-1" {...props} />,
+                    ol: ({ node, ...props }) => <ol className="list-decimal list-outside ml-4 my-2 space-y-1" {...props} />,
+                    li: ({ node, ...props }) => <li className="pl-1 leading-relaxed" {...props} />,
+                    h1: ({ node, ...props }) => <h1 className="text-sm font-bold text-zinc-900 mt-3 mb-1" {...props} />,
+                    h2: ({ node, ...props }) => <h2 className="text-xs font-bold text-zinc-900 mt-2.5 mb-1" {...props} />,
+                    h3: ({ node, ...props }) => <h3 className="text-xs font-bold text-zinc-900 mt-2 mb-1" {...props} />,
+                    h4: ({ node, ...props }) => <h4 className="text-xs font-semibold text-zinc-900 mt-1.5 mb-0.5" {...props} />,
+                  }}
+                >
+                  {contract.jobDescription || ''}
+                </ReactMarkdown>
+              </div>
             </div>
 
             {contract.targetMilestoneTitle && (
@@ -1431,9 +1449,24 @@ export const ContractDetailsPage: React.FC = () => {
                     <span className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
                       Full Project Description
                     </span>
-                    <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap font-sans">
-                      {contract.jobDescription}
-                    </p>
+                    <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed font-sans">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          p: ({ node, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
+                          strong: ({ node, ...props }) => <strong className="font-bold text-zinc-900 dark:text-white" {...props} />,
+                          em: ({ node, ...props }) => <em className="italic" {...props} />,
+                          ul: ({ node, ...props }) => <ul className="list-disc list-outside ml-4 my-2 space-y-1" {...props} />,
+                          ol: ({ node, ...props }) => <ol className="list-decimal list-outside ml-4 my-2 space-y-1" {...props} />,
+                          li: ({ node, ...props }) => <li className="pl-1 leading-relaxed" {...props} />,
+                          h1: ({ node, ...props }) => <h1 className="text-sm font-bold text-zinc-900 dark:text-white mt-3 mb-1" {...props} />,
+                          h2: ({ node, ...props }) => <h2 className="text-xs font-bold text-zinc-900 dark:text-white mt-2.5 mb-1" {...props} />,
+                          h3: ({ node, ...props }) => <h3 className="text-xs font-bold text-zinc-900 dark:text-white mt-2 mb-1" {...props} />,
+                        }}
+                      >
+                        {contract.jobDescription || ''}
+                      </ReactMarkdown>
+                    </div>
                   </div>
 
                   {/* Add-on Work Rate */}

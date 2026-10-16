@@ -36,7 +36,40 @@ const Layout = () => {
   const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
   const isSidebarCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
+  const setIsSidebarCollapsed = useGlobalState((state) => state.setIsSidebarCollapsed);
   const initializeChat = useChatState((state) => state.initialize);
+
+  // Auto-collapse sidebar when viewport is narrow (< 1024px)
+  useEffect(() => {
+    let wasAutoCollapsed = false;
+    let prevWidth = window.innerWidth;
+
+    const handleResize = () => {
+      const currentWidth = window.innerWidth;
+      const wentNarrow = prevWidth >= 1024 && currentWidth < 1024;
+      const wentWide = prevWidth < 1024 && currentWidth >= 1024;
+      prevWidth = currentWidth;
+
+      const currentCollapsed = useGlobalState.getState().isSidebarCollapsed;
+
+      if (wentNarrow && !currentCollapsed) {
+        setIsSidebarCollapsed(true);
+        wasAutoCollapsed = true;
+      } else if (wentWide && currentCollapsed && wasAutoCollapsed) {
+        setIsSidebarCollapsed(false);
+        wasAutoCollapsed = false;
+      }
+    };
+
+    // Auto-collapse on initial mount if screen is already narrow
+    if (window.innerWidth < 1024 && !useGlobalState.getState().isSidebarCollapsed) {
+      setIsSidebarCollapsed(true);
+      wasAutoCollapsed = true;
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [setIsSidebarCollapsed]);
   const openDirectChat = useChatState((state) => state.openDirectChat);
   const openFloatingConversation = useChatState(
     (state) => state.openFloatingConversation

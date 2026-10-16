@@ -1,25 +1,35 @@
-# Current Task: Incoming Proposals & Incoming Orders Card Layout Refinements
+# Current Task: Chat Member Profile Options Menu & Merge Contract and Members Tabs
 
 ## Objective
-1. **Job Proposals Card Refinement (`/jobs/proposals`)**:
-   - Moved the `Hired` counter pill to the upper right corner of the job's thumbnail image as a sleek floating glass badge displaying `{job.hiredCount}/{job.positionsNeeded} Hired` (e.g. `0/1 Hired` or `1/1 Hired`).
-   - Converted the `Proposals` counter stat box in the bottom grid to a clean neutral gray theme (`bg-gray-50 dark:bg-white/5 border-gray-200 text-gray-900 dark:text-white` with `text-gray-500` icon).
-   - Card bottom stats now cleanly span a balanced 2-column layout: **Budget** (Amber) and **Proposals** (Gray).
+1. **Chat Member Profile Options Menu**:
+   - In Team Project Chat (`ProjectChatTab.tsx`), clicking a member's profile (in the member roster or in message bubbles) opens an interactive contextual options menu with:
+     - **View Profile**: navigates to `/profile/:accountId`.
+     - **Follow User**: checks live follow status (`/api/accounts/:accountId/follow-status`), toggles follow/unfollow via `/api/accounts/:accountId/follow`, and shows immediate status feedback.
+     - **Message**: opens a direct conversation with that member via `useChatState.getState().openDirectChat({ account_id, name, avatarUrl })`.
+     - **Report User**: opens `ReportMemberModal` to report that specific member with reason and description, saving to the PostgreSQL `reports` table.
+2. **Merge Contract and Members Tabs into "Contract & Members"**:
+   - In `TeamProjectWorkspace.tsx`, merged the separate `Contract` and `Members` tabs into a single unified tab named **Contract & Members**.
+   - Created `ProjectContractAndMembersTab.tsx` combining both views with clean sub-tab switching:
+     - **Contracts (N)**: displays the contract cards and escrow details with sequential position and escrow security.
+     - **Members (N)**: displays the contributors roster and contractual team policy notice.
+   - Maintained backward and direct URL compatibility (`?tab=contract` or `?tab=members`).
 
-2. **Gig Orders Card Refinement (`/gigs/orders`)**:
-   - Moved both `Tiers` and `Total Orders` counter pills to the upper right corner of the service/gig thumbnail as floating glass badges:
-     - `{tiers.length} Tiers` (purple icon)
-     - `{ordersCount} Total` (blue icon)
-   - Converted the `Pending` orders counter stat box in the bottom grid to a clean neutral gray theme (`bg-gray-50 dark:bg-white/5 border-gray-200 text-gray-900 dark:text-white` with `text-gray-500` clock icon).
-   - Card bottom stats now cleanly span a balanced 2-column layout: **Starting Price** (Amber) and **Pending Orders** (Gray).
+## Status: Complete
 
-3. **Status Flow Guides**:
-   - Both `/jobs/proposals/flow` and `/gigs/orders/flow` remain registered and easily accessible via the "Proposal Flow" and "Order Flow" tabs.
+## Changes Implemented
+1. **Backend Member Reporting**:
+   - Updated `backend/services/TeamsServices.js` (`report`) to accept `targetAccountId`.
+   - Updated `backend/repositories/TeamsRepositories.js` (`addReport`) to record `for_account_id = targetAccountId`, `target_type = 'Member'`, and `target_id = targetAccountId` when reporting a specific member.
+2. **Chat Member Profile Options Menu**:
+   - In `ProjectChatTab.tsx`:
+     - Added click handling for avatars and names in both the Team Members sidebar roster and incoming chat message bubbles.
+     - Rendered a floating popover anchored near the clicked profile with user preview, View Profile, Follow User (with live follow status check and toggle), Message (via `openDirectChat`), and Report User (triggering `ReportMemberModal`).
+     - Added click-away backdrop and Escape key listener to cleanly dismiss the menu.
+3. **Unified Contract & Members Tab**:
+   - Created `ProjectContractAndMembersTab.tsx` combining `ProjectContractTab` and `ProjectMembersTab` features with a top sub-tab segmented control.
+   - Updated `TeamProjectWorkspace.tsx` tab navigation from 6 tabs to 5 tabs with `Contract & Members` (`badge: members.length`).
+   - Wired `searchParams.get('tab') === 'members'` to automatically activate the Members sub-tab.
 
-## Acceptance Criteria
-1. Job thumbnail on `/jobs/proposals` has `{hiredCount}/{positionsNeeded} Hired` floating in its upper right corner.
-2. Job card bottom stats grid contains Budget and Gray Proposals box.
-3. Gig thumbnail on `/gigs/orders` has `{tiers.length} Tiers` and `{ordersCount} Total` floating in its upper right corner.
-4. Gig card bottom stats grid contains Starting Price and Gray Pending box.
-5. High-contrast light mode styling preserved across all cards.
-6. `npm run build` succeeds with zero errors.
+## Verification
+- Frontend: `cd frontend && npm run build` passed with zero TypeScript and bundler errors (`✓ built in 3.86s`).
+- Preserved existing controller → service → repository separation and design guidelines.
