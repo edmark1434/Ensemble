@@ -1,45 +1,48 @@
-# Current Task: Redesign Contracts List, Dedicated Details Page, Paper Contract View, Knowledge Guide, Ensemble Logo & Specialist TOS Fix
+# Current Task: Rate & Review Modal Streamlining & 24h Review Window
 
 ## Objective
-1. Polish `/contracts` list cards and layout for superior light mode visibility, high-contrast typography, solid background (no gray bleed-through), crisp progress tracks, and clean deliverable checklist styling.
-2. Refactor the contract details view from a cramped popup modal into a dedicated, responsive full-page view at `/contracts/:id`.
-3. Add a Paper Contract ("Paper Detail") view mode to `/contracts/:id` that renders the agreement as a formal, printable legal document complete with full clauses, milestones schedule table, deliverables checklist, and digital signature blocks.
-4. Add an Information Tab (`Contract Terms & Guide`) on `/contracts` explaining parties/roles, contract types (Job vs Gig, Single vs Team Milestone Job), contract statuses, milestone lifecycle statuses, and escrow/fee rules with search and category filters.
-5. Declutter the top action bar on `/contracts/:id` to eliminate wrapping and button chaos (unified breadcrumb navigation, segmented view mode switcher, contextual print button, and a streamlined "Actions" dropdown for cancellation/disputes).
-6. Fix PDF / Print layout and pagination so that sections don't slice awkwardly across pages, backgrounds don't produce dark rasterization bands, and legal formatting looks like a real paper agreement.
-7. Fix print centering by neutralizing the 256px sidebar `marginLeft` / `paddingLeft` from the app `Layout` in print mode.
-8. Replace placeholder "E" badge on paper contract and contracts view with the official Ensemble platform SVG logo (`/ensemble_lg.svg`).
-9. Fix missing Specialist Terms of Service (TOS) in Section 5.1 and Workspace view by mapping backend `terms_title` and `terms_content` with robust fallback guarantees.
-10. Replace the generic `Shield` icon on the user side navigation bar (`user_nav.tsx`), `Navbar.tsx`, and Active Contracts tab with the official `ScrollText` contract icon.
+1. **Uncluttered & Compact Rate & Review Modal**:
+   - Drastically reduced modal footprint (from ~600px to compact ~350px `max-w-md`) so both POVs see only what they need to see and do without scrolling or visual noise.
+   - Reduced the 4-line warning card into a sleek, small 1-line amber strip with the countdown timer and grace-period notice.
+   - Streamlined the payout summary for freelancers into an unobtrusive 1-line Net Earnings pill.
+   - Removed heavy outer container boxes around the star ratings for a clean, direct, and satisfying rating UX.
+   - Made written feedback compact and easy to fill.
+2. **Dynamic Star Rating Tiers (Crisp, Enlarged, No Glow)**:
+   - Level 1: **Poor** - Red (`#f43f5e`, red pill badge).
+   - Level 2: **Fair** - Orange (`#f97316`, orange pill badge).
+   - Level 3: **Good** - Yellow (`#fbbf24`, yellow pill badge).
+   - Level 4: **Very Good** - Green (`#10b981`, green pill badge with subtle light sheen).
+   - Level 5: **Outstanding** - Blue - purple (SVG linear gradient royal-blue to neon-purple, blue-purple pill with celestial glint).
+   - Extra large star icons (`w-11 h-11 sm:w-12 sm:h-12` up to 48px) in an `h-16` container for a bold, prominent, and tactile feel.
+   - Removed all fuzzy glow/drop-shadow filters on the stars for crisp, sharp vector rendering.
+   - 500-character ceiling with dynamic character counter (`{count} / 500`) that changes color when nearing the limit.
+   - Fixed height (`h-6`) and pill container on both empty and active rating states to eliminate layout shift (modal resizing/jumping) when hovering or selecting stars.
+3. **High-Contrast Light Mode UI**:
+   - Upgraded borders, backgrounds, warning strips, stars, badges, and textarea borders for sharp visibility in light mode without color washouts.
+4. **Action Buttons with Embedded 24h Window & Icons**:
+   - `Rate & Review` button converted into a segmented two-tone button with an emerald green left segment (`⭐ Rate & Review` in `bg-emerald-600 group-hover:bg-emerald-700 text-white`) and a clean white right segment (`🕒 24h Window` in `bg-white group-hover:bg-gray-50 text-gray-900 border-l border-emerald-700/30`).
+   - `View Progress Details` / `View Progress` upgraded with leading `Eye` icon and animated trailing `ArrowRight`.
+   - `Update Milestones` upgraded with leading `ListChecks` icon and animated trailing `ArrowRight`.
+   - `You Reviewed` badge styled with rounded-xl and emerald check icon.
+5. **Contract Details Page Action Buttons**:
+   - `View Task History` (freelancer) and `View Progress History` (client) on Done / Closed contracts.
+6. **Counterparty Rate & Review on Completed / Archived Cards**:
+   - When a contract is completed and both parties have rated (or completed/archived), display the rating and review received from the counterparty directly on that card.
+   - Includes counterparty name, role (`Client` / `Freelancer`), star rating (1-5 filled amber stars), numeric score (e.g. `5.0`), dynamic tier badge (`Outstanding`, `Very Good`, `Good`, `Fair`, `Poor`), and written feedback quote.
+   - Interactive segmented switch allows switching between the counterparty's review and your own review seamlessly.
+   - Dates and attribution indicators ("Received from {Name}" / "Given to {Name}") formatted cleanly with high contrast in light mode.
 
 ## Acceptance Criteria
-1. **Contracts List Polish (`/contracts`)**:
-   - Clean solid background in light mode (`bg-gray-50`) and dark mode (`dark:bg-dark-base`).
-   - Cards redesigned: clear border structure, top accent strip, hover lift, distinct metadata pills (Job/Gig, Role, Status with pulsing indicator).
-   - Milestone progress track is distinctly visible in light mode (`bg-zinc-200 dark:bg-zinc-800 border border-zinc-300/60`).
-   - Role deliverables checklist container has crisp styling and clear checkboxes.
-   - High contrast on all badges and dates in light mode (`bg-*-100 text-*-950 border-*-300`).
-   - Top banner features the Ensemble platform SVG logo (`/ensemble_lg.svg`).
-2. **Dedicated Full Page for `/contracts/:id`**:
-   - Navigating to `/contracts/:id` renders a full-page document layout instead of a popup modal.
-   - Clean, uncluttered top navigation bar with breadcrumb (`← Contracts / #id` with Ensemble icon), segmented view switcher (`Workspace` vs `Paper View`), contextual `Print / PDF` (exclusively visible when Paper View is active), and an `Actions ▾` dropdown menu (Copy ID, Request Cancellation, Report a Dispute).
-   - Clean 2-column layout: Parties Involved, Escrow Policy, Scope of Work & Deliverables, Specialist Terms of Service card, Milestone Timeline & Actions, and Financial Ledger.
-3. **Paper Contract ("Paper Detail") View & Print-to-PDF**:
-   - Official Ensemble platform SVG logo (`/ensemble_lg.svg`) displayed in the document header, digital execution seal, and official footer note, styled with `invert dark:invert-0 print:invert` and dedicated `@media print { img.ensemble-logo-print { filter: invert(1) !important; } }`.
-   - Dedicated print stylesheet `@media print` with custom `@page` margins (`15mm`).
-   - `.avoid-break` applied to each Article, table rows, and digital signatures block to prevent awkward horizontal slice-throughs at page boundaries.
-   - `print-exact` (`-webkit-print-color-adjust: exact`) ensuring badges, serial box, table headers, and status badges print with their intended colors and borders.
-   - Strictly overrides dark mode in print: forces `#ffffff` background and `#000000` text, removing dark mode background shadows and rasterization bands.
-   - Wraps `UserHeader`, `UserNav`, floating chat, and screen-only elements in `print:hidden` to ensure zero top and left whitespace on page 1.
-   - Neutralizes `<main style={{ paddingLeft: marginLeft }}>` in `Layout.tsx` by overriding `main { padding-left: 0 !important; }` in print, ensuring the printed document is 100% horizontally centered on the paper.
-4. **Specialist Terms of Service (TOS) Section 5.1 & Workspace Display**:
-   - `ContractDetailsPage.tsx` properly maps `terms_title` and `terms_content` from the backend `/api/contracts` response into `DetailedContract.freelancerTosTitle` and `freelancerTosContent`.
-   - Section 5.1 in `PaperContractDocument` displays the specialist's TOS title and content with safe platform fallbacks so it never renders blank.
-   - Workspace view displays a dedicated "Specialist Terms of Service" card under the Scope section.
-5. **Contract Terms & Knowledge Guide Tab (`/contracts`)**:
-   - Third tab `Contract Terms & Guide` in the main contracts view.
-   - Covers Parties & Roles, Contract Types, Overall Contract Statuses, Milestone Lifecycle, and Escrow Mechanics.
-   - Category quick-filter pills for clean topic-by-topic navigation.
-6. **Verification**:
-   - `cd frontend && npm run build` compiles with zero errors.
-   - No git commits performed without explicit user command.
+1. **Modal Sizing & Layout**:
+   - Compact `max-w-md` modal with no overflow or heavy stacked cards.
+   - Warning is a slim, clean 1-line strip with live countdown timer.
+   - Payout info (freelancer) is a small 1-line row.
+   - Dynamic tier colors (Red, Orange, Yellow, Green, Blue-Purple gradient).
+   - Enlarged, crisp stars with no blurry glow.
+   - Fixed-height seamless label pill (`h-6`, zero layout jump).
+   - Character counter displaying live count out of 500 characters.
+2. **Counterparty Review Display**:
+   - Display counterparty's rating and review feedback on completed/archived cards.
+   - Dual-tab toggle if both reviews exist, defaulting to counterparty review.
+3. **Verification**:
+   - `npm run build` succeeds with 0 errors.

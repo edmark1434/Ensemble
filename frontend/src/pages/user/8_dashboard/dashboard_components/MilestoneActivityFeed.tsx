@@ -353,14 +353,14 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
     return (
         <div className="flex flex-col h-full bg-white dark:bg-dark-surface/70 rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden shadow-xl">
             {/* Header */}
-            <div className="flex flex-col gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3.5 dark:border-white/10 dark:bg-white/5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex flex-col gap-3 border-b border-gray-200 bg-white px-4 py-3.5 dark:border-white/10 dark:bg-white/5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <div>
                     <h2
                         className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2"
                         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
                         {activeMilestone.name}
-                        {isCompleted && <CheckCircle className="h-4 w-4 text-emerald-400" />}
+                        {isCompleted && <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
                     </h2>
                     <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
                         {feed.length} updates • Deadline:{' '}
@@ -422,20 +422,18 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
                 </div>
                 <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
                     <div
-                        className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
                             isCompleted
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                ? 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30'
                                 : isSubmittedForReview
-                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                ? 'bg-indigo-100 text-indigo-900 border-indigo-300 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/30'
                                 : activeMilestone.status === 'overdue'
-                                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                                : activeMilestone.status === 'stalled'
-                                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
-                                : activeMilestone.status === 'abandoned'
-                                ? 'bg-red-600/20 text-red-500 border border-red-600/30'
+                                ? 'bg-rose-100 text-rose-900 border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30'
+                                : activeMilestone.status === 'stalled' || activeMilestone.status === 'abandoned'
+                                ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30'
                                 : activeMilestone.status === 'cancelled'
-                                ? 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30'
-                                : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                                ? 'bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+                                : 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30'
                         }`}
                     >
                         {activeMilestone.status.replace(/_/g, ' ')}
@@ -487,32 +485,38 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
             )}
 
             {/* Navigation Tabs: All Activity & Chat vs Submissions for Review */}
-            <div className="flex border-b border-gray-200 dark:border-white/10 px-4 sm:px-6 bg-gray-50/70 dark:bg-white/[0.03] gap-6">
+            <div className="flex border-b border-gray-200 dark:border-white/10 px-4 sm:px-6 bg-white dark:bg-dark-surface/60 gap-6">
                 <button
                     type="button"
                     onClick={() => setActiveTab('feed')}
                     className={`py-3 text-xs font-bold border-b-2 flex items-center gap-2 transition ${
                         activeTab === 'feed'
-                            ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                            : 'border-transparent text-gray-500 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-zinc-200'
+                            ? 'border-zinc-900 text-zinc-900 dark:border-white dark:text-white'
+                            : 'border-transparent text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-200'
                     }`}
                 >
                     <MessageSquare className="w-3.5 h-3.5" />
-                    All Activity & Chat ({feed.length})
+                    <span>All Activity & Chat</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-zinc-300 font-bold">
+                        {feed.length}
+                    </span>
                 </button>
                 <button
                     type="button"
                     onClick={() => setActiveTab('submissions')}
                     className={`py-3 text-xs font-bold border-b-2 flex items-center gap-2 transition ${
                         activeTab === 'submissions'
-                            ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                            : 'border-transparent text-gray-500 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-zinc-200'
+                            ? 'border-zinc-900 text-zinc-900 dark:border-white dark:text-white'
+                            : 'border-transparent text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-200'
                     }`}
                 >
                     <FileText className="w-3.5 h-3.5" />
-                    Submissions for Review ({reviewSubmissionsRaw.length})
+                    <span>Submissions for Review</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-zinc-300 font-bold">
+                        {reviewSubmissionsRaw.length}
+                    </span>
                     {reviewSubmissionsRaw.length > 0 && isSubmittedForReview && (
-                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                        <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
                     )}
                 </button>
             </div>
@@ -582,44 +586,44 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
                                                 </span>
                                             </div>
                                             <div
-                                                className={`rounded-2xl p-4 ${
+                                                className={`rounded-2xl transition ${
                                                     item.status === 'submitted_for_review'
-                                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                                                        ? 'p-4 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/40 text-gray-900 dark:text-white shadow-sm space-y-2'
                                                         : item.status === 'approval'
-                                                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
+                                                        ? 'p-4 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 text-gray-900 dark:text-white shadow-sm'
                                                         : item.status === 'revision_request'
-                                                        ? 'bg-red-500/20 border border-red-500/30 text-red-600 dark:text-white'
+                                                        ? 'p-4 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 text-gray-900 dark:text-white shadow-sm'
                                                         : item.status === 'client_message'
                                                         ? isOwnMessage
-                                                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                                                            : 'bg-blue-500/10 border border-blue-500/20 text-gray-900 dark:text-white'
-                                                        : 'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white'
-                                                } ${isOwnMessage ? 'rounded-tr-none' : 'rounded-tl-none'}`}
+                                                            ? 'p-3.5 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-sm rounded-tr-none'
+                                                            : 'p-3.5 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white border border-gray-200 dark:border-white/10 shadow-sm rounded-tl-none'
+                                                        : isOwnMessage
+                                                        ? 'p-3.5 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-sm rounded-tr-none'
+                                                        : 'p-3.5 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white border border-gray-200 dark:border-white/10 shadow-sm rounded-tl-none'
+                                                }`}
                                             >
                                                 {item.status === 'submitted_for_review' && (
-                                                    <div className="mb-2 font-bold text-xs uppercase tracking-wider text-blue-100 dark:text-blue-200 border-b border-blue-400/30 pb-2 flex items-center gap-2">
-                                                        <AlertCircle className="h-3 w-3" /> Submitted for Review
+                                                    <div className="mb-2.5 flex items-center justify-between border-b border-indigo-200/60 dark:border-indigo-800/40 pb-2">
+                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-900 dark:bg-indigo-500/20 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30">
+                                                            <FileText className="h-3 w-3" /> Submitted for Review
+                                                        </span>
                                                     </div>
                                                 )}
                                                 {item.status === 'approval' && (
-                                                    <div className="mb-2 font-bold text-xs uppercase tracking-wider text-emerald-100 dark:text-emerald-200 border-b border-emerald-400/30 pb-2 flex items-center gap-2">
-                                                        <CheckCircle className="h-3 w-3" /> Milestone Approved
+                                                    <div className="mb-2 font-bold text-xs uppercase tracking-wider text-emerald-900 dark:text-emerald-300 flex items-center gap-2">
+                                                        <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Milestone Approved
                                                     </div>
                                                 )}
                                                 {item.status === 'revision_request' && (
-                                                    <div className="mb-2 font-bold text-xs uppercase tracking-wider text-red-600 dark:text-red-300 border-b border-red-500/30 pb-2 flex items-center gap-2">
-                                                        <AlertCircle className="h-3 w-3" /> Revision Requested
+                                                    <div className="mb-2 font-bold text-xs uppercase tracking-wider text-amber-900 dark:text-amber-300 flex items-center gap-2">
+                                                        <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Revision Requested
                                                     </div>
                                                 )}
                                                 {item.status === 'client_message' && (
                                                     <div
-                                                        className={`mb-2 font-bold text-xs uppercase tracking-wider ${
-                                                            isOwnMessage
-                                                                ? 'text-blue-100'
-                                                                : 'text-blue-600 dark:text-blue-400'
-                                                        } border-b ${
-                                                            isOwnMessage ? 'border-blue-400/30' : 'border-blue-500/20'
-                                                        } pb-1.5 flex items-center gap-1.5`}
+                                                        className={`mb-1.5 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 ${
+                                                            isOwnMessage ? 'text-zinc-300 dark:text-zinc-600' : 'text-blue-600 dark:text-blue-400'
+                                                        }`}
                                                     >
                                                         <MessageSquare className="h-3 w-3" /> Client Message
                                                     </div>
@@ -633,7 +637,7 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
                                                 </div>
 
                                                 {item.attachments && item.attachments.length > 0 && (
-                                                    <div className="mt-4 grid grid-cols-2 gap-2">
+                                                    <div className="mt-3 grid grid-cols-2 gap-2">
                                                         {item.attachments.map((attachmentUrl, i) => (
                                                             <AttachmentItem
                                                                 key={`${item.id}-attachment-${i}`}
@@ -645,15 +649,15 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
                                                 )}
 
                                                 {item.status === 'submitted_for_review' && (
-                                                    <div className="mt-3 pt-2.5 border-t border-blue-400/25 flex items-center justify-between text-[11px]">
-                                                        <span className="text-blue-100 opacity-80">
+                                                    <div className="mt-3 pt-2.5 border-t border-indigo-200/60 dark:border-indigo-800/40 flex items-center justify-between text-[11px]">
+                                                        <span className="text-gray-500 dark:text-zinc-400">
                                                             Deliverable conflict?
                                                         </span>
                                                         <a
                                                             href={`/contracts/dispute-form?contractId=${
                                                                 task?.contract_id || ''
                                                             }&milestoneId=${activeMilestone?.id || ''}`}
-                                                            className="inline-flex items-center gap-1 font-bold text-white hover:text-blue-200 underline"
+                                                            className="inline-flex items-center gap-1 font-bold text-rose-600 dark:text-rose-400 hover:underline"
                                                         >
                                                             <Shield className="h-3 w-3" /> Dispute Submission
                                                         </a>
@@ -702,7 +706,7 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
                                     {/* Submission Card Header */}
                                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 dark:border-white/5 pb-3 mb-3">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                            <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-800 border border-zinc-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700">
                                                 Version {sub.versionNumber}
                                                 {sub.isLatest ? ' (Latest)' : ''}
                                             </span>
@@ -719,15 +723,15 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
                                         </div>
                                         <div>
                                             {sub.isLatest && isSubmittedForReview ? (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/20 text-blue-500 dark:text-blue-400 border border-blue-500/30">
-                                                    <Clock className="w-3 h-3 animate-pulse" /> Awaiting Review
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-300 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/30">
+                                                    <Clock className="w-3 h-3 animate-pulse text-indigo-600 dark:text-indigo-400" /> Awaiting Review
                                                 </span>
                                             ) : isCompleted && sub.isLatest ? (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 border border-emerald-500/30">
-                                                    <CheckCircle className="w-3 h-3" /> Approved Deliverable
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30">
+                                                    <CheckCircle className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Approved Deliverable
                                                 </span>
                                             ) : (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-zinc-500/20 text-zinc-500 dark:text-zinc-400 border border-zinc-500/30">
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-300 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700">
                                                     Superseded / Revised
                                                 </span>
                                             )}
@@ -924,21 +928,21 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
             {/* Bottom Interaction Panel: Milestone Chat Composer for both Freelancer and Client */}
             <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5">
                 {isCompleted ? (
-                    <div className="text-center py-4 text-emerald-400 font-bold bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-                        <div className="flex items-center justify-center gap-2 mb-2">
-                            <CheckCircle2 className="w-5 h-5" />
+                    <div className="text-center py-4 px-6 rounded-xl bg-emerald-50 dark:bg-emerald-950/25 border border-emerald-200 dark:border-emerald-800/40">
+                        <div className="flex items-center justify-center gap-2 font-bold text-emerald-900 dark:text-emerald-300 text-sm">
+                            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                             This milestone is complete.
                         </div>
                         {canReviewContract && onOpenReviewModal ? (
                             <button
                                 onClick={onOpenReviewModal}
-                                className="mt-3 text-sm font-semibold px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-[0_0_15px_rgba(37,99,235,0.3)] inline-block"
+                                className="mt-3 text-xs font-bold px-6 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm inline-block uppercase tracking-wider"
                             >
                                 Review {isFreelancer ? 'Client' : 'Freelancer'}
                             </button>
                         ) : myReview ? (
-                            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold border border-emerald-500/20">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
+                            <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-900 dark:text-emerald-300 text-xs font-semibold border border-emerald-200 dark:border-emerald-500/30">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                                 You have reviewed the {isFreelancer ? 'client' : 'freelancer'}
                             </div>
                         ) : null}

@@ -196,6 +196,7 @@ async function getDashboardTasks(accountId) {
                     'id', cm.contract_milestone_id,
                     'index', cm.index,
                     'name', cm.name,
+                    'description', cm.description,
                     'status', cm.status,
                     'credits', cm.credits,
                     'revisions_max', cm.no_of_revisions_max,
@@ -243,6 +244,7 @@ async function getDashboardTasks(accountId) {
                     'id', cm.contract_milestone_id,
                     'index', cm.index,
                     'name', cm.name,
+                    'description', cm.description,
                     'status', cm.status,
                     'credits', cm.credits,
                     'revisions_max', cm.no_of_revisions_max,
@@ -296,6 +298,8 @@ async function getTaskById(contractId, accountId) {
             c.revision_price_credits as revision_price_credits,
             j.title as job_title,
             j.job_id as job_id,
+            jm.title as target_milestone_title,
+            COALESCE(jm.tasks, '[]'::jsonb) as target_milestone_tasks,
             client_acc.display_name as client_name,
             client_acc.account_id as client_account_id,
             client_f.path as client_avatar,
@@ -308,6 +312,7 @@ async function getTaskById(contractId, accountId) {
                         'id', cm.contract_milestone_id,
                         'index', cm.index,
                         'name', cm.name,
+                        'description', cm.description,
                         'status', cm.status,
                         'credits', cm.credits,
                         'revisions_max', cm.no_of_revisions_max,
@@ -338,6 +343,7 @@ async function getTaskById(contractId, accountId) {
         JOIN job_contracts jc ON c.contract_id = jc.contract_id
         JOIN proposals p ON jc.proposal_id = p.proposal_id
         JOIN jobs j ON p.job_id = j.job_id
+        LEFT JOIN job_milestones jm ON p.job_milestone_id = jm.job_milestone_id
         JOIN accounts client_acc ON j.client_account_id = client_acc.account_id
         LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
         JOIN accounts free_acc ON p.freelancer_account_id = free_acc.account_id
@@ -354,6 +360,8 @@ async function getTaskById(contractId, accountId) {
             c.revision_price_credits as revision_price_credits,
             g.title as job_title,
             g.gig_id as job_id,
+            NULL as target_milestone_title,
+            '[]'::jsonb as target_milestone_tasks,
             client_acc.display_name as client_name,
             client_acc.account_id as client_account_id,
             client_f.path as client_avatar,
@@ -366,6 +374,7 @@ async function getTaskById(contractId, accountId) {
                         'id', cm.contract_milestone_id,
                         'index', cm.index,
                         'name', cm.name,
+                        'description', cm.description,
                         'status', cm.status,
                         'credits', cm.credits,
                         'revisions_max', cm.no_of_revisions_max,

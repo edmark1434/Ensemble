@@ -65,12 +65,12 @@ export const MilestoneSubmissionForm: React.FC<Props> = ({
         <form onSubmit={handleSubmit} className="space-y-2.5">
             {/* Contextual notice if milestone is already under review */}
             {isSubmittedForReview && (
-                <div className="flex items-center justify-between px-1 text-[11px] text-blue-600 dark:text-blue-400 font-medium">
+                <div className="flex items-center justify-between px-1 text-[11px] text-blue-900 dark:text-blue-300 font-semibold">
                     <span className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5" />
+                        <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                         Deliverable is currently under client review
                     </span>
-                    <span className="text-[10px] text-gray-400 dark:text-zinc-500">
+                    <span className="text-[10px] text-gray-500 dark:text-zinc-400">
                         You can continue chatting or send further updates below
                     </span>
                 </div>
@@ -114,9 +114,9 @@ export const MilestoneSubmissionForm: React.FC<Props> = ({
                             type="checkbox"
                             checked={markAsDone}
                             onChange={(e) => setMarkAsDone(e.target.checked)}
-                            className="w-3.5 h-3.5 rounded bg-gray-100 dark:bg-zinc-800 border-gray-300 dark:border-zinc-700 text-emerald-500 focus:ring-emerald-500/50 cursor-pointer"
+                            className="w-3.5 h-3.5 rounded bg-gray-100 dark:bg-zinc-800 border-gray-300 dark:border-zinc-700 text-emerald-600 focus:ring-emerald-500/50 cursor-pointer"
                         />
-                        <span className="text-xs font-bold text-gray-600 dark:text-zinc-400 group-hover:text-gray-900 dark:group-hover:text-zinc-300 transition">
+                        <span className="text-xs font-semibold text-gray-800 dark:text-zinc-200 group-hover:text-gray-900 dark:group-hover:text-white transition">
                             {isSubmittedForReview ? 'Resubmit for Review' : 'Submit for Review'}
                         </span>
                     </label>
@@ -124,7 +124,7 @@ export const MilestoneSubmissionForm: React.FC<Props> = ({
                 <button
                     type="submit"
                     disabled={isSubmitting || (!message.trim() && mediaList.length === 0)}
-                    className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-xs font-bold transition shadow-md shadow-emerald-500/20 flex items-center gap-1.5"
+                    className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-xs font-bold transition shadow-sm flex items-center gap-1.5"
                 >
                     <Send className="w-3.5 h-3.5" />
                     {isSubmitting

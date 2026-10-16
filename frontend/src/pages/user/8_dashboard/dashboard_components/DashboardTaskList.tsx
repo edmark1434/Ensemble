@@ -1,7 +1,163 @@
 import React from 'react';
-import { CreditIcon } from '@/components/ui/credit-icon';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink, CheckCircle } from 'lucide-react';
+import { ExternalLink, CheckCircle, Clock, Star, Eye, ArrowRight, ListChecks } from 'lucide-react';
+
+interface ReviewData {
+    rating?: number | string;
+    feedback?: string;
+    created_at?: string;
+}
+
+const RATING_TIER_STYLES: Record<number, { label: string; badgeClass: string }> = {
+    1: {
+        label: "Poor",
+        badgeClass: "text-rose-800 dark:text-rose-300 bg-rose-100/90 dark:bg-rose-500/15 border-rose-300 dark:border-rose-500/30",
+    },
+    2: {
+        label: "Fair",
+        badgeClass: "text-orange-800 dark:text-orange-300 bg-orange-100/90 dark:bg-orange-500/15 border-orange-300 dark:border-orange-500/30",
+    },
+    3: {
+        label: "Good",
+        badgeClass: "text-amber-800 dark:text-amber-300 bg-amber-100/90 dark:bg-amber-500/15 border-amber-300 dark:border-amber-500/30",
+    },
+    4: {
+        label: "Very Good",
+        badgeClass: "text-emerald-800 dark:text-emerald-300 bg-emerald-100/90 dark:bg-emerald-500/15 border-emerald-400 dark:border-emerald-500/40",
+    },
+    5: {
+        label: "Outstanding",
+        badgeClass: "text-indigo-950 dark:text-purple-200 bg-gradient-to-r from-blue-100 via-indigo-100 to-purple-100 dark:from-blue-500/20 dark:via-indigo-500/20 dark:to-purple-500/25 border-indigo-400 dark:border-purple-400/50 font-bold",
+    },
+};
+
+interface TaskReviewCalloutProps {
+    theirReview: ReviewData;
+    myReview?: ReviewData | null;
+    counterpartyName: string;
+    counterpartyRole: string;
+}
+
+const TaskReviewCallout: React.FC<TaskReviewCalloutProps> = ({
+    theirReview,
+    myReview,
+    counterpartyName,
+    counterpartyRole,
+}) => {
+    const hasMyReview = Boolean(
+        myReview &&
+        myReview.rating !== null &&
+        myReview.rating !== undefined &&
+        !isNaN(Number(myReview.rating))
+    );
+    const [viewMode, setViewMode] = React.useState<'theirs' | 'mine'>('theirs');
+
+    const activeReview = viewMode === 'theirs' ? theirReview : myReview;
+    const ratingNum = Math.max(1, Math.min(5, Math.round(Number(activeReview?.rating || 0))));
+    const rawRating = Number(activeReview?.rating || 0);
+    const tier = RATING_TIER_STYLES[ratingNum] || RATING_TIER_STYLES[5];
+
+    return (
+        <div className="mb-4 rounded-xl bg-gray-50/90 dark:bg-white/[0.03] border border-gray-200/90 dark:border-white/10 p-3.5 sm:p-4 transition-all">
+            <div className="flex flex-wrap items-center justify-between gap-2.5 mb-2.5">
+                {/* Reviewer / Toggle selector */}
+                {hasMyReview ? (
+                    <div className="inline-flex items-center p-0.5 rounded-lg bg-gray-200/70 dark:bg-white/10 text-xs">
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('theirs')}
+                            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                                viewMode === 'theirs'
+                                    ? 'bg-white dark:bg-dark-surface text-gray-900 dark:text-white shadow-2xs'
+                                    : 'text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white'
+                            }`}
+                        >
+                            {counterpartyRole}'s Review
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('mine')}
+                            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                                viewMode === 'mine'
+                                    ? 'bg-white dark:bg-dark-surface text-gray-900 dark:text-white shadow-2xs'
+                                    : 'text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white'
+                            }`}
+                        >
+                            Your Review
+                        </button>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                            {counterpartyRole}'s Review
+                        </span>
+                        <span className="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                            • {counterpartyName}
+                        </span>
+                    </div>
+                )}
+
+                {/* Stars + Score + Tier Badge */}
+                <div className="flex items-center gap-2 shrink-0 bg-white dark:bg-dark-base/60 px-2.5 py-1 rounded-lg border border-gray-200/90 dark:border-white/10 shadow-2xs">
+                    <div className="flex items-center gap-0.5">
+                        {[1, 2, 3, 4, 5].map((starIdx) => {
+                            const isFilled = starIdx <= ratingNum;
+                            return (
+                                <Star
+                                    key={starIdx}
+                                    className={`w-3.5 h-3.5 ${
+                                        isFilled
+                                            ? 'fill-amber-400 text-amber-400'
+                                            : 'text-gray-300 dark:text-zinc-600'
+                                    }`}
+                                />
+                            );
+                        })}
+                    </div>
+                    <span className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                        {rawRating.toFixed(1)}
+                    </span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${tier.badgeClass}`}>
+                        {tier.label}
+                    </span>
+                </div>
+            </div>
+
+            {/* Written Review Feedback Quote */}
+            <div className="pl-3 border-l-2 border-amber-400 dark:border-amber-500/70 py-0.5">
+                {activeReview?.feedback?.trim() ? (
+                    <p className="text-xs sm:text-sm text-gray-700 dark:text-zinc-300 italic leading-relaxed whitespace-pre-wrap break-words">
+                        "{activeReview.feedback.trim()}"
+                    </p>
+                ) : (
+                    <p className="text-xs text-gray-400 dark:text-zinc-500 italic">
+                        No written feedback provided.
+                    </p>
+                )}
+            </div>
+
+            {/* Review attribution subtitle */}
+            <div className="mt-2 text-[10px] text-gray-500 dark:text-zinc-400 flex items-center justify-between">
+                <span>
+                    {hasMyReview
+                        ? viewMode === 'theirs'
+                            ? `Received from ${counterpartyName}`
+                            : `Given to ${counterpartyName}`
+                        : `Reviewed by ${counterpartyName}`}
+                </span>
+                {activeReview?.created_at && !isNaN(new Date(activeReview.created_at).getTime()) && (
+                    <span>
+                        {new Date(activeReview.created_at).toLocaleDateString(undefined, {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                        })}
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+};
 
 interface DashboardTask {
     contract_id: string;
@@ -10,6 +166,8 @@ interface DashboardTask {
     job_title: string;
     client_name: string;
     freelancer_name: string;
+    client_avatar?: string;
+    freelancer_avatar?: string;
     client_account_id: string;
     freelancer_account_id: string;
     contract_value: string;
@@ -18,8 +176,8 @@ interface DashboardTask {
     job_banner?: string;
     job_category?: string;
     job_difficulty?: string;
-    client_rating?: any;
-    freelancer_rating?: any;
+    client_rating?: ReviewData | null;
+    freelancer_rating?: ReviewData | null;
     user_role?: {
         effective_role?: string;
         can_buy_revision?: boolean;
@@ -33,7 +191,7 @@ interface DashboardTaskListProps {
     isFreelancerTab: boolean;
     isArchivedTab?: boolean;
     currentUserAccountId?: string;
-    onOpenRateReview?: (contractId: string, reviewTargetName: string, contractValue: string, isFreelancerRole: boolean) => void;
+    onOpenRateReview?: (contractId: string, reviewTargetName: string, contractValue: string, isFreelancerRole: boolean, reviewTargetAvatar?: string) => void;
 }
 
 export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isFreelancerTab, isArchivedTab, currentUserAccountId, onOpenRateReview }) => {
@@ -66,17 +224,30 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                     computedStatus = 'Done';
                 }
 
+                const hasMyReview = Boolean(myReview && myReview.rating !== null && myReview.rating !== undefined && !isNaN(Number(myReview.rating)));
+                const hasTheirReview = Boolean(theirReview && theirReview.rating !== null && theirReview.rating !== undefined && !isNaN(Number(theirReview.rating)));
+                const bothSidesRated = hasMyReview && hasTheirReview;
+                const isCompletedContract = task.contract_status?.toLowerCase() === 'completed' || computedStatus?.toLowerCase() === 'completed' || isArchivedTab;
+                const showReviewCallout = Boolean(hasTheirReview && (bothSidesRated || isCompletedContract));
+
+                const completedMilestones = task.milestones?.filter((m: any) => m.status === 'completed' || m.status === 'approved').length || 0;
+                const totalMilestones = task.milestones?.length || 0;
+                const progressPercentage = totalMilestones > 0 ? Math.round((completedMilestones / totalMilestones) * 100) : 0;
+
                 const statusBadgeColor = 
-                    computedStatus === 'Completed' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' :
-                    computedStatus === 'Done' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' :
-                    computedStatus === 'Ongoing' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' :
-                    'bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20';
+                    computedStatus === 'Completed' || computedStatus === 'Done'
+                        ? 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30' 
+                        : computedStatus === 'Ongoing' 
+                        ? 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30' 
+                        : computedStatus === 'Waiting'
+                        ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30'
+                        : 'bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
 
                 return (
-                <div key={task.contract_id} className={`bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition border rounded-xl p-4 sm:p-6 ${isArchivedTab ? 'opacity-60 border-gray-100 dark:border-white/5 hover:opacity-100 hover:bg-gray-50 dark:hover:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/10 border-gray-200 dark:border-white/10'}`}>
+                <div key={task.contract_id} className={`bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-5 sm:p-6 shadow-sm hover:shadow-md transition-all ${isArchivedTab ? 'opacity-70 hover:opacity-100' : ''}`}>
                     <div className="flex flex-col sm:flex-row gap-5 w-full">
                         {task.job_banner && (
-                            <div className="w-full sm:w-48 h-32 sm:h-auto rounded-lg overflow-hidden shrink-0 border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-base/50 flex items-center justify-center">
+                            <div className="w-full sm:w-52 h-36 sm:h-auto rounded-xl overflow-hidden shrink-0 border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-base/50 flex items-center justify-center">
                                 <img 
                                     src={`${import.meta.env.VITE_CLOUDFRONT_URL}${task.job_banner.startsWith('/') ? '' : '/'}${task.job_banner}`}
                                     alt="Job Banner"
@@ -89,61 +260,78 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-2">
-                                    <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded border ${statusBadgeColor}`}>
+                                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${statusBadgeColor}`}>
                                         {computedStatus}
                                     </span>
-                                    <span className="text-[10px] uppercase font-bold px-2 py-1 rounded border bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20">
+                                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded border bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
                                         {task.contract_type?.toLowerCase() === 'gig' ? 'Gig' : 'Job'}
                                     </span>
                                 </div>
                             </div>
                             
-                            <div className="flex items-center gap-2 mb-1">
-                                <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate max-w-sm">{task.job_title}</h3>
+                            <div className="flex items-center gap-2 mb-1.5">
+                                <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white truncate max-w-md">{task.job_title}</h3>
                                 {task.job_id && (
                                     <a 
-                                        href={task.contract_type?.toLowerCase() === 'gig' ? `/gigs/pages/${task.job_id}` : `/jobs/postings/${task.job_id}`} 
+                                        href={task.contract_type?.toLowerCase() === 'gig' ? `/gigs/services/${task.job_id}` : `/jobs/postings/${task.job_id}`} 
                                         target="_blank" 
                                         rel="noreferrer" 
-                                        className="flex items-center justify-center p-1 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition-colors shrink-0"
+                                        className="flex items-center justify-center p-1.5 rounded-md bg-white dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition-colors shrink-0 border border-gray-200 dark:border-white/10"
                                         title={task.contract_type?.toLowerCase() === 'gig' ? "View Original Gig Post" : "View Original Job Post"}
                                     >
-                                        <ExternalLink className="h-4 w-4" />
+                                        <ExternalLink className="h-3.5 w-3.5" />
                                     </a>
                                 )}
                             </div>
-                            <div className="flex items-center gap-1 text-yellow-500 font-bold mb-2 text-sm">
-                                <CreditIcon className="h-4 w-4" /> {task.contract_value}
+
+                            <div className="flex items-center gap-1.5 font-bold text-gray-900 dark:text-white mb-2.5 text-sm">
+                                <img src="/icons/lottie/credit.png" alt="credits" className="w-4 h-4 object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                <span>{Number(task.contract_value).toLocaleString()} Credits</span>
                             </div>
                             
-                            <div className="flex flex-wrap items-center gap-2 mb-4">
+                            <div className="flex flex-wrap items-center gap-2 mb-3.5">
                                 {task.job_category && (
-                                    <span className="text-[10px] font-semibold text-gray-600 dark:text-zinc-300 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10">
+                                    <span className="text-[11px] font-medium text-gray-700 dark:text-zinc-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10">
                                         {task.job_category}
                                     </span>
                                 )}
                                 {task.job_difficulty && (
-                                    <span className="text-[10px] font-semibold text-gray-600 dark:text-zinc-300 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 capitalize">
+                                    <span className="text-[11px] font-medium text-gray-700 dark:text-zinc-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 capitalize">
                                         {task.job_difficulty}
                                     </span>
                                 )}
                             </div>
                             
-                            <div className="flex items-center gap-3 mb-4 w-full max-w-sm">
-                                <div className="w-full h-1.5 bg-gray-200 dark:bg-white/10 rounded-full flex overflow-hidden">
-                                    {task.milestones?.map((m: any, idx: number) => (
-                                        <div 
-                                            key={m.id} 
-                                            className={`h-full flex-1 ${idx !== 0 ? 'border-l border-white dark:border-[#0d0f1a]' : ''} ${m.status === 'completed' || m.status === 'approved' ? 'bg-emerald-500' : 'bg-transparent'}`}
-                                        />
-                                    ))}
+                            <div className="mb-4 w-full max-w-md">
+                                <div className="flex items-center justify-between text-xs font-semibold text-gray-600 dark:text-zinc-400 mb-1.5">
+                                    <span>Milestone Progress</span>
+                                    <span className="font-mono text-[11px]">
+                                        {completedMilestones}/{totalMilestones} Completed ({progressPercentage}%)
+                                    </span>
                                 </div>
-                                <span className="text-[10px] font-mono text-gray-500 dark:text-zinc-400 font-bold whitespace-nowrap tracking-wider">
-                                    {task.milestones?.filter((m: any) => m.status === 'completed' || m.status === 'approved').length}/{task.milestones?.length}
-                                </span>
+                                <div className="w-full h-2 bg-gray-200 dark:bg-white/10 rounded-full flex overflow-hidden">
+                                    {task.milestones?.map((m: any, idx: number) => {
+                                        const isMilestoneDone = m.status === 'completed' || m.status === 'approved';
+                                        return (
+                                            <div 
+                                                key={m.id || idx} 
+                                                className={`h-full flex-1 ${idx !== 0 ? 'border-l border-white dark:border-[#0d0f1a]' : ''} ${isMilestoneDone ? 'bg-emerald-600' : 'bg-transparent'}`}
+                                            />
+                                        );
+                                    })}
+                                </div>
                             </div>
 
-                        <div className="flex items-center justify-between border-t border-gray-200 dark:border-white/10 pt-4 mt-2">
+                            {showReviewCallout && (
+                                <TaskReviewCallout
+                                    theirReview={theirReview!}
+                                    myReview={myReview}
+                                    counterpartyName={isFreelancerRole ? task.client_name : task.freelancer_name}
+                                    counterpartyRole={isFreelancerRole ? 'Client' : 'Freelancer'}
+                                />
+                            )}
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-gray-100 dark:border-white/10 pt-4 mt-1">
                             <div className="flex items-center gap-3">
                                 <img 
                                     src={isFreelancerRole 
@@ -154,33 +342,47 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                                             ? `${import.meta.env.VITE_CLOUDFRONT_URL}${task.freelancer_avatar.startsWith('/') ? '' : '/'}${task.freelancer_avatar}`
                                             : "https://i.pravatar.cc/150?u=b042581f4e29026704d")} 
                                     alt="User Avatar" 
-                                    className="w-8 h-8 rounded-full object-cover border border-gray-300 dark:border-zinc-700"
+                                    className="w-9 h-9 rounded-full object-cover border border-gray-200 dark:border-zinc-700 shrink-0"
                                 />
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-500 tracking-wider">
+                                <div className="flex flex-col min-w-0">
+                                    <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-400 tracking-wider">
                                         {isFreelancerRole ? 'Client' : 'Freelancer'}
                                     </span>
-                                    <p className="text-sm font-semibold text-gray-600 dark:text-zinc-300 leading-tight">
+                                    <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">
                                         {isFreelancerRole ? task.client_name : task.freelancer_name}
                                     </p>
                                 </div>
                             </div>
                             
-                            <div className="flex flex-col sm:flex-row gap-2">
+                            <div className="flex flex-wrap items-center gap-2.5">
                                 {/* Done status but needs review */}
                                 {computedStatus === 'Done' && (
                                     <>
                                         {!myReview ? (
                                             <button 
-                                                onClick={() => onOpenRateReview && onOpenRateReview(task.contract_id, isFreelancerRole ? task.client_name : task.freelancer_name, task.contract_value, isFreelancerRole)}
-                                                className="bg-blue-600 hover:bg-blue-500 text-gray-900 dark:text-white px-5 py-2 rounded-lg text-sm font-semibold transition shadow-lg shadow-blue-600/20"
+                                                onClick={() => onOpenRateReview && onOpenRateReview(
+                                                    task.contract_id, 
+                                                    isFreelancerRole ? task.client_name : task.freelancer_name, 
+                                                    task.contract_value, 
+                                                    isFreelancerRole,
+                                                    isFreelancerRole ? task.client_avatar : task.freelancer_avatar
+                                                )}
+                                                className="group inline-flex items-center active:scale-98 rounded-xl text-xs font-bold transition-all shadow-xs overflow-hidden border border-emerald-600 dark:border-emerald-500"
+                                                title="Review required within 24 hours of milestone completion to avoid Merit Score penalty"
                                             >
-                                                Rate & Review
+                                                <div className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 group-hover:bg-emerald-700 text-white transition-colors">
+                                                    <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300 shrink-0 transition-transform group-hover:scale-110" />
+                                                    <span>Rate & Review</span>
+                                                </div>
+                                                <div className="flex items-center gap-1 px-2.5 py-2 bg-white group-hover:bg-gray-50 border-l border-emerald-700/30 text-[11px] font-bold text-gray-900 transition-colors">
+                                                    <Clock className="w-3 h-3 text-amber-600 shrink-0" />
+                                                    <span>24h Window</span>
+                                                </div>
                                             </button>
                                         ) : (
-                                            <div className="flex items-center gap-2 bg-white dark:bg-white/5 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 px-4 py-2 rounded-lg text-sm text-gray-500 dark:text-zinc-400 select-none">
-                                                <CheckCircle className="h-4 w-4 text-emerald-400" />
-                                                <span className="font-medium">You Reviewed</span>
+                                            <div className="inline-flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/25 px-3 py-2 rounded-xl text-xs text-emerald-800 dark:text-emerald-300 font-bold select-none shadow-2xs">
+                                                <CheckCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                                <span>You Reviewed</span>
                                             </div>
                                         )}
                                     </>
@@ -190,11 +392,29 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                                 <button 
                                     onClick={() => navigate(isFreelancerRole ? `/dashboard/tasks/${task.contract_id}` : `/dashboard/review/${task.contract_id}`)}
                                     className={(isArchivedTab || computedStatus === 'Done' || computedStatus === 'Completed')
-                                        ? "bg-zinc-800 hover:bg-zinc-700 text-gray-600 dark:text-zinc-300 px-5 py-2 rounded-lg text-sm font-semibold transition"
-                                        : "bg-emerald-500 hover:bg-emerald-600 text-gray-900 dark:text-white px-5 py-2 rounded-lg text-sm font-semibold transition shadow-lg shadow-emerald-500/20"
+                                        ? "group inline-flex items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-98"
+                                        : "group inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-98"
                                     }
                                 >
-                                    {(isArchivedTab || computedStatus === 'Done' || computedStatus === 'Completed') ? 'View Progress Details' : (isFreelancerRole ? 'Update Milestones' : 'View Progress')}
+                                    {(isArchivedTab || computedStatus === 'Done' || computedStatus === 'Completed') ? (
+                                        <>
+                                            <Eye className="w-3.5 h-3.5 shrink-0 text-gray-300 dark:text-zinc-600 group-hover:text-white dark:group-hover:text-zinc-900 transition-colors" />
+                                            <span>View Progress Details</span>
+                                            <ArrowRight className="w-3 h-3 shrink-0 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                                        </>
+                                    ) : isFreelancerRole ? (
+                                        <>
+                                            <ListChecks className="w-3.5 h-3.5 shrink-0 text-emerald-200" />
+                                            <span>Update Milestones</span>
+                                            <ArrowRight className="w-3 h-3 shrink-0 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Eye className="w-3.5 h-3.5 shrink-0 text-emerald-200" />
+                                            <span>View Progress</span>
+                                            <ArrowRight className="w-3 h-3 shrink-0 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>

@@ -979,7 +979,7 @@ export const ContractDetailsPage: React.FC = () => {
           {contract && (
             <div className="flex items-center gap-2.5 self-end sm:self-auto">
               {/* View Tasks / View Progress Action Button */}
-              {contract.status === "Active" && (
+              {contract.status === "Active" ? (
                 <button
                   type="button"
                   onClick={() => navigate(isFreelancer ? `/dashboard/tasks/${contract.id}` : `/dashboard/review/${contract.id}`)}
@@ -989,7 +989,17 @@ export const ContractDetailsPage: React.FC = () => {
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span>{isFreelancer ? "View Tasks" : "View Progress"}</span>
                 </button>
-              )}
+              ) : ["done", "closed", "completed"].includes(contract.status?.toLowerCase()) ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(isFreelancer ? `/dashboard/tasks/${contract.id}` : `/dashboard/review/${contract.id}`)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 text-xs font-bold transition shadow-xs hover:shadow active:scale-95"
+                  title={isFreelancer ? "View Completed Task Workspace & Deliverables" : "View Progress History & Deliverables"}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>{isFreelancer ? "View Task History" : "View Progress History"}</span>
+                </button>
+              ) : null}
 
               {/* Print / Save PDF (Only visible when viewing Paper View) */}
               {viewMode === "paper" && (
@@ -1070,6 +1080,21 @@ export const ContractDetailsPage: React.FC = () => {
                     >
                       <Copy className="w-4 h-4 text-zinc-400" />
                       <span>Copy Full Contract ID</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setActionsMenuOpen(false);
+                        navigate(isFreelancer ? `/dashboard/tasks/${contract.id}` : `/dashboard/review/${contract.id}`);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-left font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition"
+                    >
+                      <ExternalLink className="w-4 h-4 text-zinc-400" />
+                      <span>
+                        {contract.status === "Active"
+                          ? (isFreelancer ? "Open Task Delivery Workspace" : "Open Progress & Review")
+                          : (isFreelancer ? "View Task History" : "View Progress History")}
+                      </span>
                     </button>
 
                     {contract.status === "Active" && !activeCancellation && (
