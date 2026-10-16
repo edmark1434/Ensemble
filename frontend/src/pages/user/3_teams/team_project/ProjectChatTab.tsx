@@ -41,8 +41,16 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
   members,
 }) => {
   const navigate = useNavigate();
-  const { user } = useGlobalState();
+  const { user, setIsFloatingChatHidden } = useGlobalState();
   const myAccountId = currentUserAccountId || user?.account_id || user?.id || '';
+
+  // Ensure global floating chat bubble/widget is hidden when viewing Project Chat
+  useEffect(() => {
+    setIsFloatingChatHidden(true);
+    return () => {
+      setIsFloatingChatHidden(false);
+    };
+  }, [setIsFloatingChatHidden]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [inputMessage, setInputMessage] = useState('');

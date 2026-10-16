@@ -24,6 +24,7 @@ interface GlobalState {
   verificationModalMessage?: string
   isVerified: boolean
   subscriptionPlan: string | null
+  isFloatingChatHidden: boolean
 
   // Actions
   setIsSidebarCollapsed: (isCollapsed: boolean) => void
@@ -38,6 +39,7 @@ interface GlobalState {
   setTheme: (theme: 'light' | 'dark') => void
   setIsVerificationModalOpen: (isOpen: boolean, message?: string) => void
   setIsVerified: (isVerified: boolean) => void
+  setIsFloatingChatHidden: (hidden: boolean) => void
 }
 
 // Pass type to create<GlobalState>
@@ -55,9 +57,11 @@ const useGlobalState = create<GlobalState>((set) => ({
   verificationModalMessage: undefined,
   isVerified: false,
   subscriptionPlan: null,
+  isFloatingChatHidden: false,
 
   // Actions
   setIsSidebarCollapsed: (isCollapsed) => set({ isSidebarCollapsed: isCollapsed }),
+  setIsFloatingChatHidden: (hidden) => set({ isFloatingChatHidden: hidden }),
   setSubscriptionPlan: (plan: string) => set({ subscriptionPlan: plan }),
   setUser:            (user) => {
     localStorage.setItem('isGuestMode', 'false');

@@ -42,7 +42,7 @@ export const TeamProjectWorkspace: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user } = useGlobalState();
+  const { user, setIsFloatingChatHidden } = useGlobalState();
   const currentUserAccountId = user?.account_id || user?.id || '';
 
   const rawTab = searchParams.get('tab');
@@ -53,6 +53,18 @@ export const TeamProjectWorkspace: React.FC = () => {
       ? 'submissions'
       : ((rawTab as TabType) || 'overview');
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
+
+  // Hide global floating chat widget when the in-workspace Chat tab is active
+  useEffect(() => {
+    if (activeTab === 'chat') {
+      setIsFloatingChatHidden(true);
+      return () => {
+        setIsFloatingChatHidden(false);
+      };
+    } else {
+      setIsFloatingChatHidden(false);
+    }
+  }, [activeTab, setIsFloatingChatHidden]);
 
   const [project, setProject] = useState<any>(null);
   const [taskboardTasks, setTaskboardTasks] = useState<any[]>([]);

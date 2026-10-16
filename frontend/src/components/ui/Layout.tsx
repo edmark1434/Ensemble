@@ -107,6 +107,12 @@ const Layout = () => {
   }, [isStaffView, location.pathname, navigate]);
 
   const isInboxPage = location.pathname.startsWith("/inbox");
+  const isTeamProjectChat =
+    (location.pathname.startsWith("/team-project") || location.pathname.startsWith("/team-projects")) &&
+    new URLSearchParams(location.search).get("tab") === "chat";
+  const isFloatingChatHidden = useGlobalState((state) => state.isFloatingChatHidden);
+
+  const shouldHideFloatingChat = isInboxPage || isStaffView || isTeamProjectChat || isFloatingChatHidden;
   const currentUserId = String(user?.account_id || "");
 
   const recentChats = useMemo(() => {
@@ -290,7 +296,7 @@ const Layout = () => {
       </main>
 
       <div className="print:hidden">
-        {!isInboxPage && !isStaffView && (
+        {!shouldHideFloatingChat && (
           <ChatMain
             activeUser={activeChatUser}
             recentChats={recentChats}
