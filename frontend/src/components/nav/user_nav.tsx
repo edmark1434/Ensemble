@@ -8,7 +8,7 @@ import {
     Inbox,
     MessageSquare,
     Palette,
-    Shield,
+    ScrollText,
     Users,
     Wallet,
     ChevronLeft,
@@ -64,7 +64,7 @@ let marketplaceTopInitial: NavItem[] = [
 let activityRecordsInitial: NavItem[] = [
     { label: "Deliveries", icon: LayoutDashboard, to: "/dashboard" },
     { label: "My Terms", icon: FileText, to: "/terms-of-services" },
-    { label: "My Contracts", icon: Shield, to: "/contracts" },
+    { label: "My Contracts", icon: ScrollText, to: "/contracts" },
     { label: "Transaction History", icon: Wallet, to: "/transactions" },
     { label: "Inbox", icon: MessageSquare, to: "/inbox" },
 ];
@@ -137,7 +137,7 @@ const UserNav: React.FC<UserNavProps> = () => {
     return (
        <>
           <aside
-             className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base transition-all duration-300 ${
+             className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base transition-all duration-300 print:hidden ${
                 isCollapsed ? "w-20" : "w-64"
              }`}
           >

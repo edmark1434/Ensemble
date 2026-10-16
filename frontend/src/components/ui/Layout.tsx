@@ -225,15 +225,29 @@ const Layout = () => {
     <div
       className={`flex relative w-full ${
         isInboxPage ? "h-screen overflow-hidden" : "min-h-screen"
-      }`}
+      } print:min-h-0 print:block print:w-full print:m-0 print:p-0`}
     >
-      <UserNav />
+      <div className="print:hidden">
+        <UserNav />
+      </div>
       <main
-        className={`flex-1 transition-all duration-300 min-w-0 flex flex-col ${
+        className={`flex-1 transition-all duration-300 min-w-0 flex flex-col print:p-0 print:m-0 print:w-full print:block ${
           isInboxPage ? "h-screen overflow-hidden" : "min-h-screen"
         }`}
         style={{ paddingLeft: marginLeft }}
       >
+        <style>{`
+          @media print {
+            main {
+              padding-left: 0 !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              display: block !important;
+            }
+          }
+        `}</style>
         {isStaffView && (
           <style>
             {`[data-staff-preview-hide]{display:none !important;}`}
@@ -242,18 +256,20 @@ const Layout = () => {
         <Outlet context={{ openChatWithUser }} />
       </main>
 
-      {!isInboxPage && !isStaffView && (
-        <ChatMain
-          activeUser={activeChatUser}
-          recentChats={recentChats}
-          onSelectChat={(chat) => void openFloatingConversation(chat)}
-          onRemoveChat={removeFloatingWindow}
-        />
-      )}
-      {!isStaffView && <CallOverlay />}
+      <div className="print:hidden">
+        {!isInboxPage && !isStaffView && (
+          <ChatMain
+            activeUser={activeChatUser}
+            recentChats={recentChats}
+            onSelectChat={(chat) => void openFloatingConversation(chat)}
+            onRemoveChat={removeFloatingWindow}
+          />
+        )}
+        {!isStaffView && <CallOverlay />}
 
-      <UtilScrollTop />
-      <VerificationRequiredModal />
+        <UtilScrollTop />
+        <VerificationRequiredModal />
+      </div>
     </div>
   );
 };
