@@ -552,6 +552,172 @@ async function updateAccountBadgeDisplayOrder(accountId, registryIds) {
     }
 }
 
+async function createAuthenticationSecret(accountId, secret) { 
+    try {
+        const queryText = `
+        INSERT INTO account_authentication_secrets (account_id, secret, created_at)
+        VALUES ($1, $2, CURRENT_TIMESTAMP)
+        ON CONFLICT (account_id) DO UPDATE
+        SET secret = EXCLUDED.secret, created_at = CURRENT_TIMESTAMP
+        RETURNING secret;
+        `;      
+        const result = await pool.query(queryText, [accountId, secret]);
+        return result.rows[0].secret;
+    } catch (err) {
+        console.error(`Error creating authentication secret for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function getAuthenticationSecret(accountId) {
+    try {
+        const queryText = `
+        SELECT secret FROM account_authentication_secrets WHERE account_id = $1 LIMIT 1;
+        `;
+        const result = await pool.query(queryText, [accountId]);
+        return result.rows[0] ? result.rows[0].secret : null;
+    } catch (err) {
+        console.error(`Error fetching authentication secret for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function deleteAuthenticationSecret(accountId) {
+    try {
+        const queryText = `
+        DELETE FROM account_authentication_secrets WHERE account_id = $1;
+        `;
+        await pool.query(queryText, [accountId]);
+    } catch (err) {
+        console.error(`Error deleting authentication secret for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function createAuthenticationRecoveryCode(accountId, recoveryCode) { 
+    try {
+        const queryText = `
+            INSERT INTO account_authentication_recovery_codes (account_id, recovery_code, status, created_at)
+            VALUES ($1, $2, 'active', CURRENT_TIMESTAMP)
+            RETURNING recovery_code;
+        `;
+        const result = await pool.query(queryText, [accountId, recoveryCode]);
+        return result.rows[0].recovery_code;   
+    } catch (err) {
+        console.error(`Error creating authentication recovery code for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function createAuthenticationRecoveryCodes(accountId, recoveryCodes) { 
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM account_authentication_recovery_codes WHERE account_id = $1', [accountId]);
+        const inserted = [];
+        for (const code of recoveryCodes) {
+            const queryText = `
+                INSERT INTO account_authentication_recovery_codes (account_id, recovery_code, status, created_at)
+                VALUES ($1, $2, 'active', CURRENT_TIMESTAMP)
+                RETURNING recovery_code;
+            `;
+            const res = await client.query(queryText, [accountId, code]);
+            inserted.push(res.rows[0].recovery_code);
+        }
+        await client.query('COMMIT');
+        return inserted;
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`Error creating authentication recovery codes for account ${accountId}:`, err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+async function getAuthenticationRecoveryCodes(accountId) { 
+    try {
+        const queryText = `
+        SELECT recovery_code FROM account_authentication_recovery_codes 
+        WHERE account_id = $1 AND status = 'active' 
+        ORDER BY created_at ASC;
+        `;
+        const result = await pool.query(queryText, [accountId]);
+        return result.rows.map(row => row.recovery_code);
+    } catch (err) {
+        console.error(`Error fetching authentication recovery codes for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function deleteAuthenticationRecoveryCode(accountId, recoveryCode) { 
+    try {
+        const queryText = `
+        DELETE FROM account_authentication_recovery_codes WHERE account_id = $1 AND recovery_code = $2;
+        `;
+        await pool.query(queryText, [accountId, recoveryCode]);
+    } catch (err) {
+        console.error(`Error deleting authentication recovery code for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function deleteAuthenticationRecoveryCodes(accountId) { 
+    try {
+        const queryText = `
+        DELETE FROM account_authentication_recovery_codes WHERE account_id = $1;
+        `;
+        await pool.query(queryText, [accountId]);
+    } catch (err) {
+        console.error(`Error deleting all authentication recovery codes for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function verifyAuthenticationRecoveryCode(accountId, recoveryCode) { 
+    try {
+        const raw = String(recoveryCode || '').trim().toUpperCase();
+        if (!raw) return false;
+        const withHyphen = raw.length === 8 && !raw.includes('-')
+            ? `${raw.slice(0, 4)}-${raw.slice(4)}`
+            : raw;
+        const withoutHyphen = raw.replace(/-/g, '');
+
+        const queryText = `
+        UPDATE account_authentication_recovery_codes
+        SET status = 'used'
+        WHERE account_id = $1 
+          AND (UPPER(recovery_code) = $2 OR UPPER(recovery_code) = $3 OR UPPER(REPLACE(recovery_code, '-', '')) = $4)
+          AND status = 'active'
+        RETURNING recovery_code_id;
+        `;
+        const result = await pool.query(queryText, [accountId, raw, withHyphen, withoutHyphen]);
+        return result.rowCount > 0;
+    } catch (err) {
+        console.error(`Error verifying authentication recovery code for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function checkAccountHasPassword(accountId) {
+    try {
+        if (!accountId) return false;
+        const queryText = `
+            SELECT password_hash FROM users WHERE account_id = $1
+            UNION ALL
+            SELECT password_hash FROM staff WHERE account_id = $1
+            LIMIT 1;
+        `;
+        const result = await pool.query(queryText, [accountId]);
+        if (result.rows.length === 0) return false;
+        const hash = result.rows[0].password_hash;
+        return typeof hash === 'string' && hash.trim().length > 0;
+    } catch (err) {
+        console.error(`Error checking password for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
 module.exports = {
     getAllAccounts,
     getAccountById,
@@ -573,5 +739,15 @@ module.exports = {
     getFollowing,
     checkIsFollowing,
     getAccountBadges,
+    createAuthenticationSecret,
+    getAuthenticationSecret,
+    deleteAuthenticationSecret,
+    createAuthenticationRecoveryCode,
+    createAuthenticationRecoveryCodes,
+    getAuthenticationRecoveryCodes,
+    deleteAuthenticationRecoveryCode,
+    deleteAuthenticationRecoveryCodes,
+    verifyAuthenticationRecoveryCode,
+    checkAccountHasPassword,
     updateAccountBadgeDisplayOrder
 };

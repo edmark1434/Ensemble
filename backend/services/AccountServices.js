@@ -1,5 +1,6 @@
 //jp
-const { getAllAccounts, createAccount, getAccountByHandle, getAccountWalletRepositories,
+const crypto = require('crypto');
+const { getAllAccounts, getAccountById, createAccount, getAccountByHandle, getAccountWalletRepositories,
     checkAccountId, getProfileRepositories, getAccountLinkByAccountIdRepositories,
     checkUserAccountIdRepositories,
     getDisplayNameByAccountId,
@@ -13,9 +14,17 @@ const { getAllAccounts, createAccount, getAccountByHandle, getAccountWalletRepos
     getFollowing,
     checkIsFollowing,
     getAccountBadges,
-    updateAccountBadgeDisplayOrder
+    updateAccountBadgeDisplayOrder,
+    createAuthenticationSecret,
+    getAuthenticationSecret,
+    deleteAuthenticationSecret,
+    createAuthenticationRecoveryCodes,
+    getAuthenticationRecoveryCodes,
+    deleteAuthenticationRecoveryCodes,
+    verifyAuthenticationRecoveryCode,
+    checkAccountHasPassword
 } = require("../repositories/AccountRepositories");
-
+const { generateSecret, generate, verify, generateURI } = require('otplib');
 const SELF_TRIGGERED_BADGES = new Set(['setup-profile']);
 const {
     updateUserDetailsByAccountId,
@@ -327,7 +336,13 @@ module.exports = {
     getFollowingService,
     checkIsFollowingService,
     curateBadgesService,
-grantBadgeService
+    grantBadgeService,
+    setup2FASecretService,
+    verifyAndEnable2FAService,
+    get2FAStatusService,
+    disable2FAService,
+    regenerateRecoveryCodesService,
+    verify2FACodeOrRecoveryService,
 };
 
 async function grantBadgeService(accountId, registryId) {
@@ -347,4 +362,190 @@ async function grantBadgeService(accountId, registryId) {
         console.error('Error granting badge:', err);
         throw err;
     }
+}
+
+function generateRecoveryCodes(count = 8) {
+    const codes = [];
+    for (let i = 0; i < count; i++) {
+        const p1 = crypto.randomBytes(2).toString('hex').toUpperCase();
+        const p2 = crypto.randomBytes(2).toString('hex').toUpperCase();
+        codes.push(`${p1}-${p2}`);
+    }
+    return codes;
+}
+
+async function setup2FASecretService(accountId) {
+    if (!accountId) throw new Error('Account ID is required');
+
+    const hasPassword = await checkAccountHasPassword(accountId);
+    if (!hasPassword) {
+        const err = new Error('You must set an account password before enabling two-factor authentication.');
+        err.statusCode = 400;
+        throw err;
+    }
+
+    const account = await getAccountById(accountId);
+    if (!account) throw new Error('Account not found');
+
+    const secret = generateSecret();
+    const label = account.handle ? `@${account.handle}` : (account.display_name || 'Ensemble User');
+    const otpauthUrl = generateURI({
+        issuer: 'Ensemble',
+        label,
+        secret,
+    });
+    // Exactly 8 recovery codes per requirement
+    const recoveryCodes = generateRecoveryCodes(8);
+
+    // Cache the pending secret and recovery codes in Redis for 15 minutes
+    await redisClient.set(
+        `pending_2fa_setup:${accountId}`,
+        JSON.stringify({ secret, recoveryCodes }),
+        { EX: 15 * 60 }
+    );
+
+    return {
+        secret,
+        otpauthUrl,
+        recoveryCodes,
+    };
+}
+
+async function verifyAndEnable2FAService(accountId, token) {
+    if (!accountId) throw new Error('Account ID is required');
+
+    const hasPassword = await checkAccountHasPassword(accountId);
+    if (!hasPassword) {
+        const err = new Error('You must set an account password before enabling two-factor authentication.');
+        err.statusCode = 400;
+        throw err;
+    }
+
+    const cleanToken = String(token || '').trim();
+    if (!cleanToken || cleanToken.length !== 6) {
+        throw new Error('Please enter a valid 6-digit verification code');
+    }
+
+    const pendingData = await redisClient.get(`pending_2fa_setup:${accountId}`);
+    if (!pendingData) {
+        throw new Error('2FA setup session has expired. Please initiate setup again.');
+    }
+    const { secret, recoveryCodes } = JSON.parse(pendingData);
+
+    const check = await verify({ token: cleanToken, secret, epochTolerance: 30 });
+    if (!check?.valid) {
+        throw new Error('Invalid verification code. Please check your authenticator app and try again.');
+    }
+
+    // Persist secret and 8 recovery codes
+    await createAuthenticationSecret(accountId, secret);
+    await createAuthenticationRecoveryCodes(accountId, recoveryCodes);
+    await redisClient.del(`pending_2fa_setup:${accountId}`).catch(() => null);
+
+    return {
+        success: true,
+        message: 'Two-factor authentication enabled successfully.',
+        recoveryCodes,
+    };
+}
+
+async function get2FAStatusService(accountId) {
+    if (!accountId) throw new Error('Account ID is required');
+    const hasPassword = await checkAccountHasPassword(accountId);
+    const secret = await getAuthenticationSecret(accountId);
+    if (!secret) {
+        return { enabled: false, recoveryCodesCount: 0, hasPassword };
+    }
+    const recoveryCodes = await getAuthenticationRecoveryCodes(accountId);
+    return {
+        enabled: true,
+        recoveryCodesCount: recoveryCodes.length,
+        hasPassword,
+    };
+}
+
+async function disable2FAService(accountId, verificationCode) {
+    if (!accountId) throw new Error('Account ID is required');
+    const secret = await getAuthenticationSecret(accountId);
+    if (!secret) {
+        throw new Error('Two-factor authentication is not currently enabled.');
+    }
+
+    const cleanCode = String(verificationCode || '').trim();
+    if (!cleanCode) {
+        throw new Error('Verification code or recovery code is required to disable 2FA.');
+    }
+
+    let isValid = false;
+    if (cleanCode.length === 6 && /^\d+$/.test(cleanCode)) {
+        const check = await verify({ token: cleanCode, secret, epochTolerance: 30 });
+        if (check?.valid) isValid = true;
+    }
+    if (!isValid) {
+        // Try recovery code
+        const recoveryValid = await verifyAuthenticationRecoveryCode(accountId, cleanCode);
+        if (recoveryValid) isValid = true;
+    }
+
+    if (!isValid) {
+        throw new Error('Invalid verification code or recovery code. Cannot disable 2FA.');
+    }
+
+    // Delete secret and all 8 recovery codes upon disabling per requirement
+    await deleteAuthenticationSecret(accountId);
+    await deleteAuthenticationRecoveryCodes(accountId);
+    await redisClient.del(`pending_2fa_setup:${accountId}`).catch(() => null);
+
+    return {
+        success: true,
+        message: 'Two-factor authentication disabled and all recovery codes removed.',
+    };
+}
+
+async function regenerateRecoveryCodesService(accountId, token) {
+    if (!accountId) throw new Error('Account ID is required');
+    const secret = await getAuthenticationSecret(accountId);
+    if (!secret) {
+        throw new Error('Two-factor authentication is not enabled.');
+    }
+    const cleanToken = String(token || '').trim();
+    if (!cleanToken) {
+        throw new Error('Current 6-digit authenticator code is required to regenerate recovery codes.');
+    }
+    const check = await verify({ token: cleanToken, secret, epochTolerance: 30 });
+    if (!check?.valid) {
+        throw new Error('Invalid verification code.');
+    }
+
+    const newCodes = generateRecoveryCodes(8);
+    await createAuthenticationRecoveryCodes(accountId, newCodes);
+    return {
+        success: true,
+        recoveryCodes: newCodes,
+    };
+}
+
+async function verify2FACodeOrRecoveryService(accountId, code) {
+    if (!accountId) return { verified: false, error: 'Account ID is required' };
+    const secret = await getAuthenticationSecret(accountId);
+    if (!secret) return { verified: false, error: 'Two-factor authentication is not enabled for this account' };
+
+    const cleanCode = String(code || '').trim();
+    if (!cleanCode) return { verified: false, error: 'Code is required' };
+
+    // 1. Check if it's a 6-digit TOTP code
+    if (cleanCode.length === 6 && /^\d+$/.test(cleanCode)) {
+        const check = await verify({ token: cleanCode, secret, epochTolerance: 30 });
+        if (check?.valid) {
+            return { verified: true, type: 'totp' };
+        }
+    }
+
+    // 2. Check if it's an active recovery code
+    const isRecoveryValid = await verifyAuthenticationRecoveryCode(accountId, cleanCode);
+    if (isRecoveryValid) {
+        return { verified: true, type: 'recovery_code' };
+    }
+
+    return { verified: false, error: 'Invalid two-factor authentication code or recovery code' };
 }

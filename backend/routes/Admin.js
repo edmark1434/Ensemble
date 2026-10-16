@@ -41,13 +41,20 @@ const {
   postAdminModerationCaseAssignMyself,
   postAdminModerationActivityReverse,
 } = require('../controllers/AdminModerationControllers');
-const { getAdminAnalyticsOverview } = require('../controllers/AdminAnalyticsControllers');
+const {
+  getAdminAnalyticsOverview,
+  getAdminPlatformTransactions,
+  getAdminUserTransactions,
+  getAdminTopupTransactions,
+} = require('../controllers/AdminAnalyticsControllers');
 const {
   getAdminTicketsOverview,
   getAdminTicketDetail,
   createAdminTicket,
   patchAdminTicket,
   postAdminTicketMessage,
+  patchAdminTicketMessage,
+  deleteAdminTicketMessage,
   postTicketCreditAdjustment,
   getAdminTicketArticles,
   postAdminTicketArticle,
@@ -96,11 +103,16 @@ router.delete('/moderation/cases/:id', [checkSession, requireAdmin], deleteAdmin
 router.post('/moderation/cases/:id/assign-myself', [checkSession, requireAdmin], postAdminModerationCaseAssignMyself);
 router.post('/moderation/activity/:id/reverse', [checkSession, requireAdmin], postAdminModerationActivityReverse);
 router.get('/analytics-overview', [checkSession, requireAdmin], getAdminAnalyticsOverview);
+router.get('/analytics/platform-transactions', [checkSession, requireAdmin], getAdminPlatformTransactions);
+router.get('/analytics/user-transactions', [checkSession, requireAdmin], getAdminUserTransactions);
+router.get('/analytics/topup-transactions', [checkSession, requireAdmin], getAdminTopupTransactions);
 router.get('/tickets-overview', [checkSession, requireAdmin], getAdminTicketsOverview);
 router.post('/tickets', [checkSession, requireAdmin], createAdminTicket);
 router.get('/tickets/:id', [checkSession, requireAdmin], getAdminTicketDetail);
 router.patch('/tickets/:id', [checkSession, requireAdmin], patchAdminTicket);
 router.post('/tickets/:id/messages', [checkSession, requireAdmin], postAdminTicketMessage);
+router.patch('/tickets/:id/messages/:messageId', [checkSession, requireAdmin], patchAdminTicketMessage);
+router.delete('/tickets/:id/messages/:messageId', [checkSession, requireAdmin], deleteAdminTicketMessage);
 router.post('/tickets/:id/credit-adjustment', [checkSession, requireUserTeamFullWrite], postTicketCreditAdjustment);
 router.get('/ticket-articles', [checkSession, requireAdmin], getAdminTicketArticles);
 router.post('/ticket-articles', [checkSession, requireAdmin], postAdminTicketArticle);

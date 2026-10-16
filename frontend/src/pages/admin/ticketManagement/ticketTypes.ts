@@ -10,6 +10,7 @@ export type TicketAssignee = {
   staffId: number | string;
   name: string;
   role: string;
+  accountId?: string | null;
 };
 
 export type SupportTicket = {
@@ -40,6 +41,7 @@ export type SupportTicket = {
 };
 
 export type TicketAttachment = {
+  attachment_id?: string;
   attachment_key?: string;
   attachment_url?: string;
   attachment_name?: string;
@@ -103,9 +105,27 @@ export type TicketMessage = {
   body: string;
   attachments?: TicketAttachment[];
   isInternal: boolean;
+  isEdited?: boolean;
+  isUnsent?: boolean;
+  messageType?: string;
+  replyToId?: string | null;
   audience?: 'staff' | 'author_and_staff' | 'parties' | 'public' | string;
   publishedAt?: string | null;
   createdAt: string;
+};
+
+export type TicketPerson = {
+  accountId: string;
+  name: string;
+  handle?: string | null;
+  email?: string | null;
+  role: string;
+  status: 'active' | 'removed' | 'left' | string;
+  isRequester: boolean;
+  isStaff: boolean;
+  replyCount: number;
+  lastReplyAt?: string | null;
+  joinedAt?: string | null;
 };
 
 export type DisputeCreditHold = {
@@ -202,7 +222,7 @@ export type TicketActivity = {
 
 export type ChartSegment = { label: string; value: number; color?: string };
 
-export const TICKET_STATUS_OPTIONS = ['Open', 'In Progress', 'Escalated to Dev', 'Resolved', 'Closed'] as const;
+export const TICKET_STATUS_OPTIONS = ['In Progress', 'Closed'] as const;
 export const TICKET_PRIORITY_OPTIONS = ['Low', 'Medium', 'High'] as const;
 
 export const SUPPORT_SUBGROUPS: { label: string; types: readonly string[] }[] = [
@@ -447,6 +467,14 @@ export type TicketDetail = {
   payments?: TicketPaymentEvidence | null;
   canAdjustCredits?: boolean;
   formValues?: { key: string; label: string; value: string }[];
+  participants?: TicketPerson[];
+  involved?: TicketPerson[];
+  pendingInvites?: { accountId: string; name: string; handle?: string | null }[];
+  invitePending?: boolean;
+  canManageParticipants?: boolean;
+  savedTranscript?: { text: string; createdAt?: string | null } | null;
+  autoClosesAt?: string | null;
+  scheduledCloseAt?: string | null;
 };
 
 export function ticketTypeOf(t: { type?: string; category?: string }) {

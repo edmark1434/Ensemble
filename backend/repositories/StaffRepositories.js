@@ -353,6 +353,16 @@ async function deleteStaffAccount(staffId, actorStaffId = null) {
         [existing.account_id]
     );
 
+    try {
+        const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
+        await notifyAccountStatusChanged(existing.account_id, {
+            status: 'Banned',
+            previousStatus: 'Active',
+            action: 'delete_staff',
+            reason: 'Staff account has been deactivated and banned.',
+        });
+    } catch (_e) {}
+
     return {
         staffId: existing.staff_id,
         accountId: existing.account_id,

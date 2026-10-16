@@ -110,13 +110,14 @@ async function postTicketMessage(req, res) {
     if (isAdminTicketPayload(existing.ticket || existing)) {
       return res.status(403).json({ success: false, message: 'Admin tickets are not available to Support Moderators' });
     }
-    const data = await addTicketMessage(req.params.id, (body || '').trim(), req.session, Boolean(isInternal), attachments);
+    const data = await addTicketMessage(req.params.id, (body || '').trim(), req.session, Boolean(isInternal), attachments, req.body?.replyToMessageId);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error adding ticket message:', err);
-    const msg = err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
-    res.status(err?.message?.includes('MongoDB') ? 503 : 500).json({ success: false, message: msg });
+    const status = err?.statusCode || (err?.message?.includes('MongoDB') ? 503 : 500);
+    const msg = status < 500 || err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
+    res.status(status).json({ success: false, message: msg });
   }
 }
 
@@ -281,7 +282,40 @@ async function patchRestriction(req, res) {
   }
 }
 
-const { postTicketCreditAdjustment } = require('./AdminTicketsControllers');
+const { postTicketCreditAdjustment, patchAdminTicketMessage, deleteAdminTicketMessage } = require('./AdminTicketsControllers');
+
+async function guardSupportTicket(req, res) {
+  const existing = await getTicketDetail(req.params.id, req.session);
+  if (!existing) {
+    res.status(404).json({ success: false, message: 'Ticket not found' });
+    return false;
+  }
+  if (isAdminTicketPayload(existing.ticket || existing)) {
+    res.status(403).json({ success: false, message: 'Admin tickets are not available to Support Moderators' });
+    return false;
+  }
+  return true;
+}
+
+async function patchTicketMessage(req, res) {
+  try {
+    if (!(await guardSupportTicket(req, res))) return;
+    return patchAdminTicketMessage(req, res);
+  } catch (err) {
+    console.error('Error updating ticket message:', err);
+    res.status(500).json({ success: false, message: 'Failed to update message' });
+  }
+}
+
+async function deleteTicketMessage(req, res) {
+  try {
+    if (!(await guardSupportTicket(req, res))) return;
+    return deleteAdminTicketMessage(req, res);
+  } catch (err) {
+    console.error('Error deleting ticket message:', err);
+    res.status(500).json({ success: false, message: 'Failed to delete message' });
+  }
+}
 
 module.exports = {
   getOverview,
@@ -289,6 +323,8 @@ module.exports = {
   getTicket,
   patchTicket,
   postTicketMessage,
+  patchTicketMessage,
+  deleteTicketMessage,
   postTicketCreditAdjustment,
   getReports,
   getReport,

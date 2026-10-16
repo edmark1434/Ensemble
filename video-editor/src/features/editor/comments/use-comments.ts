@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CollabTarget } from "@/features/editor/collab/collab-target";
+import { onAccessChanged } from "@/features/editor/collab/access-events";
 import type {
   CommentAttachment,
   CommentStatus,
@@ -65,8 +66,11 @@ export function useComments(target: CollabTarget | null) {
 
     load();
     connect();
+    // role changes alter what the server returns (canComment / canDelete, or a 403)
+    const offAccess = onAccessChanged(() => load());
 
     return () => {
+      offAccess();
       cancelled = true;
       if (timer) clearTimeout(timer);
       ws?.close();

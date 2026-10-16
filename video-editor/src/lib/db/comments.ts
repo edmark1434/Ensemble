@@ -140,15 +140,13 @@ export async function listComments(
   role: BlockRole,
 ): Promise<CommentsPayload> {
   const c = CFG[target.kind];
-  const moderator = canModerateComments(role);
-
   const toItem = (r: any, files: Map<string, CommentAttachment[]>): CommentReply => ({
     id: r.id,
     authorName: `${r.first_name} ${r.last_name}`.trim(),
     avatarUrl: resolveFileUrl(r.avatar_path),
     body: r.body,
     createdAt: new Date(r.created_at).toISOString(),
-    canDelete: moderator || r.user_id === viewerId,
+    canDelete: r.user_id === viewerId, // only the author can delete
     attachments: files.get(r.id) ?? [],
   });
 

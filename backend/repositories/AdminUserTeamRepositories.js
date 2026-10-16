@@ -1133,6 +1133,18 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null) {
     },
   });
 
+  try {
+    const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
+    await notifyAccountStatusChanged(accountId, {
+      status,
+      previousStatus: account.status,
+      action: key,
+      actorStaffId: staffId,
+    });
+  } catch (notifyErr) {
+    console.warn('Failed to broadcast account status change:', notifyErr.message);
+  }
+
   return { accountId, status, previousStatus: account.status };
 }
 
@@ -1431,6 +1443,23 @@ async function warnAccount(accountId, { type, reason, points, expiresAt } = {}, 
   const { maybeAutoSuspendAfterWarning } = require('../lib/ModerationPolicy');
   const autoSuspend = await maybeAutoSuspendAfterWarning(accountId, staffId);
 
+  try {
+    const { notifyAccountWarned } = require('../services/AccountStandingServices');
+    await notifyAccountWarned(accountId, {
+      violationId: inserted.rows[0]?.violation_id || null,
+      violationNumber,
+      type: warnType,
+      reason: warnReason,
+      points: warnPoints,
+      expiresAt: expiry,
+      autoSuspended: Boolean(autoSuspend?.suspended),
+      activeWarnings: autoSuspend?.activeCount ?? null,
+      maxWarningsBeforeSuspend: autoSuspend?.max ?? null,
+    });
+  } catch (notifyErr) {
+    console.warn('Failed to broadcast warning notification:', notifyErr.message);
+  }
+
   return {
     accountId,
     violationId: inserted.rows[0]?.violation_id || null,
@@ -1505,6 +1534,19 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
     });
 
     await client.query('COMMIT');
+
+    try {
+      const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
+      await notifyAccountStatusChanged(accountId, {
+        status: 'Active',
+        previousStatus,
+        action: 'pardon',
+        reason: note || 'Account pardoned — violations cleared and status restored',
+        actorStaffId: staffId,
+      });
+    } catch (notifyErr) {
+      console.warn('Failed to broadcast pardon status change:', notifyErr.message);
+    }
 
     return {
       accountId,

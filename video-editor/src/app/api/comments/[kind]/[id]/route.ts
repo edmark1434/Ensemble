@@ -6,7 +6,6 @@ import {
   addComment,
   addReply,
   allImageFilesExist,
-  canModerateComments,
   getCommentRole,
   listComments,
   removeComment,
@@ -127,10 +126,10 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
   const targetId = commentId ?? replyId;
   if (!targetId || !UUID.test(targetId)) return fail("bad request", 400);
 
-  const moderator = canModerateComments(a.role);
+  // only the author can delete their own comment / reply
   const ok = commentId
-    ? await removeComment(a.target, commentId, a.userId, moderator)
-    : await removeReply(a.target, replyId!, a.userId, moderator);
+    ? await removeComment(a.target, commentId, a.userId, false)
+    : await removeReply(a.target, replyId!, a.userId, false);
   if (!ok) return fail("not found", 404);
 
   broadcastComments(a.target);

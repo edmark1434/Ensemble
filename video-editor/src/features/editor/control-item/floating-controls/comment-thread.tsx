@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
 import { useCommentsStore } from "@/features/editor/store/use-comments-store";
@@ -39,8 +40,8 @@ export default function CommentThreadControl() {
             <Tip label={resolved ? "Reopen thread" : "Mark as resolved"}>
               <Button
                 size="sm"
-                variant={resolved ? "default" : "outline"}
-                className="h-8 gap-2 px-3 text-xs"
+                variant={resolved ? "outline" : "default"}
+                className="h-8 gap-2 border border-border px-3 text-xs"
                 onClick={() => void setStatus(thread.id, resolved ? "open" : "resolved")}
               >
                 <Check size={14} />
@@ -55,10 +56,9 @@ export default function CommentThreadControl() {
         </div>
       </div>
 
-      {/* px-1 + the box's px-3 = the header's 16px, so the avatars, the ⋯ buttons and the X
-          line up. Only the original comment is in a solid box; replies sit plain below it. */}
+      {/* Only the original comment is in a solid box; replies sit plain below it. */}
       <ScrollArea className="w-full px-4 [&>[data-radix-scroll-area-viewport]]:max-h-[420px]">
-        <div className="flex h-fit flex-col gap-5 pb-4">
+        <div className={cn("flex h-fit flex-col gap-5", !data?.canComment && "pb-4")}>
           <div className="rounded-md bg-secondary p-4 text-secondary-foreground shadow-xs">
             <Entry
               item={thread}
@@ -84,7 +84,7 @@ export default function CommentThreadControl() {
       </ScrollArea>
 
       {data?.canComment && (
-        <div className="px-4 pb-4 pt-1">
+        <div className="px-4 pb-4 pt-4">
           <Composer
             placeholder="Reply…"
             getTimeMs={currentMs}

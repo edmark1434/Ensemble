@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, HelpCircle, MessageCircleQuestion, MessageSquare } from "lucide-react";
+import { Heart, HelpCircle, Lock, LogIn, MessageCircleQuestion, MessageSquare, UserPlus } from "lucide-react";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import useGlobalState from "@/lib/global_state";
 
-const LOGGED_OUT_TYPES = ["Sign-in and password", "Account compromised"];
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 
 interface TicketField {
@@ -122,7 +121,7 @@ const PageSubmitATicket: React.FC = () => {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accountId && !LOGGED_OUT_TYPES.includes(ticketType)) {
+    if (!accountId) {
       navigate(`/login?redirect=${encodeURIComponent("/support/ticket")}`);
       return;
     }
@@ -168,24 +167,21 @@ const PageSubmitATicket: React.FC = () => {
     }
   };
 
-  const shownCatalog = accountId
-    ? catalog
-    : catalog.filter((item) => LOGGED_OUT_TYPES.includes(item.label));
-  const groups = Array.from(new Set(shownCatalog.map((item) => item.group).filter(Boolean))) as string[];
+  const groups = Array.from(new Set(catalog.map((item) => item.group).filter(Boolean))) as string[];
   const subgroups = Array.from(
     new Set(
-      shownCatalog
+      catalog
         .filter((item) => item.group === group && item.subgroup)
         .map((item) => item.subgroup as string)
     )
   );
-  const visibleTypes = shownCatalog.filter(
+  const visibleTypes = catalog.filter(
     (item) => item.group === group && (group !== "Support" || item.subgroup === subgroup)
   );
   const selected = catalog.find((item) => item.label === ticketType) || null;
 
   const chooseGroup = (nextGroup: string) => {
-    const inGroup = shownCatalog.filter((item) => item.group === nextGroup);
+    const inGroup = catalog.filter((item) => item.group === nextGroup);
     const nextSubgroup = inGroup.find((item) => item.subgroup)?.subgroup || "";
     const nextType = inGroup.find((item) => !nextSubgroup || item.subgroup === nextSubgroup);
     setGroup(nextGroup);
@@ -195,7 +191,7 @@ const PageSubmitATicket: React.FC = () => {
   };
 
   const chooseSubgroup = (nextSubgroup: string) => {
-    const nextType = shownCatalog.find((item) => item.group === group && item.subgroup === nextSubgroup);
+    const nextType = catalog.find((item) => item.group === group && item.subgroup === nextSubgroup);
     setSubgroup(nextSubgroup);
     setTicketType(nextType?.label || "");
     setFieldValues({});
@@ -232,12 +228,14 @@ const PageSubmitATicket: React.FC = () => {
       <div style={{ maxWidth: 600, margin: "0 auto", padding: "32px 24px 64px" }}>
         <h1 style={{ fontSize: 42, fontWeight: 800, marginBottom: 16 }}>Submit a Ticket</h1>
         <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 15, marginBottom: 8 }}>
-          Encountered a bug or an escrow processing issue? File a support ticket and our team will look into it.
+          {accountId
+            ? "Encountered a bug or an escrow processing issue? File a support ticket and our team will look into it."
+            : "Encountered an issue or need assistance? Sign in to file a support ticket so our team can resolve it."}
         </p>
         <p style={{ color: theme === 'dark' ? "#a1a1aa" : "#374151", fontSize: 13, marginBottom: 24 }}>
           {accountId
             ? "This ticket is filed on the account you are signed in with. We also save your browser and the page you came from."
-            : "Sign-in and compromised-account tickets can be filed while you are locked out. Other tickets need you to sign in."}
+            : "Submitting a support ticket is only accessible to logged-in members. Please sign in to submit a ticket or explore our self-service options below."}
         </p>
 
         <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -262,7 +260,37 @@ const PageSubmitATicket: React.FC = () => {
           })}
         </div>
 
-        {submitted ? (
+        {!accountId ? (
+          <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-white/10 dark:bg-zinc-900/60">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-100 text-zinc-700 dark:bg-white/10 dark:text-zinc-200">
+              <Lock className="h-6 w-6" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              Sign In Required to Submit a Ticket
+            </h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-gray-600 dark:text-zinc-400">
+              To keep our community secure and provide direct assistance with your account, projects, and escrow, ticket submissions are only accessible to logged-in users.
+            </p>
+            <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => navigate(`/login?redirect=${encodeURIComponent("/support/ticket")}`)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-gray-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 sm:w-auto"
+              >
+                <LogIn className="h-4 w-4" />
+                Log in to submit a ticket
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/signup")}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-transparent px-6 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-white/20 dark:text-zinc-300 dark:hover:bg-white/5 sm:w-auto"
+              >
+                <UserPlus className="h-4 w-4" />
+                Create an account
+              </button>
+            </div>
+          </div>
+        ) : submitted ? (
           <div
             style={{
               background: "rgba(45,212,191,0.05)",

@@ -53,6 +53,7 @@ import PresenceAvatars from "@/components/presence-avatars";
 import { useViewOnly } from "@/features/editor/hooks/use-view-only";
 import { useProjectRole } from "@/features/editor/hooks/use-project-role";
 import { canManageSharing } from "@/features/editor/types/editor-role";
+import { useCanComment } from "@/features/editor/hooks/use-can-comment";
 import { CommentsSync } from "@/features/editor/comments/comments-sync";
 
 export default function Navbar({
@@ -80,6 +81,7 @@ export default function Navbar({
   const [isShareModalOpen, setShareModalOpen] = useState(false);
   const { activeRightItem, setActiveRightItem } = useLayoutStore();
   const commentsOpen = activeRightItem === "comments";
+  const canComment = useCanComment();
   const [title, setTitle] = useState(projectName);
 
   const projectRole = useProjectRole(projectId);
@@ -88,6 +90,14 @@ export default function Navbar({
   useEffect(() => {
     setTitle(projectName);
   }, [projectName]);
+
+  // Lost Commenter access while comments were showing: back to the controls.
+  useEffect(() => {
+    if (canComment) return;
+    const layout = useLayoutStore.getState();
+    if (layout.activeRightItem === "comments") layout.setActiveRightItem("controls");
+    if (layout.floatingControl === "comment-thread") layout.setFloatingControl("");
+  }, [canComment]);
 
   const handleUndo = () => {
     undoManager?.undo();
@@ -322,21 +332,23 @@ export default function Navbar({
               </TooltipContent>
             </Tooltip>
           )}
-          <Tooltip delayDuration={10}>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={() => setActiveRightItem(commentsOpen ? "controls" : "comments")}
-                className={cn("hover:!bg-accent/30", commentsOpen && "bg-accent/30")}
-                variant="ghost"
-                size="icon"
-              >
-                <MessageSquare size={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="center" sideOffset={1}>
-              {commentsOpen ? "Close comments" : "Comments"}
-            </TooltipContent>
-          </Tooltip>
+          {canComment && (
+            <Tooltip delayDuration={10}>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => setActiveRightItem(commentsOpen ? "controls" : "comments")}
+                  className={cn("hover:!bg-accent/30", commentsOpen && "bg-accent/30")}
+                  variant="ghost"
+                  size="icon"
+                >
+                  <MessageSquare size={20} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="center" sideOffset={1}>
+                {commentsOpen ? "Close comments" : "Comments"}
+              </TooltipContent>
+            </Tooltip>
+          )}
           <DownloadPopover stateManager={stateManager} />
 
           {canShare && (

@@ -52,6 +52,7 @@ import { broadcastUserRole } from "@/features/editor/collab/live-transform";
 import { RightPanelContent } from "@/features/editor/right-panel-content";
 import { canEditWithRole, EditorRole } from "@/features/editor/types/editor-role";
 import { useEditorRole } from "@/features/editor/hooks/use-editor-role";
+import { CanCommentProvider, canCommentWithRole, useCanComment } from "@/features/editor/hooks/use-can-comment";
 import { ViewOnlyProvider } from "@/features/editor/hooks/use-view-only";
 import { useProjectFonts } from "@/features/editor/hooks/use-project-fonts";
 import SceneRemovedModal from "./modals/scene-removed-modal";
@@ -365,6 +366,7 @@ const Panels = ({
   timelineLoading,
 }: any) => {
   const { showMenuItem: menuItemOpen, setControlsPanelRef } = useLayoutStore();
+  const canComment = useCanComment();
   const showMenuItem = menuItemOpen && !viewOnly;
 
   const { activeSceneBlockId } = useStore();
@@ -456,7 +458,8 @@ const Panels = ({
               <Controls panelRef={controlsPanelRef} />
             </ResizablePanel>
 
-            {!viewOnly && <FloatingControl anchorRef={controlsPanelRef} />}
+            {/* commenters are view-only, but still need the thread window */}
+            {(!viewOnly || canComment) && <FloatingControl anchorRef={controlsPanelRef} />}
           </ResizablePanelGroup>
         </div>
       </div>
@@ -549,6 +552,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
 
   const resolvedRole = useEditorRole(projectId, activeSceneBlockId, storeUserId, role ?? null, leaveSceneNoAccess, handleProjectAccessLost);
   const canEdit = canEditWithRole(resolvedRole);
+  const canComment = canCommentWithRole(resolvedRole);
 
   const blockDocReady =
     !!activeSceneBlockId &&
@@ -673,7 +677,7 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
     setTypeControlItem("");
   }, [isLargeScreen]);
 
-  useKeyboardShortcuts(stateManager, collab?.undoManager, viewOnly);
+  useKeyboardShortcuts(stateManager, collab?.undoManager, viewOnly, canComment);
 
   useEffect(() => {
     useStore.getState().setStateManager(stateManager);
@@ -706,48 +710,50 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
 
   return (
     <ViewOnlyProvider value={viewOnly}>
-      <div className="flex h-screen w-screen flex-col bg-background">
-        <Navbar
-          user={null}
-          stateManager={stateManager}
-          undoManager={collab?.undoManager}
-          viewOnly={viewOnly}
-          saveStatus={collab?.saveStatus}
-          compactStatus={collab?.compactStatus}
-          onForceSave={collab?.forceSave}
-        />
+      <CanCommentProvider value={canComment}>
+        <div className="flex h-screen w-screen flex-col bg-background">
+          <Navbar
+            user={null}
+            stateManager={stateManager}
+            undoManager={collab?.undoManager}
+            viewOnly={viewOnly}
+            saveStatus={collab?.saveStatus}
+            compactStatus={collab?.compactStatus}
+            onForceSave={collab?.forceSave}
+          />
 
-        <div className="flex flex-1 min-h-0">
-          {isLargeScreen ? (
-            <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-              <ResizablePanel defaultSize={100} minSize={40} className="min-w-0 min-h-0">
-                <Panels
-                  sceneRef={sceneRef}
-                  playerRef={playerRef}
-                  stateManager={stateManager}
-                  trackItem={trackItem}
-                  loaded={loaded}
-                  isLargeScreen={isLargeScreen}
-                  viewOnly={viewOnly}
-                  timelineLoading={timelineLoading}
-                />
-              </ResizablePanel>
-            </ResizablePanelGroup>
-          ) : (
-            <Panels
-              sceneRef={sceneRef}
-              playerRef={playerRef}
-              stateManager={stateManager}
-              trackItem={trackItem}
-              loaded={loaded}
-              isLargeScreen={isLargeScreen}
-              viewOnly={viewOnly}
-              timelineLoading={timelineLoading}
-            />
-          )}
+          <div className="flex flex-1 min-h-0">
+            {isLargeScreen ? (
+              <ResizablePanelGroup direction="horizontal" className="h-full w-full">
+                <ResizablePanel defaultSize={100} minSize={40} className="min-w-0 min-h-0">
+                  <Panels
+                    sceneRef={sceneRef}
+                    playerRef={playerRef}
+                    stateManager={stateManager}
+                    trackItem={trackItem}
+                    loaded={loaded}
+                    isLargeScreen={isLargeScreen}
+                    viewOnly={viewOnly}
+                    timelineLoading={timelineLoading}
+                  />
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            ) : (
+              <Panels
+                sceneRef={sceneRef}
+                playerRef={playerRef}
+                stateManager={stateManager}
+                trackItem={trackItem}
+                loaded={loaded}
+                isLargeScreen={isLargeScreen}
+                viewOnly={viewOnly}
+                timelineLoading={timelineLoading}
+              />
+            )}
+          </div>
         </div>
-      </div>
-      <SceneRemovedModal sceneName={removedFromScene} onClose={() => setRemovedFromScene(null)} />
+        <SceneRemovedModal sceneName={removedFromScene} onClose={() => setRemovedFromScene(null)} />
+      </CanCommentProvider>
     </ViewOnlyProvider>
   );
 };

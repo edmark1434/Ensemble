@@ -21,13 +21,19 @@ const {
     checkUsernameUniqueness,
     forgotPasswordController,
     verifyResetTokenController,
-    resetPasswordController
+    resetPasswordController,
+    get2FAStatusController,
+    setup2FAController,
+    enable2FAController,
+    disable2FAController,
+    regenerateRecoveryCodesController,
 } = require('../controllers/UserControllers');
 const {
     createPublicTicket,
     listMyTickets,
     getMyTicket,
     postMyTicketMessage,
+    postMyTicketInvite,
     postMyTicketSatisfaction,
     getPublicTicketCatalog,
     getTicketContext,
@@ -42,6 +48,13 @@ router.post('/signup', signup);
 
 router.post('/login', loginCredentials);
 
+// Two-Factor Authentication routes
+router.get('/2fa/status', [checkSession, requireAuth], get2FAStatusController);
+router.post('/2fa/setup', [checkSession, requireAuth], setup2FAController);
+router.post('/2fa/enable', [checkSession, requireAuth], enable2FAController);
+router.post('/2fa/disable', [checkSession, requireAuth], disable2FAController);
+router.post('/2fa/regenerate-recovery-codes', [checkSession, requireAuth], regenerateRecoveryCodesController);
+
 router.post('/refresh-token',checkSession, refreshToken);
 
 router.post('/logout', [checkSession, requireAuth], LogoutUsers);
@@ -53,10 +66,11 @@ router.post('/update-personal-details', [checkSession, requireAuth],updatePerson
 // Support tickets (Postgres metadata + Mongo chat)
 router.get('/ticket-catalog', getPublicTicketCatalog);
 router.get('/ticket-context', [checkSession, requireAuth], getTicketContext);
-router.post('/tickets', [checkSession], createPublicTicket);
+router.post('/tickets', [checkSession, requireAuth], createPublicTicket);
 router.get('/tickets', [checkSession, requireAuth], listMyTickets);
 router.get('/tickets/:id', [checkSession, requireAuth], getMyTicket);
 router.post('/tickets/:id/messages', [checkSession, requireAuth], postMyTicketMessage);
+router.post('/tickets/:id/invite', [checkSession, requireAuth], postMyTicketInvite);
 router.post('/tickets/:id/satisfaction', [checkSession, requireAuth], postMyTicketSatisfaction);
 router.post('/reports', [checkSession, requireAuth], createMyTechnicalReport);
 router.get('/check-username', [checkSession, requireAuth], checkUsernameUniqueness);

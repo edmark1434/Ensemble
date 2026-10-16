@@ -1,6 +1,14 @@
 // features/editor/comments/comments-panel.tsx
 
-import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import {
   ArrowUpDown,
   AtSign,
@@ -193,6 +201,23 @@ const TOKEN_RE = /\{\{t:(\d+)\}\}|@\[([^\]]+)\]\([0-9a-f-]{36}\)/gi;
 const hasTimeToken = (body: string) => /\{\{t:\d+\}\}/.test(body);
 const fmtPill = (ms: number) => millisecondsToHHMMSS(Math.floor(ms / 1000) * 1000);
 
+// Plain-text version of a comment body (tokens flattened, main time pill dropped), cut to maxLen with an ellipsis.
+export function commentPreview(body: string, maxLen = 120): string {
+  let skippedMain = false;
+  const text = body
+    .replace(TOKEN_RE, (_m, ms, name) => {
+      if (ms === undefined) return `@${name}`;
+      if (!skippedMain) {
+        skippedMain = true; // the comment's own (main) time pill: left out
+        return "";
+      }
+      return fmtPill(Number(ms));
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length > maxLen ? `${text.slice(0, maxLen).trimEnd()}…` : text;
+}
+
 function TimePill({
   ms,
   onSeek,
@@ -261,10 +286,12 @@ const MAX_MB = COMMENT_MAX_IMAGE_BYTES / 1024 / 1024;
 const EDITOR_CLASS =
   "border-input dark:bg-input/30 max-h-48 min-h-[80px] w-full overflow-y-auto whitespace-pre-wrap break-words rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 empty:before:pointer-events-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]";
 
-function makeTimeChip(ms: number) {
+// main = the comment's own pill: locked in place and kept in sync with the playhead
+function makeTimeChip(ms: number, main = false) {
   const el = document.createElement("span");
   el.contentEditable = "false";
   el.dataset.type = "time";
+  if (main) el.dataset.main = "true";
   el.dataset.ms = String(Math.round(ms));
   el.className =
     "mx-0.5 inline-block select-none rounded-md bg-primary/10 px-2 py-0.5 align-middle text-xs text-primary";
@@ -289,6 +316,7 @@ function makeMentionChip(person: CommentPerson) {
 function readEditor(root: HTMLElement) {
   let body = "";
   let firstTime: number | undefined;
+  let mainTime: number | undefined;
   let hasText = false;
   let afterChip = false;
 
@@ -315,6 +343,7 @@ function readEditor(root: HTMLElement) {
         const ms = Number(n.dataset.ms);
         addChip(`{{t:${ms}}}`);
         if (firstTime === undefined) firstTime = ms;
+        if (n.dataset.main === "true") mainTime = ms;
       } else if (type === "mention") {
         addChip(`@[${n.dataset.name}](${n.dataset.id})`);
         hasText = true;
@@ -331,7 +360,8 @@ function readEditor(root: HTMLElement) {
   };
   walk(root);
 
-  return { body: body.trim(), timeMs: firstTime, blank: !hasText };
+  // the main pill is the marker time; otherwise the first pill in the text
+  return { body: body.trim(), timeMs: (mainTime ?? firstTime) as number | undefined, blank: !hasText };
 }
 
 // "@" or "/" at the start of a word, right before the caret
@@ -362,12 +392,28 @@ function placeCaretAtEnd(el: HTMLElement) {
   s?.addRange(r);
 }
 
+// the main pill plus the space after it: none of it can be deleted
+function mainPillRange(root: HTMLElement): Range | null {
+  const main = root.querySelector('[data-main="true"]');
+  if (!main) return null;
+  const r = document.createRange();
+  r.setStartBefore(main);
+  const next = main.nextSibling;
+  if (next && next.nodeType === Node.TEXT_NODE && /^[ \u00a0]/.test((next as Text).data)) {
+    r.setEnd(next, 1);
+  } else {
+    r.setEndAfter(main);
+  }
+  return r;
+}
+
 export function Composer({
   placeholder,
   onSubmit,
   getTimeMs,
   autoPill,
   autoFocus,
+  focusKey,
 }: {
   placeholder: string;
   onSubmit: (p: { body: string; timeMs?: number; fileIds: string[] }) => Promise<void>;
@@ -376,6 +422,8 @@ export function Composer({
   // Also drops a pill into the box when it's focused empty (top-level comments).
   autoPill?: boolean;
   autoFocus?: boolean;
+  // bump to pull focus into the box again (C pressed while the composer is already open)
+  focusKey?: number;
 }) {
   const upload = useCommentsStore((s) => s.upload);
   const peopleData = useCommentsStore((s) => s.data?.people);
@@ -400,6 +448,45 @@ export function Composer({
     () => () => filesRef.current.forEach((f) => URL.revokeObjectURL(f.preview)),
     [],
   );
+
+  // the main pill follows the playhead while you type
+  const playerRef = useStore((s) => s.playerRef);
+  const frame = useCurrentPlayerFrame(autoPill ? (playerRef ?? null) : null);
+  useEffect(() => {
+    if (!autoPill || !getTimeMs) return;
+    const chip = editorRef.current?.querySelector<HTMLElement>('[data-main="true"]');
+    const ms = getTimeMs();
+    if (!chip || ms == null) return;
+    const next = String(Math.round(ms));
+    if (chip.dataset.ms !== next) {
+      chip.dataset.ms = next;
+      chip.textContent = fmtPill(ms);
+    }
+  }, [frame]);
+
+  // Backspace / Delete can't remove the main pill or the space after it
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el || !autoPill) return;
+    const onBefore = (e: InputEvent) => {
+      if (!e.inputType.startsWith("delete")) return;
+      const guard = mainPillRange(el);
+      if (!guard || !window.getSelection()?.isCollapsed) return;
+      const hit = e.getTargetRanges().some((tr) => {
+        const r = document.createRange();
+        r.setStart(tr.startContainer, tr.startOffset);
+        r.setEnd(tr.endContainer, tr.endOffset);
+        // the two ranges overlap
+        return (
+          r.compareBoundaryPoints(Range.START_TO_END, guard) > 0 &&
+          r.compareBoundaryPoints(Range.END_TO_START, guard) < 0
+        );
+      });
+      if (hit) e.preventDefault();
+    };
+    el.addEventListener("beforeinput", onBefore);
+    return () => el.removeEventListener("beforeinput", onBefore);
+  }, [autoPill]);
 
   const sync = () => {
     const el = editorRef.current;
@@ -431,6 +518,10 @@ export function Composer({
   useEffect(() => {
     if (autoFocus) editorRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (focusKey) editorRef.current?.focus();
+  }, [focusKey]);
 
   // ---- "@" / "/" menu ----
   const items = useMemo<MenuItem[]>(() => {
@@ -504,15 +595,65 @@ export function Composer({
     document.execCommand("insertText", false, needsSpace ? " @" : "@");
   };
 
-  // ---- time pill on focus ----
+  // ---- main time pill (top-level comments) ----
+  // Put back whenever it's missing (first focus, or a range delete that took it with it).
+  const ensureMainChip = () => {
+    const el = editorRef.current;
+    if (!el || !autoPill || !getTimeMs || el.querySelector('[data-main="true"]')) return false;
+    const ms = getTimeMs();
+    if (ms == null) return false;
+    const gap = document.createTextNode(" ");
+    el.prepend(makeTimeChip(ms, true), gap);
+    const sel = window.getSelection();
+    // a caret left at the very start lands after the pill
+    if (sel && sel.rangeCount && sel.anchorNode === el && sel.anchorOffset === 0) {
+      const r = document.createRange();
+      r.setStart(gap, 1);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+    return true;
+  };
+
+  // the main pill always keeps a space after it
+  const ensureMainGap = () => {
+    const el = editorRef.current;
+    const main = el?.querySelector('[data-main="true"]');
+    if (!el || !main) return;
+    const sel = window.getSelection();
+    const next = main.nextSibling;
+
+    if (next && next.nodeType === Node.TEXT_NODE) {
+      const t = next as Text;
+      if (/^[ \u00a0]/.test(t.data)) return;
+      const atStart = !!sel?.rangeCount && sel.anchorNode === t && sel.anchorOffset === 0;
+      t.insertData(0, " ");
+      if (atStart) {
+        const r = document.createRange();
+        r.setStart(t, 1);
+        r.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(r);
+      }
+      return;
+    }
+
+    const gap = document.createTextNode(" ");
+    main.after(gap);
+    const idx = Array.prototype.indexOf.call(el.childNodes, main) as number;
+    if (sel?.rangeCount && sel.anchorNode === el && sel.anchorOffset === idx + 1) {
+      const r = document.createRange();
+      r.setStart(gap, 1);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+  };
+
   const addAutoPill = () => {
     const el = editorRef.current;
-    if (!el || !autoPill || !getTimeMs) return;
-    if (el.textContent?.trim() || el.querySelector("[data-type]")) return;
-    const ms = getTimeMs();
-    if (ms == null) return;
-    el.innerHTML = "";
-    el.append(makeTimeChip(ms), document.createTextNode(" "));
+    if (!el || !ensureMainChip()) return;
     placeCaretAtEnd(el);
     // a click-focus sets its own caret right after the focus event
     requestAnimationFrame(() => {
@@ -614,6 +755,8 @@ export function Composer({
               onInput={() => {
                 const el = editorRef.current;
                 if (el && !el.textContent && !el.querySelector("[data-type]")) el.innerHTML = "";
+                ensureMainChip();
+                ensureMainGap();
                 sync();
                 updateTrigger();
               }}
@@ -621,9 +764,9 @@ export function Composer({
               onBlur={() => {
                 triggerRef.current = null;
                 setTrigger(null);
-                // leaving it empty drops the auto pill again
+                // leaving a reply box empty clears it (the main pill of a comment stays)
                 const el = editorRef.current;
-                if (el && readEditor(el).blank && filesRef.current.length === 0) {
+                if (!autoPill && el && readEditor(el).blank && filesRef.current.length === 0) {
                   el.innerHTML = "";
                   setBlank(true);
                 }
@@ -845,18 +988,16 @@ export function Entry({
           </div>
           {item.canDelete && (
             <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-              <Tip label="More">
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="More actions"
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
-                  >
-                    <MoreHorizontal size={16} />
-                  </button>
-                </PopoverTrigger>
-              </Tip>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="More actions"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
+                >
+                  <MoreHorizontal size={16} />
+                </button>
+              </PopoverTrigger>
               <PopoverContent
                 align="end"
                 className="z-[300] w-32 p-0"
@@ -924,6 +1065,7 @@ function Thread({
   thread,
   canComment,
   focused,
+  mentioned,
   onSeek,
   onOpen,
   onDeleteComment,
@@ -931,6 +1073,7 @@ function Thread({
   thread: CommentThread;
   canComment: boolean;
   focused: boolean;
+  mentioned: boolean;
   onSeek: (ms: number) => void;
   onOpen: () => void;
   onDeleteComment: () => void;
@@ -942,10 +1085,17 @@ function Thread({
   const resolved = thread.status === "resolved";
   const clickable = n > 0 || canComment;
 
-  const parts: string[] = [];
+  const parts: ReactNode[] = [];
   if (n > 0) parts.push(`${n} ${n === 1 ? "reply" : "replies"}`);
   if (images > 0) parts.push(`${images} ${images === 1 ? "image" : "images"}`);
-  const summary = parts.length ? parts.join(" · ") : canComment ? "Reply" : null;
+  if (parts.length === 0 && canComment) parts.push("Reply");
+  if (mentioned) {
+    parts.push(
+      <span key="mention" className="text-primary">
+        Mentions you
+      </span>,
+    );
+  }
 
   return (
     <div
@@ -967,11 +1117,20 @@ function Thread({
         onSeek={onSeek}
       />
 
-      {(summary || resolved) && (
+      {(parts.length > 0 || resolved) && (
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          {summary && <span>{summary}</span>}
+          {parts.length > 0 && (
+            <span>
+              {parts.map((p, i) => (
+                <Fragment key={i}>
+                  {i > 0 && " · "}
+                  {p}
+                </Fragment>
+              ))}
+            </span>
+          )}
           {resolved && (
-            <span className="inline-flex items-center gap-1">
+            <span className="ml-auto inline-flex items-center gap-1">
               <Check size={12} />
               Resolved
             </span>
@@ -999,6 +1158,8 @@ export function CommentsPanel() {
     setFilter,
     sort,
     setSort,
+    pendingCompose,
+    consumeCompose,
   } = useCommentsStore();
   const { setFloatingControl, setActiveRightItem } = useLayoutStore();
   const playerRef = useStore((s) => s.playerRef);
@@ -1007,6 +1168,16 @@ export function CommentsPanel() {
   const userId = useStore((s) => s.userId);
   const { seek, currentMs } = usePlayheadControls();
   const [composing, setComposing] = useState(false);
+  const [focusKey, setFocusKey] = useState(0);
+
+  // the header's "Add comment" button / the C shortcut
+  useEffect(() => {
+    if (!pendingCompose) return;
+    setComposing(true);
+    setFocusKey((k) => k + 1);
+    consumeCompose();
+  }, [pendingCompose, consumeCompose]);
+
   const currentFrame = useCurrentPlayerFrame(playerRef ?? null);
   // A comment is stored as ms from the exact playhead frame, so this round-trips.
   const atPlayhead = (ms: number | null) =>
@@ -1102,6 +1273,7 @@ export function CommentsPanel() {
                 <Composer
                   autoFocus
                   autoPill
+                  focusKey={focusKey}
                   placeholder="Add a comment…"
                   getTimeMs={currentMs}
                   onSubmit={async ({ body, timeMs, fileIds }) => {
@@ -1128,6 +1300,7 @@ export function CommentsPanel() {
                   thread={t}
                   canComment={data.canComment}
                   focused={atPlayhead(t.timeMs)}
+                  mentioned={mentionsUser(t, userId)}
                   onSeek={seek}
                   onOpen={() => {
                     setOpenThreadId(t.id);

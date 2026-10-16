@@ -1,12 +1,21 @@
 const {
   getTicketsOverview,
   getTicketDetail,
+  listParticipantTicketIds,
+  searchTicketParticipants,
+  addTicketParticipant,
+  removeTicketParticipant,
+  respondTicketInvite,
+  generateTicketTranscript,
+  scheduleTicketClose,
+  cancelScheduledTicketClose,
   createSupportTicket,
-  findAccountByEmailOrUsername,
   getTicketPickers,
   getTicketCatalog,
   updateTicket,
   addTicketMessage,
+  updateTicketMessage,
+  deleteTicketMessage,
   updateDispute,
   getDisputeDetail,
   addDisputeMessage,
@@ -125,13 +134,60 @@ async function postAdminTicketMessage(req, res) {
     if (!body?.trim() && !screenshots.length) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
     }
-    const data = await addTicketMessage(req.params.id, body?.trim() || '', req.session, Boolean(isInternal), req.body?.attachments);
+    const data = await addTicketMessage(
+      req.params.id,
+      body?.trim() || '',
+      req.session,
+      Boolean(isInternal),
+      req.body?.attachments,
+      req.body?.replyToMessageId
+    );
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error adding ticket message:', err);
-    const msg = err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
-    res.status(err?.message?.includes('MongoDB') ? 503 : 500).json({ success: false, message: msg });
+    const status = err?.statusCode || (err?.message?.includes('MongoDB') ? 503 : 500);
+    const msg = status < 500 || err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
+    res.status(status).json({ success: false, message: msg });
+  }
+}
+
+function ticketMessageClientError(message) {
+  return /only change your own|only staff|not found|required|nothing to update|mongodb/i.test(String(message || ''));
+}
+
+async function patchAdminTicketMessage(req, res) {
+  try {
+    const patch = {};
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'body')) patch.body = req.body.body;
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'isInternal')) patch.isInternal = Boolean(req.body.isInternal);
+    const data = await updateTicketMessage(req.params.id, req.params.messageId, patch, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error updating ticket message:', err);
+    const message = err?.message || 'Failed to update message';
+    const client = ticketMessageClientError(message);
+    res.status(message.includes('MongoDB') ? 503 : client ? 400 : 500).json({
+      success: false,
+      message: client || message.includes('MongoDB') ? message : 'Failed to update message',
+    });
+  }
+}
+
+async function deleteAdminTicketMessage(req, res) {
+  try {
+    const data = await deleteTicketMessage(req.params.id, req.params.messageId, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error deleting ticket message:', err);
+    const message = err?.message || 'Failed to delete message';
+    const client = ticketMessageClientError(message);
+    res.status(message.includes('MongoDB') ? 503 : client ? 400 : 500).json({
+      success: false,
+      message: client || message.includes('MongoDB') ? message : 'Failed to delete message',
+    });
   }
 }
 
@@ -271,6 +327,11 @@ async function getPublicTicketCatalog(_req, res) {
 
 async function createPublicTicket(req, res) {
   try {
+    const requesterAccountId = req.session?.account_id || req.session?.accountId || null;
+    if (!requesterAccountId) {
+      return res.status(401).json({ success: false, message: 'Authentication required to submit a ticket' });
+    }
+
     const {
       subject,
       reason,
@@ -285,25 +346,6 @@ async function createPublicTicket(req, res) {
     }
     if (!description?.trim()) {
       return res.status(400).json({ success: false, message: 'Description is required' });
-    }
-
-    const { LOGGED_OUT_TICKET_TYPES, normalizeTicketType: normalizeType } = {
-      ...require('../lib/TicketFormFields'),
-      normalizeTicketType: require('../lib/TicketEnums').normalizeTicketType,
-    };
-    const normalizedType = normalizeType(type || category || 'Other');
-    let requesterAccountId = req.session?.account_id || req.session?.accountId || null;
-    if (!requesterAccountId && LOGGED_OUT_TICKET_TYPES.includes(normalizedType)) {
-      requesterAccountId = await findAccountByEmailOrUsername(req.body?.fields?.email_or_username);
-      if (!requesterAccountId) {
-        return res.status(400).json({
-          success: false,
-          message: 'No account matches that email or username',
-        });
-      }
-    }
-    if (!requesterAccountId) {
-      return res.status(401).json({ success: false, message: 'Authentication required' });
     }
 
     const data = await createSupportTicket(
@@ -336,21 +378,31 @@ async function createPublicTicket(req, res) {
   }
 }
 
+function sessionCanReadTicket(data, accountId) {
+  if (!data?.ticket || !accountId) return false;
+  if (String(data.ticket.requester?.accountId) === String(accountId)) return true;
+  return (data.participants || []).some(
+    (person) => String(person.accountId) === String(accountId) && person.status === 'active'
+  );
+}
+
 async function listMyTickets(req, res) {
   try {
     const accountId = req.session?.account_id || req.session?.accountId;
     if (!accountId) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
+    const participantTicketIds = await listParticipantTicketIds(accountId);
     const result = await pool.query(
       `
       SELECT ticket_id, ticket_number, reason, type, priority, status,
              message_count, last_message_at, created_at, updated_at, resolved_at
       FROM tickets
-      WHERE account_id = $1 AND deleted_at IS NULL
+      WHERE deleted_at IS NULL
+        AND (account_id = $1 OR ticket_id = ANY($2::uuid[]))
       ORDER BY updated_at DESC NULLS LAST, created_at DESC
       `,
-      [accountId]
+      [accountId, participantTicketIds]
     );
     res.status(200).json({
       success: true,
@@ -385,7 +437,7 @@ async function getMyTicket(req, res) {
     }
     const data = await getTicketDetail(req.params.id);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
-    if (String(data.ticket.requester.accountId) !== String(accountId)) {
+    if (!sessionCanReadTicket(data, accountId)) {
       return res.status(403).json({ success: false, message: 'Not your ticket' });
     }
     // Hide staff internal notes from requesters.
@@ -416,21 +468,25 @@ async function postMyTicketMessage(req, res) {
     }
     const existing = await getTicketDetail(req.params.id);
     if (!existing) return res.status(404).json({ success: false, message: 'Ticket not found' });
-    if (String(existing.ticket.requester.accountId) !== String(accountId)) {
+    if (!sessionCanReadTicket(existing, accountId)) {
       return res.status(403).json({ success: false, message: 'Not your ticket' });
     }
-    const data = await addTicketMessage(req.params.id, body?.trim() || '', req.session, false, req.body?.attachments);
-    data.messages = (data.messages || []).filter((m) => !m.isInternal);
-    delete data.assignableStaff;
-    delete data.timeline;
-    delete data.payments;
-    delete data.articles;
-    delete data.canAdjustCredits;
+    const data = await addTicketMessage(
+      req.params.id,
+      body?.trim() || '',
+      req.session,
+      false,
+      req.body?.attachments,
+      req.body?.replyToMessageId
+    );
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    if (data.isInternal) return res.status(403).json({ success: false, message: 'Not your ticket' });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error adding user ticket message:', err);
-    const msg = err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
-    res.status(err?.message?.includes('MongoDB') ? 503 : 500).json({ success: false, message: msg });
+    const status = err?.statusCode || (err?.message?.includes('MongoDB') ? 503 : 500);
+    const msg = status < 500 || err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
+    res.status(status).json({ success: false, message: msg });
   }
 }
 
@@ -529,6 +585,112 @@ async function postTicketCreditAdjustment(req, res) {
   }
 }
 
+async function getTicketParticipantSearch(req, res) {
+  try {
+    const people = await searchTicketParticipants(req.query.q || req.query.handle || '');
+    res.status(200).json({ success: true, data: people });
+  } catch (err) {
+    console.error('Error searching ticket participants:', err);
+    res.status(err.statusCode || 500).json({
+      success: false,
+      message: err.statusCode ? err.message : 'Failed to search people',
+    });
+  }
+}
+
+async function postTicketParticipant(req, res) {
+  try {
+    const accountId = req.body?.accountId || req.body?.account_id;
+    const data = await addTicketParticipant(req.params.id, accountId, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({
+      success: true,
+      data,
+      message: data.invitePending
+        ? 'Invite sent. They need to accept before they can open the ticket.'
+        : 'User added to the ticket',
+    });
+  } catch (err) {
+    console.error('Error adding ticket participant:', err);
+    res.status(err.statusCode || 400).json({
+      success: false,
+      message: err.message || 'Failed to add user',
+    });
+  }
+}
+
+async function deleteTicketParticipant(req, res) {
+  try {
+    const data = await removeTicketParticipant(req.params.id, req.params.accountId, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data, message: 'User removed from the ticket' });
+  } catch (err) {
+    console.error('Error removing ticket participant:', err);
+    res.status(err.statusCode || 400).json({
+      success: false,
+      message: err.message || 'Failed to remove user',
+    });
+  }
+}
+
+async function postTicketTranscript(req, res) {
+  try {
+    const data = await generateTicketTranscript(req.params.id, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data, message: 'Transcript saved' });
+  } catch (err) {
+    console.error('Error generating ticket transcript:', err);
+    res.status(err.statusCode || 400).json({
+      success: false,
+      message: err.message || 'Failed to generate transcript',
+    });
+  }
+}
+
+async function postTicketScheduleClose(req, res) {
+  try {
+    const data = await scheduleTicketClose(req.params.id, req.session, req.body?.closesAt);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data, message: 'Close time saved' });
+  } catch (err) {
+    console.error('Error scheduling ticket close:', err);
+    res.status(err.statusCode || 400).json({
+      success: false,
+      message: err.statusCode ? err.message : 'Failed to schedule the close',
+    });
+  }
+}
+
+async function deleteTicketScheduleClose(req, res) {
+  try {
+    const data = await cancelScheduledTicketClose(req.params.id, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data, message: 'Scheduled close cancelled' });
+  } catch (err) {
+    console.error('Error cancelling scheduled ticket close:', err);
+    res.status(err.statusCode || 400).json({
+      success: false,
+      message: err.statusCode ? err.message : 'Failed to cancel the scheduled close',
+    });
+  }
+}
+
+async function postMyTicketInvite(req, res) {
+  try {
+    const accountId = req.session?.account_id || req.session?.accountId;
+    if (!accountId) return res.status(401).json({ success: false, message: 'Authentication required' });
+    const data = await respondTicketInvite(req.params.id, accountId, req.body?.action);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error responding to ticket invite:', err);
+    res.status(err.statusCode || 400).json({
+      success: false,
+      message: err.message || 'Failed to respond to the invite',
+    });
+  }
+}
+
 async function postMyTicketSatisfaction(req, res) {
   try {
     const accountId = req.session?.account_id || req.session?.accountId;
@@ -546,6 +708,8 @@ module.exports = {
   createAdminTicket,
   patchAdminTicket,
   postAdminTicketMessage,
+  patchAdminTicketMessage,
+  deleteAdminTicketMessage,
   getAdminDisputeDetail,
   patchAdminDispute,
   postAdminDisputeMessage,
@@ -558,10 +722,17 @@ module.exports = {
   listMyTickets,
   getMyTicket,
   postMyTicketMessage,
+  postMyTicketInvite,
   createMyTechnicalReport,
   getAdminTicketArticles,
   postAdminTicketArticle,
   deleteAdminTicketArticle,
   postTicketCreditAdjustment,
+  getTicketParticipantSearch,
+  postTicketParticipant,
+  deleteTicketParticipant,
+  postTicketTranscript,
+  postTicketScheduleClose,
+  deleteTicketScheduleClose,
   postMyTicketSatisfaction,
 };

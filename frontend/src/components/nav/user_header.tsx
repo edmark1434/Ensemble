@@ -15,6 +15,8 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import toast from "react-hot-toast";
 import AccountAvatar from "@/components/ui/AccountAvatar";
 import { getNotificationIcon, getNotificationLabel } from "@/lib/notificationTypes";
+import TicketInviteActions from "@/components/nav/TicketInviteActions";
+import { showAccountWarningToast } from "@/components/ui/AccountStanding";
 
 interface UserHeaderProps {
   pageTitle: string;
@@ -512,6 +514,33 @@ useEffect(() => {
                 </div>
               </div>
             ), { duration: 5000 });
+          } else if (notification.reference_prefix === 'WARNING' || notification.reference_prefix === 'ACCOUNT_WARNING') {
+            showAccountWarningToast({
+              violationId: notification.reference_id,
+              type: 'Account Warning',
+              message: notification.message,
+              onNavigate: () => navigate('/notifications'),
+            });
+          } else if (notification.reference_prefix === 'TICKET_INVITE' && notification.reference_id) {
+            const def = getNotificationIcon(notification.reference_prefix);
+            toast.custom((t) => (
+              <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2`}>
+                <div className="absolute top-2 left-3">
+                  <span className={`text-[9px] font-bold tracking-wider uppercase ${def.text}`}>
+                    {getNotificationLabel(notification.reference_prefix)}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-gray-800 dark:text-gray-200">{notification.message}</p>
+                <TicketInviteActions
+                  ticketId={notification.reference_id}
+                  compact
+                  onDone={(result, chatId) => {
+                    toast.dismiss(t.id);
+                    if (result === 'accepted' && chatId) navigate('/inbox/direct', { state: { conversationId: chatId } });
+                  }}
+                />
+              </div>
+            ), { duration: 12000 });
           } else {
             const def = getNotificationIcon(notification.reference_prefix);
             toast.custom((t) => (

@@ -20,7 +20,9 @@ import {
   Trash,
   ZoomIn,
   ZoomOut, EyeOff, LockOpen, Eye, VolumeOff, Volume2, Home, Scissors, ClipboardPaste,
-  Component, ArrowLeft
+  Component, ArrowLeft,
+  MessageSquare,
+  MessageSquareShare
 } from "lucide-react";
 import {
   getFitZoomLevel,
@@ -55,6 +57,10 @@ import {
 } from "@/components/ui/breadcrumb";
 import { PLAYER_PAUSE } from "@/features/editor/constants/events";
 import { useViewOnly } from "@/features/editor/hooks/use-view-only";
+import { useCanComment } from "@/features/editor/hooks/use-can-comment";
+import { startComment } from "@/features/editor/comments/start-comment";
+import { useCommentsStore } from "@/features/editor/store/use-comments-store";
+import useLayoutStore from "@/features/editor/store/use-layout-store";
 
 const IconAddMarker = ({ size }: { size: number }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 2.5 24 24" fill="none"
@@ -108,10 +114,27 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
   const isSaving = saveStatus === "saving" || compactStatus === "compacting";
   const isLargeScreen = useIsLargeScreen();
   const viewOnly = useViewOnly();
+  const canComment = useCanComment();
 
   useUpdateAnsestors({ playing, playerRef });
 
   const currentFrame = useCurrentPlayerFrame(playerRef);
+  const commentThreads = useCommentsStore((s) => s.data?.threads);
+  // same frame match the comments panel uses for "focused"
+  const activeCommentThread = (commentThreads ?? []).find(
+    (t) => t.timeMs != null && Math.round((t.timeMs * fps) / 1000) === currentFrame
+  );
+  const isCommentActive = !!activeCommentThread;
+  const setActiveRightItem = useLayoutStore((s) => s.setActiveRightItem);
+  const setFocusedCommentId = useCommentsStore((s) => s.setFocusedId);
+
+  // same behavior as clicking a comment marker in the ruler
+  const openActiveComment = () => {
+    if (!activeCommentThread || activeCommentThread.timeMs == null) return;
+    playerRef?.current?.seekTo(Math.round((activeCommentThread.timeMs * fps) / 1000));
+    setFocusedCommentId(activeCommentThread.id);
+    setActiveRightItem("comments");
+  };
   const timelineOffsetX = useTimelineOffsetX();
 
   const doActiveDelete = () => {
@@ -690,7 +713,8 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
                       onClick={toggleMarker}
                       variant={"ghost"}
                       size={"icon"}
-                      className={`disabled:opacity-0 disabled:pointer-events-none ${isMarkerActive ? "text-primary hover:text-primary" : ""}`}
+                      className="disabled:opacity-0 disabled:pointer-events-none"
+                      style={isMarkerActive ? { color: "#f43f5e" } : undefined}
                     >
                       {isMarkerActive ? <IconRemoveMarker size={16} /> : <IconAddMarker size={16} />}
                     </Button>
@@ -703,6 +727,27 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
                   </TooltipContent>
                 </Tooltip>
               </>
+            )}
+
+            {canComment && (
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={isCommentActive ? openActiveComment : startComment}
+                    variant={"ghost"}
+                    size={"icon"}
+                    className={isCommentActive ? "text-primary hover:text-primary" : ""}
+                  >
+                    {isCommentActive ? <MessageSquareShare size={16} /> : <MessageSquare size={16} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  {isCommentActive ? "Open comments" : <>Add comment <Kbd>C</Kbd></>}
+                </TooltipContent>
+              </Tooltip>
             )}
           </div>
 

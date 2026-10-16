@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/inbox/inbox_functions/inbox_upload_image";
 import useChatState, { formatCallCardText, type ChatTarget } from "../chat_state";
 import { InboxEmojiPicker } from "@/components/ui/inbox/inbox_functions/inbox_emoji_picker";
+import { InboxUnsentMessage } from "@/components/ui/inbox/inbox_functions/inbox_unsend_message";
 import { ChatImagePreview } from "@/components/ui/inbox/inbox_functions/chat_image_preview";
 import LiveGoogleMeetingBanner from "./LiveGoogleMeetingBanner";
 import { MarketplaceContextCard } from "@/components/ui/inbox/inbox_components/marketplace_context_card";
@@ -502,8 +503,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         ) : (
           messages.map((message) => {
             const isMe = String(message.sender_id) === currentActorId;
-            const isDeleted =
-              message.is_deleted || message.is_unsent || Boolean(message.deleted_at);
+            const isUnsent = Boolean(message.is_unsent || message.is_deleted || message.deleted_at);
+            if (isUnsent && user?.type !== "Staff") return null;
             const parent = message.message_id_reply
               ? messages.find(
                   (item) => String(item._id) === String(message.message_id_reply)
@@ -583,8 +584,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       </button>
                     )}
                     <div data-floating-message={message._id}>
-                      {isDeleted ? (
-                        <span className="italic opacity-60">Message deleted</span>
+                      {isUnsent ? (
+                        <InboxUnsentMessage isSender={isMe} body={message.message_content} />
                       ) : (
                         <>
                           {(() => {
@@ -700,7 +701,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       )}
                     </div>
                   </div>
-                  {!isDeleted && (
+                  {!isUnsent && (
                     <div className="relative opacity-0 transition group-hover:opacity-100">
                       <button
                         data-floating-menu-trigger={message._id}
@@ -751,9 +752,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             </button>}
                             {isMe && (
                               <>
+                                {!hasRestrictedMessageTools && (
                                 <button onClick={() => beginEdit(message)} className="flex w-full gap-2 rounded px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800">
                                   <Pencil size={13} /> Edit
                                 </button>
+                                )}
                                 <button onClick={() => { closeMessageMenu(); void deleteMessage(message._id); }} className="flex w-full gap-2 rounded px-2 py-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">
                                   <Trash2 size={13} /> Delete
                                 </button>

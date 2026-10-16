@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Bell, CheckCheck, InboxIcon, Users, Activity, CreditCard, Shield } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "@/lib/axios";
+import TicketInviteActions from "@/components/nav/TicketInviteActions";
 import { getFollower, getNotificationIcon, getNotificationLabel } from "@/lib/notificationTypes";
 import { useAccountAvatars } from "@/lib/accountAvatars";
 import AccountAvatar from "@/components/ui/AccountAvatar";
@@ -37,7 +38,7 @@ const TRANSACTION_PREFIXES = new Set([
 const SYSTEM_PREFIXES = new Set([
   "VERIFICATION", "BUSINESS_VERIFICATION", "IDENTITY_REVERIFICATION", "SUSPEND", "MARKETPLACE",
   "TICKET_ASSIGNED", "TICKET_RESOLVED", "TICKET_REPLY", "TICKET_INTERNAL_REPLY",
-  "BADGE_GRANTED",
+  "BADGE_GRANTED", "WARNING", "ACCOUNT_WARNING", "ACCOUNT_BANNED", "ACCOUNT_LOCKED", "RESTORE",
 ]);
 
 interface BadgeGrant {
@@ -248,6 +249,25 @@ const NotificationsPage: React.FC = () => {
                     const def = getIconDef(n.reference_prefix);
                     const follower = n.reference_prefix === "follow" ? getFollower(n.message) : null;
                     const isFollower = n.reference_prefix === "follow";
+                    if (n.reference_prefix === "TICKET_INVITE") {
+                      return (
+                        <motion.li key={n.notification_id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.035 }} className="flex items-center gap-4 px-5 py-4">
+                          <div className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/5 ${def.text}`}>{def.icon}</div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-zinc-500">{getNotificationLabel(n.reference_prefix)}</span>
+                            <p className={`text-sm leading-snug ${!n.is_read ? "text-gray-900 dark:text-white font-medium" : "text-gray-600 dark:text-zinc-400"}`}>{n.message}</p>
+                          </div>
+                          <TicketInviteActions
+                            ticketId={n.reference_id}
+                            onDone={(result, chatId) => {
+                              setNotifications((prev) => prev.map((item) => item.notification_id === n.notification_id ? { ...item, is_read: true } : item));
+                              void api.patch(`/api/notifications/${n.notification_id}/read`).catch(() => undefined);
+                              if (result === "accepted" && chatId) navigate("/inbox/direct", { state: { conversationId: chatId } });
+                            }}
+                          />
+                        </motion.li>
+                      );
+                    }
                     if (n.reference_prefix === "BADGE_GRANTED") {
                       const grant = badgeGrants[n.reference_id];
                       const meta = grant ? badgeMetaById.get(grant.registry_id) : undefined;

@@ -35,10 +35,7 @@ import {
   uploadChatAttachment,
   useInboxUploadMedia,
 } from "./inbox_functions/inbox_upload_image";
-import {
-  InboxUnsentMessage,
-  type ExtendedMessage,
-} from "./inbox_functions/inbox_unsend_message";
+import { InboxUnsentMessage, type ExtendedMessage } from "./inbox_functions/inbox_unsend_message";
 import {
   InboxReplyQuote,
   scrollToRepliedMessage,
@@ -617,13 +614,13 @@ const InboxMain = () => {
     previousMessageCountRef.current = messages.length;
   }, [messages.length]);
 
-  const visibleMessages = useMemo(
-    () =>
-      messages.slice(
-        Math.max(0, messages.length - Math.min(visibleMessageCount, messages.length))
-      ),
-    [messages, visibleMessageCount]
-  );
+  const canSeeUnsent = user?.type === "Staff";
+  const visibleMessages = useMemo(() => {
+    const sent = canSeeUnsent
+      ? messages
+      : messages.filter((message) => !message.is_unsent && !message.is_deleted && !message.deleted_at);
+    return sent.slice(Math.max(0, sent.length - Math.min(visibleMessageCount, sent.length)));
+  }, [canSeeUnsent, messages, visibleMessageCount]);
   const latestSeenOwnMessageId = useMemo(
     () =>
       [...visibleMessages]
@@ -813,7 +810,6 @@ const InboxMain = () => {
     const hasRestrictedMessageTools = ["ticket", "dispute"].includes(
       String(selectedConversation?.conversation_type || "").toLowerCase()
     );
-    const isUnsent = message.is_unsent;
     const attachments = message.attachments || [];
     const hasText = Boolean(message.message_content && message.message_content.trim());
     const isCallCard = /^(?:\[video-call:(?:missed|ended)\]|\[meeting:(?:requested|ended):[^\]]+\]|\[zoom-call:(?:started|ended):[^\]]+\])/.test(
@@ -898,6 +894,21 @@ const InboxMain = () => {
       )}&background=71717a&color=fff`;
     })();
 
+    if (message.is_unsent || message.is_deleted || message.deleted_at) {
+      if (!canSeeUnsent) return null;
+      return (
+        <div
+          key={message._id}
+          data-message-id={message._id}
+          className={`group relative my-2 flex items-center gap-2 ${
+            isSender ? "flex-row-reverse" : "flex-row"
+          }`}
+        >
+          <InboxUnsentMessage isSender={isSender} body={message.message_content} />
+        </div>
+      );
+    }
+
     if (message.message_type === "system") {
       return (
         <div
@@ -927,11 +938,7 @@ const InboxMain = () => {
             className="h-8 w-8 flex-shrink-0 self-end rounded-full object-cover"
           />
         )}
-        {isUnsent ? (
-          <InboxUnsentMessage isSender={isSender} />
-        ) : (
-          <>
-            <div className="relative max-w-[75%] flex flex-col">
+        <div className="relative max-w-[75%] flex flex-col">
               {isGroupMessage && (
                 <span
                   className={`mb-1 px-1 text-[11px] font-medium text-gray-500 dark:text-zinc-400 ${
@@ -1176,6 +1183,7 @@ const InboxMain = () => {
                   >
                     {isSender && (
                       <>
+                        {!isTicketMessage && (
                         <button
                           onClick={() => {
                             setEditingMessage(message);
@@ -1188,6 +1196,7 @@ const InboxMain = () => {
                           <Pencil className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
                           Edit
                         </button>
+                        )}
                         <button
                           onClick={() => handleUnsend(message._id)}
                           className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-red-500 hover:bg-red-500/10"
@@ -1238,8 +1247,6 @@ const InboxMain = () => {
                 )}
               </div>
             </div>
-          </>
-        )}
       </div>
     );
   };
