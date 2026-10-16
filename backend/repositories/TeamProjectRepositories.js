@@ -697,6 +697,29 @@ async function getProjectMilestones(teamId, viewerAccountId) {
       COALESCE(cm.status, c.status, 'pending') as milestone_status,
       cm.credits as milestone_credits,
       cm.started_at,
+      cm.no_of_revisions_max,
+      (
+        SELECT COUNT(*)::int
+        FROM milestone_submits ms
+        WHERE ms.contract_milestone_id = cm.contract_milestone_id AND LOWER(ms.status) = 'revision_requested'
+      ) as revisions_used,
+      (
+        SELECT COALESCE(
+          json_agg(
+            json_build_object(
+              'id', ms.milestone_submit_id,
+              'message', ms.message,
+              'attachments', ms.attachments,
+              'status', ms.status,
+              'submitted_at', ms.submitted_at,
+              'responded_at', ms.responded_at
+            ) ORDER BY ms.submitted_at DESC
+          ),
+          '[]'::json
+        )
+        FROM milestone_submits ms
+        WHERE ms.contract_milestone_id = cm.contract_milestone_id
+      ) as submissions,
       
       -- Assignee details
       freelancer_acc.account_id as assignee_account_id,

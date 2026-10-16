@@ -10,6 +10,7 @@ import {
   Clock,
   Edit3,
   FileText,
+  FileCheck,
   Flag,
   Kanban,
   Layers,
@@ -28,13 +29,14 @@ import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 import { ProjectOverviewTab } from './ProjectOverviewTab';
 import { ProjectTaskboardTab } from './ProjectTaskboardTab';
+import { ProjectSubmissionsTab } from './ProjectSubmissionsTab';
 import { ProjectContractAndMembersTab } from './ProjectContractAndMembersTab';
 import { ProjectHistoryTab } from './ProjectHistoryTab';
 import { ProjectChatTab } from './ProjectChatTab';
 import ReportTeamModal from '../team_modals/ReportTeamModal';
 import { RateReviewModal } from '@/pages/user/8_dashboard/dashboard_components/RateReviewModal';
 
-type TabType = 'overview' | 'taskboard' | 'contract' | 'history' | 'chat';
+type TabType = 'overview' | 'taskboard' | 'submissions' | 'contract' | 'history' | 'chat';
 
 export const TeamProjectWorkspace: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -44,7 +46,12 @@ export const TeamProjectWorkspace: React.FC = () => {
   const currentUserAccountId = user?.account_id || user?.id || '';
 
   const rawTab = searchParams.get('tab');
-  const initialTab: TabType = rawTab === 'members' || rawTab === 'contract' ? 'contract' : ((rawTab as TabType) || 'overview');
+  const initialTab: TabType =
+    rawTab === 'members' || rawTab === 'contract'
+      ? 'contract'
+      : rawTab === 'submissions' || rawTab === 'submission'
+      ? 'submissions'
+      : ((rawTab as TabType) || 'overview');
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 
   const [project, setProject] = useState<any>(null);
@@ -521,11 +528,19 @@ export const TeamProjectWorkspace: React.FC = () => {
             )}
           </div>
 
-          {/* Navigation Tabs (5 Dedicated Tabs) */}
+          {/* Navigation Tabs (6 Dedicated Tabs) */}
           <div className="flex items-center border-t border-slate-200 dark:border-zinc-800 overflow-x-auto bg-slate-50/50 dark:bg-zinc-900/30 px-6">
             {[
               { id: 'overview', label: 'Overview', icon: FileText },
               { id: 'taskboard', label: 'Taskboard', icon: Kanban, badge: taskboardTasks.length },
+              {
+                id: 'submissions',
+                label: 'Submissions',
+                icon: FileCheck,
+                badge: milestones.filter(
+                  (m) => String(m.milestone_status || '').toLowerCase() === 'submitted_for_review'
+                ).length,
+              },
               { id: 'contract', label: 'Contract & Members', icon: Briefcase, badge: members.length },
               { id: 'history', label: 'History', icon: Clock, badge: history.length },
               { id: 'chat', label: 'Chat', icon: MessageCircle },
@@ -591,6 +606,17 @@ export const TeamProjectWorkspace: React.FC = () => {
               members={members}
               contracts={contracts}
               onTasksUpdated={loadProjectData}
+            />
+          )}
+
+          {activeTab === 'submissions' && (
+            <ProjectSubmissionsTab
+              teamId={project.team_id}
+              milestones={milestones}
+              contracts={contracts}
+              currentUserAccountId={currentUserAccountId}
+              isClient={isClient}
+              onUpdated={loadProjectData}
             />
           )}
 

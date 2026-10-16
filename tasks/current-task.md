@@ -1,35 +1,24 @@
-# Current Task: Chat Member Profile Options Menu & Merge Contract and Members Tabs
+# Current Task: Taskboard 4 Displays (Board, List, Table, Gantt) & New Submissions Tab
 
 ## Objective
-1. **Chat Member Profile Options Menu**:
-   - In Team Project Chat (`ProjectChatTab.tsx`), clicking a member's profile (in the member roster or in message bubbles) opens an interactive contextual options menu with:
-     - **View Profile**: navigates to `/profile/:accountId`.
-     - **Follow User**: checks live follow status (`/api/accounts/:accountId/follow-status`), toggles follow/unfollow via `/api/accounts/:accountId/follow`, and shows immediate status feedback.
-     - **Message**: opens a direct conversation with that member via `useChatState.getState().openDirectChat({ account_id, name, avatarUrl })`.
-     - **Report User**: opens `ReportMemberModal` to report that specific member with reason and description, saving to the PostgreSQL `reports` table.
-2. **Merge Contract and Members Tabs into "Contract & Members"**:
-   - In `TeamProjectWorkspace.tsx`, merged the separate `Contract` and `Members` tabs into a single unified tab named **Contract & Members**.
-   - Created `ProjectContractAndMembersTab.tsx` combining both views with clean sub-tab switching:
-     - **Contracts (N)**: displays the contract cards and escrow details with sequential position and escrow security.
-     - **Members (N)**: displays the contributors roster and contractual team policy notice.
-   - Maintained backward and direct URL compatibility (`?tab=contract` or `?tab=members`).
+1. **New Submissions Tab in Team Project Workspace**:
+   - Added a dedicated **Submissions** tab in `TeamProjectWorkspace.tsx` alongside Overview, Taskboard, Submissions, Contract & Members, History, Chat.
+   - Implemented `ProjectSubmissionsTab.tsx`:
+     - Contributors submit milestone deliverables/work updates with notes, document keys, URLs, and mark ready for review (`/api/dashboard/tasks/:contractId/milestones/:milestoneId/submit`).
+     - Client reviews submitted deliverables with actions to:
+       - **Approve**: releases escrow payout and advances milestone (`/api/dashboard/tasks/:contractId/milestones/:milestoneId/review` with `status: 'approval'`).
+       - **Request Revision**: provides revision feedback instructions, decrements revision counter (`status: 'revision_request'`).
+       - **Send Feedback Message**: message without status change (`status: 'client_message'`).
+     - Shows milestone deliverables timeline, past submission versions, client feedback, escrow protection values, countdown/deadlines, and revision limits.
+2. **Taskboard Tracker Redesign (4 Display Views)**:
+   - In `ProjectTaskboardTab.tsx`, implemented 4 view displays based on reference design:
+     - **Board** (default): ClickUp/Kanban board with Status headers (TO DO dashed circle, IN PROGRESS blue pill, COMPLETE green pill), quick action row (assignee, due date, priority flag, tags), and `+ Add Task`.
+     - **List**: Grouped by status (`IN PROGRESS`, `TO DO`, `COMPLETE`) with column headers (Name, Assignee, Due date, Priority, Status), status bullet indicators, comment indicators, and `+ Add Task` per group.
+     - **Table**: Clean spreadsheet grid with row numbers, sortable Name, Assignee avatar/selector, Status pill, Due date, Priority flag, Milestone tag, and quick `+` add row.
+     - **Gantt**: Interactive Gantt timeline chart with tasks list on the left and horizontal schedule bars across days/weeks on the right, status color fills, milestone markers, and hover tooltips.
+   - Header toolbar with Status selector pill, filter controls, assignee dropdown/stack, search, and primary `+ Task` button.
 
 ## Status: Complete
 
-## Changes Implemented
-1. **Backend Member Reporting**:
-   - Updated `backend/services/TeamsServices.js` (`report`) to accept `targetAccountId`.
-   - Updated `backend/repositories/TeamsRepositories.js` (`addReport`) to record `for_account_id = targetAccountId`, `target_type = 'Member'`, and `target_id = targetAccountId` when reporting a specific member.
-2. **Chat Member Profile Options Menu**:
-   - In `ProjectChatTab.tsx`:
-     - Added click handling for avatars and names in both the Team Members sidebar roster and incoming chat message bubbles.
-     - Rendered a floating popover anchored near the clicked profile with user preview, View Profile, Follow User (with live follow status check and toggle), Message (via `openDirectChat`), and Report User (triggering `ReportMemberModal`).
-     - Added click-away backdrop and Escape key listener to cleanly dismiss the menu.
-3. **Unified Contract & Members Tab**:
-   - Created `ProjectContractAndMembersTab.tsx` combining `ProjectContractTab` and `ProjectMembersTab` features with a top sub-tab segmented control.
-   - Updated `TeamProjectWorkspace.tsx` tab navigation from 6 tabs to 5 tabs with `Contract & Members` (`badge: members.length`).
-   - Wired `searchParams.get('tab') === 'members'` to automatically activate the Members sub-tab.
-
 ## Verification
-- Frontend: `cd frontend && npm run build` passed with zero TypeScript and bundler errors (`✓ built in 3.86s`).
-- Preserved existing controller → service → repository separation and design guidelines.
+- Verified build: `npm run build` in `frontend` completed with 0 errors (`✓ built in 4.12s`).
