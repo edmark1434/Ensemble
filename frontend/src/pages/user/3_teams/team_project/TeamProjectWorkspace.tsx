@@ -605,6 +605,7 @@ export const TeamProjectWorkspace: React.FC = () => {
               isClient={isClient}
               members={members}
               contracts={contracts}
+              milestones={milestones}
               onTasksUpdated={loadProjectData}
             />
           )}

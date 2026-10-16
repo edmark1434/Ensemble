@@ -329,14 +329,19 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
   }
 
   const { client_account_id, assignee_account_id, is_locked } = permRes.rows[0];
-  const isAuthorized = String(viewerAccountId) === String(client_account_id) ||
-                       String(viewerAccountId) === String(assignee_account_id);
+  const isAssignee = String(viewerAccountId) === String(assignee_account_id);
+  const isClient = String(viewerAccountId) === String(client_account_id);
 
-  if (!isAuthorized) {
+  if (!isAssignee && !isClient) {
     throw new Error('You do not have permission to modify this task.');
   }
 
-  if (is_locked && String(viewerAccountId) !== String(client_account_id)) {
+  // Only the person assigned to the task can change its status
+  if (status !== undefined && status !== null && !isAssignee) {
+    throw new Error('Only the assigned team member can change the status of this task.');
+  }
+
+  if (is_locked && !isClient) {
     throw new Error('This task is locked waiting for previous milestones to be completed.');
   }
 
@@ -347,7 +352,7 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
            status = COALESCE($3, status),
            checklist = COALESCE($4, checklist),
            priority = COALESCE($5, priority),
-           due_at = COALESCE($6, due_at),
+           due_at = CASE WHEN $6 = 'CLEAR' THEN NULL WHEN $6 IS NOT NULL THEN $6::timestamptz ELSE due_at END,
            completed_at = CASE WHEN $3 = 'completed' THEN NOW() WHEN $3 IS NOT NULL AND $3 != 'completed' THEN NULL ELSE completed_at END,
            updated_at = NOW()
      WHERE task_id = $7
@@ -358,7 +363,7 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     status || null,
     checklist ? JSON.stringify(checklist) : null,
     priority || null,
-    due_at || null,
+    due_at !== undefined ? due_at : null,
     taskId
   ]);
 
