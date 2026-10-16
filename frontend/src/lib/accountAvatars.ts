@@ -1,14 +1,32 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/axios";
 
-export function resolveAvatarUrl(path?: string | null): string | null {
-  if (!path) return null;
-  if (/^https?:\/\//i.test(path)) return path;
+export function getFallbackAvatarUrl(name?: string | null): string {
+  const cleanName = encodeURIComponent((name || "User").trim());
+  return `https://ui-avatars.com/api/?name=${cleanName}&background=71717a&color=fff&size=128`;
+}
+
+export function constructAvatarUrl(path?: string | null, name?: string | null): string {
+  if (!path || path.trim() === "") {
+    return getFallbackAvatarUrl(name);
+  }
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
   const presetMatch = path.match(/p\d+\.png$/i);
-  if (presetMatch) return `/profile_presets/${presetMatch[0]}`;
+  if (presetMatch) {
+    return `/profile_presets/${presetMatch[0]}`;
+  }
   const cloudfrontUrl = (import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/$/, "");
   const cleanPath = path.startsWith("/") ? path.substring(1) : path;
   return cloudfrontUrl ? `${cloudfrontUrl}/${cleanPath}` : `/${cleanPath}`;
+}
+
+export function resolveAvatarUrl(path?: string | null, name?: string | null): string | null {
+  if (!path || path.trim() === "") {
+    return name ? getFallbackAvatarUrl(name) : null;
+  }
+  return constructAvatarUrl(path, name);
 }
 
 const cache = new Map<string, Promise<string | null>>();

@@ -13,6 +13,7 @@ import { ProfileTags } from "@/pages/user/7_profile/Utilities/ProfileTags";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { InviteToJobModal } from "@/components/ui/InviteToJobModal";
 import DiscoveryFlipCardModal from "@/components/ui/DiscoveryFlipCardModal";
+import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 
 interface UserProfile {
   id: string;
@@ -56,18 +57,14 @@ interface MatchResult {
 
 const norm = (s: string) => s.trim().toLowerCase();
 
-const mapAccount = (account: any, cloudfront: string): UserProfile => {
+const mapAccount = (account: any, _cloudfront: string): UserProfile => {
   const avatarPath = account.avatar_preset_url || "";
   const name = account.full_name || account.display_name || account.handle;
   return {
     id: String(account.account_id),
     name,
     username: account.handle,
-    avatar: avatarPath
-      ? /^https?:\/\//i.test(avatarPath)
-        ? avatarPath
-        : `${cloudfront}/${avatarPath.replace(/^\/+/, "")}`
-      : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`,
+    avatar: constructAvatarUrl(avatarPath, name),
     bio: account.bio || "",
     tagline: account.tagline || "",
     skills: (account.skills || []).map((s: any) => s.name),
@@ -683,7 +680,18 @@ export default function DiscoveryPage() {
                       className="group rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 cursor-pointer transition hover:border-zinc-300 dark:hover:border-white/20 hover:shadow-md animate-fade-in"
                     >
                       <div className="flex items-start gap-3">
-                        <img src={profile.avatar} alt="" className="h-14 w-14 rounded-full object-cover border border-zinc-200 dark:border-white/10 shrink-0" />
+                        <img
+                          src={profile.avatar}
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            const fallback = getFallbackAvatarUrl(profile.name);
+                            if (target.src !== fallback) {
+                              target.src = fallback;
+                            }
+                          }}
+                          alt=""
+                          className="h-14 w-14 rounded-full object-cover border border-zinc-200 dark:border-white/10 shrink-0"
+                        />
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="font-bold text-sm truncate group-hover:text-blue-500 transition-colors">{profile.name}</h3>
@@ -906,7 +914,18 @@ export default function DiscoveryPage() {
                         )}
 
                         <div className="flex items-start gap-3 mt-1">
-                          <img src={myProfile.avatar} alt="" className="h-14 w-14 rounded-full object-cover border border-zinc-200 dark:border-white/10 shrink-0" />
+                          <img
+                            src={myProfile.avatar}
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              const fallback = getFallbackAvatarUrl(myProfile.name);
+                              if (target.src !== fallback) {
+                                target.src = fallback;
+                              }
+                            }}
+                            alt=""
+                            className="h-14 w-14 rounded-full object-cover border border-zinc-200 dark:border-white/10 shrink-0"
+                          />
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <h3 className="font-bold text-sm truncate">{myProfile.name}</h3>

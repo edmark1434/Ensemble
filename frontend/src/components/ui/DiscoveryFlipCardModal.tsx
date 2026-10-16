@@ -4,12 +4,13 @@ import FlipCard from "./FlipCard";
 import { useNavigate } from "react-router-dom";
 import { badgesRegistry } from "@/pages/user/7_profile/Utilities/BadgesRegistry";
 import { bannerPresetUrl } from "@/lib/profileBanners";
+import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 
 export interface DiscoveryFlipCardUser {
   id: string;
   name: string;
   username: string;
-  avatar: string;
+  avatar?: string | null;
   bio: string;
   skills: string[];
   rawSkills?: { name: string; proficiency: string; years: number }[];
@@ -56,6 +57,7 @@ export const DiscoveryFlipCardModal: React.FC<DiscoveryFlipCardModalProps> = ({ 
     .filter((b): b is NonNullable<typeof b> => !!b);
   const topBadges = displayedBadges.slice(0, 3);
   const extraBadgeCount = displayedBadges.length - topBadges.length;
+  const avatarUrl = constructAvatarUrl(user.avatar, user.name);
 
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
@@ -83,7 +85,18 @@ export const DiscoveryFlipCardModal: React.FC<DiscoveryFlipCardModalProps> = ({ 
               )}
               <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-overlay" />
               
-              <img src={user.avatar} className="w-28 h-28 rounded-full object-cover border-4 border-zinc-100 dark:border-white/10 mb-5 z-10 shadow-sm" alt="Avatar" />
+              <img
+                src={avatarUrl}
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  const fallback = getFallbackAvatarUrl(user.name);
+                  if (target.src !== fallback) {
+                    target.src = fallback;
+                  }
+                }}
+                className="w-28 h-28 rounded-full object-cover border-4 border-zinc-100 dark:border-white/10 mb-5 z-10 shadow-sm"
+                alt={user.name ? `${user.name}'s avatar` : "Avatar"}
+              />
               <h2 className="text-2xl font-bold z-10 text-center">{user.name}</h2>
               <div className="flex items-center justify-center gap-1.5 mt-1 z-10 max-w-full">
                 <p className="text-xs text-zinc-600 dark:text-zinc-300 font-mono truncate">@{user.username}</p>

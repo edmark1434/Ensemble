@@ -277,7 +277,7 @@ const InboxMain = () => {
       }
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(
         getConversationName(inbox)
-      )}&background=6366f1&color=fff&bold=true`;
+      )}&background=71717a&color=fff&bold=true`;
     },
     [currentUserId, getConversationName, profiles, user]
   );
@@ -425,7 +425,7 @@ const InboxMain = () => {
 
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(
         name
-      )}&background=6366f1&color=fff`;
+      )}&background=71717a&color=fff`;
     },
     [currentUserId, profiles, selectedConversation, user]
   );
@@ -443,7 +443,7 @@ const InboxMain = () => {
             profile.avatar_preset_url &&
             /^https?:\/\//i.test(profile.avatar_preset_url)
               ? profile.avatar_preset_url
-              : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`,
+              : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=71717a&color=fff`,
         };
       }),
     [memberIds, profiles]
@@ -895,7 +895,7 @@ const InboxMain = () => {
       if (avatar && base) return `${base}/${avatar.replace(/^\/+/, "")}`;
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(
         senderName
-      )}&background=6366f1&color=fff`;
+      )}&background=71717a&color=fff`;
     })();
 
     if (message.message_type === "system") {
@@ -1388,7 +1388,7 @@ getConversationName={getConversationName}
               if (avatar) return chatAttachmentUrl(avatar);
               return `https://ui-avatars.com/api/?name=${encodeURIComponent(
                   accountId === currentActorId ? "You" : (profiles[accountId]?.name || accountId.slice(0, 8))
-                )}&background=6366f1&color=fff`;
+                )}&background=71717a&color=fff`;
             }}
             suggestedAccounts={suggestedAccounts}
             onUpdateMember={(

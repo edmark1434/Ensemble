@@ -90,7 +90,7 @@ const constructAvatarUrl = (path?: string | null): string => {
 
 const getFallbackAvatar = (name?: string): string => {
   const cleanName = encodeURIComponent((name || 'User').trim());
-  return `https://ui-avatars.com/api/?name=${cleanName}&background=0D8ABC&color=fff&size=128`;
+  return `https://ui-avatars.com/api/?name=${cleanName}&background=71717a&color=fff&size=128`;
 };
 
 interface CachedHeaderData {
@@ -681,7 +681,7 @@ useEffect(() => {
               ? /^https?:\/\//i.test(avatarPath)
                 ? avatarPath
                 : `${cloudfront}/${avatarPath.replace(/^\/+/, "")}`
-              : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`,
+              : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=71717a&color=fff`,
           };
         });
         if (!cancelled) setCreatorSearchResults(results);

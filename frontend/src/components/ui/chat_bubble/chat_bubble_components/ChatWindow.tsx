@@ -379,7 +379,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 src={
                   activeUser?.avatarUrl
                     ? chatAttachmentUrl(activeUser.avatarUrl)
-                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=6366f1&color=fff`
+                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=71717a&color=fff`
                 }
                 alt={displayName}
                 className="h-8 w-8 rounded-full object-cover"
@@ -550,12 +550,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             className="w-full h-full object-cover" 
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
-                              target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(message.author_name || "User")}&background=6366f1&color=fff&bold=true`;
+                              target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(message.author_name || "User")}&background=71717a&color=fff&bold=true`;
                             }}
                           />
                         ) : (
                           <img 
-                            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(message.author_name || "User")}&background=6366f1&color=fff&bold=true`} 
+                            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(message.author_name || "User")}&background=71717a&color=fff&bold=true`} 
                             alt="User" 
                             className="w-full h-full object-cover" 
                           />
@@ -829,7 +829,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                   ? chatAttachmentUrl(memberAvatar)
                                   : `https://ui-avatars.com/api/?name=${encodeURIComponent(
                                       memberName
-                                    )}&background=6366f1&color=fff`
+                                    )}&background=71717a&color=fff`
                               }
                               alt={`Seen by ${memberName}`}
                               className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-blue-400"
@@ -837,7 +837,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                 const target = e.target as HTMLImageElement;
                                 target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
                                   memberName
-                                )}&background=6366f1&color=fff`;
+                                )}&background=71717a&color=fff`;
                               }}
                             />
                           );

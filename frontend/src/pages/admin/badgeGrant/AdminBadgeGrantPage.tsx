@@ -31,7 +31,7 @@ interface Holder extends Omit<Recipient, 'badge_status'> {
 const MAX_MESSAGE = 500;
 
 const avatarUrl = (path?: string | null, name?: string | null) => {
-  if (!path) return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=0D8ABC&color=fff&size=64`;
+  if (!path) return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=71717a&color=fff&size=64`;
   if (/^https?:\/\//.test(path)) return path;
   const preset = path.match(/p\d+\.png$/i);
   if (preset) return `/profile_presets/${preset[0]}`;

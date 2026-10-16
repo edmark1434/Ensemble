@@ -24,7 +24,7 @@ const constructAvatarUrl = (path?: string | null): string => {
 
 const getFallbackAvatar = (name?: string): string => {
   const cleanName = encodeURIComponent((name || 'User').trim());
-  return `https://ui-avatars.com/api/?name=${cleanName}&background=0D8ABC&color=fff&size=128`;
+  return `https://ui-avatars.com/api/?name=${cleanName}&background=71717a&color=fff&size=128`;
 };
 
 const getSubscriptionIcon = (type: string) => {

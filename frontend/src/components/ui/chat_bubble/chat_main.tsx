@@ -240,7 +240,7 @@ export const ChatMain: React.FC<ChatMainProps> = ({
                               const target = e.target as HTMLImageElement;
                               target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
                                 chat.name || "User"
-                              )}&background=6366f1&color=fff&bold=true`;
+                              )}&background=71717a&color=fff&bold=true`;
                             }}
                           />
                         ) : (
