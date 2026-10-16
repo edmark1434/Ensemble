@@ -60,6 +60,8 @@ export const ProposalsMain: React.FC = () => {
 
   // Route check
   const isJobSelectionPage = location.pathname === "/jobs/proposals";
+  const isFlowPage = location.pathname.startsWith("/jobs/proposals/flow");
+  const isFullWidthPage = isJobSelectionPage || isFlowPage;
   const isSentPage = location.pathname.startsWith("/jobs/proposals/sent") || location.pathname.startsWith("/jobs/proposals/team-sent");
 
   const [loading, setLoading] = useState(true);
@@ -171,7 +173,7 @@ export const ProposalsMain: React.FC = () => {
         {/* Navigation Tabs & View Switcher */}
         <div className="mb-8 flex flex-wrap items-center justify-between border-b border-gray-200 dark:border-white/10 gap-4 pb-2">
           <ProposalsTabs />
-          {!isJobSelectionPage && (
+          {!isFullWidthPage && (
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowFilters(!showFilters)}
@@ -190,9 +192,9 @@ export const ProposalsMain: React.FC = () => {
         </div>
 
         {/* Sidebar & Content Layout */}
-        <div className={isJobSelectionPage ? "w-full" : "flex flex-col lg:flex-row gap-6 lg:gap-8 items-start"}>
+        <div className={isFullWidthPage ? "w-full" : "flex flex-col lg:flex-row gap-6 lg:gap-8 items-start"}>
           {/* Sidebar */}
-          {!isJobSelectionPage && (
+          {!isFullWidthPage && (
             <div className={`transition-all duration-300 origin-left ease-in-out shrink-0 ${
               showFilters ? "opacity-100 w-full lg:w-72" : "opacity-0 w-0 h-0 lg:h-auto overflow-hidden hidden lg:block"
             }`}>
@@ -235,7 +237,7 @@ export const ProposalsMain: React.FC = () => {
           )}
 
           {/* Sub-Pages Container */}
-          <div className={`transition-all duration-300 ${isJobSelectionPage ? "w-full" : "flex-1 min-w-0"}`}>
+          <div className={`transition-all duration-300 ${isFullWidthPage ? "w-full" : "flex-1 min-w-0"}`}>
             <Outlet
               context={
                 {

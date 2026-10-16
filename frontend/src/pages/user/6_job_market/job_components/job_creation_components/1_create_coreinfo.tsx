@@ -1,8 +1,9 @@
 import React, { useRef, useState, type ChangeEvent } from "react";
-import { ArrowRight, Image as ImageIcon, ChevronDown, Check, Bold, Italic, List, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Image as ImageIcon, ChevronDown, Check, Bold, Italic, List, Eye, EyeOff, Wand2 } from "lucide-react";
 import { JobRichText } from "../JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
-import { showErrorToast } from "@/components/utility/toast";
+import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
+import { handleRichTextPaste, autoFormatDescription } from "@/lib/markdownPaste";
 
 export const categories = [
   "Ads & Social",
@@ -186,6 +187,14 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
     }, 0);
   };
 
+  const handleAutoFormat = () => {
+    if (!description.trim()) return;
+    const formatted = autoFormatDescription(description);
+    setDescription(formatted);
+    clearError("description");
+    showSuccessToast("Formatted description with Markdown!");
+  };
+
   const processFile = (file: File) => {
     if (!file.type.startsWith("image/")) {
       showErrorToast("Please upload an image file.");
@@ -330,6 +339,16 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
             <button type="button" onClick={() => insertMarkdown('- ')} className="p-1 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors" title="Bullet List" disabled={isPreviewMode}>
               <List className="w-3.5 h-3.5" />
             </button>
+            <button
+              type="button"
+              onClick={handleAutoFormat}
+              className="p-1 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors flex items-center gap-1 px-1.5"
+              title="Auto-format AI / pasted text into Markdown (Bold headers, bullets, spacing)"
+              disabled={isPreviewMode || !description.trim()}
+            >
+              <Wand2 className="w-3.5 h-3.5 text-blue-500" />
+              <span className="text-[10px] font-semibold hidden sm:inline">Format</span>
+            </button>
             <div className="w-px h-4 bg-gray-100 dark:bg-white/10 mx-1" />
             <button type="button" onClick={() => setIsPreviewMode(!isPreviewMode)} className={`p-1 rounded transition-colors flex items-center gap-1 px-2 ${isPreviewMode ? 'bg-blue-500/20 text-blue-400' : 'bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-300'}`} title="Toggle Preview">
               {isPreviewMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -348,7 +367,19 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
             )}
           </div>
         ) : (
-          <textarea ref={descriptionRef} rows={8} maxLength={2000} placeholder="Outline requirements, raw footage details, deliverables..." value={description} onChange={e => { setDescription(e.target.value); if(e.target.value.trim()) clearError("description"); }} className={`w-full min-h-[180px] rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-3 text-xs text-gray-900 dark:text-white outline-none transition-all resize-y leading-relaxed custom-scrollbar ${errors.description ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"}`} />
+          <textarea
+            ref={descriptionRef}
+            rows={8}
+            maxLength={2000}
+            placeholder="Outline requirements, raw footage details, deliverables..."
+            value={description}
+            onPaste={(e) => {
+              const handled = handleRichTextPaste(e, description, setDescription, 2000);
+              if (handled) clearError("description");
+            }}
+            onChange={e => { setDescription(e.target.value); if(e.target.value.trim()) clearError("description"); }}
+            className={`w-full min-h-[180px] rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-3 text-xs text-gray-900 dark:text-white outline-none transition-all resize-y leading-relaxed custom-scrollbar ${errors.description ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"}`}
+          />
         )}
         
         {errors.description && <p className="text-[11px] text-red-400">{errors.description}</p>}

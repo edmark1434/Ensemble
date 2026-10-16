@@ -3,11 +3,12 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import api from '@/lib/axios';
 import useGlobalState from "@/lib/global_state"; 
 import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
-import { LayoutDashboard, Clock, Briefcase, FileSearch, ShieldCheck, CheckCircle, ExternalLink, Archive, Shield, Calendar, ChevronRight, Layers } from 'lucide-react';
+import { LayoutDashboard, Clock, Briefcase, FileSearch, ShieldCheck, CheckCircle, ExternalLink, Archive, Shield, Calendar, ChevronRight, Layers, Award, AlertTriangle, Star, HelpCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import UserHeader from "@/components/nav/user_header";
 import { DashboardTaskList } from './dashboard_components/DashboardTaskList';
 import { RateReviewModal } from './dashboard_components/RateReviewModal';
+import { DeliveryFlowGuide } from './dashboard_components/DeliveryFlowGuide';
 import socket from '@/lib/socket';
 
 // ============================================================================
@@ -66,6 +67,7 @@ const DashboardMain = () => {
     const navigate = useNavigate();
     const [tasks, setTasks] = useState<DashboardTask[]>([]);
     const [loading, setLoading] = useState(true);
+    const [profileStats, setProfileStats] = useState<any>(null);
 
     const [reviewModalOpen, setReviewModalOpen] = useState(false);
     const [reviewTarget, setReviewTarget] = useState({ id: '', name: '', value: '', isFreelancerRole: false, avatar: '' });
@@ -74,15 +76,35 @@ const DashboardMain = () => {
         ? 'client' 
         : location.pathname.includes('/dashboard/tasks') 
             ? 'freelancer' 
-            : location.pathname.includes('/dashboard/archived')
-                ? 'archived'
-                : 'overview';
+            : location.pathname.includes('/dashboard/rate')
+                ? 'rate'
+                : location.pathname.includes('/dashboard/archived')
+                    ? 'archived'
+                    : location.pathname.includes('/dashboard/flow')
+                        ? 'flow'
+                        : 'overview';
     const [currentTime, setCurrentTime] = useState(new Date());
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
+
+    useEffect(() => {
+        if (user?.account_id) {
+            api.get(`/api/accounts/profile/${user.account_id}`)
+                .then(res => {
+                    if (res.data?.success && res.data?.data) {
+                        setProfileStats(res.data.data);
+                    } else if (res.data) {
+                        setProfileStats(res.data);
+                    }
+                })
+                .catch(err => {
+                    console.error("Failed to fetch profile stats for dashboard:", err);
+                });
+        }
+    }, [user?.account_id]);
 
     useEffect(() => {
         fetchTasks();
@@ -140,9 +162,77 @@ const DashboardMain = () => {
         return Boolean(allMilestonesDone && myReview && theirReview);
     };
 
+    const isTaskToRate = (t: DashboardTask) => {
+        const allMilestonesDone = t.milestones?.length > 0 && t.milestones.every((m: any) => m.status === 'completed' || m.status === 'approved');
+        const isDone = t.contract_status === 'Done' || allMilestonesDone;
+        const isCompleted = t.contract_status === 'Completed';
+        if (isCompleted) return false;
+
+        const isFreelancer = t.user_role?.effective_role
+            ? t.user_role.effective_role === 'freelancer'
+            : t.freelancer_account_id === user?.account_id;
+        const myReview = isFreelancer ? t.freelancer_rating : t.client_rating;
+        const hasMyReview = Boolean(myReview && myReview.rating !== null && myReview.rating !== undefined && !isNaN(Number(myReview.rating)));
+
+        return isDone && !hasMyReview;
+    };
+
     const myTasks = tasks.filter(t => (t.user_role?.effective_role === 'freelancer' || (t.freelancer_account_id === user?.account_id && t.user_role?.effective_role !== 'client')) && !computeCompleted(t));
     const toReview = tasks.filter(t => (t.user_role?.effective_role === 'client' || (t.client_account_id === user?.account_id && t.user_role?.effective_role !== 'freelancer')) && !computeCompleted(t));
+    const toRateTasks = tasks.filter(t => isTaskToRate(t));
     const archivedTasks = tasks.filter(t => computeCompleted(t));
+
+    // Ratings received from Clients (when current user acted as Freelancer)
+    const clientRatingsList = tasks
+        .filter(t => (t.user_role?.effective_role === 'freelancer' || t.freelancer_account_id === user?.account_id) && t.client_rating?.rating)
+        .map(t => Number(t.client_rating.rating))
+        .filter(r => !isNaN(r) && r > 0);
+    
+    const profileClientCount = Number(profileStats?.freelancer_service_count || 0) + Number(profileStats?.freelancer_job_count || 0);
+    const profileClientWeighted = (Number(profileStats?.freelancer_service_rating || 0) * Number(profileStats?.freelancer_service_count || 0)) + 
+                                  (Number(profileStats?.freelancer_job_rating || 0) * Number(profileStats?.freelancer_job_count || 0));
+    
+    const totalClientReviewsCount = profileClientCount > 0 ? profileClientCount : clientRatingsList.length;
+    const avgClientRating = profileClientCount > 0
+        ? (profileClientWeighted / profileClientCount).toFixed(1)
+        : (clientRatingsList.length > 0
+            ? (clientRatingsList.reduce((sum, r) => sum + r, 0) / clientRatingsList.length).toFixed(1)
+            : '0.0');
+
+    // Ratings received from Freelancers (when current user acted as Client)
+    const freelancerRatingsList = tasks
+        .filter(t => (t.user_role?.effective_role === 'client' || t.client_account_id === user?.account_id) && t.freelancer_rating?.rating)
+        .map(t => Number(t.freelancer_rating.rating))
+        .filter(r => !isNaN(r) && r > 0);
+
+    const profileFreelancerCount = Number(profileStats?.client_service_count || 0) + Number(profileStats?.client_job_count || 0);
+    const profileFreelancerWeighted = (Number(profileStats?.client_service_rating || 0) * Number(profileStats?.client_service_count || 0)) + 
+                                      (Number(profileStats?.client_job_rating || 0) * Number(profileStats?.client_job_count || 0));
+
+    const totalFreelancerReviewsCount = profileFreelancerCount > 0 ? profileFreelancerCount : freelancerRatingsList.length;
+    const avgFreelancerRating = profileFreelancerCount > 0
+        ? (profileFreelancerWeighted / profileFreelancerCount).toFixed(1)
+        : (freelancerRatingsList.length > 0
+            ? (freelancerRatingsList.reduce((sum, r) => sum + r, 0) / freelancerRatingsList.length).toFixed(1)
+            : '0.0');
+
+    // Overdue Tasks: ongoing/waiting contracts with incomplete milestones past deadline
+    const overdueTasks = tasks.filter(t => {
+        const statusLower = t.contract_status?.toLowerCase();
+        if (statusLower === 'completed' || statusLower === 'done') return false;
+        if (!t.milestones || t.milestones.length === 0) return false;
+
+        const now = Date.now();
+        return t.milestones.some((m: any) => {
+            const isMilestoneDone = m.status === 'completed' || m.status === 'approved';
+            if (isMilestoneDone) return false;
+
+            const deadlineDate = m.deadline_at 
+                ? new Date(m.deadline_at).getTime() 
+                : (m.deadline && !isNaN(new Date(m.deadline).getTime()) ? new Date(m.deadline).getTime() : null);
+            return deadlineDate !== null && deadlineDate < now;
+        });
+    });
 
     const ongoingCount = [...myTasks, ...toReview].filter(t => t.contract_status === 'Active').length;
     const waitingCount = [...myTasks, ...toReview].filter(t => t.contract_status === 'Waiting' || t.contract_status === 'Pending Signature').length;
@@ -175,21 +265,41 @@ const DashboardMain = () => {
                                 Manage your ongoing and upcoming tasks from a job or gig.
                             </p>
                         </div>
-                        <div className="flex items-center gap-3 bg-white/90 dark:bg-dark-surface/90 border border-gray-200 dark:border-white/10 px-3.5 py-2 rounded-xl text-gray-700 dark:text-zinc-300 shadow-xs backdrop-blur-md w-max">
-                            <div className="flex items-center gap-2">
-                                <div className="p-1.5 rounded-lg bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-zinc-400">
-                                    <Clock className="h-4 w-4" />
+                        {(() => {
+                            const formattedTimeParts = currentTime.toLocaleTimeString('en-US', { 
+                                hour: 'numeric', 
+                                minute: '2-digit', 
+                                second: '2-digit', 
+                                hour12: true 
+                            }).split(/\s+/);
+                            const timeDigits = formattedTimeParts[0];
+                            const timePeriod = formattedTimeParts[1];
+
+                            return (
+                                <div className="flex items-center gap-3.5 bg-white/95 dark:bg-dark-surface/90 border border-gray-200 dark:border-white/10 px-4 py-2.5 rounded-2xl text-gray-700 dark:text-zinc-300 shadow-xs backdrop-blur-md w-max">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-2 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-zinc-400">
+                                            <Clock className="h-5 w-5" />
+                                        </div>
+                                        <div className="flex items-baseline gap-1.5 font-mono">
+                                            <span className="text-lg sm:text-xl font-extrabold tracking-tight text-gray-900 dark:text-white">
+                                                {timeDigits}
+                                            </span>
+                                            {timePeriod && (
+                                                <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                                                    {timePeriod}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="h-5 w-px bg-gray-200 dark:bg-white/10" />
+                                    <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-gray-600 dark:text-zinc-400">
+                                        <Calendar className="h-4 w-4 text-gray-400 dark:text-zinc-500" />
+                                        <span>{currentTime.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                    </div>
                                 </div>
-                                <span className="font-mono text-sm font-bold tracking-tight text-gray-900 dark:text-white">
-                                    {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                </span>
-                            </div>
-                            <div className="h-4 w-px bg-gray-200 dark:bg-white/10" />
-                            <div className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-zinc-400">
-                                <Calendar className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500" />
-                                <span>{currentTime.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                            </div>
-                        </div>
+                            );
+                        })()}
                     </div>
                 </div>
 
@@ -267,6 +377,32 @@ const DashboardMain = () => {
                             )}
                         </button>
                         <button 
+                            onClick={() => navigate('/dashboard/rate')}
+                            className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+                                activeTab === 'rate' 
+                                    ? 'text-blue-600 dark:text-blue-400 font-bold' 
+                                    : 'text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/60 dark:hover:bg-white/5 rounded-t-lg'
+                            }`}
+                            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                        >
+                            <span className="relative z-10 flex items-center gap-2">
+                                <Star className="h-4 w-4" /> To Rate
+                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                                    activeTab === 'rate'
+                                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300'
+                                        : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-zinc-400'
+                                }`}>
+                                    {toRateTasks.length}
+                                </span>
+                            </span>
+                            {activeTab === 'rate' && (
+                                <>
+                                    <motion.div layoutId="dashboardTabGlow" className="absolute inset-0 bg-blue-500/5 rounded-t-lg" transition={{ duration: 0.2, ease: "easeOut" }} />
+                                    <motion.div layoutId="dashboardTabUnderline" className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-blue-600 dark:bg-blue-500 z-10" transition={{ duration: 0.2, ease: "easeOut" }} />
+                                </>
+                            )}
+                        </button>
+                        <button 
                             onClick={() => navigate('/dashboard/archived')}
                             className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
                                 activeTab === 'archived' 
@@ -292,6 +428,25 @@ const DashboardMain = () => {
                                 </>
                             )}
                         </button>
+                        <button 
+                            onClick={() => navigate('/dashboard/flow')}
+                            className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+                                activeTab === 'flow' 
+                                    ? 'text-blue-600 dark:text-blue-400 font-bold' 
+                                    : 'text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/60 dark:hover:bg-white/5 rounded-t-lg'
+                            }`}
+                            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                        >
+                            <span className="relative z-10 flex items-center gap-2">
+                                <HelpCircle className="h-4 w-4" /> Delivery Flow
+                            </span>
+                            {activeTab === 'flow' && (
+                                <>
+                                    <motion.div layoutId="dashboardTabGlow" className="absolute inset-0 bg-blue-500/5 rounded-t-lg" transition={{ duration: 0.2, ease: "easeOut" }} />
+                                    <motion.div layoutId="dashboardTabUnderline" className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-blue-600 dark:bg-blue-500 z-10" transition={{ duration: 0.2, ease: "easeOut" }} />
+                                </>
+                            )}
+                        </button>
                     </div>
                 </div>
 
@@ -299,8 +454,8 @@ const DashboardMain = () => {
                     <DashboardSkeletonLoader />
                 ) : activeTab === 'overview' ? (
                     <div>
-                        {/* Stat Cards */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 mt-6">
+                        {/* Stat Cards - Row 1: Task Activity */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 mt-6">
                             <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-xs hover:shadow-sm hover:border-gray-300 dark:hover:border-white/20 transition-all">
                                 <div>
                                     <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">Ongoing Tasks</p>
@@ -335,6 +490,82 @@ const DashboardMain = () => {
                                 </div>
                                 <div className="bg-gray-100 dark:bg-white/5 p-3 rounded-xl border border-gray-200/80 dark:border-white/10 text-gray-600 dark:text-zinc-400 shadow-xs">
                                     <Layers className="h-5 w-5" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Stat Cards - Row 2: Ratings, Reviews & Deadlines */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                            {/* Pending for Rating */}
+                            <div 
+                                onClick={() => navigate('/dashboard/rate')}
+                                className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-xs hover:shadow-sm hover:border-blue-400 dark:hover:border-blue-500/50 cursor-pointer transition-all group"
+                            >
+                                <div>
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Pending for Rating</p>
+                                    <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mt-1 tracking-tight">{toRateTasks.length}</h2>
+                                    <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1">Awaiting your rating</p>
+                                </div>
+                                <div className="bg-gray-100 dark:bg-white/5 p-3 rounded-xl border border-gray-200/80 dark:border-white/10 text-gray-600 dark:text-zinc-400 shadow-xs group-hover:scale-105 transition-transform">
+                                    <Star className="h-5 w-5" />
+                                </div>
+                            </div>
+
+                            {/* Your total rating from Clients */}
+                            <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-xs hover:shadow-sm hover:border-gray-300 dark:hover:border-white/20 transition-all">
+                                <div>
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">Rating from Clients</p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">{avgClientRating}</h2>
+                                        <div className="flex items-center text-amber-500">
+                                            <Star className="h-5 w-5 fill-amber-400 text-amber-400" />
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+                                        {totalClientReviewsCount} {totalClientReviewsCount === 1 ? 'review' : 'reviews'} received
+                                    </p>
+                                </div>
+                                <div className="bg-gray-100 dark:bg-white/5 p-3 rounded-xl border border-gray-200/80 dark:border-white/10 text-gray-600 dark:text-zinc-400 shadow-xs">
+                                    <Award className="h-5 w-5" />
+                                </div>
+                            </div>
+
+                            {/* Total rating from Freelancers */}
+                            <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-xs hover:shadow-sm hover:border-gray-300 dark:hover:border-white/20 transition-all">
+                                <div>
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">Rating from Freelancers</p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">{avgFreelancerRating}</h2>
+                                        <div className="flex items-center text-amber-500">
+                                            <Star className="h-5 w-5 fill-amber-400 text-amber-400" />
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+                                        {totalFreelancerReviewsCount} {totalFreelancerReviewsCount === 1 ? 'review' : 'reviews'} received
+                                    </p>
+                                </div>
+                                <div className="bg-gray-100 dark:bg-white/5 p-3 rounded-xl border border-gray-200/80 dark:border-white/10 text-gray-600 dark:text-zinc-400 shadow-xs">
+                                    <Briefcase className="h-5 w-5" />
+                                </div>
+                            </div>
+
+                            {/* Overdue Tasks */}
+                            <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-xs hover:shadow-sm hover:border-gray-300 dark:hover:border-white/20 transition-all">
+                                <div>
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">Overdue Tasks</p>
+                                    <h2 className={`text-3xl font-extrabold mt-1 tracking-tight ${overdueTasks.length > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-900 dark:text-white'}`}>
+                                        {overdueTasks.length}
+                                    </h2>
+                                    <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+                                        {overdueTasks.length > 0 ? 'Milestones past deadline' : 'All on schedule'}
+                                    </p>
+                                </div>
+                                <div className={`p-3 rounded-xl border shadow-xs ${
+                                    overdueTasks.length > 0 
+                                        ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-200/80 dark:border-rose-500/20 text-rose-600 dark:text-rose-400' 
+                                        : 'bg-gray-100 dark:bg-white/5 border-gray-200/80 dark:border-white/10 text-gray-600 dark:text-zinc-400'
+                                }`}>
+                                    <AlertTriangle className="h-5 w-5" />
                                 </div>
                             </div>
                         </div>
@@ -624,11 +855,22 @@ const DashboardMain = () => {
                             </div>
                         </div>
                     </div>
+                ) : activeTab === 'flow' ? (
+                    <DeliveryFlowGuide />
                 ) : (
                     <DashboardTaskList 
-                        tasks={activeTab === 'freelancer' ? myTasks : activeTab === 'client' ? toReview : archivedTasks} 
+                        tasks={
+                            activeTab === 'freelancer' 
+                                ? myTasks 
+                                : activeTab === 'client' 
+                                ? toReview 
+                                : activeTab === 'rate'
+                                ? toRateTasks
+                                : archivedTasks
+                        } 
                         isFreelancerTab={activeTab === 'freelancer' || (activeTab === 'archived' && false)} 
                         isArchivedTab={activeTab === 'archived'}
+                        isRateTab={activeTab === 'rate'}
                         currentUserAccountId={user?.account_id}
                         onOpenRateReview={(id, name, value, role, avatar) => {
                             setReviewTarget({ id, name, value, isFreelancerRole: role, avatar: avatar || '' });

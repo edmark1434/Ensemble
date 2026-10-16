@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Star, LoaderCircle, Clock, AlertTriangle } from 'lucide-react';
 import api from '@/lib/axios';
 import { showSuccessToast, showErrorToast } from '@/components/utility/toast';
@@ -77,6 +78,16 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({
     const [hoverRating, setHoverRating] = useState<number>(0);
     const [feedback, setFeedback] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            const originalOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            return () => {
+                document.body.style.overflow = originalOverflow;
+            };
+        }
+    }, [isOpen]);
 
     // 24-hour countdown deadline
     const [timeLeftMs, setTimeLeftMs] = useState<number>(() => {
@@ -176,9 +187,15 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({
         ? 'Freelancer' 
         : (isFreelancerRole ? 'Client' : 'Freelancer');
 
-    return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-white dark:bg-dark-base border border-gray-200 dark:border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    return createPortal(
+        <div 
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
+            onClick={onClose}
+        >
+            <div 
+                className="bg-white dark:bg-dark-base border border-gray-200 dark:border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+                onClick={(e) => e.stopPropagation()}
+            >
                 
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/50">
@@ -386,6 +403,7 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };

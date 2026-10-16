@@ -45,6 +45,7 @@ import ProposalsCreatePage from '@/pages/user/6_job_market/job_proposals/proposa
 import ProposalsEditPage from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_edit_page.tsx'
 import ProposalsViewDetailsAsApplicant from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_applicant'
 import ProposalsViewDetailsAsAuthor from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author'
+import JobProposalsFlowGuide from '@/pages/user/6_job_market/job_proposals/proposals_components/JobProposalsFlowGuide'
 import GigMain from '@/pages/user/7_gigs/gig_main.tsx'
 import GigServicesPage from '@/pages/user/7_gigs/gig_pages/gig_services_page.tsx'
 import GigSavesPage from '@/pages/user/7_gigs/gig_pages/gig_saves_page.tsx'
@@ -59,6 +60,7 @@ import IncomingOrders from '@/pages/user/7_gigs/gig_orders/incoming_orders.tsx'
 import IncomingOrderDetail from '@/pages/user/7_gigs/gig_orders/incoming_order_detail.tsx'
 import SentOrders from '@/pages/user/7_gigs/gig_orders/sent_orders.tsx'
 import SentOrderDetail from '@/pages/user/7_gigs/gig_orders/sent_order_detail.tsx'
+import GigOrdersFlowGuide from '@/pages/user/7_gigs/gig_orders/orders_components/GigOrdersFlowGuide'
 import BusinessVerification from '@/pages/user/9_verification/BusinessVerification.tsx'
 import TransactionHistoryMain from '@/pages/user/11_transactionhistory/main.tsx'
 import TosMain from '@/pages/user/terms_of_service/tos_main.tsx'
@@ -270,6 +272,7 @@ function App() {
             <Route path='incoming/:jobPostId' element={<ProposalsIncomingPage />} />
             <Route path='sent' element={<ProposalsSentPage />} />
             <Route path='team-sent' element={<ProposalsSentPage />} />
+            <Route path='flow' element={<JobProposalsFlowGuide />} />
           </Route>
 
           {/* Standalone Creation, Edit & View Details Pages */}
@@ -296,6 +299,7 @@ function App() {
             <Route index element={<OrdersSelectGigPage />} />
             <Route path='incoming/:gigId' element={<IncomingOrders />} />
             <Route path='sent' element={<SentOrders />} />
+            <Route path='flow' element={<GigOrdersFlowGuide />} />
           </Route>
           <Route path='/gigs/orders/incoming/:gigId/order/:orderId' element={<IncomingOrderDetail />} />
           <Route path='/gigs/orders/sent/:orderId' element={<SentOrderDetail />} />
@@ -312,7 +316,9 @@ function App() {
           <Route path='/dashboard' element={<DashboardMain />} />
           <Route path='/dashboard/tasks' element={<DashboardMain />} />
           <Route path='/dashboard/review' element={<DashboardMain />} />
+          <Route path='/dashboard/rate' element={<DashboardMain />} />
           <Route path='/dashboard/archived' element={<DashboardMain />} />
+          <Route path='/dashboard/flow' element={<DashboardMain />} />
           <Route path='/dashboard/tasks/:id' element={<DashboardTaskDetail />} />
           <Route path='/dashboard/update/:id' element={<DashboardTaskDetail />} />
           <Route path='/dashboard/review/:id' element={<DashboardTaskDetail />} />

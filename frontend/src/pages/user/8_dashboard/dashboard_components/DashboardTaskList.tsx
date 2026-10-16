@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink, CheckCircle, Clock, Star, Eye, ArrowRight, ListChecks } from 'lucide-react';
+import { ExternalLink, CheckCircle, Clock, Star, Eye, ArrowRight, ListChecks, X } from 'lucide-react';
 
 interface ReviewData {
     rating?: number | string;
@@ -31,131 +32,207 @@ const RATING_TIER_STYLES: Record<number, { label: string; badgeClass: string }> 
     },
 };
 
-interface TaskReviewCalloutProps {
-    theirReview: ReviewData;
-    myReview?: ReviewData | null;
-    counterpartyName: string;
-    counterpartyRole: string;
+interface ContractReviewsModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    task: DashboardTask | null;
+    currentUserAccountId?: string;
 }
 
-const TaskReviewCallout: React.FC<TaskReviewCalloutProps> = ({
-    theirReview,
-    myReview,
-    counterpartyName,
-    counterpartyRole,
+export const ContractReviewsModal: React.FC<ContractReviewsModalProps> = ({
+    isOpen,
+    onClose,
+    task,
+    currentUserAccountId,
 }) => {
-    const hasMyReview = Boolean(
-        myReview &&
-        myReview.rating !== null &&
-        myReview.rating !== undefined &&
-        !isNaN(Number(myReview.rating))
-    );
-    const [viewMode, setViewMode] = React.useState<'theirs' | 'mine'>('theirs');
+    useEffect(() => {
+        if (isOpen) {
+            const originalOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            return () => {
+                document.body.style.overflow = originalOverflow;
+            };
+        }
+    }, [isOpen]);
 
-    const activeReview = viewMode === 'theirs' ? theirReview : myReview;
-    const ratingNum = Math.max(1, Math.min(5, Math.round(Number(activeReview?.rating || 0))));
-    const rawRating = Number(activeReview?.rating || 0);
-    const tier = RATING_TIER_STYLES[ratingNum] || RATING_TIER_STYLES[5];
+    if (!isOpen || !task) return null;
 
-    return (
-        <div className="mb-4 rounded-xl bg-gray-50/90 dark:bg-white/[0.03] border border-gray-200/90 dark:border-white/10 p-3.5 sm:p-4 transition-all">
-            <div className="flex flex-wrap items-center justify-between gap-2.5 mb-2.5">
-                {/* Reviewer / Toggle selector */}
-                {hasMyReview ? (
-                    <div className="inline-flex items-center p-0.5 rounded-lg bg-gray-200/70 dark:bg-white/10 text-xs">
-                        <button
-                            type="button"
-                            onClick={() => setViewMode('theirs')}
-                            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
-                                viewMode === 'theirs'
-                                    ? 'bg-white dark:bg-dark-surface text-gray-900 dark:text-white shadow-2xs'
-                                    : 'text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white'
-                            }`}
-                        >
-                            {counterpartyRole}'s Review
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setViewMode('mine')}
-                            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
-                                viewMode === 'mine'
-                                    ? 'bg-white dark:bg-dark-surface text-gray-900 dark:text-white shadow-2xs'
-                                    : 'text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white'
-                            }`}
-                        >
-                            Your Review
-                        </button>
+    const isFreelancerRole = task.user_role?.effective_role
+        ? task.user_role.effective_role === 'freelancer'
+        : task.freelancer_account_id === currentUserAccountId;
+
+    const theirReview: ReviewData | null = (isFreelancerRole ? task.client_rating : task.freelancer_rating) || null;
+    const myReview: ReviewData | null = (isFreelancerRole ? task.freelancer_rating : task.client_rating) || null;
+
+    const counterpartyName = isFreelancerRole ? task.client_name : task.freelancer_name;
+    const counterpartyRole = isFreelancerRole ? 'Client' : 'Freelancer';
+    const counterpartyAvatar = isFreelancerRole ? task.client_avatar : task.freelancer_avatar;
+
+    const renderReviewCard = (
+        title: string,
+        reviewerSubtitle: string,
+        review: ReviewData | null,
+        avatar?: string
+    ) => {
+        const ratingNum = Math.max(1, Math.min(5, Math.round(Number(review?.rating || 0))));
+        const rawRating = Number(review?.rating || 0);
+        const tier = RATING_TIER_STYLES[ratingNum] || RATING_TIER_STYLES[5];
+        const hasRating = review && review.rating !== null && review.rating !== undefined && !isNaN(Number(review.rating));
+
+        return (
+            <div className="p-4 rounded-xl bg-gray-50/90 dark:bg-white/[0.03] border border-gray-200/90 dark:border-white/10 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {avatar ? (
+                            <img
+                                src={`${import.meta.env.VITE_CLOUDFRONT_URL}${avatar.startsWith('/') ? '' : '/'}${avatar}`}
+                                alt={title}
+                                className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-white/10 shrink-0 shadow-2xs"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                        ) : (
+                            <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 flex items-center justify-center text-sm font-bold shrink-0 border border-blue-200 dark:border-blue-500/30">
+                                {title[0]?.toUpperCase() || '?'}
+                            </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                            <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                                {title}
+                            </h4>
+                            <p className="text-[11px] text-gray-500 dark:text-zinc-400 font-medium truncate">
+                                {reviewerSubtitle}
+                            </p>
+                        </div>
                     </div>
-                ) : (
-                    <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
-                            {counterpartyRole}'s Review
+
+                    {hasRating ? (
+                        <div className="flex items-center gap-2 shrink-0 self-start sm:self-center bg-white dark:bg-dark-base/80 px-2.5 py-1.5 rounded-xl border border-gray-200/90 dark:border-white/10 shadow-2xs">
+                            <div className="flex items-center gap-0.5">
+                                {[1, 2, 3, 4, 5].map((starIdx) => (
+                                    <Star
+                                        key={starIdx}
+                                        className={`w-3.5 h-3.5 ${
+                                            starIdx <= ratingNum
+                                                ? 'fill-amber-400 text-amber-400'
+                                                : 'text-gray-300 dark:text-zinc-600'
+                                        }`}
+                                    />
+                                ))}
+                            </div>
+                            <span className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                {rawRating.toFixed(1)}
+                            </span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${tier.badgeClass}`}>
+                                {tier.label}
+                            </span>
+                        </div>
+                    ) : (
+                        <span className="text-xs text-gray-400 dark:text-zinc-500 italic shrink-0 self-start sm:self-center">
+                            No rating submitted yet
                         </span>
-                        <span className="text-xs font-semibold text-gray-900 dark:text-white truncate">
-                            • {counterpartyName}
-                        </span>
-                    </div>
-                )}
-
-                {/* Stars + Score + Tier Badge */}
-                <div className="flex items-center gap-2 shrink-0 bg-white dark:bg-dark-base/60 px-2.5 py-1 rounded-lg border border-gray-200/90 dark:border-white/10 shadow-2xs">
-                    <div className="flex items-center gap-0.5">
-                        {[1, 2, 3, 4, 5].map((starIdx) => {
-                            const isFilled = starIdx <= ratingNum;
-                            return (
-                                <Star
-                                    key={starIdx}
-                                    className={`w-3.5 h-3.5 ${
-                                        isFilled
-                                            ? 'fill-amber-400 text-amber-400'
-                                            : 'text-gray-300 dark:text-zinc-600'
-                                    }`}
-                                />
-                            );
-                        })}
-                    </div>
-                    <span className="text-xs font-bold text-gray-900 dark:text-white font-mono">
-                        {rawRating.toFixed(1)}
-                    </span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${tier.badgeClass}`}>
-                        {tier.label}
-                    </span>
+                    )}
                 </div>
-            </div>
 
-            {/* Written Review Feedback Quote */}
-            <div className="pl-3 border-l-2 border-amber-400 dark:border-amber-500/70 py-0.5">
-                {activeReview?.feedback?.trim() ? (
-                    <p className="text-xs sm:text-sm text-gray-700 dark:text-zinc-300 italic leading-relaxed whitespace-pre-wrap break-words">
-                        "{activeReview.feedback.trim()}"
-                    </p>
-                ) : (
-                    <p className="text-xs text-gray-400 dark:text-zinc-500 italic">
-                        No written feedback provided.
-                    </p>
-                )}
-            </div>
+                <div className="pl-3.5 border-l-2 border-amber-400 dark:border-amber-500/80 py-1 bg-amber-50/40 dark:bg-amber-500/[0.04] rounded-r-lg pr-3">
+                    {review?.feedback?.trim() ? (
+                        <p className="text-xs sm:text-sm text-gray-800 dark:text-zinc-200 italic leading-relaxed whitespace-pre-wrap break-words">
+                            "{review.feedback.trim()}"
+                        </p>
+                    ) : (
+                        <p className="text-xs text-gray-400 dark:text-zinc-500 italic">
+                            No written feedback provided.
+                        </p>
+                    )}
+                </div>
 
-            {/* Review attribution subtitle */}
-            <div className="mt-2 text-[10px] text-gray-500 dark:text-zinc-400 flex items-center justify-between">
-                <span>
-                    {hasMyReview
-                        ? viewMode === 'theirs'
-                            ? `Received from ${counterpartyName}`
-                            : `Given to ${counterpartyName}`
-                        : `Reviewed by ${counterpartyName}`}
-                </span>
-                {activeReview?.created_at && !isNaN(new Date(activeReview.created_at).getTime()) && (
-                    <span>
-                        {new Date(activeReview.created_at).toLocaleDateString(undefined, {
+                {review?.created_at && !isNaN(new Date(review.created_at).getTime()) && (
+                    <div className="text-[10px] text-gray-400 dark:text-zinc-500 text-right">
+                        {new Date(review.created_at).toLocaleDateString(undefined, {
                             year: 'numeric',
                             month: 'short',
                             day: 'numeric',
                         })}
-                    </span>
+                    </div>
                 )}
             </div>
-        </div>
+        );
+    };
+
+    return createPortal(
+        <div 
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+            onClick={onClose}
+        >
+            <div 
+                className="relative w-full max-w-lg bg-white dark:bg-dark-surface rounded-2xl shadow-2xl border border-gray-200 dark:border-white/10 overflow-hidden flex flex-col max-h-[90vh]"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {/* Modal Header */}
+                <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.02]">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2.5 rounded-xl bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0">
+                            <Star className="w-5 h-5 fill-amber-400 text-amber-500" />
+                        </div>
+                        <div className="min-w-0">
+                            <h3 className="text-base font-bold text-gray-900 dark:text-white truncate">
+                                Ratings & Reviews
+                            </h3>
+                            <p className="text-xs text-gray-500 dark:text-zinc-400 truncate">
+                                {task.job_title}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                        title="Close modal"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* Modal Body: Both Reviews */}
+                <div className="p-5 space-y-4 overflow-y-auto">
+                    {/* Review from Counterparty */}
+                    <div>
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-2">
+                            Review from {counterpartyRole}
+                        </p>
+                        {renderReviewCard(
+                            counterpartyName,
+                            `Rated you as ${isFreelancerRole ? 'Freelancer' : 'Client'}`,
+                            theirReview,
+                            counterpartyAvatar
+                        )}
+                    </div>
+
+                    {/* Your Review */}
+                    <div>
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-2">
+                            Your Review
+                        </p>
+                        {renderReviewCard(
+                            'Your Review',
+                            `Given to ${counterpartyName} (${counterpartyRole})`,
+                            myReview
+                        )}
+                    </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="p-4 border-t border-gray-100 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.02] flex justify-end">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 transition-colors"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>,
+        document.body
     );
 };
 
@@ -190,17 +267,23 @@ interface DashboardTaskListProps {
     tasks: DashboardTask[];
     isFreelancerTab: boolean;
     isArchivedTab?: boolean;
+    isRateTab?: boolean;
     currentUserAccountId?: string;
     onOpenRateReview?: (contractId: string, reviewTargetName: string, contractValue: string, isFreelancerRole: boolean, reviewTargetAvatar?: string) => void;
 }
 
-export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isFreelancerTab, isArchivedTab, currentUserAccountId, onOpenRateReview }) => {
+export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isFreelancerTab, isArchivedTab, isRateTab, currentUserAccountId, onOpenRateReview }) => {
     const navigate = useNavigate();
+    const [viewingReviewsTask, setViewingReviewsTask] = useState<DashboardTask | null>(null);
 
     if (tasks.length === 0) {
         return (
             <div className="text-center py-12 text-gray-500 dark:text-zinc-500 bg-white dark:bg-white/5 shadow-sm dark:shadow-none rounded-lg border border-gray-200 dark:border-white/10 border-dashed">
-                No active tasks in this tab.
+                {isRateTab 
+                    ? "No contracts pending rating. All done contracts have been rated!"
+                    : isArchivedTab
+                    ? "No archived tasks."
+                    : "No active tasks in this tab."}
             </div>
         );
     }
@@ -322,15 +405,6 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                                 </div>
                             </div>
 
-                            {showReviewCallout && (
-                                <TaskReviewCallout
-                                    theirReview={theirReview!}
-                                    myReview={myReview}
-                                    counterpartyName={isFreelancerRole ? task.client_name : task.freelancer_name}
-                                    counterpartyRole={isFreelancerRole ? 'Client' : 'Freelancer'}
-                                />
-                            )}
-
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-gray-100 dark:border-white/10 pt-4 mt-1">
                             <div className="flex items-center gap-3">
                                 <img 
@@ -388,6 +462,19 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                                     </>
                                 )}
 
+                                {/* View Ratings & Reviews Button (opens popup modal) */}
+                                {(bothSidesRated || isCompletedContract || isArchivedTab) && (hasTheirReview || hasMyReview) && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => setViewingReviewsTask(task)}
+                                        className="group inline-flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-500/10 dark:hover:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-98"
+                                        title="View ratings and reviews from both parties"
+                                    >
+                                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 shrink-0 group-hover:scale-110 transition-transform" />
+                                        <span>View Reviews</span>
+                                    </button>
+                                )}
+
                                 {/* View Progress / Update Milestones Button */}
                                 <button 
                                     onClick={() => navigate(isFreelancerRole ? `/dashboard/tasks/${task.contract_id}` : `/dashboard/review/${task.contract_id}`)}
@@ -423,6 +510,14 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                 </div>
                 );
             })}
+
+            {/* Reviews Popup Modal */}
+            <ContractReviewsModal
+                isOpen={Boolean(viewingReviewsTask)}
+                onClose={() => setViewingReviewsTask(null)}
+                task={viewingReviewsTask}
+                currentUserAccountId={currentUserAccountId}
+            />
         </div>
     );
 };
