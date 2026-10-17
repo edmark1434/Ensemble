@@ -1178,9 +1178,39 @@ useEffect(() => {
                   </button>
                   
                   {isProfileOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] shadow-xl dark:shadow-[0_12px_32px_rgba(0,0,0,0.5)] origin-top-right transition-all duration-200 animate-in fade-in zoom-in-95">
+                    <div className="absolute right-0 top-full mt-3.5 w-72 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] shadow-xl dark:shadow-[0_12px_32px_rgba(0,0,0,0.5)] origin-top-right transition-all duration-200 animate-in fade-in zoom-in-95">
+                      {/* Pointing tip */}
+                      <svg
+                        className="absolute -top-[7px] right-[5px] z-[2] overflow-visible"
+                        width="14"
+                        height="8"
+                        viewBox="0 0 14 8"
+                        aria-hidden="true"
+                      >
+                        {/* Triangle fill */}
+                        <path
+                          d="M0 8L5.58579 1.41421C6.36684 0.633165 7.63316 0.633165 8.41421 1.41421L14 8H0Z"
+                          className="fill-white dark:fill-[#18181b]"
+                        />
+                        {/* Angled borders */}
+                        <path
+                          d="M0 8L5.58579 1.41421C6.36684 0.633165 7.63316 0.633165 8.41421 1.41421L14 8"
+                          fill="none"
+                          className="stroke-zinc-200 dark:stroke-zinc-800"
+                          strokeWidth="1"
+                        />
+                        {/* Mask underlying card border */}
+                        <rect
+                          x="0.5"
+                          y="7"
+                          width="13"
+                          height="2"
+                          className="fill-white dark:fill-[#18181b]"
+                        />
+                      </svg>
+
                       <div
-                        className="relative p-2 space-y-1"
+                        className="relative p-2 space-y-1 z-[1]"
                         onMouseLeave={handleProfileMenuLeave}
                       >
                         {/* Animated sliding glide pill */}
