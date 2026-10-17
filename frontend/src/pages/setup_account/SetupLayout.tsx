@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Check } from 'lucide-react';
 import ShapeGrid from '@/components/ui/ShapeGrid';
 import useGlobalState from '@/lib/global_state';
+import api from '@/lib/axios';
 
 export interface SetupStep {
   number: number;
@@ -32,6 +33,8 @@ export interface SetupLayoutProps {
   children: React.ReactNode;
   theme?: 'light' | 'dark';
   onStepClick?: (step: 1 | 2 | 3) => void;
+  accountEmail?: string;
+  accountName?: string;
 }
 
 export const SetupLayout: React.FC<SetupLayoutProps> = ({
@@ -39,8 +42,37 @@ export const SetupLayout: React.FC<SetupLayoutProps> = ({
   children,
   theme: propTheme,
   onStepClick,
+  accountEmail: propEmail,
+  accountName: propName,
 }) => {
   const storeTheme = useGlobalState((state) => state.theme);
+  const storeUser = useGlobalState((state) => state.user);
+  const signUpData = useGlobalState((state) => state.signUpData);
+  const [user, setUser] = useState(storeUser);
+
+  useEffect(() => {
+    if (storeUser) {
+      setUser(storeUser);
+      return;
+    }
+    let active = true;
+    api.get('api/users/me')
+      .then((res) => {
+        if (!active) return;
+        const u = res.data?.user ?? res.data?.credentials ?? res.data;
+        if (u) {
+          useGlobalState.getState().setUser(u);
+          setUser(u);
+        }
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [storeUser]);
+
+  const resolvedEmail = propEmail || user?.email || user?.email_address || signUpData?.email || 'user@ensemble.com';
+  const resolvedName = propName || user?.username || user?.handle || user?.displayName || user?.name || signUpData?.username || resolvedEmail.split('@')[0];
+  const avatarLetter = (resolvedName[0] || resolvedEmail[0] || 'U').toUpperCase();
+
   const searchTheme = useMemo(() => {
     if (typeof window === 'undefined') return null;
     return new URLSearchParams(window.location.search).get('theme') as 'light' | 'dark' | null;
@@ -206,80 +238,138 @@ export const SetupLayout: React.FC<SetupLayoutProps> = ({
             </div>
 
             {/* Mobile Horizontal Stepper Navigation (hidden on desktop) */}
-            <div className="flex md:hidden items-center justify-between gap-2">
-              {SETUP_STEPS.map((step, idx) => {
-                const isCompleted = step.number < currentStep;
-                const isActive = step.number === currentStep;
-                const isLast = idx === SETUP_STEPS.length - 1;
+            <div className="flex md:hidden flex-col gap-2">
+              {/* Mobile Active Account Row */}
+              <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-zinc-200/50 dark:border-zinc-800/60 text-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${
+                    isDark ? 'bg-white text-zinc-950' : 'bg-zinc-900 text-white'
+                  }`}>
+                    {avatarLetter}
+                  </div>
+                  <div className="min-w-0">
+                    <p className={`text-xs font-semibold truncate ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                      {resolvedName}
+                    </p>
+                    <p className="text-[10px] text-zinc-400 truncate font-mono">
+                      {resolvedEmail}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-medium text-zinc-400 shrink-0 bg-zinc-100 dark:bg-zinc-800/80 px-2 py-0.5 rounded-full">
+                  Step {currentStep}/3
+                </span>
+              </div>
 
-                const isClickable = isCompleted && Boolean(onStepClick);
+              <div className="flex items-center justify-between gap-2">
+                {SETUP_STEPS.map((step, idx) => {
+                  const isCompleted = step.number < currentStep;
+                  const isActive = step.number === currentStep;
+                  const isLast = idx === SETUP_STEPS.length - 1;
 
-                return (
-                  <React.Fragment key={step.number}>
-                    <button
-                      type="button"
-                      disabled={!isClickable}
-                      onClick={() => isClickable && onStepClick?.(step.number as 1 | 2 | 3)}
-                      className={`flex items-center gap-2 min-w-0 text-left transition-opacity duration-200 ${
-                        isClickable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
-                      }`}
-                    >
-                      <div
-                        className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold transition-all duration-300 ${
-                          isActive
-                            ? isDark
-                              ? 'bg-white text-zinc-950 shadow-sm ring-2 ring-white/20'
-                              : 'bg-zinc-900 text-white shadow-sm ring-2 ring-zinc-900/10'
-                            : isCompleted
-                            ? isDark
-                              ? 'bg-zinc-800 text-zinc-200 border border-zinc-700'
-                              : 'bg-zinc-100 text-zinc-800 border border-zinc-300'
-                            : isDark
-                            ? 'bg-[#18181b] border border-zinc-700/60 text-zinc-500'
-                            : 'bg-zinc-50 border border-zinc-300 text-zinc-400'
+                  const isClickable = isCompleted && Boolean(onStepClick);
+
+                  return (
+                    <React.Fragment key={step.number}>
+                      <button
+                        type="button"
+                        disabled={!isClickable}
+                        onClick={() => isClickable && onStepClick?.(step.number as 1 | 2 | 3)}
+                        className={`flex items-center gap-2 min-w-0 text-left transition-opacity duration-200 ${
+                          isClickable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
                         }`}
                       >
-                        {isCompleted ? <Check className="w-3.5 h-3.5 stroke-[2.5] animate-in zoom-in-75 duration-200" /> : step.number}
-                      </div>
-                      <span
-                        className={`text-xs truncate hidden min-[360px]:inline-block ${
-                          isActive
-                            ? isDark
-                              ? 'text-white font-bold'
-                              : 'text-zinc-950 font-bold'
-                            : isCompleted
-                            ? isDark
-                              ? 'text-zinc-300'
-                              : 'text-zinc-600'
-                            : 'text-zinc-500'
-                        }`}
-                      >
-                        {step.title.split(' ')[0]}
-                      </span>
-                    </button>
+                        <div
+                          className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold transition-all duration-300 ${
+                            isActive
+                              ? isDark
+                                ? 'bg-white text-zinc-950 shadow-sm ring-2 ring-white/20'
+                                : 'bg-zinc-900 text-white shadow-sm ring-2 ring-zinc-900/10'
+                              : isCompleted
+                              ? isDark
+                                ? 'bg-zinc-800 text-zinc-200 border border-zinc-700'
+                                : 'bg-zinc-100 text-zinc-800 border border-zinc-300'
+                              : isDark
+                              ? 'bg-[#18181b] border border-zinc-700/60 text-zinc-500'
+                              : 'bg-zinc-50 border border-zinc-300 text-zinc-400'
+                          }`}
+                        >
+                          {isCompleted ? <Check className="w-3.5 h-3.5 stroke-[2.5] animate-in zoom-in-75 duration-200" /> : step.number}
+                        </div>
+                        <span
+                          className={`text-xs truncate hidden min-[360px]:inline-block ${
+                            isActive
+                              ? isDark
+                                ? 'text-white font-bold'
+                                : 'text-zinc-950 font-bold'
+                              : isCompleted
+                              ? isDark
+                                ? 'text-zinc-300'
+                                : 'text-zinc-600'
+                              : 'text-zinc-500'
+                          }`}
+                        >
+                          {step.title.split(' ')[0]}
+                        </span>
+                      </button>
 
-                    {!isLast && (
-                      <div
-                        className={`flex-1 h-[2px] mx-1 transition-colors duration-300 ${
-                          isCompleted
-                            ? isDark
-                              ? 'bg-zinc-700'
-                              : 'bg-zinc-300'
-                            : isDark
-                            ? 'bg-zinc-800'
-                            : 'bg-zinc-200'
-                        }`}
-                      />
-                    )}
-                  </React.Fragment>
-                );
-              })}
+                      {!isLast && (
+                        <div
+                          className={`flex-1 h-[2px] mx-1 transition-colors duration-300 ${
+                            isCompleted
+                              ? isDark
+                                ? 'bg-zinc-700'
+                                : 'bg-zinc-300'
+                              : isDark
+                              ? 'bg-zinc-800'
+                              : 'bg-zinc-200'
+                          }`}
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
-          {/* Bottom Footer Information */}
-          <div className="hidden md:block pt-8 border-t border-zinc-200/50 dark:border-zinc-800/80 mt-6 text-[11px] text-zinc-400 dark:text-zinc-500">
-            <p>Step {currentStep} of {SETUP_STEPS.length}</p>
+          {/* Bottom Active Account Card */}
+          <div className="hidden md:block pt-5 border-t border-zinc-200/50 dark:border-zinc-800/80 mt-6">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2">
+              Active Account
+            </div>
+            <div className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
+              isDark
+                ? 'bg-zinc-800/40 border-zinc-700/50'
+                : 'bg-zinc-50 border-zinc-200'
+            }`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 shadow-sm ${
+                isDark
+                  ? 'bg-white text-zinc-950'
+                  : 'bg-zinc-900 text-white'
+              }`}>
+                {avatarLetter}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-xs font-semibold truncate ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                    {resolvedName}
+                  </span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Active setup session" />
+                </div>
+                <p className={`text-[11px] truncate font-mono ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                  {resolvedEmail}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mt-3 text-[11px] text-zinc-400 dark:text-zinc-500">
+              <span>Step {currentStep} of {SETUP_STEPS.length}</span>
+              <span className="text-[10px] text-emerald-500 font-medium inline-flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Setting up
+              </span>
+            </div>
           </div>
         </aside>
 

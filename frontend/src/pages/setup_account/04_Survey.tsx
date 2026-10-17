@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  HelpCircle,
   ArrowRight,
   ArrowLeft,
   Check,
@@ -589,6 +588,7 @@ export default function Survey() {
           z-index: 10;
           width: 100%;
           max-width: 620px;
+          min-height: 540px;
           margin: 0 auto;
           display: flex;
           flex-direction: column;
@@ -600,10 +600,14 @@ export default function Survey() {
           border-radius: 20px;
           border: 1px solid ${T.border};
           box-shadow: ${isDark ? "0 24px 70px rgba(0,0,0,0.65)" : "0 20px 60px rgba(15,23,42,0.08)"};
-          overflow: hidden;
+          overflow-x: hidden;
         }
 
         .animated-content {
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          height: 100%;
           will-change: transform, opacity, filter;
         }
 
@@ -800,13 +804,6 @@ export default function Survey() {
       <SetupLayout currentStep={subStep === 1 ? 2 : 3} theme={theme} onStepClick={handleStepClick}>
         <form onSubmit={handleNextAction} className="setup-card">
           <div className={`animated-content ${slideDirection}`} key={subStep}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 12, background: T.bgInput,
-              border: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", color: T.accent, marginBottom: 20,
-            }}>
-              <HelpCircle className="h-5 w-5" />
-            </div>
-
             <h2 style={{ fontSize: 24, fontWeight: 700, color: T.text, marginBottom: 6, letterSpacing: -.3 }}>
               {subStep === 1 ? "About you" : "Platform purpose"}
             </h2>
@@ -835,7 +832,7 @@ export default function Survey() {
             )}
 
             {/* Footer Buttons */}
-            <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ display: "flex", gap: 12, marginTop: "auto", paddingTop: 24 }}>
               <button
                 type="button"
                 className="onboarding-secondary-button"

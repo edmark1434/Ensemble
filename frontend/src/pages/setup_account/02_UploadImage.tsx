@@ -470,6 +470,7 @@ export default function UploadImage() {
           z-index: 10;
           width: 100%;
           max-width: 620px;
+          min-height: 540px;
           margin: 0 auto;
           display: flex;
           flex-direction: column;
@@ -481,10 +482,14 @@ export default function UploadImage() {
           border-radius: 20px;
           border: 1px solid ${T.border};
           box-shadow: ${isDark ? "0 24px 70px rgba(0,0,0,0.65)" : "0 20px 60px rgba(15,23,42,0.08)"};
-          overflow: hidden;
+          overflow-x: hidden;
         }
 
         .animated-content {
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          height: 100%;
           will-change: transform, opacity, filter;
           animation: smooth-fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
@@ -729,7 +734,7 @@ export default function UploadImage() {
               })}
             </div>
 
-            <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ display: "flex", gap: 12, marginTop: "auto", paddingTop: 24 }}>
               <button
                 type="button"
                 className="onboarding-primary-button"
