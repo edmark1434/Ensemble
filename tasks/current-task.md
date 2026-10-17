@@ -1,32 +1,28 @@
-# Current Task: Seamless Optimistic Task Updates, "On Review" Status & Milestone Task Completion Gate
+# Current Task: Landing Page Header & Hero Section Redesign (TechText Bleed, Theme Styling & Version Relocation)
 
 ## Objective
-1. **Optimistic & Seamless Taskboard Updates (Zero Skeleton Reload)**:
-   - Eliminate full-screen skeleton flash when setting status, priority, or due dates on tasks.
-   - Local optimistic state in `ProjectTaskboardTab.tsx` for immediate 0ms UI card transitions.
-   - Reconcile data in background with `loadProjectData(true)` without triggering `isLoading = true`.
-2. **"On Review" Task Status**:
-   - Added `"On Review"` across Board, List, Table, and Gantt views.
-   - Milestone submissions automatically transition tasks to `"On Review"`.
-   - Milestone deliverables cannot be submitted for client review unless all tasks for that milestone are completed.
-3. **Task Creation, Assignment & Contract Protection Rules**:
-   - **Auto-Assignment to Creator**: Whenever a contributor creates a task, the assignee is automatically the creator (`currentUserAccountId`). Other members cannot create tasks and assign them to you.
-   - **Clients Cannot Create Tasks**: Clients cannot add tasks to the taskboard (hidden in UI, rejected with HTTP 403 in backend).
-   - **Default Milestone**: Pre-selected to the contributor's currently assigned milestone.
-   - **Contract Immutability**: Tasks originating from the contract (`is_contract_task = true`) cannot have their title or scope edited, nor can they be deleted by contributors. Only user-created tasks can be edited and deleted by their creator.
-   - **Card Status Display Polish**: Removed the bulky text button (`[• IN PROGRESS ⌄]`) from the card footer that wrapped onto two lines. Made the existing compact `<Tag />` icon the interactive status trigger (colored by status), keeping card footers clean and single-line.
-   - **Milestone-Specific Due Date Picker**: When setting a task due date, min and max dates are strictly bounded to that specific milestone's start and deadline (calculated from sequential `duration_hours`), preventing dates from spilling into other milestones.
+1. **Landing Page Header Logo Simplification**:
+   - In `nav_Landing.tsx`, removed the text "Ensemble" so only the circular brand icon (`/ensemble_lg.svg`) remains on the header.
+   - Sized icon appropriately (28px) with hover scale transition and retained soft-click sound and navigation on click.
+2. **Hero Section Brand Emphasis & Decluttering**:
+   - Rearranged layout: TrueFocus pill badge as an elegant eyebrow kicker at the top (`COLLABORATIVE VIDEO EDITING | & CREATIVE MARKETPLACE`).
+   - Dynamic intent tagline ("Work at the speed of your ambition", etc.) styled as a complementary, legible sub-headline (`clamp(24px, 3vw, 36px)`).
+3. **Interactive TechText Brand Title & Full Drag Bleed**:
+   - Integrated `@react-bits/TechText` in `frontend/src/components/ui/TechText.tsx`.
+   - Applied `TechText` directly to **`Ensemble`** with responsive sizing and full container width.
+   - Size/displacement labels, blueprint dashed frames, bounding boxes, corner squares, and specks are **pure white in dark mode** (`#ffffff`) and **pure black in light mode** (`#000000`).
+   - Added expanded canvas bleed margins (`bleed={{ top: 350, bottom: 650, left: 250, right: 900 }}`) with `pointer-events: none` on the expanded canvas and global window drag tracking.
+   - Letters can be dragged far outside the container bounds (up, down, left, right across the screen) and stay completely visible without clipping.
+4. **App Version Display Below Popular Services Tags**:
+   - Moved `APP_VERSION` from `@/version.tsx` (`V1.5.21 | A`) to the area directly below the Popular Services / tags section.
+   - Rendered as small, uncontained, clean monospace text without any box or container.
 
 ## Acceptance Criteria
-- [x] Changing task status, priority, due date, or checklists updates immediately with 0ms delay and never triggers full skeleton loading.
-- [x] Taskboard Board view has 4 columns including "ON REVIEW".
-- [x] Taskboard List and Table views support "ON REVIEW" with high-contrast amber styling.
-- [x] Submitting milestone deliverable or sending submission update automatically sets associated milestone tasks to "On Review".
-- [x] Contributors cannot submit milestone deliverable for client review if any tasks for that milestone are incomplete (blocked with warning banner and backend check).
-- [x] Creating a task auto-assigns it to the creator. Other members and clients cannot assign tasks to you.
-- [x] Clients cannot create tasks on the taskboard.
-- [x] Contract-defined tasks cannot have their title modified or be deleted.
-- [x] The bulky "IN PROGRESS" text button is replaced by the clickable Tag icon with status coloring.
-- [x] Due date picker is strictly bounded to the specific milestone's duration/timeline.
-- [x] Status dropdown menu in Board view is aligned `right-0` and column overflow clipping is removed, preventing text from clipping (`IN PROGRESS`, `ON REVIEW`, `COMPLETE`).
+- [x] Header on landing page displays only the circular Ensemble logo icon (no text).
+- [x] Eyebrow pill badge positioned cleanly at the top of the content stack.
+- [x] Created `TechText.tsx` in `frontend/src/components/ui/TechText.tsx`.
+- [x] Size and bounding box accent color is white in darkmode and black in lightmode (no blue).
+- [x] Expanded bleed rendering allows letters to be dragged far away/outside the bounds while remaining completely visible.
+- [x] Underlying buttons, inputs, and controls remain fully interactive and non-blocked.
+- [x] Small version text (`APP_VERSION`) displayed below the Popular Services tags with no container/box.
 - [x] `cd frontend && npm run build` compiles cleanly with zero TypeScript or Vite errors.

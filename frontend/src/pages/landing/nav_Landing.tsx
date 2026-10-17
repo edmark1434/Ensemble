@@ -8,20 +8,14 @@ const T_NAV = {
 } as const;
 
 // ─── Logo Sub-Component ───────────────────────────────────────────────────────
-const Logo: FC<{ size?: number }> = ({ size = 22 }) => (
-  <div style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+const Logo: FC<{ size?: number }> = ({ size = 28 }) => (
+  <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} title="Ensemble" aria-label="Ensemble">
     <img 
       src="/ensemble_lg.svg" 
       alt="Ensemble Logo" 
-      style={{ width: size + 6, height: size + 6, display: "block" }} 
-      className="invert dark:invert-0" 
+      style={{ width: size, height: size, display: "block" }} 
+      className="invert dark:invert-0 transition-transform duration-200 hover:scale-105" 
     />
-    <span 
-      className="text-gray-900 dark:text-white"
-      style={{ fontSize: size, fontWeight: 700, fontFamily: T_NAV.fontDisplay, letterSpacing: .5 }}
-    >
-      Ensemble
-    </span>
   </div>
 );
 
