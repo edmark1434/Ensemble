@@ -45,6 +45,120 @@ const GLOBAL_CSS = `
   .animate-swap {
     animation: content-swap 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
+
+  /* Precision Floating Ask AI Pill */
+  .ensemble-floating-ask-ai {
+    position: fixed;
+    bottom: 26px;
+    right: 26px;
+    z-index: 999;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px 6px 7px;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(18, 18, 22, 0.85);
+    color: #f4f4f5;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    cursor: pointer;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 
+      0 4px 18px rgba(0, 0, 0, 0.45),
+      0 1px 0 rgba(255, 255, 255, 0.12) inset;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+  }
+  .ensemble-floating-ask-ai:hover {
+    transform: translateY(-2px);
+    border-color: rgba(59, 130, 246, 0.5);
+    background: rgba(24, 24, 32, 0.95);
+    box-shadow: 
+      0 8px 26px rgba(0, 0, 0, 0.55),
+      0 0 16px rgba(59, 130, 246, 0.22),
+      0 1px 0 rgba(255, 255, 255, 0.2) inset;
+  }
+  .ensemble-floating-ask-ai:active {
+    transform: translateY(0) scale(0.98);
+  }
+
+  .ensemble-ai-pill-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.2s ease;
+  }
+  .ensemble-floating-ask-ai:hover .ensemble-ai-pill-icon {
+    background: rgba(37, 99, 235, 0.2);
+    border-color: rgba(59, 130, 246, 0.5);
+  }
+
+  .ensemble-ai-pill-label {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1;
+    color: inherit;
+  }
+
+  .ensemble-ai-pill-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5px 5.5px;
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.2s ease;
+  }
+  .ensemble-floating-ask-ai:hover .ensemble-ai-pill-kbd {
+    color: #93c5fd;
+    border-color: rgba(59, 130, 246, 0.3);
+    background: rgba(37, 99, 235, 0.15);
+  }
+
+  /* Light mode (when html does not have .dark) */
+  html:not(.dark) .ensemble-floating-ask-ai {
+    border-color: rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.9);
+    color: #0f172a;
+    box-shadow: 
+      0 4px 18px rgba(0, 0, 0, 0.08),
+      0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  }
+  html:not(.dark) .ensemble-floating-ask-ai:hover {
+    border-color: rgba(37, 99, 235, 0.4);
+    background: #ffffff;
+    box-shadow: 
+      0 8px 26px rgba(0, 0, 0, 0.12),
+      0 0 16px rgba(37, 99, 235, 0.15),
+      0 1px 0 rgba(255, 255, 255, 1) inset;
+  }
+  html:not(.dark) .ensemble-ai-pill-icon {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.06);
+  }
+  html:not(.dark) .ensemble-ai-pill-kbd {
+    color: rgba(15, 23, 42, 0.55);
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.06);
+  }
+  html:not(.dark) .ensemble-floating-ask-ai:hover .ensemble-ai-pill-kbd {
+    color: #1d4ed8;
+    border-color: rgba(37, 99, 235, 0.25);
+    background: rgba(37, 99, 235, 0.08);
+  }
 `;
 
 function useGlobalStyle(css: string): void {
@@ -142,6 +256,24 @@ const LandingPage: FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
+
+  // Global ⌘K / Ctrl+K keyboard shortcut to launch Ask AI
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable) {
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        navigate("/landing/AskOurChatbot");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [navigate]);
+
   const toggleBgm = () => {
     if (!audioRef.current) return;
     if (isBgmMuted) {
@@ -212,7 +344,28 @@ const LandingPage: FC = () => {
         <SectionFooter isMuted={isSfxMuted} />
       </Suspense>
 
-      <ScrollToTop />
+      {/* Precision Floating Ask AI Command Pill (Bottom Right) */}
+      <button
+        onClick={() => navigate("/landing/AskOurChatbot")}
+        className="ensemble-floating-ask-ai group"
+        aria-label={`Ask Ensemble AI (${isMac ? "⌘K" : "Ctrl K"})`}
+        title={`Ask Ensemble AI (${isMac ? "⌘K" : "Ctrl K"})`}
+      >
+        <span className="ensemble-ai-pill-icon">
+          <img
+            src="/ensemble_lg.svg"
+            alt="Ensemble"
+            className="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110"
+            style={{
+              filter: theme === "dark" ? "none" : "invert(1)",
+            }}
+          />
+        </span>
+        <span className="ensemble-ai-pill-label">Ask AI</span>
+        <kbd className="ensemble-ai-pill-kbd">{isMac ? "⌘K" : "Ctrl K"}</kbd>
+      </button>
+
+      <ScrollToTop bottom="76px" />
     </div>
   );
 };

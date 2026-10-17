@@ -145,6 +145,7 @@ const PageTermsOfService = lazyPage(() => import('@/pages/landing/pages/page_Ter
 const PageSendAFeedback = lazyPage(() => import('./pages/landing/pages/page_SendAFeedback'));
 const PageSubmitATicket = lazyPage(() => import('./pages/landing/pages/page_SubmitATicket'));
 const PageSupportUs = lazyPage(() => import('./pages/landing/pages/page_SupportUs'));
+const PageUsecase = lazyPage(() => import('./pages/landing/pages/page_Usecase'));
 
 function App() {
   const theme = useGlobalState((state) => state.theme);
@@ -206,6 +207,10 @@ function App() {
           <Route path="SendAFeedback" element={<PageSendAFeedback />} />
           <Route path="TermsOfService" element={<PageTermsOfService />} />
           <Route path="PrivacyPolicy" element={<PagePrivacyPolicy />} />
+          <Route path="usecase/:usertype" element={<PageUsecase />} />
+          <Route path="usecase" element={<Navigate to="/landing/usecase/client" replace />} />
+          <Route path="usecases/:usertype" element={<PageUsecase />} />
+          <Route path="usecases" element={<Navigate to="/landing/usecase/client" replace />} />
         </Route>
 
         {/* Handoff page: no sidebar, but still behind RouteMiddleware */}

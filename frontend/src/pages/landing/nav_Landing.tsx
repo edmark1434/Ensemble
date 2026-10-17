@@ -233,7 +233,11 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isBgmMuted, isSfxM
       "Ask our Chatbot": "/landing/AskOurChatbot",
       "Submit a Ticket": "/support/ticket",
       "Support Us": "/landing/SupportUs",
-      "Submit a Feedback": "/landing/SendAFeedback"
+      "Submit a Feedback": "/landing/SendAFeedback",
+      "Client": "/landing/usecase/client",
+      "Freelancer": "/landing/usecase/freelancer",
+      "Asset Creator": "/landing/usecase/asset-creator",
+      "Enthusiast": "/landing/usecase/enthusiast"
     };
 
     const target = routeMap[item];
@@ -273,6 +277,17 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isBgmMuted, isSfxM
       </div>
 
       <div style={{ display: isMobile ? "none" : "flex", alignItems: "center", gap: 12 }}>
+        <NavDropdown
+          label="Usecases"
+          items={["Client", "Freelancer", "Asset Creator", "Enthusiast"]}
+          isOpen={openDD === "usecases"}
+          onToggle={toggle("usecases")}
+          onItemClick={handleDropdownItemAction}
+          onParentHover={playHover}
+          onChildHover={playMinimalHover}
+          onActionClick={playSoftClick}
+        />
+
         <NavDropdown
           label="About"
           items={["How to Hire", "How to Work", "About Us", "Terms of Service", "Privacy Policy"]}
