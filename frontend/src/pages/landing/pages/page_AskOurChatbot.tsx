@@ -106,20 +106,20 @@ const PageAskOurChatbot: React.FC = () => {
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    // Phase 1 -> 2: Begin soft circular bloom expansion (smooth 1.6s curve)
+    // Phase 1 -> 2: Dedicated optical triangle expands and fades away, unveiling real Prism
     const expandTimer = setTimeout(() => {
       setLoadingPhase('expanding');
-    }, 1300);
+    }, 1200);
 
-    // Phase 2 -> 3: Reveal chat workspace gently as bloom reaches perimeter
+    // Phase 2 -> 3: Reveal chat workspace gently once triangle has dissolved
     const revealTimer = setTimeout(() => {
       setLoadingPhase('ready');
-    }, 1750);
+    }, 1850);
 
-    // Cleanup: Remove overlay from DOM once bloom has completed
+    // Cleanup: Remove overlay from DOM once transition is complete
     const unmountTimer = setTimeout(() => {
       setShowLoader(false);
-    }, 3200);
+    }, 2600);
 
     return () => {
       clearTimeout(expandTimer);
@@ -234,10 +234,10 @@ const PageAskOurChatbot: React.FC = () => {
 
   return (
     <main className="ensemble-chat-page">
-      {/* Interactive WebGL2 Prism Background - Scaled compact in center during loading, expands to fill background */}
+      {/* Interactive WebGL2 Prism Background - Running at full viewport scale behind loading */}
       <div
         className={`ensemble-chat-prism-bg ${
-          loadingPhase !== 'loading' ? 'is-expanded' : 'is-compact'
+          loadingPhase !== 'loading' ? 'is-visible' : ''
         }`}
         aria-hidden="true"
       >
@@ -250,7 +250,7 @@ const PageAskOurChatbot: React.FC = () => {
           glow={theme === 'dark' ? 1.15 : 0.72}
           noise={0.0}
           intro={false}
-          offset={{ y: loadingPhase === 'loading' ? 0 : -40 }}
+          offset={{ y: -40 }}
           lightMode={theme === 'light'}
           saturation={theme === 'dark' ? 1.05 : 0.7}
           colorFrequency={theme === 'dark' ? 1.2 : 1.15}
@@ -265,20 +265,109 @@ const PageAskOurChatbot: React.FC = () => {
         />
       </div>
 
-      {/* Loading Overlay - Clean studio status badge below the compact 3D Prism */}
+      {/* Loading Overlay - Dedicated rounded optical crystal triangle that expands and fades away to reveal the real 3D Prism */}
       {showLoader && (
         <div
-          className={`ensemble-loader-overlay transition-opacity duration-500 ease-out ${
-            loadingPhase !== 'loading' ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          className={`ensemble-loader-overlay ${
+            loadingPhase === 'ready' ? 'pointer-events-none' : ''
           }`}
           aria-label="Initializing AI"
           role="status"
         >
-          {/* Subtle ambient chromatic glow behind the compact 3D Prism */}
-          <div className="ensemble-loader-prism-glow" aria-hidden="true" />
+          {/* Standalone Optical Triangle Emblem */}
+          <div
+            className={`ensemble-loader-triangle-wrap ${
+              loadingPhase !== 'loading' ? 'is-expanding' : ''
+            }`}
+            aria-hidden="true"
+          >
+            {/* Ambient chromatic aura halo */}
+            <div className="ensemble-loader-triangle-aura" />
 
-          {/* Minimalist studio status badge placed below the compact 3D Prism */}
-          <div className="ensemble-loader-status-container">
+            {/* Faceted optical crystal triangle SVG */}
+            <svg
+              width="110"
+              height="100"
+              viewBox="0 0 110 100"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className="ensemble-loader-triangle-svg"
+            >
+              <defs>
+                {/* Smooth rounded equilateral triangle outline */}
+                <clipPath id="ensemble-prism-clip">
+                  <path d="M 51 18 C 53 14.5, 57 14.5, 59 18 L 93 74 C 95 77.5, 93 81.5, 88.5 81.5 L 21.5 81.5 C 17 81.5, 15 77.5, 17 74 Z" />
+                </clipPath>
+
+                {/* Left facet chromatic gradient */}
+                <linearGradient id="ensemble-facet-left" x1="55" y1="18" x2="20" y2="80" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.95" />
+                  <stop offset="45%" stopColor="#6366f1" stopOpacity="0.85" />
+                  <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.8" />
+                </linearGradient>
+
+                {/* Right facet chromatic gradient */}
+                <linearGradient id="ensemble-facet-right" x1="55" y1="18" x2="90" y2="80" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#ec4899" stopOpacity="0.95" />
+                  <stop offset="50%" stopColor="#f59e0b" stopOpacity="0.85" />
+                  <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.8" />
+                </linearGradient>
+
+                {/* Bottom facet chromatic gradient */}
+                <linearGradient id="ensemble-facet-bottom" x1="20" y1="80" x2="90" y2="80" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.75" />
+                  <stop offset="50%" stopColor="#10b981" stopOpacity="0.85" />
+                  <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.75" />
+                </linearGradient>
+
+                {/* Optical outer stroke gradient */}
+                <linearGradient id="ensemble-triangle-stroke" x1="15" y1="15" x2="95" y2="85" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#c084fc" />
+                  <stop offset="25%" stopColor="#60a5fa" />
+                  <stop offset="50%" stopColor="#34d399" />
+                  <stop offset="75%" stopColor="#fbbf24" />
+                  <stop offset="100%" stopColor="#f472b6" />
+                </linearGradient>
+
+                {/* Refractive specular core shine */}
+                <radialGradient id="ensemble-facet-shine" cx="55" cy="56" r="38" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55" />
+                  <stop offset="40%" stopColor="#ffffff" stopOpacity="0.18" />
+                  <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+                </radialGradient>
+              </defs>
+
+              {/* 3 internal facets meeting at centroid (55, 56) */}
+              <g clipPath="url(#ensemble-prism-clip)">
+                <path d="M 55 16 L 55 56 L 15 84 Z" fill="url(#ensemble-facet-left)" />
+                <path d="M 55 16 L 95 84 L 55 56 Z" fill="url(#ensemble-facet-right)" />
+                <path d="M 55 56 L 95 84 L 15 84 Z" fill="url(#ensemble-facet-bottom)" />
+                <circle cx="55" cy="56" r="35" fill="url(#ensemble-facet-shine)" />
+
+                {/* Internal facet ridge lines */}
+                <line x1="55" y1="18" x2="55" y2="56" stroke="rgba(255,255,255,0.45)" strokeWidth="1.2" strokeLinecap="round" />
+                <line x1="55" y1="56" x2="20" y2="79" stroke="rgba(255,255,255,0.3)" strokeWidth="1" strokeLinecap="round" />
+                <line x1="55" y1="56" x2="90" y2="79" stroke="rgba(255,255,255,0.3)" strokeWidth="1" strokeLinecap="round" />
+              </g>
+
+              {/* Crisp rounded perimeter outline */}
+              <path
+                d="M 51 18 C 53 14.5, 57 14.5, 59 18 L 93 74 C 95 77.5, 93 81.5, 88.5 81.5 L 21.5 81.5 C 17 81.5, 15 77.5, 17 74 Z"
+                stroke="url(#ensemble-triangle-stroke)"
+                strokeWidth="1.8"
+                strokeLinejoin="round"
+                fill="none"
+                opacity="0.9"
+              />
+            </svg>
+          </div>
+
+          {/* Minimalist studio status badge placed below the triangle */}
+          <div
+            className={`ensemble-loader-status-container transition-opacity duration-300 ease-out ${
+              loadingPhase !== 'loading' ? 'opacity-0' : 'opacity-100'
+            }`}
+          >
             <div className="ensemble-loader-pill">
               <span className="ensemble-loader-dot" aria-hidden="true" />
               <span className="ensemble-loader-text">INITIALIZING JOED AI</span>
@@ -464,23 +553,11 @@ const PageAskOurChatbot: React.FC = () => {
           overflow: hidden;
           pointer-events: none;
           z-index: 0;
-          transform-origin: 50% 50%;
-          transition: transform 1.5s cubic-bezier(0.16, 1, 0.3, 1),
-                      opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1),
-                      -webkit-mask-image 1.2s ease-out,
-                      mask-image 1.2s ease-out;
+          opacity: 0;
+          transition: opacity 1.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .ensemble-chat-prism-bg.is-compact {
-          transform: scale(0.24);
-          opacity: 1;
-          -webkit-mask-image: radial-gradient(circle at 50% 50%, black 0%, black 35%, transparent 75%);
-          mask-image: radial-gradient(circle at 50% 50%, black 0%, black 35%, transparent 75%);
-        }
-        .ensemble-chat-prism-bg.is-expanded {
-          transform: scale(1);
+        .ensemble-chat-prism-bg.is-visible {
           opacity: ${theme === 'dark' ? "0.9" : "0.85"};
-          -webkit-mask-image: radial-gradient(circle at 50% 50%, black 0%, black 160%, transparent 200%);
-          mask-image: radial-gradient(circle at 50% 50%, black 0%, black 160%, transparent 200%);
         }
         .ensemble-chat-shell {
           position: relative;
@@ -928,7 +1005,7 @@ const PageAskOurChatbot: React.FC = () => {
           color: #93c5fd;
         }
         
-        /* Studio Status Badge & Ambient Light during 3D Prism Loading */
+        /* Studio Status Badge & Dedicated Optical Triangle Loader */
         .ensemble-loader-overlay {
           position: fixed;
           top: 0;
@@ -936,33 +1013,62 @@ const PageAskOurChatbot: React.FC = () => {
           right: 0;
           bottom: 0;
           display: flex;
-          flex-direction: column;
           align-items: center;
           justify-content: center;
           z-index: 10;
           pointer-events: none;
         }
 
-        .ensemble-loader-prism-glow {
+        .ensemble-loader-triangle-wrap {
           position: absolute;
-          width: 260px;
-          height: 260px;
+          top: calc(50% - 32px);
+          left: 50%;
+          transform: translate(-50%, -50%) scale(1);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          pointer-events: none;
+          animation: ensemble-triangle-float 2.8s ease-in-out infinite alternate;
+          will-change: transform, opacity, filter;
+        }
+
+        .ensemble-loader-triangle-wrap.is-expanding {
+          animation: none;
+          transform: translate(-50%, -50%) scale(5.4);
+          opacity: 0;
+          filter: blur(36px);
+          transition: transform 1.35s cubic-bezier(0.16, 1, 0.3, 1),
+                      opacity 1.05s cubic-bezier(0.16, 1, 0.3, 1),
+                      filter 1.2s ease-out;
+        }
+
+        .ensemble-loader-triangle-aura {
+          position: absolute;
+          width: 150px;
+          height: 150px;
           border-radius: 50%;
           background: radial-gradient(
             circle,
-            rgba(99, 102, 241, 0.22) 0%,
-            rgba(6, 182, 212, 0.16) 35%,
-            rgba(236, 72, 153, 0.1) 65%,
-            transparent 85%
+            rgba(99, 102, 241, 0.38) 0%,
+            rgba(6, 182, 212, 0.25) 40%,
+            rgba(236, 72, 153, 0.16) 70%,
+            transparent 100%
           );
-          filter: blur(32px);
+          filter: blur(24px);
           pointer-events: none;
-          animation: ensemble-pulse-ambient 3s ease-in-out infinite alternate;
+        }
+
+        .ensemble-loader-triangle-svg {
+          position: relative;
+          z-index: 1;
+          filter: drop-shadow(0 6px 20px rgba(99, 102, 241, 0.35));
         }
 
         .ensemble-loader-status-container {
           position: absolute;
-          top: calc(50% + 120px);
+          top: calc(50% + 72px);
+          left: 50%;
+          transform: translateX(-50%);
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -1007,9 +1113,16 @@ const PageAskOurChatbot: React.FC = () => {
           color: ${theme === 'dark' ? "#a1a1aa" : "#64748b"};
         }
 
-        @keyframes ensemble-pulse-ambient {
-          0% { transform: scale(0.9); opacity: 0.6; }
-          100% { transform: scale(1.15); opacity: 1; }
+        @keyframes ensemble-triangle-float {
+          0% {
+            transform: translate(-50%, -50%) translateY(0px) scale(1);
+          }
+          50% {
+            transform: translate(-50%, -50%) translateY(-5px) scale(1.03);
+          }
+          100% {
+            transform: translate(-50%, -50%) translateY(0px) scale(1);
+          }
         }
 
         @keyframes ensemble-dot-spin {

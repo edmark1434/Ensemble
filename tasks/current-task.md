@@ -31,15 +31,15 @@
    - Added global `Cmd+K` / `Ctrl+K` keyboard shortcut that launches `/landing/AskOurChatbot` directly from the landing page.
    - Coordinated `ScrollToTop` offset (`bottom="76px"`) for clean vertical stacking without overlap.
 
-7. **Micro-Prism Loader & Seamless Organic Bloom Expansion**:
-   - Transformed the placeholder loading spinner into a jewel-like circular micro-prism core matching the exact rainbow spectrum of the WebGL2 background Prism (`#6366f1`, `#3b82f6`, `#06b6d4`, `#10b981`, `#f59e0b`, `#ec4899`, `#8b5cf6`).
-   - Removed sharp polygon expansion and sudden explosive pop curves (`cubic-bezier(0.12, 0.8, 0.2, 1)`).
-   - Designed a 100% round, gaussian-feathered circular chromatic radial bloom with `filter: blur(72px)` and smooth 1.6-second quintic ease-out curve (`cubic-bezier(0.22, 1, 0.36, 1)`).
-   - Implemented a 3-phase staggered orchestration:
-     - Phase 1 (0–1300ms): Micro-prism gently pulses, refracts, and spins in the center while WebGL context compiles.
-     - Phase 2 (1300–1750ms): Status text vanishes immediately (zero ghosting), inner crystal dissolves into pure light, and the soft circular chromatic bloom smoothly opens up across the viewport while the 3D WebGL background Prism emerges from behind it.
-     - Phase 3 (1750ms+): Chat workspace smoothly fades and glides into view over the fully expanded, interactive 3D Prism.
-     - Unmount (3200ms): Loader overlay cleanly unmounts from the DOM.
+7. **Dedicated Optical Crystal Triangle Loader & Seamless Fade-Out Reveal**:
+   - Replaced scaling/masking of the WebGL canvas with an independent, dedicated optical crystal prism triangle.
+   - Built with smooth rounded vertices (`strokeLinejoin="round"`), 3 internal chromatic gradient planes meeting at centroid `(55, 56)`, specular core shine, and an ambient chromatic glow aura.
+   - Preserved the real WebGL2 3D Prism running at full viewport size (`100vw` × `100vh`) behind the overlay without CSS scale transforms or clipping masks.
+   - Staggered orchestration:
+     - Phase 1 (0–1200ms): Dedicated optical triangle floats gently in the center with "INITIALIZING JOED AI" status pill while WebGL compiles.
+     - Phase 2 (1200–1850ms): Status badge fades out immediately, the standalone triangle expands (`scale(5.4)`), diffuses (`blur(36px)`), and fades away (`opacity: 0`), seamlessly unveiling the full-scale rotating 3D Prism behind it.
+     - Phase 3 (1850ms+): Chat workspace glides in with zero layout shifts or sharp edge artifacts.
+     - Unmount (2600ms): Loader overlay cleanly unmounts from the DOM.
 
 ## Acceptance Criteria
 - [x] Left sidebar is fully collapsable and expandable with `PanelLeftClose` and `PanelLeftOpen` controls.
@@ -50,5 +50,5 @@
 - [x] Colorful optical prism spectrum configured across rotating crystal facets without overpowering the background.
 - [x] All typography, navigation, sidebar items, and message bubbles are high-contrast and crystal clear in both light and dark modes.
 - [x] Redesigned "Ask AI" floating trigger as a sleek, native studio command pill with `⌘K` / `Ctrl K` support.
-- [x] Micro-prism loader transitions organically to full background Prism with zero sharp corners, smooth 1.6s easing, and zero text ghosting.
+- [x] Dedicated optical crystal triangle loader expands, diffuses, and fades away seamlessly, unveiling the full-viewport 3D WebGL Prism behind it.
 - [x] `cd frontend && npm run build` compiles cleanly with zero TypeScript or Vite errors.
