@@ -1,29 +1,28 @@
-# Current Task: Account Setup Vertical Stepper Layout
+# Current Task: Setup Flow Transitions & Title Alignment
 
 ## Objective
-Implement a unified split-screen setup wizard layout for the onboarding flow:
-- **Left Column**: Vertical progress stepper displaying the 3 steps starting at Avatar Setup:
-  1. **Profile Picture** ("Choose presets or upload photo")
-  2. **Role & Purpose** ("Tell us what you're here to do")
-  3. **Skills & Tools** ("Select your experience & software")
-- Visual states for stepper:
-  - **Completed**: Badge with checkmark icon and connected solid line.
-  - **Active**: Highlighted badge with step number, crisp text, and active styling.
-  - **Upcoming**: Muted badge and dimmed text.
-- **Right Column**: Embedded form card containing the current step's active content:
-  - Step 1: Avatar / Profile Picture on `/setup/upload-image`
-  - Step 2: Role & Purpose on `/setup/survey` (Substep 1)
-  - Step 3: Skills & Tools on `/setup/survey` (Substep 2)
-- Neutral dark mode palette (`#09090b` page, `#18181b` card, `#27272a` borders) and crisp light mode palette.
-- Responsive mobile adaptation (horizontal stepper on mobile).
-- Preserve 100% of existing upload, cropping, GlideSelect dropdown, and survey validation logic.
+Harmonize the onboarding vertical stepper titles and card headings with the actual questions being asked, and make forward/backward step navigation buttery smooth and seamless:
+1. **Title Alignment**:
+   - The survey questions are:
+     - Substep 1: Q1 "Where did you hear about us?" & Q2 "What is your nature of work?" ➔ Step 2 Title: **"About You"** ("Discovery source & work background.")
+     - Substep 2: Q3 "What is your purpose on the platform?" (Earn, Hire, Explore) ➔ Step 3 Title: **"Platform Purpose"** ("Tell us what you plan to do on Ensemble.")
+   - Card headers updated to match stepper: `{subStep === 1 ? "About you" : "Platform purpose"}`.
+2. **Smooth Transitions**:
+   - Directional sliding animations:
+     - Next/Forward: Slides in from the right (`translateX(20px)` ➔ `translateX(0)`) with `opacity: 0 ➔ 1` and `blur(2px) ➔ blur(0)`.
+     - Back/Backward: Slides in from the left (`translateX(-20px)` ➔ `translateX(0)`) with `opacity: 0 ➔ 1` and `blur(2px) ➔ blur(0)`.
+   - Native-app deceleration physics curve: `cubic-bezier(0.16, 1, 0.3, 1)`.
+   - Removed artificial `animation-delay` so transitions respond instantly upon user action.
+   - Added `overflow: hidden` to `.setup-card` to avoid horizontal scroll flutters during transitions.
+   - Added checkmark badge pop animation (`animate-in zoom-in-75 duration-200`) and smooth state transitions.
+   - Stepper items for completed steps are clickable on both desktop and mobile for intuitive back-navigation.
 
 ## Acceptance Criteria
-- [x] Create reusable `SetupLayout` component with the vertical 3-step stepper.
-- [x] Integrate `SetupLayout` into `02_UploadImage.tsx` (`currentStep={1}`).
-- [x] Integrate `SetupLayout` into `04_Survey.tsx` (`currentStep={subStep === 1 ? 2 : 3}`).
-- [x] Stepper correctly reflects completed, active, and upcoming steps across forward and backward navigation.
-- [x] Fully styled in neutral dark mode (no blue/navy tints) and clean light mode.
-- [x] Responsive design gracefully adapts for smaller screens.
-- [x] All existing logic (avatar upload/crop/presets, survey answer handling, GlideSelects, submit pipeline) works without regression.
-- [x] `cd frontend && npm run build` compiles with 0 errors.
+- [x] Step 3 title accurately reflects platform purpose ("Platform Purpose" ➔ "What is your purpose on the platform?").
+- [x] Step 2 title accurately reflects discovery and work background ("About You" ➔ "Discovery source & work background").
+- [x] Directional sliding animations implemented for forward and backward navigation in `04_Survey.tsx`.
+- [x] Zero-delay responsive animation added to `02_UploadImage.tsx` card entry.
+- [x] Stepper progress indicator transitions smoothly between active, completed, and upcoming states.
+- [x] Interactive back-navigation on completed steps enabled for desktop and mobile stepper.
+- [x] Verified build cleanly with `npm run build` in `frontend/`.
+- [x] Verified visually via headless browser screenshot artifacts.

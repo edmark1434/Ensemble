@@ -481,13 +481,12 @@ export default function UploadImage() {
           border-radius: 20px;
           border: 1px solid ${T.border};
           box-shadow: ${isDark ? "0 24px 70px rgba(0,0,0,0.65)" : "0 20px 60px rgba(15,23,42,0.08)"};
+          overflow: hidden;
         }
 
         .animated-content {
-          opacity: 0;
-          transform: translateY(10px);
-          animation: smooth-fade-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-          animation-delay: 0.15s;
+          will-change: transform, opacity, filter;
+          animation: smooth-fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
         .presets-grid {
@@ -571,8 +570,8 @@ export default function UploadImage() {
           outline-offset: 3px;
         }
         @keyframes smooth-fade-in {
-          0% { opacity: 0; transform: translateY(10px); }
-          100% { opacity: 1; transform: translateY(0); }
+          0% { opacity: 0; transform: translateY(10px); filter: blur(2px); }
+          100% { opacity: 1; transform: translateY(0); filter: blur(0); }
         }
 
         @keyframes spin {

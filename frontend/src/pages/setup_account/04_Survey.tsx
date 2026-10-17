@@ -168,6 +168,7 @@ export default function Survey() {
   
   // Local sub-step control state
   const [subStep, setSubStep] = useState<1 | 2>(1);
+  const [slideDirection, setSlideDirection] = useState<'forward' | 'backward'>('forward');
   
   // Dynamic state to store answers for all questions
   const [answers, setAnswers] = useState<{ [questionId: string]: string | string[] }>({});
@@ -322,10 +323,15 @@ export default function Survey() {
     const currentQuestions = getQuestionsForSubStep();
     const lastQuestionIndex = currentQuestions[currentQuestions.length - 1]?.display_order || 0;
     
+    const isPreview = window.location.search.includes('preview=true');
+
     if (subStep === 1 && lastQuestionIndex < totalQuestions) {
       setLoading(true);
       try {
-        await api.post('/api/onboarding/survey-progress', buildSubmissionData());
+        if (!isPreview) {
+          await api.post('/api/onboarding/survey-progress', buildSubmissionData());
+        }
+        setSlideDirection('forward');
         setSubStep(2);
       } catch (error: unknown) {
         setErrors({ submit: getApiErrorMessage(error) || 'Failed to save survey progress.' });
@@ -383,18 +389,24 @@ export default function Survey() {
   };
 
   const handleBackAction = async () => {
+    const isPreview = window.location.search.includes('preview=true');
     if (subStep === 2) {
       try {
-        await api.post('/api/onboarding/current-step', { current_step: 'survey_1' });
+        if (!isPreview) {
+          await api.post('/api/onboarding/current-step', { current_step: 'survey_1' });
+        }
         setErrors({});
+        setSlideDirection('backward');
         setSubStep(1);
       } catch {
         setErrors({ submit: 'Unable to return to the previous survey section.' });
       }
     } else {
       try {
-        await api.post('/api/onboarding/current-step', { current_step: 'avatar' });
-        notifyOnboardingStepChanged('/setup/upload-image', useGlobalState.getState().user?.account_id);
+        if (!isPreview) {
+          await api.post('/api/onboarding/current-step', { current_step: 'avatar' });
+          notifyOnboardingStepChanged('/setup/upload-image', useGlobalState.getState().user?.account_id);
+        }
         navigate("/setup/upload-image");
       } catch {
         setErrors({ submit: 'Unable to return to the avatar step.' });
@@ -404,9 +416,12 @@ export default function Survey() {
 
   const handleStepClick = (step: 1 | 2 | 3) => {
     if (step === 1) {
+      const isPreview = window.location.search.includes('preview=true');
       if (subStep === 2) {
-        void api.post('/api/onboarding/current-step', { current_step: 'avatar' }).catch(() => {});
-        notifyOnboardingStepChanged('/setup/upload-image', useGlobalState.getState().user?.account_id);
+        if (!isPreview) {
+          void api.post('/api/onboarding/current-step', { current_step: 'avatar' }).catch(() => {});
+          notifyOnboardingStepChanged('/setup/upload-image', useGlobalState.getState().user?.account_id);
+        }
         navigate("/setup/upload-image");
       } else {
         handleBackAction();
@@ -585,13 +600,19 @@ export default function Survey() {
           border-radius: 20px;
           border: 1px solid ${T.border};
           box-shadow: ${isDark ? "0 24px 70px rgba(0,0,0,0.65)" : "0 20px 60px rgba(15,23,42,0.08)"};
+          overflow: hidden;
         }
 
         .animated-content {
-          opacity: 0;
-          transform: translateY(10px);
-          animation: smooth-fade-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-          animation-delay: 0.15s;
+          will-change: transform, opacity, filter;
+        }
+
+        .animated-content.forward {
+          animation: slide-in-forward 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .animated-content.backward {
+          animation: slide-in-backward 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
         .survey-section {
@@ -749,15 +770,36 @@ export default function Survey() {
           outline: 2px solid ${T.accent};
           outline-offset: 3px;
         }
-        @keyframes smooth-fade-in {
-          0% { opacity: 0; transform: translateY(10px); }
-          100% { opacity: 1; transform: translateY(0); }
+        @keyframes slide-in-forward {
+          0% {
+            opacity: 0;
+            transform: translateX(20px);
+            filter: blur(2px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateX(0);
+            filter: blur(0);
+          }
+        }
+
+        @keyframes slide-in-backward {
+          0% {
+            opacity: 0;
+            transform: translateX(-20px);
+            filter: blur(2px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateX(0);
+            filter: blur(0);
+          }
         }
       `}</style>
 
       <SetupLayout currentStep={subStep === 1 ? 2 : 3} theme={theme} onStepClick={handleStepClick}>
         <form onSubmit={handleNextAction} className="setup-card">
-          <div className="animated-content" key={subStep}>
+          <div className={`animated-content ${slideDirection}`} key={subStep}>
             <div style={{
               width: 48, height: 48, borderRadius: 12, background: T.bgInput,
               border: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", color: T.accent, marginBottom: 20,
@@ -766,7 +808,7 @@ export default function Survey() {
             </div>
 
             <h2 style={{ fontSize: 24, fontWeight: 700, color: T.text, marginBottom: 6, letterSpacing: -.3 }}>
-              {subStep === 1 ? "Onboarding survey" : "Platform purpose"}
+              {subStep === 1 ? "About you" : "Platform purpose"}
             </h2>
             <p style={{ color: T.muted, fontSize: 14, marginBottom: 28, lineHeight: 1.5 }}>
               {subStep === 1

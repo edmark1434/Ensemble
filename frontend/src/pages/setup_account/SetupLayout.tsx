@@ -17,13 +17,13 @@ export const SETUP_STEPS: SetupStep[] = [
   },
   {
     number: 2,
-    title: 'Role & Purpose',
-    description: "Tell us what you're here to do.",
+    title: 'About You',
+    description: 'Discovery source & work background.',
   },
   {
     number: 3,
-    title: 'Skills & Tools',
-    description: 'Select your experience & software.',
+    title: 'Platform Purpose',
+    description: "Tell us what you plan to do on Ensemble.",
   },
 ];
 
@@ -138,7 +138,7 @@ export const SetupLayout: React.FC<SetupLayoutProps> = ({
                           }`}
                         >
                           {isCompleted ? (
-                            <Check className="w-4 h-4 stroke-[2.5]" />
+                            <Check className="w-4 h-4 stroke-[2.5] animate-in zoom-in-75 duration-200" />
                           ) : (
                             step.number
                           )}
@@ -212,9 +212,18 @@ export const SetupLayout: React.FC<SetupLayoutProps> = ({
                 const isActive = step.number === currentStep;
                 const isLast = idx === SETUP_STEPS.length - 1;
 
+                const isClickable = isCompleted && Boolean(onStepClick);
+
                 return (
                   <React.Fragment key={step.number}>
-                    <div className="flex items-center gap-2 min-w-0">
+                    <button
+                      type="button"
+                      disabled={!isClickable}
+                      onClick={() => isClickable && onStepClick?.(step.number as 1 | 2 | 3)}
+                      className={`flex items-center gap-2 min-w-0 text-left transition-opacity duration-200 ${
+                        isClickable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
+                      }`}
+                    >
                       <div
                         className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold transition-all duration-300 ${
                           isActive
@@ -230,7 +239,7 @@ export const SetupLayout: React.FC<SetupLayoutProps> = ({
                             : 'bg-zinc-50 border border-zinc-300 text-zinc-400'
                         }`}
                       >
-                        {isCompleted ? <Check className="w-3.5 h-3.5 stroke-[2.5]" /> : step.number}
+                        {isCompleted ? <Check className="w-3.5 h-3.5 stroke-[2.5] animate-in zoom-in-75 duration-200" /> : step.number}
                       </div>
                       <span
                         className={`text-xs truncate hidden min-[360px]:inline-block ${
@@ -247,7 +256,7 @@ export const SetupLayout: React.FC<SetupLayoutProps> = ({
                       >
                         {step.title.split(' ')[0]}
                       </span>
-                    </div>
+                    </button>
 
                     {!isLast && (
                       <div
