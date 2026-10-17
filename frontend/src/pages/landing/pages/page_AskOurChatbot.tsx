@@ -234,12 +234,10 @@ const PageAskOurChatbot: React.FC = () => {
 
   return (
     <main className="ensemble-chat-page">
-      {/* Interactive WebGL2 Prism Background - Only background animation */}
+      {/* Interactive WebGL2 Prism Background - Scaled compact in center during loading, expands to fill background */}
       <div
-        className={`ensemble-chat-prism-bg transition-all duration-[1600ms] ease-out transform ${
-          loadingPhase !== 'loading'
-            ? `${theme === 'dark' ? 'opacity-90' : 'opacity-85'} scale-100 blur-0`
-            : 'opacity-0 scale-90 blur-md pointer-events-none'
+        className={`ensemble-chat-prism-bg ${
+          loadingPhase !== 'loading' ? 'is-expanded' : 'is-compact'
         }`}
         aria-hidden="true"
       >
@@ -252,7 +250,7 @@ const PageAskOurChatbot: React.FC = () => {
           glow={theme === 'dark' ? 1.15 : 0.72}
           noise={0.0}
           intro={false}
-          offset={{ y: -40 }}
+          offset={{ y: loadingPhase === 'loading' ? 0 : -40 }}
           lightMode={theme === 'light'}
           saturation={theme === 'dark' ? 1.05 : 0.7}
           colorFrequency={theme === 'dark' ? 1.2 : 1.15}
@@ -267,79 +265,26 @@ const PageAskOurChatbot: React.FC = () => {
         />
       </div>
 
-      {/* Loading Overlay - Organic Chromatic Bloom expanding into 3D Prism */}
+      {/* Loading Overlay - Clean studio status badge below the compact 3D Prism */}
       {showLoader && (
         <div
-          className={`ensemble-loader-overlay ${loadingPhase !== 'loading' ? 'is-expanding' : ''}`}
+          className={`ensemble-loader-overlay transition-opacity duration-500 ease-out ${
+            loadingPhase !== 'loading' ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
           aria-label="Initializing AI"
           role="status"
         >
-          {/* 100% circular, feathered, gaussian-softened chromatic bloom - ZERO sharp corners */}
-          <div className="ensemble-micro-prism-bloom" aria-hidden="true" />
+          {/* Subtle ambient chromatic glow behind the compact 3D Prism */}
+          <div className="ensemble-loader-prism-glow" aria-hidden="true" />
 
-          {/* Centered micro-prism core (crystal + rings) - smoothly dissolves into pure light */}
-          <div className="ensemble-micro-prism-core">
-            {/* Ambient chromatic caustic radial glow */}
-            <div className="ensemble-micro-prism-glow" aria-hidden="true" />
-
-            {/* Rotating chromatic spectrum halo (conic-gradient) */}
-            <div className="ensemble-micro-prism-spectrum-ring" aria-hidden="true" />
-
-            {/* Counter-rotating facet ring */}
-            <div className="ensemble-micro-prism-facet-ring" aria-hidden="true" />
-
-            {/* 3D-effect crystal glass gem */}
-            <div className="ensemble-micro-prism-gem">
-              <svg
-                viewBox="0 0 64 64"
-                className="ensemble-micro-prism-svg"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                aria-hidden="true"
-              >
-                <defs>
-                  <linearGradient id="ensemble-micro-prism-f1" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#6366f1" />
-                    <stop offset="100%" stopColor="#06b6d4" />
-                  </linearGradient>
-                  <linearGradient id="ensemble-micro-prism-f2" x1="100%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#06b6d4" />
-                    <stop offset="50%" stopColor="#10b981" />
-                    <stop offset="100%" stopColor="#f59e0b" />
-                  </linearGradient>
-                  <linearGradient id="ensemble-micro-prism-f3" x1="0%" y1="100%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#ec4899" />
-                    <stop offset="100%" stopColor="#8b5cf6" />
-                  </linearGradient>
-                  <linearGradient id="ensemble-micro-prism-edge" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
-                    <stop offset="100%" stopColor="#ffffff" stopOpacity="0.25" />
-                  </linearGradient>
-                </defs>
-                <polygon points="32,12 16,46 32,36" fill="url(#ensemble-micro-prism-f1)" fillOpacity="0.92" strokeLinejoin="round" />
-                <polygon points="32,12 48,46 32,36" fill="url(#ensemble-micro-prism-f2)" fillOpacity="0.92" strokeLinejoin="round" />
-                <polygon points="16,46 48,46 32,36" fill="url(#ensemble-micro-prism-f3)" fillOpacity="0.88" strokeLinejoin="round" />
-                <polyline
-                  points="32,12 16,46 32,36 48,46 32,12 32,36"
-                  stroke="url(#ensemble-micro-prism-edge)"
-                  strokeWidth="1.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-
-              <div className="ensemble-micro-prism-spark" aria-hidden="true" />
-            </div>
-          </div>
-
-          {/* Status badge with animated spectrum dot and chromatic shimmer */}
-          <div className="ensemble-loader-status-block">
+          {/* Minimalist studio status badge placed below the compact 3D Prism */}
+          <div className="ensemble-loader-status-container">
             <div className="ensemble-loader-pill">
-              <span className="ensemble-loader-spectrum-dot" aria-hidden="true" />
+              <span className="ensemble-loader-dot" aria-hidden="true" />
               <span className="ensemble-loader-text">INITIALIZING JOED AI</span>
             </div>
-            <p className="ensemble-loader-subtext">
-              Refracting documentation & knowledge base...
+            <p className="ensemble-loader-caption">
+              Grounding in Ensemble documentation & RAG models...
             </p>
           </div>
         </div>
@@ -519,6 +464,23 @@ const PageAskOurChatbot: React.FC = () => {
           overflow: hidden;
           pointer-events: none;
           z-index: 0;
+          transform-origin: 50% 50%;
+          transition: transform 1.5s cubic-bezier(0.16, 1, 0.3, 1),
+                      opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1),
+                      -webkit-mask-image 1.2s ease-out,
+                      mask-image 1.2s ease-out;
+        }
+        .ensemble-chat-prism-bg.is-compact {
+          transform: scale(0.24);
+          opacity: 1;
+          -webkit-mask-image: radial-gradient(circle at 50% 50%, black 0%, black 35%, transparent 75%);
+          mask-image: radial-gradient(circle at 50% 50%, black 0%, black 35%, transparent 75%);
+        }
+        .ensemble-chat-prism-bg.is-expanded {
+          transform: scale(1);
+          opacity: ${theme === 'dark' ? "0.9" : "0.85"};
+          -webkit-mask-image: radial-gradient(circle at 50% 50%, black 0%, black 160%, transparent 200%);
+          mask-image: radial-gradient(circle at 50% 50%, black 0%, black 160%, transparent 200%);
         }
         .ensemble-chat-shell {
           position: relative;
@@ -966,170 +928,45 @@ const PageAskOurChatbot: React.FC = () => {
           color: #93c5fd;
         }
         
-        /* Micro-Prism Loading Screen & Organic Background Expansion */
+        /* Studio Status Badge & Ambient Light during 3D Prism Loading */
         .ensemble-loader-overlay {
-          position: absolute;
-          inset: 0;
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          z-index: 50;
-          pointer-events: auto;
-          overflow: hidden;
-          transition: opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1);
-        }
-        .ensemble-loader-overlay.is-expanding {
-          opacity: 0;
+          z-index: 10;
           pointer-events: none;
         }
 
-        /* Pure circular, soft-feathered chromatic bloom - 100% round, 0 sharp corners */
-        .ensemble-micro-prism-bloom {
+        .ensemble-loader-prism-glow {
           position: absolute;
-          width: 150px;
-          height: 150px;
-          border-radius: 50%;
-          pointer-events: none;
-          background: radial-gradient(
-            circle,
-            rgba(99, 102, 241, 0.8) 0%,
-            rgba(6, 182, 212, 0.65) 24%,
-            rgba(16, 185, 129, 0.5) 44%,
-            rgba(245, 158, 11, 0.4) 62%,
-            rgba(236, 72, 153, 0.35) 78%,
-            rgba(139, 92, 246, 0.2) 90%,
-            transparent 100%
-          );
-          filter: blur(18px);
-          transform: translateY(-24px) scale(1);
-          opacity: 0.92;
-          transition: transform 1.6s cubic-bezier(0.22, 1, 0.36, 1),
-                      filter 1.6s cubic-bezier(0.22, 1, 0.36, 1),
-                      opacity 1.4s cubic-bezier(0.25, 0.1, 0.25, 1);
-        }
-
-        .ensemble-loader-overlay.is-expanding .ensemble-micro-prism-bloom {
-          transform: translateY(-40px) scale(26);
-          filter: blur(72px);
-          opacity: 0;
-        }
-
-        /* Micro-prism core (crystal + rings) - smoothly dissolves into pure light */
-        .ensemble-micro-prism-core {
-          position: relative;
-          width: 88px;
-          height: 88px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transform: translateY(-24px) scale(1);
-          transform-origin: center center;
-          transition: opacity 0.35s ease-out, transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
-        }
-
-        .ensemble-loader-overlay.is-expanding .ensemble-micro-prism-core {
-          opacity: 0;
-          transform: translateY(-32px) scale(1.12);
-          pointer-events: none;
-        }
-
-        .ensemble-micro-prism-glow {
-          position: absolute;
-          inset: -28px;
+          width: 260px;
+          height: 260px;
           border-radius: 50%;
           background: radial-gradient(
             circle,
-            rgba(99, 102, 241, 0.45) 0%,
-            rgba(6, 182, 212, 0.35) 28%,
-            rgba(16, 185, 129, 0.25) 50%,
-            rgba(236, 72, 153, 0.22) 72%,
-            transparent 88%
+            rgba(99, 102, 241, 0.22) 0%,
+            rgba(6, 182, 212, 0.16) 35%,
+            rgba(236, 72, 153, 0.1) 65%,
+            transparent 85%
           );
-          filter: blur(14px);
-          animation: ensemble-prism-pulse 3s ease-in-out infinite alternate;
+          filter: blur(32px);
+          pointer-events: none;
+          animation: ensemble-pulse-ambient 3s ease-in-out infinite alternate;
         }
 
-        .ensemble-micro-prism-spectrum-ring {
+        .ensemble-loader-status-container {
           position: absolute;
-          inset: -6px;
-          border-radius: 50%;
-          padding: 2.5px;
-          background: conic-gradient(
-            from 0deg,
-            #6366f1,
-            #3b82f6,
-            #06b6d4,
-            #10b981,
-            #f59e0b,
-            #ec4899,
-            #8b5cf6,
-            #6366f1
-          );
-          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-          mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-          -webkit-mask-composite: xor;
-          mask-composite: exclude;
-          animation: ensemble-prism-spin 3.6s linear infinite;
-          box-shadow: 0 0 24px rgba(99, 102, 241, 0.45);
-        }
-
-        .ensemble-micro-prism-facet-ring {
-          position: absolute;
-          inset: 2px;
-          border-radius: 50%;
-          border: 1px dashed ${theme === 'dark' ? 'rgba(255, 255, 255, 0.25)' : 'rgba(15, 23, 42, 0.2)'};
-          animation: ensemble-prism-spin-reverse 6s linear infinite;
-        }
-
-        .ensemble-micro-prism-gem {
-          position: relative;
-          width: 68px;
-          height: 68px;
-          border-radius: 50%;
-          background: ${theme === 'dark' ? 'rgba(18, 18, 22, 0.88)' : 'rgba(255, 255, 255, 0.9)'};
-          border: 1px solid ${theme === 'dark' ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.08)'};
-          backdrop-filter: blur(14px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 
-            inset 0 1px 1px rgba(255, 255, 255, 0.35),
-            0 8px 24px rgba(0, 0, 0, ${theme === 'dark' ? '0.5' : '0.12'});
-        }
-
-        .ensemble-micro-prism-svg {
-          width: 44px;
-          height: 44px;
-          filter: drop-shadow(0 2px 8px rgba(99, 102, 241, 0.5));
-          animation: ensemble-prism-levitate 3s ease-in-out infinite;
-        }
-
-        .ensemble-micro-prism-spark {
-          position: absolute;
-          top: 13px;
-          right: 17px;
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          background: #ffffff;
-          box-shadow: 0 0 10px 3px rgba(255, 255, 255, 0.85), 0 0 16px 6px rgba(99, 102, 241, 0.65);
-          animation: ensemble-prism-glint 2s ease-in-out infinite alternate;
-        }
-
-        .ensemble-loader-status-block {
-          margin-top: 18px;
+          top: calc(50% + 120px);
           display: flex;
           flex-direction: column;
           align-items: center;
           gap: 10px;
-          transform: translateY(-24px);
-          transition: opacity 0.22s ease-out, transform 0.25s ease-out;
-        }
-        .ensemble-loader-overlay.is-expanding .ensemble-loader-status-block {
-          opacity: 0;
-          transform: translateY(-10px) scale(0.95);
           pointer-events: none;
         }
 
@@ -1137,21 +974,22 @@ const PageAskOurChatbot: React.FC = () => {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          padding: 6px 14px;
+          padding: 6px 16px;
           border-radius: 9999px;
-          background: ${theme === 'dark' ? 'rgba(24, 24, 27, 0.85)' : 'rgba(255, 255, 255, 0.9)'};
-          border: 1px solid ${theme === 'dark' ? 'rgba(39, 39, 42, 0.95)' : 'rgba(226, 232, 240, 0.95)'};
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-          backdrop-filter: blur(10px);
+          background: ${theme === 'dark' ? "rgba(24, 24, 27, 0.85)" : "rgba(255, 255, 255, 0.9)"};
+          border: 1px solid ${theme === 'dark' ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)"};
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, ${theme === 'dark' ? '0.4' : '0.06'});
         }
 
-        .ensemble-loader-spectrum-dot {
+        .ensemble-loader-dot {
           width: 7px;
           height: 7px;
           border-radius: 50%;
           background: conic-gradient(#6366f1, #06b6d4, #10b981, #f59e0b, #ec4899, #6366f1);
-          animation: ensemble-prism-spin 2s linear infinite;
-          box-shadow: 0 0 6px rgba(99, 102, 241, 0.6);
+          animation: ensemble-dot-spin 2s linear infinite;
+          box-shadow: 0 0 8px rgba(99, 102, 241, 0.7);
         }
 
         .ensemble-loader-text {
@@ -1159,50 +997,24 @@ const PageAskOurChatbot: React.FC = () => {
           font-weight: 700;
           letter-spacing: 0.16em;
           text-transform: uppercase;
-          background: ${theme === 'dark' 
-            ? 'linear-gradient(90deg, #94a3b8 0%, #ffffff 40%, #cbd5e1 80%, #94a3b8 100%)' 
-            : 'linear-gradient(90deg, #64748b 0%, #0f172a 40%, #475569 80%, #64748b 100%)'};
-          background-size: 200% auto;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          animation: ensemble-prism-shimmer 3s linear infinite;
+          color: ${theme === 'dark' ? "#f4f4f5" : "#0f172a"};
         }
 
-        .ensemble-loader-subtext {
+        .ensemble-loader-caption {
+          margin: 0;
           font-size: 13px;
           font-weight: 500;
-          color: ${theme === 'dark' ? '#a1a1aa' : '#64748b'};
+          color: ${theme === 'dark' ? "#a1a1aa" : "#64748b"};
         }
 
-        @keyframes ensemble-prism-spin {
+        @keyframes ensemble-pulse-ambient {
+          0% { transform: scale(0.9); opacity: 0.6; }
+          100% { transform: scale(1.15); opacity: 1; }
+        }
+
+        @keyframes ensemble-dot-spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
-        }
-        @keyframes ensemble-prism-spin-reverse {
-          from { transform: rotate(360deg); }
-          to { transform: rotate(0deg); }
-        }
-        @keyframes ensemble-prism-pulse {
-          0% { transform: scale(0.92); opacity: 0.55; }
-          100% { transform: scale(1.18); opacity: 0.85; }
-        }
-        @keyframes ensemble-prism-levitate {
-          0%, 100% { transform: translateY(0px) rotate(0deg); }
-          50% { transform: translateY(-3px) rotate(1.5deg); }
-        }
-        @keyframes ensemble-prism-glint {
-          0%, 20% { opacity: 0.3; transform: scale(0.7); }
-          50%, 70% { opacity: 1; transform: scale(1.3); }
-          100% { opacity: 0.4; transform: scale(0.8); }
-        }
-        @keyframes ensemble-burst-flash {
-          0% { opacity: 0.85; }
-          40% { opacity: 0.7; }
-          100% { opacity: 0; }
-        }
-        @keyframes ensemble-prism-shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
         }
 
         @keyframes ensemble-bounce {
