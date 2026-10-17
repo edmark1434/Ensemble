@@ -444,10 +444,30 @@ export default function Survey() {
         }));
 
         return (
-          <div className="survey-section" key={question.question_id}>
-            <label className="survey-label">
-              {question.question_text} {question.is_required && <span style={{ color: T.error }}>*</span>}
-            </label>
+          <div
+            className="survey-section"
+            key={question.question_id}
+            style={{
+              position: 'relative',
+              zIndex: question.display_order === 1 ? 25 : 20,
+              marginBottom: 20,
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+              <label className="survey-label" style={{ margin: 0 }}>
+                {question.question_text} {question.is_required && <span style={{ color: T.error }}>*</span>}
+              </label>
+              {question.display_order === 1 && (
+                <span className="survey-sublabel" style={{ margin: 0 }}>
+                  Help us understand how you discovered the Ensemble network.
+                </span>
+              )}
+              {question.display_order === 2 && (
+                <span className="survey-sublabel" style={{ margin: 0 }}>
+                  Select your current employment or professional situation.
+                </span>
+              )}
+            </div>
             <GlideSelect
               options={selectOptions}
               value={(value as string) || ''}
@@ -462,6 +482,7 @@ export default function Survey() {
               accentColor={isDark ? '#ffffff' : '#0f172a'}
               radius={12}
               size="lg"
+              maxVisibleItems={3.25}
               defaultOpen={new URLSearchParams(window.location.search).get('open') === '1' && question.display_order === 1}
             />
             {error && <span className="error-text">{error}</span>}
@@ -589,6 +610,8 @@ export default function Survey() {
           width: 100%;
           max-width: 620px;
           min-height: 540px;
+          height: 100%;
+          flex: 1;
           margin: 0 auto;
           display: flex;
           flex-direction: column;
@@ -600,7 +623,7 @@ export default function Survey() {
           border-radius: 20px;
           border: 1px solid ${T.border};
           box-shadow: ${isDark ? "0 24px 70px rgba(0,0,0,0.65)" : "0 20px 60px rgba(15,23,42,0.08)"};
-          overflow-x: hidden;
+          overflow: visible;
         }
 
         .animated-content {
@@ -777,7 +800,7 @@ export default function Survey() {
         @keyframes slide-in-forward {
           0% {
             opacity: 0;
-            transform: translateX(20px);
+            transform: translateX(12px);
             filter: blur(2px);
           }
           100% {
@@ -790,7 +813,7 @@ export default function Survey() {
         @keyframes slide-in-backward {
           0% {
             opacity: 0;
-            transform: translateX(-20px);
+            transform: translateX(-12px);
             filter: blur(2px);
           }
           100% {

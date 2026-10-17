@@ -471,6 +471,8 @@ export default function UploadImage() {
           width: 100%;
           max-width: 620px;
           min-height: 540px;
+          height: 100%;
+          flex: 1;
           margin: 0 auto;
           display: flex;
           flex-direction: column;

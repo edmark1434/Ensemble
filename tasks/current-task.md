@@ -1,26 +1,19 @@
-# Current Task: Setup Flow Card Sizing, Icon Removal, & Active Account Display
+# Current Task: Limit Dropdown Height to ~3 Visible Items & Scroll Remainder
 
 ## Objective
-Polish the setup wizard layout across all 3 steps:
-1. **Identical Container Dimensions**:
-   - Fixed container footprint for all 3 steps (`width: 100%; max-width: 620px; min-height: 540px;`).
-   - `display: flex; flex-direction: column; flex: 1; height: 100%;` inside `.animated-content`.
-   - Anchored footer action buttons (`marginTop: auto; paddingTop: 24px;`) across Step 1, Step 2, and Step 3 so the button row remains rock-solid in place with zero jumping or layout shift.
-   - `overflow-x: hidden;` on `.setup-card` to prevent horizontal slide overflow without clipping vertical dropdown popovers.
-2. **Icon Removal**:
-   - Removed the `(?)` HelpCircle icon container above "About you" (Substep 1) and "Platform purpose" (Substep 2) in `04_Survey.tsx`.
-3. **Active Account & Email Display**:
-   - Added active account indicator badge in `SetupLayout.tsx`:
-     - Displays avatar initial circle.
-     - Displays account name / username (`user?.username || user?.displayName`).
-     - Displays active account email (`user?.email || user?.email_address || signUpData?.email`).
-     - Live emerald status indicator (`● Setting up`).
-   - Rendered in both the desktop vertical sidebar and mobile header.
+Configure the dropdown selects on the "About you" onboarding step ("What is your nature of work?" & "Where did you hear about us?"):
+1. **Support `maxVisibleItems` in `GlideSelect.tsx`**:
+   - Added `maxVisibleItems` (defaulting to 3.25) and `menuMaxHeight` props to `GlideSelectProps`.
+   - Calculated `maxHeight` dynamically based on row height and gap to show at least 3 items (`~3.25` rows so 3 are fully visible and the 4th subtly peeks out to provide a natural scroll indicator).
+   - Applied custom theme-aware thin scrollbars (`.gs-listbox-scroll`) with zero native browser scrollbar styles.
+   - Automatically scrolls the active/focused item into view when navigating via keyboard or opening to a preselected item.
+2. **Applied in `04_Survey.tsx`**:
+   - Configured `maxVisibleItems={3.25}` for the survey dropdown questions.
+3. **Verification**:
+   - Ran `cd frontend && npm run build` and verified 0 compilation/bundle errors.
 
 ## Acceptance Criteria
-- [x] Containers for Step 1 (Avatar), Step 2 (About You), and Step 3 (Platform Purpose) have identical width and height (`min-height: 540px`, `max-width: 620px`).
-- [x] Footer action buttons (`Back`, `Next`, `Continue`, `Complete Setup`) are vertically anchored at the same baseline.
-- [x] HelpCircle icon above "About you" and "Platform purpose" removed.
-- [x] Active account name and email displayed in desktop sidebar and mobile header.
-- [x] `cd frontend && npm run build` verified with 0 errors.
-- [x] Visual verification via headless screenshots for dark and mobile views.
+- [x] Dropdowns show at least 3 items cleanly with the remaining items scrollable.
+- [x] Custom dark/light scrollbar is active and responsive.
+- [x] Keyboard arrows scroll the listbox into view as options change.
+- [x] `npm run build` passes with 0 errors.

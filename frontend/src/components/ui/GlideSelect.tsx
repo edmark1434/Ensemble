@@ -26,6 +26,8 @@ export interface GlideSelectProps {
   size?: 'sm' | 'md' | 'lg';
   radius?: number;
   menuWidth?: number | string;
+  menuMaxHeight?: number | string;
+  maxVisibleItems?: number;
   fullWidth?: boolean;
   placement?: 'top' | 'bottom';
   align?: 'left' | 'right';
@@ -50,7 +52,26 @@ const PAD = 4;
 const GAP = 2;
 const MENU_GAP = 6;
 const DEFAULT_OPTIONS: (string | GlideSelectOption)[] = ['One', 'Two', 'Three'];
-const STYLE = '@keyframes gs-swap{from{opacity:.6;filter:blur(2px)}}';
+const STYLE = `
+@keyframes gs-swap{from{opacity:.6;filter:blur(2px)}}
+.gs-listbox-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gs-scrollbar-thumb, rgba(255, 255, 255, 0.2)) transparent;
+}
+.gs-listbox-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+.gs-listbox-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.gs-listbox-scroll::-webkit-scrollbar-thumb {
+  background: var(--gs-scrollbar-thumb, rgba(255, 255, 255, 0.2));
+  border-radius: 9999px;
+}
+.gs-listbox-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--gs-scrollbar-thumb-hover, rgba(255, 255, 255, 0.35));
+}
+`;
 
 const norm = (o: string | GlideSelectOption): GlideSelectOption =>
   typeof o === 'string' ? { value: o, label: o } : o;
@@ -85,6 +106,8 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
   size = 'lg',
   radius = 12,
   menuWidth,
+  menuMaxHeight,
+  maxVisibleItems = 3.25,
   fullWidth = true,
   placement = 'bottom',
   align = 'left',
@@ -120,6 +143,11 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
   const S = SIZES[size] ?? SIZES.lg;
   const step = S.row + GAP;
   const popOut = Math.round((popDuration * 2) / 3);
+  const listMaxHeight = menuMaxHeight
+    ? (typeof menuMaxHeight === 'number' ? `${menuMaxHeight}px` : menuMaxHeight)
+    : maxVisibleItems !== undefined
+      ? `${Math.round(maxVisibleItems * step + PAD * 2)}px`
+      : `${Math.round(3.25 * step + PAD * 2)}px`;
 
   useLayoutEffect(() => {
     if (phase !== 'open') return;
@@ -129,9 +157,9 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
     const r = root.getBoundingClientRect();
     const need = el.offsetHeight + MENU_GAP;
     setSide(
-      placement === 'bottom' && r.bottom + need > window.innerHeight
+      placement === 'bottom' && r.bottom + need > window.innerHeight - 20
         ? 'top'
-        : placement === 'top' && r.top - need < 0
+        : placement === 'top' && r.top - need < 20
           ? 'bottom'
           : placement
     );
@@ -163,7 +191,21 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
     p.style.transform = `translateY(${active * step}px)`;
     p.style.opacity = '1';
     instant.current = false;
-  }, [active, phase, step]);
+
+    // Scroll active item into view
+    const itemEl = document.getElementById(`${id}-${active}`);
+    if (itemEl && listRef.current) {
+      const listTop = listRef.current.scrollTop;
+      const listBottom = listTop + listRef.current.clientHeight;
+      const elTop = itemEl.offsetTop;
+      const elBottom = elTop + itemEl.offsetHeight;
+      if (elTop < listTop) {
+        listRef.current.scrollTop = elTop - PAD;
+      } else if (elBottom > listBottom) {
+        listRef.current.scrollTop = elBottom - listRef.current.clientHeight + PAD;
+      }
+    }
+  }, [active, phase, step, id]);
 
   const open = (viaKey: boolean) => {
     if (disabled) return;
@@ -291,9 +333,9 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
   return (
     <div
       ref={rootRef}
-      className={`group relative ${fullWidth ? 'w-full block' : 'inline-block'} data-[disabled]:opacity-50${
-        className ? ` ${className}` : ''
-      }`}
+      className={`group relative ${fullWidth ? 'w-full block' : 'inline-block'} ${
+        phase !== 'closed' ? 'z-50' : 'z-10'
+      } data-[disabled]:opacity-50${className ? ` ${className}` : ''}`}
       data-size={size}
       data-disabled={disabled ? '' : undefined}
       style={
@@ -313,6 +355,8 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
           '--gs-pop-out': `${popOut}ms`,
           '--gs-glide': `${glideDuration}ms`,
           '--gs-origin': origin,
+          '--gs-scrollbar-thumb': textColor === '#0f172a' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
+          '--gs-scrollbar-thumb-hover': textColor === '#0f172a' ? 'rgba(0, 0, 0, 0.35)' : 'rgba(255, 255, 255, 0.35)',
         } as CSSProperties
       }
       onAnimationEnd={(e) => {
@@ -366,9 +410,9 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
       {phase !== 'closed' ? (
         <div
           ref={menuRef}
-          className={`absolute z-30 ${
+          className={`absolute z-50 ${
             fullWidth ? 'w-full' : 'min-w-full [width:var(--gs-menu-w)]'
-          } scale-95 p-1 opacity-0 [border-radius:var(--gs-radius)] [background:var(--gs-surface)] [border:1px_solid_var(--gs-border)] [box-shadow:0_12px_32px_rgba(0,0,0,0.45)] [transform-origin:var(--gs-origin)] [transition:opacity_var(--gs-pop)_cubic-bezier(0.23,1,0.32,1),transform_var(--gs-pop)_cubic-bezier(0.23,1,0.32,1)] data-[state=open]:scale-100 data-[state=open]:opacity-100 data-[state=closed]:pointer-events-none data-[state=closed]:[transition-duration:var(--gs-pop-out)] data-[side=bottom]:top-[calc(100%+6px)] data-[side=top]:bottom-[calc(100%+6px)] left-0`}
+          } scale-95 p-1 opacity-0 [border-radius:var(--gs-radius)] [background:var(--gs-surface)] [border:1px_solid_var(--gs-border)] [box-shadow:0_16px_40px_rgba(0,0,0,0.55)] [transform-origin:var(--gs-origin)] [transition:opacity_var(--gs-pop)_cubic-bezier(0.23,1,0.32,1),transform_var(--gs-pop)_cubic-bezier(0.23,1,0.32,1)] data-[state=open]:scale-100 data-[state=open]:opacity-100 data-[state=closed]:pointer-events-none data-[state=closed]:[transition-duration:var(--gs-pop-out)] data-[side=bottom]:top-[calc(100%+6px)] data-[side=top]:bottom-[calc(100%+6px)] left-0`}
           data-state="open"
           data-side={side}
           data-align={align}
@@ -378,7 +422,8 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
             ref={listRef}
             role="listbox"
             aria-label={ariaLabel}
-            className="group/list relative grid touch-none gap-0.5 max-h-[260px] overflow-y-auto overflow-x-hidden p-0.5"
+            className="group/list gs-listbox-scroll relative grid touch-none gap-0.5 overflow-y-auto overflow-x-hidden p-1 pr-1.5"
+            style={{ maxHeight: listMaxHeight }}
             data-live={active !== null ? '' : undefined}
             onPointerOver={onListOver}
             onPointerLeave={() => {

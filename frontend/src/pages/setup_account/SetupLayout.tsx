@@ -374,7 +374,7 @@ export const SetupLayout: React.FC<SetupLayoutProps> = ({
         </aside>
 
         {/* Right Column: Main Content Area */}
-        <main className="flex-1 min-w-0 flex flex-col justify-center">
+        <main className="flex-1 min-w-0 flex flex-col">
           {children}
         </main>
       </div>
