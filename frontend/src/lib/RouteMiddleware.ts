@@ -97,6 +97,7 @@ export default function RouteMiddleware() {
     const isPublicRoute =
         basePublicRoutes.includes(location.pathname) ||
         (location.pathname.startsWith('/landing/') && !isTicketFormRoute) ||
+        location.search.includes('preview=true') ||
         isTicketFormRoute;
     const isOnboardingRoute = location.pathname.startsWith('/setup/');
 
@@ -274,13 +275,14 @@ export default function RouteMiddleware() {
     }, [navigate, redirectPath, shouldAutoRedirect]);
 
     useEffect(() => {
+        if (location.search.includes('preview=true')) return;
         if (isCheckingSession || onboardingPath === undefined || !resolvedUser || resolvedUser.type !== 'User') return;
         if (onboardingPath && location.pathname !== onboardingPath) {
             navigate(onboardingPath, { replace: true });
         } else if (!onboardingPath && isOnboardingRoute) {
             navigate('/home', { replace: true });
         }
-    }, [isCheckingSession, onboardingPath, resolvedUser, isOnboardingRoute, location.pathname, navigate]);
+    }, [isCheckingSession, onboardingPath, resolvedUser, isOnboardingRoute, location.pathname, location.search, navigate]);
 
     useEffect(() => {
         if (isCheckingSession || resolvedUser || isGuestMode || isPublicRoute || isGuestAllowedRoute) {

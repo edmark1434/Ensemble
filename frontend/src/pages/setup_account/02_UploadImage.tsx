@@ -9,19 +9,6 @@ import { deleteAvatarDraft, getAvatarDraft, saveAvatarDraft } from "../../lib/on
 import { notifyOnboardingStepChanged } from "../../lib/onboardingEvents";
 import useGlobalState from "../../lib/global_state";
 
-const T = {
-  bg:        "#080a12",
-  bgInput:   "#13151f",
-  border:    "#2a2d3e",
-  borderFoc: "#4a6fa5",
-  accent:    "#4a6fa5",
-  text:      "#ffffff",
-  muted:     "#888",
-  dim:       "#555",
-  error:     "#e05252",
-  fontBody:  "'Plus Jakarta Sans', sans-serif",
-};
-
 interface Preset {
   file_id: string;
   path: string;
@@ -29,6 +16,25 @@ interface Preset {
 }
 
 export default function UploadImage() {
+  const storeTheme = useGlobalState((state) => state.theme);
+  const searchTheme = new URLSearchParams(window.location.search).get('theme') as 'light' | 'dark' | null;
+  const theme = searchTheme || storeTheme || 'dark';
+  const isDark = theme === 'dark';
+
+  const T = {
+    bg: isDark ? "#0f0f11" : "#f8fafc",
+    bgCard: isDark ? "rgba(18, 18, 20, 0.88)" : "rgba(255, 255, 255, 0.96)",
+    bgInput: isDark ? "#18181b" : "#ffffff",
+    border: isDark ? "#27272a" : "#e2e8f0",
+    borderFoc: isDark ? "#52525b" : "#0f172a",
+    accent: isDark ? "#f4f4f5" : "#0f172a",
+    text: isDark ? "#f4f4f5" : "#0f172a",
+    muted: isDark ? "#a1a1aa" : "#64748b",
+    dim: isDark ? "#52525b" : "#94a3b8",
+    error: "#ef4444",
+    fontBody: "'Plus Jakarta Sans', sans-serif",
+  };
+
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
@@ -144,14 +150,17 @@ export default function UploadImage() {
 
   useEffect(() => {
     const fetchPresets = async () => {
+      const isPreview = window.location.search.includes('preview=true');
       try {
         const [response, stateResponse] = await Promise.all([
-          api.get("/api/files/profile-presets"),
-          api.get("/api/onboarding/state"),
+          api.get("/api/files/profile-presets").catch(() => ({ data: { files: [] } })),
+          isPreview
+            ? Promise.resolve({ data: { completed: false, path: '/setup/upload-image' } })
+            : api.get("/api/onboarding/state"),
         ]);
-        if (stateResponse.data.completed) return navigate("/home", { replace: true });
-        if (stateResponse.data.path !== '/setup/upload-image') return navigate(stateResponse.data.path, { replace: true });
-        const presetFiles = response.data.files || [];
+        if (!isPreview && stateResponse.data.completed) return navigate("/home", { replace: true });
+        if (!isPreview && stateResponse.data.path !== '/setup/upload-image') return navigate(stateResponse.data.path, { replace: true });
+        const presetFiles = response.data?.files || [];
         setPresets(presetFiles);
         const savedAvatar = stateResponse.data.data?.avatar;
         if (savedAvatar?.type === "preset") {
@@ -463,12 +472,13 @@ export default function UploadImage() {
           display: flex;
           flex-direction: column;
           font-family: ${T.fontBody};
-          background: rgba(8, 10, 18, 0.8);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
+          background: ${T.bgCard};
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
           padding: 32px;
           border-radius: 20px;
-          border: 1px solid rgba(42, 45, 62, 0.4);
+          border: 1px solid ${T.border};
+          box-shadow: ${isDark ? "0 24px 70px rgba(0,0,0,0.65)" : "0 20px 60px rgba(15,23,42,0.08)"};
         }
 
         .animated-content {
@@ -518,7 +528,7 @@ export default function UploadImage() {
         .preset-circle.active {
           border-color: ${T.accent};
           transform: scale(1.08);
-          box-shadow: 0 0 12px rgba(74, 111, 165, 0.3);
+          box-shadow: 0 0 12px ${isDark ? "rgba(255, 255, 255, 0.2)" : "rgba(15, 23, 42, 0.2)"};
         }
 
         .preset-circle.disabled {
@@ -532,7 +542,7 @@ export default function UploadImage() {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: rgba(0, 0, 0, 0.3);
+          background: rgba(0, 0, 0, 0.45);
           border-radius: 50%;
         }
 
@@ -555,7 +565,7 @@ export default function UploadImage() {
         }
 
         .setup-card button:focus-visible {
-          outline: 2px solid #7aadde;
+          outline: 2px solid ${T.accent};
           outline-offset: 3px;
         }
         @keyframes smooth-fade-in {
@@ -577,18 +587,18 @@ export default function UploadImage() {
           <ShapeGrid
             direction="diagonal"
             speed={0.3}
-            borderColor="rgba(42, 45, 62, 0.3)"
+            borderColor={isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.06)"}
             squareSize={45}
-            hoverFillColor="rgba(74, 111, 165, 0.15)"
+            hoverFillColor={isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)"}
             hoverTrailAmount={4}
             shape="square"
           />
         </div>
 
         <div className="setup-card">
-          <div style={{ marginBottom: 40 }}>
+          <div style={{ marginBottom: 36 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: T.accent, letterSpacing: 0.5 }}>ACCOUNT SETUP</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>ACCOUNT SETUP</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>1 / 3</span>
             </div>
             <div style={{ width: "100%", height: 4, background: T.border, borderRadius: 2, overflow: "hidden" }}>
@@ -597,13 +607,6 @@ export default function UploadImage() {
           </div>
 
           <div className="animated-content">
-            <div style={{
-              width: 48, height: 48, borderRadius: 12, background: T.bgInput,
-              border: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", color: T.accent, marginBottom: 20,
-            }}>
-              <Image className="h-5 w-5" />
-            </div>
-
             <h2 style={{ fontSize: 24, fontWeight: 700, color: T.text, marginBottom: 6, letterSpacing: -.3 }}>
               Choose avatar profile
             </h2>
@@ -663,25 +666,25 @@ export default function UploadImage() {
                     width: 34,
                     height: 34,
                     borderRadius: "50%",
-                    background: isUploading || isSaved ? "#555" : "#fff",
-                    color: isUploading || isSaved ? "#888" : "#080a12",
+                    background: isUploading || isSaved ? T.dim : (isDark ? "#ffffff" : "#0f172a"),
+                    color: isUploading || isSaved ? T.muted : (isDark ? "#0f0f11" : "#ffffff"),
                     border: "none",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     cursor: isUploading || isSaved ? "not-allowed" : "pointer",
-                    boxShadow: "0 4px 10px rgba(0,0,0,0.4)",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
                     transition: "all 0.2s ease"
                   }}
                   title="Upload Custom Image"
                   onMouseEnter={(e) => {
                     if (!isUploading && !isSaved) {
-                      e.currentTarget.style.background = "#e8e8e8";
+                      e.currentTarget.style.background = isDark ? "#e4e4e7" : "#1e293b";
                       e.currentTarget.style.transform = "scale(1.1)";
                     }
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isUploading || isSaved ? "#555" : "#fff";
+                    e.currentTarget.style.background = isUploading || isSaved ? T.dim : (isDark ? "#ffffff" : "#0f172a");
                     e.currentTarget.style.transform = "scale(1)";
                   }}
                 >
@@ -706,12 +709,13 @@ export default function UploadImage() {
                 gap: 8,
                 marginBottom: 16,
                 padding: "6px 14px",
-                background: "rgba(74, 111, 165, 0.1)",
+                background: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.06)",
+                border: `1px solid ${T.border}`,
                 borderRadius: 20,
                 justifyContent: "center"
               }}>
                 <Check className="h-3.5 w-3.5" style={{ color: T.accent }} />
-                <span style={{ color: T.accent, fontSize: 11, fontWeight: 500 }}>
+                <span style={{ color: T.text, fontSize: 11, fontWeight: 600 }}>
                   Custom image selected
                 </span>
               </div>
@@ -754,8 +758,8 @@ export default function UploadImage() {
                 disabled={isUploading || isSaved || loading || !previewUrl}
                 style={{
                   flex: 2,
-                  background: (isUploading || isSaved || loading || !previewUrl) ? "#555" : "#fff",
-                  color: (isUploading || isSaved || loading || !previewUrl) ? "#888" : "#080a12",
+                  background: (isUploading || isSaved || loading || !previewUrl) ? (isDark ? "#27272a" : "#e2e8f0") : (isDark ? "#ffffff" : "#0f172a"),
+                  color: (isUploading || isSaved || loading || !previewUrl) ? (isDark ? "#71717a" : "#94a3b8") : (isDark ? "#0f0f11" : "#ffffff"),
                   border: "none",
                   padding: "12px 20px",
                   borderRadius: 30,
@@ -768,17 +772,17 @@ export default function UploadImage() {
                   gap: 6,
                   transition: "all 0.2s ease",
                   transform: isUploading || isSaved || loading || !previewUrl ? "none" : "scale(1)",
-                  boxShadow: isUploading || isSaved || loading || !previewUrl ? "none" : "0 4px 15px rgba(255,255,255,0.1)"
+                  boxShadow: isUploading || isSaved || loading || !previewUrl ? "none" : (isDark ? "0 4px 15px rgba(255,255,255,0.12)" : "0 4px 15px rgba(15,23,42,0.12)")
                 }}
                 onMouseEnter={(e) => {
                   if (!isUploading && !isSaved && !loading && previewUrl) {
-                    e.currentTarget.style.background = "#e8e8e8";
+                    e.currentTarget.style.background = isDark ? "#e4e4e7" : "#1e293b";
                     e.currentTarget.style.transform = "scale(1.02)";
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isUploading && !isSaved && !loading && previewUrl) {
-                    e.currentTarget.style.background = "#fff";
+                    e.currentTarget.style.background = isDark ? "#ffffff" : "#0f172a";
                     e.currentTarget.style.transform = "scale(1)";
                   }
                 }}
