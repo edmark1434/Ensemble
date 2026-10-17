@@ -73,11 +73,11 @@ export const ProjectMembersTab: React.FC<ProjectMembersTabProps> = ({
       </div>
 
       {/* Members List */}
-      <div className="bg-white dark:bg-[#151720] rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs divide-y divide-slate-100 dark:divide-zinc-800">
+      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs divide-y divide-zinc-100 dark:divide-zinc-800">
         <div className="p-5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            <h3 className="text-base font-bold text-zinc-900 dark:text-white">
               Project Contributors Roster ({members.length})
             </h3>
           </div>
@@ -93,7 +93,7 @@ export const ProjectMembersTab: React.FC<ProjectMembersTabProps> = ({
           )}
         </div>
 
-        <div className="divide-y divide-slate-100 dark:divide-zinc-800">
+        <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
           {members.map((member) => {
             const isOwner = member.team_role === 'Owner';
             const isMe = Boolean(
@@ -106,7 +106,7 @@ export const ProjectMembersTab: React.FC<ProjectMembersTabProps> = ({
             return (
               <div
                 key={member.account_id}
-                className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition"
+                className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition"
               >
                 <div className="flex items-center gap-3.5">
                   <img
@@ -115,7 +115,7 @@ export const ProjectMembersTab: React.FC<ProjectMembersTabProps> = ({
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = getFallbackAvatarUrl(member.display_name);
                     }}
-                    className="w-11 h-11 rounded-full object-cover border border-slate-200 dark:border-zinc-700 shrink-0 cursor-pointer hover:border-blue-500 transition"
+                    className="w-11 h-11 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0 cursor-pointer hover:border-blue-500 transition"
                     onClick={() => {
                       if (member.account_id) navigate(`/profile/${member.account_id}`);
                     }}
@@ -126,12 +126,12 @@ export const ProjectMembersTab: React.FC<ProjectMembersTabProps> = ({
                         onClick={() => {
                           if (member.account_id) navigate(`/profile/${member.account_id}`);
                         }}
-                        className="text-sm font-bold text-slate-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition"
+                        className="text-sm font-bold text-zinc-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition"
                       >
                         {member.display_name}
                       </h4>
                       {isMe && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300">
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
                           You
                         </span>
                       )}
@@ -146,10 +146,10 @@ export const ProjectMembersTab: React.FC<ProjectMembersTabProps> = ({
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-zinc-400 mt-1">
+                    <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400 mt-1">
                       {member.handle && <span>@{member.handle}</span>}
                       {member.milestone_role && (
-                        <span className="font-semibold text-slate-700 dark:text-zinc-300">
+                        <span className="font-semibold text-zinc-700 dark:text-zinc-300">
                           Role: {member.milestone_role}
                         </span>
                       )}
@@ -164,7 +164,7 @@ export const ProjectMembersTab: React.FC<ProjectMembersTabProps> = ({
                   {!isMe && (
                     <button
                       onClick={() => handleStartDirectChat(member.account_id)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 transition"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 transition"
                     >
                       <MessageCircle className="w-3.5 h-3.5" />
                       Direct Message

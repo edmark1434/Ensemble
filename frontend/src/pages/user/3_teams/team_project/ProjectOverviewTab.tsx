@@ -147,8 +147,8 @@ const MilestoneCountdownTimer: React.FC<{
 
   if (isLocked) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-500 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 shrink-0">
-        <Lock className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 shrink-0">
+        <Lock className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
         <span>Locked</span>
         <span className="text-[11px] opacity-75">
           ({durationHours || 132}h sequential queue)
@@ -159,8 +159,8 @@ const MilestoneCountdownTimer: React.FC<{
 
   if (!timeLeft) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-500 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 shrink-0">
-        <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shrink-0">
+        <Clock className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
         <span>{durationHours ? `${durationHours}h estimated window` : 'Active'}</span>
       </span>
     );
@@ -281,14 +281,14 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Overview Sub-Tabs: Summary | Milestones | About */}
-      <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-zinc-800/80 w-fit border border-slate-200/80 dark:border-zinc-700/60 shadow-2xs">
+      <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 w-fit border border-zinc-200/80 dark:border-zinc-700/60 shadow-2xs">
         <button
           type="button"
           onClick={() => handleSubTabChange('summary')}
           className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
             activeSubTab === 'summary'
-              ? 'bg-white dark:bg-[#151720] text-blue-600 dark:text-blue-400 shadow-xs'
-              : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+              ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
           }`}
         >
           <LayoutDashboard className="w-3.5 h-3.5" />
@@ -300,8 +300,8 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
           onClick={() => handleSubTabChange('milestones')}
           className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
             activeSubTab === 'milestones'
-              ? 'bg-white dark:bg-[#151720] text-blue-600 dark:text-blue-400 shadow-xs'
-              : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+              ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
           }`}
         >
           <Clock className="w-3.5 h-3.5" />
@@ -310,7 +310,7 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
             className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
               activeSubTab === 'milestones'
                 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                : 'bg-slate-200 dark:bg-zinc-700 text-slate-700 dark:text-zinc-300'
+                : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300'
             }`}
           >
             {completedMilestones}/{totalMilestones}
@@ -322,8 +322,8 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
           onClick={() => handleSubTabChange('about')}
           className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
             activeSubTab === 'about'
-              ? 'bg-white dark:bg-[#151720] text-blue-600 dark:text-blue-400 shadow-xs'
-              : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+              ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
           }`}
         >
           <Info className="w-3.5 h-3.5" />
@@ -337,72 +337,72 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
           {/* ROW 1: Total Milestones (0/2) | Total Tasks (0/4) | Current Milestone | Credit Pool */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Milestones Card */}
-        <div className="bg-white dark:bg-[#151720] p-4 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-2">
+            <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-2">
               <span className="text-xs font-bold uppercase tracking-wider">
                 Total Milestones ({completedMilestones}/{totalMilestones})
               </span>
-              <CheckCircle2 className="w-4 h-4 text-slate-400 dark:text-zinc-500" />
+              <CheckCircle2 className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
             </div>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            <div className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">
               {completedMilestones} / {totalMilestones}
-              <span className="text-xs font-semibold text-slate-500 dark:text-zinc-400 ml-2">
+              <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 ml-2">
                 ({milestoneProgress}%)
               </span>
             </div>
           </div>
-          <div className="w-full bg-slate-100 dark:bg-zinc-800 h-2 rounded-full overflow-hidden">
+          <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-2 rounded-full overflow-hidden">
             <div
-              className="bg-slate-400 dark:bg-zinc-500 h-full rounded-full transition-all duration-300"
+              className="bg-zinc-400 dark:bg-zinc-500 h-full rounded-full transition-all duration-300"
               style={{ width: `${milestoneProgress}%` }}
             />
           </div>
         </div>
 
         {/* Total Tasks Card */}
-        <div className="bg-white dark:bg-[#151720] p-4 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-2">
+            <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-2">
               <span className="text-xs font-bold uppercase tracking-wider">
                 Total Tasks ({completedTasks}/{totalTasks})
               </span>
-              <Layers className="w-4 h-4 text-slate-400 dark:text-zinc-500" />
+              <Layers className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
             </div>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            <div className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">
               {completedTasks} / {totalTasks}
-              <span className="text-xs font-semibold text-slate-500 dark:text-zinc-400 ml-2">
+              <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 ml-2">
                 ({taskProgress}%)
               </span>
             </div>
           </div>
-          <div className="w-full bg-slate-100 dark:bg-zinc-800 h-2 rounded-full overflow-hidden">
+          <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-2 rounded-full overflow-hidden">
             <div
-              className="bg-slate-400 dark:bg-zinc-500 h-full rounded-full transition-all duration-300"
+              className="bg-zinc-400 dark:bg-zinc-500 h-full rounded-full transition-all duration-300"
               style={{ width: `${taskProgress}%` }}
             />
           </div>
         </div>
 
         {/* Current Milestone Card */}
-        <div className="bg-white dark:bg-[#151720] p-4 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-2">
+            <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-2">
               <span className="text-xs font-bold uppercase tracking-wider">Current Milestone</span>
-              <Activity className="w-4 h-4 text-slate-400 dark:text-zinc-500" />
+              <Activity className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
             </div>
             {currentMilestone ? (
               <div>
-                <h4 className="text-base font-bold text-slate-900 dark:text-white truncate">
+                <h4 className="text-base font-bold text-zinc-900 dark:text-white truncate">
                   {currentMilestone.milestone_title}
                 </h4>
                 <div className="flex items-center gap-2 mt-1.5">
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-700 dark:bg-zinc-800 dark:text-zinc-300 border border-slate-300 dark:border-zinc-700">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-zinc-500" />
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
                     Active Stage
                   </span>
                   {currentMilestone.assignee_name && (
-                    <span className="text-xs text-slate-500 dark:text-zinc-400 truncate">
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
                       by {currentMilestone.assignee_name}
                     </span>
                   )}
@@ -410,42 +410,42 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
               </div>
             ) : (
               <div>
-                <div className="text-lg font-bold text-slate-700 dark:text-zinc-300">
+                <div className="text-lg font-bold text-zinc-700 dark:text-zinc-300">
                   {completedMilestones === totalMilestones && totalMilestones > 0
                     ? 'All Milestones Completed'
                     : 'None Active'}
                 </div>
-                <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
                   Sequential workflow ready
                 </p>
               </div>
             )}
           </div>
           {currentMilestone && (
-            <div className="pt-2 text-xs text-slate-500 dark:text-zinc-400 font-medium flex items-center gap-1">
+            <div className="pt-2 text-xs text-zinc-500 dark:text-zinc-400 font-medium flex items-center gap-1">
               <span>Step {currentMilestone.order_index + 1} of {totalMilestones}</span>
             </div>
           )}
         </div>
 
         {/* Credit Pool Card */}
-        <div className="bg-white dark:bg-[#151720] p-4 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-2">
+            <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-2">
               <span className="text-xs font-bold uppercase tracking-wider">Credit Pool</span>
-              <Coins className="w-4 h-4 text-slate-400 dark:text-zinc-500" />
+              <Coins className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
             </div>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">
+            <div className="text-2xl font-bold text-zinc-900 dark:text-white">
               {totalCredits.toLocaleString()}{' '}
-              <span className="text-xs font-semibold text-slate-500 dark:text-zinc-400">Credits</span>
+              <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Credits</span>
             </div>
           </div>
-          <p className="text-xs text-slate-500 dark:text-zinc-400 pt-2 border-t border-slate-100 dark:border-zinc-800/80">
-            <span className="text-slate-700 dark:text-zinc-300 font-bold">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+            <span className="text-zinc-700 dark:text-zinc-300 font-bold">
               {releasedCredits.toLocaleString()}
             </span>{' '}
             paid |{' '}
-            <span className="text-slate-700 dark:text-zinc-300 font-bold">
+            <span className="text-zinc-700 dark:text-zinc-300 font-bold">
               {escrowRemaining.toLocaleString()}
             </span>{' '}
             in escrow
@@ -456,85 +456,85 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
       {/* ROW 2: Ongoing | Upcoming | Completed | Remaining Milestones | Pending for Rating | Overdue Tasks */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {/* Ongoing */}
-        <div className="bg-white dark:bg-[#151720] p-3.5 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-1">
+        <div className="bg-white dark:bg-zinc-900 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
+          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider">Ongoing</span>
-            <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-zinc-500" />
+            <span className="w-2 h-2 rounded-full bg-zinc-400 dark:bg-zinc-500" />
           </div>
-          <div className="text-xl font-bold text-slate-900 dark:text-white">
+          <div className="text-xl font-bold text-zinc-900 dark:text-white">
             {ongoingMilestonesCount}
           </div>
-          <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-medium">
+          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
             Active in progress
           </span>
         </div>
 
         {/* Upcoming */}
-        <div className="bg-white dark:bg-[#151720] p-3.5 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-1">
+        <div className="bg-white dark:bg-zinc-900 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
+          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider">Upcoming</span>
-            <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
+            <Clock className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
           </div>
-          <div className="text-xl font-bold text-slate-900 dark:text-white">
+          <div className="text-xl font-bold text-zinc-900 dark:text-white">
             {upcomingMilestonesCount}
           </div>
-          <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-medium">
+          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
             Next in pipeline
           </span>
         </div>
 
         {/* Completed */}
-        <div className="bg-white dark:bg-[#151720] p-3.5 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-1">
+        <div className="bg-white dark:bg-zinc-900 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
+          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider">Completed</span>
-            <CheckCircle2 className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
           </div>
-          <div className="text-xl font-bold text-slate-900 dark:text-white">
+          <div className="text-xl font-bold text-zinc-900 dark:text-white">
             {completedMilestones}
           </div>
-          <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-medium">
+          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
             Finished & approved
           </span>
         </div>
 
         {/* Remaining Milestones */}
-        <div className="bg-white dark:bg-[#151720] p-3.5 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-1">
+        <div className="bg-white dark:bg-zinc-900 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
+          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider">Remaining</span>
-            <Layers className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
+            <Layers className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
           </div>
-          <div className="text-xl font-bold text-slate-900 dark:text-white">
+          <div className="text-xl font-bold text-zinc-900 dark:text-white">
             {remainingMilestonesCount}
           </div>
-          <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-medium">
+          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
             Milestones left
           </span>
         </div>
 
         {/* Pending for Rating */}
-        <div className="bg-white dark:bg-[#151720] p-3.5 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-1">
+        <div className="bg-white dark:bg-zinc-900 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
+          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider truncate">For Rating</span>
-            <Star className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
+            <Star className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
           </div>
-          <div className="text-xl font-bold text-slate-900 dark:text-white">
+          <div className="text-xl font-bold text-zinc-900 dark:text-white">
             {pendingForRatingCount}
           </div>
-          <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-medium truncate block">
+          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium truncate block">
             Awaiting feedback
           </span>
         </div>
 
         {/* Overdue Tasks */}
-        <div className="bg-white dark:bg-[#151720] p-3.5 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-1">
+        <div className="bg-white dark:bg-zinc-900 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
+          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider truncate">Overdue</span>
-            <AlertCircle className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
+            <AlertCircle className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
           </div>
-          <div className="text-xl font-bold text-slate-900 dark:text-white">
+          <div className="text-xl font-bold text-zinc-900 dark:text-white">
             {overdueTasksCount}
           </div>
-          <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-medium truncate block">
+          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium truncate block">
             Tasks past due
           </span>
         </div>
@@ -549,15 +549,15 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                   navigate(`/profile/${project.client_account_id}`);
                 }
               }}
-              className="bg-white dark:bg-[#151720] rounded-xl border border-slate-200 dark:border-zinc-800 p-5 shadow-xs hover:border-blue-400 dark:hover:border-blue-500/60 transition cursor-pointer group flex flex-col justify-between"
+              className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-xs hover:border-blue-400 dark:hover:border-blue-500/60 transition cursor-pointer group flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-center justify-between mb-3 gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                     Project Client (Owner)
                   </span>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-700 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 rounded border border-slate-300 dark:border-zinc-700 shrink-0">
-                    <ShieldCheck className="w-3 h-3 text-slate-500 dark:text-zinc-400" />
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 shrink-0">
+                    <ShieldCheck className="w-3 h-3 text-zinc-500 dark:text-zinc-400" />
                     Contract Author
                   </span>
                 </div>
@@ -570,26 +570,26 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = getFallbackAvatarUrl(project.client_name);
                       }}
-                      className="w-11 h-11 rounded-full object-cover border border-slate-200 dark:border-zinc-700 group-hover:border-blue-500 transition shadow-xs"
+                      className="w-11 h-11 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 group-hover:border-blue-500 transition shadow-xs"
                     />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                      <h4 className="text-sm font-bold text-zinc-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
                         {project.client_name || 'Client'}
                       </h4>
                       <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 shrink-0">
                         Client Owner
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400 truncate mt-0.5">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
                       @{project.client_handle || 'client'}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400">
+              <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
                 <span>Escrow & milestone funder</span>
                 <span className="font-semibold text-blue-600 dark:text-blue-400 group-hover:underline flex items-center gap-0.5">
                   View Profile <ChevronRight className="w-3.5 h-3.5" />
@@ -598,10 +598,10 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
             </div>
 
             {/* Row 2: Active Contributors Card */}
-            <div className="bg-white dark:bg-[#151720] rounded-xl border border-slate-200 dark:border-zinc-800 p-5 shadow-xs flex flex-col justify-between">
+            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-xs flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-3 gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                     Active Contributors ({members.length})
                   </span>
                   {onSelectTab && (
@@ -627,30 +627,30 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = getFallbackAvatarUrl(m.display_name);
                         }}
-                        className="inline-block w-10 h-10 rounded-full object-cover ring-2 ring-white dark:ring-[#151720] border border-slate-200 dark:border-zinc-700 shadow-xs"
+                        className="inline-block w-10 h-10 rounded-full object-cover ring-2 ring-white dark:ring-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-xs"
                       />
                     ))}
                     {members.length > 4 && (
-                      <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 text-xs font-bold ring-2 ring-white dark:ring-[#151720] border border-slate-200 dark:border-zinc-700 shadow-xs">
+                      <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-bold ring-2 ring-white dark:ring-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-xs">
                         +{members.length - 4}
                       </div>
                     )}
                     {members.length === 0 && (
-                      <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-zinc-800 flex items-center justify-center border border-dashed border-slate-300 dark:border-zinc-700">
-                        <Users className="w-5 h-5 text-slate-400 dark:text-zinc-500" />
+                      <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center border border-dashed border-zinc-300 dark:border-zinc-700">
+                        <Users className="w-5 h-5 text-zinc-400 dark:text-zinc-500" />
                       </div>
                     )}
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                    <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">
                       {members.length === 0
                         ? 'No contributors contracted yet'
                         : members.length === 1
                         ? members[0].display_name
                         : `${members[0].display_name} and ${members.length - 1} other${members.length > 2 ? 's' : ''}`}
                     </p>
-                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate mt-0.5">
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
                       {members.length === 0
                         ? 'Contract offers are pending acceptance'
                         : 'Contracted freelancers collaborating'}
@@ -659,7 +659,7 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400">
+              <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
                 <span>{completedMilestones} of {totalMilestones} milestones completed</span>
                 {onSelectTab && (
                   <button
@@ -675,9 +675,9 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
           </div>
 
           {/* Quick Info & Navigation Banner */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-white dark:bg-[#151720] border border-slate-200 dark:border-zinc-800 shadow-xs text-xs">
-            <div className="flex items-center gap-2 text-slate-600 dark:text-zinc-400">
-              <Clock className="w-4 h-4 text-slate-400 dark:text-zinc-500 shrink-0" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs text-xs">
+            <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+              <Clock className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
               <span>
                 {currentMilestone
                   ? `Active milestone stage: "${currentMilestone.milestone_title}" (${remainingMilestonesCount} remaining).`
@@ -700,21 +700,21 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
       {activeSubTab === 'milestones' && (
         <div className="space-y-6">
           {/* Milestone Pipeline Card (Full Width) */}
-          <div className="bg-white dark:bg-[#151720] p-6 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-zinc-800/80">
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-100 dark:border-zinc-800/80">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                <h3 className="text-base font-bold text-zinc-900 dark:text-white">
                   Milestones Pipeline ({completedMilestones}/{totalMilestones} Completed)
                 </h3>
               </div>
-              <span className="text-xs font-semibold text-slate-500 dark:text-zinc-400">
+              <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                 Sequential execution enforced
               </span>
             </div>
 
             {activeMilestonesList.length === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-zinc-400 py-6 text-center">
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 py-6 text-center">
                 Milestones will appear here once candidates accept team job contracts.
               </p>
             ) : (
@@ -733,11 +733,11 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                           ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800/50'
                           : isCurrent
                           ? 'bg-blue-50/40 dark:bg-blue-950/20 border-blue-300 dark:border-blue-800/60 ring-1 ring-blue-500/20'
-                          : 'bg-slate-50/70 dark:bg-zinc-900/40 border-slate-200 dark:border-zinc-800'
+                          : 'bg-zinc-50/70 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800'
                       }`}
                     >
                       {/* Top Row: Milestone Step + Title + Status Badges */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-zinc-800/70">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-100 dark:border-zinc-800/70">
                         <div className="flex items-center gap-3">
                           <span
                             className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
@@ -745,22 +745,22 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                                 ? 'bg-emerald-600 text-white'
                                 : isCurrent
                                 ? 'bg-blue-600 text-white'
-                                : 'bg-slate-300 dark:bg-zinc-700 text-slate-700 dark:text-zinc-300'
+                                : 'bg-zinc-300 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300'
                             }`}
                           >
                             {index + 1}
                           </span>
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                              <h4 className="text-sm font-bold text-zinc-900 dark:text-white">
                                 {m.milestone_title || `Milestone ${index + 1}`}
                               </h4>
-                              <span className="text-xs font-mono font-bold text-slate-700 dark:text-zinc-300">
+                              <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300">
                                 • {Number(m.budget_credits).toLocaleString()} Credits
                               </span>
                             </div>
                             {m.milestone_description && (
-                              <p className="text-xs text-slate-600 dark:text-zinc-400 line-clamp-1 mt-0.5">
+                              <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-1 mt-0.5">
                                 {m.milestone_description}
                               </p>
                             )}
@@ -812,35 +812,35 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                                   (e.target as HTMLImageElement).src = getFallbackAvatarUrl(m.assignee_name);
                                 }}
                                 onClick={() => navigate(`/profile/${m.assignee_account_id}`)}
-                                className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-zinc-700 shrink-0 cursor-pointer hover:border-blue-500 transition shadow-xs"
+                                className="w-10 h-10 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0 cursor-pointer hover:border-blue-500 transition shadow-xs"
                               />
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 block">
+                                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
                                     Assigned Contributor
                                   </span>
                                 </div>
                                 <h5
                                   onClick={() => navigate(`/profile/${m.assignee_account_id}`)}
-                                  className="text-xs font-bold text-slate-900 dark:text-white truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition"
+                                  className="text-xs font-bold text-zinc-900 dark:text-white truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition"
                                 >
                                   {m.assignee_name}
                                 </h5>
-                                <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
+                                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
                                   @{m.assignee_handle || 'freelancer'}
                                 </p>
                               </div>
                             </>
                           ) : (
                             <div className="flex items-center gap-2.5">
-                              <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-zinc-800 flex items-center justify-center border border-dashed border-slate-300 dark:border-zinc-700">
-                                <Users className="w-4 h-4 text-slate-400 dark:text-zinc-500" />
+                              <div className="w-9 h-9 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center border border-dashed border-zinc-300 dark:border-zinc-700">
+                                <Users className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
                               </div>
                               <div>
-                                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 block">
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
                                   Assigned Contributor
                                 </span>
-                                <span className="text-xs font-semibold text-slate-600 dark:text-zinc-400">
+                                <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
                                   Unassigned (Open Position)
                                 </span>
                               </div>
@@ -850,7 +850,7 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
 
                         {/* Real-time Ticking Down Timer */}
                         <div className="flex flex-col md:items-end justify-center">
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-1">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1">
                             Milestone Countdown
                           </span>
                           <MilestoneCountdownTimer
@@ -864,9 +864,9 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                       </div>
 
                       {/* Bottom Row: Tasks Breakdown for this Milestone */}
-                      <div className="pt-3 border-t border-slate-100 dark:border-zinc-800/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
+                          <span className="font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1">
                             <CheckSquare className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                             Tasks: {m.completed_tasks} / {m.total_tasks} completed
                           </span>
@@ -877,14 +877,14 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                                 return (
                                   <span
                                     key={tIdx}
-                                    className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700 truncate max-w-[150px]"
+                                    className="px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 truncate max-w-[150px]"
                                   >
                                     {title}
                                   </span>
                                 );
                               })}
                               {m.milestone_tasks.length > 2 && (
-                                <span className="text-[10px] text-slate-500 dark:text-zinc-400">
+                                <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
                                   +{m.milestone_tasks.length - 2} more
                                 </span>
                               )}
@@ -917,23 +917,23 @@ export const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
       {activeSubTab === 'about' && (
         <div className="space-y-6">
           {/* Job Project Brief & Deliverables Card (Full Width) */}
-          <div className="bg-white dark:bg-[#151720] p-6 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-zinc-800/80">
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-zinc-100 dark:border-zinc-800/80">
               <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              <h3 className="text-base font-bold text-zinc-900 dark:text-white">
                 Job Project Brief & Deliverables
               </h3>
             </div>
 
             <JobRichText
               content={project.project_description || project.description || 'No detailed project brief provided.'}
-              className="text-sm leading-relaxed text-slate-700 dark:text-zinc-300"
+              className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300"
             />
 
             {/* Category badge */}
             {project.job_category && (
               <div className="pt-2">
-                <span className="text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider block mb-2">
+                <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider block mb-2">
                   Category & Specialization
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 border border-blue-200 dark:border-blue-700">

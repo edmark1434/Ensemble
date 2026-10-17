@@ -234,16 +234,16 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner & Station Intro */}
-      <div className="bg-white dark:bg-[#151720] rounded-xl border border-slate-200 dark:border-zinc-800 p-5 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-zinc-800/80">
+      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-800/80">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <FileCheck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
                 Deliverables & Submissions Review Station
               </h3>
             </div>
-            <p className="text-xs text-slate-500 dark:text-zinc-400">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
               Where contributors submit completed milestone deliverables and the client inspects work, requests revisions, or approves payment release.
             </p>
           </div>
@@ -258,36 +258,36 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
 
         {/* 3 Metric Summary Boxes */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-200/80 dark:border-zinc-800 flex items-center justify-between">
+          <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 block">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
                 Milestones Approved
               </span>
-              <span className="text-lg font-bold text-slate-900 dark:text-white">
+              <span className="text-lg font-bold text-zinc-900 dark:text-white">
                 {completedCount} / {totalCount}
               </span>
             </div>
             <CheckCircle2 className="w-6 h-6 text-emerald-500" />
           </div>
 
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-200/80 dark:border-zinc-800 flex items-center justify-between">
+          <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 block">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
                 Pending Client Review
               </span>
-              <span className="text-lg font-bold text-slate-900 dark:text-white">
+              <span className="text-lg font-bold text-zinc-900 dark:text-white">
                 {underReviewCount} {underReviewCount === 1 ? 'Milestone' : 'Milestones'}
               </span>
             </div>
-            <Clock className={`w-6 h-6 ${underReviewCount > 0 ? 'text-amber-500 animate-pulse' : 'text-slate-400 dark:text-zinc-500'}`} />
+            <Clock className={`w-6 h-6 ${underReviewCount > 0 ? 'text-amber-500 animate-pulse' : 'text-zinc-400 dark:text-zinc-500'}`} />
           </div>
 
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-200/80 dark:border-zinc-800 flex items-center justify-between">
+          <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 block">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
                 Total Deliverables Escrow
               </span>
-              <span className="text-lg font-bold text-slate-900 dark:text-white">
+              <span className="text-lg font-bold text-zinc-900 dark:text-white">
                 {totalEscrowCredits.toLocaleString()} Credits
               </span>
             </div>
@@ -299,10 +299,10 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
       {/* Milestones Deliverable List */}
       <div className="space-y-4">
         {milestones.length === 0 ? (
-          <div className="p-12 text-center bg-white dark:bg-[#151720] rounded-xl border border-slate-200 dark:border-zinc-800">
-            <FileText className="w-10 h-10 text-slate-300 dark:text-zinc-600 mx-auto mb-2" />
-            <p className="text-sm font-bold text-slate-800 dark:text-white">No Milestones Found</p>
-            <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
+          <div className="p-12 text-center bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+            <FileText className="w-10 h-10 text-zinc-300 dark:text-zinc-600 mx-auto mb-2" />
+            <p className="text-sm font-bold text-zinc-800 dark:text-white">No Milestones Found</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
               This team project workspace does not have any milestone deliverables configured yet.
             </p>
           </div>
@@ -329,28 +329,28 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
             return (
               <div
                 key={m.job_milestone_id || idx}
-                className={`bg-white dark:bg-[#151720] rounded-xl border transition-all duration-200 shadow-xs overflow-hidden ${
+                className={`bg-white dark:bg-zinc-900 rounded-xl border transition-all duration-200 shadow-xs overflow-hidden ${
                   isUnderReview
                     ? 'border-amber-300 dark:border-amber-600/60 ring-1 ring-amber-400/20'
                     : isExpanded
                     ? 'border-blue-400 dark:border-blue-500/60 shadow-md'
-                    : 'border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700'
+                    : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
                 }`}
               >
                 {/* Milestone Accordion Header */}
                 <div
                   onClick={() => toggleExpand(m.job_milestone_id)}
-                  className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition"
+                  className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition"
                 >
                   <div className="flex items-start gap-3.5 min-w-0">
                     {/* Index Badge */}
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-zinc-800 text-slate-800 dark:text-zinc-200 flex items-center justify-center font-mono font-bold text-xs shrink-0 mt-0.5">
+                    <div className="w-8 h-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 flex items-center justify-center font-mono font-bold text-xs shrink-0 mt-0.5">
                       {idx + 1}
                     </div>
 
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                        <h4 className="text-sm font-bold text-zinc-900 dark:text-white">
                           {m.milestone_title}
                         </h4>
 
@@ -375,14 +375,14 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                             In Progress
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
                             Upcoming
                           </span>
                         )}
                       </div>
 
                       {/* Description & Contributor Details */}
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-zinc-400">
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
                         {m.assignee_name && (
                           <div className="flex items-center gap-1.5">
                             <img
@@ -391,9 +391,9 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                               onError={(e) => {
                                 (e.target as HTMLImageElement).src = getFallbackAvatarUrl(m.assignee_name);
                               }}
-                              className="w-4 h-4 rounded-full object-cover border border-slate-200 dark:border-zinc-700"
+                              className="w-4 h-4 rounded-full object-cover border border-zinc-200 dark:border-zinc-700"
                             />
-                            <span className="font-medium text-slate-700 dark:text-zinc-300">
+                            <span className="font-medium text-zinc-700 dark:text-zinc-300">
                               {m.assignee_name} {isAssignee && '(You)'}
                             </span>
                           </div>
@@ -416,15 +416,15 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                   {/* Right: Escrow Amount & Expand Chevron */}
                   <div className="flex items-center gap-4 shrink-0 self-end md:self-auto">
                     <div className="text-right">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 block">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
                         Milestone Escrow
                       </span>
-                      <span className="text-base font-bold text-slate-900 dark:text-white">
+                      <span className="text-base font-bold text-zinc-900 dark:text-white">
                         {Number(m.budget_credits || m.milestone_credits || 0).toLocaleString()} Credits
                       </span>
                     </div>
 
-                    <div className="p-1 rounded-lg bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400">
+                    <div className="p-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                       {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     </div>
                   </div>
@@ -432,14 +432,14 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
 
                 {/* Expanded Details Body */}
                 {isExpanded && (
-                  <div className="p-5 border-t border-slate-100 dark:border-zinc-800/80 bg-slate-50/30 dark:bg-zinc-900/20 space-y-6">
+                  <div className="p-5 border-t border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/30 dark:bg-zinc-900/20 space-y-6">
                     {/* Milestone Project Brief / Description */}
                     {m.milestone_description && (
-                      <div className="p-3.5 rounded-xl bg-white dark:bg-[#181a24] border border-slate-200/80 dark:border-zinc-800 text-xs leading-relaxed space-y-1">
-                        <span className="font-bold uppercase tracking-wider text-[10px] text-slate-500 dark:text-zinc-400 block">
+                      <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 text-xs leading-relaxed space-y-1">
+                        <span className="font-bold uppercase tracking-wider text-[10px] text-zinc-500 dark:text-zinc-400 block">
                           Milestone Scope & Requirements
                         </span>
-                        <p className="text-slate-700 dark:text-zinc-300 whitespace-pre-wrap">
+                        <p className="text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
                           {m.milestone_description}
                         </p>
                       </div>
@@ -489,7 +489,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                             <button
                               type="button"
                               onClick={() => setReviewAction('client_message')}
-                              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 hover:bg-slate-100 border border-slate-200 dark:border-zinc-700 transition shadow-2xs cursor-pointer"
+                              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 hover:bg-zinc-100 border border-zinc-200 dark:border-zinc-700 transition shadow-2xs cursor-pointer"
                             >
                               <MessageSquare className="w-4 h-4" />
                               <span>Send Feedback Message</span>
@@ -497,9 +497,9 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                           </div>
                         ) : (
                           /* Detailed Action Confirmation / Input Form */
-                          <div className="p-4 rounded-xl bg-white dark:bg-[#181a24] border border-amber-200 dark:border-amber-800/60 space-y-3">
+                          <div className="p-4 rounded-xl bg-white dark:bg-zinc-900 border border-amber-200 dark:border-amber-800/60 space-y-3">
                             <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-slate-900 dark:text-white">
+                              <span className="text-xs font-bold text-zinc-900 dark:text-white">
                                 {reviewAction === 'approval'
                                   ? 'Confirm Deliverable Approval & Escrow Release'
                                   : reviewAction === 'revision_request'
@@ -512,16 +512,16 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                   setReviewAction(null);
                                   setReviewNote('');
                                 }}
-                                className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"
+                                className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
                               >
                                 Cancel
                               </button>
                             </div>
 
                             {reviewAction === 'approval' ? (
-                              <p className="text-xs text-slate-600 dark:text-zinc-400">
+                              <p className="text-xs text-zinc-600 dark:text-zinc-400">
                                 Are you sure you want to approve this milestone? Approving will mark this deliverable as completed and automatically release{' '}
-                                <strong className="text-slate-900 dark:text-white">{Number(m.budget_credits || 0).toLocaleString()} credits</strong> from escrow directly to the contributor.
+                                <strong className="text-zinc-900 dark:text-white">{Number(m.budget_credits || 0).toLocaleString()} credits</strong> from escrow directly to the contributor.
                               </p>
                             ) : (
                               <textarea
@@ -533,7 +533,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                     ? 'Specify clearly what revisions or changes are needed before this deliverable can be approved...'
                                     : 'Write your message to the contributor...'
                                 }
-                                className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-amber-500 resize-none"
+                                className="w-full text-xs p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-amber-500 resize-none"
                               />
                             )}
 
@@ -570,7 +570,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                   setReviewAction(null);
                                   setReviewNote('');
                                 }}
-                                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                               >
                                 Cancel
                               </button>
@@ -584,15 +584,15 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                     {/* 2. CONTRIBUTOR SUBMISSION FORM (WHEN READY TO SUBMIT)     */}
                     {/* ========================================================= */}
                     {canSubmit && (
-                      <div className="p-5 rounded-2xl bg-white dark:bg-[#181a24] border border-blue-200 dark:border-blue-900/60 shadow-xs space-y-4">
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-zinc-800">
+                      <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-900/60 shadow-xs space-y-4">
+                        <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
                           <div className="flex items-center gap-2">
                             <Send className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                            <h5 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                            <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
                               {isUnderReview ? 'Submit Additional Update / Work Link' : 'Submit Deliverable for Client Review'}
                             </h5>
                           </div>
-                          <span className="text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
+                          <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
                             Escrow: {Number(m.budget_credits || 0).toLocaleString()} Credits
                           </span>
                         </div>
@@ -605,7 +605,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
 
                         <div className="space-y-3">
                           <div>
-                            <label className="block text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase mb-1">
+                            <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                               Submission Notes & Summary *
                             </label>
                             <textarea
@@ -613,22 +613,22 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                               onChange={(e) => setSubmissionMessage(e.target.value)}
                               placeholder="Describe what was accomplished, deliverables completed, release notes, or instructions for the client..."
                               rows={3}
-                              className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 resize-none"
+                              className="w-full text-xs p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 resize-none"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase mb-1">
+                            <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                               Deliverable Link or Repository URL (Optional)
                             </label>
                             <div className="flex items-center gap-2">
-                              <ExternalLink className="w-4 h-4 text-slate-400 ml-2 absolute pointer-events-none" />
+                              <ExternalLink className="w-4 h-4 text-zinc-400 ml-2 absolute pointer-events-none" />
                               <input
                                 type="url"
                                 value={submissionLink}
                                 onChange={(e) => setSubmissionLink(e.target.value)}
                                 placeholder="https://github.com/... or https://figma.com/... or Google Drive link"
-                                className="w-full text-xs pl-8 pr-3 py-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                                className="w-full text-xs pl-8 pr-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                               />
                             </div>
                           </div>
@@ -660,7 +660,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                       <ul className="list-disc list-inside mt-1 space-y-0.5 text-[11px] opacity-95">
                                         {incompleteTasks.map((task) => (
                                           <li key={task.task_id} className="truncate">
-                                            <span className="font-semibold text-slate-900 dark:text-white">{task.title}</span>
+                                            <span className="font-semibold text-zinc-900 dark:text-white">{task.title}</span>
                                             <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-400 font-bold uppercase">
                                               [{task.status === 'in_progress' ? 'IN PROGRESS' : 'TO DO'}]
                                             </span>
@@ -672,12 +672,12 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                 )}
 
                                 <div className="flex items-center justify-between pt-2">
-                                  <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-zinc-300 cursor-pointer select-none">
+                                  <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300 cursor-pointer select-none">
                                     <input
                                       type="checkbox"
                                       checked={isReadyForReview}
                                       onChange={(e) => setIsReadyForReview(e.target.checked)}
-                                      className="rounded border-slate-300 text-blue-600 focus:ring-0"
+                                      className="rounded border-zinc-300 text-blue-600 focus:ring-0"
                                     />
                                     <span>Mark deliverable as Ready for Client Review</span>
                                   </label>
@@ -722,14 +722,14 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                     {/* ========================================================= */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <h6 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
-                          <History className="w-3.5 h-3.5 text-slate-400" />
+                        <h6 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                          <History className="w-3.5 h-3.5 text-zinc-400" />
                           <span>Submission & Review History ({submissionsList.length})</span>
                         </h6>
                       </div>
 
                       {submissionsList.length === 0 ? (
-                        <div className="p-4 text-center rounded-xl bg-white dark:bg-[#181a24] border border-dashed border-slate-200 dark:border-zinc-800 text-slate-400 dark:text-zinc-500 text-xs">
+                        <div className="p-4 text-center rounded-xl bg-white dark:bg-zinc-900 border border-dashed border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 text-xs">
                           No submissions recorded yet for this deliverable.
                         </div>
                       ) : (
@@ -749,7 +749,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                     ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/60'
                                     : isReviewReady
                                     ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60'
-                                    : 'bg-white dark:bg-[#181a24] border-slate-200 dark:border-zinc-800'
+                                    : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800'
                                 }`}
                               >
                                 <div className="flex items-center justify-between">
@@ -762,7 +762,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                           ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-300'
                                           : isReviewReady
                                           ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300'
-                                          : 'bg-slate-100 text-slate-800 dark:bg-zinc-800 dark:text-zinc-300'
+                                          : 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300'
                                       }`}
                                     >
                                       {isApproval
@@ -775,7 +775,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                     </span>
 
                                     {sub.submitted_at && (
-                                      <span className="text-[11px] text-slate-400 dark:text-zinc-500">
+                                      <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
                                         {new Date(sub.submitted_at).toLocaleString()}
                                       </span>
                                     )}
@@ -783,7 +783,7 @@ export const ProjectSubmissionsTab: React.FC<ProjectSubmissionsTabProps> = ({
                                 </div>
 
                                 {sub.message && (
-                                  <p className="text-slate-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed">
+                                  <p className="text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed">
                                     {sub.message}
                                   </p>
                                 )}

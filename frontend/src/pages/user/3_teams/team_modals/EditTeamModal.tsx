@@ -109,14 +109,14 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#151720] shadow-2xl">
+      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl">
         {/* Modal Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 dark:border-zinc-800 px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
           <div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            <h3 className="text-base font-bold text-zinc-900 dark:text-white">
               {mode === "create" ? "Create a Team" : "Edit Team Details"}
             </h3>
-            <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
               {mode === "create"
                 ? "Set up a private collaborative team space for your projects"
                 : "Update your team's visual identity and info"}
@@ -124,7 +124,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="rounded-xl p-1.5 text-slate-400 hover:text-slate-600 dark:text-zinc-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+            className="rounded-xl p-1.5 text-zinc-400 hover:text-zinc-600 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
@@ -136,13 +136,13 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
             {/* Left Column: Live Card Preview & Info (md:col-span-5) */}
             <div className="md:col-span-5 space-y-4">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-2">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
                   Live Card Preview
                 </p>
                 
                 {/* Preview Card */}
-                <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1c1f2b] overflow-hidden shadow-xs">
-                  <div className="h-32 w-full bg-slate-100 dark:bg-zinc-800 relative overflow-hidden">
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-xs">
+                  <div className="h-32 w-full bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
                     {photoPreview ? (
                       <img
                         src={photoPreview}
@@ -150,8 +150,8 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                         alt="Team preview"
                       />
                     ) : (
-                      <div className="flex flex-col h-full items-center justify-center text-xs font-bold text-slate-400 dark:text-zinc-500 gap-1.5">
-                        <ImageIcon className="h-6 w-6 text-slate-300 dark:text-zinc-600" />
+                      <div className="flex flex-col h-full items-center justify-center text-xs font-bold text-zinc-400 dark:text-zinc-500 gap-1.5">
+                        <ImageIcon className="h-6 w-6 text-zinc-300 dark:text-zinc-600" />
                         <span>Team Banner Preview</span>
                       </div>
                     )}
@@ -159,7 +159,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                   
                   <div className="p-4 space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate">
+                      <h4 className="font-bold text-sm text-zinc-900 dark:text-white truncate">
                         {name || "Team Name"}
                       </h4>
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-900 border border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800 shrink-0">
@@ -169,12 +169,12 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                     <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 truncate">
                       {tagline || "Your team tagline will appear here"}
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400 line-clamp-3 leading-relaxed">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-3 leading-relaxed">
                       {description || "A concise description of your team's mission, skillsets, and collaborative projects."}
                     </p>
-                    <div className="pt-2 border-t border-slate-100 dark:border-zinc-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400">
+                    <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
                       <span className="inline-flex items-center gap-1 font-medium">
-                        <Users className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />
+                        <Users className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
                         1 member (You)
                       </span>
                       <span className="font-semibold text-blue-600 dark:text-blue-400">
@@ -186,8 +186,8 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
               </div>
 
               {/* Privacy Notice */}
-              <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-slate-50 dark:bg-zinc-900/40 border border-slate-200 dark:border-zinc-800 text-xs text-slate-600 dark:text-zinc-400">
-                <Lock className="w-4 h-4 text-slate-500 dark:text-zinc-400 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-600 dark:text-zinc-400">
+                <Lock className="w-4 h-4 text-zinc-500 dark:text-zinc-400 shrink-0 mt-0.5" />
                 <span className="leading-relaxed">
                   All teams are <strong>Private</strong>. Only invited collaborators and colleagues with your team join code can participate.
                 </span>
@@ -198,7 +198,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
             <div className="md:col-span-7 space-y-4">
               {/* Team Name */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">
                   Team Name <span className="text-rose-500">*</span>
                 </label>
                 <input
@@ -207,13 +207,13 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                   onChange={(event) => setName(event.target.value)}
                   placeholder="e.g. Creative Velocity Studio"
                   maxLength={50}
-                  className="w-full rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900/60 px-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition shadow-xs"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/60 px-4 py-2.5 text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition shadow-xs"
                 />
               </div>
 
               {/* Tagline */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">
                   Tagline <span className="text-rose-500">*</span>
                 </label>
                 <input
@@ -222,13 +222,13 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                   onChange={(event) => setTagline(event.target.value)}
                   maxLength={50}
                   placeholder="e.g. High-performance video production and post-processing"
-                  className="w-full rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900/60 px-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition shadow-xs"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/60 px-4 py-2.5 text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition shadow-xs"
                 />
               </div>
 
               {/* Description */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1.5">
                   Description <span className="text-rose-500">*</span>
                 </label>
                 <textarea
@@ -236,14 +236,14 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                   onChange={(event) => setDescription(event.target.value)}
                   rows={4}
                   placeholder="Share what your team works on, skillsets, and collaboration objectives..."
-                  className="w-full resize-none rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900/60 px-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition shadow-xs"
+                  className="w-full resize-none rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/60 px-4 py-2.5 text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition shadow-xs"
                 />
               </div>
 
               {/* Team Photo */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
                     Team Photo {mode === "create" && <span className="text-rose-500">*</span>}
                   </label>
                   {photoPreview && (
@@ -257,7 +257,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                   )}
                 </div>
 
-                <div className="relative h-28 w-full overflow-hidden rounded-xl border border-dashed border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900/50">
+                <div className="relative h-28 w-full overflow-hidden rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50">
                   {photoPreview ? (
                     <img
                       src={photoPreview}
@@ -265,10 +265,10 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-full flex-col items-center justify-center gap-1 text-slate-500 dark:text-zinc-500">
-                      <ImageIcon className="h-6 w-6 text-slate-400 dark:text-zinc-500" />
+                    <div className="flex h-full flex-col items-center justify-center gap-1 text-zinc-500 dark:text-zinc-500">
+                      <ImageIcon className="h-6 w-6 text-zinc-400 dark:text-zinc-500" />
                       <span className="text-xs font-medium">Upload banner or profile image</span>
-                      <span className="text-[10px] text-slate-400 dark:text-zinc-500">PNG, JPG, WebP up to 5 MB</span>
+                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500">PNG, JPG, WebP up to 5 MB</span>
                     </div>
                   )}
                   <label className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/50 opacity-0 transition-opacity hover:opacity-100">
@@ -278,7 +278,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
                       onChange={handlePhotoUpload}
                       className="hidden"
                     />
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/90 text-slate-900 text-xs font-bold shadow-md">
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/90 text-zinc-900 text-xs font-bold shadow-md">
                       <Upload className="h-4 w-4" />
                       <span>{photoPreview ? "Change Photo" : "Choose File"}</span>
                     </div>
@@ -293,11 +293,11 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/30 px-6 py-3.5">
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 px-6 py-3.5">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+            className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
           >
             Cancel
           </button>

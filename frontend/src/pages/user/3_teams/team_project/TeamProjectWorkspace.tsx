@@ -203,35 +203,35 @@ export const TeamProjectWorkspace: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-[#0c0d12] text-slate-900 dark:text-white flex flex-col">
+      <div className="min-h-screen bg-zinc-50 dark:bg-dark-base text-zinc-900 dark:text-white flex flex-col">
         <UserHeader />
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
           {/* Navigation Skeleton */}
           <div className="flex items-center justify-between">
-            <div className="w-32 h-6 bg-slate-200 dark:bg-zinc-800 rounded-lg animate-pulse" />
-            <div className="w-44 h-8 bg-slate-200 dark:bg-zinc-800 rounded-xl animate-pulse" />
+            <div className="w-32 h-6 bg-zinc-200 dark:bg-zinc-800 rounded-lg animate-pulse" />
+            <div className="w-44 h-8 bg-zinc-200 dark:bg-zinc-800 rounded-xl animate-pulse" />
           </div>
 
           {/* Banner Card Skeleton */}
-          <div className="bg-white dark:bg-[#151720] rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xs overflow-hidden">
-            <div className="h-44 w-full bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs overflow-hidden">
+            <div className="h-44 w-full bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
             <div className="p-6 space-y-4">
               <div className="flex items-center justify-between">
-                <div className="w-72 h-8 bg-slate-200 dark:bg-zinc-800 rounded-xl animate-pulse" />
+                <div className="w-72 h-8 bg-zinc-200 dark:bg-zinc-800 rounded-xl animate-pulse" />
                 <div className="flex items-center gap-2">
-                  <div className="w-28 h-9 bg-slate-200 dark:bg-zinc-800 rounded-xl animate-pulse" />
-                  <div className="w-9 h-9 bg-slate-200 dark:bg-zinc-800 rounded-xl animate-pulse" />
+                  <div className="w-28 h-9 bg-zinc-200 dark:bg-zinc-800 rounded-xl animate-pulse" />
+                  <div className="w-9 h-9 bg-zinc-200 dark:bg-zinc-800 rounded-xl animate-pulse" />
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-32 h-6 bg-slate-200 dark:bg-zinc-800 rounded-full animate-pulse" />
-                <div className="w-24 h-6 bg-slate-200 dark:bg-zinc-800 rounded-full animate-pulse" />
-                <div className="w-36 h-6 bg-slate-200 dark:bg-zinc-800 rounded-full animate-pulse" />
+                <div className="w-32 h-6 bg-zinc-200 dark:bg-zinc-800 rounded-full animate-pulse" />
+                <div className="w-24 h-6 bg-zinc-200 dark:bg-zinc-800 rounded-full animate-pulse" />
+                <div className="w-36 h-6 bg-zinc-200 dark:bg-zinc-800 rounded-full animate-pulse" />
               </div>
             </div>
-            <div className="flex items-center gap-3 border-t border-slate-200 dark:border-zinc-800 px-6 py-3 bg-slate-50/50 dark:bg-zinc-900/30 overflow-x-auto">
+            <div className="flex items-center gap-3 border-t border-zinc-200 dark:border-zinc-800 px-6 py-3 bg-zinc-50/50 dark:bg-zinc-900/30 overflow-x-auto">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="w-24 h-8 bg-slate-200 dark:bg-zinc-800 rounded-xl animate-pulse shrink-0" />
+                <div key={i} className="w-24 h-8 bg-zinc-200 dark:bg-zinc-800 rounded-xl animate-pulse shrink-0" />
               ))}
             </div>
           </div>
@@ -240,56 +240,56 @@ export const TeamProjectWorkspace: React.FC = () => {
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="bg-white dark:bg-[#151720] p-4 rounded-xl border border-slate-200 dark:border-zinc-800 space-y-3">
+                <div key={i} className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-3">
                   <div className="flex justify-between items-center">
-                    <div className="w-24 h-4 bg-slate-200 dark:bg-zinc-800 rounded-sm animate-pulse" />
-                    <div className="w-5 h-5 bg-slate-200 dark:bg-zinc-800 rounded-full animate-pulse" />
+                    <div className="w-24 h-4 bg-zinc-200 dark:bg-zinc-800 rounded-sm animate-pulse" />
+                    <div className="w-5 h-5 bg-zinc-200 dark:bg-zinc-800 rounded-full animate-pulse" />
                   </div>
-                  <div className="w-32 h-7 bg-slate-200 dark:bg-zinc-800 rounded-md animate-pulse" />
-                  <div className="w-full h-2 bg-slate-200 dark:bg-zinc-800 rounded-full animate-pulse" />
+                  <div className="w-32 h-7 bg-zinc-200 dark:bg-zinc-800 rounded-md animate-pulse" />
+                  <div className="w-full h-2 bg-zinc-200 dark:bg-zinc-800 rounded-full animate-pulse" />
                 </div>
               ))}
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="bg-white dark:bg-[#151720] p-3.5 rounded-xl border border-slate-200 dark:border-zinc-800 space-y-2">
-                  <div className="w-16 h-3 bg-slate-200 dark:bg-zinc-800 rounded-sm animate-pulse" />
-                  <div className="w-10 h-6 bg-slate-200 dark:bg-zinc-800 rounded-md animate-pulse" />
+                <div key={i} className="bg-white dark:bg-zinc-900 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-2">
+                  <div className="w-16 h-3 bg-zinc-200 dark:bg-zinc-800 rounded-sm animate-pulse" />
+                  <div className="w-10 h-6 bg-zinc-200 dark:bg-zinc-800 rounded-md animate-pulse" />
                 </div>
               ))}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
               <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white dark:bg-[#151720] p-6 rounded-xl border border-slate-200 dark:border-zinc-800 space-y-4">
-                  <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-zinc-800">
-                    <div className="w-48 h-6 bg-slate-200 dark:bg-zinc-800 rounded-md animate-pulse" />
-                    <div className="w-36 h-4 bg-slate-200 dark:bg-zinc-800 rounded-sm animate-pulse" />
+                <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-4">
+                  <div className="flex justify-between items-center pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                    <div className="w-48 h-6 bg-zinc-200 dark:bg-zinc-800 rounded-md animate-pulse" />
+                    <div className="w-36 h-4 bg-zinc-200 dark:bg-zinc-800 rounded-sm animate-pulse" />
                   </div>
                   {[1, 2].map((i) => (
-                    <div key={i} className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 space-y-3">
+                    <div key={i} className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-3">
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-3">
-                          <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-zinc-800 animate-pulse" />
-                          <div className="w-48 h-5 bg-slate-200 dark:bg-zinc-800 rounded-md animate-pulse" />
+                          <div className="w-7 h-7 rounded-full bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+                          <div className="w-48 h-5 bg-zinc-200 dark:bg-zinc-800 rounded-md animate-pulse" />
                         </div>
-                        <div className="w-28 h-6 rounded-full bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+                        <div className="w-28 h-6 rounded-full bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
                       </div>
-                      <div className="w-full h-12 bg-slate-100 dark:bg-zinc-900/50 rounded-lg animate-pulse" />
+                      <div className="w-full h-12 bg-zinc-100 dark:bg-zinc-900/50 rounded-lg animate-pulse" />
                     </div>
                   ))}
                 </div>
               </div>
 
               <div className="space-y-4">
-                <div className="bg-white dark:bg-[#151720] p-5 rounded-xl border border-slate-200 dark:border-zinc-800 space-y-3">
-                  <div className="w-32 h-4 bg-slate-200 dark:bg-zinc-800 rounded-sm animate-pulse" />
+                <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-3">
+                  <div className="w-32 h-4 bg-zinc-200 dark:bg-zinc-800 rounded-sm animate-pulse" />
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-full bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+                    <div className="w-11 h-11 rounded-full bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
                     <div className="space-y-1.5 flex-1">
-                      <div className="w-28 h-4 bg-slate-200 dark:bg-zinc-800 rounded-sm animate-pulse" />
-                      <div className="w-20 h-3 bg-slate-200 dark:bg-zinc-800 rounded-sm animate-pulse" />
+                      <div className="w-28 h-4 bg-zinc-200 dark:bg-zinc-800 rounded-sm animate-pulse" />
+                      <div className="w-20 h-3 bg-zinc-200 dark:bg-zinc-800 rounded-sm animate-pulse" />
                     </div>
                   </div>
                 </div>
@@ -303,15 +303,15 @@ export const TeamProjectWorkspace: React.FC = () => {
 
   if (!project) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-[#0c0d12] flex flex-col">
+      <div className="min-h-screen bg-zinc-50 dark:bg-dark-base flex flex-col">
         <UserHeader />
         <div className="flex-1 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#151720] border border-slate-200 dark:border-zinc-800 rounded-2xl p-8 max-w-md w-full text-center space-y-4 shadow-sm">
-            <Lock className="w-12 h-12 text-slate-400 dark:text-zinc-500 mx-auto" />
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 max-w-md w-full text-center space-y-4 shadow-sm">
+            <Lock className="w-12 h-12 text-zinc-400 dark:text-zinc-500 mx-auto" />
+            <h3 className="text-lg font-bold text-zinc-900 dark:text-white">
               Project Not Found or Unauthorized
             </h3>
-            <p className="text-xs text-slate-600 dark:text-zinc-400">
+            <p className="text-xs text-zinc-600 dark:text-zinc-400">
               This contractual team project workspace is only accessible to the client and contracted team contributors.
             </p>
             <div className="flex items-center justify-center gap-3 pt-2">
@@ -324,7 +324,7 @@ export const TeamProjectWorkspace: React.FC = () => {
               </button>
               <button
                 onClick={() => navigate('/dashboard/tasks')}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 transition shadow-xs cursor-pointer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition shadow-xs cursor-pointer"
               >
                 <span>Deliveries</span>
                 <ArrowRight className="w-4 h-4" />
@@ -340,7 +340,7 @@ export const TeamProjectWorkspace: React.FC = () => {
   const isArchived = Boolean(project.is_archived);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0c0d12] text-slate-900 dark:text-white flex flex-col">
+    <div className="min-h-screen bg-zinc-50 dark:bg-dark-base text-zinc-900 dark:text-white flex flex-col">
       <UserHeader />
 
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -348,7 +348,7 @@ export const TeamProjectWorkspace: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <button
             onClick={() => navigate('/teams')}
-            className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white transition cursor-pointer"
+            className="inline-flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Return to Teams</span>
@@ -364,7 +364,7 @@ export const TeamProjectWorkspace: React.FC = () => {
 
             <button
               onClick={() => navigate('/dashboard/tasks')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-zinc-200 bg-white dark:bg-[#151720] hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 transition shadow-2xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 transition shadow-2xs cursor-pointer"
             >
               <span>Go to Deliveries & Tasks</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -373,10 +373,10 @@ export const TeamProjectWorkspace: React.FC = () => {
         </div>
 
         {/* Project Header Banner Card */}
-        <div className="bg-white dark:bg-[#151720] rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xs overflow-hidden transition-all duration-300">
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs overflow-hidden transition-all duration-300">
           {/* Top banner visual (Collapsible) */}
           <div
-            className={`w-full bg-slate-900 dark:bg-zinc-950 relative overflow-hidden transition-all duration-300 ease-in-out ${
+            className={`w-full bg-zinc-900 dark:bg-zinc-950 relative overflow-hidden transition-all duration-300 ease-in-out ${
               isBannerCollapsed ? 'max-h-0 opacity-0' : 'h-36 sm:h-48 opacity-100'
             }`}
           >
@@ -390,8 +390,8 @@ export const TeamProjectWorkspace: React.FC = () => {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full bg-slate-800 dark:bg-zinc-900 flex items-center justify-center">
-                <Briefcase className="w-16 h-16 text-slate-600 dark:text-zinc-700" />
+              <div className="w-full h-full bg-zinc-800 dark:bg-zinc-900 flex items-center justify-center">
+                <Briefcase className="w-16 h-16 text-zinc-600 dark:text-zinc-700" />
               </div>
             )}
           </div>
@@ -408,15 +408,15 @@ export const TeamProjectWorkspace: React.FC = () => {
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = getFallbackAvatarUrl(project.project_title);
                       }}
-                      className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-zinc-700 shrink-0"
+                      className="w-10 h-10 rounded-xl object-cover border border-zinc-200 dark:border-zinc-700 shrink-0"
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 flex items-center justify-center shrink-0">
-                      <Briefcase className="w-5 h-5 text-slate-500" />
+                    <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center shrink-0">
+                      <Briefcase className="w-5 h-5 text-zinc-500" />
                     </div>
                   )
                 )}
-                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white truncate">
+                <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white truncate">
                   {project.project_title || project.job_title}
                 </h1>
               </div>
@@ -426,7 +426,7 @@ export const TeamProjectWorkspace: React.FC = () => {
                 <button
                   type="button"
                   onClick={toggleBannerCollapse}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 transition cursor-pointer"
                   title={isBannerCollapsed ? 'Expand banner' : 'Collapse banner'}
                 >
                   {isBannerCollapsed ? (
@@ -446,7 +446,7 @@ export const TeamProjectWorkspace: React.FC = () => {
                 <div className="relative shrink-0">
                   <button
                     onClick={() => setIsActionMenuOpen((prev) => !prev)}
-                    className="p-2 rounded-xl text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 transition cursor-pointer"
+                    className="p-2 rounded-xl text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 transition cursor-pointer"
                     title="More actions"
                   >
                     <MoreVertical className="w-5 h-5" />
@@ -458,7 +458,7 @@ export const TeamProjectWorkspace: React.FC = () => {
                       className="fixed inset-0 z-40"
                       onClick={() => setIsActionMenuOpen(false)}
                     />
-                    <div className="absolute right-0 mt-2 w-48 rounded-xl bg-white dark:bg-[#1c1f2b] border border-slate-200 dark:border-zinc-700 shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="absolute right-0 mt-2 w-48 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
                       {isClient ? (
                         <>
                           <button
@@ -466,9 +466,9 @@ export const TeamProjectWorkspace: React.FC = () => {
                               setIsActionMenuOpen(false);
                               setIsEditModalOpen(true);
                             }}
-                            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer text-left"
+                            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer text-left"
                           >
-                            <Edit3 className="w-4 h-4 text-slate-500 dark:text-zinc-400" />
+                            <Edit3 className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
                             <span>Edit Project</span>
                           </button>
 
@@ -518,13 +518,13 @@ export const TeamProjectWorkspace: React.FC = () => {
 
               {/* Category tag: Gray */}
               {project.job_category && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
                   {project.job_category}
                 </span>
               )}
 
               {/* Role tag: Gray */}
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700">
                 {isClient ? 'Client (Project Owner)' : `Contributor (${project.user_role || 'Freelancer'})`}
               </span>
             </div>
@@ -541,7 +541,7 @@ export const TeamProjectWorkspace: React.FC = () => {
           </div>
 
           {/* Navigation Tabs (6 Dedicated Tabs) */}
-          <div className="flex items-center border-t border-slate-200 dark:border-zinc-800 overflow-x-auto bg-slate-50/50 dark:bg-zinc-900/30 px-6">
+          <div className="flex items-center border-t border-zinc-200 dark:border-zinc-800 overflow-x-auto bg-zinc-50/50 dark:bg-zinc-900/30 px-6">
             {[
               { id: 'overview', label: 'Overview', icon: FileText },
               { id: 'taskboard', label: 'Taskboard', icon: Kanban, badge: taskboardTasks.length },
@@ -566,8 +566,8 @@ export const TeamProjectWorkspace: React.FC = () => {
                   onClick={() => handleTabChange(tab.id as TabType)}
                   className={`flex items-center gap-2 py-3.5 px-4 text-xs font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
                     isActive
-                      ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-[#151720]'
-                      : 'border-transparent text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white'
+                      ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-900'
+                      : 'border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -577,7 +577,7 @@ export const TeamProjectWorkspace: React.FC = () => {
                       className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
                         isActive
                           ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                          : 'bg-slate-200 text-slate-700 dark:bg-zinc-800 dark:text-zinc-300'
+                          : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
                       }`}
                     >
                       {tab.badge}
@@ -619,6 +619,7 @@ export const TeamProjectWorkspace: React.FC = () => {
               contracts={contracts}
               milestones={milestones}
               onTasksUpdated={(silent?: boolean) => loadProjectData(silent)}
+              projectTitle={project.project_title || project.job_title}
             />
           )}
 
@@ -669,13 +670,13 @@ export const TeamProjectWorkspace: React.FC = () => {
       {/* EDIT PROJECT MODAL */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="bg-white dark:bg-[#151720] border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-4">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-4">
+            <h3 className="text-base font-bold text-zinc-900 dark:text-white">
               Edit Project Details
             </h3>
             <form onSubmit={handleEditProject} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 uppercase mb-1">
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                   Project Title
                 </label>
                 <input
@@ -683,27 +684,27 @@ export const TeamProjectWorkspace: React.FC = () => {
                   required
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-hidden"
+                  className="w-full px-3 py-2 text-sm rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 uppercase mb-1">
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                   Project Description
                 </label>
                 <textarea
                   rows={4}
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-hidden"
+                  className="w-full px-3 py-2 text-sm rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-zinc-800">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg transition"
+                  className="px-4 py-2 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition"
                 >
                   Cancel
                 </button>
@@ -723,19 +724,19 @@ export const TeamProjectWorkspace: React.FC = () => {
       {/* DELETE PROJECT CONFIRMATION MODAL */}
       {isDeleteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="bg-white dark:bg-[#151720] border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-4">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-4">
             <h3 className="text-base font-bold text-rose-600">
               Delete Team Project Workspace?
             </h3>
-            <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed">
+            <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
               Are you sure you want to delete this team project workspace? Existing contracted payouts and job records will remain in the transaction history.
             </p>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-zinc-800">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
               <button
                 type="button"
                 onClick={() => setIsDeleteModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg transition"
+                className="px-4 py-2 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition"
               >
                 Cancel
               </button>

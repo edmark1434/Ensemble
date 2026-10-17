@@ -80,10 +80,10 @@ export const ProjectHistoryTab: React.FC<ProjectHistoryTabProps> = ({ history })
 
   if (history.length === 0) {
     return (
-      <div className="bg-white dark:bg-[#151720] p-12 rounded-xl border border-slate-200 dark:border-zinc-800 text-center">
-        <Activity className="w-12 h-12 text-slate-300 dark:text-zinc-600 mx-auto mb-3" />
-        <h3 className="text-base font-bold text-slate-900 dark:text-white">No activity logged yet</h3>
-        <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
+      <div className="bg-white dark:bg-zinc-900 p-12 rounded-xl border border-zinc-200 dark:border-zinc-800 text-center">
+        <Activity className="w-12 h-12 text-zinc-300 dark:text-zinc-600 mx-auto mb-3" />
+        <h3 className="text-base font-bold text-zinc-900 dark:text-white">No activity logged yet</h3>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
           Activity events such as task checks, milestone submissions, approvals, and payouts will appear here in real time.
         </p>
       </div>
@@ -91,33 +91,33 @@ export const ProjectHistoryTab: React.FC<ProjectHistoryTabProps> = ({ history })
   }
 
   return (
-    <div className="bg-white dark:bg-[#151720] p-6 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs space-y-6">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800/80">
+    <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-6">
+      <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800/80">
         <div>
-          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+          <h3 className="text-base font-bold text-zinc-900 dark:text-white">
             Project Audit Log & Activity Trail
           </h3>
-          <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
             Real-time chronological record of team updates, submissions, checks, and credit payouts
           </p>
         </div>
-        <span className="text-xs font-mono font-bold text-slate-600 dark:text-zinc-400">
+        <span className="text-xs font-mono font-bold text-zinc-600 dark:text-zinc-400">
           {history.length} Events
         </span>
       </div>
 
-      <div className="relative pl-6 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 dark:before:bg-zinc-800">
+      <div className="relative pl-6 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-zinc-200 dark:before:bg-zinc-800">
         {history.map((item) => {
           const actionConfig = ACTION_LABELS[item.action] || {
             label: item.action.replace(/_/g, ' '),
-            badgeClass: 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700',
+            badgeClass: 'bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700',
           };
-          const icon = ACTION_ICONS[item.action] || <Clock className="w-4 h-4 text-slate-400" />;
+          const icon = ACTION_ICONS[item.action] || <Clock className="w-4 h-4 text-zinc-400" />;
 
           return (
             <div key={item.activity_id} className="relative group">
               {/* Timeline marker */}
-              <div className="absolute -left-[27px] top-1.5 w-4 h-4 rounded-full bg-white dark:bg-[#151720] border-2 border-slate-400 dark:border-zinc-600 flex items-center justify-center">
+              <div className="absolute -left-[27px] top-1.5 w-4 h-4 rounded-full bg-white dark:bg-zinc-900 border-2 border-zinc-400 dark:border-zinc-600 flex items-center justify-center">
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
               </div>
 
@@ -132,7 +132,7 @@ export const ProjectHistoryTab: React.FC<ProjectHistoryTabProps> = ({ history })
                     onClick={() => {
                       if (item.actor_account_id) navigate(`/profile/${item.actor_account_id}`);
                     }}
-                    className="w-7 h-7 rounded-full object-cover border border-slate-200 dark:border-zinc-700 shrink-0 cursor-pointer hover:border-blue-500 transition"
+                    className="w-7 h-7 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0 cursor-pointer hover:border-blue-500 transition"
                   />
                   <div>
                     <div className="flex items-center gap-2">
@@ -140,7 +140,7 @@ export const ProjectHistoryTab: React.FC<ProjectHistoryTabProps> = ({ history })
                         onClick={() => {
                           if (item.actor_account_id) navigate(`/profile/${item.actor_account_id}`);
                         }}
-                        className="text-xs font-bold text-slate-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition"
+                        className="text-xs font-bold text-zinc-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition"
                       >
                         {item.actor_name}
                       </span>
@@ -151,16 +151,16 @@ export const ProjectHistoryTab: React.FC<ProjectHistoryTabProps> = ({ history })
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-600 dark:text-zinc-300 mt-0.5">
+                    <p className="text-xs text-zinc-600 dark:text-zinc-300 mt-0.5">
                       {item.task_title && (
                         <span>
-                          Task: <span className="font-bold text-slate-800 dark:text-zinc-200">"{item.task_title}"</span>
+                          Task: <span className="font-bold text-zinc-800 dark:text-zinc-200">"{item.task_title}"</span>
                           {' — '}
                         </span>
                       )}
                       {item.metadata?.status && (
                         <span>
-                          Status changed to <span className="font-bold uppercase text-slate-800 dark:text-zinc-200">{item.metadata.status}</span>
+                          Status changed to <span className="font-bold uppercase text-zinc-800 dark:text-zinc-200">{item.metadata.status}</span>
                         </span>
                       )}
                       {item.metadata?.unlocked_milestone_order && (
@@ -175,7 +175,7 @@ export const ProjectHistoryTab: React.FC<ProjectHistoryTabProps> = ({ history })
                   </div>
                 </div>
 
-                <span className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 shrink-0">
+                <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 shrink-0">
                   {new Date(item.created_at).toLocaleString()}
                 </span>
               </div>

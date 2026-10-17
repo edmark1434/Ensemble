@@ -117,15 +117,15 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
   return (
     <div className="space-y-6">
       {/* Sub-tab Switcher: Contracts | Members */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200/80 dark:border-zinc-800">
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-zinc-900 rounded-xl w-fit border border-slate-200/80 dark:border-zinc-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-zinc-200/80 dark:border-zinc-800">
+        <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-xl w-fit border border-zinc-200/80 dark:border-zinc-800">
           <button
             type="button"
             onClick={() => setSubTab('contracts')}
             className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               subTab === 'contracts'
-                ? 'bg-white dark:bg-[#151720] text-blue-600 dark:text-blue-400 shadow-2xs'
-                : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+                ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
             }`}
           >
             <Briefcase className="w-3.5 h-3.5" />
@@ -137,8 +137,8 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
             onClick={() => setSubTab('members')}
             className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               subTab === 'members'
-                ? 'bg-white dark:bg-[#151720] text-blue-600 dark:text-blue-400 shadow-2xs'
-                : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+                ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
             }`}
           >
             <Users className="w-3.5 h-3.5" />
@@ -150,10 +150,10 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
           <button
             type="button"
             onClick={() => window.open('/contracts', '_blank', 'noopener,noreferrer')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-zinc-300 bg-white dark:bg-[#151720] border border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800/60 transition shadow-2xs shrink-0 self-start sm:self-auto cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition shadow-2xs shrink-0 self-start sm:self-auto cursor-pointer"
           >
             <span>All Contracts</span>
-            <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+            <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
           </button>
         ) : (
           !isClient &&
@@ -174,15 +174,15 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
             <div>
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-2">
-                <Briefcase className="w-4 h-4 text-slate-400 dark:text-zinc-500" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-800 dark:text-white flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
                 <span>
                   {isClient
                     ? `Workspace Member Contracts (${visibleContracts.length})`
                     : 'My Contract Details'}
                 </span>
               </h3>
-              <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                 {isClient
                   ? 'All member contracts linked to this workspace. Click any card to open the contract in a new tab.'
                   : 'Your active contract agreement and escrow security. Click the card to open in a new tab.'}
@@ -192,12 +192,12 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
 
           {/* Empty State */}
           {visibleContracts.length === 0 ? (
-            <div className="bg-white dark:bg-[#151720] p-12 rounded-xl border border-slate-200 dark:border-zinc-800 text-center shadow-xs">
-              <Briefcase className="w-12 h-12 text-slate-300 dark:text-zinc-600 mx-auto mb-3" />
-              <h4 className="text-base font-bold text-slate-900 dark:text-white">
+            <div className="bg-white dark:bg-zinc-900 p-12 rounded-xl border border-zinc-200 dark:border-zinc-800 text-center shadow-xs">
+              <Briefcase className="w-12 h-12 text-zinc-300 dark:text-zinc-600 mx-auto mb-3" />
+              <h4 className="text-base font-bold text-zinc-900 dark:text-white">
                 {isClient ? 'No Contracts Found' : 'No Contract Assigned'}
               </h4>
-              <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1 max-w-sm mx-auto mb-4">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-sm mx-auto mb-4">
                 {isClient
                   ? 'There are currently no active member contracts linked to this team project workspace.'
                   : 'You do not have a contract assigned in this team project workspace yet.'}
@@ -228,7 +228,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                   <div
                     key={contract.contract_id}
                     onClick={() => handleOpenContract(contract.contract_id)}
-                    className="bg-white dark:bg-[#151720] p-6 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all duration-200 cursor-pointer group"
+                    className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all duration-200 cursor-pointer group"
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {
@@ -239,7 +239,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                     }}
                   >
                     {/* Header: Member Avatar & Details + Total Escrow & Status */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-zinc-800/80">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-800/80">
                       <div className="flex items-center gap-3">
                         <img
                           src={constructAvatarUrl(
@@ -258,7 +258,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                               navigate(`/profile/${contract.freelancer_account_id}`);
                             }
                           }}
-                          className="w-12 h-12 rounded-full object-cover border border-slate-200 dark:border-zinc-700 shrink-0 group-hover:border-blue-400 transition"
+                          className="w-12 h-12 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0 group-hover:border-blue-400 transition"
                         />
                         <div>
                           <div className="flex items-center gap-2">
@@ -269,15 +269,15 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                                   navigate(`/profile/${contract.freelancer_account_id}`);
                                 }
                               }}
-                              className="text-base font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition"
+                              className="text-base font-bold text-zinc-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition"
                             >
                               {contract.freelancer_name}
                             </h4>
-                            <span className="text-xs text-slate-500 dark:text-zinc-400">
+                            <span className="text-xs text-zinc-500 dark:text-zinc-400">
                               @{contract.freelancer_handle || 'member'}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-600 dark:text-zinc-400 mt-0.5">
+                          <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
                             Role:{' '}
                             <span className="font-bold text-blue-600 dark:text-blue-400">
                               {contract.milestone_title || 'Milestone Contributor'}
@@ -288,10 +288,10 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
 
                       <div className="flex items-center gap-4">
                         <div className="text-right">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 block">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
                             Total Contract Escrow
                           </span>
-                          <span className="text-xl font-bold text-slate-900 dark:text-white">
+                          <span className="text-xl font-bold text-zinc-900 dark:text-white">
                             {Number(contract.rate_credits || 0).toLocaleString()} Credits
                           </span>
                         </div>
@@ -302,7 +302,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                               ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
                               : isCompleted
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                              : 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+                              : 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
                           }`}
                         >
                           {status}
@@ -313,10 +313,10 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                     {/* 4 Metadata Columns */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 text-xs">
                       <div>
-                        <span className="text-slate-500 dark:text-zinc-400 block mb-0.5">
+                        <span className="text-zinc-500 dark:text-zinc-400 block mb-0.5">
                           Payment Type
                         </span>
-                        <span className="font-bold text-slate-800 dark:text-zinc-200">
+                        <span className="font-bold text-zinc-800 dark:text-zinc-200">
                           {contract.contract_type === 'hourly'
                             ? 'Hourly Rate'
                             : 'Fixed Milestone Escrow'}
@@ -324,10 +324,10 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                       </div>
 
                       <div>
-                        <span className="text-slate-500 dark:text-zinc-400 block mb-0.5">
+                        <span className="text-zinc-500 dark:text-zinc-400 block mb-0.5">
                           Started Date
                         </span>
-                        <span className="font-bold text-slate-800 dark:text-zinc-200">
+                        <span className="font-bold text-zinc-800 dark:text-zinc-200">
                           {contract.starts_at
                             ? new Date(contract.starts_at).toLocaleDateString()
                             : 'Active'}
@@ -335,16 +335,16 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                       </div>
 
                       <div>
-                        <span className="text-slate-500 dark:text-zinc-400 block mb-0.5">
+                        <span className="text-zinc-500 dark:text-zinc-400 block mb-0.5">
                           Sequential Position
                         </span>
-                        <span className="font-bold text-slate-800 dark:text-zinc-200">
+                        <span className="font-bold text-zinc-800 dark:text-zinc-200">
                           Milestone {milestoneOrder}
                         </span>
                       </div>
 
                       <div>
-                        <span className="text-slate-500 dark:text-zinc-400 block mb-0.5">
+                        <span className="text-zinc-500 dark:text-zinc-400 block mb-0.5">
                           Security & Escrow
                         </span>
                         <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
@@ -354,8 +354,8 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                     </div>
 
                     {/* Card Action Footer */}
-                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-zinc-800/70 flex items-center justify-between text-xs text-slate-400 dark:text-zinc-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
-                      <span className="text-[11px] text-slate-500 dark:text-zinc-400">
+                    <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/70 flex items-center justify-between text-xs text-zinc-400 dark:text-zinc-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                      <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
                         {Array.isArray(contract.milestones) && contract.milestones.length > 0
                           ? `${contract.milestones.length} milestone deliverable(s) attached`
                           : 'Contract agreement active'}
@@ -389,17 +389,17 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
           </div>
 
           {/* Members List */}
-          <div className="bg-white dark:bg-[#151720] rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs divide-y divide-slate-100 dark:divide-zinc-800">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs divide-y divide-zinc-100 dark:divide-zinc-800">
             <div className="p-5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                <h3 className="text-base font-bold text-zinc-900 dark:text-white">
                   Project Contributors Roster ({members.length})
                 </h3>
               </div>
             </div>
 
-            <div className="divide-y divide-slate-100 dark:divide-zinc-800">
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {members.map((member) => {
                 const isOwner = member.team_role === 'Owner';
                 const isMe = Boolean(
@@ -412,7 +412,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                 return (
                   <div
                     key={member.account_id}
-                    className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition"
+                    className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition"
                   >
                     <div className="flex items-center gap-3.5">
                       <img
@@ -421,7 +421,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = getFallbackAvatarUrl(member.display_name);
                         }}
-                        className="w-11 h-11 rounded-full object-cover border border-slate-200 dark:border-zinc-700 shrink-0 cursor-pointer hover:border-blue-500 transition"
+                        className="w-11 h-11 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0 cursor-pointer hover:border-blue-500 transition"
                         onClick={() => {
                           if (member.account_id) navigate(`/profile/${member.account_id}`);
                         }}
@@ -432,12 +432,12 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                             onClick={() => {
                               if (member.account_id) navigate(`/profile/${member.account_id}`);
                             }}
-                            className="text-sm font-bold text-slate-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition"
+                            className="text-sm font-bold text-zinc-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition"
                           >
                             {member.display_name}
                           </h4>
                           {isMe && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300">
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
                               You
                             </span>
                           )}
@@ -452,10 +452,10 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-zinc-400 mt-1">
+                        <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400 mt-1">
                           {member.handle && <span>@{member.handle}</span>}
                           {member.milestone_role && (
-                            <span className="font-semibold text-slate-700 dark:text-zinc-300">
+                            <span className="font-semibold text-zinc-700 dark:text-zinc-300">
                               Role: {member.milestone_role}
                             </span>
                           )}
@@ -470,7 +470,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                       {!isMe && (
                         <button
                           onClick={() => handleStartDirectChat(member)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 transition cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 transition cursor-pointer"
                         >
                           <MessageCircle className="w-3.5 h-3.5" />
                           <span>Direct Message</span>

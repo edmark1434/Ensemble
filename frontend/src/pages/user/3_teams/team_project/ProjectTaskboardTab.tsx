@@ -15,6 +15,7 @@ import {
   Filter,
   Flag,
   Grid,
+  GripVertical,
   Kanban,
   Layers,
   Link2,
@@ -38,6 +39,9 @@ import {
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
+import { motion, AnimatePresence } from 'framer-motion';
+import useGlobalState from '@/lib/global_state';
+import GlideSelect, { type GlideSelectOption } from '@/components/ui/GlideSelect';
 
 interface TaskChecklistItem {
   id?: string;
@@ -77,6 +81,7 @@ interface ProjectTaskboardTabProps {
   contracts: any[];
   milestones?: any[];
   onTasksUpdated?: (silent?: boolean) => void;
+  projectTitle?: string;
 }
 
 type DisplayMode = 'board' | 'list' | 'table' | 'gantt';
@@ -144,8 +149,8 @@ export const getStatusBadgeConfig = (status?: string) => {
     default:
       return {
         label: 'TO DO',
-        btnClass: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700 hover:bg-slate-200 dark:hover:bg-zinc-700',
-        icon: <div className="w-2 h-2 rounded-full border border-dashed border-slate-500 dark:border-zinc-400 shrink-0" />,
+        btnClass: 'bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700',
+        icon: <div className="w-2 h-2 rounded-full border border-dashed border-zinc-500 dark:border-zinc-400 shrink-0" />,
       };
   }
 };
@@ -154,8 +159,8 @@ export const STATUS_OPTIONS = [
   {
     id: 'todo' as const,
     label: 'TO DO',
-    icon: <div className="w-2 h-2 rounded-full border border-dashed border-slate-500 dark:border-zinc-400 shrink-0" />,
-    textColor: 'text-slate-800 dark:text-zinc-200',
+    icon: <div className="w-2 h-2 rounded-full border border-dashed border-zinc-500 dark:border-zinc-400 shrink-0" />,
+    textColor: 'text-zinc-800 dark:text-zinc-200',
   },
   {
     id: 'in_progress' as const,
@@ -181,7 +186,7 @@ const PRIORITY_FLAGS: Record<string, { color: string; label: string }> = {
   urgent: { color: 'text-rose-500', label: 'Urgent' },
   high: { color: 'text-amber-500', label: 'High' },
   normal: { color: 'text-blue-500', label: 'Normal' },
-  low: { color: 'text-slate-400', label: 'Low' },
+  low: { color: 'text-zinc-400', label: 'Low' },
 };
 
 export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
@@ -193,6 +198,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   contracts,
   milestones = [],
   onTasksUpdated,
+  projectTitle,
 }) => {
   // Local optimistic state for zero-latency seamless taskboard updates
   const [localTasks, setLocalTasks] = useState<TaskItem[]>(tasks);
@@ -225,6 +231,168 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   // Popover menus state
   const [activeStatusMenuTaskId, setActiveStatusMenuTaskId] = useState<string | null>(null);
   const [activePriorityMenuTaskId, setActivePriorityMenuTaskId] = useState<string | null>(null);
+
+  // Kanban 4 Selection & Drag-and-Drop state
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
+
+  // Generate issue keys for all tasks (Option A: #TSK-01 or derived from project title)
+  const taskCodeMap = useMemo(() => {
+    let prefix = 'TSK';
+    if (projectTitle) {
+      const words = projectTitle.replace(/[^a-zA-Z0-9\s]/g, '').trim().split(/\s+/).filter(Boolean);
+      if (words.length >= 3) {
+        prefix = (words[0][0] + words[1][0] + words[2][0]).toUpperCase();
+      } else if (words.length === 2) {
+        prefix = (words[0].slice(0, 2) + words[1][0]).toUpperCase();
+      } else if (words.length === 1 && words[0].length >= 3) {
+        prefix = words[0].slice(0, 3).toUpperCase();
+      }
+    }
+    const map: Record<string, string> = {};
+    const sorted = [...tasks].sort((a, b) => {
+      const orderA = a.milestone_order ?? 999;
+      const orderB = b.milestone_order ?? 999;
+      if (orderA !== orderB) return orderA - orderB;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+    sorted.forEach((t, idx) => {
+      map[t.task_id] = `${prefix}-${String(idx + 1).padStart(2, '0')}`;
+    });
+    return map;
+  }, [tasks, projectTitle]);
+
+  const selectedTask = useMemo(() => {
+    return localTasks.find((t) => t.task_id === selectedTaskId) || null;
+  }, [localTasks, selectedTaskId]);
+
+  // Close card detail side panel on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedTaskId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const getInitials = (name?: string) => {
+    if (!name) return '??';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0].slice(0, 2).toUpperCase();
+  };
+
+  const storeTheme = useGlobalState((state) => state.theme);
+  const isDark = storeTheme !== 'light';
+
+  // Assignee options with profile picture icons for GlideSelect
+  const assigneeSelectOptions: GlideSelectOption[] = useMemo(() => {
+    const list: GlideSelectOption[] = [
+      {
+        value: 'all',
+        label: 'All Assignees',
+        icon: (
+          <div className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 flex items-center justify-center shrink-0">
+            <Users className="w-3 h-3" />
+          </div>
+        ),
+      },
+      {
+        value: 'me',
+        label: 'My Tasks',
+        icon: (
+          <div className="w-5 h-5 rounded-full bg-blue-600/20 text-blue-500 flex items-center justify-center shrink-0">
+            <Zap className="w-3 h-3" />
+          </div>
+        ),
+      },
+    ];
+
+    members.forEach((m: any) => {
+      const avatarPath =
+        m.avatar_path ||
+        tasks.find((t) => String(t.assignee_account_id) === String(m.account_id))?.assignee_avatar_path;
+      const displayName = m.display_name || m.name || 'Member';
+
+      list.push({
+        value: String(m.account_id),
+        label: displayName,
+        icon: (
+          <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 aspect-square border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-zinc-700 dark:text-zinc-300">
+            {avatarPath ? (
+              <img
+                src={constructAvatarUrl(avatarPath, displayName)}
+                alt={displayName}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = getFallbackAvatarUrl(displayName);
+                }}
+                className="w-full h-full object-cover block shrink-0"
+              />
+            ) : (
+              <span>{getInitials(displayName)}</span>
+            )}
+          </div>
+        ),
+      });
+    });
+
+    tasks.forEach((t) => {
+      if (t.assignee_account_id && !list.some((o) => o.value === String(t.assignee_account_id))) {
+        const displayName = t.assignee_name || 'Contributor';
+        list.push({
+          value: String(t.assignee_account_id),
+          label: displayName,
+          icon: (
+            <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 aspect-square border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-zinc-700 dark:text-zinc-300">
+              {t.assignee_avatar_path ? (
+                <img
+                  src={constructAvatarUrl(t.assignee_avatar_path, displayName)}
+                  alt={displayName}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = getFallbackAvatarUrl(displayName);
+                  }}
+                  className="w-full h-full object-cover block shrink-0"
+                />
+              ) : (
+                <span>{getInitials(displayName)}</span>
+              )}
+            </div>
+          ),
+        });
+      }
+    });
+
+    return list;
+  }, [members, tasks]);
+
+  const handleCardClick = (task: TaskItem) => {
+    setSelectedTaskId((prev) => (prev === task.task_id ? null : task.task_id));
+  };
+
+  const handleDropOnColumn = (targetColId: 'todo' | 'in_progress' | 'review' | 'completed') => {
+    if (!draggingTaskId) return;
+    const task = localTasks.find((t) => t.task_id === draggingTaskId);
+    setDraggingTaskId(null);
+    setDragOverColumnId(null);
+    if (!task) return;
+
+    if (task.is_locked && !isClient) {
+      showErrorToast('This task is locked waiting for earlier milestones to finish.');
+      return;
+    }
+    if (!isTaskAssignee(task) && !isClient) {
+      showErrorToast('Only the assigned team member can move this task.');
+      return;
+    }
+    if (normalizeStatus(task.status) === targetColId) return;
+
+    handleUpdateStatus(task, targetColId);
+  };
 
   // Helper to locate milestone attached to a task
   const getTaskMilestone = (task: TaskItem) => {
@@ -535,80 +703,401 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     });
   }, [localTasks, filterAssignee, currentUserAccountId, searchQuery]);
 
+  const renderSidePanelContent = (task: TaskItem) => {
+    const taskCode = taskCodeMap[task.task_id] || '#TSK';
+    const normStatus = normalizeStatus(task.status);
+    const statusCfg = getStatusBadgeConfig(task.status);
+    const priorityConfig = PRIORITY_FLAGS[task.priority] || PRIORITY_FLAGS.normal;
+    const isOwner = isTaskAssignee(task);
+    const checklist = Array.isArray(task.checklist) ? task.checklist : [];
+    const completedCount = checklist.filter((item) => item.completed).length;
+
+    return (
+      <div className="flex flex-col h-full space-y-4">
+        {/* Top bar: Code + Status + Close */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-mono font-bold text-zinc-500 dark:text-zinc-400">
+              {taskCode}
+            </span>
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold ${statusCfg.btnClass}`}>
+              {statusCfg.icon}
+              <span>{statusCfg.label}</span>
+            </span>
+            {task.is_locked && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                <Lock className="w-3 h-3" />
+                <span>Locked</span>
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setSelectedTaskId(null)}
+            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+            title="Close details"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Task Title */}
+        <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-white leading-snug">
+          {task.title}
+        </h3>
+
+        {/* Attributes Box (Screenshot 2: rounded grouped box with rows) */}
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-dark-base p-3.5 space-y-2.5 text-xs">
+          {/* Assignee Row */}
+          <div className="flex items-center justify-between">
+            <span className="text-zinc-500 dark:text-zinc-400 font-medium">Assignee</span>
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-700 dark:text-zinc-300">
+                {task.assignee_avatar_path ? (
+                  <img
+                    src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
+                    alt={task.assignee_name || 'Assignee'}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = getFallbackAvatarUrl(task.assignee_name);
+                    }}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{getInitials(task.assignee_name)}</span>
+                )}
+              </div>
+              <span className="font-semibold text-zinc-900 dark:text-white">
+                {task.assignee_name || 'Unassigned'}
+              </span>
+            </div>
+          </div>
+
+          {/* Priority Row */}
+          <div className="flex items-center justify-between pt-2.5 border-t border-zinc-200/60 dark:border-zinc-800/80">
+            <span className="text-zinc-500 dark:text-zinc-400 font-medium">Priority</span>
+            {isOwner ? (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActivePriorityMenuTaskId(activePriorityMenuTaskId === task.task_id ? null : task.task_id);
+                  }}
+                  className="flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white hover:text-blue-600 transition cursor-pointer"
+                >
+                  <Flag className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
+                  <span className="capitalize">{priorityConfig.label}</span>
+                  <ChevronDown className="w-3 h-3 text-zinc-400" />
+                </button>
+                {activePriorityMenuTaskId === task.task_id && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-30"
+                      onClick={() => setActivePriorityMenuTaskId(null)}
+                    />
+                    <div className="absolute right-0 top-full mt-1 z-40 w-32 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5">
+                      {[
+                        { id: 'urgent', label: 'Urgent', color: 'text-rose-500' },
+                        { id: 'high', label: 'High', color: 'text-amber-500' },
+                        { id: 'normal', label: 'Normal', color: 'text-blue-500' },
+                        { id: 'low', label: 'Low', color: 'text-zinc-400' },
+                      ].map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            handleUpdatePriority(task, p.id as any);
+                            setActivePriorityMenuTaskId(null);
+                          }}
+                          className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Flag className={`w-3.5 h-3.5 ${p.color}`} />
+                            <span>{p.label}</span>
+                          </div>
+                          {task.priority === p.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white">
+                <Flag className={`w-3.5 h-3.5 ${priorityConfig.color}`} />
+                <span className="capitalize">{priorityConfig.label}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Milestone Row (Locked to milestone) */}
+          <div className="flex items-center justify-between pt-2.5 border-t border-zinc-200/60 dark:border-zinc-800/80">
+            <span className="text-zinc-500 dark:text-zinc-400 font-medium">Milestone</span>
+            <div className="flex items-center gap-1.5 text-right">
+              <span className="font-semibold text-zinc-900 dark:text-white truncate max-w-[180px]" title={task.milestone_title}>
+                {task.milestone_title || `Milestone ${task.milestone_order || 1}`}
+              </span>
+              <span className="text-zinc-400" title="Milestone scope is fixed by contract and cannot be moved">
+                <Lock className="w-3 h-3 text-zinc-400 shrink-0" />
+              </span>
+            </div>
+          </div>
+
+          {/* Due Date Row */}
+          <div className="flex items-center justify-between pt-2.5 border-t border-zinc-200/60 dark:border-zinc-800/80">
+            <span className="text-zinc-500 dark:text-zinc-400 font-medium">Due Date</span>
+            {isOwner ? (
+              <div className="relative flex items-center gap-1.5 font-semibold text-zinc-900 dark:text-white cursor-pointer hover:text-blue-500">
+                <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                <span>
+                  {task.due_at
+                    ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+                    : 'Set date'}
+                </span>
+                <input
+                  type="date"
+                  value={task.due_at ? task.due_at.substring(0, 10) : ''}
+                  onChange={(e) => handleUpdateDueDate(task, e.target.value)}
+                  onClick={(e) => {
+                    try {
+                      (e.target as any).showPicker?.();
+                    } catch {}
+                  }}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                />
+              </div>
+            ) : (
+              <span className="font-semibold text-zinc-900 dark:text-white">
+                {task.due_at
+                  ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+                  : 'No deadline'}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Move to Quick-Action Buttons (Screenshot 2) */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+              Move to
+            </span>
+            {!isOwner && !isClient && (
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500 italic">
+                View only
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800">
+            {[
+              { id: 'todo', label: 'To do' },
+              { id: 'in_progress', label: 'In progress' },
+              { id: 'review', label: 'In review' },
+              { id: 'completed', label: 'Done' },
+            ].map((s) => {
+              const isActive = normStatus === s.id;
+              const canMove = !task.is_locked && (isOwner || isClient);
+
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  disabled={!canMove}
+                  onClick={() => handleUpdateStatus(task, s.id as any)}
+                  className={`py-1.5 px-1 rounded-lg text-xs font-semibold transition-all text-center truncate ${
+                    isActive
+                      ? 'bg-white text-zinc-950 font-bold shadow-xs dark:bg-white dark:text-zinc-950'
+                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-zinc-700/50'
+                  } disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {task.is_locked && (
+            <p className="mt-1.5 text-[11px] text-amber-500 dark:text-amber-400 flex items-center gap-1">
+              <Lock className="w-3 h-3 shrink-0" />
+              <span>Locked waiting for earlier milestone completion.</span>
+            </p>
+          )}
+        </div>
+
+        {/* Description Section */}
+        {task.description && (
+          <div>
+            <h4 className="text-[11px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-1.5">
+              Description
+            </h4>
+            <div className="p-3 rounded-xl bg-zinc-50/50 dark:bg-dark-base border border-zinc-200/80 dark:border-zinc-800/80 text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+              {task.description}
+            </div>
+          </div>
+        )}
+
+        {/* Subtasks Section */}
+        {checklist.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-[11px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+                Subtasks ({completedCount}/{checklist.length})
+              </h4>
+              <span className="text-[10px] font-mono text-zinc-400">
+                {Math.round((completedCount / checklist.length) * 100)}%
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {checklist.map((item, idx) => (
+                <label
+                  key={idx}
+                  className="flex items-start gap-2.5 p-2 rounded-lg bg-zinc-50/50 dark:bg-dark-base border border-zinc-200/60 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-200 cursor-pointer select-none"
+                >
+                  <input
+                    type="checkbox"
+                    checked={item.completed}
+                    disabled={task.is_locked || (!isOwner && !isClient)}
+                    onChange={() => handleToggleChecklistItem(task, idx)}
+                    className="mt-0.5 rounded border-zinc-300 text-blue-600 focus:ring-0"
+                  />
+                  <span className={item.completed ? 'line-through text-zinc-400 dark:text-zinc-500' : ''}>
+                    {item.title}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Activity & Scope Info */}
+        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
+          <h4 className="text-[11px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-1.5">
+            Activity
+          </h4>
+          <div className="p-3 rounded-xl bg-zinc-50/50 dark:bg-dark-base border border-zinc-200/80 dark:border-zinc-800 text-xs space-y-1.5">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center text-[10px] font-bold">
+                {getInitials(task.assignee_name || 'Team')}
+              </div>
+              <span className="font-semibold text-zinc-900 dark:text-white">
+                {task.assignee_name || 'Contributor'}
+              </span>
+              <span className="text-[10px] text-zinc-400">
+                {new Date(task.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-600 dark:text-zinc-400 pl-7">
+              Task created under milestone <span className="text-zinc-800 dark:text-zinc-200 font-medium">"{task.milestone_title || `Milestone ${task.milestone_order || 1}`}"</span>.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
       {/* ======================================================== */}
       {/* 1. TOP TAB SWITCHER: Board | List | Table | Gantt        */}
       {/* ======================================================== */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-[#121318] px-4 py-2 border-b border-slate-200 dark:border-zinc-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-[#121214] px-4 py-2 border-b border-zinc-200 dark:border-zinc-800">
         <div className="flex items-center gap-1 overflow-x-auto">
           {/* Board Tab */}
           <button
             type="button"
             onClick={() => setDisplayMode('board')}
-            className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer shrink-0 border-b-2 ${
+            className={`relative inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
               displayMode === 'board'
-                ? 'border-blue-600 dark:border-white text-slate-900 dark:text-white'
-                : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+                ? 'text-zinc-900 dark:text-white'
+                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
             }`}
           >
             <div className="w-3.5 h-3.5 rounded-xs bg-blue-600 flex items-center justify-center p-0.5 shadow-2xs">
               <div className="w-1.5 h-full bg-white rounded-2xs" />
             </div>
             <span>Board</span>
+            {displayMode === 'board' && (
+              <motion.div
+                layoutId="taskboard-active-tab-indicator"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-white rounded-full"
+                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+              />
+            )}
           </button>
 
           {/* List Tab */}
           <button
             type="button"
             onClick={() => setDisplayMode('list')}
-            className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer shrink-0 border-b-2 ${
+            className={`relative inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
               displayMode === 'list'
-                ? 'border-blue-600 dark:border-white text-slate-900 dark:text-white'
-                : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+                ? 'text-zinc-900 dark:text-white'
+                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
             }`}
           >
-            <List className="w-3.5 h-3.5 text-slate-400" />
+            <List className="w-3.5 h-3.5 text-zinc-400" />
             <span>List</span>
+            {displayMode === 'list' && (
+              <motion.div
+                layoutId="taskboard-active-tab-indicator"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-white rounded-full"
+                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+              />
+            )}
           </button>
 
           {/* Table Tab */}
           <button
             type="button"
             onClick={() => setDisplayMode('table')}
-            className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer shrink-0 border-b-2 ${
+            className={`relative inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
               displayMode === 'table'
-                ? 'border-blue-600 dark:border-white text-slate-900 dark:text-white'
-                : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+                ? 'text-zinc-900 dark:text-white'
+                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
             }`}
           >
             <TableIcon className="w-3.5 h-3.5 text-emerald-500" />
             <span>Table</span>
+            {displayMode === 'table' && (
+              <motion.div
+                layoutId="taskboard-active-tab-indicator"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-white rounded-full"
+                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+              />
+            )}
           </button>
 
           {/* Gantt Tab */}
           <button
             type="button"
             onClick={() => setDisplayMode('gantt')}
-            className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer shrink-0 border-b-2 ${
+            className={`relative inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
               displayMode === 'gantt'
-                ? 'border-blue-600 dark:border-white text-slate-900 dark:text-white'
-                : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+                ? 'text-zinc-900 dark:text-white'
+                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
             }`}
           >
             <CalendarRange className="w-3.5 h-3.5 text-rose-500" />
             <span>Gantt</span>
+            {displayMode === 'gantt' && (
+              <motion.div
+                layoutId="taskboard-active-tab-indicator"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-white rounded-full"
+                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+              />
+            )}
           </button>
 
           {/* + View pill */}
-          <div className="inline-flex items-center gap-1 px-2.5 py-1 text-xs text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300 transition cursor-pointer shrink-0">
+          <div className="inline-flex items-center gap-1 px-2.5 py-1 text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition cursor-pointer shrink-0">
             <Plus className="w-3 h-3" />
             <span>View</span>
           </div>
         </div>
 
         {/* Total Tasks Counter */}
-        <span className="text-xs text-slate-500 dark:text-zinc-400 self-end sm:self-auto shrink-0 font-medium">
+        <span className="text-xs text-zinc-500 dark:text-zinc-400 self-end sm:self-auto shrink-0 font-medium">
           {filteredTasks.length} {filteredTasks.length === 1 ? 'task' : 'tasks'}
         </span>
       </div>
@@ -616,7 +1105,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       {/* ======================================================== */}
       {/* 2. SUBHEADER TOOLBAR (Matching Reference Pics)           */}
       {/* ======================================================== */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#121318] px-4 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#121214] px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs relative z-20">
         {/* Left Side: Status pill + Link */}
         <div className="flex items-center gap-2">
           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-xs font-bold border border-indigo-200 dark:border-indigo-900/60 shadow-2xs">
@@ -627,7 +1116,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
           <button
             type="button"
             title="Task Dependencies"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition cursor-pointer"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition cursor-pointer"
           >
             <Link2 className="w-4 h-4" />
           </button>
@@ -639,7 +1128,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
           <button
             type="button"
             title="Sort"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition cursor-pointer"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition cursor-pointer"
           >
             <ArrowUpDown className="w-3.5 h-3.5" />
           </button>
@@ -647,7 +1136,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
           <button
             type="button"
             title="Filter"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800/80 transition cursor-pointer"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition cursor-pointer"
           >
             <Filter className="w-3.5 h-3.5" />
           </button>
@@ -659,7 +1148,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
             className={`p-1.5 rounded-lg transition cursor-pointer ${
               filterAssignee === 'me'
                 ? 'bg-blue-600 text-white'
-                : 'text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800/80'
+                : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80'
             }`}
           >
             <Zap className="w-3.5 h-3.5" />
@@ -667,31 +1156,35 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
           {/* Search Input */}
           <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="text-xs pl-8 pr-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 w-28 sm:w-40"
+              className="text-xs pl-8 pr-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 w-28 sm:w-40"
             />
           </div>
 
-          {/* Assignee Filter Dropdown */}
-          <div className="hidden md:flex items-center gap-1.5">
-            <select
+          {/* Assignee Filter Dropdown using GlideSelect with Profile Pictures */}
+          <div className="hidden md:flex items-center">
+            <GlideSelect
+              options={assigneeSelectOptions}
               value={filterAssignee}
-              onChange={(e) => setFilterAssignee(e.target.value)}
-              className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-900 dark:text-white focus:outline-hidden cursor-pointer"
-            >
-              <option value="all">All Assignees</option>
-              <option value="me">My Tasks</option>
-              {members.map((m: any) => (
-                <option key={m.account_id} value={m.account_id}>
-                  {m.display_name}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setFilterAssignee(val)}
+              placeholder="All Assignees"
+              fullWidth={false}
+              size="sm"
+              radius={8}
+              menuWidth={220}
+              maxVisibleItems={4.5}
+              surfaceColor={isDark ? '#121214' : '#ffffff'}
+              highlightColor={isDark ? '#27272a' : '#f4f4f5'}
+              textColor={isDark ? '#f4f4f5' : '#09090b'}
+              borderColor={isDark ? '#27272a' : '#e4e4e7'}
+              accentColor={isDark ? '#ffffff' : '#09090b'}
+              className="w-44 lg:w-48"
+            />
           </div>
 
           {/* Primary + Task Button with Dropdown Chevron */}
@@ -710,167 +1203,212 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       </div>
 
       {/* ======================================================== */}
-      {/* 3. DISPLAY 1: BOARD VIEW (Matching Reference 1)         */}
+      {/* 3. TAB VIEW CONTENT (Animated smooth transition)         */}
       {/* ======================================================== */}
-      {displayMode === 'board' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
-          {COLUMNS.map((col) => {
-            const colTasks = filteredTasks.filter((t) => normalizeStatus(t.status) === col.id);
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={displayMode}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.16, ease: 'easeOut' }}
+        >
+          {displayMode === 'board' && (
+        <div className="space-y-3">
+          {/* Board Subtitle matching Screenshot 1 */}
+          <div className="flex items-center justify-between px-1">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              {filteredTasks.length} {filteredTasks.length === 1 ? 'item' : 'items'}. Click a card to open it, or drag it to another column.
+            </p>
+          </div>
 
-            return (
-              <div
-                key={col.id}
-                className="bg-slate-50/70 dark:bg-[#121318] rounded-xl border border-slate-200 dark:border-zinc-800 p-3 flex flex-col min-h-[500px]"
-              >
-                {/* Column Header */}
-                <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200/80 dark:border-zinc-800/80">
-                  <div className="flex items-center gap-2">
-                    {/* Status Pill Badge */}
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold ${
-                        col.id === 'todo'
-                          ? 'bg-zinc-800 text-zinc-200 border border-zinc-700'
-                          : col.id === 'in_progress'
-                          ? 'bg-blue-600 text-white'
-                          : col.id === 'review'
-                          ? 'bg-amber-600 text-white'
-                          : 'bg-emerald-600 text-white'
-                      }`}
-                    >
-                      {col.id === 'todo' ? (
-                        <div className="w-2.5 h-2.5 rounded-full border border-dashed border-zinc-300" />
-                      ) : col.id === 'in_progress' ? (
-                        <div className="w-2 h-2 rounded-full bg-white ring-2 ring-blue-300" />
-                      ) : col.id === 'review' ? (
-                        <Clock className="w-3 h-3 text-white" />
-                      ) : (
-                        <Check className="w-3 h-3 text-white" />
-                      )}
-                      <span>{col.label}</span>
-                    </span>
+          {/* Kanban Main Stage: Columns (Always maintain full-width 4-column layout) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start w-full">
+              {COLUMNS.map((col) => {
+                const colTasks = filteredTasks.filter((t) => normalizeStatus(t.status) === col.id);
+                const isDragOver = dragOverColumnId === col.id;
+                const colLabel =
+                  col.id === 'todo'
+                    ? 'To do'
+                    : col.id === 'in_progress'
+                    ? 'In progress'
+                    : col.id === 'review'
+                    ? 'In review'
+                    : 'Done';
 
-                    <span className="text-xs font-bold text-slate-500 dark:text-zinc-400">
-                      {colTasks.length}
-                    </span>
-                  </div>
+                return (
+                  <div
+                    key={col.id}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      if (dragOverColumnId !== col.id) {
+                        setDragOverColumnId(col.id);
+                      }
+                    }}
+                    onDragLeave={(e) => {
+                      if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                      if (dragOverColumnId === col.id) {
+                        setDragOverColumnId(null);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleDropOnColumn(col.id as any);
+                    }}
+                    className={`bg-zinc-50/70 dark:bg-dark-base rounded-2xl border transition-all duration-150 p-3.5 flex flex-col min-h-[520px] ${
+                      isDragOver
+                        ? 'border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/20 dark:bg-blue-950/10'
+                        : 'border-zinc-200 dark:border-zinc-800'
+                    }`}
+                  >
+                    {/* Column Header */}
+                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-200/80 dark:border-zinc-800/80">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
+                          {colLabel}
+                        </span>
+                        <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500">
+                          {colTasks.length}
+                        </span>
+                      </div>
 
-                  <div className="flex items-center gap-1 text-slate-400">
-                    <button
-                      type="button"
-                      className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-zinc-800 transition cursor-pointer"
-                      title="Options"
-                    >
-                      <MoreHorizontal className="w-3.5 h-3.5" />
-                    </button>
-                    {!isClient && (
-                      <button
-                        type="button"
-                        onClick={() => openAddTaskModal(col.id as any)}
-                        className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-zinc-800 transition cursor-pointer"
-                        title="Add Task"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Cards Container */}
-                <div className="space-y-3 flex-1">
-                  {colTasks.length === 0 ? (
-                    <div className="h-28 flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-zinc-800/80 rounded-xl text-xs text-slate-400 dark:text-zinc-500 font-medium">
-                      No tasks in {col.label}
+                      <div className="flex items-center gap-1">
+                        {!isClient && (
+                          <button
+                            type="button"
+                            onClick={() => openAddTaskModal(col.id as any)}
+                            className="p-1 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition cursor-pointer"
+                            title="Add Task"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    colTasks.map((task) => {
-                      const priorityConfig = PRIORITY_FLAGS[task.priority] || PRIORITY_FLAGS.normal;
-                      const isOwner = isTaskAssignee(task);
-                      const checklist = Array.isArray(task.checklist) ? task.checklist : [];
-                      const completedCount = checklist.filter((item) => item.completed).length;
-                      const hasSubtasks = checklist.length > 0;
-                      const isExpanded = Boolean(expandedTasks[task.task_id]);
-                      const isCardActive =
-                        activeStatusMenuTaskId === task.task_id || activePriorityMenuTaskId === task.task_id;
 
-                      return (
-                        <div
-                          key={task.task_id}
-                          className={`bg-white dark:bg-[#181a24] p-4 rounded-xl border transition-all duration-150 shadow-xs relative ${
-                            isCardActive ? 'z-20' : 'z-0'
-                          } ${
-                            task.is_locked
-                              ? 'border-slate-300 dark:border-zinc-700/60 opacity-80'
-                              : 'border-slate-200 dark:border-zinc-700/80 hover:border-slate-300 dark:hover:border-zinc-600'
-                          }`}
-                        >
-                          {/* Locked Badge */}
-                          {task.is_locked && (
-                            <div className="mb-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                              <Lock className="w-3 h-3 text-amber-500" />
-                              Locked (Milestone {task.milestone_order || 1})
-                            </div>
-                          )}
+                    {/* Cards Container */}
+                    <div className="space-y-3 flex-1">
+                      {colTasks.length === 0 && !isDragOver && (
+                        <div className="h-28 flex items-center justify-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-400 dark:text-zinc-500 font-medium">
+                          No tasks in {colLabel}
+                        </div>
+                      )}
 
-                          {/* Task Title */}
-                          <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2 leading-snug">
-                            {task.title}
-                          </h4>
+                      {colTasks.map((task) => {
+                        const taskCode = taskCodeMap[task.task_id] || '#TSK';
+                        const isSelected = selectedTaskId === task.task_id;
+                        const isDragging = draggingTaskId === task.task_id;
+                        const isOwner = isTaskAssignee(task);
+                        const checklist = Array.isArray(task.checklist) ? task.checklist : [];
+                        const completedCount = checklist.filter((item) => item.completed).length;
+                        const canDrag = !task.is_locked && (isOwner || isClient);
 
-                          {/* Description if present */}
-                          {task.description && (
-                            <p className="text-xs text-slate-500 dark:text-zinc-400 mb-3 line-clamp-2">
-                              {task.description}
-                            </p>
-                          )}
+                        // Dot color by column status (Screenshot 1)
+                        const dotColor =
+                          col.id === 'todo'
+                            ? 'bg-zinc-400 dark:bg-zinc-500'
+                            : col.id === 'in_progress'
+                            ? 'bg-blue-500'
+                            : col.id === 'review'
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500';
 
-                          {/* Subtasks Progress */}
-                          {hasSubtasks && (
-                            <div className="mb-3 pt-2 border-t border-slate-100 dark:border-zinc-800/80">
-                              <button
-                                type="button"
-                                onClick={() => toggleExpand(task.task_id)}
-                                className="w-full flex items-center justify-between text-[11px] font-bold text-slate-700 dark:text-zinc-300 hover:text-blue-600 transition"
-                              >
-                                <span className="flex items-center gap-1">
-                                  {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                                  Subtasks ({completedCount}/{checklist.length})
+                        return (
+                          <div
+                            key={task.task_id}
+                            draggable={canDrag}
+                            onDragStart={(e) => {
+                              if (!canDrag) {
+                                e.preventDefault();
+                                return;
+                              }
+                              e.dataTransfer.setData('text/plain', task.task_id);
+                              e.dataTransfer.effectAllowed = 'move';
+                              setDraggingTaskId(task.task_id);
+                            }}
+                            onDragEnd={() => {
+                              setDraggingTaskId(null);
+                              setDragOverColumnId(null);
+                            }}
+                            onClick={() => handleCardClick(task)}
+                            className={`group/card bg-white dark:bg-zinc-900 p-3.5 rounded-xl border transition-all duration-150 shadow-xs cursor-pointer select-none relative ${
+                              isDragging
+                                ? 'opacity-30 scale-95 border-blue-500'
+                                : isSelected
+                                ? 'ring-2 ring-zinc-900 dark:ring-white border-transparent shadow-md'
+                                : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-xs'
+                            } ${task.is_locked ? 'opacity-80' : ''}`}
+                          >
+                            {/* Top Row: Dot + Task Code + Locked Badge + Drag Grip */}
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+                                <span className="text-[11px] font-mono font-bold text-zinc-500 dark:text-zinc-400 truncate">
+                                  {taskCode}
                                 </span>
-                                <span className="font-mono text-[10px]">
-                                  {Math.round((completedCount / checklist.length) * 100)}%
-                                </span>
-                              </button>
+                                {task.is_locked && (
+                                  <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-500 font-bold ml-1" title="Locked waiting for earlier milestone">
+                                    <Lock className="w-2.5 h-2.5 shrink-0" />
+                                  </span>
+                                )}
+                              </div>
 
-                              {isExpanded && (
-                                <div className="mt-2 space-y-1 pl-2 border-l-2 border-blue-500/30">
-                                  {checklist.map((item, cIdx) => (
-                                    <label
-                                      key={cIdx}
-                                      className="flex items-start gap-2 text-xs text-slate-700 dark:text-zinc-300 cursor-pointer select-none"
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={item.completed}
-                                        disabled={task.is_locked || (!isOwner && !isClient)}
-                                        onChange={() => handleToggleChecklistItem(task, cIdx)}
-                                        className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-0"
-                                      />
-                                      <span className={item.completed ? 'line-through text-slate-400 dark:text-zinc-500' : ''}>
-                                        {item.title}
-                                      </span>
-                                    </label>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Quick Actions Row: Assignee, Due date, Priority flag, Tag (Reference 1) */}
-                          <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-zinc-800/80 text-slate-400 dark:text-zinc-500">
-                            <div className="flex items-center gap-2">
-                              {/* Assignee Icon: Fixed circular container so it NEVER flattens */}
                               <div
-                                className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 flex items-center justify-center"
-                                title={task.assignee_name ? `Assigned to: ${task.assignee_name}` : 'Unassigned'}
+                                className={`text-zinc-400 dark:text-zinc-500 ${
+                                  canDrag ? 'cursor-grab active:cursor-grabbing group-hover/card:text-zinc-600 dark:group-hover/card:text-zinc-300' : 'opacity-30 cursor-not-allowed'
+                                }`}
+                                title={canDrag ? 'Drag to move column' : 'Locked or View Only'}
+                              >
+                                <GripVertical className="w-3.5 h-3.5" />
+                              </div>
+                            </div>
+
+                            {/* Task Title */}
+                            <h4 className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-white leading-snug mb-1 line-clamp-2">
+                              {task.title}
+                            </h4>
+
+                            {/* Task Description Preview */}
+                            {task.description && (
+                              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 mb-3 leading-relaxed">
+                                {task.description}
+                              </p>
+                            )}
+
+                            {/* Card Footer: Metadata Badges + Assignee Avatar */}
+                            <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/80 text-[11px] text-zinc-500 dark:text-zinc-400">
+                              <div className="flex items-center gap-2">
+                                {/* Milestone Badge */}
+                                {task.milestone_title ? (
+                                  <span
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 max-w-[100px] truncate"
+                                    title={task.milestone_title}
+                                  >
+                                    M{task.milestone_order || 1}
+                                  </span>
+                                ) : null}
+
+                                {/* Checklist Counter */}
+                                {checklist.length > 0 && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
+                                    <MessageSquare className="w-3 h-3" />
+                                    <span>{completedCount}/{checklist.length}</span>
+                                  </span>
+                                )}
+
+                                {/* Due Date Preview */}
+                                {task.due_at && (
+                                  <span className="text-[10px] text-zinc-400">
+                                    {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Assignee Avatar */}
+                              <div
+                                className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-700 dark:text-zinc-300"
+                                title={task.assignee_name ? `Assigned: ${task.assignee_name}` : 'Unassigned'}
                               >
                                 {task.assignee_avatar_path ? (
                                   <img
@@ -882,236 +1420,37 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     className="w-full h-full object-cover block shrink-0"
                                   />
                                 ) : (
-                                  <User className="w-3 h-3 text-slate-400 shrink-0" />
+                                  <span>{getInitials(task.assignee_name)}</span>
                                 )}
                               </div>
-
-                              {/* Due Date: Editable by assignee, bounded by milestone timeline. No "Set date" text */}
-                              {(() => {
-                                const { minDate, maxDate } = getMilestoneTimelineBounds(task);
-                                return isOwner ? (
-                                  <div
-                                    className="relative flex items-center cursor-pointer p-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 transition group/date"
-                                    title={
-                                      maxDate
-                                        ? task.due_at
-                                          ? `Due: ${new Date(task.due_at).toLocaleDateString()} (Milestone deadline: ${new Date(maxDate).toLocaleDateString()})`
-                                          : `Set due date (Milestone deadline: ${new Date(maxDate).toLocaleDateString()})`
-                                        : task.due_at
-                                        ? `Due: ${new Date(task.due_at).toLocaleDateString()}`
-                                        : 'Set due date'
-                                    }
-                                  >
-                                    <Calendar className={`w-3.5 h-3.5 shrink-0 ${task.due_at ? 'text-blue-500' : 'text-slate-400 hover:text-blue-500'}`} />
-                                    {task.due_at && (
-                                      <span className="text-[10px] text-slate-700 dark:text-zinc-300 font-semibold ml-1 whitespace-nowrap">
-                                        {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                                      </span>
-                                    )}
-                                    <input
-                                      type="date"
-                                      min={minDate}
-                                      max={maxDate}
-                                      value={task.due_at ? task.due_at.substring(0, 10) : ''}
-                                      onChange={(e) => handleUpdateDueDate(task, e.target.value)}
-                                      onClick={(e) => {
-                                        try {
-                                          (e.target as any).showPicker?.();
-                                        } catch {}
-                                      }}
-                                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                                    />
-                                  </div>
-                                ) : (
-                                  <div
-                                    className="flex items-center gap-1 text-slate-400 dark:text-zinc-500 p-1"
-                                    title={task.due_at ? `Due: ${new Date(task.due_at).toLocaleDateString()}` : 'No due date'}
-                                  >
-                                    <Calendar className="w-3.5 h-3.5 shrink-0 opacity-70" />
-                                    {task.due_at && (
-                                      <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-medium whitespace-nowrap">
-                                        {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-
-                              {/* Priority Flag: Click flag only, no text label */}
-                              {isOwner ? (
-                                <div className="relative">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActivePriorityMenuTaskId(activePriorityMenuTaskId === task.task_id ? null : task.task_id);
-                                      setActiveStatusMenuTaskId(null);
-                                    }}
-                                    className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer flex items-center justify-center"
-                                    title={`Priority: ${priorityConfig.label} (Click flag to change)`}
-                                  >
-                                    <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
-                                  </button>
-
-                                  {activePriorityMenuTaskId === task.task_id && (
-                                    <>
-                                      <div
-                                        className="fixed inset-0 z-20 cursor-default"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setActivePriorityMenuTaskId(null);
-                                        }}
-                                      />
-                                      <div
-                                        className="absolute left-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
-                                          Priority
-                                        </div>
-                                        {[
-                                          { id: 'urgent', label: 'Urgent', color: 'text-rose-500' },
-                                          { id: 'high', label: 'High', color: 'text-amber-500' },
-                                          { id: 'normal', label: 'Normal', color: 'text-blue-500' },
-                                          { id: 'low', label: 'Low', color: 'text-slate-400' },
-                                        ].map((p) => (
-                                          <button
-                                            key={p.id}
-                                            type="button"
-                                            onClick={() => {
-                                              handleUpdatePriority(task, p.id as any);
-                                              setActivePriorityMenuTaskId(null);
-                                            }}
-                                            className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
-                                          >
-                                            <div className="flex items-center gap-2">
-                                              <Flag className={`w-3.5 h-3.5 shrink-0 ${p.color}`} />
-                                              <span>{p.label}</span>
-                                            </div>
-                                            {task.priority === p.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="p-1" title={`Priority: ${priorityConfig.label} (View only)`}>
-                                  <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
-                                </div>
-                              )}
-
-                              {/* Status Tag Icon: ONLY assignee can change; others view only. No "IN PROGRESS" text */}
-                              {(() => {
-                                const statusCfg = getStatusBadgeConfig(task.status);
-                                const normStatus = normalizeStatus(task.status);
-                                const tagColorClass =
-                                  normStatus === 'completed'
-                                    ? 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
-                                    : normStatus === 'review'
-                                    ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40'
-                                    : normStatus === 'in_progress'
-                                    ? 'text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/40'
-                                    : 'text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-800';
-
-                                const tooltipText = isOwner
-                                  ? `Status: ${statusCfg.label}${task.milestone_title ? ` (Milestone: ${task.milestone_title})` : ''} - Click to change`
-                                  : `Status: ${statusCfg.label}${task.milestone_title ? ` (Milestone: ${task.milestone_title})` : ''} (Assigned to ${task.assignee_name || 'member'})`;
-
-                                return isOwner ? (
-                                  <div className="relative">
-                                    <button
-                                      type="button"
-                                      disabled={task.is_locked && !isClient}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setActiveStatusMenuTaskId(activeStatusMenuTaskId === task.task_id ? null : task.task_id);
-                                        setActivePriorityMenuTaskId(null);
-                                      }}
-                                      className={`p-1 rounded-md transition cursor-pointer flex items-center justify-center ${tagColorClass}`}
-                                      title={tooltipText}
-                                    >
-                                      <Tag className="w-3.5 h-3.5 shrink-0" />
-                                    </button>
-
-                                    {activeStatusMenuTaskId === task.task_id && (
-                                      <>
-                                        <div
-                                          className="fixed inset-0 z-20 cursor-default"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveStatusMenuTaskId(null);
-                                          }}
-                                        />
-                                        <div
-                                          className="absolute right-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
-                                            Status
-                                          </div>
-                                          {STATUS_OPTIONS.map((s) => (
-                                            <button
-                                              key={s.id}
-                                              type="button"
-                                              onClick={() => {
-                                                handleUpdateStatus(task, s.id as any);
-                                                setActiveStatusMenuTaskId(null);
-                                              }}
-                                              className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
-                                            >
-                                              <div className="flex items-center gap-2">
-                                                {s.icon}
-                                                <span className={normStatus === s.id ? s.textColor : ''}>{s.label}</span>
-                                              </div>
-                                              {normStatus === s.id && <Check className="w-3.5 h-3.5 text-blue-500" />}
-                                            </button>
-                                          ))}
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div
-                                    className={`p-1 rounded-md ${tagColorClass} cursor-default`}
-                                    title={tooltipText}
-                                  >
-                                    <Tag className="w-3.5 h-3.5 shrink-0 opacity-70" />
-                                  </div>
-                                );
-                              })()}
                             </div>
-
-                            {/* Right side contract task indicator - icon only */}
-                            {task.is_contract_task && (
-                              <div
-                                className="p-1 rounded-md text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 transition flex items-center justify-center shrink-0 cursor-default"
-                                title="Contract Task (Defined by contract agreement - scope & title fixed)"
-                              >
-                                <FileText className="w-3.5 h-3.5" />
-                              </div>
-                            )}
                           </div>
-                        </div>
-                      );
-                    })
-                  )}
+                        );
+                      })}
 
-                  {/* + Add Task at Bottom of Column */}
-                  {!isClient && (
-                    <button
-                      type="button"
-                      onClick={() => openAddTaskModal(col.id as any)}
-                      className="w-full flex items-center gap-1.5 p-2 rounded-xl text-xs font-bold text-slate-500 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-200/50 dark:hover:bg-zinc-800/50 transition cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Task</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                      {/* Dashed Drop Target Placeholder (Screenshot 1) */}
+                      {isDragOver && (
+                        <div className="h-24 rounded-xl border-2 border-dashed border-zinc-400 dark:border-zinc-700 bg-zinc-100/50 dark:bg-zinc-800/30 flex items-center justify-center text-xs font-semibold text-zinc-500 dark:text-zinc-400 transition-all duration-150 animate-pulse">
+                          Drop to move to {colLabel}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* + Add Task at Bottom of Column */}
+                    {!isClient && (
+                      <button
+                        type="button"
+                        onClick={() => openAddTaskModal(col.id as any)}
+                        className="mt-3 w-full flex items-center justify-center gap-1.5 p-2 rounded-xl text-xs font-bold text-zinc-500 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 transition cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add task</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
         </div>
       )}
 
@@ -1125,14 +1464,14 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
             const isCollapsed = Boolean(collapsedGroups[group.id]);
 
             return (
-              <div key={group.id} className="bg-white dark:bg-[#151720] rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs overflow-hidden">
+              <div key={group.id} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs overflow-hidden">
                 {/* Group Accordion Header */}
                 <div
                   onClick={() => toggleGroupCollapse(group.id)}
-                  className="p-3.5 flex items-center justify-between border-b border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-zinc-900/40 cursor-pointer select-none"
+                  className="p-3.5 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40 cursor-pointer select-none"
                 >
                   <div className="flex items-center gap-2.5">
-                    <button type="button" className="text-slate-400">
+                    <button type="button" className="text-zinc-400">
                       {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
 
@@ -1160,7 +1499,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                       <span>{group.label}</span>
                     </span>
 
-                    <span className="text-xs font-bold text-slate-500 dark:text-zinc-400">
+                    <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400">
                       {groupTasks.length}
                     </span>
                   </div>
@@ -1172,7 +1511,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         e.stopPropagation();
                         openAddTaskModal(group.id as any);
                       }}
-                      className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-800"
+                      className="p-1 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800"
                       title="Add Task to Group"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -1184,7 +1523,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                 {!isCollapsed && (
                   <div>
                     {/* Header Row */}
-                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-[11px] font-bold text-slate-400 dark:text-zinc-500 border-b border-slate-100 dark:border-zinc-800/80 uppercase tracking-wider">
+                    <div className="grid grid-cols-12 gap-2 px-4 py-2 text-[11px] font-bold text-zinc-400 dark:text-zinc-500 border-b border-zinc-100 dark:border-zinc-800/80 uppercase tracking-wider">
                       <div className="col-span-5">Name</div>
                       <div className="col-span-2">Assignee</div>
                       <div className="col-span-2">Due Date</div>
@@ -1193,9 +1532,9 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     </div>
 
                     {/* Task Rows */}
-                    <div className="divide-y divide-slate-100 dark:divide-zinc-800/80">
+                    <div className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
                       {groupTasks.length === 0 ? (
-                        <div className="p-4 text-center text-xs text-slate-400 dark:text-zinc-500">
+                        <div className="p-4 text-center text-xs text-zinc-400 dark:text-zinc-500">
                           No tasks in this group.
                         </div>
                       ) : (
@@ -1205,7 +1544,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           return (
                             <div
                               key={task.task_id}
-                              className="grid grid-cols-12 gap-2 px-4 py-2.5 items-center hover:bg-slate-50/60 dark:hover:bg-zinc-900/40 text-xs transition"
+                              className="grid grid-cols-12 gap-2 px-4 py-2.5 items-center hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 text-xs transition"
                             >
                               {/* Name with Bullet */}
                               <div className="col-span-5 flex items-center gap-2.5 min-w-0">
@@ -1222,17 +1561,17 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                                   </div>
                                 ) : (
-                                  <div className="w-3.5 h-3.5 rounded-full border border-dashed border-slate-400 shrink-0" />
+                                  <div className="w-3.5 h-3.5 rounded-full border border-dashed border-zinc-400 shrink-0" />
                                 )}
 
-                                <span className="font-semibold text-slate-900 dark:text-white truncate">
+                                <span className="font-semibold text-zinc-900 dark:text-white truncate">
                                   {task.title}
                                 </span>
                               </div>
 
                               {/* Assignee */}
                               <div className="col-span-2 flex items-center gap-1.5 truncate">
-                                <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 flex items-center justify-center">
+                                <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
                                   {task.assignee_avatar_path ? (
                                     <img
                                       src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
@@ -1243,10 +1582,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                       className="w-full h-full object-cover block shrink-0"
                                     />
                                   ) : (
-                                    <User className="w-3 h-3 text-slate-400 shrink-0" />
+                                    <User className="w-3 h-3 text-zinc-400 shrink-0" />
                                   )}
                                 </div>
-                                <span className="text-slate-600 dark:text-zinc-300 truncate">
+                                <span className="text-zinc-600 dark:text-zinc-300 truncate">
                                   {task.assignee_name ? task.assignee_name.split(' ')[0] : 'Unassigned'}
                                 </span>
                               </div>
@@ -1256,7 +1595,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                 const { minDate, maxDate } = getMilestoneTimelineBounds(task);
                                 return isTaskAssignee(task) ? (
                                   <div
-                                    className="col-span-2 relative flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-zinc-300 hover:text-blue-500 transition group/date w-fit p-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800"
+                                    className="col-span-2 relative flex items-center gap-1.5 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-blue-500 transition group/date w-fit p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800"
                                     title={
                                       maxDate
                                         ? task.due_at
@@ -1267,13 +1606,13 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                         : 'Set due date'
                                     }
                                   >
-                                    <Calendar className={`w-3.5 h-3.5 shrink-0 ${task.due_at ? 'text-blue-500' : 'text-slate-400 group-hover/date:text-blue-500'}`} />
+                                    <Calendar className={`w-3.5 h-3.5 shrink-0 ${task.due_at ? 'text-blue-500' : 'text-zinc-400 group-hover/date:text-blue-500'}`} />
                                     {task.due_at ? (
                                       <span className="text-[11px] font-semibold whitespace-nowrap">
                                         {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                                       </span>
                                     ) : (
-                                      <span className="text-[11px] text-slate-400 group-hover/date:text-blue-500 whitespace-nowrap font-medium">
+                                      <span className="text-[11px] text-zinc-400 group-hover/date:text-blue-500 whitespace-nowrap font-medium">
                                         --
                                       </span>
                                     )}
@@ -1292,7 +1631,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     />
                                   </div>
                                 ) : (
-                                  <div className="col-span-2 flex items-center gap-1 text-slate-500 dark:text-zinc-400 p-1">
+                                  <div className="col-span-2 flex items-center gap-1 text-zinc-500 dark:text-zinc-400 p-1">
                                     <Calendar className="w-3.5 h-3.5 shrink-0 opacity-70" />
                                     <span className="text-[11px] whitespace-nowrap">
                                       {task.due_at ? new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '-'}
@@ -1311,7 +1650,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                       setActivePriorityMenuTaskId(activePriorityMenuTaskId === task.task_id ? null : task.task_id);
                                       setActiveStatusMenuTaskId(null);
                                     }}
-                                    className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer flex items-center gap-1.5"
+                                    className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer flex items-center gap-1.5"
                                     title={`Priority: ${priorityConfig.label} (Click flag to change)`}
                                   >
                                     <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
@@ -1327,17 +1666,17 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                         }}
                                       />
                                       <div
-                                        className="absolute left-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
+                                        className="absolute left-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
                                         onClick={(e) => e.stopPropagation()}
                                       >
-                                        <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                                        <div className="px-2.5 py-1 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                                           Priority
                                         </div>
                                         {[
                                           { id: 'urgent', label: 'Urgent', color: 'text-rose-500' },
                                           { id: 'high', label: 'High', color: 'text-amber-500' },
                                           { id: 'normal', label: 'Normal', color: 'text-blue-500' },
-                                          { id: 'low', label: 'Low', color: 'text-slate-400' },
+                                          { id: 'low', label: 'Low', color: 'text-zinc-400' },
                                         ].map((p) => (
                                           <button
                                             key={p.id}
@@ -1346,7 +1685,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                               handleUpdatePriority(task, p.id as any);
                                               setActivePriorityMenuTaskId(null);
                                             }}
-                                            className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                            className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
                                           >
                                             <div className="flex items-center gap-2">
                                               <Flag className={`w-3.5 h-3.5 shrink-0 ${p.color}`} />
@@ -1397,10 +1736,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                             }}
                                           />
                                           <div
-                                            className="absolute right-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
+                                            className="absolute right-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
                                             onClick={(e) => e.stopPropagation()}
                                           >
-                                            <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                                            <div className="px-2.5 py-1 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                                               Status
                                             </div>
                                             {STATUS_OPTIONS.map((s) => (
@@ -1411,7 +1750,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                                   handleUpdateStatus(task, s.id as any);
                                                   setActiveStatusMenuTaskId(null);
                                                 }}
-                                                className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                                className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
                                               >
                                                 <div className="flex items-center gap-2">
                                                   {s.icon}
@@ -1443,11 +1782,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
                     {/* Bottom + Add Task Link */}
                     {!isClient && (
-                      <div className="p-3 border-t border-slate-100 dark:border-zinc-800/80">
+                      <div className="p-3 border-t border-zinc-100 dark:border-zinc-800/80">
                         <button
                           type="button"
                           onClick={() => openAddTaskModal(group.id as any)}
-                          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-zinc-400 hover:text-blue-600 transition cursor-pointer"
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 hover:text-blue-600 transition cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           <span>Add Task</span>
@@ -1466,32 +1805,32 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       {/* 5. DISPLAY 3: TABLE VIEW (Matching Reference 3)          */}
       {/* ======================================================== */}
       {displayMode === 'table' && (
-        <div className="bg-white dark:bg-[#151720] rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs overflow-hidden">
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900/60 text-slate-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-[11px]">
-                  <th className="py-2.5 px-3 w-10 text-center border-r border-slate-200 dark:border-zinc-800">
-                    <input type="checkbox" className="rounded border-slate-300 text-blue-600" />
+                <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/60 text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-[11px]">
+                  <th className="py-2.5 px-3 w-10 text-center border-r border-zinc-200 dark:border-zinc-800">
+                    <input type="checkbox" className="rounded border-zinc-300 text-blue-600" />
                   </th>
-                  <th className="py-2.5 px-3 w-12 text-center border-r border-slate-200 dark:border-zinc-800">#</th>
-                  <th className="py-2.5 px-4 border-r border-slate-200 dark:border-zinc-800">
+                  <th className="py-2.5 px-3 w-12 text-center border-r border-zinc-200 dark:border-zinc-800">#</th>
+                  <th className="py-2.5 px-4 border-r border-zinc-200 dark:border-zinc-800">
                     <span className="flex items-center gap-1.5">
                       <span>Name</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                      <ArrowUpDown className="w-3 h-3 text-zinc-400" />
                     </span>
                   </th>
-                  <th className="py-2.5 px-4 border-r border-slate-200 dark:border-zinc-800">Assignee</th>
-                  <th className="py-2.5 px-4 border-r border-slate-200 dark:border-zinc-800">Status</th>
-                  <th className="py-2.5 px-4 border-r border-slate-200 dark:border-zinc-800">Due date</th>
-                  <th className="py-2.5 px-4 border-r border-slate-200 dark:border-zinc-800">Priority</th>
+                  <th className="py-2.5 px-4 border-r border-zinc-200 dark:border-zinc-800">Assignee</th>
+                  <th className="py-2.5 px-4 border-r border-zinc-200 dark:border-zinc-800">Status</th>
+                  <th className="py-2.5 px-4 border-r border-zinc-200 dark:border-zinc-800">Due date</th>
+                  <th className="py-2.5 px-4 border-r border-zinc-200 dark:border-zinc-800">Priority</th>
                   <th className="py-2.5 px-4">Milestone</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {filteredTasks.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-slate-400 dark:text-zinc-500">
+                    <td colSpan={8} className="py-8 text-center text-zinc-400 dark:text-zinc-500">
                       No tasks found.
                     </td>
                   </tr>
@@ -1500,14 +1839,14 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     const priorityConfig = PRIORITY_FLAGS[task.priority] || PRIORITY_FLAGS.normal;
 
                     return (
-                      <tr key={task.task_id} className="hover:bg-slate-50/60 dark:hover:bg-zinc-900/40 transition">
-                        <td className="py-2.5 px-3 text-center border-r border-slate-100 dark:border-zinc-800/80">
-                          <input type="checkbox" className="rounded border-slate-300 text-blue-600" />
+                      <tr key={task.task_id} className="hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 transition">
+                        <td className="py-2.5 px-3 text-center border-r border-zinc-100 dark:border-zinc-800/80">
+                          <input type="checkbox" className="rounded border-zinc-300 text-blue-600" />
                         </td>
-                        <td className="py-2.5 px-3 text-center font-mono text-slate-400 dark:text-zinc-500 border-r border-slate-100 dark:border-zinc-800/80">
+                        <td className="py-2.5 px-3 text-center font-mono text-zinc-400 dark:text-zinc-500 border-r border-zinc-100 dark:border-zinc-800/80">
                           {rIdx + 1}
                         </td>
-                        <td className="py-2.5 px-4 border-r border-slate-100 dark:border-zinc-800/80">
+                        <td className="py-2.5 px-4 border-r border-zinc-100 dark:border-zinc-800/80">
                           <div className="flex items-center gap-2">
                             {task.status === 'completed' ? (
                               <div className="w-3 h-3 rounded-full bg-emerald-500 shrink-0" />
@@ -1516,16 +1855,16 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                             ) : task.status === 'in_progress' ? (
                               <div className="w-3 h-3 rounded-full border-2 border-blue-500 bg-blue-500 shrink-0" />
                             ) : (
-                              <div className="w-3 h-3 rounded-full border border-dashed border-slate-400 shrink-0" />
+                              <div className="w-3 h-3 rounded-full border border-dashed border-zinc-400 shrink-0" />
                             )}
-                            <span className="font-semibold text-slate-900 dark:text-white">
+                            <span className="font-semibold text-zinc-900 dark:text-white">
                               {task.title}
                             </span>
                           </div>
                         </td>
-                        <td className="py-2.5 px-4 border-r border-slate-100 dark:border-zinc-800/80">
+                        <td className="py-2.5 px-4 border-r border-zinc-100 dark:border-zinc-800/80">
                           <div className="flex items-center gap-1.5">
-                            <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 flex items-center justify-center">
+                            <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
                               {task.assignee_avatar_path ? (
                                 <img
                                   src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
@@ -1536,16 +1875,16 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                   className="w-full h-full object-cover block shrink-0"
                                 />
                               ) : (
-                                <User className="w-3 h-3 text-slate-400 shrink-0" />
+                                <User className="w-3 h-3 text-zinc-400 shrink-0" />
                               )}
                             </div>
-                            <span className="text-slate-700 dark:text-zinc-300">
+                            <span className="text-zinc-700 dark:text-zinc-300">
                               {task.assignee_name || 'Unassigned'}
                             </span>
                           </div>
                         </td>
                         {/* Status Column */}
-                        <td className="py-2.5 px-4 border-r border-slate-100 dark:border-zinc-800/80">
+                        <td className="py-2.5 px-4 border-r border-zinc-100 dark:border-zinc-800/80">
                           {(() => {
                             const statusCfg = getStatusBadgeConfig(task.status);
                             return isTaskAssignee(task) ? (
@@ -1576,10 +1915,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                       }}
                                     />
                                     <div
-                                      className="absolute left-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
+                                      className="absolute left-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
                                       onClick={(e) => e.stopPropagation()}
                                     >
-                                      <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                                      <div className="px-2.5 py-1 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                                         Status
                                       </div>
                                       {STATUS_OPTIONS.map((s) => (
@@ -1590,7 +1929,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                             handleUpdateStatus(task, s.id as any);
                                             setActiveStatusMenuTaskId(null);
                                           }}
-                                          className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                          className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
                                         >
                                           <div className="flex items-center gap-2">
                                             {s.icon}
@@ -1616,12 +1955,12 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         </td>
 
                         {/* Due Date Column */}
-                        <td className="py-2.5 px-4 border-r border-slate-100 dark:border-zinc-800/80 text-slate-600 dark:text-zinc-400">
+                        <td className="py-2.5 px-4 border-r border-zinc-100 dark:border-zinc-800/80 text-zinc-600 dark:text-zinc-400">
                           {(() => {
                             const { minDate, maxDate } = getMilestoneTimelineBounds(task);
                             return isTaskAssignee(task) ? (
                               <div
-                                className="relative flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-zinc-300 hover:text-blue-500 transition group/date w-fit p-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800"
+                                className="relative flex items-center gap-1.5 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-blue-500 transition group/date w-fit p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800"
                                 title={
                                   maxDate
                                     ? task.due_at
@@ -1632,13 +1971,13 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     : 'Set due date'
                                 }
                               >
-                                <Calendar className={`w-3.5 h-3.5 shrink-0 ${task.due_at ? 'text-blue-500' : 'text-slate-400 group-hover/date:text-blue-500'}`} />
+                                <Calendar className={`w-3.5 h-3.5 shrink-0 ${task.due_at ? 'text-blue-500' : 'text-zinc-400 group-hover/date:text-blue-500'}`} />
                                 {task.due_at ? (
                                   <span className="text-[11px] font-semibold whitespace-nowrap">
                                     {new Date(task.due_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                                   </span>
                                 ) : (
-                                  <span className="text-[11px] text-slate-400 group-hover/date:text-blue-500 whitespace-nowrap font-medium">
+                                  <span className="text-[11px] text-zinc-400 group-hover/date:text-blue-500 whitespace-nowrap font-medium">
                                     --
                                   </span>
                                 )}
@@ -1665,7 +2004,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         </td>
 
                         {/* Priority Column */}
-                        <td className="py-2.5 px-4 border-r border-slate-100 dark:border-zinc-800/80">
+                        <td className="py-2.5 px-4 border-r border-zinc-100 dark:border-zinc-800/80">
                           {isTaskAssignee(task) ? (
                             <div className="relative flex items-center">
                               <button
@@ -1675,11 +2014,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                   setActivePriorityMenuTaskId(activePriorityMenuTaskId === task.task_id ? null : task.task_id);
                                   setActiveStatusMenuTaskId(null);
                                 }}
-                                className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer flex items-center gap-1.5"
+                                className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer flex items-center gap-1.5"
                                 title={`Priority: ${priorityConfig.label} (Click flag to change)`}
                               >
                                 <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
-                                <span className="text-[10px] font-bold text-slate-700 dark:text-zinc-300">{priorityConfig.label}</span>
+                                <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300">{priorityConfig.label}</span>
                               </button>
 
                               {activePriorityMenuTaskId === task.task_id && (
@@ -1692,17 +2031,17 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     }}
                                   />
                                   <div
-                                    className="absolute left-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
+                                    className="absolute left-0 top-full mt-1.5 z-30 w-36 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl space-y-0.5"
                                     onClick={(e) => e.stopPropagation()}
                                   >
-                                    <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                                    <div className="px-2.5 py-1 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                                       Priority
                                     </div>
                                     {[
                                       { id: 'urgent', label: 'Urgent', color: 'text-rose-500' },
                                       { id: 'high', label: 'High', color: 'text-amber-500' },
                                       { id: 'normal', label: 'Normal', color: 'text-blue-500' },
-                                      { id: 'low', label: 'Low', color: 'text-slate-400' },
+                                      { id: 'low', label: 'Low', color: 'text-zinc-400' },
                                     ].map((p) => (
                                       <button
                                         key={p.id}
@@ -1711,7 +2050,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                           handleUpdatePriority(task, p.id as any);
                                           setActivePriorityMenuTaskId(null);
                                         }}
-                                        className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                        className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
                                       >
                                         <div className="flex items-center gap-2">
                                           <Flag className={`w-3.5 h-3.5 shrink-0 ${p.color}`} />
@@ -1727,11 +2066,11 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           ) : (
                             <span className="inline-flex items-center gap-1 font-medium" title={`Priority: ${priorityConfig.label} (View only)`}>
                               <Flag className={`w-3.5 h-3.5 shrink-0 ${priorityConfig.color}`} />
-                              <span className="text-[10px] text-slate-600 dark:text-zinc-400">{priorityConfig.label}</span>
+                              <span className="text-[10px] text-zinc-600 dark:text-zinc-400">{priorityConfig.label}</span>
                             </span>
                           )}
                         </td>
-                        <td className="py-2.5 px-4 text-slate-600 dark:text-zinc-400 truncate max-w-[150px]">
+                        <td className="py-2.5 px-4 text-zinc-600 dark:text-zinc-400 truncate max-w-[150px]">
                           {task.milestone_title || '-'}
                         </td>
                       </tr>
@@ -1740,12 +2079,12 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                 )}
                 {/* Add Row Button at Table Bottom */}
                 {!isClient && (
-                  <tr className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition">
+                  <tr className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition">
                     <td colSpan={8} className="py-2.5 px-4">
                       <button
                         type="button"
                         onClick={() => openAddTaskModal()}
-                        className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-blue-600 transition cursor-pointer"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-blue-600 transition cursor-pointer"
                       >
                         <Plus className="w-4 h-4" />
                         <span>Add row / task</span>
@@ -1763,30 +2102,30 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
       {/* 6. DISPLAY 4: GANTT TIMELINE VIEW                        */}
       {/* ======================================================== */}
       {displayMode === 'gantt' && (
-        <div className="bg-white dark:bg-[#151720] rounded-xl border border-slate-200 dark:border-zinc-800 shadow-xs overflow-hidden space-y-4 p-4">
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs overflow-hidden space-y-4 p-4">
           {/* Gantt Header & Switcher */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-zinc-800/80">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-100 dark:border-zinc-800/80">
             <div className="flex items-center gap-2">
               <CalendarRange className="w-4 h-4 text-rose-500" />
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
                   Gantt Schedule: Milestones & Tasks
                 </h4>
-                <p className="text-[11px] text-slate-400 dark:text-zinc-500">
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
                   Comprehensive timeline of overall contractual milestones and detailed task execution with assigned owners
                 </p>
               </div>
             </div>
 
             {/* Filter Pills for Gantt */}
-            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-900/80 p-1 rounded-lg border border-slate-200/80 dark:border-zinc-800 self-start sm:self-auto">
+            <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-900/80 p-1 rounded-lg border border-zinc-200/80 dark:border-zinc-800 self-start sm:self-auto">
               <button
                 type="button"
                 onClick={() => setGanttSection('all')}
                 className={`px-2.5 py-1 rounded text-xs font-semibold transition cursor-pointer ${
                   ganttSection === 'all'
-                    ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-2xs'
-                    : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-2xs'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
                 }`}
               >
                 All Schedules
@@ -1796,8 +2135,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                 onClick={() => setGanttSection('milestones')}
                 className={`px-2.5 py-1 rounded text-xs font-semibold transition cursor-pointer ${
                   ganttSection === 'milestones'
-                    ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-2xs'
-                    : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-2xs'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
                 }`}
               >
                 Milestones ({milestones.length})
@@ -1807,8 +2146,8 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                 onClick={() => setGanttSection('tasks')}
                 className={`px-2.5 py-1 rounded text-xs font-semibold transition cursor-pointer ${
                   ganttSection === 'tasks'
-                    ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-2xs'
-                    : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-2xs'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
                 }`}
               >
                 Tasks ({filteredTasks.length})
@@ -1822,20 +2161,20 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
             {/* ==================================================== */}
             {(ganttSection === 'all' || ganttSection === 'milestones') && (
               <div className="space-y-2 min-w-[760px]">
-                <div className="flex items-center justify-between bg-slate-50 dark:bg-zinc-900/60 px-3 py-2 rounded-lg border border-slate-200/80 dark:border-zinc-800">
+                <div className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/60 px-3 py-2 rounded-lg border border-zinc-200/80 dark:border-zinc-800">
                   <div className="flex items-center gap-2">
                     <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                    <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                    <span className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
                       Milestones Overall Schedule ({milestones.length})
                     </span>
                   </div>
-                  <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium">
+                  <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium">
                     Contract deliverables, budget escrows, and assigned contributors
                   </span>
                 </div>
 
                 {/* Milestones Timeline Grid Header */}
-                <div className="grid grid-cols-12 gap-1 pb-1.5 border-b border-slate-200 dark:border-zinc-800 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                <div className="grid grid-cols-12 gap-1 pb-1.5 border-b border-zinc-200 dark:border-zinc-800 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                   <div className="col-span-5 grid grid-cols-12 gap-1">
                     <span className="col-span-6">Milestone & Escrow</span>
                     <span className="col-span-6">Assigned Contributor</span>
@@ -1854,7 +2193,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
                 {/* Milestone Rows */}
                 {milestones.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-slate-400 dark:text-zinc-500">
+                  <div className="py-6 text-center text-xs text-zinc-400 dark:text-zinc-500">
                     No milestones found for this project.
                   </div>
                 ) : (
@@ -1871,7 +2210,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     return (
                       <div
                         key={m.job_milestone_id || mIdx}
-                        className="grid grid-cols-12 gap-1 items-center py-2 px-1 hover:bg-slate-50/60 dark:hover:bg-zinc-900/40 rounded-lg transition border-b border-slate-100 dark:border-zinc-800/40"
+                        className="grid grid-cols-12 gap-1 items-center py-2 px-1 hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 rounded-lg transition border-b border-zinc-100 dark:border-zinc-800/40"
                       >
                         {/* Milestone & Assignee Info */}
                         <div className="col-span-5 grid grid-cols-12 gap-2 items-center pr-2">
@@ -1881,18 +2220,18 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
                                 M{m.order_index || mIdx + 1}
                               </span>
-                              <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                              <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">
                                 {m.milestone_title}
                               </span>
                             </div>
-                            <span className="text-[10px] text-slate-400 dark:text-zinc-500 block truncate ml-1">
+                            <span className="text-[10px] text-zinc-400 dark:text-zinc-500 block truncate ml-1">
                               {Number(m.budget_credits || 0).toLocaleString()} Credits
                             </span>
                           </div>
 
                           {/* Assigned Contributor */}
                           <div className="col-span-6 flex items-center gap-1.5 truncate">
-                            <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 flex items-center justify-center">
+                            <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
                               {m.assignee_avatar_path ? (
                                 <img
                                   src={constructAvatarUrl(m.assignee_avatar_path, m.assignee_name || 'Contributor')}
@@ -1903,15 +2242,15 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                   className="w-full h-full object-cover block shrink-0"
                                 />
                               ) : (
-                                <User className="w-3 h-3 text-slate-400 shrink-0" />
+                                <User className="w-3 h-3 text-zinc-400 shrink-0" />
                               )}
                             </div>
                             <div className="min-w-0">
-                              <span className="text-xs font-semibold text-slate-800 dark:text-zinc-200 truncate block">
+                              <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate block">
                                 {m.assignee_name || 'Unassigned'}
                               </span>
                               {m.assignee_handle && (
-                                <span className="text-[9px] text-slate-400 dark:text-zinc-500 block truncate">
+                                <span className="text-[9px] text-zinc-400 dark:text-zinc-500 block truncate">
                                   @{m.assignee_handle}
                                 </span>
                               )}
@@ -1920,7 +2259,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         </div>
 
                         {/* Milestone Horizontal Timeline Bar */}
-                        <div className="col-span-7 grid grid-cols-8 gap-1 h-8 bg-slate-100/70 dark:bg-zinc-900/60 rounded-lg p-1 relative items-center">
+                        <div className="col-span-7 grid grid-cols-8 gap-1 h-8 bg-zinc-100/70 dark:bg-zinc-900/60 rounded-lg p-1 relative items-center">
                           <div
                             style={{
                               gridColumnStart: startCol,
@@ -1956,20 +2295,20 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
             {/* ==================================================== */}
             {(ganttSection === 'all' || ganttSection === 'tasks') && (
               <div className="space-y-2 min-w-[760px] pt-2">
-                <div className="flex items-center justify-between bg-slate-50 dark:bg-zinc-900/60 px-3 py-2 rounded-lg border border-slate-200/80 dark:border-zinc-800">
+                <div className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/60 px-3 py-2 rounded-lg border border-zinc-200/80 dark:border-zinc-800">
                   <div className="flex items-center gap-2">
                     <Kanban className="w-3.5 h-3.5 text-blue-500" />
-                    <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                    <span className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
                       Tasks Detailed Schedule ({filteredTasks.length})
                     </span>
                   </div>
-                  <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium">
+                  <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium">
                     Task execution by assigned team members, priority, and progress
                   </span>
                 </div>
 
                 {/* Tasks Timeline Grid Header */}
-                <div className="grid grid-cols-12 gap-1 pb-1.5 border-b border-slate-200 dark:border-zinc-800 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                <div className="grid grid-cols-12 gap-1 pb-1.5 border-b border-zinc-200 dark:border-zinc-800 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                   <div className="col-span-5 grid grid-cols-12 gap-1">
                     <span className="col-span-6">Task & Milestone</span>
                     <span className="col-span-6">Assigned Member</span>
@@ -1988,7 +2327,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
                 {/* Task Gantt Bars */}
                 {filteredTasks.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-slate-400 dark:text-zinc-500">
+                  <div className="py-8 text-center text-xs text-zinc-400 dark:text-zinc-500">
                     No tasks to display in Gantt view.
                   </div>
                 ) : (
@@ -2006,7 +2345,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                     return (
                       <div
                         key={task.task_id}
-                        className="grid grid-cols-12 gap-1 items-center py-2 px-1 hover:bg-slate-50/60 dark:hover:bg-zinc-900/40 rounded-lg transition border-b border-slate-100 dark:border-zinc-800/40"
+                        className="grid grid-cols-12 gap-1 items-center py-2 px-1 hover:bg-zinc-50/60 dark:hover:bg-zinc-900/40 rounded-lg transition border-b border-zinc-100 dark:border-zinc-800/40"
                       >
                         {/* Task & Assignee Info */}
                         <div className="col-span-5 grid grid-cols-12 gap-2 items-center pr-2">
@@ -2019,10 +2358,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                             ) : isInProg ? (
                               <div className="w-3 h-3 rounded-full bg-blue-500 shrink-0" />
                             ) : (
-                              <div className="w-3 h-3 rounded-full border border-dashed border-slate-400 shrink-0" />
+                              <div className="w-3 h-3 rounded-full border border-dashed border-zinc-400 shrink-0" />
                             )}
                             <div className="min-w-0">
-                              <span className="text-xs font-semibold text-slate-900 dark:text-white truncate block">
+                              <span className="text-xs font-semibold text-zinc-900 dark:text-white truncate block">
                                 {task.title}
                               </span>
                               {task.milestone_title && (
@@ -2036,7 +2375,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                           {/* Assigned Member */}
                           <div className="col-span-6 flex items-center justify-between gap-1.5 truncate">
                             <div className="flex items-center gap-1.5 truncate">
-                              <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 flex items-center justify-center">
+                              <div className="w-5 h-5 min-w-[20px] rounded-full shrink-0 aspect-square overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
                                 {task.assignee_avatar_path ? (
                                   <img
                                     src={constructAvatarUrl(task.assignee_avatar_path, task.assignee_name || 'User')}
@@ -2047,10 +2386,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                                     className="w-full h-full object-cover block shrink-0"
                                   />
                                 ) : (
-                                  <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <User className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                                 )}
                               </div>
-                              <span className="text-xs font-medium text-slate-800 dark:text-zinc-200 truncate">
+                              <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">
                                 {task.assignee_name || 'Unassigned'}
                               </span>
                             </div>
@@ -2060,7 +2399,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         </div>
 
                         {/* Task Timeline Bar */}
-                        <div className="col-span-7 grid grid-cols-8 gap-1 h-7 bg-slate-100/60 dark:bg-zinc-900/50 rounded-lg p-1 relative items-center">
+                        <div className="col-span-7 grid grid-cols-8 gap-1 h-7 bg-zinc-100/60 dark:bg-zinc-900/50 rounded-lg p-1 relative items-center">
                           <div
                             style={{
                               gridColumnStart: startCol,
@@ -2091,21 +2430,57 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
           </div>
         </div>
       )}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* ======================================================== */}
+      {/* CARD DETAIL POPUP MODAL (Smooth Spring Animation)        */}
+      {/* ======================================================== */}
+      <AnimatePresence>
+        {selectedTask && (
+          <motion.div
+            key="task-detail-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs"
+            onClick={() => setSelectedTaskId(null)}
+          >
+            <motion.div
+              key="task-detail-modal"
+              initial={{ opacity: 0, scale: 0.94, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 6 }}
+              transition={{
+                type: 'spring',
+                damping: 26,
+                stiffness: 360,
+                mass: 0.8,
+              }}
+              className="w-full max-w-xl max-h-[88vh] bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-2xl overflow-y-auto flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {renderSidePanelContent(selectedTask)}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ======================================================== */}
       {/* ADD TASK MODAL                                           */}
       {/* ======================================================== */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="bg-white dark:bg-[#151720] border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-4">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
                 Create Project Task
               </h3>
               <button
                 type="button"
                 onClick={() => setIsAddModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2113,7 +2488,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
             <form onSubmit={handleCreateTask} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 uppercase mb-1">
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                   Task Title *
                 </label>
                 <input
@@ -2122,12 +2497,12 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   placeholder="e.g. Build authentication endpoints"
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
-                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 uppercase mb-1">
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                   Description
                 </label>
                 <textarea
@@ -2135,19 +2510,19 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   placeholder="Task details and instructions..."
                   value={newTaskDesc}
                   onChange={(e) => setNewTaskDesc(e.target.value)}
-                  className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full text-xs p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 resize-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 uppercase mb-1">
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                     Priority
                   </label>
                   <select
                     value={newTaskPriority}
                     onChange={(e) => setNewTaskPriority(e.target.value as any)}
-                    className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-hidden cursor-pointer"
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden cursor-pointer"
                   >
                     <option value="normal">Normal</option>
                     <option value="high">High</option>
@@ -2157,10 +2532,10 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 uppercase mb-1">
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                     Assignee
                   </label>
-                  <div className="w-full text-xs px-3 py-2 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-800 dark:text-zinc-200 font-semibold flex items-center gap-2 border border-slate-200 dark:border-zinc-700">
+                  <div className="w-full text-xs px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 font-semibold flex items-center gap-2 border border-zinc-200 dark:border-zinc-700">
                     <User className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                     <span>You (Auto-assigned)</span>
                   </div>
@@ -2168,7 +2543,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 uppercase mb-1">
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                   Associated Milestone
                 </label>
                 <select
@@ -2176,7 +2551,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   onChange={(e) => {
                     setNewTaskMilestone(e.target.value);
                   }}
-                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-hidden cursor-pointer"
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden cursor-pointer"
                 >
                   <option value="">No Milestone Linked</option>
                   {milestones?.map((m: any, idx: number) => {
@@ -2197,7 +2572,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                   const maxD = bounds.maxDate;
                   return (
                     <>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 uppercase mb-1">
+                      <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase mb-1">
                         Due Date {maxD ? `(Milestone deadline: ${new Date(maxD).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})` : ''}
                       </label>
                       <input
@@ -2206,7 +2581,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                         max={maxD}
                         value={newTaskDueDate}
                         onChange={(e) => setNewTaskDueDate(e.target.value)}
-                        className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-hidden cursor-pointer"
+                        className="w-full text-xs px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white focus:outline-hidden cursor-pointer"
                       />
                     </>
                   );
@@ -2217,7 +2592,7 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                 >
                   Cancel
                 </button>
