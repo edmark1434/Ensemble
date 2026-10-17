@@ -212,12 +212,68 @@ const UserHeader: React.FC<UserHeaderProps> = ({
 }) => {
   const navigate = useNavigate();
 
-  const isCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
+  const storeTheme = useGlobalState((state) => state.theme);
+  const searchTheme = typeof window !== "undefined" ? (new URLSearchParams(window.location.search).get('theme') as 'light' | 'dark' | null) : null;
+  const theme = searchTheme || storeTheme || 'dark';
 
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  useEffect(() => {
+    if (searchTheme) {
+      if (searchTheme === 'light') {
+        document.documentElement.classList.remove('dark');
+      } else {
+        document.documentElement.classList.add('dark');
+      }
+    }
+  }, [searchTheme]);
+
+  const [isProfileOpen, setIsProfileOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      return new URLSearchParams(window.location.search).get("openProfile") === "1";
+    }
+    return false;
+  });
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+
+  const [profilePillStyle, setProfilePillStyle] = useState<{
+    top: number;
+    height: number;
+    opacity: number;
+    isDestructive?: boolean;
+  }>({
+    top: 0,
+    height: 0,
+    opacity: 0,
+  });
+  const profileItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const handleProfileItemHover = (index: number, isDestructive = false) => {
+    const el = profileItemRefs.current[index];
+    if (!el) return;
+    setProfilePillStyle({
+      top: el.offsetTop,
+      height: el.offsetHeight,
+      opacity: 1,
+      isDestructive,
+    });
+  };
+
+  const handleProfileMenuLeave = () => {
+    setProfilePillStyle((prev) => ({ ...prev, opacity: 0 }));
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hoverItem = new URLSearchParams(window.location.search).get("hoverProfile");
+    if (hoverItem !== null) {
+      const idx = parseInt(hoverItem, 10);
+      if (!isNaN(idx) && idx >= 0 && idx < 5) {
+        const timer = setTimeout(() => handleProfileItemHover(idx, idx === 4), 250);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [isProfileOpen]);
 
   const [headerSearchInput, setHeaderSearchInput] = useState("");
   const [creatorSearchResults, setCreatorSearchResults] = useState<CreatorSearchResult[]>([]);
@@ -229,12 +285,25 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const creatorSearchRef = useRef<HTMLFormElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const userInfo = useGlobalState((state) => state.user);
+  const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const isPreviewMode = urlParams?.get("preview") === "true";
+
+  const rawUserInfo = useGlobalState((state) => state.user);
+  const userInfo = rawUserInfo || (isPreviewMode ? {
+    account_id: 999,
+    username: "alexander_chen",
+    display_name: "Alexander Chen",
+    subscription_plan: "Premium",
+    is_verified: true,
+    wallet: { balance_credits: 4250 },
+    avatar_url: "/icons/avatar/default_avatar.png"
+  } as any : null);
+
   const isStaffPreview = isStaffPlatformViewer(userInfo);
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isGlobalLoading = useGlobalState((state) => state.isLoading);
-  const isSessionLoading = isGlobalLoading || (!userInfo?.account_id && !isGuestMode);
-  const isGuestView = isGuestMode || (!isSessionLoading && !userInfo?.account_id);
+  const isSessionLoading = !isPreviewMode && (isGlobalLoading || (!userInfo?.account_id && !isGuestMode));
+  const isGuestView = !isPreviewMode && (isGuestMode || (!isSessionLoading && !userInfo?.account_id));
 
   const hasCachedData = Boolean(
     cachedHeaderData &&
@@ -773,6 +842,24 @@ useEffect(() => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+    if (isProfileOpen) {
+      document.addEventListener("mousedown", handleOutsideClick);
+      return () => document.removeEventListener("mousedown", handleOutsideClick);
+    }
+  }, [isProfileOpen]);
+
+  useEffect(() => {
+    if (!isProfileOpen) {
+      setProfilePillStyle({ top: 0, height: 0, opacity: 0 });
+    }
+  }, [isProfileOpen]);
+
   const handleTopUp = () => {
     if (onTopUp) {
       onTopUp();
@@ -1087,67 +1174,96 @@ useEffect(() => {
                           {userSubscriptionPlan || "Free"}
                         </p>
                     </div>
-                    <ChevronDown className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
+                    <ChevronDown className={`h-4 w-4 text-gray-500 dark:text-zinc-400 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] ${isProfileOpen ? "rotate-180" : ""}`} />
                   </button>
                   
                   {isProfileOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1a1b23] shadow-xl dark:shadow-2xl">
-                      <div className="p-2 space-y-1">
+                    <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] shadow-xl dark:shadow-[0_12px_32px_rgba(0,0,0,0.5)] origin-top-right transition-all duration-200 animate-in fade-in zoom-in-95">
+                      <div
+                        className="relative p-2 space-y-1"
+                        onMouseLeave={handleProfileMenuLeave}
+                      >
+                        {/* Animated sliding glide pill */}
+                        <span
+                          className="pointer-events-none absolute left-2 right-2 rounded-lg transition-all duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]"
+                          style={{
+                            top: `${profilePillStyle.top}px`,
+                            height: `${profilePillStyle.height}px`,
+                            opacity: profilePillStyle.opacity,
+                            backgroundColor: profilePillStyle.isDestructive
+                              ? (theme === "dark" ? "rgba(239, 68, 68, 0.14)" : "rgba(239, 68, 68, 0.08)")
+                              : (theme === "dark" ? "#27272a" : "#f1f5f9"),
+                            transitionProperty: "top, height, opacity, background-color",
+                          }}
+                          aria-hidden="true"
+                        />
+
                         <button
+                          ref={(el) => { profileItemRefs.current[0] = el; }}
+                          onMouseEnter={() => handleProfileItemHover(0, false)}
                           onClick={() => {
                             setIsProfileOpen(false);
                             navigate("/profile");
                           }}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+                          className="relative z-[1] flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 font-medium transition-colors duration-150 hover:text-gray-900 dark:hover:text-white outline-none"
                         >
-                          <User className="h-4 w-4" />
+                          <User className="h-4 w-4 shrink-0 text-gray-500 dark:text-zinc-400" />
                           Profile
                         </button>
+
                         <button
+                          ref={(el) => { profileItemRefs.current[1] = el; }}
+                          onMouseEnter={() => handleProfileItemHover(1, false)}
                           onClick={() => {
                             setIsProfileOpen(false);
                             navigate("/settings");
                           }}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+                          className="relative z-[1] flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 font-medium transition-colors duration-150 hover:text-gray-900 dark:hover:text-white outline-none"
                         >
-                          <Settings className="h-4 w-4" />
+                          <Settings className="h-4 w-4 shrink-0 text-gray-500 dark:text-zinc-400" />
                           Settings
                         </button>
                         
                         <button
+                          ref={(el) => { profileItemRefs.current[2] = el; }}
+                          onMouseEnter={() => handleProfileItemHover(2, false)}
                           onClick={() => {
                             setIsProfileOpen(false);
                             navigate("/landing/SendAFeedback");
                           }}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+                          className="relative z-[1] flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 font-medium transition-colors duration-150 hover:text-gray-900 dark:hover:text-white outline-none"
                         >
-                          <MessageSquare className="h-4 w-4" />
+                          <MessageSquare className="h-4 w-4 shrink-0 text-gray-500 dark:text-zinc-400" />
                           Submit Feedback
                         </button>
 
-                        <div className="my-2 border-t border-gray-200 dark:border-white/10" />
+                        <div className="my-2 border-t border-gray-100 dark:border-zinc-800" />
 
                         <button
+                          ref={(el) => { profileItemRefs.current[3] = el; }}
+                          onMouseEnter={() => handleProfileItemHover(3, false)}
                           onClick={() => {
                             setIsProfileOpen(false);
                             navigate("/support/ticket");
                           }}
-                          className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+                          className="relative z-[1] flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-gray-700 dark:text-zinc-300 font-medium transition-colors duration-150 hover:text-gray-900 dark:hover:text-white outline-none"
                         >
-                          <LifeBuoy className="mt-0.5 h-4 w-4 shrink-0" />
+                          <LifeBuoy className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-zinc-400" />
                           <span>
                             <span className="block text-sm">Get Support</span>
-                            <span className="block text-xs text-gray-500 dark:text-zinc-500">Help, tickets, and support requests</span>
+                            <span className="block text-xs font-normal text-gray-500 dark:text-zinc-500">Help, tickets, and support requests</span>
                           </span>
                         </button>
                         
-                        <div className="my-2 border-t border-gray-200 dark:border-white/10" />
+                        <div className="my-2 border-t border-gray-100 dark:border-zinc-800" />
                         
                         <button
+                          ref={(el) => { profileItemRefs.current[4] = el; }}
+                          onMouseEnter={() => handleProfileItemHover(4, true)}
                           onClick={() => setIsLogoutModalOpen(true)}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-500/10"
+                          className="relative z-[1] flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 transition-colors duration-150 hover:text-red-700 dark:hover:text-red-300 outline-none"
                         >
-                          <LogOut className="h-4 w-4" />
+                          <LogOut className="h-4 w-4 shrink-0" />
                           Sign out
                         </button>
                       </div>
