@@ -36,12 +36,14 @@ async function getAdminVideo(req, res) {
 async function patchAdminVideo(req, res) {
   try {
     const data = await freezeAdminVideoProject(req.params.projectId, req.body || {}, req.session);
-    const frozen = String(data?.status || '').toLowerCase() === 'frozen';
-    res.status(200).json({
-      success: true,
-      data,
-      message: frozen ? 'Project frozen' : 'Project unfrozen',
-    });
+    const action = String(req.body?.action || '').toLowerCase();
+    const message = {
+      freeze: 'Project frozen',
+      unfreeze: 'Project unfrozen',
+      remove: 'Project removed from the library',
+      restore: 'Project restored',
+    }[action] || 'Project updated';
+    res.status(200).json({ success: true, data, message });
   } catch (err) {
     sendError(res, err, 'Failed to update video project');
   }

@@ -32,8 +32,10 @@ function mapListRow(row) {
       : null,
     moderationNote: row.moderation_note || null,
     frozenAt: row.frozen_at || null,
+    removedAt: row.deleted_at || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    status: row.deleted_at ? 'removed' : row.status,
   };
 }
 
@@ -47,6 +49,7 @@ const LIST_SQL = `
     p.duration_seconds,
     p.moderation_note,
     p.frozen_at,
+    p.deleted_at,
     p.created_at,
     p.updated_at,
     owner.user_id AS owner_user_id,
@@ -77,13 +80,17 @@ const LIST_SQL = `
 `;
 
 async function listVideoProjects({ status = 'all', search = '' } = {}) {
-  const where = ['p.deleted_at IS NULL'];
+  const where = [];
   const params = [];
   const normalized = String(status || 'all').toLowerCase();
-  if (normalized !== 'all') {
+  if (normalized === 'removed') {
+    where.push('p.deleted_at IS NOT NULL');
+  } else if (normalized !== 'all') {
+    where.push('p.deleted_at IS NULL');
     params.push(normalized);
     where.push(`LOWER(p.status) = $${params.length}`);
   }
+  if (!where.length) where.push('TRUE');
   const q = String(search || '').trim();
   if (q) {
     params.push(`%${q}%`);
@@ -107,7 +114,7 @@ async function listVideoProjects({ status = 'all', search = '' } = {}) {
 async function getVideoProject(projectId) {
   if (!PROJECT_UUID.test(String(projectId || ''))) return null;
   const result = await pool.query(
-    `${LIST_SQL} WHERE p.project_id = $1 AND p.deleted_at IS NULL`,
+    `${LIST_SQL} WHERE p.project_id = $1`,
     [projectId]
   );
   const row = result.rows[0];
@@ -256,8 +263,60 @@ async function setVideoProjectFreeze(projectId, { action, note }, session) {
   return getVideoProject(projectId);
 }
 
+async function setVideoProjectRemoval(projectId, action, session) {
+  if (!PROJECT_UUID.test(String(projectId || ''))) {
+    throw videoError('Project not found', 404);
+  }
+  const verb = String(action || '').toLowerCase();
+  if (verb !== 'remove' && verb !== 'restore') {
+    throw videoError('Choose remove or restore');
+  }
+  const current = await pool.query(
+    `SELECT project_id, name, deleted_at FROM projects WHERE project_id = $1`,
+    [projectId]
+  );
+  const project = current.rows[0];
+  if (!project) throw videoError('Project not found', 404);
+  if (verb === 'remove' && project.deleted_at) throw videoError('This project is already removed', 409);
+  if (verb === 'restore' && !project.deleted_at) throw videoError('This project is not removed', 409);
+
+  await pool.query(
+    `UPDATE projects
+     SET deleted_at = $2, updated_at = NOW()
+     WHERE project_id = $1`,
+    [projectId, verb === 'remove' ? new Date() : null]
+  );
+
+  const staff = await resolveStaffId(session);
+  const owner = await pool.query(
+    `SELECT u.account_id
+     FROM project_members pm
+     JOIN users u ON u.user_id = pm.user_id
+     WHERE pm.project_id = $1 AND pm.role = 'Owner' AND pm.deleted_at IS NULL
+     LIMIT 1`,
+    [projectId]
+  );
+  if (owner.rows[0]?.account_id) {
+    await recordAccountActivity({
+      accountId: owner.rows[0].account_id,
+      action: verb === 'remove'
+        ? `Removed video project “${project.name}” from the library`
+        : `Restored video project “${project.name}”`,
+      eventCode: verb === 'remove' ? 'VIDEO_PROJECT_REMOVED' : 'VIDEO_PROJECT_RESTORED',
+      referenceTable: 'projects',
+      referencePrefix: 'PROJECT',
+      referenceId: projectId,
+      actorStaffId: staff?.staff_id || null,
+      actorAccountId: staff?.account_id || session?.account_id || session?.accountId || null,
+      metadata: { projectId },
+    });
+  }
+  return getVideoProject(projectId);
+}
+
 module.exports = {
   listVideoProjects,
   getVideoProject,
   setVideoProjectFreeze,
+  setVideoProjectRemoval,
 };

@@ -1,9 +1,9 @@
-# Current Task: Admin video project management
+# Current Task: Admin video and forum moderation
 
 ## Objective
-Moderation → Management → Video lists editor projects and lets an admin inspect them and freeze editing.
+Moderation → Management covers editor projects and forum content with the actions an admin needs to inspect and stop them.
 
 ## Acceptance criteria
-- [x] Admin can search and filter projects and open owner, members, scenes, size, and edit counts.
-- [x] Freeze stops new editor writes and renames. Unfreeze restores the previous status.
-- [x] Apply `cd backend && npm run migrate` so freeze metadata columns exist.
+- [x] Video: view details, freeze or unfreeze edits, remove or restore a project.
+- [x] Forum: view groups and discussions, archive or reactivate a group, ban a member, lock, pin, remove a post, and remove a comment.
+- [ ] Run `cd backend && npm run migrate` if the video freeze columns are not applied yet.

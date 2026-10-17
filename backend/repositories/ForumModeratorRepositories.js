@@ -96,6 +96,43 @@ async function getModeratorForumGroups() {
   };
 }
 
+async function getModeratorForumGroupDetail(groupId) {
+  const db = forumDb();
+  if (!db) throw new Error('MongoDB is not connected');
+  if (!ObjectId.isValid(String(groupId || ''))) return null;
+  const group = await db.collection('forum_groups').findOne({ _id: new ObjectId(groupId) });
+  if (!group) return null;
+  const { getPublicForumUserIdentities } = require('./UserRepositories');
+  const members = Array.isArray(group.members) ? group.members : [];
+  const identities = await getPublicForumUserIdentities(members.map((member) => member.userId));
+  const byId = new Map(identities.map((row) => [String(row.user_id), row]));
+  const discussionCount = await db.collection('forum_discussions').countDocuments({
+    forum_group_id: { $in: [String(groupId), group._id] },
+  });
+  return {
+    id: String(group._id),
+    name: group.group_name || 'Untitled group',
+    description: group.description || null,
+    imageUrl: group.image_url || null,
+    status: group.status || 'active',
+    tags: Array.isArray(group.tags) ? group.tags : [],
+    discussionCount,
+    createdAt: group.created_at || null,
+    deletedAt: group.deleted_at || null,
+    members: members.map((member) => {
+      const identity = byId.get(String(member.userId));
+      return {
+        userId: member.userId,
+        accountId: identity?.account_id || null,
+        name: identity?.display_name || 'Unknown member',
+        handle: identity?.handle || null,
+        role: member.role || 'Member',
+        isBanned: Boolean(member.is_banned),
+      };
+    }),
+  };
+}
+
 async function setForumGroupStatus(groupId, status) {
   const db = forumDb();
   if (!db) throw new Error('MongoDB is not connected');
@@ -523,6 +560,7 @@ module.exports = {
   getForumTickets,
   getForumReports,
   getModeratorForumGroups,
+  getModeratorForumGroupDetail,
   setForumGroupStatus,
   getModeratorForumDiscussions,
   getModeratorForumDiscussionDetail,

@@ -79,6 +79,7 @@ function formatBytes(bytes: number) {
 function statusClass(status: string) {
   const value = status.toLowerCase();
   if (value === 'frozen') return 'bg-sky-500/15 text-sky-200 border-sky-500/30';
+  if (value === 'removed') return 'bg-rose-500/15 text-rose-200 border-rose-500/30';
   if (value === 'archived') return 'bg-zinc-500/15 text-zinc-300 border-white/10';
   return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25';
 }
@@ -99,6 +100,7 @@ export default function VideoManagementSection() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const load = async (nextStatus = status, nextSearch = search) => {
     setLoading(true);
@@ -134,6 +136,7 @@ export default function VideoManagementSection() {
     setSelectedId(id);
     setDetail(null);
     setNote('');
+    setConfirmRemove(false);
     setDetailLoading(true);
     try {
       const res = await api.get(`/api/admin/moderation/videos/${id}`);
@@ -147,7 +150,7 @@ export default function VideoManagementSection() {
     }
   };
 
-  const applyFreeze = async (action: 'freeze' | 'unfreeze') => {
+  const applyFreeze = async (action: 'freeze' | 'unfreeze' | 'remove' | 'restore') => {
     if (!selectedId) return;
     setSaving(true);
     try {
@@ -166,6 +169,7 @@ export default function VideoManagementSection() {
   };
 
   const frozen = detail?.status?.toLowerCase() === 'frozen';
+  const removed = detail?.status?.toLowerCase() === 'removed';
 
   return (
     <div className="space-y-6">
@@ -200,6 +204,7 @@ export default function VideoManagementSection() {
                   { value: 'active', label: 'Active' },
                   { value: 'frozen', label: 'Frozen' },
                   { value: 'archived', label: 'Archived' },
+                  { value: 'removed', label: 'Removed' },
                 ],
               },
             ]}
@@ -287,22 +292,6 @@ export default function VideoManagementSection() {
         )}
       </section>
 
-      <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-        <h3 className="text-sm font-semibold text-white">What else this desk can grow into</h3>
-        <ul className="mt-3 grid gap-2 text-sm text-zinc-400 sm:grid-cols-2">
-          {[
-            'Remove a project from the owner’s library after a takedown',
-            'Download a transcript of who edited, and when',
-            'Hold new invites while a project is under review',
-            'Open the owner in User & Team when the project is part of an account case',
-          ].map((item) => (
-            <li key={item} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
-              {item}
-            </li>
-          ))}
-        </ul>
-      </section>
-
       {selectedId && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 md:pl-[260px]">
           <button type="button" className="absolute inset-0 bg-black/70" onClick={() => setSelectedId(null)} aria-label="Close" />
@@ -373,6 +362,47 @@ export default function VideoManagementSection() {
                     </ul>
                   </div>
                 )}
+                <div className="rounded-xl border border-rose-500/20 bg-rose-500/[0.04] p-4">
+                  <p className="text-sm font-medium text-rose-100">Library</p>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                    Removing a project hides it from the owner and collaborators. The edit history stays so it can be restored.
+                  </p>
+                  <div className="mt-3 flex justify-end gap-2">
+                    {removed ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => void applyFreeze('restore')}
+                        className="rounded-xl border border-white/10 px-4 py-2 text-sm text-white hover:bg-white/5 disabled:opacity-50"
+                      >
+                        {saving ? 'Saving…' : 'Restore project'}
+                      </button>
+                    ) : confirmRemove ? (
+                      <>
+                        <button type="button" onClick={() => setConfirmRemove(false)} className="rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300">
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => void applyFreeze('remove')}
+                          className="rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+                        >
+                          {saving ? 'Removing…' : 'Confirm remove'}
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmRemove(true)}
+                        className="rounded-xl border border-rose-500/40 px-4 py-2 text-sm text-rose-100 hover:bg-rose-500/10"
+                      >
+                        Remove from library
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {!removed && (
                 <div className="rounded-xl border border-sky-500/20 bg-sky-500/[0.05] p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-sky-100">
                     <Snowflake className="h-4 w-4" />
@@ -418,6 +448,7 @@ export default function VideoManagementSection() {
                     )}
                   </div>
                 </div>
+                )}
               </div>
             )}
           </div>
