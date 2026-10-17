@@ -35,6 +35,8 @@ function buildTicketPermissions(row, staff, sessionStaffId = null) {
     isAssignee,
     isAdmin,
     canView: true,
+    /** Replies and notes require this staff member to be the current handler. */
+    canReply: Boolean(isAssignee),
     canAct: Boolean(isAdmin || isAssignee || (unassigned && designated)),
     /** Admin may pick / reassign handlers at any time */
     canAssignOthers: Boolean(isAdmin),

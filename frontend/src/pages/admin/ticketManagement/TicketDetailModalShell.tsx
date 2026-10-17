@@ -142,7 +142,7 @@ function MessageBubble({
   own: boolean;
   busy: boolean;
   replyQuote: { id: string; author: string; body: string } | null;
-  onReply: () => void;
+  onReply?: () => void;
   onJumpToReply: (messageId: string) => void;
   onDelete: () => Promise<void>;
   onToggleInternal: (isInternal: boolean) => Promise<void>;
@@ -265,6 +265,7 @@ function MessageBubble({
           )}
           {!message.isUnsent && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {onReply && (
               <button
                 type="button"
                 disabled={busy}
@@ -274,7 +275,8 @@ function MessageBubble({
                 <CornerDownRight className="h-3 w-3" />
                 Reply
               </button>
-              {(own || staffReply) && own && !confirmDelete && (
+              )}
+              {onReply && (own || staffReply) && own && !confirmDelete && (
                 <button
                   type="button"
                   disabled={busy}
@@ -285,7 +287,7 @@ function MessageBubble({
                   Delete
                 </button>
               )}
-              {own && confirmDelete && (
+              {onReply && own && confirmDelete && (
                 <>
                   <button
                     type="button"
@@ -305,7 +307,7 @@ function MessageBubble({
                   </button>
                 </>
               )}
-              {staffReply && !message.isUnsent && (
+              {onReply && staffReply && !message.isUnsent && (
                 <button
                   type="button"
                   disabled={busy}
@@ -396,6 +398,7 @@ function statusButtonClass(label: string, active: boolean) {
   if (!active) {
     return 'border-white/10 bg-transparent text-zinc-400 hover:border-white/20 hover:bg-white/[0.04] hover:text-zinc-200';
   }
+  if (s === 'open') return 'border-rose-500/40 bg-rose-500/20 text-rose-200';
   if (s === 'in progress') return 'border-amber-500/40 bg-amber-500/20 text-amber-200';
   if (s === 'closed') return 'border-zinc-500/40 bg-zinc-500/25 text-zinc-200';
   return 'border-white/25 bg-white/10 text-white';
@@ -491,7 +494,7 @@ export default function TicketDetailModalShell({
   }, [detail, escalateRole]);
 
   const statusOptions = (detail?.statuses?.length ? detail.statuses : [...TICKET_STATUS_OPTIONS])
-    .filter((label) => label === 'In Progress' || label === 'Closed');
+    .filter((label) => label === 'Open' || label === 'In Progress' || label === 'Closed');
   const priorityOptions = detail?.priorities?.length ? detail.priorities : [...TICKET_PRIORITY_OPTIONS];
   const perms = detail?.permissions;
   const myStaffId = perms?.staffId != null ? String(perms.staffId) : '';
@@ -501,6 +504,7 @@ export default function TicketDetailModalShell({
     perms?.isAssignee ||
       (myStaffId && ticketAssigneeId && myStaffId.toLowerCase() === ticketAssigneeId.toLowerCase())
   );
+  const canReply = Boolean(perms?.canReply ?? alreadyAssignedToMe);
   const canAssignMyself = Boolean(
     !alreadyAssignedToMe &&
       (perms?.canAssignMyself || perms?.canSelfAssign)
@@ -804,7 +808,7 @@ export default function TicketDetailModalShell({
     setSaving(true);
     try {
       await api.patch(`${endpointBase}/${ticketId}`, {
-        status: 'In Progress',
+        status: 'Open',
         assigned_role: role,
         type,
         handled_by_staff_id: null,
@@ -956,6 +960,7 @@ export default function TicketDetailModalShell({
   };
 
   const sendReply = async () => {
+    if (!canReply) return;
     const text = reply.trim();
     const files = screenshots;
     const target = replyTarget;
@@ -1696,7 +1701,7 @@ export default function TicketDetailModalShell({
                       own={Boolean(viewerAccountId) && String(m.senderId || '') === String(viewerAccountId)}
                       busy={saving}
                       replyQuote={quoteFor(m.replyToId)}
-                      onReply={() => setReplyTarget(m)}
+                      onReply={canReply ? () => setReplyTarget(m) : undefined}
                       onJumpToReply={jumpToMessage}
                       onDelete={() => removeMessage(m.id)}
                       onToggleInternal={(isInternal) => changeMessage(m.id, { isInternal })}
@@ -1707,6 +1712,27 @@ export default function TicketDetailModalShell({
               </div>
 
               <div className="shrink-0 border-t border-white/10 bg-[#0f1016] p-4">
+                {!canReply ? (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                    <p className="text-sm text-zinc-200">
+                      {ticketAssigneeId
+                        ? 'Only the assigned staff member can reply on this ticket.'
+                        : 'Claim this ticket before replying. No one is assigned yet.'}
+                    </p>
+                    {canAssignMyself && (
+                      <button
+                        type="button"
+                        onClick={() => void assignMyself()}
+                        disabled={saving}
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 px-4 py-2 text-sm font-medium text-sky-100 hover:bg-sky-500/25 disabled:opacity-50"
+                      >
+                        <Hand className="h-4 w-4" />
+                        Assign myself
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                <>
                 {(() => {
                   const thread = (detail.messages || []).filter(
                     (message) =>
@@ -1809,6 +1835,8 @@ export default function TicketDetailModalShell({
                   </button>
                   </div>
                 </div>
+                </>
+                )}
               </div>
             </section>
           </div>

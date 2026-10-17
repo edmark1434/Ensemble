@@ -356,12 +356,17 @@ async function submitTicketSatisfaction(ticketId, accountId, score, comment) {
 
 async function adjustTicketCredits({ ticketId, amount, note, staffId, staffRole, actorAccountId }) {
   const ticket = await pool.query(
-    `SELECT ticket_id, ticket_number, type, account_id
+    `SELECT ticket_id, ticket_number, type, account_id, handled_by_staff_id
      FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
   );
   if (!ticket.rows.length) return null;
   const row = ticket.rows[0];
+  const assigneeId = row.handled_by_staff_id ? String(row.handled_by_staff_id).toLowerCase() : '';
+  const actorId = staffId ? String(staffId).toLowerCase() : '';
+  if (!assigneeId || !actorId || assigneeId !== actorId) {
+    throw new Error('Claim this ticket before changing credits or replying.');
+  }
   if (!canAdjustTicketCredits(staffRole, row.type)) {
     throw new Error('Credit changes on this ticket are limited to Admin and Support on payment tickets');
   }

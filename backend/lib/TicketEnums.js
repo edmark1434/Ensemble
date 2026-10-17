@@ -114,6 +114,7 @@ const TICKET_TYPES = Object.freeze([
 const SPECIALIST_TYPES = Object.freeze([...FORUM_TYPES, ...MARKETPLACE_TYPES, ...JOBS_TYPES]);
 
 const TICKET_STATUSES = Object.freeze([
+  'Open',
   'In Progress',
   'Closed',
 ]);
@@ -237,7 +238,6 @@ const LEGACY_TYPE_MAP = Object.freeze({
 });
 
 const LEGACY_STATUS_MAP = Object.freeze({
-  open: 'In Progress',
   in_progress: 'In Progress',
   'in progress': 'In Progress',
   resolved: 'Closed',

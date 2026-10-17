@@ -277,7 +277,6 @@ async function createSupportTicket(input, session = null) {
 
   const type = normalizeTicketType(input?.type || input?.category || 'Other');
   const priority = resolveTicketPriority(type, input?.priority);
-  const status = normalizeTicketStatus(input?.status || 'In Progress');
   const requesterAccountId = input?.requesterAccountId || sessionAccountId(session);
   if (!requesterAccountId) throw new Error('Requester account is required');
 
@@ -290,6 +289,7 @@ async function createSupportTicket(input, session = null) {
   const ticketNumber = await nextTicketNumber();
   const handledBy =
     input?.handledByStaffId ?? input?.assignedStaffId ?? null;
+  const status = handledBy ? 'In Progress' : 'Open';
 
   const insert = await pool.query(
     `
@@ -348,7 +348,9 @@ async function createSupportTicket(input, session = null) {
       username: sessionDisplayName(session),
     };
     try {
-      await addTicketMessage(ticketId, description, authorSession, false, input?.attachments || []);
+      await addTicketMessage(ticketId, description, authorSession, false, input?.attachments || [], null, {
+        initial: true,
+      });
     } catch (err) {
       // Ticket metadata still exists; chat can be started later when Mongo is up.
       if (!err?.message?.includes('MongoDB')) throw err;
@@ -453,6 +455,7 @@ async function getTicketsOverview(staffSession = null) {
     pool.query(`
       SELECT
         COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE status = 'Open')::int AS open_status,
         COUNT(*) FILTER (WHERE status NOT IN ('Resolved', 'Closed'))::int AS open_count,
         COUNT(*) FILTER (WHERE status NOT IN ('Resolved', 'Closed'))::int AS in_progress,
         COUNT(*) FILTER (WHERE status = 'Escalated to Dev')::int AS escalated_dev,
@@ -532,7 +535,8 @@ async function getTicketsOverview(staffSession = null) {
   const rc = reportCounts.rows[0];
 
   const statusChart = [
-    { label: 'In Progress', value: Number(tc.in_progress), color: '#fbbf24' },
+    { label: 'Open', value: Number(tc.open_status || 0), color: '#fb7185' },
+    { label: 'In Progress', value: Math.max(0, Number(tc.in_progress) - Number(tc.open_status || 0)), color: '#fbbf24' },
     { label: 'Closed', value: Number(tc.resolved), color: '#a1a1aa' },
   ].filter((x) => x.value > 0);
 
@@ -2371,7 +2375,7 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
   if (!staff) throw new Error('Could not match your login to a staff profile.');
 
   const fresh = await pool.query(
-    `SELECT handled_by_staff_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    `SELECT handled_by_staff_id, status FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
   );
   if (!fresh.rows.length) return null;
@@ -2386,10 +2390,21 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
       throw new Error('This ticket already has a handler. They must release the case first.');
     }
     await pool.query(
-      `UPDATE tickets SET handled_by_staff_id = $1, updated_at = NOW()
+      `UPDATE tickets
+       SET handled_by_staff_id = $1,
+           status = CASE WHEN status = 'Open' THEN 'In Progress' ELSE status END,
+           updated_at = NOW()
        WHERE ticket_id = $2 AND deleted_at IS NULL`,
       [staff.staff_id, ticketId]
     );
+    if (normalizeTicketStatus(row.status) === 'Open') {
+      await recordTicketEvent({
+        ticketId,
+        eventType: 'status',
+        summary: 'Status changed from Open to In Progress',
+        actorStaffId: staff.staff_id,
+      });
+    }
     await recordTicketEvent({
       ticketId,
       eventType: 'assign',
@@ -2404,18 +2419,26 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
     if (!perms.canRelease && !perms.isAssignee) {
       throw new Error('Only the current handler can release this case.');
     }
-    if (perms.isAdmin && !perms.isAssignee) {
-      await pool.query(
-        `UPDATE tickets SET handled_by_staff_id = NULL, updated_at = NOW()
-         WHERE ticket_id = $1 AND deleted_at IS NULL`,
-        [ticketId]
-      );
-    } else {
-      await pool.query(
-        `UPDATE tickets SET handled_by_staff_id = NULL, updated_at = NOW()
-         WHERE ticket_id = $1 AND deleted_at IS NULL AND handled_by_staff_id = $2`,
-        [ticketId, staff.staff_id]
-      );
+    const releaseSql = perms.isAdmin && !perms.isAssignee
+      ? `UPDATE tickets
+         SET handled_by_staff_id = NULL,
+             status = CASE WHEN status = 'In Progress' THEN 'Open' ELSE status END,
+             updated_at = NOW()
+         WHERE ticket_id = $1 AND deleted_at IS NULL`
+      : `UPDATE tickets
+         SET handled_by_staff_id = NULL,
+             status = CASE WHEN status = 'In Progress' THEN 'Open' ELSE status END,
+             updated_at = NOW()
+         WHERE ticket_id = $1 AND deleted_at IS NULL AND handled_by_staff_id = $2`;
+    const releaseParams = perms.isAdmin && !perms.isAssignee ? [ticketId] : [ticketId, staff.staff_id];
+    await pool.query(releaseSql, releaseParams);
+    if (normalizeTicketStatus(row.status) === 'In Progress') {
+      await recordTicketEvent({
+        ticketId,
+        eventType: 'status',
+        summary: 'Status changed from In Progress to Open',
+        actorStaffId: staff.staff_id,
+      });
     }
     await recordTicketEvent({
       ticketId,
@@ -2511,6 +2534,22 @@ async function updateTicket(ticketId, patch, staffSession) {
       const nextPriority = defaultPriorityForType(nextType);
       if (nextPriority !== 'Medium') patch.priority = nextPriority;
     }
+  }
+
+  const nextAssigneeForStatus =
+    patch.handled_by_staff_id !== undefined
+      ? patch.handled_by_staff_id === null || patch.handled_by_staff_id === ''
+        ? null
+        : patch.handled_by_staff_id
+      : currentAssignee;
+  const assignedAfterSave = Boolean(normalizeStaffId(nextAssigneeForStatus));
+  const incomingStatus =
+    patch.status !== undefined ? normalizeTicketStatus(patch.status) : normalizeTicketStatus(currentStatus);
+  let enforcedStatus = incomingStatus;
+  if (!assignedAfterSave && enforcedStatus !== 'Closed') enforcedStatus = 'Open';
+  if (assignedAfterSave && enforcedStatus === 'Open') enforcedStatus = 'In Progress';
+  if (enforcedStatus !== normalizeTicketStatus(currentStatus) || (patch.status !== undefined && normalizeTicketStatus(patch.status) !== enforcedStatus)) {
+    patch.status = enforcedStatus;
   }
 
   if (patch.status !== undefined) {
@@ -2686,7 +2725,18 @@ async function updateTicket(ticketId, patch, staffSession) {
   return getTicketDetail(ticketId, staffSession);
 }
 
-async function addTicketMessage(ticketId, body, staffSession, isInternal = false, rawAttachments = [], replyToMessageId = null) {
+function assertStaffMayAnswerTicket(ticketRow, staffSession) {
+  const assigneeId = normalizeStaffId(ticketRow?.handled_by_staff_id);
+  if (!assigneeId) {
+    throw ticketError('Claim this ticket before replying. No one is assigned yet.', 403);
+  }
+  const actorId = normalizeStaffId(sessionStaffId(staffSession));
+  if (!actorId || actorId !== assigneeId) {
+    throw ticketError('Only the assigned staff member can reply on this ticket.', 403);
+  }
+}
+
+async function addTicketMessage(ticketId, body, staffSession, isInternal = false, rawAttachments = [], replyToMessageId = null, options = {}) {
   if (!getMongoClient()) {
     throw new Error('MongoDB is not connected — cannot send ticket chat messages');
   }
@@ -2696,6 +2746,18 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
     [ticketId]
   );
   if (!ticketResult.rows.length) return null;
+  if (isStaffSession(staffSession) && !options.initial) {
+    const requesterId = ticketResult.rows[0].account_id;
+    const actorAccountId = sessionAccountId(staffSession);
+    const isRequester = requesterId && actorAccountId && String(requesterId) === String(actorAccountId);
+    if (!isRequester) {
+      const actor = await resolveDisputeStaffId(staffSession);
+      const sessionForCheck = actor?.staff_id
+        ? { ...staffSession, staff_id: actor.staff_id, staffId: actor.staff_id }
+        : staffSession;
+      assertStaffMayAnswerTicket(ticketResult.rows[0], sessionForCheck);
+    }
+  }
 
   const chatId = await ensureTicketChat(ticketId, ticketResult.rows[0]);
   const now = new Date();
@@ -2900,10 +2962,15 @@ async function updateTicketMessage(ticketId, messageId, patch, staffSession) {
   if (!getMongoClient()) throw new Error('MongoDB is not connected — cannot update ticket chat messages');
   if (!isStaffSession(staffSession)) throw new Error('Only staff can change ticket replies');
   const ticketResult = await pool.query(
-    `SELECT ticket_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    `SELECT ticket_id, handled_by_staff_id, account_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
   );
   if (!ticketResult.rows.length) return null;
+  const editor = await resolveDisputeStaffId(staffSession);
+  assertStaffMayAnswerTicket(
+    ticketResult.rows[0],
+    editor?.staff_id ? { ...staffSession, staff_id: editor.staff_id, staffId: editor.staff_id } : staffSession
+  );
 
   const wantsBody = Object.prototype.hasOwnProperty.call(patch || {}, 'body');
   const wantsInternal = Object.prototype.hasOwnProperty.call(patch || {}, 'isInternal');
@@ -2962,10 +3029,15 @@ async function deleteTicketMessage(ticketId, messageId, staffSession) {
   if (!getMongoClient()) throw new Error('MongoDB is not connected — cannot delete ticket chat messages');
   if (!isStaffSession(staffSession)) throw new Error('Only staff can change ticket replies');
   const ticketResult = await pool.query(
-    `SELECT ticket_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    `SELECT ticket_id, handled_by_staff_id, account_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
   );
   if (!ticketResult.rows.length) return null;
+  const editor = await resolveDisputeStaffId(staffSession);
+  assertStaffMayAnswerTicket(
+    ticketResult.rows[0],
+    editor?.staff_id ? { ...staffSession, staff_id: editor.staff_id, staffId: editor.staff_id } : staffSession
+  );
 
   const { chatId, message } = await loadOwnedTicketMessage(ticketId, messageId);
   assertOwnTicketReply(message, staffSession);

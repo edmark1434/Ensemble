@@ -155,6 +155,7 @@ export type TicketPermissions = {
   isAssignee?: boolean;
   isAdmin?: boolean;
   canView?: boolean;
+  canReply?: boolean;
   canAct?: boolean;
   canAssignOthers?: boolean;
   canSelfAssign?: boolean;
@@ -222,7 +223,7 @@ export type TicketActivity = {
 
 export type ChartSegment = { label: string; value: number; color?: string };
 
-export const TICKET_STATUS_OPTIONS = ['In Progress', 'Closed'] as const;
+export const TICKET_STATUS_OPTIONS = ['Open', 'In Progress', 'Closed'] as const;
 export const TICKET_PRIORITY_OPTIONS = ['Low', 'Medium', 'High'] as const;
 
 export const SUPPORT_SUBGROUPS: { label: string; types: readonly string[] }[] = [

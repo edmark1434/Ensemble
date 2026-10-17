@@ -477,9 +477,10 @@ function toCategoryChart(rows) {
 
 function ticketStatusChart(counts) {
   return [
+    { label: 'Open', value: Number(counts.open_count || 0), color: '#fb7185' },
     {
       label: 'In Progress',
-      value: Number(counts.in_progress || 0) + Number(counts.open_count || 0) + Number(counts.escalated_dev || 0),
+      value: Number(counts.in_progress || 0) + Number(counts.escalated_dev || 0),
       color: '#fbbf24',
     },
     { label: 'Closed', value: Number(counts.resolved || counts.closed || 0), color: '#a1a1aa' },
