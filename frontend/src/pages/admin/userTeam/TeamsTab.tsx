@@ -38,6 +38,8 @@ type ModalKind =
   | 'unban'
   | 'unsuspend'
   | 'unlock'
+  | 'timeout'
+  | 'clear_timeout'
   | null;
 
 type BulkPending = {
@@ -281,6 +283,8 @@ export default function TeamsTab({
       case 'unban':
       case 'unsuspend':
       case 'unlock':
+      case 'timeout':
+      case 'clear_timeout':
         open(team, actionId);
         break;
       default:
@@ -516,14 +520,16 @@ export default function TeamsTab({
           modal === 'lock' ||
           modal === 'unban' ||
           modal === 'unsuspend' ||
-          modal === 'unlock') && (
+          modal === 'unlock' ||
+          modal === 'timeout' ||
+          modal === 'clear_timeout') && (
         <ConfirmStatusModal
           entityName={selected.name}
           action={modal}
           onClose={closeModal}
-          onConfirm={async () => {
+          onConfirm={async (options) => {
             try {
-              await setAccountStatus(selected.accountId, modal);
+              await setAccountStatus(selected.accountId, modal, options);
               await refreshAfterChange();
             } catch (err) {
               handleAccountActionError(err);

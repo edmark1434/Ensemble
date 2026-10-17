@@ -12,9 +12,12 @@ const FULL_STATUS_ACTIONS = [
   'lock',
   'unlock',
   'restore',
+  'timeout',
+  'clear_timeout',
 ];
 
 const LIMITED_STATUS_ACTIONS = ['suspend', 'unsuspend', 'lock', 'unlock'];
+const FORUM_TIMEOUT_ACTIONS = ['timeout', 'clear_timeout'];
 
 function roleOf(session) {
   return String(session?.role || '');
@@ -75,6 +78,7 @@ function canWarn(session) {
 
 function allowedStatusActions(session) {
   if (isAdminOrSupport(session)) return [...FULL_STATUS_ACTIONS];
+  if (isForumModerator(session)) return [...LIMITED_STATUS_ACTIONS, ...FORUM_TIMEOUT_ACTIONS];
   if (isLimitedEnforcer(session)) return [...LIMITED_STATUS_ACTIONS];
   return [];
 }

@@ -8,6 +8,8 @@ export type StatusActionId =
   | 'unsuspend'
   | 'lock'
   | 'unlock'
+  | 'timeout'
+  | 'clear_timeout'
   | 'warn'
   | 'pardon';
 
@@ -57,6 +59,11 @@ export function getManageActionsForStatus(
     }
     if (allowAction('lock', caps)) items.push({ id: 'lock', label: 'Lock', section: 'manage' });
     if (allowAction('ban', caps)) items.push({ id: 'ban', label: 'Ban', danger: true, section: 'manage' });
+    if (allowAction('timeout', caps)) items.push({ id: 'timeout', label: 'Forum timeout', section: 'manage' });
+  }
+
+  if (allowAction('clear_timeout', caps)) {
+    items.push({ id: 'clear_timeout', label: 'Clear forum timeout', section: 'manage' });
   }
 
   if (allowAction('warn', caps)) items.push({ id: 'warn', label: 'Issue warning', section: 'manage' });

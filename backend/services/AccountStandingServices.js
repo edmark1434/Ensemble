@@ -97,7 +97,7 @@ async function notifyAccountStatusChanged(accountId, statusData = {}) {
   if (nextStatus === 'Banned' || nextStatus === 'Locked') {
     const isBan = nextStatus === 'Banned';
     const defaultMsg = isBan
-      ? 'Your account has been banned due to policy violations. You cannot sign in or use Ensemble.'
+      ? 'Your account has been banned. You can sign in only to file an appeal and view your tickets and disputes.'
       : 'Your account has been locked. You cannot sign in until an administrator unlocks it.';
     const msg = statusData.reason || access.message || defaultMsg;
 
@@ -115,26 +115,28 @@ async function notifyAccountStatusChanged(accountId, statusData = {}) {
       console.error(`Failed to save ${nextStatus} notification:`, err.message);
     }
 
-    // Invalidate active Redis sessions for this user
-    try {
-      const redisClient = require('../lib/Redis');
-      const keys = await redisClient.keys('session:*');
-      for (const key of keys) {
-        const raw = await redisClient.get(key);
-        if (raw) {
-          try {
-            const sessionUser = JSON.parse(raw);
-            if (
-              String(sessionUser.account_id) === String(accountId) ||
-              String(sessionUser.accountId) === String(accountId)
-            ) {
-              await redisClient.del(key);
-            }
-          } catch (_parseErr) {}
+    // A lock ends the session. A ban keeps it so the member can open an appeal.
+    if (!isBan) {
+      try {
+        const redisClient = require('../lib/Redis');
+        const keys = await redisClient.keys('session:*');
+        for (const key of keys) {
+          const raw = await redisClient.get(key);
+          if (raw) {
+            try {
+              const sessionUser = JSON.parse(raw);
+              if (
+                String(sessionUser.account_id) === String(accountId) ||
+                String(sessionUser.accountId) === String(accountId)
+              ) {
+                await redisClient.del(key);
+              }
+            } catch (_parseErr) {}
+          }
         }
+      } catch (redisErr) {
+        console.warn('Redis session cleanup failed on lock:', redisErr.message);
       }
-    } catch (redisErr) {
-      console.warn('Redis session cleanup failed on ban/lock:', redisErr.message);
     }
 
     // Real-time broadcast

@@ -70,6 +70,7 @@ import ContractDetailsPage from '@/pages/user/contracts/ContractDetailsPage.tsx'
 import UserProfilesList from '@/components/nav/user_profiles_list.tsx'
 import { VerificationStatus } from '@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx'
 import { AccountRestrictionHost } from '@/components/ui/AccountStanding'
+import AccountAccessPage from '@/pages/user/account/AccountAccessPage'
 
 import './App.css'
 import OpenInEditor from "@/pages/user/2_projects/OpenInEditor.tsx";
@@ -219,6 +220,7 @@ function App() {
         {/* User Dashboard Routes - All wrapped in Layout */}
         <Route element={<Layout />}>
           <Route path='/home' element={<Home />} />
+          <Route path='/account/access' element={<AccountAccessPage />} />
           <Route path='/support/ticket' element={<PageSubmitATicket />} />
             <Route path='/credits' element={<CreditShop />} />
             <Route path='/credits-subscriptions' element={<CreditShop />} />

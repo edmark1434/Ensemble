@@ -229,6 +229,63 @@ async function updateDisputeMessageAudience(chatId, messageId, audience) {
   return nextAudience;
 }
 
+function mapDisputeSummary(row) {
+  return {
+    id: row.dispute_id,
+    number: row.dispute_number,
+    title: row.title || row.reason,
+    type: row.type,
+    status: row.status,
+    reason: row.reason,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function listAccountDisputes(accountId) {
+  const result = await pool.query(
+    `
+    SELECT dispute_id, dispute_number, title, type, status, reason, created_at, updated_at
+    FROM disputes
+    WHERE deleted_at IS NULL
+      AND (
+        by_account_id = $1
+        OR for_account_id = $1
+        OR initiator_account_id = $1
+        OR respondent_account_id = $1
+      )
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC
+    `,
+    [accountId]
+  );
+  return result.rows.map(mapDisputeSummary);
+}
+
+async function getAccountDispute(disputeId, accountId) {
+  const result = await pool.query(
+    `
+    SELECT dispute_id, dispute_number, title, type, status, reason, created_at, updated_at, outcome
+    FROM disputes
+    WHERE dispute_id = $1
+      AND deleted_at IS NULL
+      AND (
+        by_account_id = $2
+        OR for_account_id = $2
+        OR initiator_account_id = $2
+        OR respondent_account_id = $2
+      )
+    `,
+    [disputeId, accountId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  const chatId = await getDisputeChatId(disputeId);
+  const messages = (await listDisputeMessages(chatId)).filter(
+    (message) => !message.isInternal && (message.audience === 'parties' || message.audience === 'public')
+  );
+  return { ...mapDisputeSummary(row), outcome: row.outcome || null, messages };
+}
+
 module.exports = {
   CONVERSATION_TYPE,
   DISPUTE_MESSAGE_AUDIENCES,
@@ -236,6 +293,8 @@ module.exports = {
   getDisputeChatId,
   ensureDisputeChat,
   listDisputeMessages,
+  listAccountDisputes,
+  getAccountDispute,
   createDisputeMessage,
   updateDisputeMessageAudience,
   mapMongoDisputeMessage,

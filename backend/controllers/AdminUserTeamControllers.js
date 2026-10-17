@@ -68,8 +68,15 @@ async function patchAdminAccountStatus(req, res) {
       return res.status(400).json({ success: false, message: 'accountId and action are required' });
     }
     assertStatusActionAllowed(req.session, action);
-    const data = await updateAccountStatus(accountId, action, staffIdFromSession(req.session));
-    res.status(200).json({ success: true, data, message: `Account set to ${data.status}` });
+    const data = await updateAccountStatus(accountId, action, staffIdFromSession(req.session), {
+      days: req.body?.days,
+    });
+    const message = data.forumTimeout
+      ? 'Forum timeout applied'
+      : data.forumTimeout === false && String(action).toLowerCase().includes('timeout')
+        ? 'Forum timeout cleared'
+        : `Account set to ${data.status}`;
+    res.status(200).json({ success: true, data, message });
   } catch (err) {
     console.error('Error updating account status:', err);
     const code = err.statusCode === 403 ? 403 : 400;

@@ -50,9 +50,23 @@ function RouteLoadingShell() {
     return createElement(ProfileLoadingState);
 }
 
-function getRedirectPath(user: { type?: string; role?: string | null } | null) {
+function isBannedMember(user: { type?: string; status?: string; restriction?: { banned?: boolean; code?: string } } | null) {
+    if (!user || user.type === 'Staff') return false;
+    const status = String(user.status || '').toLowerCase();
+    return Boolean(user.restriction?.banned || user.restriction?.code === 'ACCOUNT_BANNED' || status === 'banned');
+}
+
+function isBannedAllowedPath(pathname: string) {
+    return pathname === '/account/access' || pathname === '/login';
+}
+
+function getRedirectPath(user: { type?: string; role?: string | null; status?: string; restriction?: { banned?: boolean; code?: string } } | null) {
     if (!user) {
         return null;
+    }
+
+    if (isBannedMember(user)) {
+        return '/account/access';
     }
 
     if (user.type === 'Staff') {
@@ -255,6 +269,10 @@ export default function RouteMiddleware() {
             return null;
         }
 
+        if (isBannedMember(resolvedUser)) {
+            return '/account/access';
+        }
+
         if (resolvedUser?.type === 'User' && onboardingPath === undefined) {
             return null;
         }
@@ -276,6 +294,7 @@ export default function RouteMiddleware() {
 
     useEffect(() => {
         if (location.search.includes('preview=true')) return;
+        if (isBannedMember(resolvedUser)) return;
         if (isCheckingSession || onboardingPath === undefined || !resolvedUser || resolvedUser.type !== 'User') return;
         if (onboardingPath && location.pathname !== onboardingPath) {
             navigate(onboardingPath, { replace: true });
@@ -293,6 +312,12 @@ export default function RouteMiddleware() {
     }, [isCheckingSession, resolvedUser, isGuestMode, isPublicRoute, isGuestAllowedRoute, isTicketFormRoute, navigate]);
 
     useEffect(() => {
+        if (isCheckingSession || !isBannedMember(resolvedUser)) return;
+        if (isBannedAllowedPath(location.pathname)) return;
+        navigate('/account/access', { replace: true });
+    }, [isCheckingSession, resolvedUser, location.pathname, navigate]);
+
+    useEffect(() => {
         if (isCheckingSession || resolvedUser?.type !== 'Staff') return;
         if (isStaffPreviewFrame()) return;
         if (isPublicRoute || isStaffConsolePath(location.pathname) || isOnboardingRoute) return;
@@ -307,7 +332,7 @@ export default function RouteMiddleware() {
         return createElement(RouteLoadingShell);
     }
 
-    if ((isCheckingSession || (resolvedUser?.type === 'User' && onboardingPath === undefined)) && !isGuestMode && !isPublicRoute && !isOnboardingRoute && !isGuestAllowedRoute) {
+    if ((isCheckingSession || (!isBannedMember(resolvedUser) && resolvedUser?.type === 'User' && onboardingPath === undefined)) && !isGuestMode && !isPublicRoute && !isOnboardingRoute && !isGuestAllowedRoute) {
         return createElement(RouteLoadingShell);
     }
 

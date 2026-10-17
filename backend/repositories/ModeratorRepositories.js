@@ -202,43 +202,9 @@ async function updateAccountRestriction(accountId, status, staffSession = null) 
     throw new Error(`Invalid restriction status: ${status}`);
   }
 
-  const previous = await pool.query(
-    `SELECT status FROM accounts WHERE account_id = $1 AND deleted_at IS NULL`,
-    [accountId]
-  );
-  if (!previous.rows.length) throw new Error('Account not found');
-
-  const nextStatus = normalized.charAt(0).toUpperCase() + normalized.slice(1);
-  await pool.query(`UPDATE accounts SET status = $1 WHERE account_id = $2`, [nextStatus, accountId]);
-
+  const { updateAccountStatus } = require('./AdminUserTeamRepositories');
   const staffId = staffSession?.staff_id || staffSession?.staffId || null;
-  await recordAccountActivity({
-    accountId,
-    action: `Account restriction status set to ${nextStatus}`,
-    eventCode: 'ACCOUNT_STATUS_CHANGED',
-    referenceTable: 'accounts',
-    referencePrefix: 'ACC',
-    referenceId: accountId,
-    actorStaffId: staffId,
-    metadata: {
-      previousStatus: previous.rows[0].status,
-      status: nextStatus,
-      source: 'moderator_restrictions',
-    },
-  });
-
-  try {
-    const { notifyAccountStatusChanged } = require('../services/AccountStandingServices');
-    await notifyAccountStatusChanged(accountId, {
-      status: nextStatus,
-      previousStatus: previous.rows[0].status,
-      action: normalized,
-      actorStaffId: staffId,
-    });
-  } catch (notifyErr) {
-    console.warn('Failed to broadcast moderator account status change:', notifyErr.message);
-  }
-
+  await updateAccountStatus(accountId, normalized, staffId, {});
   return getViolationsAndRestrictions();
 }
 

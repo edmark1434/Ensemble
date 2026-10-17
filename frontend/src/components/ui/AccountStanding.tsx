@@ -17,7 +17,9 @@ export type AccountViolation = {
 export type AccountStanding = {
   status?: string | null;
   blocked?: boolean;
+  banned?: boolean;
   suspended?: boolean;
+  forumTimeout?: boolean;
   code?: string | null;
   message?: string | null;
   violations?: AccountViolation[];
@@ -89,10 +91,10 @@ function restrictionCopy(standing: AccountStanding) {
             : 'Your account has a violation';
   const detail =
     kind === 'banned'
-      ? 'You cannot sign in. A banned account is not allowed to log in to Ensemble.'
+      ? 'You can sign in only to file an appeal and view your tickets and disputes.'
       : standing.message ||
         (kind === 'suspended'
-          ? 'You can view your account and notifications. Actions are turned off until this is lifted.'
+          ? 'You can look around Ensemble. Actions stay off until this ends.'
           : kind === 'locked'
             ? 'This account is locked. You cannot sign in until an administrator unlocks it.'
             : kind === 'warning'
@@ -371,7 +373,29 @@ export function AccountRestrictionHost() {
     const handleRestricted = (payload: any) => {
       const code = String(payload?.code || payload?.restriction?.code || '');
       const status = String(payload?.status || payload?.restriction?.status || '').toLowerCase();
-      // Suspended accounts MUST NEVER be blocked or logged out; they stay signed in with the yellow banner
+      if (code === 'ACCOUNT_BANNED' || status === 'banned') {
+        const standing: AccountStanding = payload?.restriction || {
+          status: 'Banned',
+          banned: true,
+          blocked: false,
+          code: 'ACCOUNT_BANNED',
+          message: payload?.message,
+        };
+        setBlocked(null);
+        const currentUser = useGlobalState.getState().user;
+        if (currentUser) {
+          useGlobalState.getState().setUser({
+            ...currentUser,
+            status: 'Banned',
+            restriction: standing,
+          });
+        }
+        if (window.location.pathname !== '/account/access') {
+          navigate('/account/access', { replace: true });
+        }
+        return;
+      }
+      // Suspended accounts stay signed in and can read the platform.
       if (code === 'ACCOUNT_SUSPENDED' || status === 'suspended') {
         const standing: AccountStanding = payload?.restriction || {
           status: 'Suspended',
@@ -408,6 +432,16 @@ export function AccountRestrictionHost() {
 
     const handleStatusChanged = (payload: any) => {
       const status = String(payload?.status || '').toLowerCase();
+      if (payload?.code === 'FORUM_TIMEOUT' || payload?.restriction?.forumTimeout) {
+        const currentUser = useGlobalState.getState().user;
+        if (currentUser) {
+          useGlobalState.getState().setUser({
+            ...currentUser,
+            restriction: payload.restriction || currentUser.restriction,
+          });
+        }
+        return;
+      }
       if (status === 'banned' || status === 'locked') {
         handleRestricted(payload);
       } else if (status === 'active') {
@@ -464,6 +498,7 @@ export function AccountRestrictionHost() {
   }, [user?.account_id, navigate]);
 
   const warning = user?.restriction as AccountStanding | undefined;
+  const forumTimeout = Boolean(warning?.forumTimeout || warning?.code === 'FORUM_TIMEOUT');
   const suspended = Boolean(
     warning &&
       !warning.blocked &&
@@ -476,6 +511,9 @@ export function AccountRestrictionHost() {
     <>
       {suspended && warning ? (
         <SuspensionBanner standing={warning} onOpenNotifications={() => navigate('/notifications')} />
+      ) : null}
+      {forumTimeout && warning && !suspended ? (
+        <SuspensionBanner standing={{ ...warning, message: warning.message || 'You are timed out from the forums. You can read them, and you cannot post, comment, react, or change them.' }} onOpenNotifications={() => navigate('/forums')} />
       ) : null}
       {blocked ? (
         <AccountBlockedScreen

@@ -340,6 +340,18 @@ async function createPublicTicket(req, res) {
       priority,
       description,
     } = req.body;
+    const { APPEAL_TICKET_TYPE } = require('../lib/AccountRestriction');
+    let ticketType = type || category || 'Other';
+    if (req.accountAccess?.banned) {
+      if (String(type || category || APPEAL_TICKET_TYPE).trim() !== APPEAL_TICKET_TYPE) {
+        return res.status(403).json({
+          success: false,
+          code: 'ACCOUNT_BANNED',
+          message: 'A banned account can only open an appeal ticket.',
+        });
+      }
+      ticketType = APPEAL_TICKET_TYPE;
+    }
     const subjectOrReason = (reason || subject || '').trim();
     if (!subjectOrReason) {
       return res.status(400).json({ success: false, message: 'Subject is required' });
@@ -352,7 +364,7 @@ async function createPublicTicket(req, res) {
       {
         subject: subjectOrReason,
         reason: subjectOrReason,
-        type: type || category || 'Other',
+        type: ticketType,
         category,
         priority: priority || 'Medium',
         description: description.trim(),
@@ -426,6 +438,37 @@ async function listMyTickets(req, res) {
   } catch (err) {
     console.error('Error listing user tickets:', err);
     res.status(500).json({ success: false, message: 'Failed to load tickets' });
+  }
+}
+
+async function listMyDisputes(req, res) {
+  try {
+    const accountId = req.session?.account_id || req.session?.accountId;
+    if (!accountId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    const { listAccountDisputes } = require('../repositories/DisputeChatRepositories');
+    const data = await listAccountDisputes(accountId);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error listing user disputes:', err);
+    res.status(500).json({ success: false, message: 'Failed to load disputes' });
+  }
+}
+
+async function getMyDispute(req, res) {
+  try {
+    const accountId = req.session?.account_id || req.session?.accountId;
+    if (!accountId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    const { getAccountDispute } = require('../repositories/DisputeChatRepositories');
+    const data = await getAccountDispute(req.params.id, accountId);
+    if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching user dispute:', err);
+    res.status(500).json({ success: false, message: 'Failed to load dispute' });
   }
 }
 
@@ -720,6 +763,8 @@ module.exports = {
   getTicketContext,
   createPublicTicket,
   listMyTickets,
+  listMyDisputes,
+  getMyDispute,
   getMyTicket,
   postMyTicketMessage,
   postMyTicketInvite,

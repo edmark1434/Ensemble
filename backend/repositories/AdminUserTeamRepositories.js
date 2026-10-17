@@ -1110,13 +1110,103 @@ async function getAccountWallet(accountId) {
   return result.rows[0] || null;
 }
 
-async function updateAccountStatus(accountId, actionOrStatus, staffId = null) {
+async function updateAccountStatus(accountId, actionOrStatus, staffId = null, options = {}) {
   const account = await assertAccountExists(accountId);
   const key = String(actionOrStatus || '').toLowerCase();
+  const {
+    suspensionEndFromDays,
+    timeoutEndFromDays,
+    getAccountAccess,
+  } = require('../lib/AccountRestriction');
+
+  if (key === 'timeout' || key === 'forum_timeout') {
+    const endsAt = timeoutEndFromDays(options.days);
+    await pool.query(
+      `
+      INSERT INTO restrictions (type, module, starts_at, ends_at, account_id, staff_id)
+      VALUES ('forum_timeout', 'forum', NOW(), $1, $2, $3)
+      `,
+      [endsAt, accountId, staffId]
+    );
+    await recordAccountActivity({
+      accountId,
+      action: endsAt ? 'Forum timeout applied' : 'Forum timeout applied until lifted',
+      eventCode: 'FORUM_TIMEOUT',
+      referenceTable: 'restrictions',
+      referencePrefix: 'RST',
+      referenceId: accountId,
+      actorStaffId: staffId,
+      metadata: { endsAt, days: options.days ?? null },
+    });
+    let restriction = null;
+    try {
+      restriction = await getAccountAccess(accountId);
+      const { getIo } = require('../lib/WebSocket');
+      const io = getIo();
+      if (io) {
+        io.to(String(accountId)).emit('account:status_changed', {
+          accountId,
+          status: account.status,
+          code: 'FORUM_TIMEOUT',
+          message: restriction?.message,
+          restriction,
+        });
+      }
+    } catch (notifyErr) {
+      console.warn('Failed to broadcast forum timeout:', notifyErr.message);
+    }
+    return { accountId, status: account.status, forumTimeout: true, restriction };
+  }
+
+  if (key === 'clear_timeout' || key === 'clear-timeout') {
+    await pool.query(
+      `
+      UPDATE restrictions
+      SET ends_at = NOW()
+      WHERE account_id = $1
+        AND LOWER(type) IN ('forum_timeout', 'timeout')
+        AND (ends_at IS NULL OR ends_at > NOW())
+      `,
+      [accountId]
+    );
+    await recordAccountActivity({
+      accountId,
+      action: 'Forum timeout cleared',
+      eventCode: 'FORUM_TIMEOUT_CLEARED',
+      referenceTable: 'restrictions',
+      referencePrefix: 'RST',
+      referenceId: accountId,
+      actorStaffId: staffId,
+      metadata: {},
+    });
+    let restriction = null;
+    try {
+      restriction = await getAccountAccess(accountId);
+      const { getIo } = require('../lib/WebSocket');
+      const io = getIo();
+      if (io) {
+        io.to(String(accountId)).emit('account:status_changed', {
+          accountId,
+          status: account.status,
+          code: null,
+          message: 'Your forum timeout has been lifted.',
+          restriction,
+        });
+      }
+    } catch (notifyErr) {
+      console.warn('Failed to broadcast forum timeout clear:', notifyErr.message);
+    }
+    return { accountId, status: account.status, forumTimeout: false, restriction };
+  }
+
   const status = STATUS_MAP[key] || null;
   if (!status) throw new Error(`Invalid account status action: ${actionOrStatus}`);
 
-  await pool.query(`UPDATE accounts SET status = $1 WHERE account_id = $2`, [status, accountId]);
+  const suspensionEndsAt = status === 'Suspended' ? suspensionEndFromDays(options.days) : null;
+  await pool.query(
+    `UPDATE accounts SET status = $1, suspension_ends_at = $2 WHERE account_id = $3`,
+    [status, suspensionEndsAt, accountId]
+  );
 
   await recordAccountActivity({
     accountId,
@@ -1130,6 +1220,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null) {
       previousStatus: account.status,
       status,
       action: key,
+      suspensionEndsAt,
     },
   });
 
@@ -1145,7 +1236,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null) {
     console.warn('Failed to broadcast account status change:', notifyErr.message);
   }
 
-  return { accountId, status, previousStatus: account.status };
+  return { accountId, status, previousStatus: account.status, suspensionEndsAt };
 }
 
 async function updateAccountVerification(accountId, action, staffId, _options = {}) {

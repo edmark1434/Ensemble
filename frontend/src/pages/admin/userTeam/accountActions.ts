@@ -1,10 +1,13 @@
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 
-type ActionOptions = { silent?: boolean };
+type ActionOptions = { silent?: boolean; days?: number | null };
 
 export async function setAccountStatus(accountId: string, action: string, options?: ActionOptions) {
-  const res = await api.patch(`/api/admin/accounts/${accountId}/status`, { action });
+  const res = await api.patch(`/api/admin/accounts/${accountId}/status`, {
+    action,
+    days: options?.days,
+  });
   if (!res.data?.success) throw new Error(res.data?.message || 'Status update failed');
   if (!options?.silent) {
     showSuccessToast(res.data.message || `Account ${action} applied`);

@@ -31,6 +31,8 @@ const {
 const {
     createPublicTicket,
     listMyTickets,
+    listMyDisputes,
+    getMyDispute,
     getMyTicket,
     postMyTicketMessage,
     postMyTicketInvite,
@@ -69,6 +71,8 @@ router.get('/ticket-context', [checkSession, requireAuth], getTicketContext);
 router.post('/tickets', [checkSession, requireAuth], createPublicTicket);
 router.get('/tickets', [checkSession, requireAuth], listMyTickets);
 router.get('/tickets/:id', [checkSession, requireAuth], getMyTicket);
+router.get('/disputes', [checkSession, requireAuth], listMyDisputes);
+router.get('/disputes/:id', [checkSession, requireAuth], getMyDispute);
 router.post('/tickets/:id/messages', [checkSession, requireAuth], postMyTicketMessage);
 router.post('/tickets/:id/invite', [checkSession, requireAuth], postMyTicketInvite);
 router.post('/tickets/:id/satisfaction', [checkSession, requireAuth], postMyTicketSatisfaction);
