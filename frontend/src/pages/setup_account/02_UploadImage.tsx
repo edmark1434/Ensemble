@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import { deleteAvatarDraft, getAvatarDraft, saveAvatarDraft } from "../../lib/onboardingAvatarDraft";
 import { notifyOnboardingStepChanged } from "../../lib/onboardingEvents";
 import useGlobalState from "../../lib/global_state";
+import SetupLayout from "./SetupLayout";
 
 interface Preset {
   file_id: string;
@@ -468,7 +469,8 @@ export default function UploadImage() {
           position: relative;
           z-index: 10;
           width: 100%;
-          max-width: 480px;
+          max-width: 620px;
+          margin: 0 auto;
           display: flex;
           flex-direction: column;
           font-family: ${T.fontBody};
@@ -582,30 +584,8 @@ export default function UploadImage() {
         }
       `}</style>
 
-      <div className="setup-page-wrapper">
-        <div className="canvas-bg-container">
-          <ShapeGrid
-            direction="diagonal"
-            speed={0.3}
-            borderColor={isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.06)"}
-            squareSize={45}
-            hoverFillColor={isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)"}
-            hoverTrailAmount={4}
-            shape="square"
-          />
-        </div>
-
+      <SetupLayout currentStep={1} theme={theme}>
         <div className="setup-card">
-          <div style={{ marginBottom: 36 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase" }}>ACCOUNT SETUP</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>1 / 3</span>
-            </div>
-            <div style={{ width: "100%", height: 4, background: T.border, borderRadius: 2, overflow: "hidden" }}>
-              <div style={{ width: "33.333%", height: "100%", background: T.accent, borderRadius: 2, transition: "width 0.5s cubic-bezier(0.16, 1, 0.3, 1)" }} />
-            </div>
-          </div>
-
           <div className="animated-content">
             <h2 style={{ fontSize: 24, fontWeight: 700, color: T.text, marginBottom: 6, letterSpacing: -.3 }}>
               Choose avatar profile
@@ -823,7 +803,7 @@ export default function UploadImage() {
             </div>
           </div>
         </div>
-      </div>
+      </SetupLayout>
     </>
   );
 }
