@@ -5,6 +5,16 @@ import { setProjectNameInLiveRoom } from "@/lib/collab/live-rooms";
 
 const CURSOR_COLORS = ["#F97316", "#3B82F6", "#22C55E", "#EAB308", "#EC4899", "#8B5CF6"];
 
+export async function isProjectFrozen(projectId: string): Promise<boolean> {
+  const project = await db
+    .selectFrom("projects")
+    .select(["status"])
+    .where("project_id", "=", projectId)
+    .where("deleted_at", "is", null)
+    .executeTakeFirst();
+  return String(project?.status || "").toLowerCase() === "frozen";
+}
+
 export async function createProject({
   userId,
   width,

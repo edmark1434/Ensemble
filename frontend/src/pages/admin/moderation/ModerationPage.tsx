@@ -44,6 +44,7 @@ import ReportsTab from './ReportsTab';
 import ListingApprovalsTab from './ListingApprovalsTab';
 import IdentityVerificationTab from './IdentityVerificationTab';
 import MyCasesTab from './MyCasesTab';
+import VideoManagementSection from './VideoManagementSection';
 
 const CLOSED_DISPUTE_STATUSES = new Set(['closed']);
 
@@ -1139,7 +1140,7 @@ function ManagementTab({
     },
     video: {
       title: 'Video platform management',
-      description: 'Content moderation for video uploads and the editor pipeline.',
+      description: 'Every editor project, who is on it, and a freeze that stops further edits.',
     },
     forum: {
       title: 'Forum content management',
@@ -1185,7 +1186,7 @@ function ManagementTab({
           onChanged={onSaved}
         />
       )}
-      {section === 'video' && <VideoSection />}
+      {section === 'video' && <VideoManagementSection />}
       {section === 'forum' && (
         <ForumSection
           connected={data.dataSources.mongo.connected}
@@ -1997,39 +1998,6 @@ function ConfirmDeleteModal({
         </div>
       </div>
     </div>
-  );
-}
-
-function VideoSection() {
-  return (
-    <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-8">
-      <div className="mx-auto max-w-lg text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/10">
-          <Video className="h-7 w-7 text-rose-400" />
-        </div>
-        <h3 className="mt-4 text-lg font-semibold text-white">Video pipeline not connected</h3>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-          The video editor runs as a separate app. When the asset upload pipeline is wired to this
-          admin surface, flagged clips, takedown requests, and age-restricted content will be
-          managed from this panel.
-        </p>
-        <ul className="mt-6 space-y-2 text-left text-sm text-zinc-400">
-          {[
-            'Review flagged video uploads',
-            'Issue takedowns and age restrictions',
-            'Audit editor publish events',
-          ].map((item) => (
-            <li
-              key={item}
-              className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-zinc-600" />
-              {item}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
   );
 }
 

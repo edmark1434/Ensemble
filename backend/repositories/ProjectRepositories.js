@@ -47,6 +47,15 @@ async function softDeleteProject(projectId, userId) {
 
 async function renameProject(projectId, userId, newName) {
     try {
+        const current = await pool.query(
+            `SELECT status FROM projects WHERE project_id = $1 AND deleted_at IS NULL`,
+            [projectId]
+        );
+        if (current.rows[0] && String(current.rows[0].status).toLowerCase() === 'frozen') {
+            const error = new Error('This project is frozen and cannot be edited');
+            error.statusCode = 403;
+            throw error;
+        }
         const query = `
             UPDATE projects p
             SET name = $1, updated_at = NOW()

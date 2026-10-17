@@ -15,6 +15,7 @@ import { CollabTarget } from "@/features/editor/collab/collab-target";
 import { compactBlock, loadLatestBlockState, withBlockSnapshotLock } from "@/lib/collab/block-persistence-store";
 import { getEffectiveBlockRole } from "@/lib/db/block-members";
 import { canEditWithRole } from "@/features/editor/types/editor-role";
+import { isProjectFrozen } from "@/lib/db/projects";
 import { liveRooms } from "@/lib/collab/live-rooms";
 import { markProjectDirty, onProjectRoomEmpty } from "@/lib/collab/thumbnail-service";
 
@@ -194,13 +195,14 @@ async function resolveRoomAccess(
     .executeTakeFirst();
 
   if (!membership) return { allowed: false, canWrite: false };
+  const frozen = await isProjectFrozen(projectId);
 
   if (target.kind === "project") {
-    return { allowed: true, canWrite: canEditWithRole(membership.role) };
+    return { allowed: true, canWrite: !frozen && canEditWithRole(membership.role) };
   }
 
   const blockRole = await getEffectiveBlockRole(target.id, projectId, userId);
-  return { allowed: blockRole !== null, canWrite: canEditWithRole(blockRole) };
+  return { allowed: blockRole !== null, canWrite: !frozen && canEditWithRole(blockRole) };
 }
 
 export async function handleCollabConnection(ws: WebSocket, req: IncomingMessage): Promise<void> {
