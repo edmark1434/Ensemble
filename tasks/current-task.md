@@ -1,11 +1,9 @@
-# Current Task: Block replies on closed tickets
+# Current Task: Chatbot human support ticket link
 
 ## Objective
-A member cannot send another reply once a ticket status is Closed.
+On the Ask our chatbot page, give visitors a clear way to reach a person by opening a support ticket.
 
 ## Acceptance criteria
-- [x] Inbox hides the composer on a closed ticket.
-- [x] The account access ticket view hides the reply form on a closed ticket.
-- [x] Ticket message APIs and inbox send/reply reject a member reply on a closed ticket.
-- [x] Admins and moderators cannot reply to a closed ticket.
-- [x] Admins and moderators cannot claim a closed ticket until it is opened again.
+- [x] The chatbot page explains that a real person is available through a support ticket.
+- [x] A button opens the support ticket form at `/support/ticket`.
+- [x] The prompt stays visible on desktop and on a narrow layout.

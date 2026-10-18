@@ -11,6 +11,7 @@ import {
   RotateCcw,
   ShieldCheck,
   Sparkles,
+  Ticket,
   User,
 } from "lucide-react";
 import axios from "axios";
@@ -392,6 +393,12 @@ const PageAskOurChatbot: React.FC = () => {
           <span className="ensemble-eyebrow"><Sparkles size={14} /> Ensemble support</span>
           <h1>How can we help?</h1>
           <p>Get clear answers about Ensemble, grounded in our current platform documentation.</p>
+          <div className="ensemble-human-callout">
+            <p>Need a real person? Open a support ticket and a teammate will follow up.</p>
+            <button type="button" onClick={() => navigate("/support/ticket")}>
+              <Ticket size={14} /> Open a ticket
+            </button>
+          </div>
         </section>
 
         <div className={`ensemble-chat-workspace ${isSidebarOpen ? "sidebar-open" : "sidebar-collapsed"}`}>
@@ -528,7 +535,12 @@ const PageAskOurChatbot: React.FC = () => {
                 onDictate={handleDictate}
               />
             </div>
-            <p className="ensemble-chat-disclaimer">AI responses may be imperfect. Contact support for account-specific or payment concerns.</p>
+            <div className="ensemble-human-footer">
+              <p className="ensemble-chat-disclaimer">Need a real person? Open a support ticket and someone from Ensemble will take it from here.</p>
+              <button type="button" className="ensemble-ticket-btn" onClick={() => navigate("/support/ticket")}>
+                <Ticket size={14} /> Open a ticket
+              </button>
+            </div>
           </section>
         </div>
       </div>
@@ -536,7 +548,8 @@ const PageAskOurChatbot: React.FC = () => {
         .ensemble-chat-page {
           position: relative;
           min-height: 100vh;
-          overflow: hidden;
+          overflow-x: hidden;
+          overflow-y: auto;
           background: ${theme === 'dark' ? "#0f0f11" : "#f8fafc"};
           color: ${theme === 'dark' ? "#f4f4f5" : "#0f172a"};
           padding: 36px 32px 48px;
@@ -618,12 +631,49 @@ const PageAskOurChatbot: React.FC = () => {
           font-weight: 450;
           text-shadow: ${theme === 'dark' ? "0 1px 10px rgba(0,0,0,0.7)" : "none"};
         }
+        .ensemble-human-callout {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 12px;
+          max-width: 640px;
+          margin: 16px auto 0;
+          padding: 12px 14px;
+          border: 1px solid ${theme === 'dark' ? "rgba(59, 130, 246, 0.35)" : "rgba(37, 99, 235, 0.22)"};
+          border-radius: 12px;
+          background: ${theme === 'dark' ? "rgba(24, 24, 27, 0.82)" : "rgba(255, 255, 255, 0.92)"};
+        }
+        .ensemble-human-callout p {
+          margin: 0;
+          font-size: 13px;
+          font-weight: 500;
+          text-shadow: none;
+        }
+        .ensemble-human-callout button {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          flex: 0 0 auto;
+          padding: 8px 12px;
+          border: 0;
+          border-radius: 8px;
+          background: #2563eb;
+          color: #ffffff;
+          font: inherit;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .ensemble-human-callout button:hover {
+          background: #1d4ed8;
+        }
         
         .ensemble-chat-workspace {
           display: grid;
           grid-template-columns: 290px minmax(0, 1fr);
           height: 690px;
-          max-height: calc(100vh - 200px);
+          max-height: calc(100vh - 270px);
           overflow: hidden;
           border: 1px solid ${theme === 'dark' ? "rgba(63, 63, 70, 0.55)" : "rgba(226, 232, 240, 0.95)"};
           border-radius: 18px;
@@ -983,12 +1033,37 @@ const PageAskOurChatbot: React.FC = () => {
           position: relative;
           z-index: 30;
         }
-        .ensemble-chat-disclaimer {
+        .ensemble-human-footer {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
           margin: 6px 24px 14px;
+        }
+        .ensemble-chat-disclaimer {
+          margin: 0;
           color: ${theme === 'dark' ? "#a1a1aa" : "#64748b"};
           font-size: 11px;
           font-weight: 500;
-          text-align: center;
+          text-align: left;
+        }
+        .ensemble-ticket-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          flex: 0 0 auto;
+          padding: 7px 12px;
+          border: 0;
+          border-radius: 8px;
+          background: #2563eb;
+          color: #ffffff;
+          font: inherit;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .ensemble-ticket-btn:hover {
+          background: #1d4ed8;
         }
         .ensemble-inline-link {
           display: inline-flex;
@@ -1172,6 +1247,8 @@ const PageAskOurChatbot: React.FC = () => {
             background: ${theme === 'dark' ? "#18181b" : "#f8fafc"};
           }
           .ensemble-sidebar-note { display: none; }
+          .ensemble-human-footer { flex-direction: column; align-items: stretch; }
+          .ensemble-ticket-btn { justify-content: center; }
           .ensemble-conversation { min-height: 560px; }
         }
         @media (max-width: 520px) {
@@ -1185,7 +1262,7 @@ const PageAskOurChatbot: React.FC = () => {
           .ensemble-conversation-header button.ensemble-reset-btn { font-size: 0; padding: 8px; }
           .ensemble-conversation-header button.ensemble-reset-btn svg { margin: 0; }
           .ensemble-composer-wrapper { margin: 0 12px 6px; }
-          .ensemble-chat-disclaimer { margin-inline: 14px; }
+          .ensemble-human-footer { margin-inline: 14px; }
         }
         @media (prefers-reduced-motion: reduce) {
           .ensemble-typing span,
