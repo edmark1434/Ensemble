@@ -110,9 +110,12 @@ export default function AccountAccessPage() {
     }
   }
 
+  const selectedTicket = tickets.find((ticket) => ticket.id === openTicketId) || null;
+  const ticketClosed = selectedTicket?.status === 'Closed' || selectedTicket?.status === 'Resolved';
+
   async function sendReply(event: FormEvent) {
     event.preventDefault();
-    if (!openTicketId || !reply.trim()) return;
+    if (!openTicketId || !reply.trim() || ticketClosed) return;
     setSaving(true);
     try {
       await api.post(`/api/users/tickets/${openTicketId}/messages`, { body: reply.trim() });
@@ -200,6 +203,9 @@ export default function AccountAccessPage() {
                 </li>
               ))}
             </ul>
+            {ticketClosed ? (
+              <p className="mt-4 text-sm text-zinc-500">This ticket is closed. You cannot reply.</p>
+            ) : (
             <form className="mt-4 flex flex-col gap-2" onSubmit={sendReply}>
               <textarea
                 value={reply}
@@ -216,6 +222,7 @@ export default function AccountAccessPage() {
                 Send reply
               </button>
             </form>
+            )}
           </div>
         ) : null}
       </section>

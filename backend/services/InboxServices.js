@@ -28,6 +28,7 @@ const { getProfileCurrentAvatarByAccountIdService } = require('./ProfileServices
 const { createNotificationServices } = require('./NotificationServices');
 const { getAccountById } = require('../repositories/AccountRepositories');
 const { pool } = require('../lib/Database');
+const { isClosedStatus } = require('../lib/TicketEnums');
 const { createReport } = require('../repositories/ModeratorSharedRepositories');
 const { getTaskById } = require('../repositories/DashboardRepositories');
 const { getAuthorizedActorAccountIds } = require('./MarketplaceActorServices');
@@ -801,6 +802,25 @@ async function createOrReuseDirectChatServices(payload, accountId) {
     return inbox;
 }
 
+async function assertMemberCanReplyOnTicket(inbox, senderAccountId) {
+    if (String(inbox?.conversation_type || '').toLowerCase() !== 'ticket') return;
+    const member = (inbox.members || []).find(
+        (entry) => String(entry.account_id) === String(senderAccountId)
+    );
+    const role = String(member?.role || '').toLowerCase();
+    if (['admin', 'staff', 'moderator'].includes(role)) return;
+
+    const ticketId = inbox.ticket_id || inbox.support_ticket_id;
+    if (!ticketId) return;
+    const result = await pool.query(
+        `SELECT status FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+        [ticketId]
+    );
+    if (result.rows.length && isClosedStatus(result.rows[0].status)) {
+        throw new ChatServiceError('This ticket is closed. You cannot reply.', 403);
+    }
+}
+
 async function buildMessage(payload, accountId) {
     const personalSenderId = await requireAccount(accountId);
     const conversationId = String(requireValue(payload.conversation_id, 'conversation_id is required'));
@@ -818,6 +838,7 @@ async function buildMessage(payload, accountId) {
     if (!messageContent && !attachments.length) {
         throw new ChatServiceError('Message content or an attachment is required');
     }
+    await assertMemberCanReplyOnTicket(inbox, senderId);
 
     const now = new Date();
     const senderName = await actorDisplayName(senderId);

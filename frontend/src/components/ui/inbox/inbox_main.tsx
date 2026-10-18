@@ -687,6 +687,14 @@ const InboxMain = () => {
   const handleSendMessage = async () => {
     if (!messageInput.trim() && mediaList.length === 0) return;
     if (!selectedConversation || isSending) return;
+    const ticketStatus = String(selectedConversation.ticket_details?.status || "");
+    if (
+      selectedConversation.conversation_type === "ticket" &&
+      (ticketStatus === "Closed" || ticketStatus === "Resolved")
+    ) {
+      setMessageError("This ticket is closed. You cannot reply.");
+      return;
+    }
 
     if (editingMessage) {
       setIsSending(true);

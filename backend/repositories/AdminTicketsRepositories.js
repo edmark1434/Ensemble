@@ -2746,10 +2746,14 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
     [ticketId]
   );
   if (!ticketResult.rows.length) return null;
+  const requesterId = ticketResult.rows[0].account_id;
+  const actorAccountId = sessionAccountId(staffSession);
+  const isRequester = requesterId && actorAccountId && String(requesterId) === String(actorAccountId);
+  const memberReply = !isStaffSession(staffSession) || isRequester;
+  if (!options.initial && memberReply && isClosedStatus(ticketResult.rows[0].status)) {
+    throw ticketError('This ticket is closed. You cannot reply.', 403);
+  }
   if (isStaffSession(staffSession) && !options.initial) {
-    const requesterId = ticketResult.rows[0].account_id;
-    const actorAccountId = sessionAccountId(staffSession);
-    const isRequester = requesterId && actorAccountId && String(requesterId) === String(actorAccountId);
     if (!isRequester) {
       const actor = await resolveDisputeStaffId(staffSession);
       const sessionForCheck = actor?.staff_id
