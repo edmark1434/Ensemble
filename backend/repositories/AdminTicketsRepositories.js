@@ -2383,6 +2383,9 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
   const perms = buildTicketPermissions(row, staff, sessionStaffId(staffSession));
 
   if (action === 'self_assign') {
+    if (isClosedStatus(row.status)) {
+      throw ticketError('Open this ticket before claiming it.', 400);
+    }
     if (!perms.canAssignMyself && !perms.canSelfAssign) {
       throw new Error('You cannot assign this ticket to yourself.');
     }
@@ -2578,6 +2581,10 @@ async function updateTicket(ticketId, patch, staffSession) {
     const nextNorm = normalizeStaffId(nextAssignee);
     const curNorm = normalizeStaffId(currentAssignee);
 
+    if (isClosedStatus(currentStatus) && nextNorm && nextNorm !== curNorm) {
+      throw ticketError('Open this ticket before claiming or assigning it.', 400);
+    }
+
     if (curNorm && nextNorm !== curNorm) {
       // Locked while assigned — handler must Release case (or escalate). Admin may override.
       if (!patch.assigned_role && !ticketPerms.isAdmin && !ticketPerms.canAssignOthers) {
@@ -2749,9 +2756,8 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
   const requesterId = ticketResult.rows[0].account_id;
   const actorAccountId = sessionAccountId(staffSession);
   const isRequester = requesterId && actorAccountId && String(requesterId) === String(actorAccountId);
-  const memberReply = !isStaffSession(staffSession) || isRequester;
-  if (!options.initial && memberReply && isClosedStatus(ticketResult.rows[0].status)) {
-    throw ticketError('This ticket is closed. You cannot reply.', 403);
+  if (!options.initial && isClosedStatus(ticketResult.rows[0].status)) {
+    throw ticketError('This ticket is closed. Open it again before replying.', 403);
   }
   if (isStaffSession(staffSession) && !options.initial) {
     if (!isRequester) {

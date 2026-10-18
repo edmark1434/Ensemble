@@ -504,8 +504,9 @@ export default function TicketDetailModalShell({
     perms?.isAssignee ||
       (myStaffId && ticketAssigneeId && myStaffId.toLowerCase() === ticketAssigneeId.toLowerCase())
   );
-  const canReply = Boolean(perms?.canReply ?? alreadyAssignedToMe);
-  const canAssignMyself = Boolean(
+  const ticketClosed = ['Closed', 'Resolved'].includes(String(detail?.ticket?.status || ''));
+  const canReply = !ticketClosed && Boolean(perms?.canReply ?? alreadyAssignedToMe);
+  const canAssignMyself = !ticketClosed && Boolean(
     !alreadyAssignedToMe &&
       (perms?.canAssignMyself || perms?.canSelfAssign)
   );
@@ -513,7 +514,7 @@ export default function TicketDetailModalShell({
   const canEscalate = Boolean(perms?.canEscalate || alreadyAssignedToMe || perms?.isAdmin);
   const isAdmin = Boolean(perms?.isAdmin);
   /** Locked for non-admins once someone is assigned; Admin may reassign anytime */
-  const assigneeLocked = Boolean(ticketAssigneeId) && !Boolean(perms?.canAssignOthers || isAdmin);
+  const assigneeLocked = ticketClosed || (Boolean(ticketAssigneeId) && !Boolean(perms?.canAssignOthers || isAdmin));
 
   const syncEscalateType = (role: string, preferred?: string) => {
     const opts =
@@ -1504,7 +1505,12 @@ export default function TicketDetailModalShell({
                           </option>
                         ))}
                     </select>
-                    {assigneeLocked && (
+                    {ticketClosed && (
+                      <p className="mt-1 text-[11px] text-zinc-500">
+                        This ticket is closed. Open it again before anyone can claim it.
+                      </p>
+                    )}
+                    {assigneeLocked && !ticketClosed && (
                       <p className="mt-1 text-[11px] text-zinc-500">
                         Handler is locked. The assigned moderator must release the case before it can
                         be claimed by someone else.
@@ -1715,7 +1721,9 @@ export default function TicketDetailModalShell({
                 {!canReply ? (
                   <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
                     <p className="text-sm text-zinc-200">
-                      {ticketAssigneeId
+                      {ticketClosed
+                        ? 'This ticket is closed. Open it again before replying.'
+                        : ticketAssigneeId
                         ? 'Only the assigned staff member can reply on this ticket.'
                         : 'Claim this ticket before replying. No one is assigned yet.'}
                     </p>

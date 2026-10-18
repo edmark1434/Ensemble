@@ -802,14 +802,8 @@ async function createOrReuseDirectChatServices(payload, accountId) {
     return inbox;
 }
 
-async function assertMemberCanReplyOnTicket(inbox, senderAccountId) {
+async function assertMemberCanReplyOnTicket(inbox) {
     if (String(inbox?.conversation_type || '').toLowerCase() !== 'ticket') return;
-    const member = (inbox.members || []).find(
-        (entry) => String(entry.account_id) === String(senderAccountId)
-    );
-    const role = String(member?.role || '').toLowerCase();
-    if (['admin', 'staff', 'moderator'].includes(role)) return;
-
     const ticketId = inbox.ticket_id || inbox.support_ticket_id;
     if (!ticketId) return;
     const result = await pool.query(
@@ -838,7 +832,7 @@ async function buildMessage(payload, accountId) {
     if (!messageContent && !attachments.length) {
         throw new ChatServiceError('Message content or an attachment is required');
     }
-    await assertMemberCanReplyOnTicket(inbox, senderId);
+    await assertMemberCanReplyOnTicket(inbox);
 
     const now = new Date();
     const senderName = await actorDisplayName(senderId);
