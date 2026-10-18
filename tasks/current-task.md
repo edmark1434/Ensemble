@@ -1,9 +1,9 @@
-# Current Task: Chatbot human support ticket link
+# Current Task: Require login before the ticket page
 
 ## Objective
-On the Ask our chatbot page, give visitors a clear way to reach a person by opening a support ticket.
+Guests opening the support ticket page should sign in before they see the app, including the main menu, marketplace, and other member navigation.
 
 ## Acceptance criteria
-- [x] The chatbot page explains that a real person is available through a support ticket.
-- [x] A button opens the support ticket form at `/support/ticket`.
-- [x] The prompt stays visible on desktop and on a narrow layout.
+- [x] An unsigned visitor to `/support/ticket` is sent to login and returned to the ticket form after signing in.
+- [x] The member sidebar and header are not shown on that page until a session exists.
+- [x] A signed-in member still opens the ticket form inside the app.

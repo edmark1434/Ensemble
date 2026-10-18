@@ -41,6 +41,8 @@ async function startServer() {
       await initSocket(httpServer)
     ]);
     startPaymentReconciliationJob(); // Start the background job after DB connections
+    const { ensureDocumentationIngested } = require('./services/RagServices');
+    ensureDocumentationIngested().catch(() => {});
     // 2. Load API routes ONLY after database setups are fully initialized
 const apiRoutes = require('./routes/Api');
     app.use('/api', apiRateLimiter, csrfProtection, apiRoutes);

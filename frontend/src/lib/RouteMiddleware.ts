@@ -111,8 +111,8 @@ export default function RouteMiddleware() {
     const isPublicRoute =
         basePublicRoutes.includes(location.pathname) ||
         (location.pathname.startsWith('/landing/') && !isTicketFormRoute) ||
-        location.search.includes('preview=true') ||
-        isTicketFormRoute;
+        location.search.includes('preview=true');
+    const ticketLoginPath = `/login?redirect=${encodeURIComponent('/support/ticket')}`;
     const isOnboardingRoute = location.pathname.startsWith('/setup/');
 
     const isGuestAllowedRoute = isGuestAllowedPath(location.pathname);
@@ -129,9 +129,13 @@ export default function RouteMiddleware() {
 
     useEffect(() => {
         if (isCheckingSession || !isGuestAccessBlocked) return;
+        if (isTicketFormRoute) {
+            navigate(ticketLoginPath, { replace: true });
+            return;
+        }
         setIsGuestLoginOpen(true);
         navigate('/home', { replace: true });
-    }, [isCheckingSession, isGuestAccessBlocked, navigate]);
+    }, [isCheckingSession, isGuestAccessBlocked, isTicketFormRoute, ticketLoginPath, navigate]);
 
     useEffect(() => {
         if (resolvedUser) setIsGuestLoginOpen(false);
@@ -308,8 +312,8 @@ export default function RouteMiddleware() {
             return;
         }
 
-        navigate('/', { replace: true });
-    }, [isCheckingSession, resolvedUser, isGuestMode, isPublicRoute, isGuestAllowedRoute, isTicketFormRoute, navigate]);
+        navigate(isTicketFormRoute ? ticketLoginPath : '/', { replace: true });
+    }, [isCheckingSession, resolvedUser, isGuestMode, isPublicRoute, isGuestAllowedRoute, isTicketFormRoute, ticketLoginPath, navigate]);
 
     useEffect(() => {
         if (isCheckingSession || !isBannedMember(resolvedUser)) return;
@@ -320,9 +324,9 @@ export default function RouteMiddleware() {
     useEffect(() => {
         if (isCheckingSession || resolvedUser?.type !== 'Staff') return;
         if (isStaffPreviewFrame()) return;
-        if (isPublicRoute || isStaffConsolePath(location.pathname) || isOnboardingRoute) return;
+        if (isPublicRoute || isTicketFormRoute || isStaffConsolePath(location.pathname) || isOnboardingRoute) return;
         navigate(getStaffPlatformViewPath(resolvedUser.role), { replace: true });
-    }, [isCheckingSession, resolvedUser, isPublicRoute, isOnboardingRoute, location.pathname, navigate]);
+    }, [isCheckingSession, resolvedUser, isPublicRoute, isTicketFormRoute, isOnboardingRoute, location.pathname, navigate]);
 
     if (onboardingVerificationFailed) {
         return createElement(RouteLoadingShell);
@@ -337,6 +341,10 @@ export default function RouteMiddleware() {
     }
 
     if (!resolvedUser && !isGuestMode && !isPublicRoute && !isGuestAllowedRoute) {
+        return createElement(RouteLoadingShell);
+    }
+
+    if (isTicketFormRoute && !resolvedUser) {
         return createElement(RouteLoadingShell);
     }
 

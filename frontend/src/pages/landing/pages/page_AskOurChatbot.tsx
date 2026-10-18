@@ -217,9 +217,12 @@ const PageAskOurChatbot: React.FC = () => {
       ]);
     } catch (error: unknown) {
       if (axios.isCancel(error)) return;
-      const message = axios.isAxiosError(error)
+      const rawMessage = axios.isAxiosError(error)
         ? error.response?.data?.message || "The support assistant is temporarily unavailable. Please try again."
         : "The support assistant is temporarily unavailable. Please try again.";
+      const message = rawMessage === "Documentation has not been ingested yet"
+        ? "Ensemble’s documentation is still loading. Ask again in a moment, or open a ticket if you need a person."
+        : rawMessage;
       setMessages((prev) => [...prev, { sender: "bot", text: message, error: true }]);
     } finally {
       setIsSending(false);

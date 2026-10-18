@@ -1,6 +1,7 @@
 const { createEmbedding } = require('./EmbeddingServices');
 const { generateSupportAnswer, generateConversationReply } = require('./ClaudeSupportServices');
 const { searchDocumentChunks, getDocumentChunkCount } = require('../repositories/DocumentRepositories');
+const { ingestDocumentation } = require('./DocumentationIngestionServices');
 
 class RagError extends Error {
   constructor(message, statusCode = 400) {
@@ -163,12 +164,36 @@ function mostRelevantDocuments(documents) {
     .slice(0, 3);
 }
 
+let documentationIngestion = null;
+
+function ensureDocumentationIngested() {
+  if (documentationIngestion) return documentationIngestion;
+  documentationIngestion = ingestDocumentation()
+    .then((results) => {
+      console.log(`Documentation ingestion complete: ${results.length} source(s).`);
+      return results;
+    })
+    .catch((error) => {
+      documentationIngestion = null;
+      console.error('Documentation ingestion failed:', error.message);
+      throw error;
+    });
+  return documentationIngestion;
+}
+
 async function answerDocumentationQuestion(message, historyValue) {
   const question = validateQuestion(message);
   const history = validateConversationHistory(historyValue);
   const conversation = conversationalResponse(question);
   if (conversation) return { answer: conversation, sources: [], links: [] };
-  if (await getDocumentChunkCount() === 0) throw new RagError('Documentation has not been ingested yet', 503);
+  if (await getDocumentChunkCount() === 0) {
+    ensureDocumentationIngested().catch(() => {});
+    return {
+      answer: await generateConversationReply(question, history),
+      sources: [],
+      links: [],
+    };
+  }
   const embedding = await createEmbedding(contextualRetrievalText(question, history));
   const { topK, minSimilarity } = retrievalConfig();
   const retrieved = await searchDocumentChunks(embedding, Math.min(topK * 2, 20), minSimilarity);
@@ -200,5 +225,6 @@ module.exports = {
   rerankDocuments,
   verifiedLinks,
   answerDocumentationQuestion,
+  ensureDocumentationIngested,
   publicSources,
 };
