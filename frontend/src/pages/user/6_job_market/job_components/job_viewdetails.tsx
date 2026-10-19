@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Calendar, Clock, Briefcase, Users, Star, Send, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText, Bookmark, CheckCircle2, XCircle, HelpCircle } from "lucide-react";
+import { Calendar, Clock, Briefcase, Users, Star, Send, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText, Bookmark, CheckCircle2, XCircle, HelpCircle, Maximize2 } from "lucide-react";
 import { JobRichText } from "./JobRichText";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
@@ -83,22 +83,34 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               />
               <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
               
-              {onToggleSave && !isGuestMode && (
+              <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
                 <button
-                  title="Save Job Post"
+                  title="View Full Page"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onToggleSave(selectedJob.id);
+                    navigate(`/jobs/postings/${selectedJob.id}/page`);
                   }}
-                  className={`absolute top-4 right-4 rounded-full p-2 backdrop-blur-sm transition z-10 ${
-                    selectedJob.isSaved
-                      ? "bg-black/50 text-yellow-500 hover:bg-black/70"
-                      : "bg-black/50 text-gray-500 dark:text-zinc-400 hover:text-gray-900 hover:bg-black/70"
-                  }`}
+                  className="rounded-full p-2 bg-black/50 text-white/80 hover:text-white hover:bg-black/70 backdrop-blur-sm transition cursor-pointer"
                 >
-                  <Bookmark className={`h-4 w-4 ${selectedJob.isSaved ? "fill-current" : ""}`} />
+                  <Maximize2 className="h-4 w-4" />
                 </button>
-              )}
+                {onToggleSave && !isGuestMode && (
+                  <button
+                    title="Save Job Post"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleSave(selectedJob.id);
+                    }}
+                    className={`rounded-full p-2 backdrop-blur-sm transition cursor-pointer ${
+                      selectedJob.isSaved
+                        ? "bg-black/50 text-yellow-500 hover:bg-black/70"
+                        : "bg-black/50 text-gray-500 dark:text-zinc-400 hover:text-gray-900 hover:bg-black/70"
+                    }`}
+                  >
+                    <Bookmark className={`h-4 w-4 ${selectedJob.isSaved ? "fill-current" : ""}`} />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-5 thin-scrollbar">
@@ -486,18 +498,34 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               </div>
 
               {selectedJob.isOwnPost && !selectedJob.isManageablePost ? (
-                <div className="w-full rounded-xl border border-blue-500/20 bg-blue-500/10 py-3 text-center text-xs font-bold text-blue-400">
-                  This job was posted by a Team you belong to
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigate(`/jobs/postings/${selectedJob.id}/page`)}
+                    className="flex items-center justify-center px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
+                  >
+                    View Full
+                  </button>
+                  <div className="flex-1 rounded-xl border border-blue-500/20 bg-blue-500/10 py-3 text-center text-xs font-bold text-blue-400">
+                    This job was posted by a Team you belong to
+                  </div>
                 </div>
               ) : !selectedJob.isOwnPost ? (
                 selectedJob.hasProposed ? (
                   <div className="space-y-1">
-                    <button
-                      onClick={() => navigate(`/jobs/proposals/sent/${selectedJob.myProposalId}`)}
-                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 py-3 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/20 transition active:scale-[0.98]"
-                    >
-                      <FileText className="h-3.5 w-3.5" /> View your Proposal
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => navigate(`/jobs/postings/${selectedJob.id}/page`)}
+                        className="flex items-center justify-center px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
+                      >
+                        View Full
+                      </button>
+                      <button
+                        onClick={() => navigate(`/jobs/proposals/sent/${selectedJob.myProposalId}`)}
+                        className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 py-3 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/20 transition active:scale-[0.98]"
+                      >
+                        <FileText className="h-3.5 w-3.5" /> View your Proposal
+                      </button>
+                    </div>
                     {isTeamHiring && (
                       <span className="text-[10px] text-gray-500 dark:text-zinc-400 text-center block">
                         You have applied for a milestone role on this team project (1 role limit per contributor).
@@ -505,13 +533,20 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                     )}
                   </div>
                 ) : (
-                  <button
-                        onClick={() => {
-                          if (isGuestMode) return setIsModalOpen(true);
-                          if (isVerified) navigate(`/jobs/${selectedJob.id}/make-proposal`);
-                        }}
-                        disabled={!isGuestMode && !isVerified}
-                      className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg ${
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => navigate(`/jobs/postings/${selectedJob.id}/page`)}
+                      className="flex items-center justify-center px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
+                    >
+                      View Full
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (isGuestMode) return setIsModalOpen(true);
+                        if (isVerified) navigate(`/jobs/${selectedJob.id}/make-proposal`);
+                      }}
+                      disabled={!isGuestMode && !isVerified}
+                      className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg ${
                         (!isGuestMode && !isVerified)
                           ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' 
                           : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]'
@@ -520,9 +555,16 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                       <Send className="h-3.5 w-3.5" /> 
                       {isGuestMode ? "Login to Apply" : (!isVerified ? "Verify First" : "Send Proposal")}
                     </button>
+                  </div>
                 )
               ) : (
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigate(`/jobs/postings/${selectedJob.id}/page`)}
+                    className="flex items-center justify-center px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
+                  >
+                    View Full
+                  </button>
                   <button
                     onClick={() => navigate(`/jobs/edit/${selectedJob.id}`)}
                     className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500/10 border border-blue-500/20 py-3 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition"

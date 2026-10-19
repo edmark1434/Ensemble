@@ -216,6 +216,10 @@ async function getAllJobsRepositories(filters = {}, accountId = null, actorIds =
             values.push(filters.status);
             query += ` AND j.status = $${values.length}`;
         }
+        if (filters.jobId || filters.job_id) {
+            values.push(filters.jobId || filters.job_id);
+            query += ` AND j.job_id = $${values.length}`;
+        }
         
         query += ` ORDER BY j.created_at DESC`;
         
@@ -722,12 +726,18 @@ async function checkJobInvitationExistsRepositories(jobId, freelancerAccountId) 
     return result.rows[0];
 }
 
+async function getJobByIdRepositories(jobId, accountId = null, actorIds = [], affiliatedAccountIds = actorIds) {
+    const jobs = await getAllJobsRepositories({ jobId }, accountId, actorIds, affiliatedAccountIds);
+    return jobs[0] || null;
+}
+
 module.exports = {
     getActiveJobsByClientRepositories,
     createJobInvitationRepositories,
     checkJobInvitationExistsRepositories,
     createJobRepositories,
     getAllJobsRepositories,
+    getJobByIdRepositories,
     updateJobRepositories,
     createProposalRepositories,
     getProposalsByJobIdRepositories,

@@ -1,0 +1,992 @@
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
+import {
+  ArrowLeft,
+  Calendar,
+  Clock,
+  Briefcase,
+  Users,
+  User,
+  Star,
+  Bookmark,
+  Share2,
+  Flag,
+  Edit2,
+  Send,
+  Wrench,
+  RefreshCw,
+  FileText,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
+  ZoomIn,
+  X,
+  ChevronDown
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import UserHeader from "@/components/nav/user_header";
+import api from "@/lib/axios";
+import useGlobalState from "@/lib/global_state";
+import { CreditIcon } from "@/components/ui/credit-icon";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
+import { JobRichText } from "../job_components/JobRichText";
+import { JobsOtherPosts } from "../job_components/jobs_other_posts";
+import PopupReportJob from "../job_components/job_popups/popup_report_job";
+import type { Job } from "../job_components/job_lists";
+import { formatDistanceToNow } from "date-fns";
+
+const JobFullPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isVerified = useGlobalState((state) => state.isVerified);
+
+  const [job, setJob] = useState<Job | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
+  const [isWorkflowOpen, setIsWorkflowOpen] = useState(true);
+  const [isMilestonesOpen, setIsMilestonesOpen] = useState(true);
+
+  const getTimeAgo = (date: Date) => {
+    try {
+      let str = formatDistanceToNow(date, { addSuffix: true });
+      str = str
+        .replace(/minutes?/, (m) => (m === "minutes" ? "mins" : "min"))
+        .replace(/hours?/, (m) => (m === "hours" ? "hrs" : "hr"))
+        .replace(/seconds?/, (m) => (m === "seconds" ? "secs" : "sec"))
+        .replace(/days?/, "d")
+        .replace(/months?/, "m")
+        .replace(/years?/, (m) => (m === "years" ? "yrs" : "yr"))
+        .replace("about ", "");
+      return str;
+    } catch {
+      return "recently";
+    }
+  };
+
+  useEffect(() => {
+    const fetchJobDetails = async () => {
+      if (!id) return;
+      setLoading(true);
+      try {
+        const response = await api.get(`/api/jobs/${id}`);
+        if (response.data && response.data.success && response.data.data) {
+          const j = response.data.data;
+          const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || "";
+          const mapUrl = (path?: string) => {
+            if (!path) return "/placeholder.svg";
+            if (path.startsWith("http") || path.startsWith("/")) return path;
+            return `${cloudFrontUrl}/${path}`;
+          };
+
+          const minBudget = Number(j.rate_credits_min) || 0;
+          const maxBudget = Number(j.rate_credits_max) || 0;
+          let priceRange = "0 Credits";
+          if (minBudget && maxBudget && minBudget !== maxBudget) {
+            priceRange = `${minBudget.toLocaleString()} ~ ${maxBudget.toLocaleString()} Credits`;
+          } else if (minBudget) {
+            priceRange = `${minBudget.toLocaleString()} Credits`;
+          } else if (maxBudget) {
+            priceRange = `${maxBudget.toLocaleString()} Credits`;
+          }
+
+          const isTeam = Boolean(
+            j.hiring_type === "team" ||
+            (Array.isArray(j.milestones) && j.milestones.length > 0) ||
+            j.is_team ||
+            j.posted_as === "Team"
+          );
+
+          const mappedJob: Job = {
+            id: j.job_id || j.id,
+            title: j.title,
+            description: j.description || "",
+            status: j.status || "Open",
+            category: j.category || "General",
+            difficulty: j.experience_level || "Intermediate",
+            priceRange,
+            minBudget,
+            maxBudget,
+            postedBy: j.client_name || j.client_handle || "Unknown",
+            client_account_id: j.client_account_id,
+            clientAvatar: j.client_avatar_path
+              ? `${cloudFrontUrl}${j.client_avatar_path.startsWith("/") ? "" : "/"}${j.client_avatar_path}`
+              : undefined,
+            postedAt: new Date(j.created_at).toLocaleString(),
+            updatedAt: j.updated_at ? `Updated ${new Date(j.updated_at).toLocaleDateString()}` : undefined,
+            timeAgo: getTimeAgo(new Date(j.created_at)),
+            clientRating: 5.0,
+            ratingCount: 0,
+            positionsNeeded: Number(j.no_of_hires) || 1,
+            hiredCount: parseInt(j.hired_count) || 0,
+            applicantsCount: parseInt(j.applicant_count) || 0,
+            savesCount: parseInt(j.saves_count) || 0,
+            timeline: `${j.timeline_min || 0}-${j.timeline_max || 0} Days`,
+            thumbnail: mapUrl(j.thumbnail_path || j.thumbnail),
+            skills: j.tags || [],
+            isSaved: Boolean(j.is_saved),
+            isOwnPost: Boolean(j.is_own_post),
+            isManageablePost: Boolean(j.is_manageable_post),
+            isPersonalPost: Boolean(j.is_personal_post),
+            hasProposed: Boolean(j.has_proposed),
+            myProposalId: j.my_proposal_id || null,
+            team_id: j.team_id || null,
+            teamId: j.team_id || null,
+            team_visibility: j.team_visibility || null,
+            teamVisibility: j.team_visibility || null,
+            is_team: isTeam,
+            isTeam: isTeam,
+            posted_as: j.posted_as,
+            hiring_type: j.hiring_type || (isTeam ? "team" : "single"),
+            milestones: Array.isArray(j.milestones) ? j.milestones : [],
+            deadline: j.rough_deadline ? new Date(j.rough_deadline).toLocaleDateString() : undefined,
+            requireNDA: Boolean(j.require_nda),
+            portfolioUseAllowed: Boolean(j.portfolio_use_allowed),
+            portfolioDuration: j.portfolio_use_duration_seconds || null,
+            isExistingProject: Boolean(j.is_existing_project),
+            existingProjectId: j.existing_project_id || null,
+            initiatorRole: j.initiator_role || "Client"
+          };
+
+          setJob(mappedJob);
+        } else {
+          setJob(null);
+        }
+      } catch (error) {
+        console.error("Failed to fetch job details:", error);
+        setJob(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJobDetails();
+  }, [id]);
+
+  const isTeam = Boolean(
+    job?.is_team ||
+    job?.isTeam ||
+    job?.posted_as?.toLowerCase() === "team" ||
+    job?.team_id ||
+    job?.teamId
+  );
+  const teamVisibility = String(job?.team_visibility || job?.teamVisibility || "").toLowerCase();
+  const isPrivateTeam = isTeam && teamVisibility === "private";
+  const targetTeamId = job?.team_id || job?.teamId;
+  const isTeamHiring = Boolean(
+    job?.hiring_type === "team" ||
+    (Array.isArray(job?.milestones) && job.milestones.length > 0)
+  );
+
+  const handleViewProfile = () => {
+    if (!job) return;
+    if (isTeam && targetTeamId) {
+      navigate(`/teams/${encodeURIComponent(targetTeamId)}`);
+      return;
+    }
+    if (job.isPersonalPost) {
+      navigate("/profile");
+    } else if (job.client_account_id) {
+      navigate(`/profile/${job.client_account_id}`);
+    }
+  };
+
+  const handleToggleSave = async () => {
+    if (!job || isGuestMode) return;
+    const previousSaved = job.isSaved;
+    const previousCount = job.savesCount;
+
+    setJob((prev) =>
+      prev
+        ? {
+            ...prev,
+            isSaved: !previousSaved,
+            savesCount: previousSaved ? Math.max(0, previousCount - 1) : previousCount + 1
+          }
+        : null
+    );
+
+    try {
+      await api.post(`/api/jobs/${job.id}/save`);
+    } catch {
+      setJob((prev) =>
+        prev
+          ? {
+              ...prev,
+              isSaved: previousSaved,
+              savesCount: previousCount
+            }
+          : null
+      );
+    }
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: job?.title,
+        url: window.location.href
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      alert("Link copied to clipboard!");
+    }
+  };
+
+  if (!loading && !job) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col items-center justify-center">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Job Post Not Found</h2>
+        <p className="text-sm text-gray-500 dark:text-zinc-400 mt-2">
+          The job post you are looking for does not exist or has been removed.
+        </p>
+        <button
+          onClick={() => navigate("/jobs/postings")}
+          className="mt-4 px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition"
+        >
+          Back to Job Market
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col w-full relative">
+      {/* Sticky Top Headers Container */}
+      <div className="sticky top-0 z-40 bg-white dark:bg-dark-base flex flex-col border-b border-gray-200 dark:border-white/10 shadow-sm">
+        <div className="z-50">
+          <UserHeader pageTitle="Job Market" />
+        </div>
+        <div className="border-b border-gray-200 dark:border-white/10 px-6 py-4 flex items-center justify-between">
+          <button
+            onClick={() => navigate("/jobs/postings")}
+            className="flex items-center gap-2 text-sm font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to Job Market
+          </button>
+          {job && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleShare}
+                title="Share Job"
+                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400 cursor-pointer"
+              >
+                <Share2 className="h-4 w-4" />
+              </button>
+              {!isGuestMode && (
+                <button
+                  onClick={handleToggleSave}
+                  title="Save Job Post"
+                  className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors cursor-pointer ${
+                    job.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-gray-400"
+                  }`}
+                >
+                  <Bookmark className={`h-4 w-4 ${job.isSaved ? "fill-current" : ""}`} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="max-w-[1200px] w-full mx-auto py-8 px-4">
+        {loading || !job ? (
+          /* SKELETON LOADER */
+          <div className="w-full flex flex-col lg:flex-row gap-8 items-start animate-pulse">
+            <div className="flex-1 min-w-0 space-y-6 w-full">
+              <div className="flex items-center gap-2 pt-2">
+                <div className="h-6 w-16 rounded bg-gray-200 dark:bg-zinc-800" />
+                <div className="h-6 w-24 rounded bg-gray-200 dark:bg-zinc-800" />
+                <div className="h-6 w-28 rounded bg-gray-200 dark:bg-zinc-800" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-8 w-3/4 rounded-xl bg-gray-200 dark:bg-zinc-800" />
+                <div className="h-4 w-1/3 rounded bg-gray-200 dark:bg-zinc-800" />
+              </div>
+              <div className="w-full h-64 sm:h-80 md:h-96 rounded-2xl bg-gray-200 dark:bg-zinc-800" />
+              <div className="space-y-2 pt-4">
+                <div className="h-5 w-48 rounded bg-gray-200 dark:bg-zinc-800" />
+                <div className="h-4 w-full rounded bg-gray-200 dark:bg-zinc-800" />
+                <div className="h-4 w-full rounded bg-gray-200 dark:bg-zinc-800" />
+                <div className="h-4 w-2/3 rounded bg-gray-200 dark:bg-zinc-800" />
+              </div>
+            </div>
+
+            <div className="w-full lg:w-[400px] shrink-0 space-y-4 pt-2">
+              <div className="p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 h-20" />
+              <div className="p-6 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base h-72" />
+            </div>
+          </div>
+        ) : (
+          /* FULL PAGE 2-COLUMN VIEW */
+          <div className="w-full flex flex-col lg:flex-row gap-8 items-start">
+            {/* LEFT COLUMN */}
+            <div className="flex-1 min-w-0 space-y-6">
+              {/* Badges */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`relative overflow-hidden px-2.5 py-1 rounded text-[11px] font-black border ${
+                    job.status?.toLowerCase() === "open"
+                      ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
+                      : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
+                  }`}
+                >
+                  <span className="relative z-10">{job.status}</span>
+                  {job.status?.toLowerCase() === "open" && (
+                    <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                  )}
+                </span>
+
+                <span className="px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-bold text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
+                  {job.category}
+                </span>
+
+                <span className="px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-bold text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
+                  {job.difficulty}
+                </span>
+
+                {isTeamHiring ? (
+                  <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-purple-100 text-purple-700 border border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30 flex items-center gap-1.5 shadow-sm">
+                    <Users className="h-3 w-3" />
+                    Team Project
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-blue-100 text-blue-700 border border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30 flex items-center gap-1.5 shadow-sm">
+                    <User className="h-3 w-3" />
+                    Individual
+                  </span>
+                )}
+
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-medium text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
+                  <Clock className="h-3.5 w-3.5 text-gray-500" />
+                  <span>Timeline: {job.timeline}</span>
+                </div>
+
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-medium text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
+                  <Users className="h-3.5 w-3.5 text-gray-500" />
+                  <span>{job.positionsNeeded} {job.positionsNeeded === 1 ? "Opening" : "Openings"}</span>
+                </div>
+              </div>
+
+              {/* Title & Actions */}
+              <div className="flex justify-between items-start gap-4">
+                <div>
+                  <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white leading-tight">
+                    {job.title}
+                  </h1>
+
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-zinc-500 mt-2">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                      <span>Posted {job.postedAt}</span>
+                    </div>
+                    {job.updatedAt && (
+                      <div className="flex items-center gap-1 text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20 text-[11px] font-medium">
+                        <RefreshCw className="h-3 w-3" />
+                        <span>{job.updatedAt}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {job.isManageablePost ? (
+                    <button
+                      onClick={() => navigate(`/jobs/edit/${job.id}`)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs hover:bg-blue-500/20 transition-colors cursor-pointer"
+                      title="Edit Job Post"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                      <span>Edit Post</span>
+                    </button>
+                  ) : !job.isOwnPost && !isGuestMode ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsReportModalOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 font-bold text-xs hover:bg-gray-50 dark:hover:bg-white/10 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
+                      title="Report Job"
+                    >
+                      <Flag className="h-3.5 w-3.5" />
+                      <span>Report</span>
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Main Thumbnail Banner with Overlays */}
+              <div
+                onClick={() => {
+                  if (job.thumbnail && !job.thumbnail.includes("placeholder")) {
+                    setActiveLightboxImg(job.thumbnail);
+                  }
+                }}
+                className="w-full h-64 sm:h-80 md:h-96 rounded-2xl overflow-hidden bg-gray-100 dark:bg-white/5 relative border border-gray-200 dark:border-white/10 group cursor-pointer"
+              >
+                <img
+                  src={job.thumbnail}
+                  alt={job.title}
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = "/placeholder.svg";
+                  }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent pointer-events-none" />
+
+                {/* Top stats pills */}
+                <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-md text-white text-xs font-semibold border border-white/10 shadow-sm">
+                    <Send className="h-3.5 w-3.5 text-blue-400" />
+                    <span>{job.applicantsCount} Proposals</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-md text-white text-xs font-semibold border border-white/10 shadow-sm">
+                    <Briefcase className="h-3.5 w-3.5 text-amber-400" />
+                    <span>{job.hiredCount} / {job.positionsNeeded} Hired</span>
+                  </div>
+                </div>
+
+                {/* Posted time ago */}
+                <div className="absolute bottom-4 left-4 flex items-center gap-1.5 text-white text-xs font-medium drop-shadow-md z-10">
+                  <Clock className="h-3.5 w-3.5 text-zinc-300" />
+                  <span>Posted {job.timeAgo}</span>
+                </div>
+
+                {/* Expand overlay */}
+                <div className="absolute top-4 right-4 z-10 p-2 rounded-xl bg-black/60 backdrop-blur-md text-white/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[11px] font-bold">
+                  <ZoomIn className="h-4 w-4" />
+                  <span>Expand</span>
+                </div>
+
+                {/* Skills tags overlay */}
+                {job.skills && job.skills.length > 0 && (
+                  <div className="absolute bottom-12 left-4 right-4 z-10" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-black/60 backdrop-blur-md border border-white/15 text-zinc-300 shadow-sm shrink-0">
+                        <Wrench className="h-3.5 w-3.5" />
+                      </div>
+                      {job.skills.map((skill, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md border border-white/15 text-xs font-semibold text-white shadow-sm"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Scope of Work & Requirements */}
+              <section className="pt-2">
+                <h3 className="text-base font-bold text-gray-900 dark:text-white mb-3">
+                  Scope of Work & Requirements
+                </h3>
+                <div className="p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] text-sm text-gray-700 dark:text-zinc-300 leading-relaxed shadow-sm">
+                  <JobRichText content={job.description} />
+                </div>
+              </section>
+
+              {/* Team Milestones (When applicable) */}
+              {isTeamHiring && Array.isArray(job.milestones) && job.milestones.length > 0 && (
+                <section className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 shadow-sm overflow-hidden backdrop-blur-xl">
+                  <button
+                    type="button"
+                    onClick={() => setIsMilestonesOpen((prev) => !prev)}
+                    className="w-full p-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-purple-500" />
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white">
+                        Milestones & Roles Allocation ({job.milestones.length})
+                      </h3>
+                    </div>
+                    <ChevronDown
+                      className={`h-4 w-4 text-gray-400 dark:text-zinc-400 transition-transform duration-200 ${
+                        isMilestonesOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {isMilestonesOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden border-t border-gray-100 dark:border-white/5"
+                      >
+                        <div className="p-4 space-y-3">
+                          {job.milestones.map((m: any, idx: number) => {
+                            const taskList: string[] = Array.isArray(m.tasks)
+                              ? m.tasks
+                              : typeof m.tasks === "string"
+                              ? (() => {
+                                  try {
+                                    const parsed = JSON.parse(m.tasks);
+                                    return Array.isArray(parsed) ? parsed : [m.tasks];
+                                  } catch {
+                                    return [m.tasks];
+                                  }
+                                })()
+                              : [];
+
+                            const slots = Math.max(1, Number(m.slots_count) || 1);
+                            const hiredCount = Number(m.hired_count) || 0;
+                            const credits = Number(m.budget_credits) || 0;
+                            const percentage = Number(m.budget_percentage) || 0;
+
+                            return (
+                              <div
+                                key={m.job_milestone_id || idx}
+                                className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] space-y-2.5 transition hover:border-gray-300 dark:hover:border-white/20"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="space-y-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300">
+                                        Milestone #{idx + 1}
+                                      </span>
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 flex items-center gap-1">
+                                        <Users className="w-3 h-3 text-gray-500 dark:text-zinc-400" />
+                                        {slots} {slots === 1 ? "Slot" : "Slots"}
+                                      </span>
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200/50 dark:border-blue-500/20 flex items-center gap-1">
+                                        <Send className="w-2.5 h-2.5 text-blue-500 dark:text-blue-400" />
+                                        {Number(m.applicant_count || 0)} {Number(m.applicant_count || 0) === 1 ? "Proposal" : "Proposals"}
+                                      </span>
+                                      {hiredCount > 0 && (
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                                          {hiredCount} / {slots} Hired
+                                        </span>
+                                      )}
+                                    </div>
+                                    <h5 className="text-sm font-bold text-gray-900 dark:text-white pt-0.5">
+                                      {m.title}
+                                    </h5>
+                                  </div>
+
+                                  <div className="text-right shrink-0">
+                                    <div className="flex items-center gap-1 justify-end font-bold text-amber-500 dark:text-amber-400 text-sm">
+                                      <CreditIcon className="w-3.5 h-3.5 shrink-0" />
+                                      <span>{credits.toLocaleString()} Credits</span>
+                                    </div>
+                                    <span className="text-[10px] font-medium text-gray-500 dark:text-zinc-500">
+                                      {percentage}% share
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {m.description && (
+                                  <p className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed whitespace-pre-line">
+                                    {m.description}
+                                  </p>
+                                )}
+
+                                {taskList.length > 0 && (
+                                  <div className="pt-2 border-t border-gray-200/60 dark:border-white/5 space-y-1.5">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                                      Deliverables & Tasks ({taskList.length})
+                                    </p>
+                                    <div className="space-y-1.5 pl-0.5">
+                                      {taskList.map((task, tIdx) => (
+                                        <div key={tIdx} className="flex items-start gap-2 text-xs text-gray-700 dark:text-zinc-300">
+                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
+                                          <span className="leading-tight">{task}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </section>
+              )}
+
+              {/* Required Skills Section */}
+              {job.skills && job.skills.length > 0 && (
+                <section className="space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 flex items-center gap-1.5">
+                    <Wrench className="h-3.5 w-3.5 text-gray-400" />
+                    Required Skills & Qualifications
+                  </h4>
+                  <div className="flex flex-wrap gap-2 p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-sm">
+                    {job.skills.map((skill) => (
+                      <span
+                        key={skill}
+                        className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-zinc-800/80 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 text-xs font-semibold"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+
+            {/* RIGHT COLUMN (STICKY SIDEBAR) */}
+            <div className="w-full lg:w-[400px] shrink-0 space-y-4 pt-2 sticky top-[160px]">
+              {/* Profile Card */}
+              <div className="p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 shadow-sm backdrop-blur-xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  {job.clientAvatar ? (
+                    <img
+                      src={job.clientAvatar}
+                      alt={job.postedBy}
+                      className="h-10 w-10 rounded-full object-cover border border-gray-200 dark:border-white/10 shrink-0"
+                    />
+                  ) : (
+                    <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-xs text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 shrink-0">
+                      {job.postedBy.charAt(0)}
+                    </div>
+                  )}
+
+                  <div className="text-left min-w-0">
+                    <p className="text-[10px] uppercase text-gray-500 dark:text-zinc-500 font-bold tracking-wider">
+                      {isTeam ? "Project Team" : "Project Client"}
+                    </p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">
+                      {job.postedBy}
+                    </p>
+                    <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500 dark:text-zinc-400">
+                      <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
+                      <span>{job.clientRating || "5.0"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {!isPrivateTeam && (
+                  <button
+                    onClick={handleViewProfile}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition shrink-0 cursor-pointer"
+                  >
+                    <User className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
+                    <span>{isTeam ? "View Team" : "View Profile"}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Budget & Action Box */}
+              <div className="rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base shadow-sm p-6 space-y-5">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-500 tracking-wider">
+                      {isTeamHiring ? "Total Project Budget" : `Budget Range ${job.positionsNeeded > 1 ? "(Divided)" : ""}`}
+                    </span>
+                    {!isTeamHiring && job.positionsNeeded > 1 && (
+                      <div className="group relative flex items-center">
+                        <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                        <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover:block w-48 bg-white dark:bg-gray-900 text-gray-800 dark:text-white border border-gray-200 dark:border-gray-800 text-[10px] p-2 rounded-lg shadow-xl text-center z-20">
+                          This job requires {job.positionsNeeded} positions. The total budget pool is divided to show estimated budget per freelancer.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {isTeamHiring ? (
+                    <div>
+                      <div className="text-2xl font-black text-amber-500 dark:text-amber-400 flex items-center gap-1.5 leading-none">
+                        <CreditIcon className="h-6 w-6 text-amber-500 dark:text-amber-400 shrink-0" />
+                        <span>{job.minBudget ? job.minBudget.toLocaleString() : job.priceRange}</span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+                        Distributed across {job.milestones?.length || 0} milestones
+                      </p>
+                    </div>
+                  ) : job.positionsNeeded > 1 ? (
+                    <div>
+                      <div className="text-xs font-bold text-gray-400 dark:text-zinc-500 line-through mb-0.5 flex items-center gap-1">
+                        <CreditIcon className="h-3.5 w-3.5 shrink-0" />
+                        <span>{job.priceRange}</span>
+                      </div>
+                      <div className="text-2xl font-black text-blue-500 flex items-center gap-1.5 leading-none">
+                        <CreditIcon className="h-6 w-6 text-blue-500 shrink-0" />
+                        <span>
+                          {Math.round(job.minBudget / job.positionsNeeded) === Math.round((job.maxBudget || job.minBudget) / job.positionsNeeded)
+                            ? Math.round(job.minBudget / job.positionsNeeded).toLocaleString()
+                            : `${Math.round(job.minBudget / job.positionsNeeded).toLocaleString()} ~ ${Math.round((job.maxBudget || job.minBudget) / job.positionsNeeded).toLocaleString()}`}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-2xl font-black text-amber-500 dark:text-amber-400 flex items-center gap-1.5 leading-none">
+                      <CreditIcon className="h-6 w-6 text-amber-500 dark:text-amber-400 shrink-0" />
+                      <span>{job.priceRange}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Key stats row */}
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-100 dark:border-white/5 text-xs">
+                  <div>
+                    <span className="text-[10px] text-gray-500 dark:text-zinc-500 font-bold uppercase tracking-wider block mb-0.5">
+                      Timeline
+                    </span>
+                    <span className="font-semibold text-gray-800 dark:text-zinc-200">
+                      {job.timeline}
+                    </span>
+                  </div>
+                  {job.deadline && (
+                    <div>
+                      <span className="text-[10px] text-gray-500 dark:text-zinc-500 font-bold uppercase tracking-wider block mb-0.5">
+                        Deadline
+                      </span>
+                      <span className="font-semibold text-gray-800 dark:text-zinc-200">
+                        {job.deadline}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Proposals and Openings summary */}
+                <div className="flex items-center justify-between text-xs text-gray-600 dark:text-zinc-400 font-medium pt-2 border-t border-gray-100 dark:border-white/5">
+                  <span className="flex items-center gap-1">
+                    <Briefcase className="h-3.5 w-3.5 text-gray-400" />
+                    <strong>{job.hiredCount} / {job.positionsNeeded}</strong> Hired
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Send className="h-3.5 w-3.5 text-gray-400" />
+                    <strong>{job.applicantsCount}</strong> Proposals
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Bookmark className="h-3.5 w-3.5 text-gray-400" />
+                    <strong>{job.savesCount}</strong> Saves
+                  </span>
+                </div>
+
+                {/* Action Button */}
+                <div className="pt-2">
+                  {job.isOwnPost && !job.isManageablePost ? (
+                    <div className="w-full rounded-xl border border-blue-500/20 bg-blue-500/10 py-3 text-center text-xs font-bold text-blue-400">
+                      This job was posted by a Team you belong to
+                    </div>
+                  ) : !job.isOwnPost ? (
+                    job.hasProposed ? (
+                      <div className="space-y-1.5">
+                        <button
+                          onClick={() => navigate(`/jobs/proposals/sent/${job.myProposalId}`)}
+                          className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 py-3.5 text-sm font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/20 transition active:scale-[0.98] cursor-pointer"
+                        >
+                          <FileText className="h-4 w-4" /> View your Proposal
+                        </button>
+                        {isTeamHiring && (
+                          <span className="text-[10px] text-gray-500 dark:text-zinc-400 text-center block">
+                            You have applied for a milestone role on this team project.
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (isGuestMode) return setIsModalOpen(true);
+                          if (isVerified) navigate(`/jobs/${job.id}/make-proposal`);
+                        }}
+                        disabled={!isGuestMode && !isVerified}
+                        className={`w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition shadow-lg cursor-pointer ${
+                          !isGuestMode && !isVerified
+                            ? "bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none"
+                            : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]"
+                        }`}
+                      >
+                        <Send className="h-4 w-4" />
+                        {isGuestMode ? "Login to Apply" : !isVerified ? "Verify First" : "Send Proposal"}
+                      </button>
+                    )
+                  ) : (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => navigate(`/jobs/edit/${job.id}`)}
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 py-3 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition cursor-pointer"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" /> Edit Post
+                      </button>
+                      <button
+                        onClick={() => navigate(`/jobs/proposals/incoming/${job.id}`)}
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 py-3 text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-zinc-700 transition cursor-pointer"
+                      >
+                        <Users className="h-3.5 w-3.5 text-blue-400" /> Manage Applicants
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Collapsible Workflow & Terms */}
+              <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 shadow-sm overflow-hidden backdrop-blur-xl">
+                <button
+                  type="button"
+                  onClick={() => setIsWorkflowOpen((prev) => !prev)}
+                  className="w-full p-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="h-4 w-4 text-blue-500" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white">
+                      Workflow & Terms
+                    </h3>
+                  </div>
+                  <ChevronDown
+                    className={`h-4 w-4 text-gray-400 dark:text-zinc-400 transition-transform duration-200 ${
+                      isWorkflowOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {isWorkflowOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden border-t border-gray-100 dark:border-white/5"
+                    >
+                      <div className="p-4 space-y-3.5 text-xs">
+                        <div className="flex items-start gap-2.5">
+                          <div className="mt-0.5 shrink-0">
+                            {job.initiatorRole === "Client" ? (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-gray-400" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-900 dark:text-white">Client initiates project?</p>
+                            <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+                              {job.initiatorRole === "Client"
+                                ? "Yes, client prepares project upon hire."
+                                : "No, freelancer creates the project workspace."}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2.5">
+                          <div className="mt-0.5 shrink-0">
+                            {job.isExistingProject ? (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-gray-400" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-900 dark:text-white">Existing project linked?</p>
+                            <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+                              {job.isExistingProject ? "Yes, repository or files prepared." : "No existing project linked."}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2.5">
+                          <div className="mt-0.5 shrink-0">
+                            {job.requireNDA ? (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-gray-400" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-900 dark:text-white">Confidentiality / NDA?</p>
+                            <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+                              {job.requireNDA ? "Strict confidentiality agreement required." : "Standard platform confidentiality."}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2.5">
+                          <div className="mt-0.5 shrink-0">
+                            {job.portfolioUseAllowed ? (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-gray-400" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-900 dark:text-white">Portfolio usage allowed?</p>
+                            <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+                              {job.portfolioUseAllowed
+                                ? `Yes, allowed up to ${job.portfolioDuration || 30}s in portfolio.`
+                                : "No, confidential work not permitted in public portfolio."}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* BOTTOM SECTION: Other Job Posts You May Like */}
+        {job && <JobsOtherPosts currentJobId={job.id} />}
+      </div>
+
+      {/* Lightbox Modal */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {activeLightboxImg && (
+              <div className="fixed inset-0 z-[300000] flex items-center justify-center p-4 md:p-8">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setActiveLightboxImg(null)}
+                  className="absolute inset-0 bg-black/90 backdrop-blur-md cursor-pointer"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setActiveLightboxImg(null)}
+                  className="absolute top-4 right-4 z-50 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                  title="Close (Esc)"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.95, opacity: 0 }}
+                  className="relative z-10 max-w-5xl max-h-[85vh] rounded-2xl overflow-hidden border border-white/10 shadow-2xl"
+                >
+                  <img
+                    src={activeLightboxImg}
+                    alt="Lightbox Preview"
+                    className="w-full h-full object-contain"
+                  />
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* Guest Login Modal */}
+      <GuestLoginModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+
+      {/* Report Modal */}
+      {job && (
+        <PopupReportJob
+          isOpen={isReportModalOpen}
+          jobTitle={job.title}
+          onClose={() => setIsReportModalOpen(false)}
+          onSubmitReport={(reason, details) => {
+            console.log(`Report for job ${job.id}:`, { reason, details });
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+export default JobFullPage;

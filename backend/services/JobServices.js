@@ -62,6 +62,10 @@ async function getAllJobsServices(filters, accountId = null, actorIds = [], affi
     return await JobRepositories.getAllJobsRepositories(filters, accountId, actorIds, affiliatedAccountIds);
 }
 
+async function getJobByIdServices(jobId, accountId = null, actorIds = [], affiliatedAccountIds = actorIds) {
+    return await JobRepositories.getJobByIdRepositories(jobId, accountId, actorIds, affiliatedAccountIds);
+}
+
 async function updateJobServices(jobId, accountIds, jobData) {
     const updated = await JobRepositories.updateJobRepositories(jobId, accountIds, jobData);
     if (!updated) {
@@ -248,6 +252,7 @@ module.exports = {
     createJobInvitationServices,
     createJobServices,
     getAllJobsServices,
+    getJobByIdServices,
     updateJobServices,
     createProposalServices,
     getProposalsByJobIdServices,

@@ -37,6 +37,7 @@ import JobMyPostPage from '@/pages/user/6_job_market/job_pages/job_mypost_page.t
 import JobCreatePostPage from '@/pages/user/6_job_market/job_pages/job_createpost_page.tsx'
 import JobCreateTeamPostPage from '@/pages/user/6_job_market/job_pages/job_createteam_page.tsx'
 import JobEditPostPage from '@/pages/user/6_job_market/job_pages/job_editpost_page.tsx'
+import JobFullPage from '@/pages/user/6_job_market/job_pages/job_full_page.tsx'
 import ProposalsMain from '@/pages/user/6_job_market/job_proposals/proposals_main.tsx'
 import ProposalsSelectJobPage from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_select_job_page.tsx'
 import ProposalsIncomingPage from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_incoming_page.tsx'
@@ -289,6 +290,8 @@ function App() {
           <Route path='/jobs/create' element={<JobCreatePostPage />} />
           <Route path='/jobs/create/team' element={<JobCreateTeamPostPage />} />
           <Route path='/jobs/edit/:id' element={<JobEditPostPage />} />
+          <Route path='/jobs/postings/:id/page' element={<JobFullPage />} />
+          <Route path='/jobs/:id/page' element={<JobFullPage />} />
           <Route path='/jobs/:id/make-proposal' element={<ProposalsCreatePage />} />
           <Route path='/jobs/proposals/edit/:proposalId' element={<ProposalsEditPage />} />
           <Route path='/jobs/proposals/received/:proposalId' element={<ProposalsViewDetailsAsAuthor />} />

@@ -1,14 +1,21 @@
-# Current Task: Fix Post-Login Landing Page Redirect Flicker
+# Current Task: Full Page View for Job Posts with "Other Job Posts You May Like"
 
 ## Objective
-1. Eliminate the awkward redirect to the landing page (`'/'`) after login.
-2. Provide seamless, direct navigation to `/setup/upload-image` (or current onboarding step) if onboarding is incomplete, or to `/home` (or `redirectUrl`) if complete.
-3. Enhance backend login, signup, and session endpoints to provide onboarding state directly so the client resolves the destination with zero extra latency.
-4. Update `RouteMiddleware` so that authenticated users on public routes never flash the landing page while resolving their destination.
+1. Implement a full-page view for Job Posts at `/jobs/postings/:id/page` (supporting both Individual and Team job postings) following the layout structure of `/gigs/services/:id/page`.
+2. Do NOT include "Rates & Reviews" section (jobs do not have ratings/reviews like gigs).
+3. Include an "Other Job Posts You May Like" section at the bottom, rendering up to 3 active matching job posts in grid layout with navigation to their full page.
+4. Add backend `GET /api/jobs/:jobId` to fetch single job details directly.
+5. Add a "View Full Page" (`Maximize2`) button in the existing `JobViewDetails` drawer.
 
 ## Acceptance criteria
-- [x] Backend `/api/users/login`, `/api/users/signup`, and `/api/users/me` return user `onboarding` status (`{ completed, path }`).
-- [x] `Loginpage.tsx` directly resolves destination (`onboarding.path`, `/home`, or `redirectUrl`) and navigates immediately with `{ replace: true }`, never defaulting to `'/'`.
-- [x] `Oauth.tsx` broadcasts onboarding completion/step changes upon Google sign-in.
-- [x] `RouteMiddleware.ts` seeds onboarding gate immediately from `user.onboarding` and displays `RouteLoadingShell` instead of `<LandingPage />` if a signed-in user hits a public route while redirecting.
+- [x] Backend route `GET /api/jobs/:jobId` implemented and returns full job details.
+- [x] New `JobFullPage` created at `frontend/src/pages/user/6_job_market/job_pages/job_full_page.tsx`.
+- [x] Registered `/jobs/postings/:id/page` and `/jobs/:id/page` in `App.tsx`.
+- [x] Full page layout contains:
+  - Sticky header with `UserHeader` and Back to Job Market button.
+  - Left column: Status, difficulty, category, and Team/Individual badges; title, post metadata, edit/report actions; thumbnail with skills overlay & lightbox; description (RichText); team milestones (if team project); required skills.
+  - Right column: Poster profile card (Client / Team), budget card with price, timeline, deadline, openings, proposal status and action button ("Send Proposal", "View your Proposal", "Manage Applicants", etc.), workflow & NDA terms.
+  - Bottom section: "Other Job Posts You May Like" component (`jobs_other_posts.tsx`) featuring 3 job cards matching `/jobs/postings` grid style.
+  - No "Rates & Reviews" section.
+- [x] `JobViewDetails` drawer includes a "View Full" button on the bottom left (matching the Gig drawer) and header thumbnail button navigating to `/jobs/postings/:id/page`.
 - [x] Frontend build succeeds without errors (`cd frontend && npm run build`).

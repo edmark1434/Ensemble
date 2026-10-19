@@ -3,6 +3,7 @@ const router = require('express').Router();
 const {
     createJobController,
     getAllJobsController,
+    getJobByIdController,
     updateJobController,
     createProposalController,
     getProposalsByJobController,
@@ -43,5 +44,8 @@ router.get('/:jobId/proposals', [checkSession, requireAuth], getProposalsByJobCo
 router.get('/proposals/:proposalId', [checkSession, requireAuth], getProposalByIdController);
 router.delete('/proposals/:proposalId', [checkSession, requireAuth], withdrawProposalController);
 router.put('/proposals/:proposalId/status', [checkSession, requireAuth], updateProposalStatusController);
+
+// Single Job
+router.get('/:jobId', optionalAuth, getJobByIdController);
 
 module.exports = router;

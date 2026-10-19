@@ -59,6 +59,23 @@ async function getAllJobsController(req, res) {
     }
 }
 
+async function getJobByIdController(req, res) {
+    try {
+        const { jobId } = req.params;
+        const accountId = req.user?.account_id || req.user?.accountId || null;
+        const actorIds = accountId ? await getAuthorizedActorAccountIds(accountId) : [];
+        const affiliatedAccountIds = accountId ? await getAffiliatedAccountIds(accountId) : [];
+        const job = await JobServices.getJobByIdServices(jobId, accountId, actorIds, affiliatedAccountIds);
+        if (!job) {
+            return res.status(404).json({ success: false, message: 'Job not found' });
+        }
+        res.status(200).json({ success: true, data: job });
+    } catch (err) {
+        console.error('Error in getJobByIdController:', err);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+}
+
 async function updateJobController(req, res) {
     try {
         const accountId = req.user?.account_id;
@@ -379,6 +396,7 @@ module.exports = {
     createJobInvitationController,
     createJobController,
     getAllJobsController,
+    getJobByIdController,
     updateJobController,
     createProposalController,
     getProposalsByJobController,
