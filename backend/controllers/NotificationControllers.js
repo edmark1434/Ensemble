@@ -3,6 +3,7 @@ const {
     markNotificationAsReadServices,
     markAllNotificationsAsReadServices
 } = require('../services/NotificationServices');
+const { sendDynamicEmailService } = require('../services/EmailServices');
 
 async function getNotificationsByAccountIdController(req, res) {
     try {
@@ -50,8 +51,37 @@ async function markAllNotificationsAsReadController(req, res) {
     }
 }
 
+async function sendDynamicEmailController(req, res) {
+    try {
+        const { recipient, subject, content, links } = req.body;
+        const result = await sendDynamicEmailService({
+            recipient,
+            subject,
+            content,
+            links,
+        });
+        return res.status(200).json({
+            success: true,
+            message: 'Email sent successfully',
+            data: {
+                recipient: result.recipient,
+                subject,
+                linksCount: result.validLinksCount ?? (links || []).length,
+                simulated: result.simulated
+            }
+        });
+    } catch (err) {
+        console.error('Error sending dynamic email:', err.message);
+        return res.status(err.statusCode || 400).json({
+            success: false,
+            message: err.message || 'Failed to send email'
+        });
+    }
+}
+
 module.exports = {
     getNotificationsByAccountIdController,
     markNotificationAsReadController,
-    markAllNotificationsAsReadController
+    markAllNotificationsAsReadController,
+    sendDynamicEmailController
 }
