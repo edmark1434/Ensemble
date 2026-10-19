@@ -1,3 +1,5 @@
+export const APPEAL_PATH = '/account/appeal';
+
 type AppealUser = {
   type?: string;
   status?: string;

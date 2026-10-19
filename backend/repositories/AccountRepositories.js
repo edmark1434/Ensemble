@@ -78,7 +78,53 @@ async function getAccountByHandle(handle) {
     }
 }
 
-async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, role = null) {
+async function getAccountDeactivation(accountId) {
+    const result = await pool.query(
+        `SELECT a.account_id, a.type, a.status, a.deactivated_at, a.reactivation_available_at
+         FROM accounts a
+         LEFT JOIN users u ON u.account_id = a.account_id
+         WHERE a.deleted_at IS NULL
+           AND (a.account_id::text = $1 OR u.user_id::text = $1)
+         LIMIT 1`,
+        [accountId]
+    );
+    return result.rows[0] || null;
+}
+
+async function deactivateAccount(accountId, cooldownHours) {
+    const result = await pool.query(
+        `UPDATE accounts
+         SET status = 'Deactivated',
+             deactivated_at = NOW(),
+             reactivation_available_at = NOW() + ($2::int * INTERVAL '1 hour')
+         WHERE account_id = $1
+           AND type = 'User'
+           AND deleted_at IS NULL
+           AND LOWER(status) = 'active'
+         RETURNING account_id, type, status, deactivated_at, reactivation_available_at`,
+        [accountId, cooldownHours]
+    );
+    return result.rows[0] || null;
+}
+
+async function reactivateAccount(accountId) {
+    const result = await pool.query(
+        `UPDATE accounts
+         SET status = 'Active',
+             deactivated_at = NULL,
+             reactivation_available_at = NULL
+         WHERE account_id = $1
+           AND type = 'User'
+           AND deleted_at IS NULL
+           AND LOWER(status) = 'deactivated'
+           AND reactivation_available_at <= NOW()
+         RETURNING account_id, type, status, deactivated_at, reactivation_available_at`,
+        [accountId]
+    );
+    return result.rows[0] || null;
+}
+
+async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, role = null, includeDeactivated = false) {
     const search = String(handle || '').replace(/^@/, '').trim();
     const escapedSearch = search ? search.replace(/[\\%_]/g, '\\\$&') : '';
 
@@ -101,6 +147,9 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, 
             a.banner_preset,
               u.email_address AS email,
               a.created_at AS joined_date,
+            a.status,
+            a.deactivated_at,
+            a.reactivation_available_at,
               (SELECT COUNT(*) FROM jobs j WHERE j.client_account_id = a.account_id) AS total_jobs,
               (SELECT COUNT(*) FROM gigs g WHERE g.freelancer_account_id = a.account_id) AS total_services,
               (SELECT COUNT(*) FROM media_assets ma WHERE ma.owner_user_id = u.user_id) AS total_assets,
@@ -127,11 +176,13 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, 
          LEFT JOIN subscriptions s ON u.user_id = s.user_id
          LEFT JOIN plans p ON s.plan_id = p.plan_id
          WHERE a.type = 'User'
-           AND LOWER(a.status) = 'active'
-           AND a.deleted_at IS NULL`;
+           AND a.deleted_at IS NULL
+           AND LOWER(COALESCE(a.status, '')) NOT IN ('deleted', 'inactive')
+           AND ($3::boolean = TRUE OR LOWER(COALESCE(a.status, '')) <> 'deactivated')
+           AND ($1::uuid IS NULL OR a.account_id <> $1::uuid)`;
            
-    const values = [excludeAccountId || null, limit];
-    let paramIndex = 3;
+    const values = [excludeAccountId || null, limit, Boolean(includeDeactivated)];
+    let paramIndex = 4;
 
     if (search) {
         query += ` AND (
@@ -438,7 +489,7 @@ async function unfollowUser(followerId, followedId) {
     }
 }
 
-async function getFollowers(accountId) {
+async function getFollowers(accountId, includeDeactivated = false) {
     try {
         const query = `
             SELECT 
@@ -450,9 +501,10 @@ async function getFollowers(accountId) {
             INNER JOIN accounts a ON a.account_id = af.follower_id
             LEFT JOIN files f ON f.file_id = a.avatar_file_id
             WHERE af.followed_id = $1
+              AND ($2::boolean = TRUE OR LOWER(COALESCE(a.status, '')) <> 'deactivated')
             ORDER BY af.created_at DESC;
         `;
-        const result = await pool.query(query, [accountId]);
+        const result = await pool.query(query, [accountId, Boolean(includeDeactivated)]);
         return result.rows;
     } catch (err) {
         console.error(`Error fetching followers for ${accountId}:`, err);
@@ -460,7 +512,7 @@ async function getFollowers(accountId) {
     }
 }
 
-async function getFollowing(accountId) {
+async function getFollowing(accountId, includeDeactivated = false) {
     try {
         const query = `
             SELECT 
@@ -472,9 +524,10 @@ async function getFollowing(accountId) {
             INNER JOIN accounts a ON a.account_id = af.followed_id
             LEFT JOIN files f ON f.file_id = a.avatar_file_id
             WHERE af.follower_id = $1
+              AND ($2::boolean = TRUE OR LOWER(COALESCE(a.status, '')) <> 'deactivated')
             ORDER BY af.created_at DESC;
         `;
-        const result = await pool.query(query, [accountId]);
+        const result = await pool.query(query, [accountId, Boolean(includeDeactivated)]);
         return result.rows;
     } catch (err) {
         console.error(`Error fetching following for ${accountId}:`, err);
@@ -723,6 +776,9 @@ module.exports = {
     getAccountById,
     createAccount,
     getAccountByHandle,
+    getAccountDeactivation,
+    deactivateAccount,
+    reactivateAccount,
     searchUserAccountsByHandle,
     getAccountWalletRepositories,
     checkAccountId,

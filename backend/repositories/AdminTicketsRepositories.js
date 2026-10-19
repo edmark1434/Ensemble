@@ -1353,6 +1353,8 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     savedTranscript: await latestTicketTranscript(ticketId),
     autoClosesAt: ticketAutoClosesAt(ticket),
     scheduledCloseAt: row.scheduled_close_at || null,
+    appealDecision: row.appeal_decision || null,
+    appealDecidedAt: row.appeal_decided_at || null,
   };
 }
 
@@ -1645,11 +1647,26 @@ function ticketAutoClosesAt(ticket) {
 
 async function notifyTicketClosed({ ticketId, ticketNumber, requesterAccountId, reason, staffSession }) {
   const chatId = await getTicketChatId(ticketId);
-  const body = reason === 'auto'
-    ? 'This ticket was closed automatically after 7 days without a reply. A transcript was saved.'
-    : reason === 'scheduled'
-      ? 'This ticket is now closed at the time staff scheduled. A transcript was saved.'
-      : 'This ticket was closed. A transcript was saved.';
+  const appealCopy = {
+    appeal_accepted: {
+      body: 'This appeal is accepted. The penalty ends in 24 hours, and this ticket is now closed.',
+      message: `Your appeal on ticket #${ticketNumber} was accepted. The penalty ends in 24 hours.`,
+    },
+    appeal_denied: {
+      body: 'This appeal is denied. This ticket is closed. You can submit another appeal in 12 months.',
+      message: `Your appeal on ticket #${ticketNumber} was denied. You can appeal again in 12 months.`,
+    },
+    appeal_denied_permanent: {
+      body: 'This appeal is denied permanently. This ticket is closed, and this account cannot submit another appeal.',
+      message: `Your appeal on ticket #${ticketNumber} was denied permanently. This account cannot submit another appeal.`,
+    },
+  }[reason];
+  const body = appealCopy?.body
+    || (reason === 'auto'
+      ? 'This ticket was closed automatically after 7 days without a reply. A transcript was saved.'
+      : reason === 'scheduled'
+        ? 'This ticket is now closed at the time staff scheduled. A transcript was saved.'
+        : 'This ticket was closed. A transcript was saved.');
   if (chatId) {
     await writeTicketMembershipNote(chatId, staffSession || {}, body);
   }
@@ -1663,11 +1680,12 @@ async function notifyTicketClosed({ ticketId, ticketNumber, requesterAccountId, 
   }
   const actorId = sessionAccountId(staffSession);
   if (actorId) recipients.delete(String(actorId));
-  const message = reason === 'auto'
-    ? `Your ticket #${ticketNumber} was closed after 7 days without a reply. Open it to read the transcript.`
-    : reason === 'scheduled'
-      ? `Your ticket #${ticketNumber} is now closed. Open it to read the transcript.`
-      : `Your ticket #${ticketNumber} is closed. Open it to read the transcript.`;
+  const message = appealCopy?.message
+    || (reason === 'auto'
+      ? `Your ticket #${ticketNumber} was closed after 7 days without a reply. Open it to read the transcript.`
+      : reason === 'scheduled'
+        ? `Your ticket #${ticketNumber} is now closed. Open it to read the transcript.`
+        : `Your ticket #${ticketNumber} is closed. Open it to read the transcript.`);
   const referencePath = chatId ? `/inbox/direct?conversation=${chatId}` : '/notifications';
   await Promise.all([...recipients].map(async (accountId) => {
     try {
@@ -2107,7 +2125,7 @@ async function searchTicketParticipants(rawQuery) {
      LEFT JOIN staff s ON s.account_id = a.account_id
      WHERE a.deleted_at IS NULL
        AND (u.account_id IS NOT NULL OR s.staff_id IS NOT NULL)
-       AND (a.status IS NULL OR LOWER(a.status) = 'active')
+       AND LOWER(COALESCE(a.status, '')) NOT IN ('deleted', 'inactive', 'deactivated')
        AND (
          LOWER(a.handle) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
          OR LOWER(COALESCE(a.display_name, '')) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
@@ -3952,6 +3970,202 @@ async function getTicketPickers(accountId) {
   return { projects, listings, orders, contracts, jobs };
 }
 
+const APPEAL_TICKET_TYPE = 'Appeal an account penalty';
+const APPEAL_DECISIONS = {
+  accept: 'accepted',
+  accepted: 'accepted',
+  deny: 'denied',
+  denied: 'denied',
+  deny_permanent: 'denied_permanent',
+  denied_permanent: 'denied_permanent',
+  permanent: 'denied_permanent',
+};
+
+async function assertCanFileAppeal(accountId) {
+  const hold = await pool.query(
+    `SELECT permanently_denied, blocked_until
+     FROM account_appeal_holds
+     WHERE account_id = $1`,
+    [accountId]
+  );
+  const row = hold.rows[0];
+  if (row?.permanently_denied) {
+    throw ticketError('This account cannot submit another appeal.', 403);
+  }
+  if (row?.blocked_until && new Date(row.blocked_until).getTime() > Date.now()) {
+    const when = new Date(row.blocked_until).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    throw ticketError(`You can submit another appeal on ${when}.`, 403);
+  }
+  const open = await pool.query(
+    `SELECT ticket_id
+     FROM tickets
+     WHERE account_id = $1
+       AND deleted_at IS NULL
+       AND type = $2
+       AND status NOT IN ('Closed', 'Resolved')
+     LIMIT 1`,
+    [accountId, APPEAL_TICKET_TYPE]
+  );
+  if (open.rows.length) {
+    throw ticketError('You already have an open appeal. Reply on that ticket instead.', 409);
+  }
+}
+
+async function decideTicketAppeal(ticketId, decision, staffSession) {
+  if (!isStaffSession(staffSession)) throw ticketError('Only staff can decide an appeal', 403);
+  const normalized = APPEAL_DECISIONS[String(decision || '').toLowerCase()];
+  if (!normalized) throw ticketError('Choose accept, deny, or deny permanently', 400);
+
+  const current = await pool.query(
+    `SELECT ticket_id, ticket_number, type, account_id, appeal_decision
+     FROM tickets
+     WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  if (!current.rows.length) return null;
+  const ticket = current.rows[0];
+  if (ticket.type !== APPEAL_TICKET_TYPE) throw ticketError('This ticket is not an account appeal', 400);
+  if (ticket.appeal_decision) throw ticketError('This appeal already has a decision', 409);
+  if (!ticket.account_id) throw ticketError('This appeal has no account to update', 400);
+
+  const staff = await resolveDisputeStaffId(staffSession);
+  const staffId = staff?.staff_id || null;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    if (normalized === 'accepted') {
+      await client.query(
+        `UPDATE accounts
+         SET ban_ends_at = CASE WHEN LOWER(status) = 'banned' THEN NOW() + INTERVAL '24 hours' ELSE ban_ends_at END,
+             lock_ends_at = CASE WHEN LOWER(status) = 'locked' THEN NOW() + INTERVAL '24 hours' ELSE lock_ends_at END,
+             suspension_ends_at = CASE WHEN LOWER(status) = 'suspended' THEN NOW() + INTERVAL '24 hours' ELSE suspension_ends_at END
+         WHERE account_id = $1`,
+        [ticket.account_id]
+      );
+    }
+    const hold = normalized === 'denied_permanent'
+      ? { decision: 'denied_permanent', permanent: true }
+      : { decision: 'accepted', permanent: false };
+    if (normalized === 'denied') {
+      await client.query(
+        `INSERT INTO account_appeal_holds (
+           account_id, decision, blocked_until, permanently_denied, ticket_id, staff_id, decided_at
+         ) VALUES ($1, 'denied', NOW() + INTERVAL '12 months', FALSE, $2, $3, NOW())
+         ON CONFLICT (account_id) DO UPDATE
+           SET decision = 'denied',
+               blocked_until = NOW() + INTERVAL '12 months',
+               permanently_denied = FALSE,
+               ticket_id = EXCLUDED.ticket_id,
+               staff_id = EXCLUDED.staff_id,
+               decided_at = NOW()`,
+        [ticket.account_id, ticket.ticket_id, staffId]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO account_appeal_holds (
+           account_id, decision, blocked_until, permanently_denied, ticket_id, staff_id, decided_at
+         ) VALUES ($1, $2, NULL, $3, $4, $5, NOW())
+         ON CONFLICT (account_id) DO UPDATE
+           SET decision = EXCLUDED.decision,
+               blocked_until = NULL,
+               permanently_denied = EXCLUDED.permanently_denied,
+               ticket_id = EXCLUDED.ticket_id,
+               staff_id = EXCLUDED.staff_id,
+               decided_at = NOW()`,
+        [ticket.account_id, hold.decision, hold.permanent, ticket.ticket_id, staffId]
+      );
+    }
+    await client.query(
+      `UPDATE tickets
+       SET status = 'Closed',
+           resolved_at = COALESCE(resolved_at, NOW()),
+           updated_at = NOW(),
+           scheduled_close_at = NULL,
+           appeal_decision = $2,
+           appeal_decided_at = NOW()
+       WHERE ticket_id = $1`,
+      [ticket.ticket_id, normalized]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  const reason = normalized === 'accepted'
+    ? 'appeal_accepted'
+    : normalized === 'denied'
+      ? 'appeal_denied'
+      : 'appeal_denied_permanent';
+  const action = normalized === 'accepted'
+    ? 'Appeal accepted. Penalty ends in 24 hours.'
+    : normalized === 'denied'
+      ? 'Appeal denied. Next appeal is available in 12 months.'
+      : 'Appeal denied permanently.';
+  await recordTicketEvent({
+    ticketId: ticket.ticket_id,
+    eventType: 'status',
+    summary: action,
+    actorStaffId: staffId,
+  }).catch((error) => {
+    console.error('Appeal decision timeline failed:', error.message);
+  });
+  await recordAccountActivity({
+    accountId: ticket.account_id,
+    action,
+    eventCode: 'APPEAL_DECISION',
+    referenceTable: 'tickets',
+    referencePrefix: 'TICKET',
+    referenceId: ticket.ticket_id,
+    actorStaffId: staffId,
+    metadata: { decision: normalized, ticketNumber: ticket.ticket_number },
+  });
+  await saveTicketCloseTranscript(ticket.ticket_id, {
+    reason,
+    actorStaffId: staffId,
+    actorAccountId: sessionAccountId(staffSession),
+  }).catch((error) => {
+    console.error('Appeal transcript failed:', error.message);
+  });
+  await notifyTicketClosed({
+    ticketId: ticket.ticket_id,
+    ticketNumber: ticket.ticket_number,
+    requesterAccountId: ticket.account_id,
+    reason,
+    staffSession,
+  }).catch((error) => {
+    console.error('Appeal close notice failed:', error.message);
+  });
+
+  if (normalized === 'accepted') {
+    try {
+      const { getAccountAccess } = require('../lib/AccountRestriction');
+      const restriction = await getAccountAccess(ticket.account_id);
+      const { getIo } = require('../lib/WebSocket');
+      const io = getIo();
+      if (io) {
+        io.to(String(ticket.account_id)).emit('account:status_changed', {
+          accountId: ticket.account_id,
+          status: restriction?.status,
+          code: restriction?.code || null,
+          message: 'Your appeal was accepted. The penalty ends in 24 hours.',
+          restriction,
+        });
+      }
+    } catch (error) {
+      console.warn('Appeal acceptance broadcast failed:', error.message);
+    }
+  }
+
+  return getTicketDetail(ticketId, staffSession);
+}
+
 module.exports = {
   getTicketsOverview,
   getTicketDetail,
@@ -3972,6 +4186,8 @@ module.exports = {
   cancelScheduledTicketClose,
   closeScheduledTickets,
   generateTicketTranscript,
+  assertCanFileAppeal,
+  decideTicketAppeal,
   addTicketMessage,
   updateTicketMessage,
   deleteTicketMessage,

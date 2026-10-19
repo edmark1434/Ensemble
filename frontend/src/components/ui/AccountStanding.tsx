@@ -396,8 +396,8 @@ export function AccountRestrictionHost() {
             restriction: standing,
           });
         }
-        if (window.location.pathname !== '/account/access') {
-          navigate('/account/access', { replace: true });
+        if (window.location.pathname !== '/account/appeal') {
+          navigate('/account/appeal', { replace: true });
         }
         return;
       }

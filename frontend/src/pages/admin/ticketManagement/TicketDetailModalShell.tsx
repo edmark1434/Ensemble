@@ -466,6 +466,8 @@ export default function TicketDetailModalShell({
   const [scheduleChoice, setScheduleChoice] = useState('24');
   const [customCloseAt, setCustomCloseAt] = useState('');
   const [schedulingClose, setSchedulingClose] = useState(false);
+  const [appealChoice, setAppealChoice] = useState<'accept' | 'deny' | 'deny_permanent' | null>(null);
+  const [decidingAppeal, setDecidingAppeal] = useState(false);
   const [confirmPerson, setConfirmPerson] = useState<{
     accountId: string;
     name: string;
@@ -947,6 +949,22 @@ export default function TicketDetailModalShell({
     }
   };
 
+  const decideAppeal = async () => {
+    if (!appealChoice) return;
+    setDecidingAppeal(true);
+    try {
+      const response = await api.post(`/api/staff/tickets/${ticketId}/appeal-decision`, { decision: appealChoice });
+      if (response.data?.data) setDetail(response.data.data as TicketDetail);
+      setAppealChoice(null);
+      showSuccessToast(response.data?.message || 'Appeal decision saved');
+      onUpdated();
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to decide this appeal'));
+    } finally {
+      setDecidingAppeal(false);
+    }
+  };
+
   const saveTranscript = async () => {
     setSavingTranscript(true);
     try {
@@ -1378,6 +1396,78 @@ export default function TicketDetailModalShell({
                         </p>
                       </div>
                     ))}
+                  </section>
+                )}
+
+                {ticketTypeOf(detail.ticket) === 'Appeal an account penalty' && (
+                  <section className="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/[0.06] p-4">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-200/80">Appeal decision</p>
+                      <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                        Accepting ends the penalty in 24 hours. Denying closes this ticket and lets them appeal again in 12 months. Deny permanently closes it and blocks every future appeal.
+                      </p>
+                    </div>
+                    {detail.appealDecision ? (
+                      <p className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white">
+                        {detail.appealDecision === 'accepted'
+                          ? 'Accepted. The penalty ends 24 hours after this decision, and the ticket is closed.'
+                          : detail.appealDecision === 'denied_permanent'
+                            ? 'Denied permanently. This account cannot submit another appeal.'
+                            : 'Denied. They can submit another appeal in 12 months.'}
+                      </p>
+                    ) : appealChoice ? (
+                      <div className="space-y-2">
+                        <p className="text-sm text-zinc-200">
+                          {appealChoice === 'accept'
+                            ? 'Accept this appeal, end the penalty in 24 hours, and close the ticket?'
+                            : appealChoice === 'deny_permanent'
+                              ? 'Deny this appeal permanently and close the ticket? They will not be able to appeal again.'
+                              : 'Deny this appeal and close the ticket? They can appeal again in 12 months.'}
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={decidingAppeal}
+                            onClick={() => void decideAppeal()}
+                            className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                          >
+                            {decidingAppeal ? 'Saving…' : 'Confirm'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={decidingAppeal}
+                            onClick={() => setAppealChoice(null)}
+                            className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-200"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setAppealChoice('accept')}
+                          className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-left text-xs font-medium text-emerald-100"
+                        >
+                          Accept appeal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAppealChoice('deny')}
+                          className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-left text-xs font-medium text-amber-100"
+                        >
+                          Deny appeal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAppealChoice('deny_permanent')}
+                          className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-left text-xs font-medium text-rose-100"
+                        >
+                          Deny permanently
+                        </button>
+                      </div>
+                    )}
                   </section>
                 )}
 

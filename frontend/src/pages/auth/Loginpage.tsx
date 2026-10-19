@@ -13,6 +13,7 @@ import { notifyOnboardingCompleted, notifyOnboardingStepChanged } from "@/lib/on
 import { getStaffHomePath } from "@/lib/staffRoutes";
 import { Eye, EyeOff, KeyRound, Shield } from "lucide-react";
 import { AccountRestrictionCard, standingFromPayload, type AccountStanding } from "@/components/ui/AccountStanding";
+import { APPEAL_PATH, isAppealLimitedMember } from "@/lib/appealAccess";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -492,6 +493,11 @@ export default function LoginPage({
         setUser(loggedInUser);
         setIsAuthenticated(true);
 
+        if (isAppealLimitedMember(loggedInUser)) {
+          navigate(APPEAL_PATH, { replace: true });
+          return;
+        }
+
         if (onSuccess) {
           onSuccess();
           return;
@@ -504,11 +510,6 @@ export default function LoginPage({
           notifyOnboardingCompleted(String(accountId));
         } else if (onboarding?.path && accountId) {
           notifyOnboardingStepChanged(onboarding.path, String(accountId));
-        }
-
-        if (loggedInUser?.restriction?.banned || loggedInUser?.restriction?.locked) {
-          navigate('/account/access', { replace: true });
-          return;
         }
 
         let destination: string;

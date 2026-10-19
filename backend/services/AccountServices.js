@@ -75,9 +75,9 @@ async function getAccountByHandleService(handle) {
     }
 }
 
-async function searchUserAccountsByHandleService(handle, accountId, role = null) {
+async function searchUserAccountsByHandleService(handle, accountId, role = null, includeDeactivated = false) {
     const query = String(handle || '').replace(/^@/, '').trim();
-    return await searchUserAccountsByHandle(query, accountId, 50, role);
+    return await searchUserAccountsByHandle(query, accountId, 50, role, includeDeactivated);
 }
 
 async function getAccountWalletService(accountId, type) { 
@@ -269,20 +269,20 @@ async function unfollowUserService(followerId, followedId) {
     }
 }
 
-async function getFollowersService(accountId) {
+async function getFollowersService(accountId, includeDeactivated = false) {
     if (!accountId) throw new Error('Account ID is required');
     try {
-        return await getFollowers(accountId);
+        return await getFollowers(accountId, includeDeactivated);
     } catch (err) {
         console.error('Error in getFollowersService:', err);
         throw err;
     }
 }
 
-async function getFollowingService(accountId) {
+async function getFollowingService(accountId, includeDeactivated = false) {
     if (!accountId) throw new Error('Account ID is required');
     try {
-        return await getFollowing(accountId);
+        return await getFollowing(accountId, includeDeactivated);
     } catch (err) {
         console.error('Error in getFollowingService:', err);
         throw err;

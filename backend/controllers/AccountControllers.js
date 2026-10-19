@@ -54,7 +54,8 @@ async function searchUserAccountsByHandleController(req, res) {
         const accounts = await searchUserAccountsByHandleService(
             req.query.handle,
             account_id,
-            req.query.role
+            req.query.role,
+            req.session?.type === 'Staff'
         );
         return res.status(200).json({ success: true, data: accounts });
     } catch (err) {
@@ -127,12 +128,20 @@ async function getProfileController(req, res) {
     }
 }
 
+async function hiddenProfileResponse(req, res, accountId) {
+    const { profileHiddenFromViewer } = require('../services/AccountDeactivationServices');
+    if (!(await profileHiddenFromViewer(accountId, req.session))) return false;
+    res.status(404).json({ success: false, code: 'ACCOUNT_DEACTIVATED', message: 'Profile not found.' });
+    return true;
+}
+
 async function getAccountLinkByAccountIdController(req, res) {
     const { accountId } = req.params;
     if (!accountId) {
         return res.status(401).json({ success: false, message: 'Unauthorized. Account session not found.' });
     }
     try {
+        if (await hiddenProfileResponse(req, res, accountId)) return;
         const links = await getAccountLinkByAccountIdService(accountId);
         return res.status(200).json({ success: true, message: 'Account links fetched successfully', links });
     } catch (err) {
@@ -150,6 +159,10 @@ async function checkUserAccountIdController(req, res) {
         return res.status(401).json({ success: false, message: 'Unauthorized. Account session not found.' });
     }
     try {
+        const { profileHiddenFromViewer } = require('../services/AccountDeactivationServices');
+        if (await profileHiddenFromViewer(accountId, req.session)) {
+            return res.status(404).json({ success: false, message: 'User profile not found.', code: 'ACCOUNT_DEACTIVATED' });
+        }
         const isUser = await checkUserAccountIdService(accountId);
         if (!isUser) {
             return res.status(404).json({ success: false, message: 'User profile not found.' });
@@ -312,7 +325,8 @@ async function unfollowUserController(req, res) {
 async function getFollowersController(req, res) {
     const { accountId } = req.params;
     try {
-        const followers = await getFollowersService(accountId);
+        if (await hiddenProfileResponse(req, res, accountId)) return;
+        const followers = await getFollowersService(accountId, req.session?.type === 'Staff');
         return res.status(200).json({ success: true, followers });
     } catch (err) {
         console.error('Error in getFollowersController:', err);
@@ -323,7 +337,8 @@ async function getFollowersController(req, res) {
 async function getFollowingController(req, res) {
     const { accountId } = req.params;
     try {
-        const following = await getFollowingService(accountId);
+        if (await hiddenProfileResponse(req, res, accountId)) return;
+        const following = await getFollowingService(accountId, req.session?.type === 'Staff');
         return res.status(200).json({ success: true, following });
     } catch (err) {
         console.error('Error in getFollowingController:', err);
@@ -361,6 +376,39 @@ async function curateBadgesController(req, res) {
     }
 }
 
+async function deactivationResponse(req, res, action) {
+    try {
+        const { getAccountAccess } = require('../lib/AccountRestriction');
+        const state = await action(req.session);
+        const accountId = req.session?.account_id || req.session?.accountId;
+        const restriction = accountId ? await getAccountAccess(accountId) : null;
+        return res.status(200).json({ success: true, deactivation: state, restriction });
+    } catch (err) {
+        const status = err.statusCode || 500;
+        if (status >= 500) console.error('Account deactivation error:', err);
+        return res.status(status).json({
+            success: false,
+            message: status >= 500 ? 'Unable to update deactivation.' : err.message,
+            deactivation: err.details || null,
+        });
+    }
+}
+
+async function getDeactivationController(req, res) {
+    const { getOwnDeactivation } = require('../services/AccountDeactivationServices');
+    return deactivationResponse(req, res, getOwnDeactivation);
+}
+
+async function deactivateAccountController(req, res) {
+    const { deactivateOwnAccount } = require('../services/AccountDeactivationServices');
+    return deactivationResponse(req, res, deactivateOwnAccount);
+}
+
+async function reactivateAccountController(req, res) {
+    const { reactivateOwnAccount } = require('../services/AccountDeactivationServices');
+    return deactivationResponse(req, res, reactivateOwnAccount);
+}
+
 module.exports = {
     createAccount,
     getAccountByHandle,
@@ -380,6 +428,9 @@ module.exports = {
     getFollowingController,
     checkIsFollowingController,
     curateBadgesController, grantBadgeController,
+    getDeactivationController,
+    deactivateAccountController,
+    reactivateAccountController,
 };
 async function grantBadgeController(req, res) {
     try {

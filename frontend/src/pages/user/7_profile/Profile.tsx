@@ -874,6 +874,17 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
 
       <div className="mx-auto max-w-7xl p-4 md:p-8 space-y-5">
 
+        {String(userDetails?.status || "").toLowerCase() === "deactivated" && (
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+            <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+              Deactivated
+            </span>
+            <p className="text-sm text-amber-900 dark:text-amber-100">
+              Hidden from member search and public profiles. Staff can still view this account.
+            </p>
+          </div>
+        )}
+
         {isOwner && !hasCompletedProfileSetup && (
           <ProfileSetupWidget
             completionScore={completionScore}

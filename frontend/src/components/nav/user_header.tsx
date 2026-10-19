@@ -18,6 +18,7 @@ import { getNotificationIcon, getNotificationLabel } from "@/lib/notificationTyp
 import TicketInviteActions from "@/components/nav/TicketInviteActions";
 import { showAccountWarningToast } from "@/components/ui/AccountStanding";
 import { isAppealLimitedMember } from "@/lib/appealAccess";
+import { DeactivatedBadge } from "@/components/account/DeactivatedBadge";
 
 interface UserHeaderProps {
   pageTitle: string;
@@ -53,6 +54,7 @@ interface CreatorSearchApiAccount {
   display_name: string | null;
   handle: string;
   avatar_preset_url: string | null;
+  status?: string | null;
 }
 
 interface CreatorSearchResult {
@@ -60,6 +62,7 @@ interface CreatorSearchResult {
   name: string;
   username: string;
   avatar: string;
+  deactivated?: boolean;
 }
 
 const getSubscriptionIcon = (type: string) => {
@@ -806,6 +809,7 @@ useEffect(() => {
                 ? avatarPath
                 : `${cloudfront}/${avatarPath.replace(/^\/+/, "")}`
               : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=71717a&color=fff`,
+            deactivated: String(account.status || "").toLowerCase() === "deactivated",
           };
         });
         if (!cancelled) setCreatorSearchResults(results);
@@ -1010,8 +1014,11 @@ useEffect(() => {
                               className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-colors border-b border-gray-100 dark:border-white/5 last:border-none"
                             >
                               <img src={creator.avatar} alt={creator.name} className="h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-white/10" />
-                              <div className="min-w-0">
-                                <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{creator.name}</p>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{creator.name}</p>
+                                  {creator.deactivated && <DeactivatedBadge />}
+                                </div>
                                 <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate">@{creator.username}</p>
                               </div>
                             </div>

@@ -3,6 +3,10 @@ const GalleryServices = require('../services/GalleryServices');
 async function getUserGalleries(req, res) {
     try {
         const { accountId } = req.params;
+        const { profileHiddenFromViewer } = require('../services/AccountDeactivationServices');
+        if (await profileHiddenFromViewer(accountId, req.session)) {
+            return res.status(404).json({ success: false, code: 'ACCOUNT_DEACTIVATED', message: 'Profile not found.' });
+        }
         const galleries = await GalleryServices.getUserGalleries(accountId);
         res.status(200).json(galleries);
     } catch (err) {
@@ -13,7 +17,7 @@ async function getUserGalleries(req, res) {
 
 async function getAllGalleriesController(req, res) {
     try {
-        const galleries = await GalleryServices.getAllGalleries();
+        const galleries = await GalleryServices.getAllGalleries(req.session?.type === 'Staff');
         res.status(200).json(galleries);
     } catch (err) {
         console.error('getAllGalleriesController error:', err);
