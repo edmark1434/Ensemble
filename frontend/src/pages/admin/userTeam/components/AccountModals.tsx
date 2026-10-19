@@ -123,9 +123,11 @@ export function ConfirmStatusModal({
   entityName: string;
   action: 'ban' | 'suspend' | 'restore' | 'lock' | 'unban' | 'unsuspend' | 'unlock' | 'timeout' | 'clear_timeout';
   onClose: () => void;
-  onConfirm: (options?: { duration?: 'temporary' | 'permanent'; endsAt?: string | null }) => Promise<void>;
+  onConfirm: (options?: { duration?: 'temporary' | 'permanent'; endsAt?: string | null; reason: string }) => Promise<void>;
 }) {
   const [saving, setSaving] = useState(false);
+  const [reason, setReason] = useState('');
+  const [reasonError, setReasonError] = useState('');
   const choosesDuration = action === 'ban' || action === 'suspend' || action === 'lock' || action === 'timeout';
   const [timing, setTiming] = useState<SanctionTiming>({
     duration: action === 'ban' || action === 'lock' ? 'permanent' : 'temporary',
@@ -200,15 +202,19 @@ export function ConfirmStatusModal({
           </button>
           <button
             type="button"
-            disabled={saving || (choosesDuration && timing.duration === 'temporary' && !timing.endsAt)}
+            disabled={saving || !reason.trim() || (choosesDuration && timing.duration === 'temporary' && !timing.endsAt)}
             onClick={async () => {
+              if (!reason.trim()) {
+                setReasonError('A reason is required.');
+                return;
+              }
               setSaving(true);
               try {
-                await onConfirm(
-                  choosesDuration
-                    ? { duration: timing.duration, endsAt: timing.endsAt }
-                    : undefined
-                );
+                await onConfirm({
+                  duration: choosesDuration ? timing.duration : undefined,
+                  endsAt: choosesDuration ? timing.endsAt : undefined,
+                  reason: reason.trim(),
+                });
                 onClose();
               } catch (err) {
                 handleAccountActionError(err);
@@ -242,6 +248,21 @@ export function ConfirmStatusModal({
           onChange={setTiming}
         />
       )}
+      <label className="mt-4 block text-sm text-zinc-300">
+        Reason
+        <textarea
+          value={reason}
+          onChange={(event) => {
+            setReason(event.target.value);
+            if (event.target.value.trim()) setReasonError('');
+          }}
+          rows={3}
+          required
+          placeholder="Why this is being applied or removed"
+          className="mt-1 w-full rounded-xl border border-white/10 bg-transparent px-3 py-2 text-sm text-white"
+        />
+        {reasonError ? <span className="mt-1 block text-xs text-red-300">{reasonError}</span> : null}
+      </label>
     </ModalShell>
   );
 }
@@ -253,15 +274,18 @@ export function BulkConfirmModal({
   tone = 'bg-rose-500/90 hover:bg-rose-500',
   onClose,
   onConfirm,
+  requireReason = false,
 }: {
   count: number;
   actionLabel: string;
   resultLabel: string;
   tone?: string;
   onClose: () => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: (reason?: string) => Promise<void>;
+  requireReason?: boolean;
 }) {
   const [saving, setSaving] = useState(false);
+  const [reason, setReason] = useState('');
 
   return (
     <ModalShell
@@ -279,11 +303,12 @@ export function BulkConfirmModal({
           </button>
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || (requireReason && !reason.trim())}
             onClick={async () => {
+              if (requireReason && !reason.trim()) return;
               setSaving(true);
               try {
-                await onConfirm();
+                await onConfirm(requireReason ? reason.trim() : undefined);
                 onClose();
               } catch (err) {
                 handleAccountActionError(err);
@@ -302,6 +327,19 @@ export function BulkConfirmModal({
         This runs the same action on every highlighted row. Accounts that fail individually will be
         reported without blocking the rest.
       </p>
+      {requireReason ? (
+        <label className="mt-4 block text-sm text-zinc-300">
+          Reason
+          <textarea
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            rows={3}
+            required
+            placeholder="Why this is being applied or removed"
+            className="mt-1 w-full rounded-xl border border-white/10 bg-transparent px-3 py-2 text-sm text-white"
+          />
+        </label>
+      ) : null}
     </ModalShell>
   );
 }
@@ -1447,7 +1485,7 @@ export function WarnAccountModal({
   onChanged?: () => void;
 }) {
   const [type, setType] = useState('Account warning');
-  const [reason, setReason] = useState('Warning issued by administrator');
+  const [reason, setReason] = useState('');
   const [points, setPoints] = useState('1');
   const [timing, setTiming] = useState<SanctionTiming>({
     duration: 'temporary',
@@ -1471,8 +1509,9 @@ export function WarnAccountModal({
           </button>
           <button
             type="button"
-            disabled={saving || (timing.duration === 'temporary' && !timing.endsAt)}
+            disabled={saving || !reason.trim() || (timing.duration === 'temporary' && !timing.endsAt)}
             onClick={async () => {
+              if (!reason.trim()) return;
               setSaving(true);
               try {
                 await warnAccount(accountId, {
@@ -1512,6 +1551,8 @@ export function WarnAccountModal({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
+            required
+            placeholder="Why this warning is being issued"
             className="mt-1 w-full rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
           />
         </label>

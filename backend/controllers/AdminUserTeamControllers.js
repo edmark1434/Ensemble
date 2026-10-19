@@ -73,6 +73,7 @@ async function patchAdminAccountStatus(req, res) {
       days: req.body?.days,
       duration: req.body?.duration,
       endsAt: req.body?.endsAt,
+      reason: req.body?.reason,
     });
     const message = data.forumTimeout
       ? 'Timeout applied'

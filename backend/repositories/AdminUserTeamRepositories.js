@@ -1133,9 +1133,20 @@ async function getAccountWallet(accountId) {
   return result.rows[0] || null;
 }
 
+function sanctionReason(options = {}) {
+  const reason = String(options.reason || '').trim();
+  if (!reason) {
+    const error = new Error('A reason is required');
+    error.statusCode = 400;
+    throw error;
+  }
+  return reason;
+}
+
 async function updateAccountStatus(accountId, actionOrStatus, staffId = null, options = {}) {
   const account = await assertAccountExists(accountId);
   const key = String(actionOrStatus || '').toLowerCase();
+  const reason = sanctionReason(options);
   const {
     sanctionEndsAt,
     getAccountAccess,
@@ -1152,13 +1163,13 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
     );
     await recordAccountActivity({
       accountId,
-      action: endsAt ? 'Timeout applied' : 'Timeout applied until lifted',
+      action: endsAt ? `Timeout applied: ${reason}` : `Timeout applied until lifted: ${reason}`,
       eventCode: 'FORUM_TIMEOUT',
       referenceTable: 'restrictions',
       referencePrefix: 'RST',
       referenceId: accountId,
       actorStaffId: staffId,
-      metadata: { endsAt, days: options.days ?? null },
+      metadata: { endsAt, days: options.days ?? null, reason },
     });
     let restriction = null;
     try {
@@ -1170,7 +1181,9 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
           accountId,
           status: account.status,
           code: 'FORUM_TIMEOUT',
-          message: restriction?.message,
+          message: restriction?.message
+            ? `${restriction.message} Reason: ${reason}`
+            : reason,
           restriction,
         });
       }
@@ -1193,13 +1206,13 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
     );
     await recordAccountActivity({
       accountId,
-      action: 'Timeout cleared',
+      action: `Timeout cleared: ${reason}`,
       eventCode: 'FORUM_TIMEOUT_CLEARED',
       referenceTable: 'restrictions',
       referencePrefix: 'RST',
       referenceId: accountId,
       actorStaffId: staffId,
-      metadata: {},
+      metadata: { reason },
     });
     let restriction = null;
     try {
@@ -1211,7 +1224,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
           accountId,
           status: account.status,
           code: null,
-          message: 'Your timeout has been lifted.',
+          message: `Your timeout has been lifted. Reason: ${reason}`,
           restriction,
         });
       }
@@ -1241,7 +1254,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
 
   await recordAccountActivity({
     accountId,
-    action: `Account status set to ${status}`,
+    action: `Account status set to ${status}: ${reason}`,
     eventCode: 'ACCOUNT_STATUS_CHANGED',
     referenceTable: 'accounts',
     referencePrefix: 'ACC',
@@ -1252,6 +1265,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       status,
       action: key,
       suspensionEndsAt,
+      reason,
     },
   });
 
@@ -1262,6 +1276,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       previousStatus: account.status,
       action: key,
       actorStaffId: staffId,
+      reason,
     });
   } catch (notifyErr) {
     console.warn('Failed to broadcast account status change:', notifyErr.message);
@@ -1527,7 +1542,12 @@ async function warnAccount(accountId, { type, reason, points, expiresAt, duratio
 
   const violationNumber = `VIO-${Date.now().toString().slice(-8)}`;
   const warnType = String(type || 'Account warning').trim() || 'Account warning';
-  const warnReason = String(reason || 'Warning issued by administrator').trim();
+  const warnReason = String(reason || '').trim();
+  if (!warnReason) {
+    const error = new Error('A reason is required');
+    error.statusCode = 400;
+    throw error;
+  }
   const warnPoints = Number(points) || 1;
   const { warningExpiry } = require('../lib/AccountRestriction');
   const expiry = warningExpiry({ duration, days, expiresAt, endsAt, points: warnPoints });
