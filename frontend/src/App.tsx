@@ -218,10 +218,13 @@ function App() {
         {/* Handoff page: no sidebar, but still behind RouteMiddleware */}
         <Route path="/projects/open/:projectId" element={<OpenInEditor />} />
 
+        {/* Banned and locked members. No sidebar, chat, or platform tabs. */}
+        <Route path="/account/appeal" element={<AccountAccessPage />} />
+        <Route path="/account/access" element={<Navigate to="/account/appeal" replace />} />
+
         {/* User Dashboard Routes - All wrapped in Layout */}
         <Route element={<Layout />}>
           <Route path='/home' element={<Home />} />
-          <Route path='/account/access' element={<AccountAccessPage />} />
           <Route path='/support/ticket' element={<PageSubmitATicket />} />
             <Route path='/credits' element={<CreditShop />} />
             <Route path='/credits-subscriptions' element={<CreditShop />} />

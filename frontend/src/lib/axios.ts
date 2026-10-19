@@ -111,8 +111,8 @@ api.interceptors.response.use(
                     restriction: standing,
                 });
             }
-            if (!window.location.pathname.startsWith("/account/access")) {
-                window.location.assign("/account/access");
+            if (!window.location.pathname.startsWith("/account/appeal")) {
+                window.location.assign("/account/appeal");
             }
             return Promise.reject(err);
         }

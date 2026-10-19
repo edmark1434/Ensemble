@@ -8,7 +8,7 @@ import { ProfileLoadingState } from "@/pages/user/7_profile/Displays/ProfileLoad
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { isGuestAllowedPath } from "./guestRouteAccess";
 import { isStaffConsolePath, isStaffPreviewFrame } from "./staffPlatformView";
-import { isAppealLimitedMember } from "./appealAccess";
+import { APPEAL_PATH, isAppealLimitedMember } from "./appealAccess";
 
 type OnboardingGateState = {
     accountId: string | null;
@@ -56,7 +56,7 @@ function isBannedMember(user: Parameters<typeof isAppealLimitedMember>[0]) {
 }
 
 function isBannedAllowedPath(pathname: string) {
-    return pathname === '/account/access' || pathname === '/login';
+    return pathname === APPEAL_PATH || pathname === '/account/access' || pathname === '/login';
 }
 
 function getRedirectPath(user: { type?: string; role?: string | null; status?: string; restriction?: { banned?: boolean; code?: string } } | null) {
@@ -65,7 +65,7 @@ function getRedirectPath(user: { type?: string; role?: string | null; status?: s
     }
 
     if (isBannedMember(user)) {
-        return '/account/access';
+        return APPEAL_PATH;
     }
 
     if (user.type === 'Staff') {
@@ -304,7 +304,7 @@ export default function RouteMiddleware() {
         }
 
         if (isBannedMember(resolvedUser)) {
-            return '/account/access';
+            return APPEAL_PATH;
         }
 
         if (resolvedUser?.type === 'User' && onboardingPath === undefined) {
@@ -348,7 +348,7 @@ export default function RouteMiddleware() {
     useEffect(() => {
         if (isCheckingSession || !isBannedMember(resolvedUser)) return;
         if (isBannedAllowedPath(location.pathname)) return;
-        navigate('/account/access', { replace: true });
+        navigate(APPEAL_PATH, { replace: true });
     }, [isCheckingSession, resolvedUser, location.pathname, navigate]);
 
     useEffect(() => {

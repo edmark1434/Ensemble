@@ -1,8 +1,13 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { signOut } from 'firebase/auth';
+import { LogOut } from 'lucide-react';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
+import { auth } from '@/pages/firebase';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { AccountRecordSection } from '@/pages/user/7_profile/Displays/AccountStanding';
+import UserLogoutModal from '@/components/nav/user_logout_modal';
 
 type TicketRow = {
   id: string;
@@ -45,7 +50,10 @@ function formatWhen(value?: string | null) {
 
 export default function AccountAccessPage() {
   const user = useGlobalState((state) => state.user);
+  const clearUser = useGlobalState((state) => state.clearUser);
+  const navigate = useNavigate();
   const restriction = user?.restriction;
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const [tickets, setTickets] = useState<TicketRow[]>([]);
   const [disputes, setDisputes] = useState<DisputeRow[]>([]);
   const [openTicketId, setOpenTicketId] = useState<string | null>(null);
@@ -142,7 +150,40 @@ export default function AccountAccessPage() {
     }
   }
 
+  async function confirmSignOut() {
+    setConfirmLogout(false);
+    try {
+      await api.post('/api/users/logout');
+    } catch {
+      // The local session still has to close.
+    }
+    try {
+      await signOut(auth);
+    } catch {
+      // Firebase may already be signed out.
+    }
+    clearUser();
+    navigate('/login', { replace: true });
+  }
+
   return (
+    <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-white">
+      <header className="flex items-center justify-between border-b border-zinc-200 px-5 py-4 dark:border-white/10">
+        <p className="text-sm font-semibold tracking-wide">Ensemble</p>
+        <button
+          type="button"
+          onClick={() => setConfirmLogout(true)}
+          className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 px-3 py-2 text-sm dark:border-white/10"
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </button>
+      </header>
+      <UserLogoutModal
+        isOpen={confirmLogout}
+        onClose={() => setConfirmLogout(false)}
+        onConfirm={() => void confirmSignOut()}
+      />
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8">
       <section className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">
@@ -302,6 +343,7 @@ export default function AccountAccessPage() {
           </div>
         ) : null}
       </section>
+    </div>
     </div>
   );
 }
