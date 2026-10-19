@@ -79,22 +79,19 @@ body {
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
-/* Thin, theme-aware scrollbar that stays hidden until hover */
+/* Thin, theme-aware scrollbar that stays hidden or subtle */
 .scroll-thin {
   scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-
-.scroll-thin:hover {
   scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
-.dark .scroll-thin:hover {
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+.dark .scroll-thin {
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
 .scroll-thin::-webkit-scrollbar {
   width: 4px;
+  height: 4px;
 }
 
 .scroll-thin::-webkit-scrollbar-track,
@@ -104,16 +101,32 @@ body {
 }
 
 .scroll-thin::-webkit-scrollbar-thumb {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.15);
   border-radius: 9999px;
 }
 
+.dark .scroll-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}
+
 .scroll-thin:hover::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .dark .scroll-thin:hover::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Hide scrollbar utility */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 .silver-solid {

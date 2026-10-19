@@ -21,6 +21,7 @@ export const ProposalsSentPage: React.FC = () => {
     revisionRateSort,
     dateSort,
     viewType,
+    showFilters,
     setChildProposalsCounts,
   } = useOutletContext<ProposalsMainContext>();
 
@@ -29,7 +30,7 @@ export const ProposalsSentPage: React.FC = () => {
   const { fetchSentProposals } = useJobs();
   const navigate = useNavigate();
   const location = useLocation();
-  const proposalScope = location.pathname.startsWith("/jobs/proposals/team-sent") ? "teams" : "personal";
+  const proposalScope = location.pathname.startsWith("/jobs/proposals/team-sent") ? "teams" : "all";
   const isTeamProposals = proposalScope === "teams";
 
   useEffect(() => {
@@ -192,6 +193,7 @@ export const ProposalsSentPage: React.FC = () => {
       <ProposalsList
         proposals={filtered}
         viewType={viewType}
+        showFilters={showFilters}
         onUpdateStatus={handleUpdateStatus}
       />
     </div>

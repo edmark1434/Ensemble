@@ -1,12 +1,14 @@
-# Current Task: Staff context on member reports
+# Current Task: Refactor Incoming Team Proposals View & Remove Team Proposals Tab
 
 ## Objective
-When a member reports a message, forum, user, team, job, or gig, staff and admins can open the report and see the reported subject, a link to it, and the reporter's description. Staff can sanction the reported account, or deny or archive the report.
+Remove the unused "Team Proposals" navigation tab from proposals tabs, and redesign the incoming team job proposals page to replace the cluttered "Roster & Cart" view with intuitive Milestone Sub-Tabs and readable, polished candidate cards.
 
-## Acceptance criteria
-- [x] Report detail includes the reported account, a link to the subject, the message text when a message was reported, and the description.
-- [x] Profile, job, and gig reports save a reason and a description of at least 20 characters.
-- [x] Sanction applies a warning, suspension, or ban and notifies the reporter.
-- [x] Deny closes the report without notifying the reporter. Staff must claim the report before they can change, sanction, or deny it.
-- [x] Opening a reported account, comment, forum, job, gig, or team from staff sends them to platform view on that page.
-- [x] Frontend build succeeds.
+## Acceptance Criteria
+- [x] Remove "Team Proposals" tab from `proposals_tabs.tsx`.
+- [x] In `proposals_incoming_page.tsx`, replace the "Roster & Cart" view toggle with Milestone Sub-Tabs for jobs with milestones.
+- [x] Add compact, sleek active milestone status strip showing role need, slots filled/open, and budget percentage.
+- [x] Filter proposal cards by the selected milestone tab (or "All Roles").
+- [x] Refactor proposal cards to be clean, highly readable, and comfortable on the eyes in both List and Grid views.
+- [x] Include clear action buttons on each card: View Full Details, Chat / Interview, Shortlist toggle, and Accept / Hire candidate.
+- [x] Verify frontend with `npm run build`.
+- [x] Strictly do NOT git commit unless explicitly commanded by user.

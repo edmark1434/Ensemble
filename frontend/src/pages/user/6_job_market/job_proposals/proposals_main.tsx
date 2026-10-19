@@ -30,6 +30,7 @@ export interface ProposalsMainContext {
   dateSort: "inc" | "dec" | null;
   viewType: ViewType;
   loading: boolean;
+  showFilters: boolean;
   setChildProposalsCounts: React.Dispatch<React.SetStateAction<Record<string, number> | null>>;
 }
 
@@ -252,6 +253,7 @@ export const ProposalsMain: React.FC = () => {
                   dateSort,
                   viewType,
                   loading,
+                  showFilters,
                   setChildProposalsCounts,
                 } satisfies ProposalsMainContext
               }

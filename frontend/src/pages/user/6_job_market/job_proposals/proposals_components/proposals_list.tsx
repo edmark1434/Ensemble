@@ -12,7 +12,9 @@ import {
   Edit2,
   ExternalLink,
   MessageSquare,
+  CheckCircle2,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import type { ViewType } from "./proposals_list_viewtype";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { JobRichText } from "../../job_components/JobRichText";
@@ -74,50 +76,34 @@ export interface ProposalItemData {
   }[];
 }
 
-interface ProposalsListProps {
+export interface ProposalsListProps {
   proposals: ProposalItemData[];
   loading?: boolean;
   viewType?: ViewType;
+  showFilters?: boolean;
+  onUpdateStatus?: (id: string, newStatus: ProposalStatus, reason?: string) => void | Promise<void>;
 }
 
-export const ProposalCardSkeleton: React.FC<{ viewType?: ViewType }> = ({
+export const ProposalCardSkeleton: React.FC<{ viewType?: ViewType; showFilters?: boolean }> = ({
   viewType = "list",
 }) => {
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 animate-pulse space-y-4">
-      {/* Header Skeleton */}
-      <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-white/5">
+    <div className={`rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 animate-pulse ${
+      viewType === "list" ? "flex flex-col lg:flex-row lg:items-center justify-between gap-5" : "space-y-4"
+    }`}>
+      <div className="space-y-3 flex-1">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-gray-100 dark:bg-white/10" />
-          <div className="space-y-1.5">
-            <div className="h-4 w-28 rounded bg-gray-100 dark:bg-white/10" />
-            <div className="h-3 w-40 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+          <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-white/10 shrink-0" />
+          <div className="space-y-1.5 flex-1">
+            <div className="h-4 w-32 rounded bg-gray-200 dark:bg-white/10" />
+            <div className="h-3 w-44 rounded bg-gray-100 dark:bg-white/5" />
           </div>
         </div>
-        <div className="h-6 w-16 rounded-full bg-gray-100 dark:bg-white/10" />
+        <div className="h-3.5 w-full rounded bg-gray-100 dark:bg-white/5" />
+        <div className="h-3.5 w-3/4 rounded bg-gray-100 dark:bg-white/5" />
       </div>
 
-      {/* Bid Banner Skeleton */}
-      <div className="h-11 w-full rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-
-      {/* Pitch Skeleton */}
-      <div className="space-y-1.5">
-        <div className="h-3.5 w-full rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-        <div className="h-3.5 w-4/5 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-      </div>
-
-      {/* Pills Skeleton */}
-      <div className="flex gap-2 pt-1">
-        <div className="h-6 w-24 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-        <div className="h-6 w-24 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-        <div className="h-6 w-24 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-      </div>
-
-      {/* Footer Skeleton */}
-      <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between">
-        <div className="h-3 w-36 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-        <div className="h-3 w-16 rounded bg-gray-100 dark:bg-white/10" />
-      </div>
+      <div className={viewType === "list" ? "w-64 space-y-2 shrink-0" : "h-12 w-full rounded-xl bg-gray-100 dark:bg-white/5"} />
     </div>
   );
 };
@@ -126,20 +112,26 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
   proposals,
   loading = false,
   viewType = "list",
+  showFilters = true,
+  onUpdateStatus,
 }) => {
   const navigate = useNavigate();
+
+  const gridColsClass = showFilters
+    ? "grid-cols-1 md:grid-cols-2"
+    : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3";
 
   if (loading) {
     return (
       <div
         className={
           viewType === "grid"
-            ? "grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4"
+            ? `grid ${gridColsClass} gap-4`
             : "space-y-3.5"
         }
       >
         {[1, 2, 3, 4, 5, 6].map((i) => (
-          <ProposalCardSkeleton key={i} viewType={viewType} />
+          <ProposalCardSkeleton key={i} viewType={viewType} showFilters={showFilters} />
         ))}
       </div>
     );
@@ -159,16 +151,32 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
       case "Hired":
       case "Approved":
       case "approved":
-        return "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400";
+        return "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
       case "Shortlisted":
-        return "bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-400";
+        return "bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400";
       case "Rejected":
-        return "bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-400";
+        return "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400";
       case "Withdrawn":
       case "Archived":
-        return "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-400";
+        return "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400";
       default:
-        return "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400";
+        return "bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400";
+    }
+  };
+
+  const formatStatusText = (status: ProposalStatus | string) => {
+    switch (status) {
+      case "Accepted":
+      case "Hired":
+        return "Hired";
+      case "Shortlisted":
+        return "Shortlisted";
+      case "Rejected":
+        return "Declined";
+      case "Pending":
+        return "Pending Review";
+      default:
+        return status;
     }
   };
 
@@ -178,7 +186,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
       transition={{ duration: 0.3, ease: "easeInOut" }}
       className={
         viewType === "grid"
-          ? "grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4"
+          ? `grid ${gridColsClass} gap-4`
           : "space-y-3.5"
       }
     >
@@ -195,14 +203,233 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
           const totalHours = item.milestones.reduce((acc, m) => acc + m.hours, 0);
           const totalDays = Math.ceil(totalHours / 8) || 1;
 
+          const isHired = item.status === "Hired" || item.status === "Accepted";
+          const isShortlisted = item.status === "Shortlisted";
+
+          if (viewType === "list") {
+            return (
+              <motion.div
+                layout
+                key={item.id}
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                onClick={() =>
+                  navigate(
+                    item.type === "incoming"
+                      ? `/jobs/proposals/received/${item.id}`
+                      : `/jobs/proposals/sent/${item.id}`
+                  )
+                }
+                className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 backdrop-blur-sm shadow-sm hover:border-blue-500/30 hover:shadow-md cursor-pointer transition-all duration-200 text-left flex flex-col lg:flex-row lg:items-center justify-between gap-5"
+              >
+                {/* Left Column: Applicant + Role + Pitch */}
+                <div className="space-y-3 min-w-0 flex-1">
+                  <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 dark:text-blue-400 text-sm font-bold shrink-0 overflow-hidden">
+                      {item.partyAvatar ? (
+                        <img src={item.partyAvatar} alt={item.partyName} className="w-full h-full object-cover" />
+                      ) : (
+                        item.partyName[0]
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors truncate">
+                          {item.partyName}
+                        </h3>
+                        <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400 shrink-0">
+                          <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
+                          <span className="font-bold text-gray-700 dark:text-zinc-200">
+                            {item.rating ? item.rating.toFixed(1) : "5.0"}
+                          </span>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${renderStatusBadge(
+                            item.status
+                          )}`}
+                        >
+                          {formatStatusText(item.status)}
+                        </span>
+                      </div>
+
+                      {item.target_milestone_title ? (
+                        <div className="pt-0.5">
+                          <span className="inline-flex items-center gap-1 text-[11px] text-purple-600 dark:text-purple-400 truncate max-w-[320px]" title={item.target_milestone_title}>
+                            <span className="opacity-70 text-[10px]">Role:</span>
+                            <span className="font-semibold truncate">{item.target_milestone_title}</span>
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400 truncate pt-0.5">
+                          <span>For:</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/jobs/postings/${item.jobId}`);
+                            }}
+                            className="font-medium text-gray-600 dark:text-zinc-300 hover:text-blue-400 hover:underline transition-colors truncate inline-flex items-center gap-1"
+                            title="View Job Post Details"
+                          >
+                            <span className="truncate">{item.jobTitle}</span>
+                            <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed line-clamp-2 max-w-2xl">
+                    <JobRichText content={item.coverLetter} truncate={2} />
+                  </div>
+
+                  <div className="flex items-center gap-3 text-[11px] text-gray-400 dark:text-zinc-500">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3 inline text-gray-400" />
+                      {item.submittedAgo || item.submittedAt}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Right Column: Bid + Specs + Actions */}
+                <div className="flex flex-col sm:flex-row lg:flex-col items-start sm:items-center lg:items-end justify-between gap-4 shrink-0 lg:pl-6 lg:border-l border-gray-100 dark:border-white/5">
+                  <div className="text-left sm:text-right lg:text-right space-y-1">
+                    <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider block">
+                      {item.target_milestone_title ? "Fixed Budget" : "Proposed Bid"}
+                    </span>
+                    <div className="flex items-center sm:justify-end gap-1.5 text-amber-500 dark:text-amber-400">
+                      <CreditIcon className="h-4 w-4 shrink-0" />
+                      <span className="text-xl font-black tracking-tight text-gray-900 dark:text-white">
+                        {item.bidAmount.toLocaleString()}
+                      </span>
+                      <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400">
+                        Credits
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-zinc-400">
+                      <span>~{totalDays}d ({totalHours}h)</span>
+                      <span className="text-gray-300 dark:text-zinc-700">•</span>
+                      <span>{item.milestones.length || 1} {item.milestones.length === 1 ? "Step" : "Steps"}</span>
+                      <span className="text-gray-300 dark:text-zinc-700">•</span>
+                      <span>{revisionsSummary} {revisionsSummary === "1" ? "Rev" : "Revs"}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Chat button */}
+                    <button
+                      type="button"
+                      title="Chat with Candidate"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void openMarketplaceConversation({
+                          contextType: "job_proposal",
+                          contextId: item.id,
+                          navigate,
+                        });
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-xs font-semibold text-gray-700 dark:text-zinc-200 flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
+                      <span>Chat</span>
+                    </button>
+
+                    {/* Shortlist */}
+                    {item.type === "incoming" && !isHired && (
+                      <button
+                        type="button"
+                        title={isShortlisted ? "Remove from Shortlist" : "Save to Shortlist"}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const nextStatus = isShortlisted ? "Pending" : "Shortlisted";
+                          try {
+                            await onUpdateStatus?.(item.id, nextStatus as ProposalStatus);
+                            toast.success(nextStatus === "Shortlisted" ? "Added to shortlist!" : "Removed from shortlist.");
+                          } catch {
+                            toast.error("Failed to update status");
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border cursor-pointer ${
+                          isShortlisted
+                            ? "bg-amber-500/15 text-amber-500 border-amber-500/30 hover:bg-amber-500/25"
+                            : "bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-300 border-gray-200 dark:border-white/10 hover:border-amber-500/40 hover:text-amber-500"
+                        }`}
+                      >
+                        <Star className={`h-3.5 w-3.5 ${isShortlisted ? "fill-amber-500 text-amber-500" : ""}`} />
+                        <span>{isShortlisted ? "Shortlisted" : "Shortlist"}</span>
+                      </button>
+                    )}
+
+                    {/* Primary Action Button */}
+                    {item.type === "incoming" && (
+                      isHired ? (
+                        <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>Hired</span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/jobs/proposals/received/${item.id}`);
+                          }}
+                          className="px-4 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                        >
+                          <span>{item.target_milestone_title ? "Slot & Hire" : "Hire Candidate"}</span>
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </button>
+                      )
+                    )}
+
+                    {/* Edit for sent proposals */}
+                    {item.type === "sent" && item.status === "Pending" && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/jobs/proposals/edit/${item.id}`);
+                        }}
+                        className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-xs font-semibold text-gray-700 dark:text-zinc-200 flex items-center gap-1.5 transition cursor-pointer"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                        <span>Edit</span>
+                      </button>
+                    )}
+
+                    {/* Details button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(
+                          item.type === "incoming"
+                            ? `/jobs/proposals/received/${item.id}`
+                            : `/jobs/proposals/sent/${item.id}`
+                        );
+                      }}
+                      className="p-1.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
+                      title="View Proposal Details"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          }
+
+          // Grid View
           return (
             <motion.div
               layout
               key={item.id}
-              initial={{ opacity: 0, scale: 0.96 }}
+              initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
               onClick={() =>
                 navigate(
                   item.type === "incoming"
@@ -210,13 +437,13 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                     : `/jobs/proposals/sent/${item.id}`
                 )
               }
-              className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 backdrop-blur-sm shadow-xl hover:border-white/20 cursor-pointer transition-all duration-200 text-left space-y-4 flex flex-col justify-between"
+              className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 backdrop-blur-sm shadow-sm hover:border-blue-500/30 hover:shadow-md cursor-pointer transition-all duration-200 text-left flex flex-col justify-between gap-4"
             >
               <div className="space-y-3.5">
-                {/* 1. User Header & Clickable Target Job Post Link */}
-                <div className={`flex ${viewType === "grid" ? "flex-col-reverse gap-3" : "items-start justify-between gap-3"} border-b border-gray-100 dark:border-white/5 pb-3`}>
-                  <div className="flex items-center gap-3 min-w-0 w-full">
-                    <div className="h-9 w-9 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm font-bold shrink-0 overflow-hidden">
+                {/* 1. Header Row */}
+                <div className="flex items-start justify-between gap-3 border-b border-gray-100 dark:border-white/5 pb-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-10 w-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 dark:text-blue-400 text-sm font-bold shrink-0 overflow-hidden">
                       {item.partyAvatar ? (
                         <img src={item.partyAvatar} alt={item.partyName} className="w-full h-full object-cover" />
                       ) : (
@@ -225,7 +452,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-blue-400 transition-colors truncate">
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors truncate">
                           {item.partyName}
                         </h3>
                         <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400 shrink-0">
@@ -236,143 +463,205 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                         </div>
                       </div>
 
-                      {/* Clickable Job Post Title */}
-                      <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400 truncate">
-                        <span>Job:</span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/jobs/postings/${item.jobId}`);
-                          }}
-                          className="font-medium text-gray-600 dark:text-zinc-300 hover:text-blue-400 hover:underline transition-colors truncate flex items-center gap-1 inline-flex"
-                          title="View Job Post Details"
-                        >
-                          <span className="truncate">{item.jobTitle}</span>
-                          <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Badges & Actions */}
-                  <div className={`flex items-center gap-2 shrink-0 ${viewType === "grid" ? "w-full justify-between" : ""}`}>
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${renderStatusBadge(
-                        item.status
-                      )}`}
-                    >
-                      {item.status}
-                    </span>
-
-                    <div className="flex items-center gap-2">
-                      {/* Chat Button for Shortlisted Candidates */}
-                      {item.status === "Shortlisted" && (
-                        <button
-                          title="Open Discussion Chat"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void openMarketplaceConversation({
-                              contextType: "job_proposal",
-                              contextId: item.id,
-                              navigate,
-                            });
-                          }}
-                          className="p-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition-colors border border-blue-500/30"
-                        >
-                          <MessageSquare className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-
-                      {/* Edit Button for Own Proposals */}
-                      {item.type === "sent" && item.status === "Pending" && (
-                        <button
-                          title="Edit Proposal"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/jobs/proposals/edit/${item.id}`);
-                          }}
-                          className="p-1.5 rounded-full bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition-colors border border-gray-200 dark:border-white/10"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
+                      {item.target_milestone_title ? (
+                        <div className="pt-0.5">
+                          <span className="inline-flex items-center gap-1 text-[11px] text-purple-600 dark:text-purple-400 truncate max-w-[200px]" title={item.target_milestone_title}>
+                            <span className="opacity-70 text-[10px]">Role:</span>
+                            <span className="font-semibold truncate">{item.target_milestone_title}</span>
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400 truncate pt-0.5">
+                          <span>For:</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/jobs/postings/${item.jobId}`);
+                            }}
+                            className="font-medium text-gray-600 dark:text-zinc-300 hover:text-blue-400 hover:underline transition-colors truncate inline-flex items-center gap-1"
+                            title="View Job Post Details"
+                          >
+                            <span className="truncate">{item.jobTitle}</span>
+                            <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
+
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold border shrink-0 ${renderStatusBadge(
+                      item.status
+                    )}`}
+                  >
+                    {formatStatusText(item.status)}
+                  </span>
                 </div>
 
-                {/* 2. Prominent Emphasized Bid Banner */}
-                <div className={`p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 flex items-center ${viewType === "grid" ? "justify-between" : "justify-start gap-4"}`}>
-                  <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
-                    PROPOSED BID
-                  </span>
-                  <div className="flex items-center gap-1.5 text-amber-500 dark:text-amber-400">
-                    <CreditIcon className="h-5 w-5 text-amber-500 dark:text-amber-400 shrink-0" />
-                    <span className="text-lg font-black tracking-tight">
-                      {item.bidAmount.toLocaleString()}
-                    </span>
-                  </div>
-                  {viewType === "list" && (
-                    <div className="flex items-center gap-1.5 ml-auto">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold">
-                        <Layers className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
-                        {item.milestones.length} Milestones
+                {/* 2. Proposed Bid & Key Specs Strip */}
+                <div className="rounded-xl bg-gray-50/80 dark:bg-white/[0.03] border border-gray-100 dark:border-white/5 p-3 space-y-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider block">
+                        {item.target_milestone_title ? "Fixed Budget" : "Proposed Bid"}
                       </span>
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold">
-                        <Percent className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
-                        +{item.additionalWorkRate}% Work Rate
+                      <div className="flex items-center gap-1.5 text-amber-500 dark:text-amber-400 mt-0.5">
+                        <CreditIcon className="h-4 w-4 shrink-0" />
+                        <span className="text-lg font-black tracking-tight text-gray-900 dark:text-white">
+                          {item.bidAmount.toLocaleString()}
+                        </span>
+                        <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400">
+                          Credits
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider block">
+                        Timeline
                       </span>
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold">
-                        <RefreshCcw className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
-                        {revisionsSummary} Revs / Step
+                      <span className="text-xs font-semibold text-gray-700 dark:text-zinc-200">
+                        ~{totalDays}d ({totalHours}h)
                       </span>
                     </div>
-                  )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pt-1.5 border-t border-gray-200/50 dark:border-white/5 text-[11px] text-gray-500 dark:text-zinc-400">
+                    <span className="inline-flex items-center gap-1">
+                      <Layers className="h-3 w-3 text-gray-400 dark:text-zinc-500" />
+                      <span>{item.milestones.length || 1} {item.milestones.length === 1 ? "Step" : "Steps"}</span>
+                    </span>
+                    <span className="text-gray-300 dark:text-zinc-700">•</span>
+                    <span className="inline-flex items-center gap-1">
+                      <RefreshCcw className="h-3 w-3 text-gray-400 dark:text-zinc-500" />
+                      <span>{revisionsSummary} {revisionsSummary === "1" ? "Rev" : "Revs"}</span>
+                    </span>
+                    {item.additionalWorkRate > 0 && (
+                      <>
+                        <span className="text-gray-300 dark:text-zinc-700">•</span>
+                        <span className="inline-flex items-center gap-1 text-gray-500 dark:text-zinc-400">
+                          <Percent className="h-3 w-3 text-gray-400 dark:text-zinc-500" />
+                          <span>+{item.additionalWorkRate}% Overtime</span>
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* 3. Cover Letter Pitch Snippet */}
-                {viewType === "list" && (
-                  <div className="px-1 text-gray-600 dark:text-zinc-300 italic">
-                    <JobRichText content={item.coverLetter} truncate={2} />
-                  </div>
-                )}
-
-                {/* 4. Sleek Gray Pill Tags (Grid View only, since List View has them in the bid banner) */}
-                {viewType === "grid" && (
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold" title={`${item.milestones.length} Milestones`}>
-                      <Layers className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
-                      {item.milestones.length}
-                    </span>
-
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold" title={`+${item.additionalWorkRate}% Work Rate`}>
-                      <Percent className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
-                      +{item.additionalWorkRate}%
-                    </span>
-
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold" title={`${revisionsSummary} Revs / Step`}>
-                      <RefreshCcw className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
-                      {revisionsSummary}
-                    </span>
-                  </div>
-                )}
+                <div className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed line-clamp-3 min-h-[2.5rem]">
+                  <JobRichText content={item.coverLetter} truncate={3} />
+                </div>
               </div>
 
-              {/* 5. Date Proposed & View Details Link */}
-              <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between gap-2 text-[11px] text-gray-500 dark:text-zinc-400">
-                <span className="flex items-center gap-1 text-gray-500 dark:text-zinc-400">
-                  <Clock className="h-3 w-3 text-gray-500 dark:text-zinc-500 shrink-0" />
-                  {totalDays}d ({totalHours}h) 
-                  {viewType === "list" && (
-                    <>
-                      • <Calendar className="h-3 w-3 text-gray-500 dark:text-zinc-500 inline ml-0.5" /> {item.submittedAgo || item.submittedAt}
-                    </>
-                  )}
-                </span>
+              {/* 4. Action Area */}
+              <div className="pt-3 border-t border-gray-100 dark:border-white/5 space-y-2.5">
+                {/* Secondary tools & timestamp row */}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1 text-[11px] text-gray-500 dark:text-zinc-400">
+                    <Calendar className="h-3 w-3 text-gray-400" />
+                    {item.submittedAgo || item.submittedAt}
+                  </span>
 
-                <span className="flex items-center gap-1 text-xs font-bold text-blue-400 group-hover:translate-x-1 transition-transform shrink-0">
-                  Details <ChevronRight className="h-3.5 w-3.5" />
-                </span>
+                  <div className="flex items-center gap-1.5">
+                    {/* Chat button */}
+                    <button
+                      type="button"
+                      title="Chat with Candidate"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void openMarketplaceConversation({
+                          contextType: "job_proposal",
+                          contextId: item.id,
+                          navigate,
+                        });
+                      }}
+                      className="px-2.5 py-1 rounded-lg border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-xs font-semibold text-gray-700 dark:text-zinc-200 flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <MessageSquare className="h-3 w-3 text-blue-500" />
+                      <span>Chat</span>
+                    </button>
+
+                    {/* Shortlist button */}
+                    {item.type === "incoming" && !isHired && (
+                      <button
+                        type="button"
+                        title={isShortlisted ? "Remove from Shortlist" : "Save to Shortlist"}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const nextStatus = isShortlisted ? "Pending" : "Shortlisted";
+                          try {
+                            await onUpdateStatus?.(item.id, nextStatus as ProposalStatus);
+                            toast.success(nextStatus === "Shortlisted" ? "Added to shortlist!" : "Removed from shortlist.");
+                          } catch {
+                            toast.error("Failed to update status");
+                          }
+                        }}
+                        className={`p-1.5 rounded-lg text-xs font-semibold flex items-center justify-center transition border cursor-pointer ${
+                          isShortlisted
+                            ? "bg-amber-500/15 text-amber-500 border-amber-500/30 hover:bg-amber-500/25"
+                            : "bg-white dark:bg-white/5 text-gray-400 border-gray-200 dark:border-white/10 hover:border-amber-500/40 hover:text-amber-500"
+                        }`}
+                      >
+                        <Star className={`h-3.5 w-3.5 ${isShortlisted ? "fill-amber-500 text-amber-500" : ""}`} />
+                      </button>
+                    )}
+
+                    {/* Details button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(
+                          item.type === "incoming"
+                            ? `/jobs/proposals/received/${item.id}`
+                            : `/jobs/proposals/sent/${item.id}`
+                        );
+                      }}
+                      className="p-1.5 rounded-lg border border-gray-200 dark:border-white/10 text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
+                      title="View Proposal Details"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Primary Action Button */}
+                {item.type === "incoming" && (
+                  isHired ? (
+                    <div className="w-full py-2 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>Candidate Hired</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/jobs/proposals/received/${item.id}`);
+                      }}
+                      className="w-full py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <span>{item.target_milestone_title ? "Slot & Hire Candidate" : "Hire Candidate"}</span>
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  )
+                )}
+
+                {item.type === "sent" && item.status === "Pending" && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/jobs/proposals/edit/${item.id}`);
+                    }}
+                    className="w-full py-2 rounded-xl text-xs font-bold bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15 text-gray-900 dark:text-white transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
+                    <span>Edit Proposal</span>
+                  </button>
+                )}
               </div>
             </motion.div>
           );
