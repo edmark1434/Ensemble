@@ -7,6 +7,35 @@ async function createJobServices(jobData) {
     if (!jobData.title || !jobData.description) {
         throw new Error('Title and description are required.');
     }
+    if (jobData.deadline && (jobData.timeline_max || jobData.timeline_min)) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let deadlineDate;
+        if (typeof jobData.deadline === 'string' && jobData.deadline.includes('-')) {
+            const parts = jobData.deadline.split('T')[0].split('-');
+            if (parts.length === 3) {
+                deadlineDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+            }
+        }
+        if (!deadlineDate || isNaN(deadlineDate.getTime())) {
+            deadlineDate = new Date(jobData.deadline);
+        }
+        deadlineDate.setHours(0, 0, 0, 0);
+        if (!isNaN(deadlineDate.getTime())) {
+            const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+            if (diffDays < 0) {
+                throw new Error('Project deadline cannot be in the past.');
+            }
+            const maxTimeline = parseInt(jobData.timeline_max, 10);
+            if (!isNaN(maxTimeline) && maxTimeline > diffDays) {
+                throw new Error(`Project timeline (${maxTimeline} days) cannot exceed the days until deadline (${diffDays} days).`);
+            }
+            const minTimeline = parseInt(jobData.timeline_min, 10);
+            if (!isNaN(minTimeline) && minTimeline > diffDays) {
+                throw new Error(`Minimum timeline (${minTimeline} days) cannot exceed the days until deadline (${diffDays} days).`);
+            }
+        }
+    }
     if (jobData.hiring_type === 'team') {
         if (!Array.isArray(jobData.milestones) || jobData.milestones.length === 0) {
             throw new Error('At least one milestone is required for team job postings.');

@@ -95,12 +95,27 @@ async function signup(req, res) {
         ]);
         const accessToken = await AccessTokens(credentials);
         setAccessTokenCookie(res, accessToken);
-        const publicCredentials = { ...credentials, restriction };
+        let onboarding = null;
+        const userId = credentials.userId || credentials.user_id;
+        if (credentials.type === 'User' && userId) {
+            try {
+                const { getOnboardingState } = require('../services/OnboardingServices');
+                const state = await getOnboardingState(userId);
+                onboarding = {
+                    completed: state.completed,
+                    path: state.path || (state.completed ? '/home' : '/setup/upload-image'),
+                };
+            } catch (err) {
+                console.error('Error fetching onboarding state in signup:', err);
+            }
+        }
+        const publicCredentials = { ...credentials, restriction, onboarding };
         return res.status(statusCode).json({
             success: result.success,
             message: result.message || 'User and account created successfully',
             credentials: publicCredentials,
             result: publicCredentials,
+            onboarding,
         });
         
     } catch (err) {
@@ -290,6 +305,20 @@ async function loginCredentials(req, res) {
             setupRefreshTokenCookie(res, credentials),
             createSessionIdCookie(res, credentials)
         ]);
+        let onboarding = null;
+        const userId = credentials.userId || credentials.user_id;
+        if (credentials.type === 'User' && userId) {
+            try {
+                const { getOnboardingState } = require('../services/OnboardingServices');
+                const state = await getOnboardingState(userId);
+                onboarding = {
+                    completed: state.completed,
+                    path: state.path || (state.completed ? '/home' : '/setup/upload-image'),
+                };
+            } catch (err) {
+                console.error('Error fetching onboarding state in login:', err);
+            }
+        }
         res.json({
             success: true,
             message: 'Login successful',
@@ -306,7 +335,9 @@ async function loginCredentials(req, res) {
                 avatar_preset_url: credentials.avatar_preset_url,
                 is_verified: credentials.is_verified,
                 restriction,
+                onboarding,
             },
+            onboarding,
         });
     } catch (err) {
         if (err instanceof ServiceError) {
@@ -516,6 +547,19 @@ async function getCurrentUser(req, res) {
             };
         } catch (err) {
             console.error('Error loading account standing:', err);
+        }
+    }
+    const currentUserId = responseUser?.userId || responseUser?.user_id;
+    if (responseUser && responseUser.type === 'User' && currentUserId) {
+        try {
+            const { getOnboardingState } = require('../services/OnboardingServices');
+            const state = await getOnboardingState(currentUserId);
+            responseUser.onboarding = {
+                completed: state.completed,
+                path: state.path || (state.completed ? '/home' : '/setup/upload-image'),
+            };
+        } catch (err) {
+            console.error('Error hydrating onboarding in getCurrentUser:', err);
         }
     }
     res.status(200).json({

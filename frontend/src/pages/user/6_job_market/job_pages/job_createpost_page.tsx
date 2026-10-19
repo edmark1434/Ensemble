@@ -180,15 +180,23 @@ const JobCreatePostPage: React.FC = () => {
     }
     if (!deadline) {
       stepErrors.deadline = "Deadline is required.";
-    } else if (maxTimeline && parseInt(maxTimeline)) {
+    } else {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const selected = new Date(deadline);
+      const parts = deadline.split('-');
+      const selected = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
       const diffTime = selected.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
-      if (parseInt(maxTimeline) > diffDays) {
-        stepErrors.maxTimeline = `Max timeline (${maxTimeline} days) cannot exceed the days until deadline (${diffDays} days).`;
+      if (diffDays < 0) {
+        stepErrors.deadline = "Deadline cannot be in the past.";
+      } else {
+        if (maxTimeline && parseInt(maxTimeline) > diffDays) {
+          stepErrors.maxTimeline = `Project timeline (${maxTimeline} days) cannot exceed the days until deadline (${diffDays} days).`;
+        }
+        if (minTimeline && parseInt(minTimeline) > diffDays) {
+          stepErrors.minTimeline = `Min timeline (${minTimeline} days) cannot exceed the days until deadline (${diffDays} days).`;
+        }
       }
     }
 

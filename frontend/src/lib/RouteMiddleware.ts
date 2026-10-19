@@ -100,11 +100,24 @@ export default function RouteMiddleware() {
         useGlobalState.getState().setIsLoading(isCheckingSession);
     }, [isCheckingSession]);
     const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
-    const [onboardingGate, setOnboardingGate] = useState<OnboardingGateState>(() => ({
-        accountId: user?.type === 'User' ? String(user.account_id) : null,
-        path: user?.type === 'User' ? undefined : null,
-        verificationFailed: false,
-    }));
+    const [onboardingGate, setOnboardingGate] = useState<OnboardingGateState>(() => {
+        if (user?.type !== 'User') {
+            return { accountId: null, path: null, verificationFailed: false };
+        }
+        const accountId = String(user.account_id);
+        const userOnboarding = (user as any)?.onboarding;
+        let initialPath: string | null | undefined = undefined;
+        if (wasOnboardingCompleted(accountId) || userOnboarding?.completed) {
+            initialPath = null;
+        } else if (userOnboarding?.path) {
+            initialPath = userOnboarding.path;
+        }
+        return {
+            accountId,
+            path: initialPath,
+            verificationFailed: false,
+        };
+    });
     const basePublicRoutes = [
         '/',
         '/login',
@@ -212,6 +225,16 @@ export default function RouteMiddleware() {
         }
 
         const accountId = String(resolvedUser.account_id);
+        const userOnboarding = (resolvedUser as any)?.onboarding;
+        if (wasOnboardingCompleted(accountId) || userOnboarding?.completed) {
+            setOnboardingGate({ accountId, path: null, verificationFailed: false });
+            return;
+        }
+        if (userOnboarding?.path) {
+            setOnboardingGate({ accountId, path: userOnboarding.path, verificationFailed: false });
+            return;
+        }
+
         setOnboardingGate((current) =>
             current.accountId === accountId
                 ? current
@@ -357,7 +380,7 @@ export default function RouteMiddleware() {
         return createElement(RouteLoadingShell);
     }
 
-    if (shouldAutoRedirect && redirectPath) {
+    if (shouldAutoRedirect && !isLocalSignOutTransition && (redirectPath || resolvedUser)) {
         return createElement(RouteLoadingShell);
     }
 

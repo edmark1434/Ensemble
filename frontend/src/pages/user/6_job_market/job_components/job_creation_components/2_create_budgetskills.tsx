@@ -1,5 +1,5 @@
 import React, { type FormEvent } from "react";
-import { ArrowRight, X, Plus, Minus, HelpCircle, Info, Calendar } from "lucide-react";
+import { ArrowRight, X, Plus, Minus, HelpCircle, Info, Calendar, AlertCircle } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { SkillsAutocomplete } from "./SkillsAutocomplete";
 
@@ -76,6 +76,30 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
       });
     }
   }, [skills.length, errors.skills, setErrors]);
+
+  const daysUntilDeadline = React.useMemo(() => {
+    if (!deadline) return null;
+    const parts = deadline.split('-');
+    if (parts.length !== 3) return null;
+    const [y, m, d] = parts;
+    if (!y || !m || !d || y.length !== 4) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selected = new Date(Number(y), Number(m) - 1, Number(d));
+    if (isNaN(selected.getTime())) return null;
+    const diffTime = selected.getTime() - today.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  }, [deadline]);
+
+  const maxTimelineNum = parseInt(maxTimeline, 10);
+  const minTimelineNum = parseInt(minTimeline, 10);
+
+  const isTimelineExceedingDeadline = React.useMemo(() => {
+    if (daysUntilDeadline === null) return false;
+    if (!isNaN(maxTimelineNum) && maxTimelineNum > daysUntilDeadline) return true;
+    if (!isNaN(minTimelineNum) && minTimelineNum > daysUntilDeadline) return true;
+    return false;
+  }, [daysUntilDeadline, maxTimelineNum, minTimelineNum]);
 
   return (
     <div className="space-y-5 text-left">
@@ -318,26 +342,26 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
                 setErrors(prev => { const {deadline, maxTimeline, minTimeline, ...r} = prev; return r; }); 
                 
                 if (newDate) {
-                  const [y, m, d] = newDate.split('-');
-                  if (y && m && d && y.length === 4) {
-                    // Calculate days from today using local time to match today's date
+                  const parts = newDate.split('-');
+                  if (parts.length === 3 && parts[0].length === 4) {
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
-                    const selected = new Date(Number(y), Number(m) - 1, Number(d));
+                    const selected = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
                     
-                    // Only update timelines if the date is valid and parsed correctly
                     if (!isNaN(selected.getTime())) {
                       const diffTime = selected.getTime() - today.getTime();
                       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                       
-                      if (diffDays >= 1) {
-                        // 1 day allowance logic
-                        const maxAllowed = Math.max(1, diffDays - 1);
-                        setMaxTimeline(String(maxAllowed));
-                        setMinTimeline(String(Math.max(1, maxAllowed - 1)));
-                      } else if (diffDays === 0) {
-                        setMaxTimeline("1");
-                        setMinTimeline("1");
+                      // Auto-suggest timeline if timeline has not been set yet
+                      if (!maxTimeline && !minTimeline) {
+                        if (diffDays >= 1) {
+                          const maxAllowed = Math.max(1, diffDays - 1);
+                          setMaxTimeline(String(maxAllowed));
+                          setMinTimeline(String(Math.max(1, maxAllowed - 1)));
+                        } else if (diffDays === 0) {
+                          setMaxTimeline("1");
+                          setMinTimeline("1");
+                        }
                       }
                     }
                   }
@@ -362,9 +386,25 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
           </div>
           {errors.deadline && <p className="text-[11px] text-red-400">{errors.deadline}</p>}
           {deadline && (
-            <p className="text-[10px] text-gray-500 dark:text-zinc-400 mt-1">
-              Setting deadline to {deadline} calculates a suggested timeline with a 1-day allowance. You can still adjust it below.
-            </p>
+            <div className="flex flex-wrap items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400 mt-1 gap-1">
+              <span>
+                Setting deadline to {deadline} calculates a suggested timeline with a 1-day allowance. You can still adjust it below.
+              </span>
+              {daysUntilDeadline !== null && daysUntilDeadline >= 1 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const maxAllowed = Math.max(1, daysUntilDeadline - 1);
+                    setMaxTimeline(String(maxAllowed));
+                    setMinTimeline(isFixedBudget ? String(maxAllowed) : String(Math.max(1, maxAllowed - 1)));
+                    setErrors(prev => { const { maxTimeline, minTimeline, ...r } = prev; return r; });
+                  }}
+                  className="shrink-0 text-blue-500 hover:text-blue-600 dark:text-blue-400 font-semibold underline"
+                >
+                  Apply suggested ({Math.max(1, daysUntilDeadline - 1)} {Math.max(1, daysUntilDeadline - 1) === 1 ? 'day' : 'days'})
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -389,7 +429,9 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
                   });
                 }}
                 className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-3.5 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
-                  errors.maxTimeline || errors.minTimeline
+                  isTimelineExceedingDeadline
+                    ? "border-amber-500/80 focus:border-amber-500 dark:border-amber-400/80"
+                    : errors.maxTimeline || errors.minTimeline
                     ? "border-red-500/50 focus:border-red-500"
                     : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
                 }`}
@@ -400,10 +442,23 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
                   The expected timeline in days. Total hours (days × 24) will be distributed across milestone deliverables in Step 4.
                 </div>
               </div>
-              {(errors.maxTimeline || errors.minTimeline) && (
-                <p className="text-[11px] text-red-400 mt-1">{errors.maxTimeline || errors.minTimeline}</p>
-              )}
             </div>
+            {isTimelineExceedingDeadline && daysUntilDeadline !== null && (
+              <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs mt-1.5">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
+                <div className="space-y-0.5">
+                  <p className="font-semibold text-xs text-amber-700 dark:text-amber-300">
+                    Project timeline exceeds deadline
+                  </p>
+                  <p className="text-[11px] text-amber-600/90 dark:text-amber-400/90 leading-relaxed">
+                    The project timeline ({maxTimelineNum} {maxTimelineNum === 1 ? 'day' : 'days'}) cannot be longer than the days until deadline ({daysUntilDeadline} {daysUntilDeadline === 1 ? 'day' : 'days'} away). Please adjust the timeline or extend the deadline.
+                  </p>
+                </div>
+              </div>
+            )}
+            {!isTimelineExceedingDeadline && (errors.maxTimeline || errors.minTimeline) && (
+              <p className="text-[11px] text-red-400 mt-1">{errors.maxTimeline || errors.minTimeline}</p>
+            )}
           </div>
         ) : (
           <div className="space-y-1.5">
@@ -425,7 +480,11 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
                     });
                   }}
                   className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-3.5 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
-                    errors.minTimeline ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
+                    daysUntilDeadline !== null && !isNaN(minTimelineNum) && minTimelineNum > daysUntilDeadline
+                      ? "border-amber-500/80 focus:border-amber-500 dark:border-amber-400/80"
+                      : errors.minTimeline
+                      ? "border-red-500/50 focus:border-red-500"
+                      : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
                   }`}
                 />
                 <div className="group absolute right-2.5 top-2.5 flex items-center">
@@ -450,18 +509,38 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
                     });
                   }}
                   className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-3.5 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
-                    errors.maxTimeline ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
+                    daysUntilDeadline !== null && !isNaN(maxTimelineNum) && maxTimelineNum > daysUntilDeadline
+                      ? "border-amber-500/80 focus:border-amber-500 dark:border-amber-400/80"
+                      : errors.maxTimeline
+                      ? "border-red-500/50 focus:border-red-500"
+                      : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
                   }`}
                 />
                 <div className="group absolute right-2.5 top-2.5 flex items-center">
                   <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-                  <div className="absolute bottom-full right-0 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-50 pointer-events-none shadow-xl">
+                  <div className="absolute bottom-full right-0 mb-2 hidden w-56 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2.5 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-50 pointer-events-none shadow-xl">
                     The absolute maximum days allowed to complete the project.
                   </div>
                 </div>
                 {errors.maxTimeline && <p className="text-[11px] text-red-400 mt-1">{errors.maxTimeline}</p>}
               </div>
             </div>
+            {isTimelineExceedingDeadline && daysUntilDeadline !== null && (
+              <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs mt-1.5">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
+                <div className="space-y-0.5">
+                  <p className="font-semibold text-xs text-amber-700 dark:text-amber-300">
+                    Project timeline exceeds deadline
+                  </p>
+                  <p className="text-[11px] text-amber-600/90 dark:text-amber-400/90 leading-relaxed">
+                    {(!isNaN(maxTimelineNum) && maxTimelineNum > daysUntilDeadline)
+                      ? `Maximum timeline (${maxTimelineNum} ${maxTimelineNum === 1 ? 'day' : 'days'}) cannot exceed the days until deadline (${daysUntilDeadline} ${daysUntilDeadline === 1 ? 'day' : 'days'} away).`
+                      : `Minimum timeline (${minTimelineNum} ${minTimelineNum === 1 ? 'day' : 'days'}) cannot exceed the days until deadline (${daysUntilDeadline} ${daysUntilDeadline === 1 ? 'day' : 'days'} away).`
+                    } Please adjust your timeline range or extend the deadline.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -469,7 +548,20 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
       {/* Actions */}
       <div className="pt-4 border-t border-gray-100 dark:border-white/5 flex gap-2.5 mt-2">
         <button type="button" onClick={onBack} className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 font-bold hover:text-gray-900 dark:text-white transition text-xs focus:outline-none">Go Back</button>
-        <button type="button" onClick={onAdvance} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-2.5 text-xs font-bold text-white hover:bg-blue-600 transition focus:outline-none shadow-lg shadow-blue-500/20">
+        <button 
+          type="button" 
+          disabled={Boolean(isTimelineExceedingDeadline)}
+          onClick={() => {
+            if (isTimelineExceedingDeadline) return;
+            onAdvance();
+          }} 
+          title={isTimelineExceedingDeadline ? "Cannot continue: Project timeline exceeds the deadline" : undefined}
+          className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition focus:outline-none ${
+            isTimelineExceedingDeadline
+              ? "bg-gray-200 dark:bg-white/10 text-gray-400 dark:text-zinc-500 cursor-not-allowed shadow-none"
+              : "bg-blue-500 text-white hover:bg-blue-600 shadow-lg shadow-blue-500/20"
+          }`}
+        >
           Continue to Terms <ArrowRight className="h-3.5 w-3.5" />
         </button>
       </div>

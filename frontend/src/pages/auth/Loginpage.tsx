@@ -6,8 +6,11 @@ import type { ChangeEvent, KeyboardEvent } from "react";
 import { useGoogleAuth } from "./Oauth";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
+import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
 import { API_BASE_URL } from "@/lib/api";
+import { notifyOnboardingCompleted, notifyOnboardingStepChanged } from "@/lib/onboardingEvents";
+import { getStaffHomePath } from "@/lib/staffRoutes";
 import { Eye, EyeOff, KeyRound, Shield } from "lucide-react";
 import { AccountRestrictionCard, standingFromPayload, type AccountStanding } from "@/components/ui/AccountStanding";
 
@@ -485,9 +488,58 @@ export default function LoginPage({
           return;
         }
 
-        setUser(result.data.credentials ?? result.data.user);
+        const loggedInUser = result.data.credentials ?? result.data.user;
+        setUser(loggedInUser);
         setIsAuthenticated(true);
-        onSuccess ? onSuccess() : navigate(redirectUrl || '/');
+
+        if (onSuccess) {
+          onSuccess();
+          return;
+        }
+
+        const accountId = loggedInUser?.account_id || loggedInUser?.accountId;
+        const onboarding = result.data.onboarding ?? loggedInUser?.onboarding;
+
+        if (onboarding?.completed && accountId) {
+          notifyOnboardingCompleted(String(accountId));
+        } else if (onboarding?.path && accountId) {
+          notifyOnboardingStepChanged(onboarding.path, String(accountId));
+        }
+
+        if (loggedInUser?.restriction?.banned || loggedInUser?.restriction?.locked) {
+          navigate('/account/access', { replace: true });
+          return;
+        }
+
+        let destination: string;
+        if (loggedInUser?.type === 'Staff') {
+          destination = redirectUrl || getStaffHomePath(loggedInUser.role);
+        } else {
+          let onboardingPath: string | null = null;
+          if (onboarding) {
+            onboardingPath = onboarding.completed ? null : (onboarding.path || '/setup/upload-image');
+          } else {
+            try {
+              const onboardingRes = await api.get('/api/onboarding/state');
+              if (!onboardingRes.data.completed) {
+                onboardingPath = onboardingRes.data.path || '/setup/upload-image';
+                if (accountId) notifyOnboardingStepChanged(onboardingPath, String(accountId));
+              } else if (accountId) {
+                notifyOnboardingCompleted(String(accountId));
+              }
+            } catch {
+              // fallback to completed or default
+            }
+          }
+
+          if (onboardingPath) {
+            destination = onboardingPath;
+          } else {
+            destination = redirectUrl || '/home';
+          }
+        }
+
+        navigate(destination, { replace: true });
       }else{
         setErrors({ [require2fa ? 'twoFactorCode' : 'password']: result.data.message || "Login failed. Please try again." });
       }

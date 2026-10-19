@@ -5,10 +5,11 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import {
   Clock,
   ArrowRight,
-  Wrench,
   Bookmark,
   Send,
   Users,
+  User,
+  Edit2,
 } from "lucide-react";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
@@ -51,6 +52,10 @@ export interface Job {
   skills?: string[];
   isSaved?: boolean;
   isOwnPost?: boolean;
+  isManageablePost?: boolean;
+  hiring_type?: string;
+  milestones?: any[];
+  is_team?: boolean;
 }
 
 export const HomeFeaturedJobs: React.FC = () => {
@@ -87,7 +92,9 @@ export const HomeFeaturedJobs: React.FC = () => {
           status: j.status,
           category: j.category,
           difficulty: j.experience_level,
-          priceRange: `${j.rate_credits_min?.toLocaleString() || 0} ~ ${j.rate_credits_max?.toLocaleString() || 0}`,
+          priceRange: (j.rate_credits_min && j.rate_credits_min === j.rate_credits_max)
+            ? `${j.rate_credits_min.toLocaleString()}`
+            : `${j.rate_credits_min?.toLocaleString() || 0} ~ ${j.rate_credits_max?.toLocaleString() || 0}`,
           minBudget: j.rate_credits_min || 0,
           postedBy: j.client_name || j.client_handle || "Unknown",
           postedAt: new Date(j.created_at).toLocaleString(),
@@ -99,13 +106,17 @@ export const HomeFeaturedJobs: React.FC = () => {
           timeline: `${j.timeline_min}-${j.timeline_max} Days`,
           thumbnail: j.thumbnail_path 
              ? `${import.meta.env.VITE_CLOUDFRONT_URL}${j.thumbnail_path.startsWith('/') ? '' : '/'}${j.thumbnail_path}`
-             : "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80",
+             : "/placeholder.svg",
           clientAvatar: j.client_avatar_path
             ? `${import.meta.env.VITE_CLOUDFRONT_URL}${j.client_avatar_path.startsWith('/') ? '' : '/'}${j.client_avatar_path}`
             : undefined,
           skills: j.tags || [],
           isSaved: j.is_saved || false,
-          isOwnPost: userInfo?.account_id === j.client_account_id,
+          isOwnPost: Boolean(j.is_own_post || userInfo?.account_id === j.client_account_id),
+          isManageablePost: Boolean(j.is_manageable_post),
+          hiring_type: j.hiring_type || (Array.isArray(j.milestones) && j.milestones.length > 0 ? "team" : "single"),
+          milestones: Array.isArray(j.milestones) ? j.milestones : [],
+          is_team: Boolean(j.is_team || j.posted_as === 'Team' || j.team_id),
         }));
         
         // Only show Open jobs, and sort by newest
@@ -172,114 +183,122 @@ export const HomeFeaturedJobs: React.FC = () => {
           <div
             key={job.id}
             onClick={() => navigate(`/jobs/postings/${job.id}`)}
-            className={`group flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer shadow-sm dark:shadow-none ${index === 2 ? "hidden 2xl:flex" : "flex"}`}
+            className={`group flex flex-col justify-between rounded-2xl border p-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/[0.06] shadow-sm hover:shadow-md dark:shadow-none ${index === 2 ? "hidden 2xl:flex" : "flex"}`}
           >
             <div>
               {/* Thumbnail Image */}
-              <div className="relative mb-3 h-36 w-full overflow-hidden rounded-xl border border-gray-100 dark:border-white/5 bg-gray-200 dark:bg-zinc-900">
+              <div className="h-40 w-full overflow-hidden rounded-xl bg-gray-200 dark:bg-zinc-900 border border-gray-100 dark:border-white/5 relative mb-3">
                 <img
                   src={job.thumbnail}
-                  alt={job.title}
+                  alt=""
                   className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
                 
+                {/* Top-left Proposals count */}
                 <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
                   <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
                     <Send className="h-3 w-3" />
                     <span>{job.applicantsCount || 0} Proposals</span>
                   </div>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggleSave(job.id);
-                  }}
-                  className={`absolute top-2 right-2 rounded-full bg-white/80 dark:bg-black/50 p-1.5 backdrop-blur-sm transition ${
-                    job.isSaved ? "text-amber-500 dark:text-amber-400" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
-                  }`}
-                >
-                  <Bookmark className={`h-3.5 w-3.5 ${job.isSaved ? "fill-current" : ""}`} />
-                </button>
+
+                {/* Bottom-left Hiring Type Tag */}
+                <div className="absolute bottom-2 left-2 z-10">
+                  {Boolean(job.hiring_type === "team" || (Array.isArray(job.milestones) && job.milestones.length > 0)) ? (
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                      <Users className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
+                      <span>Team</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                      <User className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
+                      <span>Individual</span>
+                    </span>
+                  )}
+                </div>
+
+                {/* Top-right Actions */}
+                <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
+                  {job.isManageablePost && (
+                    <button
+                      title="Edit Post"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/jobs/edit-post/${job.id}`);
+                      }}
+                      className="p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm text-gray-500 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <button
+                    title="Save Job Post"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleSave(job.id);
+                    }}
+                    className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
+                      job.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <Bookmark className={`h-3.5 w-3.5 ${job.isSaved ? "fill-current" : ""}`} />
+                  </button>
+                </div>
               </div>
 
-              {/* Category & Status Pills */}
-              <div className="mb-2 flex items-center justify-between gap-1.5">
-                <div className="flex flex-wrap items-center gap-1.5">
+              {/* Category Pill Tags */}
+              <div className="flex flex-wrap items-center gap-1.5 mb-2">
                 <span
-                  className={`rounded border px-2 py-0.5 text-[10px] font-medium ${
-                    job.status === "Open"
-                      ? "border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
-                      : "border-red-300 bg-red-100 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
+                  className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
+                    job.status?.toLowerCase() === "open" || !job.status
+                      ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
+                      : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                   }`}
                 >
-                  {job.status}
+                  <span className="relative z-10">{job.status?.toLowerCase() === "open" || !job.status ? "Open" : "Closed"}</span>
+                  {(job.status?.toLowerCase() === "open" || !job.status) && (
+                    <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                  )}
                 </span>
-                <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
-                  {job.difficulty}
+                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
+                  {job.category || "General"}
                 </span>
-                <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
-                  {job.category}
+                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
+                  {job.difficulty || "Beginner"}
                 </span>
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-700 dark:text-zinc-300 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 rounded border border-gray-300 dark:border-white/10">
-                  <Users className="h-3 w-3 text-gray-500" />
-                  {job.positionsNeeded || 1} Positions
-                </div>
               </div>
 
-              {/* Price Range */}
-              <div className="mb-1 flex items-center gap-1 text-base font-black text-amber-500 dark:text-amber-400">
-                <CreditIcon className="h-4 w-4 shrink-0 text-amber-500 dark:text-amber-400" />
+              {/* Price & Title */}
+              <div className="text-amber-500 dark:text-amber-400 text-base font-black mb-1 flex items-center gap-1">
+                <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0" />
                 <span>{job.priceRange}</span>
               </div>
-
-              {/* Title & Description */}
               <h3
-                className="mb-1 line-clamp-1 text-base font-bold text-gray-900 dark:text-white transition-colors group-hover:text-gray-900 dark:group-hover:text-white"
+                className="text-gray-900 dark:text-white text-base font-bold mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 {job.title}
               </h3>
-              <div className="mb-3">
+              <div className="mb-4">
                 <JobRichText content={job.description} truncate={2} />
               </div>
-
-              {/* Skill Badges */}
-              {Array.isArray(job.skills) && job.skills.length > 0 && (
-                <div className="mb-3 flex flex-wrap items-center gap-1.5">
-                  <Wrench className="h-3 w-3 shrink-0 text-gray-400 dark:text-zinc-400" />
-                  {job.skills.slice(0, 3).map((skill) => (
-                    <span
-                      key={skill}
-                      className="rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 dark:text-zinc-300"
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                  {job.skills.length > 3 && (
-                    <span className="rounded-md border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400">
-                      +{job.skills.length - 3}
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Footer */}
-            <div className="mt-2 flex items-center justify-between border-t border-gray-200 dark:border-white/5 pt-3 text-[11px] font-medium text-gray-500 dark:text-zinc-400">
+            <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 font-medium">
               <div className="flex items-center gap-1.5 truncate">
                 {job.clientAvatar ? (
-                  <img src={job.clientAvatar} alt={job.postedBy} className="h-5 w-5 shrink-0 rounded-full border border-gray-300 dark:border-zinc-700 object-cover" />
+                  <img src={job.clientAvatar} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover border border-gray-200 dark:border-white/10" />
                 ) : (
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 text-[9px] font-bold text-gray-700 dark:text-white">
+                  <div className="h-5 w-5 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-[9px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10">
                     {job.postedBy.charAt(0)}
                   </div>
                 )}
-                <span className="truncate font-semibold text-gray-700 dark:text-zinc-300">{job.postedBy}</span>
+                <span className="truncate text-gray-700 dark:text-zinc-300 font-semibold">{job.postedBy}</span>
               </div>
 
-              <div className="ml-2 flex shrink-0 items-center gap-1 text-[10px] text-gray-400 dark:text-zinc-400">
+              <div className="flex items-center gap-1 text-gray-400 dark:text-zinc-400 text-[10px] shrink-0 ml-2">
                 <Clock className="h-3 w-3 text-gray-400 dark:text-zinc-500" />
                 <span>{job.timeAgo}</span>
               </div>

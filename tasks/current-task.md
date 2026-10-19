@@ -1,11 +1,14 @@
-# Current Task: Require login before the ticket page
-# Current Task: Implement Dynamic Email Endpoint
+# Current Task: Fix Post-Login Landing Page Redirect Flicker
 
 ## Objective
-Guests opening the support ticket page should sign in before they see the app, including the main menu, marketplace, and other member navigation.
-Implement a secure, reusable dynamic email endpoint `POST /api/notifications/send-email` that accepts dynamic recipient parameters, body content, and action links, while guaranteeing zero disruption to existing email workflows (verification OTP, password reset, project invitations, staff alerts).
+1. Eliminate the awkward redirect to the landing page (`'/'`) after login.
+2. Provide seamless, direct navigation to `/setup/upload-image` (or current onboarding step) if onboarding is incomplete, or to `/home` (or `redirectUrl`) if complete.
+3. Enhance backend login, signup, and session endpoints to provide onboarding state directly so the client resolves the destination with zero extra latency.
+4. Update `RouteMiddleware` so that authenticated users on public routes never flash the landing page while resolving their destination.
 
 ## Acceptance criteria
-- [x] An unsigned visitor to `/support/ticket` is sent to login and returned to the ticket form after signing in.
-- [x] The member sidebar and header are not shown on that page until a session exists.
-- [x] A signed-in member still opens the ticket form inside the app.
+- [x] Backend `/api/users/login`, `/api/users/signup`, and `/api/users/me` return user `onboarding` status (`{ completed, path }`).
+- [x] `Loginpage.tsx` directly resolves destination (`onboarding.path`, `/home`, or `redirectUrl`) and navigates immediately with `{ replace: true }`, never defaulting to `'/'`.
+- [x] `Oauth.tsx` broadcasts onboarding completion/step changes upon Google sign-in.
+- [x] `RouteMiddleware.ts` seeds onboarding gate immediately from `user.onboarding` and displays `RouteLoadingShell` instead of `<LandingPage />` if a signed-in user hits a public route while redirecting.
+- [x] Frontend build succeeds without errors (`cd frontend && npm run build`).

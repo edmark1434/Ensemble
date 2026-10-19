@@ -4,6 +4,8 @@ import axios from "axios";
 import useGlobalState from "@/lib/global_state";
 import { standingFromPayload, type AccountStanding } from "@/components/ui/AccountStanding";
 
+import { notifyOnboardingCompleted, notifyOnboardingStepChanged } from "@/lib/onboardingEvents";
+
 // Custom hook for Google OAuth signup
 export const useGoogleAuth = (onRestricted?: (standing: AccountStanding) => void) => {
   const { setUser, setIsAuthenticated } = useGlobalState();
@@ -30,8 +32,16 @@ export const useGoogleAuth = (onRestricted?: (standing: AccountStanding) => void
       );
 
       if (response.data.success) {
-        setUser(response.data.credentials ?? response.data.result);
+        const loggedUser = response.data.credentials ?? response.data.result;
+        setUser(loggedUser);
         setIsAuthenticated(true);
+        const onboarding = response.data.onboarding ?? loggedUser?.onboarding;
+        const accountId = loggedUser?.account_id || loggedUser?.accountId;
+        if (onboarding?.completed && accountId) {
+          notifyOnboardingCompleted(String(accountId));
+        } else if (onboarding?.path && accountId) {
+          notifyOnboardingStepChanged(onboarding.path, String(accountId));
+        }
       } else {
         console.error('OAuth signup failed:', response.data.message);
       }
