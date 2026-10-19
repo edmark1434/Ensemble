@@ -116,10 +116,10 @@ export function AccountRecordSection() {
   const badges = standingBadges(record);
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-[#14151c]">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Your account record</h2>
+    <div>
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Account record</h2>
       <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">
-        Warnings and sanctions on this account. Other people only see the public badges.
+        Your warnings, suspensions, locks, timeouts, and bans. Other people only see the public badges.
       </p>
       {error ? <p className="mt-3 text-sm text-red-600 dark:text-red-300">{error}</p> : null}
       {!record && !error ? <p className="mt-3 text-sm text-gray-500">Loading your record…</p> : null}
@@ -198,6 +198,6 @@ export function AccountRecordSection() {
           </div>
         </div>
       ) : null}
-    </section>
+    </div>
   );
 }

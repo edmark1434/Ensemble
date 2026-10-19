@@ -56,6 +56,7 @@ export default function AccountAccessPage() {
   const [description, setDescription] = useState('');
   const [reply, setReply] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showRecord, setShowRecord] = useState(false);
 
   async function loadLists() {
     const [ticketRes, disputeRes] = await Promise.all([
@@ -147,7 +148,20 @@ export default function AccountAccessPage() {
         </p>
       </section>
 
-      <AccountRecordSection />
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowRecord((open) => !open)}
+          className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-900 dark:border-white/10 dark:bg-zinc-900 dark:text-white"
+        >
+          {showRecord ? 'Hide account record' : 'View account record'}
+        </button>
+        {showRecord ? (
+          <div className="mt-3 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-zinc-900">
+            <AccountRecordSection />
+          </div>
+        ) : null}
+      </div>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-zinc-900">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
