@@ -314,7 +314,7 @@ export const ProjectChatTab: React.FC<ProjectChatTabProps> = ({
       showSuccessToast(`Report submitted for ${reportTarget.display_name}`);
       setReportTarget(null);
     } catch (err: any) {
-      showErrorToast(err?.response?.data?.message || 'Failed to submit report');
+      throw new Error(err?.response?.data?.message || err?.message || 'Failed to submit report');
     }
   };
 

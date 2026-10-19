@@ -409,6 +409,21 @@ async function reactivateAccountController(req, res) {
     return deactivationResponse(req, res, reactivateOwnAccount);
 }
 
+async function reportAccountController(req, res) {
+    try {
+        const { submitUserReport } = require('../services/MemberReportServices');
+        const report = await submitUserReport(req.params.accountId, req.body, req.session);
+        return res.status(201).json({ success: true, message: 'Report submitted', report });
+    } catch (err) {
+        const status = err.statusCode || 500;
+        if (status >= 500) console.error('Error reporting account:', err);
+        return res.status(status).json({
+            success: false,
+            message: status >= 500 ? 'Failed to submit the report' : err.message,
+        });
+    }
+}
+
 module.exports = {
     createAccount,
     getAccountByHandle,
@@ -431,6 +446,7 @@ module.exports = {
     getDeactivationController,
     deactivateAccountController,
     reactivateAccountController,
+    reportAccountController,
 };
 async function grantBadgeController(req, res) {
     try {

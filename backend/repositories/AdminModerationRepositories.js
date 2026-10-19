@@ -176,7 +176,7 @@ async function fetchPendingCasesFromDb() {
       LEFT JOIN staff st ON st.staff_id = r.assigned_staff_id
       LEFT JOIN accounts sta ON sta.account_id = st.account_id
       WHERE r.deleted_at IS NULL
-        AND LOWER(COALESCE(r.status, 'open')) NOT IN ('resolved', 'closed', 'dismissed')
+        AND LOWER(COALESCE(r.status, 'open')) NOT IN ('resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned')
       ORDER BY r.created_at DESC
       LIMIT 40
     `),
@@ -623,7 +623,7 @@ async function getModerationOverview(staffSession = null) {
         SELECT COUNT(*)::int AS open_reports
         FROM reports
         WHERE deleted_at IS NULL
-          AND LOWER(COALESCE(status, 'open')) NOT IN ('resolved', 'closed', 'dismissed')
+          AND LOWER(COALESCE(status, 'open')) NOT IN ('resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned')
       `)
       .catch(() => ({ rows: [{ open_reports: 0 }] })),
     pool
@@ -893,7 +893,7 @@ function normalizeWritablePriority(priority) {
 function normalizeWritableStatus(status) {
   const s = String(status || 'open').toLowerCase().replace(/\s+/g, '_');
   if (s === 'in_progress' || s === 'in-progress') return 'in_progress';
-  if (['open', 'pending', 'resolved', 'closed', 'dismissed'].includes(s)) return s;
+  if (['open', 'pending', 'resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned'].includes(s)) return s;
   return s;
 }
 

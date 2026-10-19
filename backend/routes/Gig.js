@@ -19,7 +19,8 @@ const {
     editGigOrderController,
     withdrawGigOrderController,
     shortlistGigOrderController,
-    unshortlistGigOrderController
+    unshortlistGigOrderController,
+    reportGigController
 } = require('../controllers/GigControllers');
 const requireAuth = require('../middleware/RequireAuth');
 const requireCompletedOnboarding = require('../middleware/RequireCompletedOnboarding');
@@ -32,6 +33,8 @@ router.get('/:id', optionalAuth, getGigByIdController);
 
 router.use(requireAuth);
 router.use(requireCompletedOnboarding);
+
+router.post('/:id/report', reportGigController);
 
 // GET /api/gigs/saved
 router.get('/saved', getSavedGigsController);

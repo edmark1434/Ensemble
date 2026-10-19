@@ -277,7 +277,7 @@ async function getSupportStaffWorkload() {
           AND ${EXCLUDE_ADMIN_TICKETS_SQL}) AS open_tickets,
       (SELECT COUNT(*)::int FROM reports r
         WHERE r.assigned_staff_id = s.staff_id
-          AND LOWER(r.status) NOT IN ('resolved', 'closed', 'dismissed')
+          AND LOWER(r.status) NOT IN ('resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned')
           AND r.deleted_at IS NULL) AS open_reports,
       (SELECT COUNT(*)::int FROM disputes d
         WHERE d.handled_by_staff_id = s.staff_id

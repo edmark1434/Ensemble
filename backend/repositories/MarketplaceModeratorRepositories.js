@@ -267,12 +267,12 @@ async function getMarketplaceReportBreakdown(targetTypesIn) {
       COUNT(*) FILTER (WHERE LOWER(status) IN ('resolved', 'closed'))::int AS resolved,
       COUNT(*) FILTER (WHERE LOWER(status) = 'dismissed')::int AS dismissed,
       COUNT(*) FILTER (
-        WHERE LOWER(status) NOT IN ('resolved', 'closed', 'dismissed')
+        WHERE LOWER(status) NOT IN ('resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned')
           AND assigned_staff_id IS NULL
       )::int AS unassigned,
       COUNT(*) FILTER (
         WHERE LOWER(priority) = 'high'
-          AND LOWER(status) NOT IN ('resolved', 'closed', 'dismissed')
+          AND LOWER(status) NOT IN ('resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned')
       )::int AS high_priority
     FROM reports
     WHERE deleted_at IS NULL

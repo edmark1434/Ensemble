@@ -382,6 +382,21 @@ async function unshortlistGigOrderController(req, res) {
     }
 }
 
+async function reportGigController(req, res) {
+    try {
+        const { submitGigReport } = require('../services/MemberReportServices');
+        const report = await submitGigReport(req.params.id, req.body, req.session);
+        return res.status(201).json({ success: true, message: 'Report submitted', report });
+    } catch (err) {
+        const status = err.statusCode || 500;
+        if (status >= 500) console.error('Error reporting gig:', err);
+        return res.status(status).json({
+            success: false,
+            message: status >= 500 ? 'Failed to submit the report' : err.message,
+        });
+    }
+}
+
 module.exports = {
     updateGigController,
     createGigController,
@@ -400,5 +415,6 @@ module.exports = {
     rejectGigOrderController,
     withdrawGigOrderController,
     shortlistGigOrderController,
-    unshortlistGigOrderController
+    unshortlistGigOrderController,
+    reportGigController,
 };

@@ -82,8 +82,8 @@ function statusClass(status: string) {
   if (s === 'in review' || s === 'in_progress' || s === 'in progress') {
     return 'bg-amber-500/15 text-amber-200 border-amber-500/25';
   }
-  if (s === 'resolved' || s === 'closed') return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25';
-  if (s === 'dismissed') return 'bg-zinc-500/15 text-zinc-300 border-white/10';
+  if (s === 'resolved' || s === 'closed' || s === 'sanctioned') return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25';
+  if (s === 'dismissed' || s === 'denied' || s === 'archived') return 'bg-zinc-500/15 text-zinc-300 border-white/10';
   return 'bg-zinc-500/15 text-zinc-300 border-white/10';
 }
 
@@ -115,7 +115,7 @@ const DEFAULT_ADVANCED: AdvancedFilters = {
   sort: 'filed_desc',
 };
 
-const CLOSED = new Set(['resolved', 'closed', 'dismissed']);
+const CLOSED = new Set(['resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned']);
 const IN_REVIEW = new Set(['in_review', 'in review', 'in_progress', 'in progress']);
 const PRIORITY_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
 
@@ -166,9 +166,11 @@ export default function ReportDesk({
         String(r.priority).toLowerCase() === 'high' && !CLOSED.has(String(r.status).toLowerCase())
     ).length;
     const resolved = reports.filter((r) =>
-      ['resolved', 'closed'].includes(String(r.status).toLowerCase())
+      ['resolved', 'closed', 'sanctioned'].includes(String(r.status).toLowerCase())
     ).length;
-    const dismissed = reports.filter((r) => String(r.status).toLowerCase() === 'dismissed').length;
+    const dismissed = reports.filter((r) =>
+      ['dismissed', 'denied', 'archived'].includes(String(r.status).toLowerCase())
+    ).length;
     return { openQueue, open, inReview, unassigned, high, resolved, dismissed, total: reports.length };
   }, [reports]);
 
@@ -243,8 +245,8 @@ export default function ReportDesk({
       if (statusFilter === 'open_queue' && CLOSED.has(status)) return false;
       if (statusFilter === 'open' && status !== 'open' && status !== 'pending') return false;
       if (statusFilter === 'in_review' && !IN_REVIEW.has(status)) return false;
-      if (statusFilter === 'resolved' && !['resolved', 'closed'].includes(status)) return false;
-      if (statusFilter === 'dismissed' && status !== 'dismissed') return false;
+      if (statusFilter === 'resolved' && !['resolved', 'closed', 'sanctioned'].includes(status)) return false;
+      if (statusFilter === 'dismissed' && !['dismissed', 'denied', 'archived'].includes(status)) return false;
 
       if (
         advanced.priority !== 'all' &&
@@ -322,7 +324,7 @@ export default function ReportDesk({
     { id: 'open', label: 'Open', count: counts.open },
     { id: 'in_review', label: 'In review', count: counts.inReview },
     { id: 'resolved', label: 'Resolved', count: counts.resolved },
-    { id: 'dismissed', label: 'Dismissed', count: counts.dismissed },
+    { id: 'dismissed', label: 'Denied', count: counts.dismissed },
     { id: 'all', label: 'All', count: counts.total },
   ];
 

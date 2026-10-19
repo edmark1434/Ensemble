@@ -1,13 +1,11 @@
-# Current Task: Member account deactivation
+# Current Task: Staff context on member reports
 
 ## Objective
-Members can deactivate their own account. A deactivated account disappears from member search and public profile views. Staff and admins can still search and open the profile, including from platform view. The deactivated member sees only a reactivation screen with a status indicator and a 72-hour cooldown.
+When a member reports a message, forum, user, team, job, or gig, staff and admins can open the report and see the reported subject, a link to it, and the reporter's description. Staff can sanction the reported account, or deny or archive the report.
 
 ## Acceptance criteria
-- [x] Deactivation sets account status to Deactivated and stores the reactivation time.
-- [x] Member search, public profiles, follower lists, and public galleries hide deactivated accounts from non-staff.
-- [x] Staff sessions can search and open those profiles, with a Deactivated indicator.
-- [x] A deactivated member can only call session, logout, and reactivation endpoints.
-- [x] Reactivation stays locked for 72 hours and the screen shows the remaining time.
+- [x] Report detail includes the reported account, a link to the subject, the message text when a message was reported, and the description.
+- [x] Profile, job, and gig reports save a reason and a description of at least 20 characters.
+- [x] Sanction applies a warning, suspension, or ban and notifies the reporter.
+- [x] Deny and archive close the report without notifying the reporter.
 - [x] Frontend build succeeds.
-- [ ] Apply `1823900000000_account-deactivation` from a host Postgres accepts. This machine was rejected by `pg_hba.conf`.

@@ -337,7 +337,7 @@ async function scopedReportCounts({ targetTypesIn } = {}) {
     `
     SELECT
       COUNT(*)::int AS total,
-      COUNT(*) FILTER (WHERE LOWER(status) NOT IN ('resolved', 'closed'))::int AS open_count
+      COUNT(*) FILTER (WHERE LOWER(status) NOT IN ('resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned'))::int AS open_count
     FROM reports
     ${whereSql}
     `,
@@ -356,6 +356,7 @@ async function createReport({
   description,
   referenceTable,
   referencePrefix = 'forum',
+  referenceId = null,
 }) {
   const reportType = String(type || 'Other').trim() || 'Other';
   const result = await pool.query(
@@ -376,7 +377,7 @@ async function createReport({
       is_created_by_bot,
       updated_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6, 'medium', $7, $8, $9, $5, 'open', false, NOW())
+    VALUES ($1, $2, $3, $4, $5, $6, 'medium', $7, $8, $9, $10, 'open', false, NOW())
     RETURNING *
     `,
     [
@@ -389,6 +390,7 @@ async function createReport({
       reportType,
       referenceTable,
       referencePrefix,
+      referenceId || targetId,
     ]
   );
   const row = result.rows[0];

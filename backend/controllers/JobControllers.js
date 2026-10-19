@@ -391,6 +391,21 @@ async function createJobInvitationController(req, res) {
     }
 }
 
+async function reportJobController(req, res) {
+    try {
+        const { submitJobReport } = require('../services/MemberReportServices');
+        const report = await submitJobReport(req.params.jobId, req.body, req.session);
+        return res.status(201).json({ success: true, message: 'Report submitted', report });
+    } catch (err) {
+        const status = err.statusCode || 500;
+        if (status >= 500) console.error('Error reporting job:', err);
+        return res.status(status).json({
+            success: false,
+            message: status >= 500 ? 'Failed to submit the report' : err.message,
+        });
+    }
+}
+
 module.exports = {
     getActiveJobsByClientController,
     createJobInvitationController,
@@ -406,5 +421,6 @@ module.exports = {
     updateProposalStatusController,
     getTermsOfServiceController,
     toggleJobSaveController,
-    deleteJobController
+    deleteJobController,
+    reportJobController,
 };

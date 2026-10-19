@@ -980,8 +980,8 @@ const JobFullPage: React.FC = () => {
           isOpen={isReportModalOpen}
           jobTitle={job.title}
           onClose={() => setIsReportModalOpen(false)}
-          onSubmitReport={(reason, details) => {
-            console.log(`Report for job ${job.id}:`, { reason, details });
+          onSubmitReport={async (reason, details) => {
+            await api.post(`/api/jobs/${job.id}/report`, { reason, description: details });
           }}
         />
       )}

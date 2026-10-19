@@ -6,6 +6,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import { formatDistanceToNow } from "date-fns";
 import type { Gig } from "../gig_datasets";
 import PopupReportGig from "./PopupReportGig";
+import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
 
 export type ViewType = "grid" | "list";
@@ -566,8 +567,9 @@ export const GigList: React.FC<GigListProps> = ({
         isOpen={Boolean(reportingGig)}
         gigTitle={reportingGig?.title}
         onClose={() => setReportingGig(null)}
-        onSubmitReport={(reason, details) => {
-          console.log("Report submitted for gig:", reportingGig?.id, reason, details);
+        onSubmitReport={async (reason, details) => {
+          if (!reportingGig?.id) throw new Error("Select a gig to report");
+          await api.post(`/api/gigs/${reportingGig.id}/report`, { reason, description: details });
         }}
       />
     </div>

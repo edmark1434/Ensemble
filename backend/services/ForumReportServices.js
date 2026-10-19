@@ -88,7 +88,8 @@ async function submitMemberReport(groupId, memberId, payload, session) {
     targetAccountId: target.account_id,
     targetType: 'member',
     targetId: String(target.user_id),
-    referenceTable: 'forum_members',
+    referenceTable: 'forum_groups',
+    referenceId: String(group._id),
     type: details.type,
     description: `${targetName || 'Forum member'}\n${details.description}`,
   });

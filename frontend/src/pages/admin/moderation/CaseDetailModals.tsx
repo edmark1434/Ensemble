@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Hand, Loader2, X } from 'lucide-react';
+import { ExternalLink, Hand, Loader2, ShieldAlert, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type { ModerationCase } from './moderationTypes';
@@ -31,6 +31,7 @@ function statusButtonClass(label: string, active: boolean) {
 }
 
 const REPORT_STATUS_OPTIONS = ['open', 'in_progress', 'closed'] as const;
+const DECIDED_REPORT_STATUSES = ['resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned'];
 
 function toApiToken(value: string) {
   return String(value || '')
@@ -64,6 +65,23 @@ type ReportDetailPayload = {
     assignee: { staffId: string | number; name: string } | null;
     createdAt: string | null;
   };
+  subject?: {
+    headline: string;
+    description: string;
+    message: {
+      unavailable?: boolean;
+      content: string;
+      attachments: string[];
+      sentAt: string | null;
+    } | null;
+    links: { label: string; path: string }[];
+    reportedAccount: {
+      accountId: string;
+      name: string;
+      handle: string | null;
+      path: string;
+    } | null;
+  };
   permissions?: DisputePermissions;
   assignableStaff: { staffId: string | number; name: string; role: string }[];
 };
@@ -87,6 +105,10 @@ export function ReportCaseDetailModal({
   const [status, setStatus] = useState('open');
   const [priority, setPriority] = useState('medium');
   const [assigneeId, setAssigneeId] = useState('');
+  const [sanctionOpen, setSanctionOpen] = useState(false);
+  const [sanctionType, setSanctionType] = useState('warning');
+  const [sanctionReason, setSanctionReason] = useState('');
+  const [sanctionDays, setSanctionDays] = useState('7');
 
   const accentLabel =
     accent === 'sky'
@@ -173,6 +195,31 @@ export function ReportCaseDetailModal({
     }
   };
 
+  const decide = async (action: 'sanction' | 'deny' | 'archive', extra: Record<string, unknown> = {}) => {
+    setSaving(true);
+    try {
+      const res = await api.patch(`${endpointBase}/${reportId}`, { action, ...extra });
+      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to update report');
+      showSuccessToast(
+        action === 'sanction'
+          ? 'Account sanctioned. The reporter has been notified.'
+          : action === 'deny'
+            ? 'Report denied'
+            : 'Report archived'
+      );
+      setSanctionOpen(false);
+      await load();
+      onUpdated();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (err instanceof Error ? err.message : 'Failed to update report');
+      showErrorToast(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const assignMyself = async () => {
     setSaving(true);
     try {
@@ -240,9 +287,49 @@ export function ReportCaseDetailModal({
                 Reported by {report.reporter.name} (@{report.reporter.username}) ·{' '}
                 {formatDateTime(report.createdAt)}
               </p>
-              {report.description && (
-                <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-400">{report.description}</p>
+              {detail.subject?.headline && (
+                <p className="mt-2 text-sm font-medium text-zinc-200">{detail.subject.headline}</p>
               )}
+            </div>
+
+            {(detail.subject?.links?.length || detail.subject?.reportedAccount) && (
+              <div className="flex flex-wrap gap-2">
+                {detail.subject?.links?.map((link) => (
+                  <a
+                    key={link.path}
+                    href={link.path}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-sky-200 hover:bg-white/[0.08]"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {detail.subject?.message && (
+              <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Reported message</p>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-200">
+                  {detail.subject.message.unavailable && !detail.subject.message.content
+                    ? 'This message is no longer available.'
+                    : detail.subject.message.content || '[No text content]'}
+                </p>
+                {detail.subject.message.attachments.length > 0 && (
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Attachments: {detail.subject.message.attachments.join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Description</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-300">
+                {detail.subject?.description || report.description || 'No description was provided.'}
+              </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
@@ -345,28 +432,106 @@ export function ReportCaseDetailModal({
               >
                 Save report changes
               </button>
-              {!['resolved', 'closed', 'dismissed'].includes(toApiToken(report.status)) && (
-                <>
+            </div>
+
+            {DECIDED_REPORT_STATUSES.includes(toApiToken(report.status)) ? (
+              <p className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+                This report is {titleCaseLabel(report.status)}.
+                {toApiToken(report.status) === 'sanctioned'
+                  ? ' The reporter was notified.'
+                  : ' The reporter was not notified.'}
+              </p>
+            ) : (
+              <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-white">Decision</p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Sanction notifies the reporter. Deny and archive do not.
+                  </p>
+                </div>
+                {!perms?.canAct && (
+                  <p className="text-xs text-amber-200/90">
+                    Assign this report to yourself before you sanction, deny, or archive it.
+                  </p>
+                )}
+                {sanctionOpen && (
+                  <div className="space-y-2">
+                    <label className="flex flex-col gap-1 text-xs text-zinc-500">
+                      Sanction
+                      <select
+                        value={sanctionType}
+                        onChange={(e) => setSanctionType(e.target.value)}
+                        className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
+                      >
+                        <option value="warning">Warning</option>
+                        <option value="suspend">Suspend</option>
+                        <option value="ban">Ban</option>
+                      </select>
+                    </label>
+                    {sanctionType === 'suspend' && (
+                      <label className="flex flex-col gap-1 text-xs text-zinc-500">
+                        Days
+                        <input
+                          type="number"
+                          min={1}
+                          max={365}
+                          value={sanctionDays}
+                          onChange={(e) => setSanctionDays(e.target.value)}
+                          className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
+                        />
+                      </label>
+                    )}
+                    <label className="flex flex-col gap-1 text-xs text-zinc-500">
+                      Reason shown to the sanctioned account
+                      <textarea
+                        value={sanctionReason}
+                        onChange={(e) => setSanctionReason(e.target.value)}
+                        rows={3}
+                        className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    disabled={saving}
-                    onClick={() => void save('resolved')}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
+                    disabled={saving || !perms?.canAct}
+                    onClick={() => {
+                      if (!sanctionOpen) {
+                        setSanctionReason((current) => current || titleCaseLabel(report.type));
+                        setSanctionOpen(true);
+                        return;
+                      }
+                      void decide('sanction', {
+                        sanctionType,
+                        reason: sanctionReason.trim(),
+                        days: sanctionType === 'suspend' ? Number(sanctionDays) : undefined,
+                      });
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
                   >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Resolve
+                    <ShieldAlert className="h-4 w-4" />
+                    {sanctionOpen ? 'Confirm sanction' : 'Sanction'}
                   </button>
                   <button
                     type="button"
-                    disabled={saving}
-                    onClick={() => void save('dismissed')}
+                    disabled={saving || !perms?.canAct}
+                    onClick={() => void decide('deny')}
                     className="rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:bg-white/[0.04] disabled:opacity-50"
                   >
-                    Dismiss
+                    Deny
                   </button>
-                </>
-              )}
-            </div>
+                  <button
+                    type="button"
+                    disabled={saving || !perms?.canAct}
+                    onClick={() => void decide('archive')}
+                    className="rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:bg-white/[0.04] disabled:opacity-50"
+                  >
+                    Archive
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <p className="py-12 text-center text-zinc-500">Report not found.</p>

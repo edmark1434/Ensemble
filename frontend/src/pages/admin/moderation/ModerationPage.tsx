@@ -826,7 +826,7 @@ function CasesTab({
   const openReportCount = useMemo(
     () =>
       reports.filter(
-        (r) => !['resolved', 'closed', 'dismissed'].includes(String(r.status).toLowerCase())
+        (r) => !['resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned'].includes(String(r.status).toLowerCase())
       ).length,
     [reports]
   );

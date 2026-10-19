@@ -15,7 +15,8 @@ const {
     toggleJobSaveController,
     deleteJobController,
     getActiveJobsByClientController,
-    createJobInvitationController
+    createJobInvitationController,
+    reportJobController
 } = require('../controllers/JobControllers');
 
 const checkSession = require('../middleware/CheckSession');
@@ -35,6 +36,7 @@ router.get('/', optionalAuth, getAllJobsController);
 router.post('/', [checkSession, requireAuth], createJobController);
 router.put('/:jobId', [checkSession, requireAuth], updateJobController);
 router.post('/:jobId/save', [checkSession, requireAuth], toggleJobSaveController);
+router.post('/:jobId/report', [checkSession, requireAuth], reportJobController);
 router.delete('/:jobId', [checkSession, requireAuth], deleteJobController);
 
 // Proposals

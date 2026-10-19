@@ -127,6 +127,9 @@ async function patchReport(req, res) {
   } catch (err) {
     console.error('Error updating report:', err);
     const msg = err.message || 'Failed to update report';
+    if (err.statusCode && err.statusCode < 500) {
+      return res.status(err.statusCode).json({ success: false, message: msg });
+    }
     const isClient = /assign|already assigned|staff profile|not found/i.test(msg);
     res.status(isClient ? 400 : 500).json({ success: false, message: msg });
   }

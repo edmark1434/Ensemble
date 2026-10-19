@@ -39,6 +39,19 @@ const REPORT_QUEUE_SCOPES = Object.freeze({
   jobs: JOBS_REPORT_TYPES,
 });
 
+const CLOSED_REPORT_STATUSES = Object.freeze([
+  'resolved',
+  'closed',
+  'dismissed',
+  'denied',
+  'archived',
+  'sanctioned',
+]);
+
+function closedReportStatusListSql() {
+  return CLOSED_REPORT_STATUSES.map((status) => `'${status}'`).join(', ');
+}
+
 function normalizeReportTargetType(value) {
   return String(value || '')
     .trim()
@@ -59,6 +72,8 @@ module.exports = {
   MARKETPLACE_REPORT_TYPES,
   JOBS_REPORT_TYPES,
   REPORT_QUEUE_SCOPES,
+  CLOSED_REPORT_STATUSES,
+  closedReportStatusListSql,
   normalizeReportTargetType,
   isReportTypeInScope,
 };

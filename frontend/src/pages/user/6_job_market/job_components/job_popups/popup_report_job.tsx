@@ -6,7 +6,7 @@ interface PopupReportJobProps {
   isOpen: boolean;
   jobTitle?: string;
   onClose: () => void;
-  onSubmitReport: (reason: string, details: string) => void;
+  onSubmitReport: (reason: string, details: string) => void | Promise<void>;
 }
 
 const REPORT_REASONS = [
@@ -28,13 +28,31 @@ const PopupReportJob: React.FC<PopupReportJobProps> = ({
   const [selectedReason, setSelectedReason] = useState<string>("");
   const [details, setDetails] = useState<string>("");
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+  const [submitError, setSubmitError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedReason) return;
+    if (!selectedReason || isSubmitting) return;
+    if (details.trim().length < 20) {
+      setSubmitError("Describe the report in at least 20 characters");
+      return;
+    }
 
-    onSubmitReport(selectedReason, details);
-    setIsSubmitted(true);
+    setIsSubmitting(true);
+    setSubmitError("");
+    try {
+      await onSubmitReport(selectedReason, details.trim());
+      setIsSubmitted(true);
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to submit the report";
+      setSubmitError(message);
+      return;
+    } finally {
+      setIsSubmitting(false);
+    }
 
     // Auto-close smoothly after timer completes
     setTimeout(() => {
@@ -46,6 +64,7 @@ const PopupReportJob: React.FC<PopupReportJobProps> = ({
     setIsSubmitted(false);
     setSelectedReason("");
     setDetails("");
+    setSubmitError("");
     onClose();
   };
 
@@ -138,16 +157,20 @@ const PopupReportJob: React.FC<PopupReportJobProps> = ({
                     {/* Additional Information */}
                     <div className="space-y-1">
                       <label className="text-[9px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 block">
-                        Details (Optional)
+                        Description
                       </label>
                       <textarea
                         rows={2}
-                        placeholder="Briefly describe the issue..."
+                        placeholder="Describe what happened. At least 20 characters."
                         value={details}
                         onChange={(e) => setDetails(e.target.value)}
                         className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs text-gray-900 focus:outline-none focus:border-red-400 placeholder:text-gray-400 dark:bg-white/5 dark:border-white/10 dark:text-white dark:focus:border-red-500/50 dark:placeholder:text-zinc-600 resize-none"
                       />
                     </div>
+
+                    {submitError && (
+                      <p className="text-xs text-red-500" role="alert">{submitError}</p>
+                    )}
 
                     {/* Actions */}
                     <div className="flex gap-2 pt-1">
@@ -160,10 +183,10 @@ const PopupReportJob: React.FC<PopupReportJobProps> = ({
                       </button>
                       <button
                         type="submit"
-                        disabled={!selectedReason}
+                        disabled={!selectedReason || details.trim().length < 20 || isSubmitting}
                         className="flex-1 py-2 rounded-lg bg-red-600 dark:bg-red-500 text-xs font-bold text-white hover:bg-red-700 dark:hover:bg-red-600 transition disabled:opacity-50 disabled:pointer-events-none shadow-md shadow-red-600/20 dark:shadow-red-500/20"
                       >
-                        Submit Report
+                        {isSubmitting ? "Submitting..." : "Submit Report"}
                       </button>
                     </div>
                   </form>

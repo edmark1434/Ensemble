@@ -16,6 +16,7 @@ const {
     getDeactivationController,
     deactivateAccountController,
     reactivateAccountController,
+    reportAccountController,
     getRecentUserAvatarsController,
     followUserController,
     unfollowUserController,
@@ -65,6 +66,7 @@ router.post('/reactivate', [checkSession, requireAuth], reactivateAccountControl
 router.get('/personal-details', [checkSession, requireAuth], getPersonalDetailsController);
 router.get('/profile/current-avatar', [checkSession, requireAuth], getProfileCurrentAvatarByAccountIdController);
 router.post('/:accountId/follow', [checkSession, requireAuth], followUserController);
+router.post('/:accountId/report', [checkSession, requireAuth], reportAccountController);
 router.delete('/:accountId/follow', [checkSession, requireAuth], unfollowUserController);
 router.get('/:accountId/followers', [optionalSession, optionalAuth], getFollowersController);
 router.get('/:accountId/following', [optionalSession, optionalAuth], getFollowingController);

@@ -773,7 +773,7 @@ async function fetchLiveModuleCounts() {
         SELECT COUNT(*)::int AS total,
           COUNT(*) FILTER (
             WHERE deleted_at IS NULL
-              AND LOWER(COALESCE(status, 'open')) NOT IN ('resolved', 'closed', 'dismissed')
+              AND LOWER(COALESCE(status, 'open')) NOT IN ('resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned')
           )::int AS open_count
         FROM reports
       `

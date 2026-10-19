@@ -21,6 +21,8 @@ const {
   getConversationByConvoId,
 } = require('./InboxRepositories');
 const { createNotificationServices } = require('../services/NotificationServices');
+const { buildReportSubject } = require('../lib/ReportSubject');
+const { CLOSED_REPORT_STATUSES } = require('../lib/ReportEnums');
 const { getSectionValue } = require('./AdminSettingsRepositories');
 const {
   isMongoReady,
@@ -504,7 +506,7 @@ async function getTicketsOverview(staffSession = null) {
         COUNT(*) FILTER (WHERE LOWER(status) = 'open')::int AS open_count,
         COUNT(*) FILTER (WHERE LOWER(status) = 'in_review')::int AS in_review,
         COUNT(*) FILTER (WHERE LOWER(status) = 'resolved')::int AS resolved,
-        COUNT(*) FILTER (WHERE LOWER(status) NOT IN ('resolved', 'closed'))::int AS awaiting_triage
+        COUNT(*) FILTER (WHERE LOWER(status) NOT IN ('resolved', 'closed', 'dismissed', 'denied', 'archived', 'sanctioned'))::int AS awaiting_triage
       FROM reports
       WHERE deleted_at IS NULL
     `),
@@ -3608,8 +3610,124 @@ async function setDisputeMessageAudience(disputeId, messageId, audience, staffSe
   return getDisputeDetail(disputeId, staffSession);
 }
 
+const REPORT_DECISIONS = new Set(['deny', 'archive', 'sanction']);
+
+function reportDecisionError(message, statusCode = 400) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+async function notifyReportReporter(row, message) {
+  if (!row?.by_account_id) return;
+  try {
+    const notification = await createNotificationServices({
+      account_id: row.by_account_id,
+      message,
+      is_read: false,
+      reference_table: 'reports',
+      reference_prefix: 'RPT',
+      reference_path: '/notifications',
+      reference_id: row.report_id,
+    });
+    const { getIo } = require('../lib/WebSocket');
+    const io = getIo();
+    if (io && notification) io.to(String(row.by_account_id)).emit('notification', notification);
+  } catch (error) {
+    console.error('Report decision notification failed:', error.message);
+  }
+}
+
+async function applyReportSanction(row, patch, staffId) {
+  const accountId = row.for_account_id;
+  if (!accountId) throw reportDecisionError('This report is not tied to an account');
+  const reason = String(patch?.reason || '').trim();
+  if (!reason) throw reportDecisionError('A sanction reason is required');
+  const sanctionType = String(patch?.sanctionType || patch?.sanction_type || 'warning').toLowerCase();
+  const days = patch?.days;
+  const { warnAccount, updateAccountStatus } = require('./AdminUserTeamRepositories');
+
+  if (sanctionType === 'warning' || sanctionType === 'warn') {
+    return warnAccount(accountId, { type: 'Report sanction', reason, points: 1, days: days || 30 }, staffId);
+  }
+  if (sanctionType === 'suspend' || sanctionType === 'suspended') {
+    if (days == null || days === '') throw reportDecisionError('Choose how many days the suspension lasts');
+    return updateAccountStatus(accountId, 'suspend', staffId, { reason, duration: 'temporary', days });
+  }
+  if (sanctionType === 'ban' || sanctionType === 'banned') {
+    return updateAccountStatus(accountId, 'ban', staffId, { reason, duration: 'permanent' });
+  }
+  throw reportDecisionError('Choose a warning, suspension, or ban');
+}
+
+async function decideReport(reportId, action, patch, staffSession) {
+  const staff = await resolveDisputeStaffId(staffSession);
+  if (!staff) throw reportDecisionError('Could not match your login to a staff profile.', 403);
+
+  const fresh = await pool.query(
+    `SELECT * FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
+    [reportId]
+  );
+  if (!fresh.rows.length) return null;
+  const row = fresh.rows[0];
+  const perms = buildReportPermissions(row, staff, staffSession);
+  if (!perms.canAct) {
+    throw reportDecisionError('Assign this report to yourself before you decide it.', 403);
+  }
+  const currentStatus = String(row.status || '').toLowerCase();
+  if (CLOSED_REPORT_STATUSES.includes(currentStatus)) {
+    throw reportDecisionError('This report is already closed.');
+  }
+
+  let nextStatus = action === 'deny' ? 'denied' : 'archived';
+  let violationId = null;
+  if (action === 'sanction') {
+    const sanction = await applyReportSanction(row, patch, staff.staff_id);
+    violationId = sanction?.violationId || null;
+    nextStatus = 'sanctioned';
+  }
+
+  await pool.query(
+    `UPDATE reports
+     SET status = $1,
+         violation_id = COALESCE($2, violation_id),
+         updated_at = NOW()
+     WHERE report_id = $3 AND deleted_at IS NULL`,
+    [nextStatus, violationId, reportId]
+  );
+
+  await recordAccountActivity({
+    accountId: row.for_account_id || row.by_account_id,
+    action: `Report ${row.report_number || reportId} ${nextStatus}`,
+    eventCode: action === 'sanction' ? 'REPORT_SANCTIONED' : 'REPORT_STATUS_CHANGED',
+    referenceTable: 'reports',
+    referencePrefix: 'RPT',
+    referenceId: reportId,
+    actorStaffId: staff.staff_id,
+    metadata: {
+      type: row.type,
+      previousStatus: row.status,
+      status: nextStatus,
+      sanctionType: action === 'sanction' ? patch?.sanctionType || 'warning' : null,
+    },
+  });
+
+  if (action === 'sanction') {
+    const number = row.report_number ? ` ${row.report_number}` : '';
+    await notifyReportReporter(
+      row,
+      `Thanks for your report${number}. The reported account has been sanctioned.`
+    );
+  }
+
+  return getReportDetail(reportId, staffSession);
+}
+
 async function updateReport(reportId, patch, staffSession = null) {
   const action = String(patch?.action || '').toLowerCase().trim();
+  if (REPORT_DECISIONS.has(action)) {
+    return decideReport(reportId, action, patch, staffSession);
+  }
   if (action === 'self_assign') {
     const staff = await resolveDisputeStaffId(staffSession);
     if (!staff) throw new Error('Could not match your login to a staff profile.');
@@ -3824,6 +3942,7 @@ async function getReportDetail(reportId, staffSession = null, options = {}) {
     includeStaffId: row.assigned_staff_id,
   });
 
+  const subject = await buildReportSubject(row);
   return {
     report: mapReportRow({
       ...row,
@@ -3831,6 +3950,7 @@ async function getReportDetail(reportId, staffSession = null, options = {}) {
       reporter_handle: row.reporter_handle,
       assignee_name: row.assignee_name,
     }),
+    subject,
     permissions: buildReportPermissions(row, staff, staffSession),
     assignableQueue: normalizeQueueKey(queueKey),
     assignableStaff,

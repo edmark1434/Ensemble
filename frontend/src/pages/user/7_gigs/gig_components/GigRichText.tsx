@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { Gig } from "../gig_datasets";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import PopupReportGig from "./PopupReportGig";
+import api from "@/lib/axios";
 import { GigsOtherServices } from "./gigs_other_services";
 import useGlobalState from "@/lib/global_state";
 import { formatDistanceToNow } from "date-fns";
@@ -1112,8 +1113,8 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
         isOpen={isReportModalOpen}
         gigTitle={gig.title}
         onClose={() => setIsReportModalOpen(false)}
-        onSubmitReport={(reason, details) => {
-          console.log("Report submitted for gig:", gig.id, reason, details);
+        onSubmitReport={async (reason, details) => {
+          await api.post(`/api/gigs/${gig.id}/report`, { reason, description: details });
         }}
       />
       <GuestLoginModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />

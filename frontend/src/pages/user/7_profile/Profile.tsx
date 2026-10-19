@@ -7,6 +7,7 @@ import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import toast from "react-hot-toast";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
+import { ReportUserModal } from "./ReportUserModal";
 import DiscoveryFlipCardModal from "@/components/ui/DiscoveryFlipCardModal";
 import { InviteToJobModal } from "@/components/ui/InviteToJobModal";
 import { getFallbackAvatarUrl } from "@/lib/accountAvatars";
@@ -178,6 +179,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isFlipCardOpen, setIsFlipCardOpen] = useState(false);
     const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isFollowedBy, setIsFollowedBy] = useState(false);
   const [followersModalType, setFollowersModalType] = useState<"followers" | "following" | null>(null);
   const [profileNotFound, setProfileNotFound] = useState(hasInvalidProfileId);
@@ -931,9 +933,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
               }}
               onReportClick={() => {
                 if (!user) return setIsGuestModalOpen(true);
-                toast.error("User reporting system will be available in a future update.", {
-                  style: { background: '#18181b', color: '#fff' }
-                });
+                setIsReportModalOpen(true);
               }}
           onEditAvatar={() => setIsAvatarModalOpen(true)}
           bannerPreset={userDetails?.banner_preset ?? null}
@@ -1192,6 +1192,12 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         freelancerName={userDetails?.name || userDetails?.username || "Freelancer"} 
       />
 
+      <ReportUserModal
+        isOpen={isReportModalOpen}
+        accountId={String(id || "")}
+        displayName={userDetails?.name || userDetails?.username || "this user"}
+        onClose={() => setIsReportModalOpen(false)}
+      />
       <GuestLoginModal
         isOpen={isGuestModalOpen}
         onClose={() => setIsGuestModalOpen(false)}

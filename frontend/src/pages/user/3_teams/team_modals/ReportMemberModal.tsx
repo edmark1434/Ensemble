@@ -6,7 +6,7 @@ interface ReportMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
   memberName: string;
-  onSubmit: (reason: string, description: string) => void;
+  onSubmit: (reason: string, description: string) => void | Promise<void>;
 }
 
 const reportReasons = [
@@ -27,19 +27,27 @@ const ReportMemberModal: React.FC<ReportMemberModalProps> = ({
   const [selectedReason, setSelectedReason] = useState("");
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   if (!isOpen) return null;
 
-  const handleSubmit = () => {
-    if (selectedReason) {
-      setIsSubmitting(true);
-      onSubmit(selectedReason, description);
-      setTimeout(() => {
-        setIsSubmitting(false);
-        onClose();
-        setSelectedReason("");
-        setDescription("");
-      }, 500);
+  const handleSubmit = async () => {
+    if (!selectedReason || isSubmitting) return;
+    if (description.trim().length < 20) {
+      setError("Describe the report in at least 20 characters");
+      return;
+    }
+    setIsSubmitting(true);
+    setError("");
+    try {
+      await onSubmit(selectedReason, description.trim());
+      onClose();
+      setSelectedReason("");
+      setDescription("");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to submit the report");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -85,7 +93,7 @@ const ReportMemberModal: React.FC<ReportMemberModalProps> = ({
         {/* Description */}
         <div className="mb-6">
           <label className="mb-2 block text-sm font-medium text-zinc-300">
-            Description (optional)
+            Description
           </label>
           <textarea
             value={description}
@@ -94,12 +102,13 @@ const ReportMemberModal: React.FC<ReportMemberModalProps> = ({
             rows={4}
             className="w-full rounded-lg border border-white/15 bg-dark-surface px-4 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none"
           />
+          {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
         </div>
 
         <div className="flex gap-3">
           <button
             onClick={handleSubmit}
-            disabled={!selectedReason || isSubmitting}
+            disabled={!selectedReason || description.trim().length < 20 || isSubmitting}
             className="flex-1 rounded-full bg-gradient-to-r from-red-500 to-pink-600 px-4 py-2 text-sm font-medium text-white transition hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? "Submitting..." : "Submit Report"}

@@ -197,7 +197,7 @@ export const TeamProjectWorkspace: React.FC = () => {
       });
       showSuccessToast('Report submitted to moderation');
     } catch (err: any) {
-      showErrorToast(err?.response?.data?.message || 'Failed to submit report');
+      throw new Error(err?.response?.data?.message || err?.message || 'Failed to submit report');
     }
   };
 

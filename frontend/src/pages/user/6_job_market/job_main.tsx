@@ -245,9 +245,9 @@ const JobMain: React.FC = () => {
     setReportingJob(job);
   };
 
-  const handleSubmitReport = (reason: string, details: string) => {
-    console.log(`Report submitted for ${reportingJob?.id}:`, { reason, details });
-    // Integrate backend API call here when ready
+  const handleSubmitReport = async (reason: string, details: string) => {
+    if (!reportingJob?.id) throw new Error("Select a job to report");
+    await api.post(`/api/jobs/${reportingJob.id}/report`, { reason, description: details });
   };
 
   const handleClearFilters = () => {
