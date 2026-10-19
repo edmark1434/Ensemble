@@ -1,6 +1,6 @@
 const { pool } = require('../lib/Database');
 const { CREDIT_TRANSACTION_TYPE } = require('../lib/CreditTransactionEnums');
-const { violationExpiryFromPoints, isViolationActive } = require('./ModeratorRepositories');
+const { isViolationActive } = require('./ModeratorRepositories');
 const {
   recordAccountActivity,
   fetchActivityForAccounts,
@@ -209,6 +209,7 @@ async function fetchHistoryForAccounts(accountIds) {
     const pastExpiry = Boolean(row.expires_at && new Date(row.expires_at).getTime() <= Date.now());
     bucket.violations.push({
       id: row.violation_number || row.violation_id,
+      violationId: row.violation_id,
       type: row.type || 'Violation',
       reason: row.reason || '—',
       points: Number(row.points || 0),
@@ -1115,12 +1116,13 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
   const key = String(actionOrStatus || '').toLowerCase();
   const {
     suspensionEndFromDays,
-    timeoutEndFromDays,
     getAccountAccess,
   } = require('../lib/AccountRestriction');
 
+  const duration = String(options.duration || '').toLowerCase();
+
   if (key === 'timeout' || key === 'forum_timeout') {
-    const endsAt = timeoutEndFromDays(options.days);
+    const endsAt = duration === 'permanent' ? null : suspensionEndFromDays(options.days ?? 7);
     await pool.query(
       `
       INSERT INTO restrictions (type, module, starts_at, ends_at, account_id, staff_id)
@@ -1202,10 +1204,25 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
   const status = STATUS_MAP[key] || null;
   if (!status) throw new Error(`Invalid account status action: ${actionOrStatus}`);
 
-  const suspensionEndsAt = status === 'Suspended' ? suspensionEndFromDays(options.days) : null;
+  const suspensionEndsAt = status === 'Suspended'
+    ? (duration === 'permanent' ? null : suspensionEndFromDays(options.days ?? 7))
+    : null;
+  const banEndsAt = status === 'Banned'
+    ? (duration === 'temporary' ? suspensionEndFromDays(options.days ?? 7) : null)
+    : null;
+  const lockEndsAt = status === 'Locked'
+    ? (duration === 'temporary' ? suspensionEndFromDays(options.days ?? 7) : null)
+    : null;
   await pool.query(
-    `UPDATE accounts SET status = $1, suspension_ends_at = $2 WHERE account_id = $3`,
-    [status, suspensionEndsAt, accountId]
+    `
+    UPDATE accounts
+    SET status = $1,
+        suspension_ends_at = $2,
+        ban_ends_at = $3,
+        lock_ends_at = $4
+    WHERE account_id = $5
+    `,
+    [status, suspensionEndsAt, banEndsAt, lockEndsAt, accountId]
   );
 
   await recordAccountActivity({
@@ -1490,7 +1507,7 @@ async function freezeAccountCredits(accountId, freeze = true, staffId = null) {
   };
 }
 
-async function warnAccount(accountId, { type, reason, points, expiresAt } = {}, staffId) {
+async function warnAccount(accountId, { type, reason, points, expiresAt, duration, days } = {}, staffId) {
   await assertAccountExists(accountId);
   if (!staffId) throw new Error('Staff session required to issue a warning');
 
@@ -1498,10 +1515,8 @@ async function warnAccount(accountId, { type, reason, points, expiresAt } = {}, 
   const warnType = String(type || 'Account warning').trim() || 'Account warning';
   const warnReason = String(reason || 'Warning issued by administrator').trim();
   const warnPoints = Number(points) || 1;
-  const expiry =
-    expiresAt != null && expiresAt !== ''
-      ? new Date(expiresAt)
-      : violationExpiryFromPoints(warnPoints);
+  const { warningExpiry } = require('../lib/AccountRestriction');
+  const expiry = warningExpiry({ duration, days, expiresAt, points: warnPoints });
 
   const inserted = await pool.query(
     `
@@ -1605,7 +1620,17 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
     ).catch(() => null);
 
     const previousStatus = account.status;
-    await client.query(`UPDATE accounts SET status = 'Active' WHERE account_id = $1`, [accountId]);
+    await client.query(
+      `
+      UPDATE accounts
+      SET status = 'Active',
+          suspension_ends_at = NULL,
+          ban_ends_at = NULL,
+          lock_ends_at = NULL
+      WHERE account_id = $1
+      `,
+      [accountId]
+    );
 
     await recordAccountActivity({
       accountId,
@@ -1656,6 +1681,49 @@ async function pardonAccount(accountId, staffId, { note } = {}) {
   }
 }
 
+async function rescindWarning(accountId, violationId, staffId) {
+  await assertAccountExists(accountId);
+  if (!staffId) throw new Error('Staff session required to rescind a warning');
+  if (!violationId) throw new Error('Warning id is required');
+
+  const updated = await pool.query(
+    `
+    UPDATE violations
+    SET status = 'rescinded'
+    WHERE account_id = $1
+      AND deleted_at IS NULL
+      AND (violation_id::text = $2 OR violation_number = $2)
+      AND LOWER(COALESCE(status, 'active')) IN ('active', 'open', 'pending')
+    RETURNING violation_id, violation_number, type
+    `,
+    [accountId, String(violationId)]
+  );
+  if (!updated.rows.length) throw new Error('Active warning not found');
+
+  const row = updated.rows[0];
+  await recordAccountActivity({
+    accountId,
+    action: `Warning rescinded: ${row.type || 'warning'}`,
+    eventCode: 'WARNING_RESCINDED',
+    referenceTable: 'violations',
+    referencePrefix: 'VIO',
+    referenceId: row.violation_id,
+    actorStaffId: staffId,
+    metadata: {
+      violationId: row.violation_id,
+      violationNumber: row.violation_number,
+      status: 'rescinded',
+    },
+  });
+
+  return {
+    accountId,
+    violationId: row.violation_id,
+    violationNumber: row.violation_number,
+    status: 'rescinded',
+  };
+}
+
 module.exports = {
   getTeamsManagement,
   getUsersManagement,
@@ -1665,6 +1733,7 @@ module.exports = {
   adjustAccountCredits,
   freezeAccountCredits,
   warnAccount,
+  rescindWarning,
   pardonAccount,
   getUserVerificationRecord,
   updateUserVerificationExpiry,

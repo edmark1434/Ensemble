@@ -192,6 +192,7 @@ export type TeamHistory = {
   activeDisputes: ActiveDispute[];
   violations: {
     id: string;
+    violationId?: string;
     type: string;
     reason: string;
     points: number;

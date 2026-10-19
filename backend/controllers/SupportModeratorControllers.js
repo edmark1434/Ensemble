@@ -264,7 +264,7 @@ async function postViolation(req, res) {
     if (!accountId || !violationType) {
       return res.status(400).json({ success: false, message: 'accountId and type are required' });
     }
-    const data = await issueViolation(accountId, { type: violationType, reason, points }, req.session);
+    const data = await issueViolation(accountId, { type: violationType, reason, points, duration: req.body?.duration, days: req.body?.days }, req.session);
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error issuing violation:', err);
@@ -274,7 +274,7 @@ async function postViolation(req, res) {
 
 async function patchRestriction(req, res) {
   try {
-    const data = await updateAccountRestriction(req.params.id, req.body.status, req.session);
+    const data = await updateAccountRestriction(req.params.id, req.body.status, req.session, { duration: req.body?.duration, days: req.body?.days });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating account restriction:', err);

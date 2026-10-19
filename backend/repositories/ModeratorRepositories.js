@@ -14,7 +14,7 @@ function violationExpiryFromPoints(points, fromDate = new Date()) {
 
 function isViolationActive(row, now = Date.now()) {
   const status = String(row.status || 'active').toLowerCase();
-  if (['cleared', 'pardoned', 'resolved', 'expired'].includes(status)) return false;
+  if (['cleared', 'pardoned', 'resolved', 'expired', 'rescinded', 'reversed'].includes(status)) return false;
   if (row.deleted_at) return false;
   if (row.expires_at && new Date(row.expires_at).getTime() <= now) return false;
   return true;
@@ -80,14 +80,12 @@ async function getViolationsAndRestrictions() {
   };
 }
 
-async function issueViolation(accountId, { type, reason, points, expiresAt }, staffSession) {
+async function issueViolation(accountId, { type, reason, points, expiresAt, duration, days }, staffSession) {
   const violationNumber = `VIO-${Date.now().toString().slice(-8)}`;
   const violationType = String(type || 'warning').trim() || 'warning';
   const warnPoints = Number(points) || 1;
-  const expiry =
-    expiresAt != null && expiresAt !== ''
-      ? new Date(expiresAt)
-      : violationExpiryFromPoints(warnPoints);
+  const { warningExpiry } = require('../lib/AccountRestriction');
+  const expiry = warningExpiry({ duration, days, expiresAt, points: warnPoints });
   const staffId = staffSession?.staff_id || staffSession?.staffId || null;
 
   const inserted = await pool.query(
@@ -195,7 +193,7 @@ async function issueRestriction(
   return getViolationsAndRestrictions();
 }
 
-async function updateAccountRestriction(accountId, status, staffSession = null) {
+async function updateAccountRestriction(accountId, status, staffSession = null, options = {}) {
   const allowed = ['active', 'suspended', 'banned', 'locked'];
   const normalized = String(status || '').toLowerCase();
   if (!allowed.includes(normalized)) {
@@ -204,7 +202,7 @@ async function updateAccountRestriction(accountId, status, staffSession = null) 
 
   const { updateAccountStatus } = require('./AdminUserTeamRepositories');
   const staffId = staffSession?.staff_id || staffSession?.staffId || null;
-  await updateAccountStatus(accountId, normalized, staffId, {});
+  await updateAccountStatus(accountId, normalized, staffId, options);
   return getViolationsAndRestrictions();
 }
 

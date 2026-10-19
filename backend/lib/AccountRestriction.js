@@ -124,15 +124,28 @@ async function liftExpiredSuspension(accountId) {
   await pool.query(
     `
     UPDATE accounts
-    SET status = 'Active', suspension_ends_at = NULL
+    SET status = 'Active',
+        suspension_ends_at = NULL,
+        ban_ends_at = NULL,
+        lock_ends_at = NULL
     WHERE account_id = $1
       AND deleted_at IS NULL
-      AND LOWER(status) = 'suspended'
-      AND suspension_ends_at IS NOT NULL
-      AND suspension_ends_at <= NOW()
+      AND (
+        (LOWER(status) = 'suspended' AND suspension_ends_at IS NOT NULL AND suspension_ends_at <= NOW())
+        OR (LOWER(status) = 'banned' AND ban_ends_at IS NOT NULL AND ban_ends_at <= NOW())
+        OR (LOWER(status) = 'locked' AND lock_ends_at IS NOT NULL AND lock_ends_at <= NOW())
+      )
     `,
     [accountId]
   );
+}
+
+function warningExpiry({ duration, days, expiresAt, points } = {}) {
+  const mode = String(duration || '').toLowerCase();
+  if (mode === 'permanent') return null;
+  if (expiresAt != null && expiresAt !== '') return new Date(expiresAt);
+  if (days != null && days !== '' && Number(days) > 0) return suspensionEndFromDays(days);
+  return suspensionEndFromDays(Math.max(1, Number(points) || 1) * 30);
 }
 
 async function activeForumTimeout(accountId) {
@@ -188,7 +201,7 @@ async function getAccountAccess(accountId) {
   }
 
   const account = await pool.query(
-    `SELECT status, type, deleted_at, suspension_ends_at FROM accounts WHERE account_id = $1`,
+    `SELECT status, type, deleted_at, suspension_ends_at, ban_ends_at, lock_ends_at FROM accounts WHERE account_id = $1`,
     [accountId]
   );
   const row = account.rows[0];
@@ -423,4 +436,5 @@ module.exports = {
   clearAuthSession,
   suspensionEndFromDays,
   timeoutEndFromDays,
+  warningExpiry,
 };

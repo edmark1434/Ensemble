@@ -91,6 +91,12 @@ export default function ModeratorRestrictionsDesk({
     type: 'Community warning',
     reason: '',
     points: '1',
+    duration: 'temporary' as 'temporary' | 'permanent',
+    days: '30',
+  });
+  const [sanction, setSanction] = useState({
+    duration: 'temporary' as 'temporary' | 'permanent',
+    days: '7',
   });
   const [submittingWarn, setSubmittingWarn] = useState(false);
 
@@ -135,16 +141,37 @@ export default function ModeratorRestrictionsDesk({
     );
   }, [data?.restrictedAccounts, query]);
 
-  async function setAccountStatus(accountId: string, status: string) {
+  async function setAccountStatus(accountId: string, status: string, duration?: 'temporary' | 'permanent', days?: string) {
     setBusyId(accountId);
     try {
-      const res = await api.patch(`${endpointBase}/accounts/${accountId}`, { status });
+      const res = await api.patch(`${endpointBase}/accounts/${accountId}`, {
+        status,
+        duration,
+        days: duration === 'temporary' ? Number(days) || 7 : undefined,
+      });
       setData(res.data?.data || null);
       showSuccessToast(`Account status set to ${status.charAt(0).toUpperCase() + status.slice(1)}`);
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         'Failed to update account status';
+      setError(message);
+      showErrorToast(message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function rescindDeskWarning(accountId: string, violationId: string) {
+    setBusyId(violationId);
+    try {
+      await api.post(`/api/admin/accounts/${accountId}/warnings/${violationId}/rescind`);
+      showSuccessToast('Warning rescinded. It stays on the record and no longer counts.');
+      await load();
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Failed to rescind warning';
       setError(message);
       showErrorToast(message);
     } finally {
@@ -163,6 +190,8 @@ export default function ModeratorRestrictionsDesk({
         type: warnForm.type.trim(),
         reason: warnForm.reason.trim() || undefined,
         points: Number(warnForm.points) || 1,
+        duration: warnForm.duration,
+        days: warnForm.duration === 'temporary' ? Number(warnForm.days) || 30 : undefined,
       });
       setData(res.data?.data || null);
       setWarnForm((prev) => ({ ...prev, reason: '', points: '1' }));
@@ -276,6 +305,37 @@ export default function ModeratorRestrictionsDesk({
                 placeholder="What happened and why this strike applies"
               />
             </label>
+            <div className="grid grid-cols-2 gap-2 sm:col-span-2">
+              <button
+                type="button"
+                onClick={() => setWarnForm((p) => ({ ...p, duration: 'temporary' }))}
+                className={`rounded-xl border px-3 py-2 text-sm ${warnForm.duration === 'temporary' ? 'border-white/30 bg-white/10 text-white' : 'border-white/10 text-zinc-400'}`}
+              >
+                Temporary
+              </button>
+              <button
+                type="button"
+                onClick={() => setWarnForm((p) => ({ ...p, duration: 'permanent' }))}
+                className={`rounded-xl border px-3 py-2 text-sm ${warnForm.duration === 'permanent' ? 'border-white/30 bg-white/10 text-white' : 'border-white/10 text-zinc-400'}`}
+              >
+                Permanent
+              </button>
+            </div>
+            {warnForm.duration === 'temporary' ? (
+              <label className="block text-xs text-zinc-500 sm:col-span-2">
+                Days
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={warnForm.days}
+                  onChange={(e) => setWarnForm((p) => ({ ...p, days: e.target.value }))}
+                  className="mt-1 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none focus:border-white/25"
+                />
+              </label>
+            ) : (
+              <p className="text-xs text-zinc-500 sm:col-span-2">A permanent warning stays until it is rescinded.</p>
+            )}
             <button
               type="submit"
               disabled={submittingWarn}
@@ -336,7 +396,16 @@ export default function ModeratorRestrictionsDesk({
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-2">
         <section className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-          <h2 className="mb-4 text-sm font-semibold text-white">Violations</h2>
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <h2 className="text-sm font-semibold text-white">Violations</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => setSanction((p) => ({ ...p, duration: 'temporary' }))} className={`rounded-lg border px-2 py-1 text-[11px] ${sanction.duration === 'temporary' ? 'border-white/30 text-white' : 'border-white/10 text-zinc-400'}`}>Temporary</button>
+              <button type="button" onClick={() => setSanction((p) => ({ ...p, duration: 'permanent' }))} className={`rounded-lg border px-2 py-1 text-[11px] ${sanction.duration === 'permanent' ? 'border-white/30 text-white' : 'border-white/10 text-zinc-400'}`}>Permanent</button>
+              {sanction.duration === 'temporary' ? (
+                <input type="number" min={1} max={365} value={sanction.days} onChange={(e) => setSanction((p) => ({ ...p, days: e.target.value }))} className="w-16 rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-white" />
+              ) : null}
+            </div>
+          </div>
           {loading && !data ? (
             <div className="flex items-center gap-2 text-sm text-zinc-500">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading…
@@ -367,7 +436,7 @@ export default function ModeratorRestrictionsDesk({
                     <button
                       type="button"
                       disabled={busyId === v.account.accountId}
-                      onClick={() => void setAccountStatus(v.account.accountId, 'suspended')}
+                      onClick={() => void setAccountStatus(v.account.accountId, 'suspended', sanction.duration, sanction.days)}
                       className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-200 disabled:opacity-50"
                     >
                       Suspend account
@@ -375,7 +444,7 @@ export default function ModeratorRestrictionsDesk({
                     <button
                       type="button"
                       disabled={busyId === v.account.accountId}
-                      onClick={() => void setAccountStatus(v.account.accountId, 'locked')}
+                      onClick={() => void setAccountStatus(v.account.accountId, 'locked', sanction.duration, sanction.days)}
                       className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-300 disabled:opacity-50"
                     >
                       Lock account
@@ -383,11 +452,21 @@ export default function ModeratorRestrictionsDesk({
                     <button
                       type="button"
                       disabled={busyId === v.account.accountId}
-                      onClick={() => void setAccountStatus(v.account.accountId, 'banned')}
+                      onClick={() => void setAccountStatus(v.account.accountId, 'banned', sanction.duration, sanction.days)}
                       className="rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-300 disabled:opacity-50"
                     >
                       Ban account
                     </button>
+                    {v.active !== false && String(v.status || '').toLowerCase() !== 'rescinded' ? (
+                      <button
+                        type="button"
+                        disabled={busyId === v.id}
+                        onClick={() => void rescindDeskWarning(v.account.accountId, v.id)}
+                        className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-zinc-200 disabled:opacity-50"
+                      >
+                        Rescind warning
+                      </button>
+                    ) : null}
                   </div>
                 </li>
               ))}
@@ -423,7 +502,7 @@ export default function ModeratorRestrictionsDesk({
                       onClick={() => void setAccountStatus(a.accountId, 'active')}
                       className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-300 disabled:opacity-50"
                     >
-                      Restore active
+                      Remove sanction
                     </button>
                     <button
                       type="button"

@@ -40,15 +40,15 @@ export function getManageActionsForStatus(
   const items: MenuItem[] = [];
 
   if (s === 'banned') {
-    if (allowAction('unban', caps)) items.push({ id: 'unban', label: 'Unban', section: 'manage' });
+    if (allowAction('unban', caps)) items.push({ id: 'unban', label: 'Remove ban', section: 'manage' });
   } else if (s === 'suspended') {
     if (allowAction('unsuspend', caps)) {
-      items.push({ id: 'unsuspend', label: 'Unsuspend', section: 'manage' });
+      items.push({ id: 'unsuspend', label: 'Remove suspension', section: 'manage' });
     }
     if (allowAction('lock', caps)) items.push({ id: 'lock', label: 'Lock', section: 'manage' });
     if (allowAction('ban', caps)) items.push({ id: 'ban', label: 'Ban', danger: true, section: 'manage' });
   } else if (s === 'locked') {
-    if (allowAction('unlock', caps)) items.push({ id: 'unlock', label: 'Unlock', section: 'manage' });
+    if (allowAction('unlock', caps)) items.push({ id: 'unlock', label: 'Remove lock', section: 'manage' });
     if (allowAction('suspend', caps)) {
       items.push({ id: 'suspend', label: 'Suspend', danger: true, section: 'manage' });
     }
@@ -63,7 +63,7 @@ export function getManageActionsForStatus(
   }
 
   if (allowAction('clear_timeout', caps)) {
-    items.push({ id: 'clear_timeout', label: 'Clear forum timeout', section: 'manage' });
+    items.push({ id: 'clear_timeout', label: 'Remove forum timeout', section: 'manage' });
   }
 
   if (allowAction('warn', caps)) items.push({ id: 'warn', label: 'Issue warning', section: 'manage' });

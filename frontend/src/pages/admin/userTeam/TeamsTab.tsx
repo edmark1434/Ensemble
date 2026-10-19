@@ -495,7 +495,13 @@ export default function TeamsTab({
         />
       )}
       {selected && modal === 'history' && (
-        <HistoryModal entityName={selected.name} history={selected.history} onClose={closeModal} />
+        <HistoryModal
+          entityName={selected.name}
+          accountId={selected.accountId}
+          history={selected.history}
+          onClose={closeModal}
+          onChanged={() => void refreshAfterChange()}
+        />
       )}
       {selected && modal === 'warn' && (
         <WarnAccountModal

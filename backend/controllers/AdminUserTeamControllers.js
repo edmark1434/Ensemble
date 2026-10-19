@@ -7,6 +7,7 @@ const {
   adjustAccountCredits,
   freezeAccountCredits,
   warnAccount,
+  rescindWarning,
   pardonAccount,
 } = require('../repositories/AdminUserTeamRepositories');
 const { listAccountActivity } = require('../repositories/AccountActivityRepositories');
@@ -70,6 +71,7 @@ async function patchAdminAccountStatus(req, res) {
     assertStatusActionAllowed(req.session, action);
     const data = await updateAccountStatus(accountId, action, staffIdFromSession(req.session), {
       days: req.body?.days,
+      duration: req.body?.duration,
     });
     const message = data.forumTimeout
       ? 'Forum timeout applied'
@@ -191,6 +193,8 @@ async function postAdminAccountWarn(req, res) {
         reason: req.body?.reason,
         points: req.body?.points,
         expiresAt: req.body?.expiresAt,
+        duration: req.body?.duration,
+        days: req.body?.days,
       },
       staffIdFromSession(req.session)
     );
@@ -198,6 +202,20 @@ async function postAdminAccountWarn(req, res) {
   } catch (err) {
     console.error('Error issuing warning:', err);
     res.status(400).json({ success: false, message: err.message || 'Failed to issue warning' });
+  }
+}
+
+async function postAdminRescindWarning(req, res) {
+  try {
+    const data = await rescindWarning(
+      req.params.accountId,
+      req.params.violationId,
+      staffIdFromSession(req.session)
+    );
+    res.status(200).json({ success: true, data, message: 'Warning rescinded. It stays on the record and no longer counts.' });
+  } catch (err) {
+    console.error('Error rescinding warning:', err);
+    res.status(400).json({ success: false, message: err.message || 'Failed to rescind warning' });
   }
 }
 
@@ -251,5 +269,6 @@ module.exports = {
   postAdminAccountCreditAdjust,
   postAdminAccountCreditFreeze,
   postAdminAccountWarn,
+  postAdminRescindWarning,
   postAdminAccountPardon,
 };

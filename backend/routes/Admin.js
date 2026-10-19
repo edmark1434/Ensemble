@@ -16,6 +16,7 @@ const {
   postAdminAccountCreditAdjust,
   postAdminAccountCreditFreeze,
   postAdminAccountWarn,
+  postAdminRescindWarning,
   postAdminAccountPardon,
   getAdminAccountActivity,
 } = require('../controllers/AdminUserTeamControllers');
@@ -108,6 +109,7 @@ router.patch('/accounts/:accountId/verification/resubmit', [checkSession, requir
 router.post('/accounts/:accountId/credits/adjust', [checkSession, requireUserTeamFullWrite], postAdminAccountCreditAdjust);
 router.post('/accounts/:accountId/credits/freeze', [checkSession, requireUserTeamFullWrite], postAdminAccountCreditFreeze);
 router.post('/accounts/:accountId/warn', [checkSession, requireUserTeamAccess], postAdminAccountWarn);
+router.post('/accounts/:accountId/warnings/:violationId/rescind', [checkSession, requireUserTeamAccess], postAdminRescindWarning);
 router.post('/accounts/:accountId/pardon', [checkSession, requireUserTeamFullWrite], postAdminAccountPardon);
 router.get('/accounts/:accountId/activity', [checkSession, requireUserTeamAccess], getAdminAccountActivity);
 router.get('/economy-overview', [checkSession, requireAdmin], getAdminEconomyOverview);

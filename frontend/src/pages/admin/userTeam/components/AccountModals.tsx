@@ -6,6 +6,7 @@ import {
   freezeAccountCredits,
   handleAccountActionError,
   pardonAccount,
+  rescindWarning,
   setAccountVerification,
   warnAccount,
 } from '../accountActions';
@@ -122,10 +123,14 @@ export function ConfirmStatusModal({
   entityName: string;
   action: 'ban' | 'suspend' | 'restore' | 'lock' | 'unban' | 'unsuspend' | 'unlock' | 'timeout' | 'clear_timeout';
   onClose: () => void;
-  onConfirm: (options?: { days?: number | null }) => Promise<void>;
+  onConfirm: (options?: { days?: number | null; duration?: 'temporary' | 'permanent' }) => Promise<void>;
 }) {
   const [saving, setSaving] = useState(false);
-  const [days, setDays] = useState(action === 'suspend' ? '7' : '');
+  const choosesDuration = action === 'ban' || action === 'suspend' || action === 'lock' || action === 'timeout';
+  const [duration, setDuration] = useState<'temporary' | 'permanent'>(
+    action === 'ban' || action === 'lock' ? 'permanent' : 'temporary'
+  );
+  const [days, setDays] = useState('7');
   const labels = {
     ban: { title: 'Ban account', verb: 'ban', result: 'Banned', tone: 'bg-rose-500/90 hover:bg-rose-500' },
     suspend: {
@@ -141,20 +146,20 @@ export function ConfirmStatusModal({
       tone: 'bg-emerald-500/90 hover:bg-emerald-500',
     },
     unban: {
-      title: 'Unban account',
-      verb: 'unban',
+      title: 'Remove ban',
+      verb: 'remove the ban from',
       result: 'Active',
       tone: 'bg-emerald-500/90 hover:bg-emerald-500',
     },
     unsuspend: {
-      title: 'Unsuspend account',
-      verb: 'unsuspend',
+      title: 'Remove suspension',
+      verb: 'remove the suspension from',
       result: 'Active',
       tone: 'bg-emerald-500/90 hover:bg-emerald-500',
     },
     unlock: {
-      title: 'Unlock account',
-      verb: 'unlock',
+      title: 'Remove lock',
+      verb: 'remove the lock from',
       result: 'Active',
       tone: 'bg-emerald-500/90 hover:bg-emerald-500',
     },
@@ -171,8 +176,8 @@ export function ConfirmStatusModal({
       tone: 'bg-amber-500/90 hover:bg-amber-500',
     },
     clear_timeout: {
-      title: 'Clear forum timeout',
-      verb: 'clear the forum timeout for',
+      title: 'Remove forum timeout',
+      verb: 'remove the forum timeout from',
       result: 'able to use the forums',
       tone: 'bg-emerald-500/90 hover:bg-emerald-500',
     },
@@ -199,12 +204,12 @@ export function ConfirmStatusModal({
               setSaving(true);
               try {
                 const parsed = Number(days);
-                const duration = action === 'suspend'
-                  ? (Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 7)
-                  : action === 'timeout'
-                    ? (Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null)
-                    : undefined;
-                await onConfirm(duration === undefined ? undefined : { days: duration });
+                const chosenDays = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 7;
+                await onConfirm(
+                  choosesDuration
+                    ? { duration, days: duration === 'temporary' ? chosenDays : null }
+                    : undefined
+                );
                 onClose();
               } catch (err) {
                 handleAccountActionError(err);
@@ -223,7 +228,7 @@ export function ConfirmStatusModal({
         {action === 'ban'
           ? 'They can sign in only to file an appeal and view their tickets and disputes.'
           : action === 'suspend'
-            ? 'They stay signed in and can read the whole platform. Every action stays off until this period ends.'
+            ? 'They stay signed in and can read the whole platform. Every other action stays off.'
             : action === 'timeout'
               ? 'They can keep using Ensemble. Posts, comments, reactions, and other forum changes stay off.'
               : action === 'lock'
@@ -232,18 +237,40 @@ export function ConfirmStatusModal({
                   ? 'They can post, comment, and react in the forums again.'
                   : 'The account will regain normal platform access.'}
       </p>
-      {(action === 'suspend' || action === 'timeout') && (
-        <label className="mt-4 block text-sm text-zinc-300">
-          {action === 'suspend' ? 'Days' : 'Days (leave empty to keep it until you clear it)'}
-          <input
-            type="number"
-            min={1}
-            max={365}
-            value={days}
-            onChange={(event) => setDays(event.target.value)}
-            className="mt-1 w-full rounded-xl border border-white/10 bg-transparent px-3 py-2"
-          />
-        </label>
+      {choosesDuration && (
+        <div className="mt-4 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setDuration('temporary')}
+              className={`rounded-xl border px-3 py-2 text-sm ${duration === 'temporary' ? 'border-white/30 bg-white/10 text-white' : 'border-white/10 text-zinc-400'}`}
+            >
+              Temporary
+            </button>
+            <button
+              type="button"
+              onClick={() => setDuration('permanent')}
+              className={`rounded-xl border px-3 py-2 text-sm ${duration === 'permanent' ? 'border-white/30 bg-white/10 text-white' : 'border-white/10 text-zinc-400'}`}
+            >
+              Permanent
+            </button>
+          </div>
+          {duration === 'temporary' ? (
+            <label className="block text-sm text-zinc-300">
+              Days
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={days}
+                onChange={(event) => setDays(event.target.value)}
+                className="mt-1 w-full rounded-xl border border-white/10 bg-transparent px-3 py-2"
+              />
+            </label>
+          ) : (
+            <p className="text-xs text-zinc-500">This stays until a staff member removes it.</p>
+          )}
+        </div>
       )}
     </ModalShell>
   );
@@ -1314,13 +1341,18 @@ export function VerificationModal({
 
 export function HistoryModal({
   entityName,
+  accountId,
   history,
   onClose,
+  onChanged,
 }: {
   entityName: string;
+  accountId?: string;
   history: PlatformTeam['history'];
   onClose: () => void;
+  onChanged?: () => void | Promise<void>;
 }) {
+  const [rescindingId, setRescindingId] = useState<string | null>(null);
   const activeDisputes =
     history.activeDisputes?.length
       ? history.activeDisputes
@@ -1397,8 +1429,28 @@ export function HistoryModal({
                 <p className="mt-2 text-xs text-zinc-600">
                   By: {v.by} · +{v.points} warning points · {v.id} · {v.timeAgo}
                   {v.expiresAt ? ` · expires ${new Date(v.expiresAt).toLocaleDateString()}` : ''}
-                  {v.active === false ? ' · inactive' : ''}
+                  {String(v.status || '').toLowerCase() === 'rescinded' ? ' · rescinded' : v.active === false ? ' · inactive' : ''}
                 </p>
+                {accountId && v.violationId && v.active !== false && String(v.status || 'active').toLowerCase() !== 'rescinded' ? (
+                  <button
+                    type="button"
+                    disabled={rescindingId === v.violationId}
+                    onClick={async () => {
+                      setRescindingId(v.violationId || null);
+                      try {
+                        await rescindWarning(accountId, v.violationId || '');
+                        await onChanged?.();
+                      } catch (err) {
+                        handleAccountActionError(err);
+                      } finally {
+                        setRescindingId(null);
+                      }
+                    }}
+                    className="mt-2 rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-zinc-200"
+                  >
+                    {rescindingId === v.violationId ? 'Rescinding…' : 'Rescind warning'}
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -1495,6 +1547,8 @@ export function WarnAccountModal({
   const [type, setType] = useState('Account warning');
   const [reason, setReason] = useState('Warning issued by administrator');
   const [points, setPoints] = useState('1');
+  const [duration, setDuration] = useState<'temporary' | 'permanent'>('temporary');
+  const [days, setDays] = useState('30');
   const [saving, setSaving] = useState(false);
 
   return (
@@ -1520,6 +1574,8 @@ export function WarnAccountModal({
                   type,
                   reason,
                   points: Number(points) || 1,
+                  duration,
+                  days: duration === 'temporary' ? (Number(days) || 30) : null,
                 });
                 onChanged?.();
                 onClose();
@@ -1563,10 +1619,38 @@ export function WarnAccountModal({
             onChange={(e) => setPoints(e.target.value)}
             className="mt-1 w-28 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
           />
-          <span className="mt-1 block text-[11px] text-zinc-600">
-            Expires automatically: {Math.max(1, Number(points) || 1) * 30} days from issue
-          </span>
         </label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setDuration('temporary')}
+            className={`rounded-xl border px-3 py-2 text-sm ${duration === 'temporary' ? 'border-white/30 bg-white/10 text-white' : 'border-white/10 text-zinc-400'}`}
+          >
+            Temporary
+          </button>
+          <button
+            type="button"
+            onClick={() => setDuration('permanent')}
+            className={`rounded-xl border px-3 py-2 text-sm ${duration === 'permanent' ? 'border-white/30 bg-white/10 text-white' : 'border-white/10 text-zinc-400'}`}
+          >
+            Permanent
+          </button>
+        </div>
+        {duration === 'temporary' ? (
+          <label className="block text-xs text-zinc-500">
+            Days
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={days}
+              onChange={(e) => setDays(e.target.value)}
+              className="mt-1 w-28 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
+            />
+          </label>
+        ) : (
+          <p className="text-xs text-zinc-500">A permanent warning stays on the record until a staff member rescinds it.</p>
+        )}
       </div>
     </ModalShell>
   );

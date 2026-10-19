@@ -1,12 +1,13 @@
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 
-type ActionOptions = { silent?: boolean; days?: number | null };
+type ActionOptions = { silent?: boolean; days?: number | null; duration?: 'temporary' | 'permanent' };
 
 export async function setAccountStatus(accountId: string, action: string, options?: ActionOptions) {
   const res = await api.patch(`/api/admin/accounts/${accountId}/status`, {
     action,
     days: options?.days,
+    duration: options?.duration,
   });
   if (!res.data?.success) throw new Error(res.data?.message || 'Status update failed');
   if (!options?.silent) {
@@ -64,7 +65,7 @@ export async function freezeAccountCredits(
 
 export async function warnAccount(
   accountId: string,
-  payload: { type?: string; reason?: string; points?: number; expiresAt?: string },
+  payload: { type?: string; reason?: string; points?: number; expiresAt?: string; duration?: 'temporary' | 'permanent'; days?: number | null },
   options?: ActionOptions
 ) {
   const res = await api.post(`/api/admin/accounts/${accountId}/warn`, payload);
@@ -72,6 +73,13 @@ export async function warnAccount(
   if (!options?.silent) {
     showSuccessToast(res.data.message || 'Warning issued');
   }
+  return res.data.data;
+}
+
+export async function rescindWarning(accountId: string, violationId: string) {
+  const res = await api.post(`/api/admin/accounts/${accountId}/warnings/${violationId}/rescind`);
+  if (!res.data?.success) throw new Error(res.data?.message || 'Could not rescind the warning');
+  showSuccessToast(res.data.message || 'Warning rescinded');
   return res.data.data;
 }
 
