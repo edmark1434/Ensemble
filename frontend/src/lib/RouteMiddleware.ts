@@ -50,10 +50,19 @@ function RouteLoadingShell() {
     return createElement(ProfileLoadingState);
 }
 
-function isBannedMember(user: { type?: string; status?: string; restriction?: { banned?: boolean; code?: string } } | null) {
+function isBannedMember(user: { type?: string; status?: string; restriction?: { banned?: boolean; locked?: boolean; blocked?: boolean; code?: string } } | null) {
     if (!user || user.type === 'Staff') return false;
+    if (user.restriction?.blocked) return false;
     const status = String(user.status || '').toLowerCase();
-    return Boolean(user.restriction?.banned || user.restriction?.code === 'ACCOUNT_BANNED' || status === 'banned');
+    const code = user.restriction?.code;
+    return Boolean(
+        user.restriction?.banned ||
+        user.restriction?.locked ||
+        code === 'ACCOUNT_BANNED' ||
+        code === 'ACCOUNT_LOCKED' ||
+        status === 'banned' ||
+        status === 'locked'
+    );
 }
 
 function isBannedAllowedPath(pathname: string) {

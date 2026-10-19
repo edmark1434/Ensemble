@@ -132,8 +132,14 @@ export default function AccountAccessPage() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8">
       <section className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">Banned</p>
-        <h1 className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">Your account is banned</h1>
+        <p className="text-xs font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">
+          {String(restriction?.status || user?.status || '').toLowerCase() === 'locked' || restriction?.locked ? 'Locked' : 'Banned'}
+        </p>
+        <h1 className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">
+          {String(restriction?.status || user?.status || '').toLowerCase() === 'locked' || restriction?.locked
+            ? 'Your account is locked'
+            : 'Your account is banned'}
+        </h1>
         <p className="mt-2 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
           {restriction?.message ||
             'You can sign in only to file an appeal and view your tickets and disputes.'}
@@ -141,7 +147,11 @@ export default function AccountAccessPage() {
       </section>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-zinc-900">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Appeal this ban</h2>
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
+          {String(restriction?.status || user?.status || '').toLowerCase() === 'locked' || restriction?.locked
+            ? 'Ask to unlock this account'
+            : 'Appeal this ban'}
+        </h2>
         <form className="mt-4 flex flex-col gap-3" onSubmit={submitAppeal}>
           <label className="text-sm text-zinc-600 dark:text-zinc-300">
             Subject

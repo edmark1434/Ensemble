@@ -227,7 +227,7 @@ export function ConfirmStatusModal({
             : action === 'timeout'
               ? 'They can keep using Ensemble. Posts, comments, reactions, and other forum changes stay off.'
               : action === 'lock'
-                ? 'They cannot sign in until a staff member unlocks the account. This is for a compromised or held account.'
+                ? 'They can sign in only to file an appeal and view their tickets and disputes. This is for a compromised or held account.'
                 : action === 'clear_timeout'
                   ? 'They can post, comment, and react in the forums again.'
                   : 'The account will regain normal platform access.'}

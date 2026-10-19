@@ -119,6 +119,7 @@ async function initSocket(httpServer) {
       socket.user = decoded;
       socket.data.suspended = Boolean(access.suspended);
       socket.data.banned = Boolean(access.banned);
+      socket.data.locked = Boolean(access.locked);
       socket.data.forumTimeout = Boolean(access.forumTimeout);
       return next();
     } catch (_error) {
@@ -133,14 +134,16 @@ async function initSocket(httpServer) {
     // Later, allow specific events here instead of blocking every action.
     socket.use((packet, next) => {
       const eventName = String(packet[0] || '');
-      if (socket.data.banned) {
+      if (socket.data.banned || socket.data.locked) {
         if (eventName === 'disconnect') return next();
         const ack = packet[packet.length - 1];
         if (typeof ack === 'function') {
           ack({
             success: false,
-            code: 'ACCOUNT_BANNED',
-            message: 'Your account is banned. You can sign in only to file an appeal and view your tickets and disputes.',
+            code: socket.data.locked ? 'ACCOUNT_LOCKED' : 'ACCOUNT_BANNED',
+            message: socket.data.locked
+              ? 'Your account is locked. You can sign in only to file an appeal and view your tickets and disputes.'
+              : 'Your account is banned. You can sign in only to file an appeal and view your tickets and disputes.',
           });
         }
         return;

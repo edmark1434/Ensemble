@@ -464,8 +464,8 @@ async function LoginUserOrEmail(loginIdentifier, password, context = {}) {
         throw new ServiceError('Invalid Credentials. Attempts remaining: ' + (MAX_ATTEMPTS - attempts), 400);
     }
 
-    // Successful password check. Locked and deleted accounts must not receive a session.
-    // Banned members may sign in for an appeal, their tickets, and their disputes.
+    // Successful password check. Deleted accounts, and locked or banned staff accounts, must not receive a session.
+    // Banned and locked members may sign in for an appeal, their tickets, and their disputes.
     const { getAccountAccess } = require('../lib/AccountRestriction');
     if (credentials.account_id) {
         const access = await getAccountAccess(credentials.account_id);

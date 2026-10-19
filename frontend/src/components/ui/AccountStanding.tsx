@@ -18,6 +18,7 @@ export type AccountStanding = {
   status?: string | null;
   blocked?: boolean;
   banned?: boolean;
+  locked?: boolean;
   suspended?: boolean;
   forumTimeout?: boolean;
   code?: string | null;
@@ -95,8 +96,8 @@ function restrictionCopy(standing: AccountStanding) {
       : standing.message ||
         (kind === 'suspended'
           ? 'You can look around Ensemble. Actions stay off until this ends.'
-          : kind === 'locked'
-            ? 'This account is locked. You cannot sign in until an administrator unlocks it.'
+            : kind === 'locked'
+            ? 'You can sign in only to file an appeal and view your tickets and disputes.'
             : kind === 'warning'
               ? 'Further violations can suspend this account.'
               : 'You cannot sign in with this account.');
@@ -373,12 +374,17 @@ export function AccountRestrictionHost() {
     const handleRestricted = (payload: any) => {
       const code = String(payload?.code || payload?.restriction?.code || '');
       const status = String(payload?.status || payload?.restriction?.status || '').toLowerCase();
-      if (code === 'ACCOUNT_BANNED' || status === 'banned') {
+      if (
+        (code === 'ACCOUNT_BANNED' || status === 'banned' || code === 'ACCOUNT_LOCKED' || status === 'locked') &&
+        payload?.restriction?.blocked !== true
+      ) {
+        const locked = code === 'ACCOUNT_LOCKED' || status === 'locked';
         const standing: AccountStanding = payload?.restriction || {
-          status: 'Banned',
-          banned: true,
+          status: locked ? 'Locked' : 'Banned',
+          banned: !locked,
+          locked,
           blocked: false,
-          code: 'ACCOUNT_BANNED',
+          code: locked ? 'ACCOUNT_LOCKED' : 'ACCOUNT_BANNED',
           message: payload?.message,
         };
         setBlocked(null);
@@ -386,7 +392,7 @@ export function AccountRestrictionHost() {
         if (currentUser) {
           useGlobalState.getState().setUser({
             ...currentUser,
-            status: 'Banned',
+            status: locked ? 'Locked' : 'Banned',
             restriction: standing,
           });
         }

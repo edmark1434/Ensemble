@@ -40,6 +40,12 @@ function formatWhen(value) {
 const BANNED_ACTION_MESSAGE =
   'Your account is banned. You can sign in only to file an appeal and view your tickets and disputes.';
 
+const LOCKED_MEMBER_MESSAGE =
+  'Your account is locked. You can sign in only to file an appeal and view your tickets and disputes.';
+
+const LOCKED_BLOCKED_MESSAGE =
+  'This account is locked. You cannot sign in until an administrator unlocks it.';
+
 const SUSPENDED_ACTION_MESSAGE =
   'Your account is suspended. You can look around Ensemble. Actions stay off until this ends.';
 
@@ -62,7 +68,7 @@ function blockMessage(normalized, extras = {}) {
   if (normalized === 'banned') return BANNED_ACTION_MESSAGE;
   if (normalized === 'suspended') return suspendedMessage(extras.suspensionEndsAt);
   if (normalized === 'locked') {
-    return 'This account is locked. You cannot sign in until an administrator unlocks it.';
+    return extras.member ? LOCKED_MEMBER_MESSAGE : LOCKED_BLOCKED_MESSAGE;
   }
   if (normalized === 'deleted') return 'This account is no longer available.';
   return 'This account cannot use Ensemble right now.';
@@ -154,6 +160,7 @@ function emptyAccess() {
     status: 'Active',
     blocked: false,
     banned: false,
+    locked: false,
     suspended: false,
     forumTimeout: false,
     suspensionEndsAt: null,
@@ -166,8 +173,9 @@ function emptyAccess() {
 
 /**
  * Live standing for an account.
- * Locked and deleted accounts cannot sign in.
- * Banned member accounts can sign in for an appeal, tickets, and disputes.
+ * Deleted accounts cannot sign in.
+ * Banned and locked member accounts can sign in for an appeal, tickets, and disputes.
+ * Locked staff and team accounts cannot sign in.
  * Suspended accounts can read the platform until suspension_ends_at.
  */
 async function getAccountAccess(accountId) {
@@ -214,28 +222,32 @@ async function getAccountAccess(accountId) {
   const member = String(row.type || '').toLowerCase() === 'user';
   const suspended = normalized === 'suspended';
   const banned = normalized === 'banned' && member;
-  const blocked = normalized === 'locked' || (normalized === 'banned' && !member);
+  const locked = normalized === 'locked' && member;
+  const blocked = (normalized === 'locked' && !member) || (normalized === 'banned' && !member);
   const code = blocked
     ? BLOCKING_CODES[normalized] || BLOCKING_CODES.locked
-    : banned
-      ? BLOCKING_CODES.banned
-      : suspended
-        ? BLOCKING_CODES.suspended
-        : forumTimeout
-          ? BLOCKING_CODES.forumTimeout
-          : null;
+    : locked
+      ? BLOCKING_CODES.locked
+      : banned
+        ? BLOCKING_CODES.banned
+        : suspended
+          ? BLOCKING_CODES.suspended
+          : forumTimeout
+            ? BLOCKING_CODES.forumTimeout
+            : null;
 
   return {
     status: displayStatus(normalized),
     blocked,
     banned,
+    locked,
     suspended,
     forumTimeout,
     suspensionEndsAt: row.suspension_ends_at || null,
     forumTimeoutEndsAt,
     code,
-    message: blocked || banned || suspended
-      ? blockMessage(normalized, { suspensionEndsAt: row.suspension_ends_at })
+    message: blocked || banned || locked || suspended
+      ? blockMessage(normalized, { member, suspensionEndsAt: row.suspension_ends_at })
       : forumTimeout
         ? forumTimeoutMessage(forumTimeoutEndsAt)
         : null,
@@ -277,7 +289,7 @@ const BANNED_WRITE_ALLOWLIST = [
   /^\/api\/users\/tickets\/[^/]+\/messages$/,
 ];
 
-function bannedRequestAllowed(req) {
+function appealRequestAllowed(req) {
   const method = String(req.method || 'GET').toUpperCase();
   const path = requestPath(req);
   if (method === 'HEAD' || method === 'OPTIONS') {
@@ -288,17 +300,21 @@ function bannedRequestAllowed(req) {
   return false;
 }
 
+function appealLimited(access) {
+  return Boolean(access?.banned || access?.locked);
+}
+
 /**
- * Locked and deleted accounts lose the session.
- * Banned member accounts stay signed in and may only use the appeal allowlist.
+ * Deleted accounts, and locked or banned staff and team accounts, lose the session.
+ * Banned and locked members stay signed in and may only use the appeal allowlist.
  * Returns true when a response has already been sent.
  */
 async function rejectRestrictedAccount(req, res) {
   if (req.accountAccessChecked) {
-    if (req.accountAccess?.banned && !bannedRequestAllowed(req)) {
+    if (appealLimited(req.accountAccess) && !appealRequestAllowed(req)) {
       res.status(403).json({
         success: false,
-        code: BLOCKING_CODES.banned,
+        code: req.accountAccess.code || BLOCKING_CODES.banned,
         message: req.accountAccess.message || BANNED_ACTION_MESSAGE,
         restriction: req.accountAccess,
       });
@@ -333,10 +349,10 @@ async function rejectRestrictedAccount(req, res) {
     return true;
   }
 
-  if (access.banned && !bannedRequestAllowed(req)) {
+  if (appealLimited(access) && !appealRequestAllowed(req)) {
     res.status(403).json({
       success: false,
-      code: BLOCKING_CODES.banned,
+      code: access.code,
       message: access.message,
       restriction: access,
     });

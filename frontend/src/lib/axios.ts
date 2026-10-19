@@ -5,7 +5,6 @@ import { showErrorToast } from "@/components/utility/toast";
 import { isStaffPreviewFrame } from "./staffPlatformView";
 
 const ACCOUNT_RESTRICTION_CODES = new Set([
-  "ACCOUNT_LOCKED",
   "ACCOUNT_DELETED",
 ]);
 
@@ -98,15 +97,32 @@ api.interceptors.response.use(
             return Promise.reject(err);
         }
 
-        if (restrictionCode === "ACCOUNT_BANNED") {
+        if (
+            restrictionCode === "ACCOUNT_BANNED" ||
+            (restrictionCode === "ACCOUNT_LOCKED" && err.response?.data?.restriction?.blocked !== true)
+        ) {
             const standing = err.response?.data?.restriction;
             const current = useGlobalState.getState().user;
+            const locked = restrictionCode === "ACCOUNT_LOCKED";
             if (current && standing) {
-                useGlobalState.getState().setUser({ ...current, status: "Banned", restriction: standing });
+                useGlobalState.getState().setUser({
+                    ...current,
+                    status: locked ? "Locked" : "Banned",
+                    restriction: standing,
+                });
             }
             if (!window.location.pathname.startsWith("/account/access")) {
                 window.location.assign("/account/access");
             }
+            return Promise.reject(err);
+        }
+
+        if (restrictionCode === "ACCOUNT_LOCKED") {
+            window.dispatchEvent(new CustomEvent("ensemble:account-restricted", {
+                detail: err.response.data,
+            }));
+            useGlobalState.getState().clearUser();
+            useGlobalState.getState().setIsAuthenticated(false);
             return Promise.reject(err);
         }
 

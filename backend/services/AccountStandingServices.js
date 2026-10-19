@@ -89,7 +89,13 @@ async function notifyAccountStatusChanged(accountId, statusData = {}) {
   try {
     access = await getAccountAccess(accountId);
   } catch (_e) {
-    access = { status: nextStatus, blocked: nextStatus === 'Banned' || nextStatus === 'Locked', suspended: nextStatus === 'Suspended' };
+    access = {
+      status: nextStatus,
+      blocked: false,
+      banned: nextStatus === 'Banned',
+      locked: nextStatus === 'Locked',
+      suspended: nextStatus === 'Suspended',
+    };
   }
 
   let notification = null;
@@ -98,7 +104,9 @@ async function notifyAccountStatusChanged(accountId, statusData = {}) {
     const isBan = nextStatus === 'Banned';
     const defaultMsg = isBan
       ? 'Your account has been banned. You can sign in only to file an appeal and view your tickets and disputes.'
-      : 'Your account has been locked. You cannot sign in until an administrator unlocks it.';
+      : access.blocked
+        ? 'Your account has been locked. You cannot sign in until an administrator unlocks it.'
+        : 'Your account has been locked. You can sign in only to file an appeal and view your tickets and disputes.';
     const msg = statusData.reason || access.message || defaultMsg;
 
     try {
@@ -115,8 +123,8 @@ async function notifyAccountStatusChanged(accountId, statusData = {}) {
       console.error(`Failed to save ${nextStatus} notification:`, err.message);
     }
 
-    // A lock ends the session. A ban keeps it so the member can open an appeal.
-    if (!isBan) {
+    // Staff and team locks end the session. Member bans and locks stay signed in for an appeal.
+    if (access.blocked) {
       try {
         const redisClient = require('../lib/Redis');
         const keys = await redisClient.keys('session:*');

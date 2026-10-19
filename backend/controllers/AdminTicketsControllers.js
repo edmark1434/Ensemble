@@ -342,12 +342,12 @@ async function createPublicTicket(req, res) {
     } = req.body;
     const { APPEAL_TICKET_TYPE } = require('../lib/AccountRestriction');
     let ticketType = type || category || 'Other';
-    if (req.accountAccess?.banned) {
+    if (req.accountAccess?.banned || req.accountAccess?.locked) {
       if (String(type || category || APPEAL_TICKET_TYPE).trim() !== APPEAL_TICKET_TYPE) {
         return res.status(403).json({
           success: false,
-          code: 'ACCOUNT_BANNED',
-          message: 'A banned account can only open an appeal ticket.',
+          code: req.accountAccess.code || 'ACCOUNT_BANNED',
+          message: 'This account can only open an appeal ticket.',
         });
       }
       ticketType = APPEAL_TICKET_TYPE;
