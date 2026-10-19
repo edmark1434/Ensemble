@@ -1,7 +1,7 @@
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 
-type ActionOptions = { silent?: boolean; days?: number | null; duration?: 'temporary' | 'permanent'; endsAt?: string | null };
+type ActionOptions = { silent?: boolean; days?: number | null; duration?: 'temporary' | 'permanent'; endsAt?: string | null; reason?: string };
 
 export async function setAccountStatus(accountId: string, action: string, options?: ActionOptions) {
   const res = await api.patch(`/api/admin/accounts/${accountId}/status`, {
@@ -9,6 +9,7 @@ export async function setAccountStatus(accountId: string, action: string, option
     days: options?.days,
     duration: options?.duration,
     endsAt: options?.endsAt,
+    reason: options?.reason,
   });
   if (!res.data?.success) throw new Error(res.data?.message || 'Status update failed');
   if (!options?.silent) {
@@ -94,7 +95,8 @@ export async function pardonAccount(accountId: string, note?: string) {
 export async function runBulkAccountAction(
   accountIds: string[],
   kind: 'status' | 'verification',
-  action: string
+  action: string,
+  reason?: string
 ) {
   let ok = 0;
   let failed = 0;
@@ -103,7 +105,7 @@ export async function runBulkAccountAction(
   for (const accountId of accountIds) {
     try {
       if (kind === 'status') {
-        await setAccountStatus(accountId, action, { silent: true });
+        await setAccountStatus(accountId, action, { silent: true, reason });
       } else {
         await setAccountVerification(accountId, action, { silent: true });
       }

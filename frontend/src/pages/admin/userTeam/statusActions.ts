@@ -57,10 +57,10 @@ export function getManageActionsForStatus(
 
   if (options?.forumTimeout) {
     if (allowAction('clear_timeout', caps)) {
-      items.push({ id: 'clear_timeout', label: 'Remove forum timeout', section: 'manage' });
+      items.push({ id: 'clear_timeout', label: 'Remove timeout', section: 'manage' });
     }
   } else if (allowAction('timeout', caps)) {
-    items.push({ id: 'timeout', label: 'Forum timeout', section: 'manage' });
+    items.push({ id: 'timeout', label: 'Timeout', section: 'manage' });
   }
 
   if (allowAction('warn', caps)) items.push({ id: 'warn', label: 'Issue warning', section: 'manage' });

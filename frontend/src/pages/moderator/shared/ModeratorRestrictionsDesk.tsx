@@ -85,7 +85,7 @@ function standingLines(account: DeskAccount) {
           : 'Account status is Active',
   ];
   if (account.forumTimeout) {
-    lines.push(`Forum timeout until ${untilLabel(account.timeoutEndsAt, 'staff remove it')}`);
+    lines.push(`Timeout until ${untilLabel(account.timeoutEndsAt, 'staff remove it')}`);
   }
   return lines;
 }
@@ -262,6 +262,7 @@ export default function ModeratorRestrictionsDesk({
   const [warnForm, setWarnForm] = useState({ type: 'Community warning', reason: '', points: '1' });
   const [warnTiming, setWarnTiming] = useState<SanctionTiming>({ duration: 'temporary', endsAt: null, summary: '' });
   const [sanctionTiming, setSanctionTiming] = useState<SanctionTiming>({ duration: 'temporary', endsAt: null, summary: '' });
+  const [sanctionReason, setSanctionReason] = useState('');
   const [submittingWarn, setSubmittingWarn] = useState(false);
   const workRef = useRef<HTMLElement>(null);
 
@@ -336,6 +337,10 @@ export default function ModeratorRestrictionsDesk({
   async function runAction(action: string) {
     if (!selected) return;
     const removing = ['unsuspend', 'unban', 'unlock', 'clear_timeout'].includes(action);
+    if (!sanctionReason.trim()) {
+      showErrorToast('A reason is required');
+      return;
+    }
     if (!removing && sanctionTiming.duration === 'temporary' && !sanctionTiming.endsAt) {
       showErrorToast(sanctionTiming.summary || 'Choose how long this lasts');
       return;
@@ -346,6 +351,7 @@ export default function ModeratorRestrictionsDesk({
         action,
         duration: removing ? undefined : sanctionTiming.duration,
         endsAt: removing ? undefined : sanctionTiming.endsAt,
+        reason: sanctionReason.trim(),
       });
       setData(res.data?.data || null);
       showSuccessToast('Account standing updated');
@@ -375,7 +381,10 @@ export default function ModeratorRestrictionsDesk({
 
   async function submitWarning(event: FormEvent) {
     event.preventDefault();
-    if (!selected || !warnForm.type.trim()) return;
+    if (!selected || !warnForm.type.trim() || !warnForm.reason.trim()) {
+      if (!warnForm.reason.trim()) showErrorToast('A reason is required');
+      return;
+    }
     if (warnTiming.duration === 'temporary' && !warnTiming.endsAt) {
       showErrorToast(warnTiming.summary || 'Choose how long this warning lasts');
       return;
@@ -386,7 +395,7 @@ export default function ModeratorRestrictionsDesk({
       const res = await api.post(`${endpointBase}/violations`, {
         accountId: selected.accountId,
         type: warnForm.type.trim(),
-        reason: warnForm.reason.trim() || undefined,
+        reason: warnForm.reason.trim(),
         points: Number(warnForm.points) || 1,
         duration: warnTiming.duration,
         endsAt: warnTiming.endsAt,
@@ -430,7 +439,7 @@ export default function ModeratorRestrictionsDesk({
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Active warnings" value={activeViolations} sub="Still counting toward auto-suspend" icon={AlertTriangle} accent={accent} />
           <StatCard label="Held accounts" value={data?.restrictedAccounts?.length || 0} sub="Banned, suspended, locked, or timed out" icon={Ban} accent={accent} />
-          <StatCard label="Forum timeouts" value={timeoutCount} sub="Forum writes blocked, rest of Ensemble open" icon={Clock} accent={accent} />
+          <StatCard label="Timeouts" value={timeoutCount} sub="Forum writes blocked, rest of Ensemble open" icon={Clock} accent={accent} />
           <StatCard label="Recent activity" value={data?.recentActivity?.length || 0} sub="Latest standing changes" icon={Activity} accent={accent} />
         </div>
 
@@ -489,6 +498,7 @@ export default function ModeratorRestrictionsDesk({
                     rows={3}
                     className="mt-1 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none focus:border-white/25"
                     placeholder="What happened"
+                    required
                   />
                 </label>
                 <label className="block text-xs text-zinc-500">
@@ -506,7 +516,7 @@ export default function ModeratorRestrictionsDesk({
               <SanctionScheduleFields defaultDuration="temporary" onChange={setWarnTiming} />
               <button
                 type="submit"
-                disabled={submittingWarn || !selected}
+                disabled={submittingWarn || !selected || !warnForm.reason.trim()}
                 className={`inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium disabled:opacity-50 ${ACCENT_BTN[accent]}`}
               >
                 {submittingWarn ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -518,6 +528,17 @@ export default function ModeratorRestrictionsDesk({
               <h3 className="text-sm font-medium text-white">Change standing</h3>
               <p className="text-xs text-zinc-500">Remove actions show only while that sanction is active.</p>
               <SanctionScheduleFields defaultDuration="temporary" onChange={setSanctionTiming} />
+              <label className="block text-xs text-zinc-500">
+                Reason
+                <textarea
+                  value={sanctionReason}
+                  onChange={(event) => setSanctionReason(event.target.value)}
+                  rows={3}
+                  required
+                  placeholder="Why this is being applied or removed"
+                  className="mt-1 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none focus:border-white/25"
+                />
+              </label>
               <div className="flex flex-wrap gap-2">
                 {can('suspend') && standing !== 'suspended' ? (
                   <ActionButton busy={busyId === selected?.accountId} disabled={!selected} onClick={() => void runAction('suspend')} tone="amber">Suspend</ActionButton>
@@ -538,10 +559,10 @@ export default function ModeratorRestrictionsDesk({
                   <ActionButton busy={busyId === selected?.accountId} disabled={!selected} onClick={() => void runAction('unban')} tone="emerald">Remove ban</ActionButton>
                 ) : null}
                 {can('timeout') && !selected?.forumTimeout ? (
-                  <ActionButton busy={busyId === selected?.accountId} disabled={!selected} onClick={() => void runAction('timeout')} tone="amber">Forum timeout</ActionButton>
+                  <ActionButton busy={busyId === selected?.accountId} disabled={!selected} onClick={() => void runAction('timeout')} tone="amber">Timeout</ActionButton>
                 ) : null}
                 {can('clear_timeout') && selected?.forumTimeout ? (
-                  <ActionButton busy={busyId === selected?.accountId} disabled={!selected} onClick={() => void runAction('clear_timeout')} tone="emerald">Remove forum timeout</ActionButton>
+                  <ActionButton busy={busyId === selected?.accountId} disabled={!selected} onClick={() => void runAction('clear_timeout')} tone="emerald">Remove timeout</ActionButton>
                 ) : null}
               </div>
             </div>
@@ -620,7 +641,7 @@ export default function ModeratorRestrictionsDesk({
 
           <section className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
             <h2 className="text-sm font-semibold text-white">Held accounts</h2>
-            <p className="mt-1 mb-4 text-xs text-zinc-500">Includes active forum timeouts</p>
+            <p className="mt-1 mb-4 text-xs text-zinc-500">Includes active timeouts</p>
             {loading && !data ? (
               <LoadingLine />
             ) : filteredRestricted.length === 0 ? (

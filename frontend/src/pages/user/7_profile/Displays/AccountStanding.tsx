@@ -72,7 +72,7 @@ export function standingBadges(standing?: PublicStanding | null) {
   if (status === 'suspended') badges.push({ label: 'Suspended', detail: untilText(standing.endsAt), tone: 'amber' });
   if (status === 'locked') badges.push({ label: 'Locked', detail: untilText(standing.endsAt), tone: 'zinc' });
   if (standing.forumTimeout) {
-    badges.push({ label: 'Forum timeout', detail: untilText(standing.forumTimeoutEndsAt), tone: 'amber' });
+    badges.push({ label: 'Timeout', detail: untilText(standing.forumTimeoutEndsAt), tone: 'amber' });
   }
   return badges;
 }
@@ -116,10 +116,10 @@ export function AccountRecordSection() {
   const badges = standingBadges(record);
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-[#14151c]">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Your account record</h2>
+    <div>
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Account record</h2>
       <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">
-        Warnings and sanctions on this account. Other people only see the public badges.
+        Your warnings, suspensions, locks, timeouts, and bans. Other people only see the public badges.
       </p>
       {error ? <p className="mt-3 text-sm text-red-600 dark:text-red-300">{error}</p> : null}
       {!record && !error ? <p className="mt-3 text-sm text-gray-500">Loading your record…</p> : null}
@@ -128,7 +128,7 @@ export function AccountRecordSection() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Current standing</p>
             {badges.length === 0 ? (
-              <p className="mt-2 text-sm text-gray-700 dark:text-zinc-300">Active. No ban, suspension, lock, or forum timeout.</p>
+              <p className="mt-2 text-sm text-gray-700 dark:text-zinc-300">Active. No ban, suspension, lock, or timeout.</p>
             ) : (
               <ul className="mt-2 space-y-1 text-sm text-gray-800 dark:text-zinc-200">
                 {badges.map((badge) => (
@@ -163,9 +163,9 @@ export function AccountRecordSection() {
           </div>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Forum timeouts</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Timeouts</p>
             {record.restrictions.length === 0 ? (
-              <p className="mt-2 text-sm text-gray-500">No forum timeouts on this account.</p>
+              <p className="mt-2 text-sm text-gray-500">No timeouts on this account.</p>
             ) : (
               <ul className="mt-2 space-y-2">
                 {record.restrictions.map((item) => (
@@ -198,6 +198,6 @@ export function AccountRecordSection() {
           </div>
         </div>
       ) : null}
-    </section>
+    </div>
   );
 }

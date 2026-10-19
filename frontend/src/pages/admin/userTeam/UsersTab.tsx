@@ -582,13 +582,15 @@ export default function UsersTab({
           resultLabel={bulkPending.result}
           tone={bulkPending.tone}
           onClose={() => setBulkPending(null)}
-          onConfirm={async () => {
+          requireReason={bulkPending.kind === 'status'}
+          onConfirm={async (reason) => {
             setBulkBusy(true);
             try {
               await runBulkAccountAction(
                 [...selectedIds],
                 bulkPending.kind,
-                bulkPending.action
+                bulkPending.action,
+                reason
               );
               setSelectedIds(new Set());
               await refreshAfterChange();

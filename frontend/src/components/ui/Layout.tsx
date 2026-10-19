@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import UserNav from "@/components/nav/user_nav.tsx";
 import UtilScrollTop from "@/components/utility/util_scroll_top.tsx";
 import useGlobalState from "@/lib/global_state.ts";
+import { isAppealLimitedMember } from "@/lib/appealAccess";
 import { ChatMain } from "./chat_bubble/chat_main";
 import { CallOverlay } from "./chat_bubble/chat_bubble_components/CallOverlay";
 import VerificationRequiredModal from "@/components/ui/VerificationRequiredModal";
@@ -112,7 +113,7 @@ const Layout = () => {
     new URLSearchParams(location.search).get("tab") === "chat";
   const isFloatingChatHidden = useGlobalState((state) => state.isFloatingChatHidden);
 
-  const shouldHideFloatingChat = isInboxPage || isStaffView || isTeamProjectChat || isFloatingChatHidden;
+  const shouldHideFloatingChat = isInboxPage || isStaffView || isTeamProjectChat || isFloatingChatHidden || isAppealLimitedMember(user);
   const currentUserId = String(user?.account_id || "");
 
   const recentChats = useMemo(() => {
@@ -203,10 +204,12 @@ const Layout = () => {
   // Dynamic margin left based on sidebar state
   const marginLeft = isSidebarCollapsed ? "5rem" : "16rem";
 
+  const appealOnly = isAppealLimitedMember(user);
+
   useEffect(() => {
-    if (isStaffView) return;
+    if (isStaffView || appealOnly) return;
     if (user?.account_id) initializeChat(String(user.account_id));
-  }, [isStaffView, user?.account_id, initializeChat]);
+  }, [isStaffView, appealOnly, user?.account_id, initializeChat]);
 
   const openChatWithUser = useCallback(
     (target?: ChatTarget) => {

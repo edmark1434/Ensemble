@@ -251,8 +251,6 @@ async function listAccountDisputes(accountId) {
       AND (
         by_account_id = $1
         OR for_account_id = $1
-        OR initiator_account_id = $1
-        OR respondent_account_id = $1
       )
     ORDER BY updated_at DESC NULLS LAST, created_at DESC
     `,
@@ -271,8 +269,6 @@ async function getAccountDispute(disputeId, accountId) {
       AND (
         by_account_id = $2
         OR for_account_id = $2
-        OR initiator_account_id = $2
-        OR respondent_account_id = $2
       )
     `,
     [disputeId, accountId]

@@ -13,7 +13,6 @@ import { getFallbackAvatarUrl } from "@/lib/accountAvatars";
 
 // Modularized Profile Sub-Components
 import { TopSection_ProfileDisplay } from "./Displays/TopSection_ProfileDisplay.tsx";
-import { AccountRecordSection } from "./Displays/AccountStanding.tsx";
 import { MeritSection_ProfileDisplay } from "./Displays/MeritSection_ProfileDisplay.tsx";
 import { BadgeSideSection_ProfileDisplay } from "./Displays/BadgeSideSection_ProfileDisplay.tsx";
 import { RatingsBudgetSideSection_ProfileDisplay } from "./Displays/RatingsBudgetSideSection_ProfileDisplay.tsx";
@@ -935,8 +934,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
           onVerificationClick={() => navigate("/account-verification-status")}
           standing={userDetails?.standing}
         />
-
-        {isOwner && <AccountRecordSection />}
 
         {confirmedProfileId === id && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">

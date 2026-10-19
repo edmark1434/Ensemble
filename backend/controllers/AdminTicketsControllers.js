@@ -342,7 +342,8 @@ async function createPublicTicket(req, res) {
     } = req.body;
     const { APPEAL_TICKET_TYPE } = require('../lib/AccountRestriction');
     let ticketType = type || category || 'Other';
-    if (req.accountAccess?.banned || req.accountAccess?.locked) {
+    const appealOnly = Boolean(req.accountAccess?.banned || req.accountAccess?.locked);
+    if (appealOnly) {
       if (String(type || category || APPEAL_TICKET_TYPE).trim() !== APPEAL_TICKET_TYPE) {
         return res.status(403).json({
           success: false,
@@ -369,7 +370,13 @@ async function createPublicTicket(req, res) {
         priority: priority || 'Medium',
         description: description.trim(),
         attachments: req.body?.attachments,
-        fields: req.body?.fields ?? {},
+        fields: appealOnly
+          ? {
+              case_id: req.body?.fields?.case_id || 'Not provided',
+              why_reverse: req.body?.fields?.why_reverse || description.trim(),
+              evidence: req.body?.fields?.evidence || '',
+            }
+          : (req.body?.fields ?? {}),
         context: req.body?.context,
         requesterAccountId,
       },

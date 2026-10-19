@@ -178,6 +178,12 @@ async function searchRestrictionAccounts(query) {
 async function issueViolation(accountId, { type, reason, points, expiresAt, duration, days, endsAt }, staffSession) {
   const violationNumber = `VIO-${Date.now().toString().slice(-8)}`;
   const violationType = String(type || 'warning').trim() || 'warning';
+  const warnReason = String(reason || '').trim();
+  if (!warnReason) {
+    const error = new Error('A reason is required');
+    error.statusCode = 400;
+    throw error;
+  }
   const warnPoints = Number(points) || 1;
   const { warningExpiry } = require('../lib/AccountRestriction');
   const expiry = warningExpiry({ duration, days, expiresAt, endsAt, points: warnPoints });
@@ -193,7 +199,7 @@ async function issueViolation(accountId, { type, reason, points, expiresAt, dura
       violationNumber,
       accountId,
       violationType,
-      reason || null,
+      warnReason,
       warnPoints,
       staffId,
       expiry,

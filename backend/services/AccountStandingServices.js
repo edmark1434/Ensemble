@@ -107,7 +107,9 @@ async function notifyAccountStatusChanged(accountId, statusData = {}) {
       : access.blocked
         ? 'Your account has been locked. You cannot sign in until an administrator unlocks it.'
         : 'Your account has been locked. You can sign in only to file an appeal and view your tickets and disputes.';
-    const msg = statusData.reason || access.message || defaultMsg;
+    const msg = statusData.reason
+      ? `${defaultMsg} Reason: ${statusData.reason}`
+      : (access.message || defaultMsg);
 
     try {
       notification = await createNotification({
@@ -175,7 +177,9 @@ async function notifyAccountStatusChanged(accountId, statusData = {}) {
       console.warn(`${nextStatus} realtime socket broadcast failed:`, err.message);
     }
   } else if (nextStatus === 'Suspended') {
-    const msg = statusData.reason || access.message || SUSPENDED_ACTION_MESSAGE;
+    const msg = statusData.reason
+      ? `${access.message || SUSPENDED_ACTION_MESSAGE} Reason: ${statusData.reason}`
+      : (access.message || SUSPENDED_ACTION_MESSAGE);
 
     try {
       notification = await createNotification({
@@ -211,9 +215,8 @@ async function notifyAccountStatusChanged(accountId, statusData = {}) {
       console.warn('Suspension realtime socket broadcast failed:', err.message);
     }
   } else if (nextStatus === 'Active') {
-    const msg =
-      statusData.reason ||
-      'Your account standing has been restored to Active. All features and actions are now available.';
+    const restored = 'Your account standing has been restored to Active. All features and actions are now available.';
+    const msg = statusData.reason ? `${restored} Reason: ${statusData.reason}` : restored;
 
     try {
       notification = await createNotification({

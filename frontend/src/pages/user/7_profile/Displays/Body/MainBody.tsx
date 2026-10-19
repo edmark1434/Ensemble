@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FolderOpen, Briefcase, FileText, Image as ImageIcon } from "lucide-react";
+import { FolderOpen, Briefcase, FileText, Image as ImageIcon, ShieldAlert } from "lucide-react";
 
 // Sub-component Imports
 import { Profile_Portfolio } from "./Profile_Portfolio";
@@ -11,10 +11,11 @@ import { Profile_History } from "./Profile_History";
 import { Profile_Reviews } from "./Profile_Reviews";
 import { Profile_Introduction } from "./Profile_Introduction";
 import { Profile_Gallery } from "./Profile_Gallery";
+import { AccountRecordSection } from "../AccountStanding";
 import { MeritSection_ProfileDisplay } from "../MeritSection_ProfileDisplay";
 import { User, Activity, Image as ImageIcon2 } from "lucide-react";
 
-export type TabType = "introduction" | "portfolio" | "gallery" | "services" | "job-posts" | "assets" | "performance";
+export type TabType = "introduction" | "portfolio" | "gallery" | "services" | "job-posts" | "assets" | "performance" | "record";
 
 interface DetailsListBodyProps {
   loading?: boolean;
@@ -39,6 +40,7 @@ const tabOptions: { key: TabType; label: string; icon: React.ReactNode }[] = [
   { key: "job-posts", label: "Job Posts", icon: <FileText className="h-3.5 w-3.5" /> },
   { key: "assets", label: "Assets", icon: <ImageIcon className="h-3.5 w-3.5" /> },
   { key: "performance", label: "Performance", icon: <Activity className="h-3.5 w-3.5" /> },
+  { key: "record", label: "Record", icon: <ShieldAlert className="h-3.5 w-3.5" /> },
 ];
 
 export const DetailsListBodySkeleton: React.FC = () => (
@@ -73,7 +75,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
 
       {/* ==================== SMOOTH NAVIGATION BAR ==================== */}
       <div className="flex flex-wrap gap-1 bg-gray-100/50 dark:bg-dark-base/40 border border-gray-200 dark:border-white/5 p-1 rounded-2xl w-fit">
-        {tabOptions.map((tab) => {
+        {tabOptions.filter((tab) => tab.key !== "record" || isOwner).map((tab) => {
           const isActive = activeTab === tab.key;
           return (
             <button
@@ -208,6 +210,9 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
             )}
             {activeTab === "assets" && (
               <Profile_Assets accountId={accountId} isOwner={isOwner} isLoading={loading} />
+            )}
+            {activeTab === "record" && isOwner && (
+              <AccountRecordSection />
             )}
           </motion.div>
         </AnimatePresence>

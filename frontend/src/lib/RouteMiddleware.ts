@@ -8,6 +8,7 @@ import { ProfileLoadingState } from "@/pages/user/7_profile/Displays/ProfileLoad
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { isGuestAllowedPath } from "./guestRouteAccess";
 import { isStaffConsolePath, isStaffPreviewFrame } from "./staffPlatformView";
+import { isAppealLimitedMember } from "./appealAccess";
 
 type OnboardingGateState = {
     accountId: string | null;
@@ -50,19 +51,8 @@ function RouteLoadingShell() {
     return createElement(ProfileLoadingState);
 }
 
-function isBannedMember(user: { type?: string; status?: string; restriction?: { banned?: boolean; locked?: boolean; blocked?: boolean; code?: string } } | null) {
-    if (!user || user.type === 'Staff') return false;
-    if (user.restriction?.blocked) return false;
-    const status = String(user.status || '').toLowerCase();
-    const code = user.restriction?.code;
-    return Boolean(
-        user.restriction?.banned ||
-        user.restriction?.locked ||
-        code === 'ACCOUNT_BANNED' ||
-        code === 'ACCOUNT_LOCKED' ||
-        status === 'banned' ||
-        status === 'locked'
-    );
+function isBannedMember(user: Parameters<typeof isAppealLimitedMember>[0]) {
+    return isAppealLimitedMember(user);
 }
 
 function isBannedAllowedPath(pathname: string) {
@@ -219,8 +209,12 @@ export default function RouteMiddleware() {
             setOnboardingGate({ accountId: null, path: null, verificationFailed: false });
             return;
         }
-        if (resolvedUser.type !== 'User') {
-            setOnboardingGate({ accountId: null, path: null, verificationFailed: false });
+        if (resolvedUser.type !== 'User' || isBannedMember(resolvedUser)) {
+            setOnboardingGate({
+                accountId: resolvedUser.type === 'User' ? String(resolvedUser.account_id) : null,
+                path: null,
+                verificationFailed: false,
+            });
             return;
         }
 
@@ -247,13 +241,17 @@ export default function RouteMiddleware() {
                     setOnboardingGate({ accountId, path, verificationFailed: false });
                 }
             })
-            .catch(() => {
-                if (!cancelled) {
-                    setOnboardingGate({ accountId, path: undefined, verificationFailed: true });
+            .catch((err: { response?: { data?: { code?: string } } }) => {
+                if (cancelled) return;
+                const code = err?.response?.data?.code;
+                if (code === 'ACCOUNT_BANNED' || code === 'ACCOUNT_LOCKED') {
+                    setOnboardingGate({ accountId, path: null, verificationFailed: false });
+                    return;
                 }
+                setOnboardingGate({ accountId, path: undefined, verificationFailed: true });
             });
         return () => { cancelled = true; };
-    }, [resolvedUser?.account_id, resolvedUser?.type]);
+    }, [resolvedUser?.account_id, resolvedUser?.type, resolvedUser?.status, resolvedUser?.restriction?.code, resolvedUser?.restriction?.banned, resolvedUser?.restriction?.locked]);
 
     useEffect(() => {
         const handleOnboardingCompleted = (event: Event) => {
@@ -360,7 +358,7 @@ export default function RouteMiddleware() {
         navigate(getStaffPlatformViewPath(resolvedUser.role), { replace: true });
     }, [isCheckingSession, resolvedUser, isPublicRoute, isTicketFormRoute, isOnboardingRoute, location.pathname, navigate]);
 
-    if (onboardingVerificationFailed) {
+    if (onboardingVerificationFailed && !isBannedMember(resolvedUser)) {
         return createElement(RouteLoadingShell);
     }
 

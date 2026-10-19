@@ -17,6 +17,7 @@ import AccountAvatar from "@/components/ui/AccountAvatar";
 import { getNotificationIcon, getNotificationLabel } from "@/lib/notificationTypes";
 import TicketInviteActions from "@/components/nav/TicketInviteActions";
 import { showAccountWarningToast } from "@/components/ui/AccountStanding";
+import { isAppealLimitedMember } from "@/lib/appealAccess";
 
 interface UserHeaderProps {
   pageTitle: string;
@@ -704,7 +705,7 @@ useEffect(() => {
 }, [userInfo?.account_id]);
   
 useEffect(() => {
-  if (isGuestView) {
+  if (isGuestView || isAppealLimitedMember(userInfo)) {
     setNotifications([]);
     return;
   }
@@ -759,7 +760,7 @@ useEffect(() => {
 
     let isMounted = true;
     const accountId = String(userInfo?.account_id || '');
-    if (accountId) {
+    if (accountId && !isAppealLimitedMember(userInfo)) {
       fetchHeaderData(accountId).then((data) => {
         if (!isMounted || !data) return;
         setCredits(data.credits);

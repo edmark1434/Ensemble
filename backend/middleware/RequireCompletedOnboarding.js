@@ -5,6 +5,7 @@ const { getOnboardingState } = require('../services/OnboardingServices');
 const ALLOWED_PATHS = [
     /^\/onboarding(?:\/|$)/,
     /^\/users\/(?:me|session|logout|refresh-token|login|signup|verify-email|resend-verification-email|signup-save-session|forgot-password|reset-password|verify-reset-token)(?:\/|$)/,
+    /^\/users\/(?:tickets|disputes|ticket-catalog|ticket-context|me\/standing)(?:\/|$)/,
     /^\/files\/(?:profile-presets|upload-url)(?:\/|$)/,
     /^\/(?:countries|places)$/,
 ];
