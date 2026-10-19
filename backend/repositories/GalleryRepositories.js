@@ -26,7 +26,7 @@ async function getUserGalleries(accountId) {
     }
 }
 
-async function getAllGalleries() {
+async function getAllGalleries(includeDeactivated = false) {
     try {
         const query = `
             SELECT 
@@ -41,14 +41,17 @@ async function getAllGalleries() {
                 f.mime_type AS file_mimetype,
                 a.display_name,
                 a.handle,
+                a.status,
+                (LOWER(COALESCE(a.status, '')) = 'deactivated') AS deactivated,
                 af.path AS avatar_url
             FROM user_galleries g
             JOIN files f ON g.file_id = f.file_id
             JOIN accounts a ON g.account_id = a.account_id
             LEFT JOIN files af ON a.avatar_file_id = af.file_id
+            WHERE $1::boolean = TRUE OR LOWER(COALESCE(a.status, '')) <> 'deactivated'
             ORDER BY g.created_at DESC
         `;
-        const result = await pool.query(query);
+        const result = await pool.query(query, [Boolean(includeDeactivated)]);
         return result.rows;
     } catch (err) {
         console.error('Error fetching all galleries:', err);

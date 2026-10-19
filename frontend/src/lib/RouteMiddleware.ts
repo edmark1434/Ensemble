@@ -9,6 +9,7 @@ import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { isGuestAllowedPath } from "./guestRouteAccess";
 import { isStaffConsolePath, isStaffPreviewFrame } from "./staffPlatformView";
 import { APPEAL_PATH, isAppealLimitedMember } from "./appealAccess";
+import DeactivatedAccountScreen from "@/components/account/DeactivatedAccountScreen";
 
 type OnboardingGateState = {
     accountId: string | null;
@@ -209,7 +210,7 @@ export default function RouteMiddleware() {
             setOnboardingGate({ accountId: null, path: null, verificationFailed: false });
             return;
         }
-        if (resolvedUser.type !== 'User' || isBannedMember(resolvedUser)) {
+        if (resolvedUser.type !== 'User' || isBannedMember(resolvedUser) || resolvedUser.restriction?.deactivated) {
             setOnboardingGate({
                 accountId: resolvedUser.type === 'User' ? String(resolvedUser.account_id) : null,
                 path: null,
@@ -251,7 +252,7 @@ export default function RouteMiddleware() {
                 setOnboardingGate({ accountId, path: undefined, verificationFailed: true });
             });
         return () => { cancelled = true; };
-    }, [resolvedUser?.account_id, resolvedUser?.type, resolvedUser?.status, resolvedUser?.restriction?.code, resolvedUser?.restriction?.banned, resolvedUser?.restriction?.locked]);
+    }, [resolvedUser?.account_id, resolvedUser?.type, resolvedUser?.status, resolvedUser?.restriction?.code, resolvedUser?.restriction?.banned, resolvedUser?.restriction?.locked, resolvedUser?.restriction?.deactivated]);
 
     useEffect(() => {
         const handleOnboardingCompleted = (event: Event) => {
@@ -376,6 +377,11 @@ export default function RouteMiddleware() {
 
     if (isTicketFormRoute && !resolvedUser) {
         return createElement(RouteLoadingShell);
+    }
+
+    const viewer = user || resolvedUser;
+    if (viewer?.type === 'User' && viewer?.restriction?.deactivated) {
+        return createElement(DeactivatedAccountScreen);
     }
 
     if (shouldAutoRedirect && !isLocalSignOutTransition && (redirectPath || resolvedUser)) {

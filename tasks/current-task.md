@@ -1,21 +1,13 @@
-# Current Task: Full Page View for Job Posts with "Other Job Posts You May Like"
+# Current Task: Member account deactivation
 
 ## Objective
-1. Implement a full-page view for Job Posts at `/jobs/postings/:id/page` (supporting both Individual and Team job postings) following the layout structure of `/gigs/services/:id/page`.
-2. Do NOT include "Rates & Reviews" section (jobs do not have ratings/reviews like gigs).
-3. Include an "Other Job Posts You May Like" section at the bottom, rendering up to 3 active matching job posts in grid layout with navigation to their full page.
-4. Add backend `GET /api/jobs/:jobId` to fetch single job details directly.
-5. Add a "View Full Page" (`Maximize2`) button in the existing `JobViewDetails` drawer.
+Members can deactivate their own account. A deactivated account disappears from member search and public profile views. Staff and admins can still search and open the profile, including from platform view. The deactivated member sees only a reactivation screen with a status indicator and a 72-hour cooldown.
 
 ## Acceptance criteria
-- [x] Backend route `GET /api/jobs/:jobId` implemented and returns full job details.
-- [x] New `JobFullPage` created at `frontend/src/pages/user/6_job_market/job_pages/job_full_page.tsx`.
-- [x] Registered `/jobs/postings/:id/page` and `/jobs/:id/page` in `App.tsx`.
-- [x] Full page layout contains:
-  - Sticky header with `UserHeader` and Back to Job Market button.
-  - Left column: Status, difficulty, category, and Team/Individual badges; title, post metadata, edit/report actions; thumbnail with skills overlay & lightbox; description (RichText); team milestones (if team project); required skills.
-  - Right column: Poster profile card (Client / Team), budget card with price, timeline, deadline, openings, proposal status and action button ("Send Proposal", "View your Proposal", "Manage Applicants", etc.), workflow & NDA terms.
-  - Bottom section: "Other Job Posts You May Like" component (`jobs_other_posts.tsx`) featuring 3 job cards matching `/jobs/postings` grid style.
-  - No "Rates & Reviews" section.
-- [x] `JobViewDetails` drawer includes a "View Full" button on the bottom left (matching the Gig drawer) and header thumbnail button navigating to `/jobs/postings/:id/page`.
-- [x] Frontend build succeeds without errors (`cd frontend && npm run build`).
+- [x] Deactivation sets account status to Deactivated and stores the reactivation time.
+- [x] Member search, public profiles, follower lists, and public galleries hide deactivated accounts from non-staff.
+- [x] Staff sessions can search and open those profiles, with a Deactivated indicator.
+- [x] A deactivated member can only call session, logout, and reactivation endpoints.
+- [x] Reactivation stays locked for 72 hours and the screen shows the remaining time.
+- [x] Frontend build succeeds.
+- [ ] Apply `1823900000000_account-deactivation` from a host Postgres accepts. This machine was rejected by `pg_hba.conf`.

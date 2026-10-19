@@ -291,7 +291,10 @@ async function getProfileByAccountId(accountId) {
                     SELECT COUNT(*) FROM ratings r 
                     JOIN contracts c ON r.contract_id = c.contract_id JOIN job_contracts jc ON c.contract_id = jc.contract_id JOIN proposals p ON jc.proposal_id = p.proposal_id JOIN jobs j ON p.job_id = j.job_id 
                     WHERE r.account_id = A.ACCOUNT_ID AND j.client_account_id = A.ACCOUNT_ID
-                ) AS client_job_count
+                ) AS client_job_count,
+                A.STATUS as status,
+                A.DEACTIVATED_AT as deactivated_at,
+                A.REACTIVATION_AVAILABLE_AT as reactivation_available_at
             FROM ACCOUNTS A
             JOIN USERS U ON A.ACCOUNT_ID = U.ACCOUNT_ID
             LEFT JOIN VERIFICATIONS V ON A.ACCOUNT_ID = V.ACCOUNT_ID

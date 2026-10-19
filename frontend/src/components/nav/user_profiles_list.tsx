@@ -8,6 +8,7 @@ import api from "@/lib/axios";
 import { toast } from "react-hot-toast";
 import { ProfileTags } from "@/pages/user/7_profile/Utilities/ProfileTags";
 import { constructAvatarUrl } from "@/lib/accountAvatars";
+import { DeactivatedBadge } from "@/components/account/DeactivatedBadge";
 
 // --- STRUCTURAL INTERFACE ---
 interface UserProfile {
@@ -23,6 +24,7 @@ interface UserProfile {
   subscriptionType: "Free" | "Premium" | "Business";
   roles: { role_id: number | string; role_name: string }[];
   meritScore: number | string;
+  deactivated?: boolean;
   followersCount: number;
   followingCount: number;
   isFollowing: boolean;
@@ -114,6 +116,7 @@ export const UserProfilesList: React.FC = () => {
             followingCount: parseInt(account.following_count || "0", 10),
             isFollowing: !!account.is_following,
             isFollowedBy: !!account.is_followed_by,
+            deactivated: String(account.status || "").toLowerCase() === "deactivated",
           };
         });
         setProfiles(results);
@@ -314,6 +317,7 @@ export const UserProfilesList: React.FC = () => {
                       <h3 className="text-lg font-bold text-zinc-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors truncate">
                         {profile.name}
                       </h3>
+                      {profile.deactivated && <DeactivatedBadge />}
                       <span className="text-xs text-zinc-500 font-mono">@{profile.username}</span>
 
                       {/* Verified & Role Tags Wrapper */}

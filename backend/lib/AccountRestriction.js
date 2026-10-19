@@ -199,6 +199,10 @@ function emptyAccess() {
     banned: false,
     locked: false,
     suspended: false,
+    deactivated: false,
+    deactivatedAt: null,
+    reactivationAvailableAt: null,
+    reactivationReady: true,
     forumTimeout: false,
     suspensionEndsAt: null,
     forumTimeoutEndsAt: null,
@@ -225,7 +229,7 @@ async function getAccountAccess(accountId) {
   }
 
   const account = await pool.query(
-    `SELECT status, type, deleted_at, suspension_ends_at, ban_ends_at, lock_ends_at FROM accounts WHERE account_id = $1`,
+    `SELECT status, type, deleted_at, suspension_ends_at, ban_ends_at, lock_ends_at, deactivated_at, reactivation_available_at FROM accounts WHERE account_id = $1`,
     [accountId]
   );
   const row = account.rows[0];
@@ -257,6 +261,11 @@ async function getAccountAccess(accountId) {
 
   const normalized = normalizeAccountStatus(row.status);
   const member = String(row.type || '').toLowerCase() === 'user';
+  const deactivated = normalized === 'deactivated' && member;
+  const reactivationAvailableAt = row.reactivation_available_at || null;
+  const reactivationReady = !deactivated
+    || !reactivationAvailableAt
+    || new Date(reactivationAvailableAt).getTime() <= Date.now();
   const suspended = normalized === 'suspended';
   const banned = normalized === 'banned' && member;
   const locked = normalized === 'locked' && member;
@@ -279,6 +288,10 @@ async function getAccountAccess(accountId) {
     banned,
     locked,
     suspended,
+    deactivated,
+    deactivatedAt: deactivated ? row.deactivated_at || null : null,
+    reactivationAvailableAt: deactivated ? reactivationAvailableAt : null,
+    reactivationReady,
     forumTimeout,
     suspensionEndsAt: row.suspension_ends_at || null,
     forumTimeoutEndsAt,
@@ -473,6 +486,40 @@ function appealLimited(access) {
   return Boolean(access?.banned || access?.locked);
 }
 
+const DEACTIVATED_READ_ALLOWLIST = [
+  /^\/api\/csrf-token$/,
+  /^\/api\/users\/me$/,
+  /^\/api\/users\/session$/,
+  /^\/api\/accounts\/deactivation$/,
+];
+
+const DEACTIVATED_WRITE_ALLOWLIST = [
+  /^\/api\/users\/logout$/,
+  /^\/api\/users\/refresh-token$/,
+  /^\/api\/accounts\/reactivate$/,
+];
+
+function deactivatedRequestAllowed(req) {
+  const method = String(req.method || 'GET').toUpperCase();
+  const path = requestPath(req);
+  if (method === 'HEAD' || method === 'OPTIONS' || method === 'GET') {
+    return DEACTIVATED_READ_ALLOWLIST.some((pattern) => pattern.test(path));
+  }
+  if (method === 'POST') return DEACTIVATED_WRITE_ALLOWLIST.some((pattern) => pattern.test(path));
+  return false;
+}
+
+function rejectDeactivatedAccount(req, res) {
+  if (!req.accountAccess?.deactivated || deactivatedRequestAllowed(req)) return false;
+  res.status(403).json({
+    success: false,
+    code: 'ACCOUNT_DEACTIVATED',
+    message: 'This account is deactivated. Reactivation unlocks 72 hours after you turn it off.',
+    restriction: req.accountAccess,
+  });
+  return true;
+}
+
 /**
  * Deleted accounts, and locked or banned staff and team accounts, lose the session.
  * Banned and locked members stay signed in and may only use the appeal allowlist.
@@ -480,6 +527,7 @@ function appealLimited(access) {
  */
 async function rejectRestrictedAccount(req, res) {
   if (req.accountAccessChecked) {
+    if (rejectDeactivatedAccount(req, res)) return true;
     if (appealLimited(req.accountAccess) && !appealRequestAllowed(req)) {
       res.status(403).json({
         success: false,
@@ -517,6 +565,8 @@ async function rejectRestrictedAccount(req, res) {
     });
     return true;
   }
+
+  if (rejectDeactivatedAccount(req, res)) return true;
 
   if (appealLimited(access) && !appealRequestAllowed(req)) {
     res.status(403).json({

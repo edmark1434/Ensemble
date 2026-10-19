@@ -7,8 +7,8 @@ async function getUserGalleries(accountId) {
     return await GalleryRepositories.getUserGalleries(accountId);
 }
 
-async function getAllGalleries() {
-    return await GalleryRepositories.getAllGalleries();
+async function getAllGalleries(includeDeactivated = false) {
+    return await GalleryRepositories.getAllGalleries(includeDeactivated);
 }
 
 async function createGalleryItem(accountId, fileId, title, description) {

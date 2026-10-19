@@ -13,6 +13,7 @@ import { ProfileTags } from "@/pages/user/7_profile/Utilities/ProfileTags";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { InviteToJobModal } from "@/components/ui/InviteToJobModal";
 import DiscoveryFlipCardModal from "@/components/ui/DiscoveryFlipCardModal";
+import { DeactivatedBadge } from "@/components/account/DeactivatedBadge";
 import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 
 interface UserProfile {
@@ -39,6 +40,7 @@ interface UserProfile {
     totalServices?: number;
     totalAssets?: number;
   tagline: string;
+  deactivated?: boolean;
 }
 
 interface MyJob {
@@ -87,6 +89,7 @@ const mapAccount = (account: any, _cloudfront: string): UserProfile => {
     isFollowedBy: !!account.is_followed_by,
     badges: Array.isArray(account.badges) ? account.badges : [],
     bannerPreset: account.banner_preset ?? null,
+    deactivated: String(account.status || "").toLowerCase() === "deactivated",
   };
 };
 
@@ -525,7 +528,10 @@ export default function DiscoveryPage() {
                     <div className="flex items-start gap-3">
                       <img src={profile.avatar} alt="" className="h-12 w-12 rounded-full object-cover border border-zinc-200 dark:border-white/10" />
                       <div className="min-w-0 flex-1">
-                        <p className="font-bold text-sm truncate group-hover:text-blue-500 transition-colors">{profile.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-sm truncate group-hover:text-blue-500 transition-colors">{profile.name}</p>
+                          {profile.deactivated && <DeactivatedBadge />}
+                        </div>
                         <p className="text-[11px] text-zinc-500 font-mono truncate">@{profile.username}</p>
                         <div className="flex items-center gap-1 mt-1 text-[11px]">
                           {profile.meritScore === "No Rating" ? (
@@ -695,6 +701,7 @@ export default function DiscoveryPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="font-bold text-sm truncate group-hover:text-blue-500 transition-colors">{profile.name}</h3>
+                            {profile.deactivated && <DeactivatedBadge />}
                             <ProfileTags role={profile.roles as any} verificationLevel={profile.verified} subscriptionType={profile.subscriptionType} />
                           </div>
                           <p className="text-[11px] text-zinc-500 font-mono">@{profile.username}</p>
@@ -834,6 +841,7 @@ export default function DiscoveryPage() {
                           <div className="flex items-center gap-2 mt-3">
                             <img src={item.avatar_url ? (item.avatar_url.startsWith('http') ? item.avatar_url : `${cloudfrontUrl}/${item.avatar_url}`) : '/default-avatar.png'} alt="" className="w-6 h-6 rounded-full" />
                             <span className="text-white/90 text-xs font-medium">@{item.handle}</span>
+                            {item.deactivated && <DeactivatedBadge />}
                           </div>
                         </div>
                       </div>
@@ -1172,7 +1180,10 @@ export default function DiscoveryPage() {
                          );
                       })()}
                       <div className="hidden sm:block">
-                        <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{selectedGalleryItem.display_name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{selectedGalleryItem.display_name}</p>
+                          {selectedGalleryItem.deactivated && <DeactivatedBadge />}
+                        </div>
                         <p className="text-[10px] text-gray-500 dark:text-zinc-400">@{selectedGalleryItem.handle}</p>
                       </div>
                       <button

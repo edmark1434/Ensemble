@@ -13,6 +13,9 @@ const {
     updateAccountProfileIdController,
     settingAccountInfoUpdateController,
     searchUserAccountsByHandleController,
+    getDeactivationController,
+    deactivateAccountController,
+    reactivateAccountController,
     getRecentUserAvatarsController,
     followUserController,
     unfollowUserController,
@@ -56,6 +59,9 @@ router.put('/profile/banner', [checkSession, requireAuth], updateBannerPresetCon
 router.get('/wallet', [checkSession, requireAuth], getAccountWalletController);
 // Optional auth for searching users (allows guests but includes follow status if logged in)
 router.get('/search-users', [optionalSession], searchUserAccountsByHandleController);
+router.get('/deactivation', [checkSession, requireAuth], getDeactivationController);
+router.post('/deactivate', [checkSession, requireAuth], deactivateAccountController);
+router.post('/reactivate', [checkSession, requireAuth], reactivateAccountController);
 router.get('/personal-details', [checkSession, requireAuth], getPersonalDetailsController);
 router.get('/profile/current-avatar', [checkSession, requireAuth], getProfileCurrentAvatarByAccountIdController);
 router.post('/:accountId/follow', [checkSession, requireAuth], followUserController);

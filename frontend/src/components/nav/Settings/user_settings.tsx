@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, CreditCard, HelpCircle, FileText, ArrowLeft, AlertCircle, Monitor, Wallet, ShieldAlert } from "lucide-react";
+import { User, CreditCard, HelpCircle, FileText, ArrowLeft, AlertCircle, Monitor, Wallet, ShieldAlert, Power } from "lucide-react";
 
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -13,13 +13,14 @@ import AvatarEditModal from "@/pages/user/7_profile/Edits/AvatarEditModal";
 
 // Modular Tab Components
 import { UserSettingsAccountDetails } from "./user_settings_accountdetails";
+import { UserSettingsDeactivate } from "./user_settings_deactivate";
 import { UserSettingsSubscriptionDetails } from "./user_settings_subscriptiondetails";
 import { UserSettingsHelp } from "./user_settings_help";
 import { UserSettingsLegalPolicies } from "./user_settings_legalpolicies";
 import { UserSettingsDisplay } from "./user_settings_display";
 import { UserSettingsWallet } from "./user_settings_wallet";
 import { AccountStandingNotice, type AccountStanding } from "@/components/ui/AccountStanding";
-type TabType = "account" | "wallet" | "subscription" | "help" | "legal" | "display" | "violations";
+type TabType = "account" | "wallet" | "subscription" | "help" | "legal" | "display" | "violations" | "deactivate";
 
 interface Preset {
   file_id: number;
@@ -293,6 +294,7 @@ export default function UserSettings() {
       items: [
         { id: "account", label: "Account Details", icon: User },
         { id: "violations", label: "Account Violations", icon: ShieldAlert },
+        { id: "deactivate", label: "Deactivate account", icon: Power },
       ]
     },
     {
@@ -451,6 +453,8 @@ export default function UserSettings() {
                     })()}
                   </div>
                 )}
+
+                {activeTab === "deactivate" && <UserSettingsDeactivate />}
 
                 {activeTab === "help" && <UserSettingsHelp />}
 
