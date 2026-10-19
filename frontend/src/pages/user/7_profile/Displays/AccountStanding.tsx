@@ -72,7 +72,7 @@ export function standingBadges(standing?: PublicStanding | null) {
   if (status === 'suspended') badges.push({ label: 'Suspended', detail: untilText(standing.endsAt), tone: 'amber' });
   if (status === 'locked') badges.push({ label: 'Locked', detail: untilText(standing.endsAt), tone: 'zinc' });
   if (standing.forumTimeout) {
-    badges.push({ label: 'Forum timeout', detail: untilText(standing.forumTimeoutEndsAt), tone: 'amber' });
+    badges.push({ label: 'Timeout', detail: untilText(standing.forumTimeoutEndsAt), tone: 'amber' });
   }
   return badges;
 }
@@ -128,7 +128,7 @@ export function AccountRecordSection() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Current standing</p>
             {badges.length === 0 ? (
-              <p className="mt-2 text-sm text-gray-700 dark:text-zinc-300">Active. No ban, suspension, lock, or forum timeout.</p>
+              <p className="mt-2 text-sm text-gray-700 dark:text-zinc-300">Active. No ban, suspension, lock, or timeout.</p>
             ) : (
               <ul className="mt-2 space-y-1 text-sm text-gray-800 dark:text-zinc-200">
                 {badges.map((badge) => (
@@ -163,9 +163,9 @@ export function AccountRecordSection() {
           </div>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Forum timeouts</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-500">Timeouts</p>
             {record.restrictions.length === 0 ? (
-              <p className="mt-2 text-sm text-gray-500">No forum timeouts on this account.</p>
+              <p className="mt-2 text-sm text-gray-500">No timeouts on this account.</p>
             ) : (
               <ul className="mt-2 space-y-2">
                 {record.restrictions.map((item) => (

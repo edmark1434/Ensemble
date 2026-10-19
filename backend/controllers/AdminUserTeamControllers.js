@@ -75,9 +75,9 @@ async function patchAdminAccountStatus(req, res) {
       endsAt: req.body?.endsAt,
     });
     const message = data.forumTimeout
-      ? 'Forum timeout applied'
+      ? 'Timeout applied'
       : data.forumTimeout === false && String(action).toLowerCase().includes('timeout')
-        ? 'Forum timeout cleared'
+        ? 'Timeout cleared'
         : `Account set to ${data.status}`;
     res.status(200).json({ success: true, data, message });
   } catch (err) {

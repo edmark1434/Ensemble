@@ -252,7 +252,7 @@ async function getAccountAccess(accountId) {
       forumTimeoutEndsAt = timeoutEnd;
     }
   } catch (err) {
-    console.warn('Could not load forum timeout:', err.message);
+    console.warn('Could not load timeout:', err.message);
   }
 
   const normalized = normalizeAccountStatus(row.status);
@@ -561,7 +561,7 @@ function rejectSuspendedWrite(req, res) {
 }
 
 /**
- * A forum timeout blocks every forum write: posts, comments, reactions, membership, and reports.
+ * A timeout blocks every forum write: posts, comments, reactions, membership, and reports.
  * Reading the forums stays open.
  */
 function rejectForumTimeout(req, res) {

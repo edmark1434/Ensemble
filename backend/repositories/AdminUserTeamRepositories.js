@@ -1152,7 +1152,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
     );
     await recordAccountActivity({
       accountId,
-      action: endsAt ? 'Forum timeout applied' : 'Forum timeout applied until lifted',
+      action: endsAt ? 'Timeout applied' : 'Timeout applied until lifted',
       eventCode: 'FORUM_TIMEOUT',
       referenceTable: 'restrictions',
       referencePrefix: 'RST',
@@ -1175,7 +1175,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
         });
       }
     } catch (notifyErr) {
-      console.warn('Failed to broadcast forum timeout:', notifyErr.message);
+      console.warn('Failed to broadcast timeout:', notifyErr.message);
     }
     return { accountId, status: account.status, forumTimeout: true, restriction };
   }
@@ -1193,7 +1193,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
     );
     await recordAccountActivity({
       accountId,
-      action: 'Forum timeout cleared',
+      action: 'Timeout cleared',
       eventCode: 'FORUM_TIMEOUT_CLEARED',
       referenceTable: 'restrictions',
       referencePrefix: 'RST',
@@ -1211,12 +1211,12 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
           accountId,
           status: account.status,
           code: null,
-          message: 'Your forum timeout has been lifted.',
+          message: 'Your timeout has been lifted.',
           restriction,
         });
       }
     } catch (notifyErr) {
-      console.warn('Failed to broadcast forum timeout clear:', notifyErr.message);
+      console.warn('Failed to broadcast timeout clear:', notifyErr.message);
     }
     return { accountId, status: account.status, forumTimeout: false, restriction };
   }

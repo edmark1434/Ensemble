@@ -85,7 +85,7 @@ function standingLines(account: DeskAccount) {
           : 'Account status is Active',
   ];
   if (account.forumTimeout) {
-    lines.push(`Forum timeout until ${untilLabel(account.timeoutEndsAt, 'staff remove it')}`);
+    lines.push(`Timeout until ${untilLabel(account.timeoutEndsAt, 'staff remove it')}`);
   }
   return lines;
 }
@@ -430,7 +430,7 @@ export default function ModeratorRestrictionsDesk({
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Active warnings" value={activeViolations} sub="Still counting toward auto-suspend" icon={AlertTriangle} accent={accent} />
           <StatCard label="Held accounts" value={data?.restrictedAccounts?.length || 0} sub="Banned, suspended, locked, or timed out" icon={Ban} accent={accent} />
-          <StatCard label="Forum timeouts" value={timeoutCount} sub="Forum writes blocked, rest of Ensemble open" icon={Clock} accent={accent} />
+          <StatCard label="Timeouts" value={timeoutCount} sub="Forum writes blocked, rest of Ensemble open" icon={Clock} accent={accent} />
           <StatCard label="Recent activity" value={data?.recentActivity?.length || 0} sub="Latest standing changes" icon={Activity} accent={accent} />
         </div>
 
@@ -538,10 +538,10 @@ export default function ModeratorRestrictionsDesk({
                   <ActionButton busy={busyId === selected?.accountId} disabled={!selected} onClick={() => void runAction('unban')} tone="emerald">Remove ban</ActionButton>
                 ) : null}
                 {can('timeout') && !selected?.forumTimeout ? (
-                  <ActionButton busy={busyId === selected?.accountId} disabled={!selected} onClick={() => void runAction('timeout')} tone="amber">Forum timeout</ActionButton>
+                  <ActionButton busy={busyId === selected?.accountId} disabled={!selected} onClick={() => void runAction('timeout')} tone="amber">Timeout</ActionButton>
                 ) : null}
                 {can('clear_timeout') && selected?.forumTimeout ? (
-                  <ActionButton busy={busyId === selected?.accountId} disabled={!selected} onClick={() => void runAction('clear_timeout')} tone="emerald">Remove forum timeout</ActionButton>
+                  <ActionButton busy={busyId === selected?.accountId} disabled={!selected} onClick={() => void runAction('clear_timeout')} tone="emerald">Remove timeout</ActionButton>
                 ) : null}
               </div>
             </div>
@@ -620,7 +620,7 @@ export default function ModeratorRestrictionsDesk({
 
           <section className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
             <h2 className="text-sm font-semibold text-white">Held accounts</h2>
-            <p className="mt-1 mb-4 text-xs text-zinc-500">Includes active forum timeouts</p>
+            <p className="mt-1 mb-4 text-xs text-zinc-500">Includes active timeouts</p>
             {loading && !data ? (
               <LoadingLine />
             ) : filteredRestricted.length === 0 ? (
