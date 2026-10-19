@@ -6,6 +6,7 @@ export default function JobsRestrictions() {
       roleLabel="Jobs & Gigs Moderator"
       subtitle="Apply job-market enforcement actions and review the account activity timeline."
       endpointBase="/api/moderator/jobs/restrictions"
+      variant="jobs"
       accent="emerald"
     />
   );

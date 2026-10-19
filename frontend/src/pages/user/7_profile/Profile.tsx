@@ -13,6 +13,7 @@ import { getFallbackAvatarUrl } from "@/lib/accountAvatars";
 
 // Modularized Profile Sub-Components
 import { TopSection_ProfileDisplay } from "./Displays/TopSection_ProfileDisplay.tsx";
+import { AccountRecordSection } from "./Displays/AccountStanding.tsx";
 import { MeritSection_ProfileDisplay } from "./Displays/MeritSection_ProfileDisplay.tsx";
 import { BadgeSideSection_ProfileDisplay } from "./Displays/BadgeSideSection_ProfileDisplay.tsx";
 import { RatingsBudgetSideSection_ProfileDisplay } from "./Displays/RatingsBudgetSideSection_ProfileDisplay.tsx";
@@ -687,7 +688,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             client_service_rating: profileData.client_service_rating,
             client_service_count: profileData.client_service_count,
             client_job_rating: profileData.client_job_rating,
-            client_job_count: profileData.client_job_count
+            client_job_count: profileData.client_job_count,
+            standing: profileData.standing || null,
           });
         } catch (skillsError) {
           console.error("Error fetching user skills:", skillsError);
@@ -730,7 +732,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             client_service_rating: profileData.client_service_rating,
             client_service_count: profileData.client_service_count,
             client_job_rating: profileData.client_job_rating,
-            client_job_count: profileData.client_job_count
+            client_job_count: profileData.client_job_count,
+            standing: profileData.standing || null,
           });
         }
 
@@ -930,7 +933,10 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
           onEditAccountTags={() => setIsAccountTagsModalOpen(true)}
           onChatClick={handleOpenChat}
           onVerificationClick={() => navigate("/account-verification-status")}
+          standing={userDetails?.standing}
         />
+
+        {isOwner && <AccountRecordSection />}
 
         {confirmedProfileId === id && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">

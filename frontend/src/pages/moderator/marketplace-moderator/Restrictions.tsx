@@ -6,6 +6,7 @@ export default function MarketplaceRestrictions() {
       roleLabel="Marketplace Moderator"
       subtitle="Restrict sellers, issue marketplace violations, and track account activity."
       endpointBase="/api/moderator/restrictions"
+      variant="marketplace"
       accent="rose"
     />
   );

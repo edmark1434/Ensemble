@@ -10,7 +10,6 @@ import {
   ConfirmStatusModal,
   CreditActivityModal,
   HistoryModal,
-  PardonAccountModal,
   TeamOverviewModal,
   VerificationModal,
   WarnAccountModal,
@@ -30,7 +29,6 @@ type ModalKind =
   | 'verification'
   | 'history'
   | 'warn'
-  | 'pardon'
   | 'ban'
   | 'suspend'
   | 'restore'
@@ -270,9 +268,6 @@ export default function TeamsTab({
       case 'warn':
         open(team, 'warn');
         break;
-      case 'pardon':
-        open(team, 'pardon');
-        break;
       case 'export':
         exportAccountJson(`team-${team.handle || team.accountId}.json`, team);
         break;
@@ -444,6 +439,7 @@ export default function TeamsTab({
                         status={team.status}
                         items={buildRowActionItems(team.status, {
                           hasViolations: (team.history?.totalViolations ?? 0) > 0,
+                          forumTimeout: team.forumTimeout,
                         })}
                         onAction={(id) => handleAction(team, id)}
                       />
@@ -505,14 +501,6 @@ export default function TeamsTab({
       )}
       {selected && modal === 'warn' && (
         <WarnAccountModal
-          entityName={selected.name}
-          accountId={selected.accountId}
-          onClose={closeModal}
-          onChanged={() => void refreshAfterChange()}
-        />
-      )}
-      {selected && modal === 'pardon' && (
-        <PardonAccountModal
           entityName={selected.name}
           accountId={selected.accountId}
           onClose={closeModal}

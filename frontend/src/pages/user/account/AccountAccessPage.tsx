@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
+import { AccountRecordSection } from '@/pages/user/7_profile/Displays/AccountStanding';
 
 type TicketRow = {
   id: string;
@@ -145,6 +146,8 @@ export default function AccountAccessPage() {
             'You can sign in only to file an appeal and view your tickets and disputes.'}
         </p>
       </section>
+
+      <AccountRecordSection />
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-zinc-900">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">

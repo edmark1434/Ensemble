@@ -26,6 +26,7 @@ export type PlatformTeam = {
   email: string;
   verificationStatus: string;
   status: string;
+  forumTimeout?: boolean;
   lastSeenAt: string | null;
   createdAt: string | null;
   stats: {
@@ -255,6 +256,7 @@ export type PlatformUserAccount = {
   username: string;
   displayName: string | null;
   status: string;
+  forumTimeout?: boolean;
   meritCredits: number;
   verificationStatus: string;
   joinedAt: string | null;

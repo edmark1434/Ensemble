@@ -5,6 +5,7 @@ import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake
 import { bannerPresetUrl } from "@/lib/profileBanners";
 import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 import { ProfileTags } from "../Utilities/ProfileTags.tsx";
+import { StandingBadges, type PublicStanding } from "./AccountStanding.tsx";
 import useGlobalState from "@/lib/global_state";
 
 interface TopSectionProps {
@@ -51,6 +52,7 @@ interface TopSectionProps {
   onInviteToJobClick?: () => void;
     onReportClick?: () => void;
     onOpenFlipCard?: () => void;
+  standing?: PublicStanding | null;
 }
 
 export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
@@ -90,7 +92,8 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   onFollowingClick,
   onInviteToJobClick,
   onReportClick,
-  onOpenFlipCard
+  onOpenFlipCard,
+  standing,
   }) => {
   const isGuestMode = useGlobalState(state => state.isGuestMode);
   const [isMetadataOpen, setIsMetadataOpen] = useState(false);
@@ -229,6 +232,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             subscriptionType={subscriptionType}
             onEditRole={isOwner ? onEditAccountTags : undefined}
           />
+          <StandingBadges standing={standing} />
 
           {/* Row 2: Full Name Header Block */}
           <div className="relative inline-flex items-center justify-center md:justify-start gap-3 w-full md:w-auto mt-1" ref={dropdownRef}>

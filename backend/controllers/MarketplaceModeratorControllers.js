@@ -156,21 +156,21 @@ async function postViolation(req, res) {
     if (!accountId || !violationType) {
       return res.status(400).json({ success: false, message: 'accountId and type are required' });
     }
-    const data = await issueViolation(accountId, { type: violationType, reason, points, duration: req.body?.duration, days: req.body?.days }, req.session);
+    const data = await issueViolation(accountId, { type: violationType, reason, points, duration: req.body?.duration, days: req.body?.days, endsAt: req.body?.endsAt }, req.session);
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error issuing violation:', err);
-    res.status(500).json({ success: false, message: 'Failed to issue violation' });
+    res.status(err.statusCode || 400).json({ success: false, message: err.message || 'Failed to issue violation' });
   }
 }
 
 async function patchRestriction(req, res) {
   try {
-    const data = await updateAccountRestriction(req.params.id, req.body.status, req.session, { duration: req.body?.duration, days: req.body?.days });
+    const data = await updateAccountRestriction(req.params.id, req.body.action || req.body.status, req.session, { duration: req.body?.duration, days: req.body?.days, endsAt: req.body?.endsAt });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating account restriction:', err);
-    res.status(500).json({ success: false, message: 'Failed to update restriction' });
+    res.status(err.statusCode || 400).json({ success: false, message: err.message || 'Failed to update restriction' });
   }
 }
 

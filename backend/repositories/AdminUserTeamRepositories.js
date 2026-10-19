@@ -54,6 +54,7 @@ function mapUserRow(row) {
     username: row.handle,
     displayName: row.display_name,
     status: normalizeStatus(row.status),
+    forumTimeout: Boolean(row.forum_timeout),
     meritCredits: row.merit_score ?? 0,
     verificationStatus: mapVerificationLabel(row.verification_status),
     joinedAt: row.created_at,
@@ -380,7 +381,17 @@ async function fetchAllUsers() {
       COALESCE(avs.updated_at, v.updated_at) AS verification_updated_at,
       NULL::text AS verified_by_name,
       w.balance_credits,
-      w.frozen_balance_credits
+      w.frozen_balance_credits,
+      EXISTS (
+        SELECT 1 FROM restrictions r
+        WHERE r.account_id = a.account_id
+          AND (
+            LOWER(r.type) IN ('forum_timeout', 'timeout')
+            OR (LOWER(COALESCE(r.module, '')) = 'forum' AND LOWER(r.type) LIKE '%timeout%')
+          )
+          AND r.starts_at <= NOW()
+          AND (r.ends_at IS NULL OR r.ends_at > NOW())
+      ) AS forum_timeout
     FROM users u
     INNER JOIN accounts a ON a.account_id = u.account_id
     LEFT JOIN files f ON f.file_id = a.avatar_file_id
@@ -707,7 +718,17 @@ async function fetchTeamsFromDatabase() {
         SELECT COUNT(*)::int
         FROM team_members tm
         WHERE tm.team_id = t.team_id AND tm.deleted_at IS NULL
-      ) AS member_count
+      ) AS member_count,
+      EXISTS (
+        SELECT 1 FROM restrictions r
+        WHERE r.account_id = a.account_id
+          AND (
+            LOWER(r.type) IN ('forum_timeout', 'timeout')
+            OR (LOWER(COALESCE(r.module, '')) = 'forum' AND LOWER(r.type) LIKE '%timeout%')
+          )
+          AND r.starts_at <= NOW()
+          AND (r.ends_at IS NULL OR r.ends_at > NOW())
+      ) AS forum_timeout
     FROM teams t
     INNER JOIN accounts a ON a.account_id = t.account_id
     LEFT JOIN files f ON f.file_id = a.avatar_file_id
@@ -828,6 +849,7 @@ async function fetchTeamsFromDatabase() {
       email: leader.email || `${(row.handle || 'team').toLowerCase()}@ensemble.app`,
       verificationStatus: mapVerificationLabel(row.verification_status, { forTeam: true }),
       status: normalizeStatus(row.status),
+      forumTimeout: Boolean(row.forum_timeout),
       lastSeenAt: row.created_at,
       createdAt: row.created_at,
       stats: {
@@ -1115,14 +1137,12 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
   const account = await assertAccountExists(accountId);
   const key = String(actionOrStatus || '').toLowerCase();
   const {
-    suspensionEndFromDays,
+    sanctionEndsAt,
     getAccountAccess,
   } = require('../lib/AccountRestriction');
 
-  const duration = String(options.duration || '').toLowerCase();
-
   if (key === 'timeout' || key === 'forum_timeout') {
-    const endsAt = duration === 'permanent' ? null : suspensionEndFromDays(options.days ?? 7);
+    const endsAt = sanctionEndsAt(options, 'temporary');
     await pool.query(
       `
       INSERT INTO restrictions (type, module, starts_at, ends_at, account_id, staff_id)
@@ -1204,15 +1224,9 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
   const status = STATUS_MAP[key] || null;
   if (!status) throw new Error(`Invalid account status action: ${actionOrStatus}`);
 
-  const suspensionEndsAt = status === 'Suspended'
-    ? (duration === 'permanent' ? null : suspensionEndFromDays(options.days ?? 7))
-    : null;
-  const banEndsAt = status === 'Banned'
-    ? (duration === 'temporary' ? suspensionEndFromDays(options.days ?? 7) : null)
-    : null;
-  const lockEndsAt = status === 'Locked'
-    ? (duration === 'temporary' ? suspensionEndFromDays(options.days ?? 7) : null)
-    : null;
+  const suspensionEndsAt = status === 'Suspended' ? sanctionEndsAt(options, 'temporary') : null;
+  const banEndsAt = status === 'Banned' ? sanctionEndsAt(options, 'permanent') : null;
+  const lockEndsAt = status === 'Locked' ? sanctionEndsAt(options, 'permanent') : null;
   await pool.query(
     `
     UPDATE accounts
@@ -1507,7 +1521,7 @@ async function freezeAccountCredits(accountId, freeze = true, staffId = null) {
   };
 }
 
-async function warnAccount(accountId, { type, reason, points, expiresAt, duration, days } = {}, staffId) {
+async function warnAccount(accountId, { type, reason, points, expiresAt, duration, days, endsAt } = {}, staffId) {
   await assertAccountExists(accountId);
   if (!staffId) throw new Error('Staff session required to issue a warning');
 
@@ -1516,7 +1530,7 @@ async function warnAccount(accountId, { type, reason, points, expiresAt, duratio
   const warnReason = String(reason || 'Warning issued by administrator').trim();
   const warnPoints = Number(points) || 1;
   const { warningExpiry } = require('../lib/AccountRestriction');
-  const expiry = warningExpiry({ duration, days, expiresAt, points: warnPoints });
+  const expiry = warningExpiry({ duration, days, expiresAt, endsAt, points: warnPoints });
 
   const inserted = await pool.query(
     `

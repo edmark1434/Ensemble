@@ -446,6 +446,21 @@ async function LogoutUsers(req, res) {
     }
 }
 
+async function getMyStanding(req, res) {
+    try {
+        const accountId = req.session?.account_id || req.session?.accountId;
+        if (!accountId) {
+            return res.status(401).json({ success: false, message: 'Sign in to view your account record.' });
+        }
+        const { getOwnAccountRecord } = require('../lib/AccountRestriction');
+        const data = await getOwnAccountRecord(accountId);
+        return res.status(200).json({ success: true, data });
+    } catch (err) {
+        console.error('Error loading account standing:', err);
+        return res.status(500).json({ success: false, message: 'Could not load your account record.' });
+    }
+}
+
 async function getCurrentUser(req, res) {
     let sessionUser = req.session || null;
     if (sessionUser && (sessionUser.account_id || sessionUser.accountId)) {
@@ -852,6 +867,7 @@ module.exports = {
     refreshToken,
     LogoutUsers,
     getCurrentUser,
+    getMyStanding,
     CheckUserRole,
     getUsersByListOfIdsController,
     getNameByUserIdController,

@@ -6,6 +6,7 @@ export default function ForumRestrictions() {
       roleLabel="Forum Moderator"
       subtitle="Enforce forum policy with violations, account holds, and the live account activity feed."
       endpointBase="/api/moderator/forum/restrictions"
+      variant="forum"
       accent="violet"
     />
   );

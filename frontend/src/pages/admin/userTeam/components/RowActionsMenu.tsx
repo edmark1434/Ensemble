@@ -55,7 +55,7 @@ function iconForAction(id: string) {
       return Ban;
     case 'unban':
     case 'unsuspend':
-    case 'pardon':
+    case 'clear_timeout':
       return ShieldCheck;
     case 'unlock':
       return Unlock;

@@ -26,6 +26,7 @@ const {
 const SupportModerator = require('../controllers/SupportModeratorControllers');
 const ForumModerator = require('../controllers/ForumModeratorControllers');
 const JobsModerator = require('../controllers/JobsModeratorControllers');
+const { lookupRestrictionAccounts } = require('../controllers/RestrictionDeskControllers');
 const {
   patchAdminTicketMessage,
   deleteAdminTicketMessage,
@@ -72,6 +73,7 @@ router.patch('/tickets/:id/messages/:messageId', [checkSession, marketplaceModer
 router.delete('/tickets/:id/messages/:messageId', [checkSession, marketplaceModerator], deleteAdminTicketMessage);
 
 router.get('/restrictions', [checkSession, marketplaceModerator], getRestrictions);
+router.get('/restrictions/lookup', [checkSession, marketplaceModerator], lookupRestrictionAccounts);
 router.post('/restrictions/violations', [checkSession, marketplaceModerator], postViolation);
 router.patch('/restrictions/accounts/:id', [checkSession, marketplaceModerator], patchRestriction);
 
@@ -93,6 +95,7 @@ router.patch('/support/disputes/:id', [checkSession, supportModerator], SupportM
 router.post('/support/disputes/:id/messages', [checkSession, supportModerator], SupportModerator.postDisputeMessage);
 router.patch('/support/disputes/:id/messages/:messageId', [checkSession, supportModerator], SupportModerator.patchDisputeMessage);
 router.get('/support/restrictions', [checkSession, supportModerator], SupportModerator.getRestrictions);
+router.get('/support/restrictions/lookup', [checkSession, supportModerator], lookupRestrictionAccounts);
 router.post('/support/restrictions/violations', [checkSession, supportModerator], SupportModerator.postViolation);
 router.patch('/support/restrictions/accounts/:id', [checkSession, supportModerator], SupportModerator.patchRestriction);
 
@@ -124,6 +127,7 @@ router.get('/forum/discussions/:id', [checkSession, forumModerator], ForumModera
 router.patch('/forum/discussions/:id', [checkSession, forumModerator], ForumModerator.patchDiscussion);
 router.delete('/forum/discussions/:id/comments/:commentId', [checkSession, forumModerator], ForumModerator.deleteComment);
 router.get('/forum/restrictions', [checkSession, forumModerator], ForumModerator.getRestrictions);
+router.get('/forum/restrictions/lookup', [checkSession, forumModerator], lookupRestrictionAccounts);
 router.post('/forum/restrictions/violations', [checkSession, forumModerator], ForumModerator.postViolation);
 router.patch('/forum/restrictions/accounts/:id', [checkSession, forumModerator], ForumModerator.patchRestriction);
 
@@ -152,6 +156,7 @@ router.get('/jobs/postings/:type/:id', [checkSession, jobsModerator], JobsModera
 router.patch('/jobs/postings/:type/:id', [checkSession, jobsModerator], JobsModerator.patchPosting);
 router.get('/jobs/users/:accountId/history', [checkSession, jobsModerator], JobsModerator.getUserHistory);
 router.get('/jobs/restrictions', [checkSession, jobsModerator], JobsModerator.getRestrictions);
+router.get('/jobs/restrictions/lookup', [checkSession, jobsModerator], lookupRestrictionAccounts);
 router.post('/jobs/restrictions/violations', [checkSession, jobsModerator], JobsModerator.postViolation);
 router.patch('/jobs/restrictions/accounts/:id', [checkSession, jobsModerator], JobsModerator.patchRestriction);
 

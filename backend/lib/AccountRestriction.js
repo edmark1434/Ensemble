@@ -82,6 +82,29 @@ function cookieClearOptions() {
   };
 }
 
+function sanctionEndsAt(options = {}, defaultMode = 'permanent') {
+  const duration = String(options.duration || defaultMode).toLowerCase();
+  if (duration !== 'temporary') return null;
+  if (options.endsAt) {
+    const date = new Date(options.endsAt);
+    if (Number.isNaN(date.getTime())) {
+      const error = new Error('Choose a valid end time');
+      error.statusCode = 400;
+      throw error;
+    }
+    if (date.getTime() <= Date.now()) {
+      const error = new Error('The end time has to be in the future');
+      error.statusCode = 400;
+      throw error;
+    }
+    return date;
+  }
+  if (options.days != null && options.days !== '') return suspensionEndFromDays(options.days);
+  const error = new Error('Choose how long this lasts');
+  error.statusCode = 400;
+  throw error;
+}
+
 function suspensionEndFromDays(days) {
   const parsed = Number(days);
   const chosen = Number.isFinite(parsed) && parsed > 0
@@ -140,12 +163,13 @@ async function liftExpiredSuspension(accountId) {
   );
 }
 
-function warningExpiry({ duration, days, expiresAt, points } = {}) {
-  const mode = String(duration || '').toLowerCase();
+function warningExpiry({ duration, days, expiresAt, endsAt, points } = {}) {
+  const mode = String(duration || 'temporary').toLowerCase();
   if (mode === 'permanent') return null;
-  if (expiresAt != null && expiresAt !== '') return new Date(expiresAt);
-  if (days != null && days !== '' && Number(days) > 0) return suspensionEndFromDays(days);
-  return suspensionEndFromDays(Math.max(1, Number(points) || 1) * 30);
+  return sanctionEndsAt(
+    { duration: 'temporary', endsAt: endsAt || expiresAt, days: days ?? (Math.max(1, Number(points) || 1) * 30) },
+    'temporary'
+  );
 }
 
 async function activeForumTimeout(accountId) {
@@ -283,8 +307,139 @@ function requestPath(req) {
   return String(req.originalUrl || req.url || '').split('?')[0];
 }
 
+const FORUM_TIMEOUT_MATCH = `
+  (
+    LOWER(r.type) IN ('forum_timeout', 'timeout')
+    OR (LOWER(COALESCE(r.module, '')) = 'forum' AND LOWER(r.type) LIKE '%timeout%')
+  )
+  AND r.starts_at <= NOW()
+  AND (r.ends_at IS NULL OR r.ends_at > NOW())
+`;
+
+function publicStandingFromRow(row) {
+  if (!row) return null;
+  const status = row.status || 'Active';
+  const normalized = normalizeAccountStatus(status);
+  const endsAt = normalized === 'banned'
+    ? row.ban_ends_at
+    : normalized === 'suspended'
+      ? row.suspension_ends_at
+      : normalized === 'locked'
+        ? row.lock_ends_at
+        : null;
+  return {
+    status,
+    endsAt: endsAt || null,
+    forumTimeout: Boolean(row.forum_timeout),
+    forumTimeoutEndsAt: row.timeout_ends_at || null,
+  };
+}
+
+async function getPublicAccountStanding(accountId) {
+  const result = await pool.query(
+    `
+    SELECT
+      a.status,
+      a.suspension_ends_at,
+      a.ban_ends_at,
+      a.lock_ends_at,
+      EXISTS (
+        SELECT 1 FROM restrictions r
+        WHERE r.account_id = a.account_id AND ${FORUM_TIMEOUT_MATCH}
+      ) AS forum_timeout,
+      (
+        SELECT r.ends_at
+        FROM restrictions r
+        WHERE r.account_id = a.account_id AND ${FORUM_TIMEOUT_MATCH}
+        ORDER BY r.created_at DESC
+        LIMIT 1
+      ) AS timeout_ends_at
+    FROM accounts a
+    WHERE a.account_id = $1
+    `,
+    [accountId]
+  );
+  return publicStandingFromRow(result.rows[0]);
+}
+
+async function getOwnAccountRecord(accountId) {
+  const standing = await getPublicAccountStanding(accountId);
+  const [warnings, restrictions, activity] = await Promise.all([
+    pool.query(
+      `
+      SELECT violation_id, violation_number, type, reason, points, status, created_at, expires_at
+      FROM violations
+      WHERE account_id = $1 AND deleted_at IS NULL
+      ORDER BY created_at DESC
+      LIMIT 40
+      `,
+      [accountId]
+    ),
+    pool.query(
+      `
+      SELECT restriction_id, type, module, starts_at, ends_at, created_at
+      FROM restrictions
+      WHERE account_id = $1
+      ORDER BY created_at DESC
+      LIMIT 20
+      `,
+      [accountId]
+    ),
+    pool.query(
+      `
+      SELECT action, event_code, created_at, metadata
+      FROM account_activity
+      WHERE account_id = $1
+        AND (
+          event_code IN (
+            'ACCOUNT_STATUS_CHANGED',
+            'FORUM_TIMEOUT',
+            'VIOLATION_ISSUED',
+            'WARNING_ISSUED',
+            'WARNING_RESCINDED'
+          )
+          OR event_code LIKE '%TIMEOUT%'
+          OR event_code LIKE '%RESTRICTION%'
+        )
+      ORDER BY created_at DESC
+      LIMIT 30
+      `,
+      [accountId]
+    ),
+  ]);
+
+  return {
+    ...(standing || { status: 'Active', endsAt: null, forumTimeout: false, forumTimeoutEndsAt: null }),
+    warnings: warnings.rows.map((row) => ({
+      id: row.violation_id,
+      number: row.violation_number,
+      type: row.type,
+      reason: row.reason,
+      points: row.points,
+      status: row.status,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+    })),
+    restrictions: restrictions.rows.map((row) => ({
+      id: row.restriction_id,
+      type: row.type,
+      module: row.module,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      createdAt: row.created_at,
+    })),
+    activity: activity.rows.map((row) => ({
+      action: row.action,
+      eventCode: row.event_code,
+      createdAt: row.created_at,
+      endsAt: row.metadata?.expiresAt || row.metadata?.endsAt || null,
+    })),
+  };
+}
+
 const BANNED_READ_ALLOWLIST = [
   /^\/api\/users\/me$/,
+  /^\/api\/users\/me\/standing$/,
   /^\/api\/users\/session$/,
   /^\/api\/users\/check-user-role$/,
   /^\/api\/users\/ticket-catalog$/,
@@ -430,11 +585,14 @@ module.exports = {
   FORUM_TIMEOUT_MESSAGE,
   DEFAULT_SUSPENSION_DAYS,
   getAccountAccess,
+  getPublicAccountStanding,
+  getOwnAccountRecord,
   rejectRestrictedAccount,
   rejectSuspendedWrite,
   rejectForumTimeout,
   clearAuthSession,
   suspensionEndFromDays,
   timeoutEndFromDays,
+  sanctionEndsAt,
   warningExpiry,
 };

@@ -6,6 +6,7 @@ export default function SupportRestrictions() {
       roleLabel="Support Moderator"
       subtitle="Issue violations, manage account restrictions, and review the shared account activity timeline."
       endpointBase="/api/moderator/support/restrictions"
+      variant="support"
       accent="sky"
     />
   );

@@ -72,6 +72,7 @@ async function patchAdminAccountStatus(req, res) {
     const data = await updateAccountStatus(accountId, action, staffIdFromSession(req.session), {
       days: req.body?.days,
       duration: req.body?.duration,
+      endsAt: req.body?.endsAt,
     });
     const message = data.forumTimeout
       ? 'Forum timeout applied'
@@ -195,6 +196,7 @@ async function postAdminAccountWarn(req, res) {
         expiresAt: req.body?.expiresAt,
         duration: req.body?.duration,
         days: req.body?.days,
+        endsAt: req.body?.endsAt,
       },
       staffIdFromSession(req.session)
     );

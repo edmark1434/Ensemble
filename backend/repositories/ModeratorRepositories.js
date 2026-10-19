@@ -20,18 +20,39 @@ function isViolationActive(row, now = Date.now()) {
   return true;
 }
 
+const FORUM_TIMEOUT_MATCH = `
+  (
+    LOWER(r.type) IN ('forum_timeout', 'timeout')
+    OR (LOWER(COALESCE(r.module, '')) = 'forum' AND LOWER(r.type) LIKE '%timeout%')
+  )
+  AND r.starts_at <= NOW()
+  AND (r.ends_at IS NULL OR r.ends_at > NOW())
+`;
+
+function mapDeskAccount(row) {
+  return {
+    accountId: row.account_id,
+    name: row.display_name || 'Unknown',
+    handle: row.handle || '',
+    email: row.email_address || null,
+    legalName: row.legal_name || null,
+    type: row.account_type || null,
+    status: row.account_status || row.status || 'Active',
+    forumTimeout: Boolean(row.forum_timeout),
+    suspensionEndsAt: row.suspension_ends_at || null,
+    banEndsAt: row.ban_ends_at || null,
+    lockEndsAt: row.lock_ends_at || null,
+    timeoutEndsAt: row.timeout_ends_at || null,
+  };
+}
+
 function mapViolationRow(row) {
   const active = isViolationActive(row);
   const pastExpiry = Boolean(row.expires_at && new Date(row.expires_at).getTime() <= Date.now());
   return {
     id: row.violation_id,
     number: row.violation_number,
-    account: {
-      accountId: row.account_id,
-      name: row.display_name || 'Unknown',
-      handle: row.handle || '—',
-      status: row.account_status,
-    },
+    account: mapDeskAccount(row),
     type: row.type || 'warning',
     reason: row.reason,
     points: row.points,
@@ -43,16 +64,45 @@ function mapViolationRow(row) {
   };
 }
 
+const ACCOUNT_DESK_SELECT = `
+  a.account_id,
+  a.display_name,
+  a.handle,
+  a.status AS account_status,
+  a.type AS account_type,
+  a.suspension_ends_at,
+  a.ban_ends_at,
+  a.lock_ends_at,
+  u.email_address,
+  NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), '') AS legal_name,
+  EXISTS (
+    SELECT 1 FROM restrictions r
+    WHERE r.account_id = a.account_id AND ${FORUM_TIMEOUT_MATCH}
+  ) AS forum_timeout,
+  (
+    SELECT r.ends_at
+    FROM restrictions r
+    WHERE r.account_id = a.account_id AND ${FORUM_TIMEOUT_MATCH}
+    ORDER BY r.created_at DESC
+    LIMIT 1
+  ) AS timeout_ends_at
+`;
+
 async function getViolationsAndRestrictions() {
   const result = await pool.query(`
     SELECT
       v.*,
-      a.display_name,
-      a.handle,
-      a.status AS account_status,
+      ${ACCOUNT_DESK_SELECT},
       COALESCE(sa.display_name, s.first_name || ' ' || s.last_name) AS issued_by_name
     FROM violations v
     LEFT JOIN accounts a ON a.account_id = v.account_id
+    LEFT JOIN LATERAL (
+      SELECT email_address, first_name, last_name
+      FROM users
+      WHERE account_id = a.account_id
+      ORDER BY user_id
+      LIMIT 1
+    ) u ON TRUE
     LEFT JOIN staff s ON s.staff_id = v.staff_id
     LEFT JOIN accounts sa ON sa.account_id = s.account_id
     ORDER BY v.created_at DESC
@@ -60,32 +110,77 @@ async function getViolationsAndRestrictions() {
   `);
 
   const restrictedResult = await pool.query(`
-    SELECT account_id, display_name, handle, status
-    FROM accounts
-    WHERE LOWER(status) IN ('suspended', 'banned', 'locked')
-    ORDER BY display_name
+    SELECT ${ACCOUNT_DESK_SELECT}
+    FROM accounts a
+    LEFT JOIN LATERAL (
+      SELECT email_address, first_name, last_name
+      FROM users
+      WHERE account_id = a.account_id
+      ORDER BY user_id
+      LIMIT 1
+    ) u ON TRUE
+    WHERE a.deleted_at IS NULL
+      AND (
+        LOWER(a.status) IN ('suspended', 'banned', 'locked')
+        OR EXISTS (
+          SELECT 1 FROM restrictions r
+          WHERE r.account_id = a.account_id AND ${FORUM_TIMEOUT_MATCH}
+        )
+      )
+    ORDER BY a.display_name
   `);
 
   const recentActivity = await listRecentAccountActivity({ limit: 40 });
 
   return {
     violations: result.rows.map(mapViolationRow),
-    restrictedAccounts: restrictedResult.rows.map((r) => ({
-      accountId: r.account_id,
-      name: r.display_name,
-      handle: r.handle,
-      status: r.status,
-    })),
+    restrictedAccounts: restrictedResult.rows.map(mapDeskAccount),
     recentActivity,
   };
 }
 
-async function issueViolation(accountId, { type, reason, points, expiresAt, duration, days }, staffSession) {
+async function searchRestrictionAccounts(query) {
+  const term = String(query || '').trim();
+  if (term.length < 2) return [];
+  const like = `%${term.replace(/[%_\\]/g, '\\$&')}%`;
+  const result = await pool.query(
+    `
+    SELECT
+      ${ACCOUNT_DESK_SELECT}
+    FROM accounts a
+    LEFT JOIN LATERAL (
+      SELECT email_address, first_name, middle_name, last_name
+      FROM users
+      WHERE account_id = a.account_id
+      ORDER BY user_id
+      LIMIT 1
+    ) u ON TRUE
+    WHERE a.deleted_at IS NULL
+      AND (
+        a.display_name ILIKE $1 ESCAPE '\\'
+        OR a.handle ILIKE $1 ESCAPE '\\'
+        OR a.account_id::text ILIKE $1 ESCAPE '\\'
+        OR COALESCE(u.email_address, '') ILIKE $1 ESCAPE '\\'
+        OR COALESCE(u.first_name, '') ILIKE $1 ESCAPE '\\'
+        OR COALESCE(u.middle_name, '') ILIKE $1 ESCAPE '\\'
+        OR COALESCE(u.last_name, '') ILIKE $1 ESCAPE '\\'
+        OR TRIM(CONCAT_WS(' ', u.first_name, u.middle_name, u.last_name)) ILIKE $1 ESCAPE '\\'
+        OR COALESCE(a.type, '') ILIKE $1 ESCAPE '\\'
+      )
+    ORDER BY a.display_name NULLS LAST
+    LIMIT 8
+    `,
+    [like]
+  );
+  return result.rows.map(mapDeskAccount);
+}
+
+async function issueViolation(accountId, { type, reason, points, expiresAt, duration, days, endsAt }, staffSession) {
   const violationNumber = `VIO-${Date.now().toString().slice(-8)}`;
   const violationType = String(type || 'warning').trim() || 'warning';
   const warnPoints = Number(points) || 1;
   const { warningExpiry } = require('../lib/AccountRestriction');
-  const expiry = warningExpiry({ duration, days, expiresAt, points: warnPoints });
+  const expiry = warningExpiry({ duration, days, expiresAt, endsAt, points: warnPoints });
   const staffId = staffSession?.staff_id || staffSession?.staffId || null;
 
   const inserted = await pool.query(
@@ -194,15 +289,20 @@ async function issueRestriction(
 }
 
 async function updateAccountRestriction(accountId, status, staffSession = null, options = {}) {
-  const allowed = ['active', 'suspended', 'banned', 'locked'];
-  const normalized = String(status || '').toLowerCase();
-  if (!allowed.includes(normalized)) {
-    throw new Error(`Invalid restriction status: ${status}`);
-  }
+  const raw = String(status || '').trim().toLowerCase();
+  const aliases = {
+    suspended: 'suspend',
+    banned: 'ban',
+    locked: 'lock',
+    active: 'restore',
+  };
+  const action = aliases[raw] || raw;
+  const { assertStatusActionAllowed } = require('../lib/UserTeamPermissions');
+  assertStatusActionAllowed(staffSession, action);
 
   const { updateAccountStatus } = require('./AdminUserTeamRepositories');
   const staffId = staffSession?.staff_id || staffSession?.staffId || null;
-  await updateAccountStatus(accountId, normalized, staffId, options);
+  await updateAccountStatus(accountId, action, staffId, options);
   return getViolationsAndRestrictions();
 }
 
@@ -210,6 +310,7 @@ module.exports = {
   violationExpiryFromPoints,
   isViolationActive,
   getViolationsAndRestrictions,
+  searchRestrictionAccounts,
   issueViolation,
   issueRestriction,
   updateAccountRestriction,

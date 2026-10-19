@@ -13,7 +13,6 @@ import {
   ConfirmStatusModal,
   CreditActivityModal,
   HistoryModal,
-  PardonAccountModal,
   UserOverviewModal,
   VerificationModal,
   WarnAccountModal,
@@ -47,7 +46,6 @@ type ModalKind =
   | 'verification'
   | 'history'
   | 'warn'
-  | 'pardon'
   | 'ban'
   | 'suspend'
   | 'restore'
@@ -284,8 +282,7 @@ export default function UsersTab({
     const isPrimary = capabilities.primaryActions.has(actionId);
     const isStatus =
       capabilities.statusActions.has(actionId) ||
-      (actionId === 'warn' && capabilities.canWarn) ||
-      (actionId === 'pardon' && capabilities.canPardon);
+      (actionId === 'warn' && capabilities.canWarn);
     if (!isPrimary && !isStatus) return;
 
     switch (actionId) {
@@ -303,9 +300,6 @@ export default function UsersTab({
         break;
       case 'warn':
         open(user, 'warn');
-        break;
-      case 'pardon':
-        open(user, 'pardon');
         break;
       case 'export':
         exportAccountJson(`user-${user.username || user.accountId}.json`, user);
@@ -484,6 +478,7 @@ export default function UsersTab({
                         status={user.status}
                         items={buildRowActionItems(user.status, {
                           hasViolations: (user.history?.totalViolations ?? 0) > 0,
+                          forumTimeout: user.forumTimeout,
                           capabilities,
                         })}
                         onAction={(id) => handleAction(user, id)}
@@ -549,14 +544,6 @@ export default function UsersTab({
       )}
       {selected && modal === 'warn' && capabilities.canWarn && (
         <WarnAccountModal
-          entityName={selected.name}
-          accountId={selected.accountId}
-          onClose={closeModal}
-          onChanged={() => void refreshAfterChange()}
-        />
-      )}
-      {selected && modal === 'pardon' && capabilities.canPardon && (
-        <PardonAccountModal
           entityName={selected.name}
           accountId={selected.accountId}
           onClose={closeModal}

@@ -1,13 +1,14 @@
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 
-type ActionOptions = { silent?: boolean; days?: number | null; duration?: 'temporary' | 'permanent' };
+type ActionOptions = { silent?: boolean; days?: number | null; duration?: 'temporary' | 'permanent'; endsAt?: string | null };
 
 export async function setAccountStatus(accountId: string, action: string, options?: ActionOptions) {
   const res = await api.patch(`/api/admin/accounts/${accountId}/status`, {
     action,
     days: options?.days,
     duration: options?.duration,
+    endsAt: options?.endsAt,
   });
   if (!res.data?.success) throw new Error(res.data?.message || 'Status update failed');
   if (!options?.silent) {
@@ -65,7 +66,7 @@ export async function freezeAccountCredits(
 
 export async function warnAccount(
   accountId: string,
-  payload: { type?: string; reason?: string; points?: number; expiresAt?: string; duration?: 'temporary' | 'permanent'; days?: number | null },
+  payload: { type?: string; reason?: string; points?: number; expiresAt?: string; endsAt?: string | null; duration?: 'temporary' | 'permanent'; days?: number | null },
   options?: ActionOptions
 ) {
   const res = await api.post(`/api/admin/accounts/${accountId}/warn`, payload);

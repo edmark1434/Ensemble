@@ -10,6 +10,7 @@ const {
     refreshToken,
     LogoutUsers,
     getCurrentUser,
+    getMyStanding,
     CheckUserRole,
     getUsersByListOfIdsController,
     getNameByUserIdController,
@@ -45,6 +46,7 @@ const {
 router.get('/', [checkSession, requireAuth], getAllUsers);
 
 router.get('/me', [checkSession],getCurrentUser);
+router.get('/me/standing', [checkSession], getMyStanding);
 
 router.post('/signup', signup);
 

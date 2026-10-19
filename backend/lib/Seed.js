@@ -283,12 +283,11 @@ async function seedSampleJobs(userAccountIds) {
 async function resetSeedTables() {
   // Prefer clearing portal + auth + demo domain tables. CASCADE handles FKs.
   // Keep migration catalogs (plans, tags, surveys, ticket_*_catalog, files/system_files).
-  // Support tickets are not seeded. Account reset still clears ticket rows that reference those accounts.
+  // Support tickets, disputes, and reports are not seeded. Account reset still clears rows that reference those accounts.
   try {
     await pool.query(`
       TRUNCATE TABLE
         credit_transactions,
-        reports,
         marketplace_listings,
         configuration,
         violations,
@@ -400,130 +399,9 @@ async function seedMarketplaceListings(userAccountIds, staffByRole) {
 async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   const supportStaffId = staffByRole['Support Moderator'];
   const adminStaffId = staffByRole.Admin;
-  const marketplaceStaffId = staffByRole['Marketplace Moderator'] || supportStaffId;
-  const jobsStaffId = staffByRole['Jobs N Gigs Moderator'] || staffByRole['Jobs Moderator'] || supportStaffId;
-  const forumStaffId = staffByRole['Forum Moderator'] || supportStaffId;
-
-  // Platform report samples for every staff desk.
-  // Specialist queues filter by target_type; Support + Admin see all.
-  // Tuple fields: reporterIdx, targetType, targetId, type, description, status, priority, prefix, assigneeRole
-  const reportBlueprints = [
-    // ── Forum queue ──────────────────────────────────────────────────────
-    [0, 'member', 'u-forum-01', 'Harassment', 'Repeated hostile messages in a critique thread after feedback.\n@noisy_creator', 'open', 'high', 'forum', null],
-    [2, 'group', 'fg-12', 'Spam', 'Group flooded with promotional invite links.\nDesign Critique Hub', 'in_review', 'medium', 'forum', 'Forum Moderator'],
-    [5, 'discussion', 'd-44', 'Misinformation', 'Discussion spreads false claims about another editor.\nLate delivery thread', 'open', 'low', 'forum', null],
-    [3, 'member', 'u-forum-02', 'Harassment', 'Threats referenced in forum chat and DMs.\n@quiet_dev', 'open', 'high', 'forum', 'Forum Moderator'],
-    [1, 'comment', 'cmt-901', 'Hate speech', 'Comment insults another member with slurs.\nReply on Showcase #18', 'open', 'high', 'forum', null],
-    [4, 'post', 'post-220', 'Spam', 'Same promotional post pasted across three groups.\nWeekly reel dump', 'dismissed', 'medium', 'forum', 'Admin'],
-    [0, 'thread', 'thr-77', 'Other', 'Off-topic personal attacks derailing the thread.\nClient rate debate', 'resolved', 'low', 'forum', 'Forum Moderator'],
-
-    // ── Marketplace queue ────────────────────────────────────────────────
-    [1, 'listing', 'LST-204', 'Scam', 'Buyer paid credits but never received the asset files.\nNeon LUT Pack', 'open', 'high', 'marketplace', null],
-    [4, 'seller', 'u-9', 'Copyright', 'Seller reuploads stolen marketplace packs as originals.\n@asset_booth', 'in_review', 'high', 'marketplace', 'Marketplace Moderator'],
-    [2, 'listing', 'LST-318', 'Misleading', 'Preview audio does not match delivered files.\nCinematic SFX Bundle', 'open', 'medium', 'marketplace', null],
-    [5, 'purchase', 'ORD-8821', 'Non-delivery', 'Purchase stuck in pending delivery for 9 days.\nOrder #8821', 'open', 'high', 'marketplace', 'Marketplace Moderator'],
-    [3, 'asset', 'AST-55', 'Quality', 'Corrupt zip and missing license file after download.\nGrain Overlay Pack v2', 'resolved', 'medium', 'marketplace', 'Admin'],
-    [0, 'marketplace', 'mkt-policy', 'Other', 'General complaint about fake “verified seller” badges.\nMarketplace policy', 'dismissed', 'low', 'marketplace', 'Support Moderator'],
-
-    // ── Jobs & Gigs queue ────────────────────────────────────────────────
-    [0, 'job', 'JOB-118', 'Inappropriate', 'Job post includes abusive requirements and contact spam.\nNeed motion editor ASAP', 'open', 'medium', 'jobs', null],
-    [2, 'gig', 'GIG-55', 'Misleading', 'Gig promises impossible delivery and uses fake samples.\nThumbnail design in 24h', 'open', 'high', 'jobs', 'Jobs N Gigs Moderator'],
-    [1, 'contract', 'CTR-440', 'Harassment', 'Client left hostile comments after milestone rejection.\nWedding film contract', 'in_review', 'high', 'jobs', null],
-    [4, 'application', 'APP-903', 'Spam', 'Applicant mass-sent identical proposals with phishing links.\nProposal on JOB-90', 'open', 'medium', 'jobs', 'Jobs N Gigs Moderator'],
-    [5, 'gig', 'GIG-201', 'Scam', 'Gig asks for off-platform payment before starting.\nColor grade overnight', 'open', 'high', 'jobs', null],
-    [3, 'feedback', 'FB-66', 'Other', 'Reported as retaliatory 1-star after a resolved dispute.\nUnfair feedback on CTR-12', 'resolved', 'low', 'jobs', 'Admin'],
-
-    // ── Support / Admin cross-cutting (not in specialist scopes) ─────────
-    [4, 'team', 'team-2', 'Impersonation', 'Member posing as official Ensemble support in team chat.\nGraphitee', 'open', 'high', 'support', 'Support Moderator'],
-    [1, 'account', 'acc-user-7', 'Account abuse', 'Multiple ban-evasion accounts linked to the same person.\n@seller_x', 'in_review', 'high', 'support', 'Admin'],
-    [2, 'profile', 'prof-18', 'Impersonation', 'Profile photo and bio copy a known creator brand.\n@mirror_edit', 'open', 'medium', 'support', null],
-    [0, 'team', 'team-9', 'Harassment', 'Team owner bullying members after leaving a contract.\nNightshift Collective', 'open', 'high', 'support', 'Support Moderator'],
-    [5, 'account', 'acc-user-3', 'Spam', 'Account used only to mass-DM promotional links.\n@alt_spam', 'resolved', 'medium', 'support', 'Admin'],
-  ];
-
-  const assigneeByRole = {
-    Admin: adminStaffId,
-    'Support Moderator': supportStaffId,
-    'Forum Moderator': forumStaffId,
-    'Marketplace Moderator': marketplaceStaffId,
-    'Jobs N Gigs Moderator': jobsStaffId,
-    'Jobs Moderator': jobsStaffId,
-  };
-
-  const reports = reportBlueprints.map((row, i) => {
-    const [
-      reporterIdx,
-      targetType,
-      targetId,
-      type,
-      description,
-      status,
-      priority,
-      prefix,
-      assigneeRole,
-    ] = row;
-    return {
-      number: `RPT-${String(10001 + i).padStart(5, '0')}`,
-      reporterAccountId: userAccountIds[reporterIdx % userAccountIds.length],
-      targetAccountId: userAccountIds[(reporterIdx + 2) % userAccountIds.length],
-      targetType,
-      targetId,
-      type,
-      description,
-      status,
-      priority,
-      prefix,
-      assigneeId:
-        status === 'resolved' || status === 'dismissed'
-          ? assigneeByRole[assigneeRole] || adminStaffId
-          : assigneeRole
-            ? assigneeByRole[assigneeRole] || null
-            : null,
-    };
-  });
-
-  const reportIds = [];
-  for (let i = 0; i < reports.length; i++) {
-    const r = reports[i];
-    const res = await pool.query(
-      `INSERT INTO reports (
-        report_number, by_account_id, for_account_id,
-        target_type, target_id,
-        description, status, priority, assigned_staff_id, created_at, updated_at,
-        type, reference_table, reference_prefix, reference_id, is_created_by_bot
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9,
-        NOW() - ($10 || ' hours')::interval,
-        NOW() - ($10 || ' hours')::interval,
-        $11, $4, $12, $13, false
-      )
-      RETURNING report_id`,
-      [
-        r.number,
-        r.reporterAccountId,
-        r.targetAccountId,
-        r.targetType,
-        r.targetId,
-        r.description,
-        r.status,
-        r.priority,
-        r.assigneeId,
-        String(4 + i * 3),
-        r.type,
-        r.prefix,
-        String(r.targetId).slice(0, 50),
-      ]
-    );
-    reportIds.push(res.rows[0].report_id);
-  }
-
-  console.log(
-    `✅ Seeded ${reports.length} reports (forum / marketplace / jobs / support+admin samples)`
-  );
-
   const violations = [
     ['VIO-21034', userAccountIds[3], 'Spam posting', 'Automated flag: duplicate promo links.', 2, adminStaffId],
-    ['VIO-21035', userAccountIds[0], 'Harassment warning', 'Report RPT-10001 substantiated — first warning.', 3, supportStaffId],
+    ['VIO-21035', userAccountIds[0], 'Harassment warning', 'Substantiated harassment report — first warning.', 3, supportStaffId],
   ];
 
   for (const v of violations) {
@@ -540,7 +418,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     );
   }
 
-  console.log(`✅ Seeded ${reports.length} reports`);
 }
 
 async function seedTeams(userAccountIds) {

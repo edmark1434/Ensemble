@@ -5,7 +5,6 @@ import { showErrorToast } from '@/components/utility/toast';
 import {
   freezeAccountCredits,
   handleAccountActionError,
-  pardonAccount,
   rescindWarning,
   setAccountVerification,
   warnAccount,
@@ -18,6 +17,7 @@ import type {
   VerificationDetail,
 } from '../userTeamTypes';
 import { getBusinessDocumentLabel } from '@/pages/user/9_verification/businessVerificationConfig';
+import { SanctionScheduleFields, type SanctionTiming } from './SanctionSchedule';
 
 function formatDateTime(value: string | null) {
   if (!value) return '—';
@@ -123,14 +123,15 @@ export function ConfirmStatusModal({
   entityName: string;
   action: 'ban' | 'suspend' | 'restore' | 'lock' | 'unban' | 'unsuspend' | 'unlock' | 'timeout' | 'clear_timeout';
   onClose: () => void;
-  onConfirm: (options?: { days?: number | null; duration?: 'temporary' | 'permanent' }) => Promise<void>;
+  onConfirm: (options?: { duration?: 'temporary' | 'permanent'; endsAt?: string | null }) => Promise<void>;
 }) {
   const [saving, setSaving] = useState(false);
   const choosesDuration = action === 'ban' || action === 'suspend' || action === 'lock' || action === 'timeout';
-  const [duration, setDuration] = useState<'temporary' | 'permanent'>(
-    action === 'ban' || action === 'lock' ? 'permanent' : 'temporary'
-  );
-  const [days, setDays] = useState('7');
+  const [timing, setTiming] = useState<SanctionTiming>({
+    duration: action === 'ban' || action === 'lock' ? 'permanent' : 'temporary',
+    endsAt: null,
+    summary: '',
+  });
   const labels = {
     ban: { title: 'Ban account', verb: 'ban', result: 'Banned', tone: 'bg-rose-500/90 hover:bg-rose-500' },
     suspend: {
@@ -199,15 +200,13 @@ export function ConfirmStatusModal({
           </button>
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || (choosesDuration && timing.duration === 'temporary' && !timing.endsAt)}
             onClick={async () => {
               setSaving(true);
               try {
-                const parsed = Number(days);
-                const chosenDays = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 7;
                 await onConfirm(
                   choosesDuration
-                    ? { duration, days: duration === 'temporary' ? chosenDays : null }
+                    ? { duration: timing.duration, endsAt: timing.endsAt }
                     : undefined
                 );
                 onClose();
@@ -238,108 +237,11 @@ export function ConfirmStatusModal({
                   : 'The account will regain normal platform access.'}
       </p>
       {choosesDuration && (
-        <div className="mt-4 space-y-3">
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setDuration('temporary')}
-              className={`rounded-xl border px-3 py-2 text-sm ${duration === 'temporary' ? 'border-white/30 bg-white/10 text-white' : 'border-white/10 text-zinc-400'}`}
-            >
-              Temporary
-            </button>
-            <button
-              type="button"
-              onClick={() => setDuration('permanent')}
-              className={`rounded-xl border px-3 py-2 text-sm ${duration === 'permanent' ? 'border-white/30 bg-white/10 text-white' : 'border-white/10 text-zinc-400'}`}
-            >
-              Permanent
-            </button>
-          </div>
-          {duration === 'temporary' ? (
-            <label className="block text-sm text-zinc-300">
-              Days
-              <input
-                type="number"
-                min={1}
-                max={365}
-                value={days}
-                onChange={(event) => setDays(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-white/10 bg-transparent px-3 py-2"
-              />
-            </label>
-          ) : (
-            <p className="text-xs text-zinc-500">This stays until a staff member removes it.</p>
-          )}
-        </div>
-      )}
-    </ModalShell>
-  );
-}
-
-export function PardonAccountModal({
-  entityName,
-  accountId,
-  onClose,
-  onChanged,
-}: {
-  entityName: string;
-  accountId: string;
-  onClose: () => void;
-  onChanged?: () => void | Promise<void>;
-}) {
-  const [note, setNote] = useState('Administrative pardon');
-  const [saving, setSaving] = useState(false);
-
-  return (
-    <ModalShell
-      title="Pardon account"
-      subtitle={`${entityName} — clear active violations and restore access`}
-      onClose={onClose}
-      footer={
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={async () => {
-              setSaving(true);
-              try {
-                await pardonAccount(accountId, note);
-                onChanged?.();
-                onClose();
-              } catch (err) {
-                handleAccountActionError(err);
-              } finally {
-                setSaving(false);
-              }
-            }}
-            className="rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {saving ? 'Pardoning…' : 'Issue pardon'}
-          </button>
-        </div>
-      }
-    >
-      <p className="mb-4 text-sm text-zinc-300">
-        A <span className="text-white">pardon</span> records forgiveness in the{' '}
-        <code className="text-xs text-zinc-400">pardons</code> table, marks active violations as
-        pardoned, ends open restrictions, and sets the account back to Active.
-      </p>
-      <label className="block text-xs text-zinc-500">
-        Note (optional)
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          rows={3}
-          className="mt-1 w-full rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
+        <SanctionScheduleFields
+          defaultDuration={action === 'ban' || action === 'lock' ? 'permanent' : 'temporary'}
+          onChange={setTiming}
         />
-      </label>
+      )}
     </ModalShell>
   );
 }
@@ -1547,8 +1449,11 @@ export function WarnAccountModal({
   const [type, setType] = useState('Account warning');
   const [reason, setReason] = useState('Warning issued by administrator');
   const [points, setPoints] = useState('1');
-  const [duration, setDuration] = useState<'temporary' | 'permanent'>('temporary');
-  const [days, setDays] = useState('30');
+  const [timing, setTiming] = useState<SanctionTiming>({
+    duration: 'temporary',
+    endsAt: null,
+    summary: '',
+  });
   const [saving, setSaving] = useState(false);
 
   return (
@@ -1566,7 +1471,7 @@ export function WarnAccountModal({
           </button>
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || (timing.duration === 'temporary' && !timing.endsAt)}
             onClick={async () => {
               setSaving(true);
               try {
@@ -1574,8 +1479,8 @@ export function WarnAccountModal({
                   type,
                   reason,
                   points: Number(points) || 1,
-                  duration,
-                  days: duration === 'temporary' ? (Number(days) || 30) : null,
+                  duration: timing.duration,
+                  endsAt: timing.endsAt,
                 });
                 onChanged?.();
                 onClose();
@@ -1620,37 +1525,7 @@ export function WarnAccountModal({
             className="mt-1 w-28 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
           />
         </label>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setDuration('temporary')}
-            className={`rounded-xl border px-3 py-2 text-sm ${duration === 'temporary' ? 'border-white/30 bg-white/10 text-white' : 'border-white/10 text-zinc-400'}`}
-          >
-            Temporary
-          </button>
-          <button
-            type="button"
-            onClick={() => setDuration('permanent')}
-            className={`rounded-xl border px-3 py-2 text-sm ${duration === 'permanent' ? 'border-white/30 bg-white/10 text-white' : 'border-white/10 text-zinc-400'}`}
-          >
-            Permanent
-          </button>
-        </div>
-        {duration === 'temporary' ? (
-          <label className="block text-xs text-zinc-500">
-            Days
-            <input
-              type="number"
-              min={1}
-              max={365}
-              value={days}
-              onChange={(e) => setDays(e.target.value)}
-              className="mt-1 w-28 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
-            />
-          </label>
-        ) : (
-          <p className="text-xs text-zinc-500">A permanent warning stays on the record until a staff member rescinds it.</p>
-        )}
+        <SanctionScheduleFields defaultDuration="temporary" onChange={setTiming} />
       </div>
     </ModalShell>
   );
