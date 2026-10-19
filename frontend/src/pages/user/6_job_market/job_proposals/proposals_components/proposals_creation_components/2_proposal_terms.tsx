@@ -45,21 +45,30 @@ export const ProposalTermsStep: React.FC<ProposalTermsProps> = ({
     }
   ];
 
-  // Set default if none selected or if tosContent is empty
+  // Set default if none selected, if placeholder is active, or if tosContent is empty
   useEffect(() => {
-    if (!selectedTosId && effectiveTerms.length > 0) {
-      const defaultTerm = effectiveTerms.find(t => t.is_default) || effectiveTerms[0];
+    if (jobTerms.length > 0) {
+      const currentValid = jobTerms.some((t) => t.id === selectedTosId);
+      if (!selectedTosId || !currentValid || selectedTosId === "default-standard") {
+        const defaultTerm = jobTerms.find((t) => t.is_default) || jobTerms[0];
+        setSelectedTosId(defaultTerm.id);
+        if (!tosContent || tosContent === DEFAULT_STANDARD_TOS) {
+          setTosContent(defaultTerm.terms_content);
+        }
+      }
+    } else if (!selectedTosId && effectiveTerms.length > 0) {
+      const defaultTerm = effectiveTerms.find((t) => t.is_default) || effectiveTerms[0];
       setSelectedTosId(defaultTerm.id);
       if (!tosContent) {
         setTosContent(defaultTerm.terms_content);
       }
     } else if (!tosContent && selectedTosId) {
-      const found = effectiveTerms.find(t => t.id === selectedTosId);
+      const found = effectiveTerms.find((t) => t.id === selectedTosId);
       if (found) {
         setTosContent(found.terms_content);
       }
     }
-  }, [selectedTosId, effectiveTerms, setSelectedTosId, tosContent, setTosContent]);
+  }, [selectedTosId, effectiveTerms, jobTerms, setSelectedTosId, tosContent, setTosContent]);
 
   const handleSelectTemplate = (id: string) => {
     setSelectedTosId(id);

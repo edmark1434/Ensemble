@@ -1,160 +1,206 @@
-import { useNavigate } from "react-router-dom";
-import { Home, ArrowLeft, Frown } from "lucide-react";
+import React from "react";
+import { useNavigate, Link } from "react-router-dom";
+import {
+  Home,
+  ArrowLeft,
+  Compass,
+  Briefcase,
+  Sparkles,
+  MessageSquare,
+  HelpCircle,
+  ArrowUpRight,
+} from "lucide-react";
+import useGlobalState from "@/lib/global_state";
 
-const NotFound = () => {
+interface NotFoundProps {
+  title?: string;
+  message?: string;
+  showNavigation?: boolean;
+}
+
+const NotFound: React.FC<NotFoundProps> = ({
+  title = "Lost in the digital workspace?",
+  message = "The page you're looking for doesn't exist, has been removed, or the link may have a typo.",
+  showNavigation = true,
+}) => {
   const navigate = useNavigate();
+  const isAuthenticated = useGlobalState((state) => state.isAuthenticated);
+  const user = useGlobalState((state) => state.user);
+  const homeRoute = isAuthenticated || user ? "/home" : "/";
+
+  const popularDestinations = [
+    {
+      title: "Job Postings",
+      description: "Find client projects & team openings",
+      to: "/jobs/postings",
+      icon: Briefcase,
+    },
+    {
+      title: "Services & Gigs",
+      description: "Explore packaged freelance services",
+      to: "/gigs",
+      icon: Sparkles,
+    },
+    {
+      title: "Community Forums",
+      description: "Join discussions and collaborate",
+      to: "/forums",
+      icon: MessageSquare,
+    },
+    {
+      title: "Help & Support",
+      description: "Submit a ticket or read FAQs",
+      to: "/support/ticket",
+      icon: HelpCircle,
+    },
+  ];
+
+  const handleGoBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate(homeRoute);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#080a12] relative overflow-hidden">
+    <div className="min-h-screen w-full relative flex flex-col justify-between overflow-hidden bg-gray-50 text-gray-900 dark:bg-[#080a12] dark:text-white transition-colors duration-200 select-none">
+      {/* Ambient background glows */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[720px] h-[360px] bg-blue-500/10 dark:bg-blue-600/15 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[420px] h-[420px] bg-indigo-500/5 dark:bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none" />
 
-      {/* Animated Color Blur Backgrounds */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-96 h-96 rounded-full bg-cyan-500/15 blur-3xl animate-float-pulse" />
-        <div className="absolute top-1/3 right-10 w-80 h-80 rounded-full bg-yellow-500/10 blur-3xl animate-float-pulse-delayed" />
-        <div className="absolute bottom-20 left-1/4 w-96 h-96 rounded-full bg-purple-500/15 blur-3xl animate-float-pulse-slow" />
-        <div className="absolute top-1/2 right-1/3 w-80 h-80 rounded-full bg-pink-500/10 blur-3xl animate-float-pulse-more-delayed" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-blue-500/8 blur-3xl" />
-      </div>
+      {/* Subtle background grid pattern */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-[0.03] dark:opacity-[0.06]"
+        style={{
+          backgroundImage:
+            "radial-gradient(currentColor 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
+        }}
+      />
 
-      {/* Main Content */}
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-4">
-        <div className="mx-auto max-w-2xl text-center">
+      {/* Top Brand Header */}
+      <header className="relative z-10 w-full max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
+        <Link
+          to={homeRoute}
+          className="inline-flex items-center gap-2.5 text-gray-900 dark:text-white hover:opacity-85 transition group"
+        >
+          <img
+            src="/ensemble_lg.svg"
+            alt="Ensemble Logo"
+            className="h-8 w-8 object-contain transition-transform group-hover:scale-105"
+          />
+          <span className="text-base font-bold tracking-tight font-sans">
+            Ensemble
+          </span>
+        </Link>
 
-          {/* 404 Card */}
-          <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 via-white/5 to-transparent p-12 backdrop-blur-sm transition-all duration-500 hover:border-cyan-500/30 hover:shadow-2xl hover:shadow-cyan-500/10">
+        <Link
+          to="/support/ticket"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 transition"
+        >
+          <HelpCircle className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Need assistance?</span>
+          <span>Help Center</span>
+        </Link>
+      </header>
 
-            {/* Animated Gradient Border - Added pointer-events-none */}
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-cyan-500/30 via-yellow-500/30 to-purple-500/30 opacity-40 animate-gradient-xy pointer-events-none" />
+      {/* Main 404 Hero Content */}
+      <main className="relative z-10 w-full max-w-2xl mx-auto px-5 py-8 md:py-12 flex flex-col items-center text-center">
+        {/* Status Pill Badge */}
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 mb-6 backdrop-blur-sm">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+          </span>
+          Error 404 · Page Not Found
+        </div>
 
-            {/* Moving Light Effect - Added pointer-events-none */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer pointer-events-none" />
-
-            {/* Decorative Blurs - Added pointer-events-none so they don't block clicks */}
-            <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-cyan-500/30 blur-3xl animate-float-pulse pointer-events-none" />
-            <div className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-500/20 blur-3xl animate-breathing pointer-events-none" />
-            <div className="absolute -bottom-20 -left-20 h-48 w-48 rounded-full bg-purple-500/30 blur-3xl animate-float-pulse-delayed pointer-events-none" />
-
-            {/* 404 Number */}
-            <div className="mb-6">
-              <div className="relative inline-block">
-                <span
-                  className="text-8xl font-bold bg-gradient-to-r from-cyan-500 via-yellow-500 to-purple-500 bg-clip-text text-transparent md:text-9xl"
-                  style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                >
-                  404
-                </span>
-              </div>
-            </div>
-
-            {/* Sorry Face Icon */}
-            <div className="mb-6 flex justify-center">
-              <div className="rounded-full bg-gradient-to-br from-cyan-500/20 via-yellow-500/20 to-purple-500/20 p-6">
-                <Frown className="h-20 w-20 text-yellow-400 animate-float" />
-              </div>
-            </div>
-
-            {/* Title */}
-            <h1
-              className="mb-3 text-2xl font-bold text-white md:text-3xl"
-              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-            >
-              Oops! Page Not Found
-            </h1>
-
-            {/* Message */}
-            <p
-              className="mb-8 text-sm text-zinc-400 md:text-base"
-              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-            >
-              We're sorry, but the page you were looking for doesn't exist.<br />
-              It might have been moved, deleted, or you might have typed the wrong address.
-            </p>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-center relative z-20">
-              <button
-                onClick={() => navigate(-1)}
-                className="group flex items-center justify-center gap-2 rounded-full border border-white/15 bg-white/5 px-7 py-3 text-sm font-medium text-zinc-300 transition-all duration-200 hover:border-white/30 hover:bg-white/10 hover:text-white hover:scale-105 active:scale-95 cursor-pointer outline-none focus:ring-2 focus:ring-cyan-500/50"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-              >
-                <ArrowLeft className="h-4 w-4 transition-transform duration-300 group-hover:-translate-x-1" />
-                Go Back
-              </button>
-
-              <button
-                onClick={() => navigate("/home")}
-                className="group flex items-center justify-center gap-2 rounded-full bg-white px-7 py-3 text-sm font-medium text-black shadow-lg transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 active:bg-gradient-to-r active:from-cyan-500 active:via-yellow-500 active:to-purple-600 active:text-white cursor-pointer outline-none focus:ring-2 focus:ring-white/50"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-              >
-                <Home className="h-4 w-4 transition-transform duration-300 group-hover:rotate-12" />
-                Back to Home
-              </button>
-            </div>
-
-            {/* Decorative Line */}
-            <div className="mx-auto mt-8 h-px w-32 bg-gradient-to-r from-cyan-500 via-yellow-500 to-purple-500 animate-pulse-width" />
-
-            {/* Decorative Dots */}
-            <div className="mt-4 flex justify-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-cyan-400/60 animate-bounce-subtle" />
-              <div className="h-1.5 w-1.5 rounded-full bg-yellow-400/60 animate-bounce-subtle-delayed" />
-              <div className="h-1.5 w-1.5 rounded-full bg-purple-400/60 animate-bounce-subtle-more-delayed" />
-            </div>
+        {/* 404 Big Numeric Display */}
+        <div className="relative mb-4 flex items-center justify-center">
+          <span
+            className="text-8xl sm:text-9xl font-black tracking-tight select-none bg-gradient-to-b from-gray-900 via-gray-700 to-gray-400 dark:from-white dark:via-zinc-200 dark:to-zinc-600 bg-clip-text text-transparent drop-shadow-sm dark:drop-shadow-[0_0_40px_rgba(59,130,246,0.18)]"
+            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+          >
+            404
+          </span>
+          <div className="absolute -bottom-2 -right-3 sm:-bottom-1 sm:-right-4 p-2.5 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10 shadow-lg text-blue-500 dark:text-blue-400 backdrop-blur-md">
+            <Compass className="h-5 w-5 sm:h-6 sm:w-6 animate-[spin_12s_linear_infinite]" />
           </div>
         </div>
-      </div>
 
-      <style>{`
-        @keyframes gradient-xy {
-          0%, 100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-        }
-        .animate-gradient-xy {
-          background-size: 200% 200%;
-          animation: gradient-xy 3s ease infinite;
-        }
-        
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        .animate-shimmer { animation: shimmer 4s ease-in-out infinite; }
-        
-        @keyframes float-pulse {
-          0%, 100% { transform: scale(1) translate(0, 0); opacity: 0.15; }
-          50% { transform: scale(1.15) translate(20px, -20px); opacity: 0.25; }
-        }
-        .animate-float-pulse { animation: float-pulse 6s ease-in-out infinite; }
-        .animate-float-pulse-delayed { animation: float-pulse 7s ease-in-out infinite; }
-        .animate-float-pulse-slow { animation: float-pulse 8s ease-in-out infinite; }
-        .animate-float-pulse-more-delayed { animation: float-pulse 9s ease-in-out infinite; }
-        
-        @keyframes breathing {
-          0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.2; }
-          50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.4; }
-        }
-        .animate-breathing { animation: breathing 3s ease-in-out infinite; }
-        
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-10px); }
-        }
-        .animate-float { animation: float 3s ease-in-out infinite; }
-        
-        @keyframes pulse-width {
-          0%, 100% { width: 8rem; }
-          50% { width: 12rem; }
-        }
-        .animate-pulse-width { animation: pulse-width 3s ease-in-out infinite; }
-        
-        @keyframes bounce-subtle {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-3px); }
-        }
-        .animate-bounce-subtle { animation: bounce-subtle 2s ease-in-out infinite; }
-        .animate-bounce-subtle-delayed { animation: bounce-subtle 2s ease-in-out infinite 0.3s; }
-        .animate-bounce-subtle-more-delayed { animation: bounce-subtle 2s ease-in-out infinite 0.6s; }
-      `}</style>
+        {/* Heading & Explanatory Text */}
+        <h1
+          className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white mb-3 tracking-tight"
+          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+        >
+          {title}
+        </h1>
+        <p
+          className="text-sm sm:text-base text-gray-600 dark:text-zinc-400 max-w-md mx-auto mb-8 leading-relaxed"
+          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+        >
+          {message}
+        </p>
+
+        {/* Primary Action Buttons */}
+        <div className="flex flex-wrap items-center justify-center gap-3 w-full sm:w-auto mb-10">
+          <button
+            onClick={handleGoBack}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white transition shadow-sm active:scale-[0.98] cursor-pointer"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Go Back</span>
+          </button>
+
+          <button
+            onClick={() => navigate(homeRoute)}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/25 transition active:scale-[0.98] cursor-pointer"
+          >
+            <Home className="h-4 w-4" />
+            <span>{isAuthenticated || user ? "Back to Dashboard" : "Back to Home"}</span>
+          </button>
+        </div>
+
+        {/* Popular Destinations Quick Links */}
+        {showNavigation && (
+          <div className="w-full max-w-xl mx-auto pt-7 border-t border-gray-200 dark:border-white/10">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-600 dark:text-zinc-400 mb-3.5 text-center">
+              Popular destinations
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left">
+              {popularDestinations.map((dest) => {
+                const IconComponent = dest.icon;
+                return (
+                  <Link
+                    key={dest.to}
+                    to={dest.to}
+                    className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white/70 dark:bg-white/[0.02] hover:bg-white dark:hover:bg-white/[0.06] hover:border-blue-500/30 dark:hover:border-blue-500/30 transition-all hover:-translate-y-0.5 group shadow-sm"
+                  >
+                    <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform shrink-0">
+                      <IconComponent className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition truncate">
+                        {dest.title}
+                      </div>
+                      <div className="text-[11px] text-gray-500 dark:text-zinc-400 truncate">
+                        {dest.description}
+                      </div>
+                    </div>
+                    <ArrowUpRight className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition shrink-0" />
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Minimal Footer */}
+      <footer className="relative z-10 w-full py-6 text-center text-[11px] text-gray-600 dark:text-zinc-400">
+        <p>© {new Date().getFullYear()} Ensemble · All rights reserved.</p>
+      </footer>
     </div>
   );
 };

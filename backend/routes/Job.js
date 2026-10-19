@@ -22,6 +22,7 @@ const {
 const checkSession = require('../middleware/CheckSession');
 const requireAuth = require('../middleware/RequireAuth');
 const optionalAuth = require('../middleware/OptionalAuth');
+const optionalSession = require('../middleware/OptionalSession');
 
 
 // Job Invitations
@@ -32,7 +33,7 @@ router.post('/invite', [checkSession, requireAuth], createJobInvitationControlle
 router.get('/tos', getTermsOfServiceController);
 
 // Jobs
-router.get('/', optionalAuth, getAllJobsController);
+router.get('/', [optionalSession, optionalAuth], getAllJobsController);
 router.post('/', [checkSession, requireAuth], createJobController);
 router.put('/:jobId', [checkSession, requireAuth], updateJobController);
 router.post('/:jobId/save', [checkSession, requireAuth], toggleJobSaveController);
@@ -48,6 +49,6 @@ router.delete('/proposals/:proposalId', [checkSession, requireAuth], withdrawPro
 router.put('/proposals/:proposalId/status', [checkSession, requireAuth], updateProposalStatusController);
 
 // Single Job
-router.get('/:jobId', optionalAuth, getJobByIdController);
+router.get('/:jobId', [optionalSession, optionalAuth], getJobByIdController);
 
 module.exports = router;

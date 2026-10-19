@@ -11,17 +11,18 @@ const {
 } = require('../services/MarketplaceActorServices');
 
 function sendControllerError(res, error, fallbackStatus = 500) {
-    const status = error instanceof MarketplaceActorError ? error.statusCode : fallbackStatus;
-    return res.status(status).json({
+    const status = error.statusCode || error.status || (error instanceof MarketplaceActorError ? error.statusCode : fallbackStatus);
+    const resolvedStatus = typeof status === 'number' && status >= 400 && status < 600 ? status : fallbackStatus;
+    return res.status(resolvedStatus).json({
         success: false,
-        message: status < 500 ? error.message : 'Internal Server Error',
+        message: resolvedStatus < 500 ? error.message : (error.message || 'Internal Server Error'),
         ...(error.code ? { code: error.code } : {}),
     });
 }
 
 async function createJobController(req, res) {
     try {
-        const accountId = req.user?.account_id;
+        const accountId = req.user?.account_id || req.user?.accountId || req.session?.account_id || req.session?.accountId;
         if (!accountId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
         const actor = await resolveMarketplaceActor(
@@ -48,7 +49,7 @@ async function createJobController(req, res) {
 async function getAllJobsController(req, res) {
     try {
         const filters = req.query;
-        const accountId = req.user?.account_id || req.user?.accountId || null;
+        const accountId = req.user?.account_id || req.user?.accountId || req.session?.account_id || req.session?.accountId || null;
         const actorIds = accountId ? await getAuthorizedActorAccountIds(accountId) : [];
         const affiliatedAccountIds = accountId ? await getAffiliatedAccountIds(accountId) : [];
         const jobs = await JobServices.getAllJobsServices(filters, accountId, actorIds, affiliatedAccountIds);
@@ -62,7 +63,7 @@ async function getAllJobsController(req, res) {
 async function getJobByIdController(req, res) {
     try {
         const { jobId } = req.params;
-        const accountId = req.user?.account_id || req.user?.accountId || null;
+        const accountId = req.user?.account_id || req.user?.accountId || req.session?.account_id || req.session?.accountId || null;
         const actorIds = accountId ? await getAuthorizedActorAccountIds(accountId) : [];
         const affiliatedAccountIds = accountId ? await getAffiliatedAccountIds(accountId) : [];
         const job = await JobServices.getJobByIdServices(jobId, accountId, actorIds, affiliatedAccountIds);
@@ -108,7 +109,7 @@ async function deleteJobController(req, res) {
 
 async function createProposalController(req, res) {
     try {
-        const accountId = req.user?.account_id;
+        const accountId = req.user?.account_id || req.user?.accountId || req.session?.account_id || req.session?.accountId;
         const { jobId } = req.params;
         if (!accountId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 

@@ -3,6 +3,8 @@ const JobRepositories = require('../repositories/JobRepositories');
 const { createNotificationServices } = require('./NotificationServices');
 const { getAccountById } = require('../repositories/AccountRepositories');
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function createJobServices(jobData) {
     if (!jobData.title || !jobData.description) {
         throw new Error('Title and description are required.');
@@ -84,7 +86,14 @@ async function deleteJobServices(jobId, accountIds) {
 
 async function createProposalServices(proposalData) {
     if (!proposalData.job_id || !proposalData.rate_credits) {
-        throw new Error('Job ID and rate are required.');
+        const error = new Error('Job ID and rate are required.');
+        error.statusCode = 400;
+        throw error;
+    }
+    if (!UUID_REGEX.test(String(proposalData.job_id).trim())) {
+        const error = new Error('Invalid Job ID format.');
+        error.statusCode = 400;
+        throw error;
     }
     return await JobRepositories.createProposalRepositories(proposalData);
 }
