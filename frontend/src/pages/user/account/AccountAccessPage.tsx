@@ -59,12 +59,19 @@ export default function AccountAccessPage() {
   const [showRecord, setShowRecord] = useState(false);
 
   async function loadLists() {
-    const [ticketRes, disputeRes] = await Promise.all([
+    const [ticketResult, disputeResult] = await Promise.allSettled([
       api.get('/api/users/tickets'),
       api.get('/api/users/disputes'),
     ]);
-    setTickets(ticketRes.data?.data || []);
-    setDisputes(disputeRes.data?.data || []);
+    if (ticketResult.status === 'fulfilled') {
+      setTickets(ticketResult.value.data?.data || []);
+    }
+    if (disputeResult.status === 'fulfilled') {
+      setDisputes(disputeResult.value.data?.data || []);
+    }
+    if (ticketResult.status === 'rejected' && disputeResult.status === 'rejected') {
+      throw ticketResult.reason;
+    }
   }
 
   useEffect(() => {
@@ -99,6 +106,10 @@ export default function AccountAccessPage() {
         description: description.trim(),
         type: 'Appeal an account penalty',
         category: 'Appeal an account penalty',
+        fields: {
+          case_id: 'Not provided',
+          why_reverse: description.trim(),
+        },
       });
       setSubject('');
       setDescription('');

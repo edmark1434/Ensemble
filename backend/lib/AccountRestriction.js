@@ -438,6 +438,7 @@ async function getOwnAccountRecord(accountId) {
 }
 
 const BANNED_READ_ALLOWLIST = [
+  /^\/api\/csrf-token$/,
   /^\/api\/users\/me$/,
   /^\/api\/users\/me\/standing$/,
   /^\/api\/users\/session$/,
