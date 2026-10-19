@@ -128,7 +128,8 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, 
          LEFT JOIN plans p ON s.plan_id = p.plan_id
          WHERE a.type = 'User'
            AND a.deleted_at IS NULL
-           AND LOWER(COALESCE(a.status, '')) NOT IN ('deleted', 'inactive', 'deactivated')`;
+           AND LOWER(COALESCE(a.status, '')) NOT IN ('deleted', 'inactive', 'deactivated')
+           AND ($1::uuid IS NULL OR a.account_id <> $1::uuid)`;
            
     const values = [excludeAccountId || null, limit];
     let paramIndex = 3;
