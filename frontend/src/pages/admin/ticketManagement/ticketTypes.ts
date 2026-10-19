@@ -476,6 +476,8 @@ export type TicketDetail = {
   savedTranscript?: { text: string; createdAt?: string | null } | null;
   autoClosesAt?: string | null;
   scheduledCloseAt?: string | null;
+  appealDecision?: 'accepted' | 'denied' | 'denied_permanent' | null;
+  appealDecidedAt?: string | null;
 };
 
 export function ticketTypeOf(t: { type?: string; category?: string }) {

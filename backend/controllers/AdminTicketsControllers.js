@@ -7,6 +7,8 @@ const {
   removeTicketParticipant,
   respondTicketInvite,
   generateTicketTranscript,
+  assertCanFileAppeal,
+  decideTicketAppeal,
   scheduleTicketClose,
   cancelScheduledTicketClose,
   createSupportTicket,
@@ -353,6 +355,9 @@ async function createPublicTicket(req, res) {
       }
       ticketType = APPEAL_TICKET_TYPE;
     }
+    if (ticketType === APPEAL_TICKET_TYPE) {
+      await assertCanFileAppeal(requesterAccountId);
+    }
     const subjectOrReason = (reason || subject || '').trim();
     if (!subjectOrReason) {
       return res.status(400).json({ success: false, message: 'Subject is required' });
@@ -393,7 +398,29 @@ async function createPublicTicket(req, res) {
     });
   } catch (err) {
     console.error('Error creating public ticket:', err);
-    res.status(400).json({ success: false, message: err.message || 'Failed to create ticket' });
+    const status = err.statusCode && err.statusCode < 500 ? err.statusCode : 400;
+    res.status(status).json({ success: false, message: err.message || 'Failed to create ticket' });
+  }
+}
+
+async function postTicketAppealDecision(req, res) {
+  try {
+    const data = await decideTicketAppeal(req.params.id, req.body?.decision, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    const decision = data.appealDecision;
+    const message = decision === 'accepted'
+      ? 'Appeal accepted. The penalty ends in 24 hours and the ticket is closed.'
+      : decision === 'denied_permanent'
+        ? 'Appeal denied permanently. The ticket is closed.'
+        : 'Appeal denied. The ticket is closed. They can appeal again in 12 months.';
+    res.status(200).json({ success: true, data, message });
+  } catch (err) {
+    console.error('Error deciding appeal:', err);
+    const status = err.statusCode && err.statusCode < 500 ? err.statusCode : 500;
+    res.status(status).json({
+      success: false,
+      message: status < 500 ? err.message : 'Failed to decide this appeal',
+    });
   }
 }
 
@@ -785,6 +812,7 @@ module.exports = {
   deleteTicketParticipant,
   postTicketTranscript,
   postTicketScheduleClose,
+  postTicketAppealDecision,
   deleteTicketScheduleClose,
   postMyTicketSatisfaction,
 };

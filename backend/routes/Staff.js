@@ -9,6 +9,7 @@ const {
   postTicketTranscript,
   postTicketScheduleClose,
   deleteTicketScheduleClose,
+  postTicketAppealDecision,
 } = require('../controllers/AdminTicketsControllers');
 
 function requireAnyStaff(req, res, next) {
@@ -26,6 +27,7 @@ router.get('/tickets/people', [checkSession, requireAnyStaff], getTicketParticip
 router.post('/tickets/:id/participants', [checkSession, requireAnyStaff], postTicketParticipant);
 router.post('/tickets/:id/transcript', [checkSession, requireAnyStaff], postTicketTranscript);
 router.post('/tickets/:id/schedule-close', [checkSession, requireAnyStaff], postTicketScheduleClose);
+router.post('/tickets/:id/appeal-decision', [checkSession, requireAnyStaff], postTicketAppealDecision);
 router.delete('/tickets/:id/schedule-close', [checkSession, requireAnyStaff], deleteTicketScheduleClose);
 router.delete('/tickets/:id/participants/:accountId', [checkSession, requireAnyStaff], deleteTicketParticipant);
 
