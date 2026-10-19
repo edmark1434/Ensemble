@@ -2125,7 +2125,7 @@ async function searchTicketParticipants(rawQuery) {
      LEFT JOIN staff s ON s.account_id = a.account_id
      WHERE a.deleted_at IS NULL
        AND (u.account_id IS NOT NULL OR s.staff_id IS NOT NULL)
-       AND (a.status IS NULL OR LOWER(a.status) = 'active')
+       AND LOWER(COALESCE(a.status, '')) NOT IN ('deleted', 'inactive', 'deactivated')
        AND (
          LOWER(a.handle) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
          OR LOWER(COALESCE(a.display_name, '')) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
