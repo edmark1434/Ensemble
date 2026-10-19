@@ -294,13 +294,12 @@ async function seedSampleJobs(userAccountIds) {
 async function resetSeedTables() {
   // Prefer clearing portal + auth + demo domain tables. CASCADE handles FKs.
   // Keep migration catalogs (plans, tags, surveys, ticket_*_catalog, files/system_files).
+  // Support tickets are not seeded. Account reset still clears ticket rows that reference those accounts.
   try {
     await pool.query(`
       TRUNCATE TABLE
-        ticket_chats,
         dispute_chats,
         credit_transactions,
-        tickets,
         reports,
         marketplace_listings,
         configuration,
@@ -1089,153 +1088,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     console.warn('ℹ️ Dispute chat seed skipped:', err.message);
   }
 
-  const tickets = [
-    // ticket_number, reason, type, priority, status, account_id, handled_by, lastAuthor, escalatedTo
-    ['TKT-50001', 'Cannot verify payment method', 'Charges and receipts', 'High', 'Open', userAccountIds[0], supportStaffId, 'user', null],
-    ['TKT-50002', 'Account locked after password reset', 'Sign-in and password', 'High', 'In Progress', userAccountIds[3], supportStaffId, 'user', null],
-    ['TKT-50003', 'Credits missing after package purchase', 'Credits and balance', 'High', 'Open', userAccountIds[4], adminStaffId, 'staff', null],
-    ['TKT-50004', 'Forum group ownership transfer', 'Forum groups', 'Medium', 'In Progress', userAccountIds[2], forumStaffId, 'user', null],
-    ['TKT-50005', 'How to invite team members?', 'Teams', 'Low', 'Resolved', userAccountIds[6], supportStaffId, 'staff', null],
-    ['TKT-50006', 'Marketplace listing rejected', 'Listing review', 'Medium', 'Open', userAccountIds[7], marketplaceStaffId, 'user', null],
-    ['TKT-50007', 'Two-factor not receiving codes', 'Identity verification', 'High', 'Open', userAccountIds[1], null, 'user', null],
-    ['TKT-50008', 'Dispute escalation request', 'Delivery and disputes', 'High', 'In Progress', userAccountIds[5], null, 'user', 'Jobs N Gigs Moderator'],
-    ['TKT-50009', 'Asset purchase never delivered', 'Asset purchase and download', 'High', 'In Progress', userAccountIds[9], marketplaceStaffId, 'staff', null],
-    ['TKT-50010', 'Gig milestone stuck in review', 'Contracts, milestones, and orders', 'High', 'Open', userAccountIds[0], jobsStaffId, 'user', null],
-    ['TKT-50011', 'Freelancer proposal spam', 'Proposals and hiring', 'Medium', 'In Progress', userAccountIds[4], jobsStaffId, 'staff', null],
-    ['TKT-50012', 'Refund status check', 'Marketplace refunds', 'Medium', 'Open', userAccountIds[2], supportStaffId, 'user', null],
-    ['TKT-50013', 'Cannot upload portfolio', 'Uploads and storage', 'Low', 'Open', userAccountIds[8], supportStaffId, 'user', null],
-    ['TKT-50014', 'Cancel annual subscription', 'Subscriptions and plans', 'Medium', 'Open', userAccountIds[1], supportStaffId, 'staff', null],
-    ['TKT-50015', 'Payout not arriving', 'Payouts and withdrawals', 'High', 'Open', userAccountIds[5], null, 'user', 'Support Moderator'],
-    ['TKT-50016', 'Timeline editor crash on export', 'Editor problems', 'Medium', 'Escalated to Dev', userAccountIds[6], supportStaffId, 'user', null],
-  ];
-
-  const ticketIds = [];
-  for (const t of tickets) {
-    const escalatedTo = t[8];
-    const res = await pool.query(
-      `INSERT INTO tickets (
-        ticket_number, reason, type, priority, status,
-        account_id, handled_by_staff_id,
-        last_message_author_type, message_count, last_message_at,
-        escalated_to_role, escalated_by_staff_id,
-        created_at, resolved_at
-      ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,
-        $9, NOW() - ($10 || ' hours')::interval,
-        $11,$12,
-        NOW() - ($13 || ' hours')::interval, $14
-      )
-      RETURNING ticket_id`,
-      [
-        t[0],
-        t[1],
-        t[2],
-        t[3],
-        t[4],
-        t[5],
-        t[6],
-        t[7],
-        faker.number.int({ min: 1, max: 8 }),
-        String(faker.number.int({ min: 1, max: 48 })),
-        escalatedTo,
-        escalatedTo ? adminStaffId : null,
-        String(faker.number.int({ min: 4, max: 200 })),
-        t[4] === 'Resolved' || t[4] === 'Closed' ? new Date() : null,
-      ]
-    );
-    ticketIds.push(res.rows[0].ticket_id);
-  }
-
-  // Ticket chat threads live in MongoDB (inbox + messages), linked via ticket_chats.
-  try {
-    await connectMongoDB();
-    if (getMongoClient() && ticketIds.length) {
-      const sampleTicketIndexes = [0, 2, 11];
-      for (const idx of sampleTicketIndexes) {
-        const ticketId = ticketIds[idx];
-        if (!ticketId) continue;
-        const ticketMeta = tickets[idx];
-        const requesterAccountId = ticketMeta[5];
-        const handledByStaffId = ticketMeta[6];
-        let staffAccountId = supportAccountId;
-        if (handledByStaffId) {
-          const sa = await pool.query(`SELECT account_id FROM staff WHERE staff_id = $1`, [handledByStaffId]);
-          staffAccountId = sa.rows[0]?.account_id || supportAccountId;
-        }
-
-        const members = [];
-        const seen = new Set();
-        const addMember = (accountId, role) => {
-          if (!accountId || seen.has(String(accountId))) return;
-          seen.add(String(accountId));
-          members.push({ account_id: String(accountId), role, joined_at: new Date() });
-        };
-        addMember(requesterAccountId, 'member');
-        addMember(staffAccountId, 'admin');
-
-        const insertResult = await createInboxRepositories({
-          conversation_name: `Ticket ${ticketMeta[0]}`,
-          conversation_type: 'group',
-          ticket_id: String(ticketId),
-          support_ticket_id: String(ticketId),
-          members,
-          pinned_messages: [],
-          created_at: new Date(),
-          updated_at: new Date(),
-        });
-        const chatId = String(insertResult.insertedId);
-        await pool.query(
-          `INSERT INTO ticket_chats (ticket_id, chat_id)
-           VALUES ($1, $2)
-           ON CONFLICT (ticket_id) DO UPDATE
-             SET chat_id = EXCLUDED.chat_id, deleted_at = NULL, created_at = CURRENT_TIMESTAMP`,
-          [ticketId, chatId]
-        );
-        await createMessageRepositories({
-          conversation_id: chatId,
-          sender_id: requesterAccountId,
-          message_type: 'text',
-          message_content: `Hi, I need help with: ${ticketMeta[1]}`,
-          message_id_reply: null,
-          attachments: [],
-          links: [],
-          message_react: [],
-          read_by: [],
-          is_edited: false,
-          is_deleted: false,
-          is_internal: false,
-          author_type: 'user',
-          author_name: 'Requester',
-          created_at: new Date(Date.now() - 60 * 60 * 1000),
-          updated_at: new Date(Date.now() - 60 * 60 * 1000),
-        });
-        if (staffAccountId) {
-          await createMessageRepositories({
-            conversation_id: chatId,
-            sender_id: staffAccountId,
-            message_type: 'text',
-            message_content: 'Thanks for reaching out — looking into this now.',
-            message_id_reply: null,
-            attachments: [],
-            links: [],
-            message_react: [],
-            read_by: [],
-            is_edited: false,
-            is_deleted: false,
-            is_internal: false,
-            author_type: 'staff',
-            author_name: 'Support',
-            created_at: new Date(Date.now() - 30 * 60 * 1000),
-            updated_at: new Date(Date.now() - 30 * 60 * 1000),
-          });
-        }
-      }
-      console.log('✅ Seeded sample ticket chat threads in MongoDB');
-    }
-  } catch (err) {
-    console.warn('ℹ️ Ticket chat seed skipped:', err.message);
-  }
-
   const violations = [
     ['VIO-21034', userAccountIds[3], 'Spam posting', 'Automated flag: duplicate promo links.', 2, adminStaffId],
     ['VIO-21035', userAccountIds[0], 'Harassment warning', 'Report RPT-10001 substantiated — first warning.', 3, supportStaffId],
@@ -1255,7 +1107,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     );
   }
 
-  console.log(`✅ Seeded ${tickets.length} tickets, ${disputes.length} disputes, ${reports.length} reports`);
+  console.log(`✅ Seeded ${disputes.length} disputes, ${reports.length} reports`);
   console.log('   Demo disputes:');
   console.log('   DIS-50001  pending + unassigned     → Admin/Maya: Assign myself, then Approve');
   console.log('   DIS-50006  pending + Maya owns      → Admin: view-only / reassign via Designated handler');
