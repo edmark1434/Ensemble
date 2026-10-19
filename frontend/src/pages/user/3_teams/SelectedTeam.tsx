@@ -176,7 +176,11 @@ export default function SelectedTeam() {
           api.get(`/api/teams/${id}/members`),
           api.get(`/api/teams/${id}/reviews`),
         ]);
-      const nextTeam: Team = teamResponse.data.data;
+      const nextTeam: Team & { team_type?: string } = teamResponse.data.data;
+      if (nextTeam.team_type === 'contractual') {
+        navigate(`/team-project/${nextTeam.team_id}`, { replace: true });
+        return;
+      }
       setTeam(nextTeam);
       setMembers(membersResponse.data.data || []);
       setReviews(reviewsResponse.data.data || []);

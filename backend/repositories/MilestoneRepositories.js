@@ -10,6 +10,7 @@
  */
 
 const { pool } = require('../lib/Database');
+const TeamProjectRepositories = require('./TeamProjectRepositories');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const AUTO_APPROVE_DAYS_JOB  = 5;   // Days after submission before auto-approve (job contracts)
@@ -357,6 +358,13 @@ async function autoApproveMilestoneSubmit({ milestoneSubmitId, milestoneId, cont
                     SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1
                 )
             `, [contractId]);
+        }
+
+        // Unlock sequential tasks & check team project auto-archive
+        try {
+            await TeamProjectRepositories.unlockSequentialMilestones(client, contractId, milestoneIndex);
+        } catch (tpErr) {
+            console.error('Error unlocking team project milestones:', tpErr);
         }
 
         await client.query('COMMIT');
@@ -903,6 +911,13 @@ async function approveMilestoneSubmit({ milestoneId, contractId, milestoneIndex,
                     SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1
                 )
             `, [contractId]);
+        }
+
+        // Unlock sequential tasks & check team project auto-archive
+        try {
+            await TeamProjectRepositories.unlockSequentialMilestones(client, contractId, milestoneIndex);
+        } catch (tpErr) {
+            console.error('Error unlocking team project milestones:', tpErr);
         }
 
         await client.query('COMMIT');

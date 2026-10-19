@@ -35,6 +35,21 @@ const {
   getAdminWalletDetail,
 } = require('../controllers/AdminEconomyControllers');
 const {
+  getAdminVideos,
+  getAdminVideo,
+  patchAdminVideo,
+} = require('../controllers/AdminVideoControllers');
+const {
+  getAdminForumGroups,
+  getAdminForumGroup,
+  patchAdminForumGroup,
+  patchAdminForumMember,
+  getAdminForumDiscussions,
+  getAdminForumDiscussion,
+  patchAdminForumDiscussion,
+  deleteAdminForumComment,
+} = require('../controllers/AdminForumControllers');
+const {
   getAdminModerationOverview,
   patchAdminModerationCase,
   deleteAdminModerationCase,
@@ -98,6 +113,17 @@ router.get('/accounts/:accountId/activity', [checkSession, requireUserTeamAccess
 router.get('/economy-overview', [checkSession, requireAdmin], getAdminEconomyOverview);
 router.get('/economy/wallets/:walletId', [checkSession, requireAdmin], getAdminWalletDetail);
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);
+router.get('/moderation/videos', [checkSession, requireAdmin], getAdminVideos);
+router.get('/moderation/videos/:projectId', [checkSession, requireAdmin], getAdminVideo);
+router.patch('/moderation/videos/:projectId', [checkSession, requireAdmin], patchAdminVideo);
+router.get('/moderation/forum/groups', [checkSession, requireAdmin], getAdminForumGroups);
+router.get('/moderation/forum/groups/:groupId', [checkSession, requireAdmin], getAdminForumGroup);
+router.patch('/moderation/forum/groups/:groupId', [checkSession, requireAdmin], patchAdminForumGroup);
+router.patch('/moderation/forum/groups/:groupId/members/:memberId', [checkSession, requireAdmin], patchAdminForumMember);
+router.get('/moderation/forum/discussions', [checkSession, requireAdmin], getAdminForumDiscussions);
+router.get('/moderation/forum/discussions/:discussionId', [checkSession, requireAdmin], getAdminForumDiscussion);
+router.patch('/moderation/forum/discussions/:discussionId', [checkSession, requireAdmin], patchAdminForumDiscussion);
+router.delete('/moderation/forum/discussions/:discussionId/comments/:commentId', [checkSession, requireAdmin], deleteAdminForumComment);
 router.patch('/moderation/cases/:id', [checkSession, requireAdmin], patchAdminModerationCase);
 router.delete('/moderation/cases/:id', [checkSession, requireAdmin], deleteAdminModerationCase);
 router.post('/moderation/cases/:id/assign-myself', [checkSession, requireAdmin], postAdminModerationCaseAssignMyself);

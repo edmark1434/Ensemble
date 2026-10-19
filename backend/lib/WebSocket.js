@@ -118,6 +118,8 @@ async function initSocket(httpServer) {
       }
       socket.user = decoded;
       socket.data.suspended = Boolean(access.suspended);
+      socket.data.banned = Boolean(access.banned);
+      socket.data.forumTimeout = Boolean(access.forumTimeout);
       return next();
     } catch (_error) {
       return next(new Error('Authentication error: Invalid or expired token.'));
@@ -130,8 +132,31 @@ async function initSocket(httpServer) {
     // Suspended accounts stay connected for notices, but client actions are dropped.
     // Later, allow specific events here instead of blocking every action.
     socket.use((packet, next) => {
-      if (!socket.data.suspended) return next();
       const eventName = String(packet[0] || '');
+      if (socket.data.banned) {
+        if (eventName === 'disconnect') return next();
+        const ack = packet[packet.length - 1];
+        if (typeof ack === 'function') {
+          ack({
+            success: false,
+            code: 'ACCOUNT_BANNED',
+            message: 'Your account is banned. You can sign in only to file an appeal and view your tickets and disputes.',
+          });
+        }
+        return;
+      }
+      if (socket.data.forumTimeout && /forum/i.test(eventName)) {
+        const ack = packet[packet.length - 1];
+        if (typeof ack === 'function') {
+          ack({
+            success: false,
+            code: 'FORUM_TIMEOUT',
+            message: 'You are timed out from the forums. You can read them, and you cannot post, comment, react, or change them.',
+          });
+        }
+        return;
+      }
+      if (!socket.data.suspended) return next();
       // Viewing and acknowledging their own notifications stays available.
       if (eventName === 'disconnect' || eventName === 'markMessageAsRead' || eventName === 'markAllNotificationsAsRead') {
         return next();
@@ -141,7 +166,7 @@ async function initSocket(httpServer) {
         ack({
           success: false,
           code: 'ACCOUNT_SUSPENDED',
-          message: 'Your account is suspended. You can view your account and notifications. Actions are turned off until this is lifted.',
+          message: 'Your account is suspended. You can look around Ensemble. Actions stay off until this ends.',
         });
       }
     });

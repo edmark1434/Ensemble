@@ -76,7 +76,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   currentUserId,
   getMemberName = (accountId) => `User ${accountId.slice(0, 8)}`,
   getMemberAvatar = (accountId) =>
-    `https://ui-avatars.com/api/?name=${accountId.slice(0, 8)}&background=6366f1&color=fff`,
+    `https://ui-avatars.com/api/?name=${accountId.slice(0, 8)}&background=71717a&color=fff`,
   onUpdateMember,
   onRemoveMember,
   onUpdateGroupProfileImage,
@@ -182,7 +182,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
             ? chatAttachmentUrl(account.avatar_preset_url)
             : `https://ui-avatars.com/api/?name=${encodeURIComponent(
                 account.display_name || account.handle
-              )}&background=6366f1&color=fff`,
+              )}&background=71717a&color=fff`,
         }));
         if (!cancelled) setMemberSearchResults(results);
       } catch {

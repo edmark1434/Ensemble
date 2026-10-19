@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api from "@/lib/axios";
-import { Loader2, ArrowLeft, Briefcase, FileText, PlayCircle } from "lucide-react";
+import { Loader2, ArrowLeft, Briefcase, FileText, PlayCircle, ChevronRight, Clock } from "lucide-react";
 import { useNavigate, useParams, useOutletContext } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -173,68 +173,70 @@ export const IncomingOrders: React.FC = () => {
             <div
               key={order.id}
               onClick={() => navigate(`/gigs/orders/incoming/${gigId}/order/${order.id}`)}
-              className="relative p-5 bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-2xl shadow-sm hover:border-gray-300 dark:hover:border-white/20 transition-all cursor-pointer flex flex-col group"
+              className="relative p-5 bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-2xl shadow-xs hover:shadow-lg hover:border-blue-500/40 dark:hover:border-blue-500/40 transition-all duration-200 cursor-pointer flex flex-col justify-between group"
             >
-              <div className="flex items-center justify-between mb-4">
-                <span className={`px-3 py-1 text-[11px] font-bold rounded-full border ${
-                    order.status === 'In Contract' || order.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
-                    order.status === 'Accepted' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
-                    order.status === 'Rejected' || order.status === 'Cancelled' ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' :
-                    order.status === 'Shortlisted' ? 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20' :
-                    'bg-yellow-50 text-yellow-600 border-yellow-200 dark:bg-yellow-500/10 dark:text-amber-500 dark:text-amber-400 dark:border-yellow-500/20'
-                  }`}>
-                  {order.status || "Pending"}
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-3 mb-4">
-                {order.client_avatar ? (
-                    <img src={order.client_avatar} alt={order.client_name} className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-white/10" />
-                ) : (
-                    <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold text-sm border border-blue-500/20">
-                        {order.client_name ? order.client_name[0] : "C"}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <span className={`px-2.5 py-1 text-[11px] font-bold rounded-full border ${
+                      order.status === 'In Contract' || order.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                      order.status === 'Accepted' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
+                      order.status === 'Rejected' || order.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' :
+                      order.status === 'Shortlisted' ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20' :
+                      'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
+                    }`}>
+                    {order.status || "Pending"}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-3 mb-4">
+                  {order.client_avatar ? (
+                      <img src={order.client_avatar} alt={order.client_name} className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-white/10 shrink-0" />
+                  ) : (
+                      <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/20 shrink-0">
+                          {order.client_name ? order.client_name[0] : "C"}
+                      </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{order.client_name}</p>
+                      <div className="flex items-center gap-1 text-[11px] font-bold text-amber-500 dark:text-amber-400">
+                        <svg className="w-3 h-3 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                        5.0
+                      </div>
                     </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{order.client_name}</p>
-                    <div className="flex items-center gap-1 text-[11px] font-bold text-amber-500 dark:text-amber-400">
-                      <svg className="w-3 h-3 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-                      5.0
+                    <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-gray-500 dark:text-zinc-400 truncate">
+                      <span>Gig: {order.gig_title}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-gray-500 dark:text-zinc-400 truncate">
-                    <span>Gig: {order.gig_title}</span>
+                </div>
+
+                <div className="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/80 dark:bg-white/5 flex items-center justify-between mb-4">
+                  <span className="text-[10px] font-bold text-gray-600 dark:text-zinc-400 uppercase tracking-wider">ORDERED TIER</span>
+                  <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-black text-lg tracking-tight">
+                    <CreditIcon className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                    {order.price?.toLocaleString()}
                   </div>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-1.5 mb-4">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800/80 text-gray-700 dark:text-zinc-300 text-[10px] font-semibold">
+                    <svg className="h-3 w-3 text-gray-500 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                    Tier: {order.tier_title}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800/80 text-gray-700 dark:text-zinc-300 text-[10px] font-semibold">
+                    <Clock className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
+                    {order.delivery_days} Days
+                  </span>
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 flex items-center justify-between mb-4">
-                <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">ORDERED TIER</span>
-                <div className="flex items-center gap-1.5 text-amber-500 dark:text-amber-400 font-black text-lg tracking-tight">
-                  <CreditIcon className="h-5 w-5 shrink-0" />
-                  {order.price?.toLocaleString()}
-                </div>
-              </div>
-              
-              <div className="flex flex-wrap items-center gap-1.5 mb-5">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold">
-                  <svg className="h-3 w-3 text-gray-500 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
-                  Tier: {order.tier_title}
-                </span>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold">
-                  <svg className="h-3 w-3 text-gray-500 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                  {order.delivery_days} Days
-                </span>
-              </div>
-
-              <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between gap-2 text-[11px] text-gray-500 dark:text-zinc-400 mt-auto">
+              <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between gap-2 text-[11px] text-gray-500 dark:text-zinc-400 mt-2">
                 <span className="flex items-center gap-1 text-gray-500 dark:text-zinc-400">
-                  <svg className="h-3 w-3 text-gray-500 dark:text-zinc-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                  <Clock className="h-3 w-3 text-gray-400 dark:text-zinc-500 shrink-0" />
                   Received {new Date(order.created_at).toLocaleDateString()}
                 </span>
-                <span className="text-[11px] font-bold text-blue-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                  Details &gt;
+                <span className="text-xs font-bold text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                  Details <ChevronRight className="h-3.5 w-3.5" />
                 </span>
               </div>
             </div>

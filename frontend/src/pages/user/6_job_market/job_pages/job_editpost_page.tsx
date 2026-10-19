@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, type FormEvent, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Save, X, ChevronDown, Check, Briefcase, Lock, Image as ImageIcon, Info, Plus, Trash2, Bold, Italic, List, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Save, X, ChevronDown, Check, Briefcase, Lock, Image as ImageIcon, Info, Plus, Trash2, Bold, Italic, List, Eye, EyeOff, Wand2 } from "lucide-react";
 import api from "@/lib/axios";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
@@ -11,7 +11,8 @@ import { categories, difficulties } from "../job_components/job_creation_compone
 import type { Job } from "../job_components/job_lists";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { JobRichText } from "../job_components/JobRichText";
-import { showErrorToast } from "@/components/utility/toast";
+import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
+import { handleRichTextPaste, autoFormatDescription } from "@/lib/markdownPaste";
 import { SkillsAutocomplete } from "../job_components/job_creation_components/SkillsAutocomplete";
 
 interface CustomSelectProps {
@@ -389,6 +390,18 @@ export const JobEditPostPage: React.FC = () => {
     }, 0);
   };
 
+  const handleAutoFormat = () => {
+    if (!description.trim()) return;
+    const formatted = autoFormatDescription(description);
+    setDescription(formatted);
+    setIsDirty(true);
+    setErrors((prev) => {
+      const { description: _, ...rest } = prev;
+      return rest;
+    });
+    showSuccessToast("Formatted description with Markdown!");
+  };
+
   const handleDelete = async () => {
     if (!id || hiredCount > 0) return;
     setIsSubmitting(true);
@@ -635,6 +648,16 @@ export const JobEditPostPage: React.FC = () => {
                 <button type="button" onClick={() => insertMarkdown('- ')} className="p-1 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors" title="Bullet List" disabled={isPreviewMode}>
                   <List className="w-3.5 h-3.5" />
                 </button>
+                <button
+                  type="button"
+                  onClick={handleAutoFormat}
+                  className="p-1 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors flex items-center gap-1 px-1.5"
+                  title="Auto-format AI / pasted text into Markdown (Bold headers, bullets, spacing)"
+                  disabled={isPreviewMode || !description.trim()}
+                >
+                  <Wand2 className="w-3.5 h-3.5 text-blue-500" />
+                  <span className="text-[10px] font-semibold hidden sm:inline">Format</span>
+                </button>
                 <div className="w-px h-4 bg-gray-100 dark:bg-white/10 mx-1" />
                 <button type="button" onClick={() => setIsPreviewMode(!isPreviewMode)} className={`p-1 rounded transition-colors flex items-center gap-1 px-2 ${isPreviewMode ? 'bg-blue-500/20 text-blue-400' : 'bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-300'}`} title="Toggle Preview">
                   {isPreviewMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -659,6 +682,13 @@ export const JobEditPostPage: React.FC = () => {
                 maxLength={2000}
                 placeholder="Outline requirements, raw footage details, deliverables..."
                 value={description}
+                onPaste={(e) => {
+                  const handled = handleRichTextPaste(e, description, setDescription, 2000);
+                  if (handled) {
+                    setIsDirty(true);
+                    setErrors((prev) => { const { description: _, ...r } = prev; return r; });
+                  }
+                }}
                 onChange={(e) => {
                   setDescription(e.target.value);
                   setIsDirty(true);

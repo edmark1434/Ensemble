@@ -55,6 +55,7 @@ function mapTicketRow(row) {
           staffId: row.handled_by_staff_id || row.assigned_staff_id,
           name: row.assignee_name || 'Unassigned',
           role: row.assignee_role || 'Support Moderator',
+          accountId: row.assignee_account_id || null,
         }
       : null,
     escalatedBy: row.escalated_by_staff_id
@@ -476,9 +477,13 @@ function toCategoryChart(rows) {
 
 function ticketStatusChart(counts) {
   return [
-    { label: 'Open', value: Number(counts.open_count), color: '#f87171' },
-    { label: 'In Progress', value: Number(counts.in_progress), color: '#fbbf24' },
-    { label: 'Resolved', value: Number(counts.resolved), color: '#34d399' },
+    { label: 'Open', value: Number(counts.open_count || 0), color: '#fb7185' },
+    {
+      label: 'In Progress',
+      value: Number(counts.in_progress || 0) + Number(counts.escalated_dev || 0),
+      color: '#fbbf24',
+    },
+    { label: 'Closed', value: Number(counts.resolved || counts.closed || 0), color: '#a1a1aa' },
   ].filter((x) => x.value > 0);
 }
 

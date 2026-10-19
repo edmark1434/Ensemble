@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import DiscoveryFlipCardModal from "@/components/ui/DiscoveryFlipCardModal";
 import { InviteToJobModal } from "@/components/ui/InviteToJobModal";
+import { getFallbackAvatarUrl } from "@/lib/accountAvatars";
 
 // Modularized Profile Sub-Components
 import { TopSection_ProfileDisplay } from "./Displays/TopSection_ProfileDisplay.tsx";
@@ -114,8 +115,8 @@ const services = [
   { id: 1, title: "Professional Logo Design", description: "Unique, modern logo design with 3 concepts and unlimited revisions", price: 499, deliveryTime: "3 days", rating: 4.9, orders: 127 }
 ];
 
-const constructAvatarUrl = (path: string | undefined): string | undefined => {
-  if (!path) return undefined;
+const constructAvatarUrl = (path: string | undefined, name?: string): string | undefined => {
+  if (!path || path.trim() === '') return name ? getFallbackAvatarUrl(name) : undefined;
   if (path.startsWith('http')) return path;
   const presetMatch = path.match(/p\d+\.png$/i);
   if (presetMatch) {
@@ -1073,7 +1074,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             id: id || "",
             name: userDetails.name || "",
             username: userDetails.username || "",
-            avatar: userDetails.avatar_preset_url || "",
+            avatar: constructAvatarUrl(userDetails.avatar_preset_url, userDetails.name),
             bio: userDetails.bio || "",
             skills: (userDetails.skills || []).map((s: any) => s.name || s), // fallback string map
             rawSkills: userDetails.skills || [],

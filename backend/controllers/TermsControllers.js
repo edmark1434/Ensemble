@@ -2,8 +2,7 @@ const TermsServices = require('../services/TermsServices');
 
 async function getAllTermsController(req, res) {
     try {
-        const accountId = req.user?.accountId || req.user?.account_id;
-        if (!accountId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+        const accountId = req.user?.accountId || req.user?.account_id || req.session?.account_id || null;
 
         const terms = await TermsServices.getAllTermsServices(accountId);
         res.status(200).json({ success: true, data: terms });

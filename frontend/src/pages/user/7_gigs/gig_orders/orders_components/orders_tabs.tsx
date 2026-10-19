@@ -1,5 +1,5 @@
 import React from "react";
-import { ClipboardList, Send } from "lucide-react";
+import { ClipboardList, Send, HelpCircle } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 
@@ -12,6 +12,7 @@ export const OrdersTabs: React.FC = () => {
     location.pathname.startsWith("/gigs/orders/incoming");
 
   const isSent = location.pathname.startsWith("/gigs/orders/sent");
+  const isFlow = location.pathname.startsWith("/gigs/orders/flow");
 
   return (
     <div className="flex gap-1 relative">
@@ -52,6 +53,32 @@ export const OrdersTabs: React.FC = () => {
         </span>
 
         {isSent && (
+          <>
+            <motion.div
+              layoutId="activeOrderTabGlow"
+              className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            />
+            <motion.div
+              layoutId="activeOrderTabUnderline"
+              className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            />
+          </>
+        )}
+      </button>
+
+      <button
+        onClick={() => navigate("/gigs/orders/flow")}
+        className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+          isFlow ? "text-blue-600 dark:text-blue-400 font-bold" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
+        }`}
+      >
+        <span className="relative z-10 flex items-center gap-2">
+          <HelpCircle className="h-4 w-4" /> Order Flow
+        </span>
+
+        {isFlow && (
           <>
             <motion.div
               layoutId="activeOrderTabGlow"

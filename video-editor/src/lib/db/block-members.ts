@@ -10,6 +10,7 @@ import {
 } from "@/features/editor/types/block-members";
 import { StoredProjectRole } from "@/features/editor/types/editor-role";
 import { resolveFileUrl } from "@/lib/file-url";
+import { isProjectFrozen } from "@/lib/db/projects";
 
 type PersonRow = {
   user_id: string;
@@ -218,6 +219,14 @@ export async function getBlockAccess(
   const viewerRow = memberRows.find((r) => r.user_id === viewerUserId);
   const generalAccess =
     (blockRow?.general_access as GeneralAccessLevel) ?? "Anyone can edit";
+  const frozen = await isProjectFrozen(projectId);
+  const viewerRole = frozen
+    ? "Viewer"
+    : resolveEffectiveBlockRole({
+        blockRole: viewerRow?.role ?? null,
+        generalAccess,
+        projectRole,
+      });
 
   return {
     owner: ownerRow ? toPerson(ownerRow) : null,
@@ -235,14 +244,10 @@ export async function getBlockAccess(
         }],
     ),
     candidates: candidateRows.map(toPerson),
-    canManage: canManageBlockAccess({ blockRole: viewerRow?.role ?? null, projectRole }),
-    canGrantManager: !!ownerRow && ownerRow.user_id === viewerUserId,
+    canManage: !frozen && canManageBlockAccess({ blockRole: viewerRow?.role ?? null, projectRole }),
+    canGrantManager: !frozen && !!ownerRow && ownerRow.user_id === viewerUserId,
     generalAccess,
-    viewerRole: resolveEffectiveBlockRole({
-      blockRole: viewerRow?.role ?? null,
-      generalAccess,
-      projectRole,
-    }),
+    viewerRole,
   };
 }
 

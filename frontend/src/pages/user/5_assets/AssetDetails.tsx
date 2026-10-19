@@ -545,7 +545,7 @@ export default function AssetDetails() {
 
         <section className="mb-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
           <div className="flex items-center gap-4">
-            <img src={asset.creator_avatar_path ? mediaUrl(asset.creator_avatar_path) : `https://ui-avatars.com/api/?name=${encodeURIComponent(asset.creator_name || 'User')}&background=0D8ABC&color=fff&size=128`} alt={asset.creator_name} className="h-12 w-12 rounded-full object-cover" />
+            <img src={asset.creator_avatar_path ? mediaUrl(asset.creator_avatar_path) : `https://ui-avatars.com/api/?name=${encodeURIComponent(asset.creator_name || 'User')}&background=71717a&color=fff&size=128`} alt={asset.creator_name} className="h-12 w-12 rounded-full object-cover" />
             <div>
               <p className="text-[9px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-500 mb-0.5">Uploaded By</p>
               <div className="flex items-center gap-2 mb-0.5">

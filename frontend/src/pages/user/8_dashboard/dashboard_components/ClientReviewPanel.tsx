@@ -125,15 +125,15 @@ export const ClientReviewCardActions: React.FC<ReviewCardActionsProps> = ({
     };
 
     return (
-        <div className="mt-4 pt-3.5 border-t border-blue-500/20 bg-blue-500/[0.03] dark:bg-white/[0.02] rounded-xl p-3.5 space-y-3">
+        <div className="mt-4 pt-3.5 border-t border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-white/[0.02] rounded-xl p-3.5 space-y-3">
             {/* Compact Policy & Escrow note */}
-            <div className="flex items-center justify-between text-[11px] text-blue-600 dark:text-blue-300">
+            <div className="flex items-center justify-between text-[11px] text-zinc-700 dark:text-zinc-300">
                 <span className="flex items-center gap-1.5 font-medium">
-                    <Clock className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                    <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
                     5 days review window • Auto-approves if no revision requested
                 </span>
                 {maxRevisions > 0 && (
-                    <span className="text-[10px] text-gray-500 dark:text-zinc-400">
+                    <span className="text-[10px] text-gray-500 dark:text-zinc-400 font-semibold">
                         {Math.max(0, maxRevisions - usedRevisions)} revision(s) left
                     </span>
                 )}
@@ -145,15 +145,15 @@ export const ClientReviewCardActions: React.FC<ReviewCardActionsProps> = ({
                     <button
                         type="button"
                         onClick={() => setAction(isOutOfRevisions ? 'buy_revision' : 'revise')}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold border border-red-500/30 bg-red-500/10 text-red-500 dark:text-red-400 hover:bg-red-500/20 transition"
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold border border-amber-300 dark:border-amber-500/30 bg-amber-50 text-amber-900 dark:bg-amber-500/10 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition shadow-sm"
                     >
-                        <AlertCircle className="w-3.5 h-3.5" />
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                         {isOutOfRevisions ? 'Purchase Revision' : 'Ask to Revise'}
                     </button>
                     <button
                         type="button"
                         onClick={() => setAction('approve')}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition"
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition"
                     >
                         <CheckCircle className="w-3.5 h-3.5" />
                         Approve Milestone
@@ -403,16 +403,16 @@ export const ClientReviewPanel: React.FC<Props> = ({
         <form onSubmit={handleSendMessage} className="space-y-2.5">
             {/* Slim contextual indicator */}
             {canReview ? (
-                <div className="flex items-center justify-between px-1 text-[11px] text-blue-600 dark:text-blue-400 font-medium">
+                <div className="flex items-center justify-between px-1 text-[11px] text-blue-900 dark:text-blue-300 font-semibold">
                     <span className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5" />
+                        <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                         Deliverable submitted for review
                     </span>
                     {onViewReviewTab && (
                         <button
                             type="button"
                             onClick={onViewReviewTab}
-                            className="font-bold underline text-blue-600 dark:text-blue-400 hover:opacity-80"
+                            className="font-bold underline text-blue-700 dark:text-blue-300 hover:opacity-80"
                         >
                             View & Review Deliverable &rarr;
                         </button>
@@ -420,11 +420,11 @@ export const ClientReviewPanel: React.FC<Props> = ({
                 </div>
             ) : (
                 activeMilestone?.status === 'overdue' && (
-                    <div className="flex items-center justify-between px-1 text-[11px] text-rose-500 font-medium">
+                    <div className="flex items-center justify-between px-1 text-[11px] text-rose-900 dark:text-rose-300 font-semibold">
                         <span className="flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5" /> Milestone deadline has passed
+                            <Clock className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" /> Milestone deadline has passed
                         </span>
-                        <span className="text-[10px] text-gray-400 dark:text-zinc-500">
+                        <span className="text-[10px] text-gray-500 dark:text-zinc-400">
                             Coordinate progress with freelancer below
                         </span>
                     </div>

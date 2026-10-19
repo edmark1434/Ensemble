@@ -10,14 +10,17 @@ interface HeroProps {
 
 import TrueFocus from "@/components/ui/TrueFocus";
 import GradientBlinds from "@/components/ui/GradientBlinds";
+import TechText from "@/components/ui/TechText";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
+import { APP_VERSION } from "@/version.tsx";
 
 const INTENT_INDEX = { hire: 0, work: 1, edit: 2 } as const;
 
 const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
   const navigate = useNavigate();
   const setIsGuestMode = useGlobalState((state) => state.setIsGuestMode);
+  const theme = useGlobalState((state) => state.theme);
 
   const [mounted, setMounted] = useState<boolean>(false);
   const [intent, setIntent] = useState<"hire" | "work" | "edit">("hire");
@@ -238,8 +241,8 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
       <div style={{ maxWidth: "1400px", width: "100%", margin: "0 auto", position: "relative", zIndex: 3 }}>
         <div style={{ maxWidth: "800px" }}>
 
-          {/* STATIC BADGE */}
-          <div className="bg-white/50 border-gray-200 dark:bg-white/[0.03] dark:border-white/[0.08]" style={{ ...animLoad(0), display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 14px", borderRadius: "100px", marginBottom: "24px", backdropFilter: "blur(8px)", borderWidth: "1px", borderStyle: "solid" }}>
+          {/* 1. EYEBROW BADGE */}
+          <div className="bg-white/50 border-gray-200 dark:bg-white/[0.03] dark:border-white/[0.08]" style={{ ...animLoad(0), display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 14px", borderRadius: "100px", marginBottom: "20px", backdropFilter: "blur(8px)", borderWidth: "1px", borderStyle: "solid" }}>
             <div className="text-gray-500 dark:text-[#a1a1aa]" style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>
               <TrueFocus 
                 sentence="COLLABORATIVE VIDEO EDITING|& CREATIVE MARKETPLACE"
@@ -254,15 +257,49 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
             </div>
           </div>
 
-          {/* SLIDING CONTENT */}
+          {/* 2. INTERACTIVE TECH TEXT BRAND TITLE */}
+          <div 
+            role="heading" 
+            aria-level={1}
+            style={{ 
+              ...animLoad(0.06), 
+              marginBottom: "16px",
+              marginLeft: "-24px",
+              position: "relative",
+              zIndex: 10
+            }} 
+            className="w-[calc(100%+32px)] max-w-[850px] h-[95px] sm:h-[125px] md:h-[150px] text-gray-900 dark:text-white"
+          >
+            <TechText
+              text="Ensemble"
+              fontFamily="'Plus Jakarta Sans', sans-serif"
+              fontWeight={900}
+              fontSize={130}
+              letterSpacing={-0.04}
+              align="left"
+              color={theme === 'dark' ? '#ffffff' : '#000000'}
+              accentColor={theme === 'dark' ? '#ffffff' : '#000000'}
+              draggable={true}
+              clickKick={true}
+              sweep={true}
+              labels={true}
+              specks={16}
+              selection={true}
+              guides={false}
+              bleed={{ top: 350, bottom: 650, left: 250, right: 900 }}
+              intro="none"
+            />
+          </div>
+
+          {/* 3. DYNAMIC INTENT TAGLINE & DESCRIPTION */}
           <div key={`text-${intent}`} className={isSwitching ? "opacity-0" : (slideDirection === "right" ? "slide-from-right" : "slide-from-left")}>
-            <h1 className="text-gray-900 dark:text-white" style={{ fontSize: "clamp(42px, 5.5vw, 64px)", fontWeight: 800, lineHeight: 1.1, letterSpacing: "-0.03em", marginBottom: "24px" }}>
+            <h2 className="text-gray-900 dark:text-white" style={{ fontSize: "clamp(24px, 3vw, 36px)", fontWeight: 700, lineHeight: 1.25, letterSpacing: "-0.025em", marginBottom: "12px" }}>
               {intent === "hire" && "Work at the speed of your ambition"}
               {intent === "work" && "Find the freedom to secure top tier gigs"}
               {intent === "edit" && "Create high-impact edits in real-time"}
-            </h1>
+            </h2>
 
-            <p className="text-gray-600 dark:text-[#a1a1aa]" style={{ fontSize: 18, marginBottom: "36px", lineHeight: 1.5, maxWidth: "580px" }}>
+            <p className="text-gray-600 dark:text-[#a1a1aa]" style={{ fontSize: 16, marginBottom: "28px", lineHeight: 1.6, maxWidth: "580px" }}>
               {intent === "hire" && "Hire specialized filmmakers and editors who use cutting-edge AI pipelines to transform complex production workflows into high impact outcomes."}
               {intent === "work" && "Gain access to premium global project creators, scale your remote freelance career, and automate empty dead-air cleanups synchronously."}
               {intent === "edit" && "Edit directly in your browser with zero rendering delay. Leverage automated caption markers and audio-syncing with team members simultaneously."}
@@ -378,6 +415,19 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
                 {tag}
               </button>
             ))}
+          </div>
+
+          {/* APP VERSION */}
+          <div style={{ marginTop: "18px" }}>
+            <span
+              className="text-[10px] sm:text-xs font-mono font-medium tracking-[0.18em] text-gray-400 dark:text-zinc-500 whitespace-nowrap select-none"
+              style={{
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                lineHeight: 1,
+              }}
+            >
+              {APP_VERSION}
+            </span>
           </div>
 
         </div>

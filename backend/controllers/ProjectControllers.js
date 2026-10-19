@@ -83,6 +83,9 @@ async function renameProjectController(req, res) {
 
         return res.status(200).json({ success: true, message: 'Project renamed successfully' });
     } catch (error) {
+        if (error.statusCode === 403) {
+            return res.status(403).json({ success: false, message: error.message });
+        }
         console.error('Error in renameProjectController:', error);
         return res.status(500).json({ success: false, message: 'Internal server error' });
     }

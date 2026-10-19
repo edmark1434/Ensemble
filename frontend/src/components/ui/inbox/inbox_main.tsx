@@ -21,7 +21,7 @@ import api from "@/lib/axios";
 
 import type { Inbox, Message } from "./inbox_dataset";
 import useChatState, { formatCallCardText } from "../chat_bubble/chat_state";
-import { MARKETPLACE_CONVERSATION_TYPES } from "../chat_bubble/useInboxUnreadTotals";
+import { MARKETPLACE_CONVERSATION_TYPES, isMarketplaceConversation } from "../chat_bubble/useInboxUnreadTotals";
 
 import { InboxTab } from "./inbox_components/inbox_tab";
 import { InboxSearch } from "./inbox_components/inbox_search";
@@ -274,7 +274,7 @@ const InboxMain = () => {
       }
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(
         getConversationName(inbox)
-      )}&background=6366f1&color=fff&bold=true`;
+      )}&background=71717a&color=fff&bold=true`;
     },
     [currentUserId, getConversationName, profiles, user]
   );
@@ -422,7 +422,7 @@ const InboxMain = () => {
 
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(
         name
-      )}&background=6366f1&color=fff`;
+      )}&background=71717a&color=fff`;
     },
     [currentUserId, profiles, selectedConversation, user]
   );
@@ -440,7 +440,7 @@ const InboxMain = () => {
             profile.avatar_preset_url &&
             /^https?:\/\//i.test(profile.avatar_preset_url)
               ? profile.avatar_preset_url
-              : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`,
+              : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=71717a&color=fff`,
         };
       }),
     [memberIds, profiles]
@@ -477,10 +477,8 @@ const InboxMain = () => {
     () =>
       inboxList.filter((inbox) =>
         isMarketplace
-          ? MARKETPLACE_CONVERSATION_TYPES.has(inbox.conversation_type)
-          : ["direct", "group", "ticket", "dispute"].includes(
-              inbox.conversation_type
-            )
+          ? isMarketplaceConversation(inbox)
+          : !isMarketplaceConversation(inbox)
       ),
     [inboxList, isMarketplace]
   );
@@ -513,7 +511,10 @@ const InboxMain = () => {
     ) {
       void selectConversation(requestedConversationId)
         .then(() => {
-          navigate(location.pathname, { replace: true, state: null });
+          const targetConvo = inboxList.find(c => String(c._id) === requestedConversationId);
+          const shouldBeMarketplace = targetConvo ? isMarketplaceConversation(targetConvo) : isMarketplace;
+          const targetPath = shouldBeMarketplace ? '/inbox/marketplace' : '/inbox/direct';
+          navigate(targetPath, { replace: true, state: null });
         })
         .catch((error: unknown) => {
           console.error("Unable to open requested conversation:", error);
@@ -521,7 +522,10 @@ const InboxMain = () => {
         });
       return;
     } else if (requestedConversationId) {
-      navigate(location.pathname, { replace: true, state: null });
+      const targetConvo = inboxList.find(c => String(c._id) === requestedConversationId);
+      const shouldBeMarketplace = targetConvo ? isMarketplaceConversation(targetConvo) : isMarketplace;
+      const targetPath = shouldBeMarketplace ? '/inbox/marketplace' : '/inbox/direct';
+      navigate(targetPath, { replace: true, state: null });
       return;
     } else if (!activeIsVisible && tabConversations[0]) {
       void handleSelectConversation(tabConversations[0]);
@@ -580,10 +584,8 @@ const InboxMain = () => {
     if (!selectedConversation) return filteredConversations;
 
     const selectedBelongsToTab = isMarketplace
-      ? MARKETPLACE_CONVERSATION_TYPES.has(selectedConversation.conversation_type)
-      : ["direct", "group", "ticket", "dispute"].includes(
-          selectedConversation.conversation_type
-        );
+      ? isMarketplaceConversation(selectedConversation)
+      : !isMarketplaceConversation(selectedConversation);
 
     if (!selectedBelongsToTab) return filteredConversations;
 
@@ -685,6 +687,14 @@ const InboxMain = () => {
   const handleSendMessage = async () => {
     if (!messageInput.trim() && mediaList.length === 0) return;
     if (!selectedConversation || isSending) return;
+    const ticketStatus = String(selectedConversation.ticket_details?.status || "");
+    if (
+      selectedConversation.conversation_type === "ticket" &&
+      (ticketStatus === "Closed" || ticketStatus === "Resolved")
+    ) {
+      setMessageError("This ticket is closed. You cannot reply.");
+      return;
+    }
 
     if (editingMessage) {
       setIsSending(true);
@@ -891,7 +901,7 @@ const InboxMain = () => {
       if (avatar && base) return `${base}/${avatar.replace(/^\/+/, "")}`;
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(
         senderName
-      )}&background=6366f1&color=fff`;
+      )}&background=71717a&color=fff`;
     })();
 
     if (message.is_unsent || message.is_deleted || message.deleted_at) {
@@ -1395,7 +1405,7 @@ getConversationName={getConversationName}
               if (avatar) return chatAttachmentUrl(avatar);
               return `https://ui-avatars.com/api/?name=${encodeURIComponent(
                   accountId === currentActorId ? "You" : (profiles[accountId]?.name || accountId.slice(0, 8))
-                )}&background=6366f1&color=fff`;
+                )}&background=71717a&color=fff`;
             }}
             suggestedAccounts={suggestedAccounts}
             onUpdateMember={(

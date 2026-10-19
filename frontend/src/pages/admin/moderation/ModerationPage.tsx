@@ -44,6 +44,8 @@ import ReportsTab from './ReportsTab';
 import ListingApprovalsTab from './ListingApprovalsTab';
 import IdentityVerificationTab from './IdentityVerificationTab';
 import MyCasesTab from './MyCasesTab';
+import VideoManagementSection from './VideoManagementSection';
+import ForumManagementSection from './ForumManagementSection';
 
 const CLOSED_DISPUTE_STATUSES = new Set(['closed']);
 
@@ -1139,11 +1141,11 @@ function ManagementTab({
     },
     video: {
       title: 'Video platform management',
-      description: 'Content moderation for video uploads and the editor pipeline.',
+      description: 'Every editor project, who is on it, and a freeze that stops further edits.',
     },
     forum: {
       title: 'Forum content management',
-      description: 'Groups and discussions flagged or pending review from MongoDB.',
+      description: 'Groups, discussions, members, and the actions that hide or lock them.',
     },
   };
 
@@ -1185,14 +1187,8 @@ function ManagementTab({
           onChanged={onSaved}
         />
       )}
-      {section === 'video' && <VideoSection />}
-      {section === 'forum' && (
-        <ForumSection
-          connected={data.dataSources.mongo.connected}
-          groups={data.forumReviewQueue}
-          discussions={data.contentSnapshots}
-        />
-      )}
+      {section === 'video' && <VideoManagementSection />}
+      {section === 'forum' && <ForumManagementSection />}
     </div>
   );
 }
@@ -1996,296 +1992,6 @@ function ConfirmDeleteModal({
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function VideoSection() {
-  return (
-    <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-8">
-      <div className="mx-auto max-w-lg text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/10">
-          <Video className="h-7 w-7 text-rose-400" />
-        </div>
-        <h3 className="mt-4 text-lg font-semibold text-white">Video pipeline not connected</h3>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-          The video editor runs as a separate app. When the asset upload pipeline is wired to this
-          admin surface, flagged clips, takedown requests, and age-restricted content will be
-          managed from this panel.
-        </p>
-        <ul className="mt-6 space-y-2 text-left text-sm text-zinc-400">
-          {[
-            'Review flagged video uploads',
-            'Issue takedowns and age restrictions',
-            'Audit editor publish events',
-          ].map((item) => (
-            <li
-              key={item}
-              className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-zinc-600" />
-              {item}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  );
-}
-
-function ForumSection({
-  connected,
-  groups,
-  discussions,
-}: {
-  connected: boolean;
-  groups: ModerationOverview['forumReviewQueue'];
-  discussions: ModerationOverview['contentSnapshots'];
-}) {
-  const [search, setSearch] = useState('');
-  const [contentFilter, setContentFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
-
-  const statusOptions = useMemo(
-    () => uniqueOptions(groups.map((g) => g.status)),
-    [groups]
-  );
-
-  const filteredGroups = useMemo(() => {
-    if (contentFilter === 'discussions') return [];
-    const q = search.trim().toLowerCase();
-    let list = groups.filter((g) => {
-      if (statusFilter !== 'all' && g.status.toLowerCase() !== statusFilter) return false;
-      if (!q) return true;
-      return (
-        g.name.toLowerCase().includes(q) ||
-        (g.description || '').toLowerCase().includes(q) ||
-        g.tags.some((t) => t.toLowerCase().includes(q)) ||
-        g.status.toLowerCase().includes(q)
-      );
-    });
-    list = [...list].sort((a, b) => {
-      switch (sortBy) {
-        case 'name':
-          return a.name.localeCompare(b.name);
-        case 'members':
-          return b.memberCount - a.memberCount;
-        case 'oldest':
-          return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
-        case 'newest':
-        default:
-          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-      }
-    });
-    return list;
-  }, [groups, search, statusFilter, contentFilter, sortBy]);
-
-  const filteredDiscussions = useMemo(() => {
-    if (contentFilter === 'groups') return [];
-    const q = search.trim().toLowerCase();
-    let list = discussions.filter((d) => {
-      if (!q) return true;
-      return (
-        d.title.toLowerCase().includes(q) ||
-        String(d.userId ?? '').includes(q) ||
-        String(d.groupId ?? '').toLowerCase().includes(q)
-      );
-    });
-    list = [...list].sort((a, b) => {
-      switch (sortBy) {
-        case 'name':
-          return a.title.localeCompare(b.title);
-        case 'members':
-          return b.commentCount - a.commentCount;
-        case 'oldest':
-          return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
-        case 'newest':
-        default:
-          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-      }
-    });
-    return list;
-  }, [discussions, search, contentFilter, sortBy]);
-
-  if (!connected) {
-    return (
-      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-8 text-center">
-        <MessageSquare className="mx-auto h-10 w-10 text-amber-400" />
-        <p className="mt-4 text-white">Forum content unavailable</p>
-        <p className="mt-2 text-sm text-zinc-500">
-          Set MONGODB_URI in backend/.env to scan forum_groups and forum_discussions.
-        </p>
-      </div>
-    );
-  }
-
-  const q = search.trim();
-  const hasFilters = q || contentFilter !== 'all' || statusFilter !== 'all';
-  const totalVisible = filteredGroups.length + filteredDiscussions.length;
-  const totalAll = groups.length + discussions.length;
-
-  return (
-    <div className="space-y-6">
-      <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
-        <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <div className="relative min-w-[200px] flex-1 sm:max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search groups / discussions / tags…"
-              className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
-            />
-          </div>
-          <p className="text-xs text-zinc-500 sm:order-last sm:w-full lg:order-none lg:w-auto">
-            {totalVisible} item{totalVisible === 1 ? '' : 's'}
-            {hasFilters ? ` matching filters (of ${totalAll})` : ''}
-          </p>
-          <div className="hidden flex-1 lg:block" />
-          <TableFilterBar
-            filters={[
-              {
-                id: 'content',
-                label: 'Content',
-                value: contentFilter,
-                options: [
-                  { value: 'groups', label: 'Groups only' },
-                  { value: 'discussions', label: 'Discussions only' },
-                ],
-              },
-              {
-                id: 'status',
-                label: 'Group status',
-                value: statusFilter,
-                options: statusOptions,
-              },
-            ]}
-            sort={{
-              value: sortBy,
-              options: [
-                { value: 'newest', label: 'Newest first' },
-                { value: 'oldest', label: 'Oldest first' },
-                { value: 'name', label: 'Name A–Z' },
-                { value: 'members', label: 'Most members / comments' },
-              ],
-            }}
-            onFilterChange={(id, value) => {
-              if (id === 'content') setContentFilter(value);
-              if (id === 'status') setStatusFilter(value);
-            }}
-            onSortChange={setSortBy}
-            onClear={() => {
-              setContentFilter('all');
-              setStatusFilter('all');
-              setSortBy('newest');
-            }}
-          />
-        </div>
-      </section>
-
-      {(contentFilter === 'all' || contentFilter === 'groups') && (
-        <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
-          <div className="border-b border-white/[0.06] px-4 py-3">
-            <h3 className="text-sm font-semibold text-white">Forum groups</h3>
-            <p className="text-xs text-zinc-500">
-              {filteredGroups.length} of {groups.length} groups
-            </p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/[0.06] bg-[#0f1016] text-[10px] uppercase tracking-wide text-zinc-500">
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Members</th>
-                  <th className="px-4 py-3">Tags</th>
-                  <th className="px-4 py-3">Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredGroups.map((g) => (
-                  <tr key={g.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-white">{g.name}</p>
-                      {g.description && (
-                        <p className="max-w-xs truncate text-[10px] text-zinc-600">
-                          {g.description}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-zinc-400">{g.status}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-zinc-300">
-                      {g.memberCount}
-                    </td>
-                    <td className="max-w-[180px] truncate px-4 py-3 text-xs text-zinc-500">
-                      {g.tags.length ? g.tags.join(', ') : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-zinc-500">
-                      {formatDateTime(g.createdAt)}
-                    </td>
-                  </tr>
-                ))}
-                {filteredGroups.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-zinc-500">
-                      No groups match your search or filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {(contentFilter === 'all' || contentFilter === 'discussions') && (
-        <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
-          <div className="border-b border-white/[0.06] px-4 py-3">
-            <h3 className="text-sm font-semibold text-white">Discussions to review</h3>
-            <p className="text-xs text-zinc-500">
-              {filteredDiscussions.length} of {discussions.length} discussions
-            </p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/[0.06] bg-[#0f1016] text-[10px] uppercase tracking-wide text-zinc-500">
-                  <th className="px-4 py-3">Title</th>
-                  <th className="px-4 py-3 text-right">Comments</th>
-                  <th className="px-4 py-3">User</th>
-                  <th className="px-4 py-3">Group</th>
-                  <th className="px-4 py-3">Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredDiscussions.map((d) => (
-                  <tr key={d.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
-                    <td className="px-4 py-3 font-medium text-white">{d.title}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-zinc-300">
-                      {d.commentCount}
-                    </td>
-                    <td className="px-4 py-3 text-zinc-400">{d.userId ?? '—'}</td>
-                    <td className="max-w-[140px] truncate px-4 py-3 text-xs text-zinc-500">
-                      {d.groupId ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-zinc-500">
-                      {formatDateTime(d.createdAt)}
-                    </td>
-                  </tr>
-                ))}
-                {filteredDiscussions.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-zinc-500">
-                      No discussions match your search or filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
     </div>
   );
 }

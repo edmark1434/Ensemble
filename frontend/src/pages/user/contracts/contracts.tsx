@@ -1,43 +1,38 @@
 import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
-// src/pages/user/contracts/contracts.tsx
 import React, { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import api from "@/lib/axios";
 import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
 import {
   Shield,
-  Briefcase,
-  MicVocal,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
+  ScrollText,
   Archive,
-  User,
-  FileText,
-  Calendar,
-  X,
-  Check,
-  Lock,
+  AlertCircle,
   ExternalLink,
-  ShieldCheck,
-  ShieldAlert,
-  Layers,
-  Sparkles,
-  XCircle,
   ListTodo,
-  Ban,
-  Eye,
-  CalendarPlus,
-  Users
+  CheckCircle2,
+  Users,
+  Briefcase,
+  Sparkles,
+  ArrowRight,
+  Check,
+  Calendar,
+  ChevronRight,
+  BookOpen,
+  Clock,
+  Layers,
+  FileCheck2,
+  XCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import useGlobalState from "@/lib/global_state";
-import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
+import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
+import { ContractsTerminologyGuide } from "./ContractsTerminologyGuide";
 
 export type ContractType = "Job" | "Gig";
-export type ContractStatus = "Active" | "Waiting" | "Done" | "Cancelled" | "Closed";
+export type ContractStatus = "Active" | "Waiting" | "Done" | "Cancelled" | "Closed" | "Pending Signature";
 export type MilestoneStatus = "Claimed" | "In Progress" | "Locked" | "Overdue" | "Stalled" | "Abandoned" | "Under Review" | "Cancelled";
 
 export interface CancellationRequest {
@@ -72,6 +67,7 @@ export interface MilestoneItem {
 
 export interface DetailedContract {
   id: string;
+  proposalId?: string;
   title: string;
   contractType: ContractType;
   clientName: string;
@@ -105,111 +101,47 @@ export interface DetailedContract {
   freelancerTosTitle: string;
   freelancerTosContent: string;
 
+  // Workflow terms & conditions
+  initiatorRole?: string;
+  isExistingProject?: boolean;
+  existingProjectId?: string;
+  requireNDA?: boolean;
+  portfolioUseAllowed?: boolean;
+  portfolioDuration?: number;
+
   // Milestones
   milestones: MilestoneItem[];
 }
-
-const SAMPLE_DETAILED_CONTRACTS: DetailedContract[] = [
-  {
-    id: "CTR-8801",
-    title: "YouTube Channel Intro Animation and Motion Graphics Design Package",
-    contractType: "Job",
-    clientName: "Edmark Talingting",
-    freelancerName: "John Paul Mahilom",
-    status: "Active",
-    isArchived: false,
-    dateCreated: "Jul 25, 2026",
-    clientRange: "8,000 ~ 16,000",
-    totalValueCredits: 12000,
-    platformFeePercent: 20,
-    jobDescription:
-      "We are looking for a creative and detail-oriented Intermediate Video Editor to craft a beautiful, cinematic 10-minute wedding highlight reel. The goal is to capture the essence of the couple's special day, focusing on emotional peaks, atmosphere, and the 'Romantic Style' requested.\n\nKey Responsibilities:\n• Narrative Storytelling: Weave together ceremony, speeches, and candid moments into a cohesive 10-minute reel.",
-    addOnRate: "15% per Milestone",
-    freelancerTosTitle: "Standard Platform TOS",
-    freelancerTosContent:
-      "1. All deliverables remain property of the creator until final milestone payout.\n2. Source files delivered upon project completion.\n3. Communication conducted via platform inbox.\n4. Additional revisions outside milestone quotas billed at agreed additional work rate.",
-    milestones: [
-      { id: 1, name: "Rough Cut", revisions: 2, deadline: "12 Hours", credits: 4000, status: "Claimed" },
-      { id: 2, name: "Creative Edits", revisions: 2, deadline: "12 Hours", credits: 4000, status: "In Progress" },
-      { id: 3, name: "Final Polish", revisions: 2, deadline: "12 Hours", credits: 4000, status: "Locked" },
-    ],
-  },
-  {
-    id: "CTR-8742",
-    title: "Cinematic Commercial Sound Design & FX Heavy Post-Production Pass",
-    contractType: "Gig",
-    clientName: "TechCraft Reviews",
-    freelancerName: "John Paul Mahilom",
-    status: "Waiting",
-    isArchived: false,
-    dateCreated: "Jul 28, 2026",
-    dateStarted: "Jul 31, 2026 • 09:30 AM",
-    clientRange: "5,000 ~ 10,000",
-    totalValueCredits: 7500,
-    platformFeePercent: 20,
-    jobDescription:
-      "Create high-energy custom audio transitions and cinematic sound effects for upcoming product launch trailers. All stems must be delivered in uncompressed WAV format with commercial distribution clearance.",
-    addOnRate: "10% per Milestone",
-    freelancerTosTitle: "Strict IP Transfer TOS",
-    freelancerTosContent:
-      "1. Full IP transfer granted immediately upon each milestone approval.\n2. Raw media and project files transferred after step sign-off.\n3. Non-disclosure agreement applies to all unreleased media.",
-    milestones: [
-      { id: 1, name: "Sound FX Draft Pass", revisions: 2, deadline: "24 Hours", credits: 3750, status: "Locked" },
-      { id: 2, name: "Master Audio Mix", revisions: 2, deadline: "24 Hours", credits: 3750, status: "Locked" },
-    ],
-  },
-  {
-    id: "CTR-7900",
-    title: "Social Media Promo Clips Batch #3",
-    contractType: "Job",
-    clientName: "Vanguard Fashion",
-    freelancerName: "John Paul Mahilom",
-    status: "Done",
-    isArchived: true,
-    dateCreated: "Jun 10, 2026",
-    clientRange: "3,000 ~ 6,000",
-    totalValueCredits: 5000,
-    platformFeePercent: 20,
-    jobDescription:
-      "Editing 5 short vertical reel clips tailored for Instagram & TikTok. Includes subtitling, color grading, and royalty-free background music integration.",
-    addOnRate: "20% per Milestone",
-    freelancerTosTitle: "Standard Platform TOS",
-    freelancerTosContent:
-      "1. Deliverables provided in 1080x1920 MP4 format.\n2. Up to 2 rounds of minor revisions included.",
-    milestones: [
-      { id: 1, name: "Reels Rough Edits", revisions: 1, deadline: "12 Hours", credits: 2500, status: "Claimed" },
-      { id: 2, name: "Final Subtitled Export", revisions: 1, deadline: "12 Hours", credits: 2500, status: "Claimed" },
-    ],
-  },
-];
 
 // ============================================================================
 // SKELETON LOADER
 // ============================================================================
 const ContractsSkeletonLoader: React.FC = () => (
   <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-pulse font-['Plus_Jakarta_Sans']">
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-6 md:p-8">
-      <div className="h-8 w-64 rounded-lg bg-gray-100 dark:bg-white/10" />
-      <div className="mt-2 h-4 w-96 max-w-full rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+    <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-xs p-6 md:p-8">
+      <div className="h-8 w-64 rounded-lg bg-zinc-200 dark:bg-white/10" />
+      <div className="mt-2 h-4 w-96 max-w-full rounded-lg bg-zinc-100 dark:bg-white/5" />
     </div>
 
     <div className="space-y-4">
-      <div className="flex gap-6 border-b border-gray-200 dark:border-white/10 pb-2">
-        <div className="h-8 w-32 rounded bg-gray-100 dark:bg-white/10" />
-        <div className="h-8 w-36 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+      <div className="flex gap-6 border-b border-zinc-200 dark:border-white/10 pb-2">
+        <div className="h-8 w-32 rounded bg-zinc-200 dark:bg-white/10" />
+        <div className="h-8 w-36 rounded bg-zinc-100 dark:bg-white/5" />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-5 md:grid-cols-2">
         {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
-            className="h-32 w-full rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-5 flex items-center justify-between"
+            className="h-64 w-full rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-xs p-6 flex flex-col justify-between"
           >
-            <div className="space-y-2">
-              <div className="h-4 w-48 rounded bg-gray-100 dark:bg-white/10" />
-              <div className="h-3 w-32 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+            <div className="space-y-3">
+              <div className="h-4 w-48 rounded bg-zinc-200 dark:bg-white/10" />
+              <div className="h-6 w-3/4 rounded bg-zinc-200 dark:bg-white/10" />
             </div>
-            <div className="h-6 w-20 rounded-full bg-gray-100 dark:bg-white/10" />
+            <div className="h-16 w-full rounded-xl bg-zinc-100 dark:bg-white/5" />
+            <div className="h-2 w-full rounded-full bg-zinc-200 dark:bg-white/10" />
+            <div className="h-8 w-full rounded-lg bg-zinc-100 dark:bg-white/5" />
           </div>
         ))}
       </div>
@@ -220,112 +152,48 @@ const ContractsSkeletonLoader: React.FC = () => (
 // ============================================================================
 // HELPERS
 // ============================================================================
-function formatDateTimeWithRelative(dateString: string | undefined): string {
-    if (!dateString) return "N/A";
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "N/A";
-
-    const formattedDate = date.toLocaleDateString([], { month: '2-digit', day: '2-digit', year: 'numeric' });
-    const formattedTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    const now = new Date();
-    const diffInSeconds = (date.getTime() - now.getTime()) / 1000;
-    
-    const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
-    let relative = "";
-    const absDiff = Math.abs(diffInSeconds);
-    
-    if (absDiff < 60) relative = rtf.format(Math.round(diffInSeconds), 'second');
-    else if (absDiff < 3600) relative = rtf.format(Math.round(diffInSeconds / 60), 'minute');
-    else if (absDiff < 86400) relative = rtf.format(Math.round(diffInSeconds / 3600), 'hour');
-    else relative = rtf.format(Math.round(diffInSeconds / 86400), 'day');
-
-    return `${formattedDate} ${formattedTime} (${relative})`;
+function formatMilestoneDeadline(m: any): string {
+  if (m.deadline_at) {
+    const d = new Date(m.deadline_at);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+  }
+  if (m.hours) return `${m.hours} Hours`;
+  const hrs = Number(m.deadline);
+  if (!isNaN(hrs) && hrs <= 0) return 'Flexible';
+  if (!isNaN(hrs) && hrs > 0 && hrs < 100000) {
+    if (m.started_at) {
+      const st = new Date(m.started_at);
+      if (!isNaN(st.getTime())) {
+        return new Date(st.getTime() + hrs * 3600000).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      }
+    }
+    if (hrs >= 24 && hrs % 24 === 0) {
+      return `${hrs / 24} Day${hrs / 24 > 1 ? 's' : ''} (${hrs} hrs)`;
+    }
+    return `${hrs} Hours`;
+  }
+  if (typeof m.deadline === 'string' && m.deadline.includes('-')) {
+    const d = new Date(m.deadline);
+    if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
+      return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+  }
+  return m.deadline ? String(m.deadline) : 'N/A';
 }
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 export const Contracts: React.FC = () => { 
+  const navigate = useNavigate();
+  const { user } = useGlobalState();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isVerified = useGlobalState((state) => state.isVerified);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
+  const [activeTab, setActiveTab] = useState<"active" | "pending" | "archived" | "guide">("active");
   const [contracts, setContracts] = useState<DetailedContract[]>([]);
-  const [selectedContract, setSelectedContract] = useState<DetailedContract | null>(null);
-  const [milestoneAction, setMilestoneAction] = useState<{ type: string; milestoneId: string; milestoneName: string } | null>(null);
-  const [extensionDays, setExtensionDays] = useState<number>(3);
-  const [milestoneLoading, setMilestoneLoading] = useState(false);
-  const { user } = useGlobalState();
-
-  // Mutual Cancellation state
-  const [activeCancellation, setActiveCancellation] = useState<CancellationRequest | null>(null);
-  const [cancellationModalOpen, setCancellationModalOpen] = useState(false);
-  const [cancellationReason, setCancellationReason] = useState("Mutual agreement to end project");
-  const [cancellationMessage, setCancellationMessage] = useState("");
-  const [submittingCancellation, setSubmittingCancellation] = useState(false);
-  const [declineModalOpen, setDeclineModalOpen] = useState(false);
-  const [declineReason, setDeclineReason] = useState("");
-  const [actionLoading, setActionLoading] = useState(false);
-
-  const myAccountId = String(user?.account_id || (user as any)?.accountId || (user as any)?.id || '').trim();
-  const isCancellationInitiator = Boolean(
-    activeCancellation && (
-      (myAccountId && (
-        String(activeCancellation.initiator_account_id || '') === myAccountId ||
-        String(activeCancellation.initiated_by || '') === myAccountId
-      )) ||
-      (selectedContract && myAccountId && (
-        (activeCancellation.initiator_role === 'client' && String(selectedContract.clientAccountId) === myAccountId) ||
-        (activeCancellation.initiator_role === 'freelancer' && String(selectedContract.freelancerAccountId) === myAccountId)
-      ))
-    )
-  );
-
-  const formatRemainingTime = (targetIso?: string) => {
-    if (!targetIso) return '';
-    const diff = new Date(targetIso).getTime() - Date.now();
-    if (diff <= 0) return 'Expiring now (pending auto-approval)';
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    if (hours >= 24) {
-      const days = Math.floor(hours / 24);
-      const remHours = hours % 24;
-      return `${days}d ${remHours}h remaining`;
-    }
-    return `${hours}h ${minutes}m remaining`;
-  };
-
-  const formatMilestoneDeadline = (m: any) => {
-    if (m.deadline_at) {
-      const d = new Date(m.deadline_at);
-      if (!isNaN(d.getTime())) {
-        return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-      }
-    }
-    if (m.hours) return `${m.hours} Hours`;
-    const hrs = Number(m.deadline);
-    if (!isNaN(hrs) && hrs <= 0) return 'Flexible';
-    if (!isNaN(hrs) && hrs > 0 && hrs < 100000) {
-      if (m.started_at) {
-        const st = new Date(m.started_at);
-        if (!isNaN(st.getTime())) {
-          return new Date(st.getTime() + hrs * 3600000).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-        }
-      }
-      if (hrs >= 24 && hrs % 24 === 0) {
-        return `${hrs / 24} Day${hrs / 24 > 1 ? 's' : ''} (${hrs} hrs)`;
-      }
-      return `${hrs} Hours`;
-    }
-    if (typeof m.deadline === 'string' && m.deadline.includes('-')) {
-      const d = new Date(m.deadline);
-      if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
-        return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-      }
-    }
-    return m.deadline ? String(m.deadline) : 'N/A';
-  };
 
   const mapBackendContracts = useCallback((data: any[]): DetailedContract[] => {
     return data.map((c: any) => {
@@ -356,6 +224,8 @@ export const Contracts: React.FC = () => {
       let derivedStatus = c.status;
       if (derivedStatus === 'Completed') {
         derivedStatus = 'Closed';
+      } else if (derivedStatus === 'Pending Signature') {
+        derivedStatus = 'Pending Signature';
       } else if (allMilestonesDone) {
         if (c.client_rating && c.freelancer_rating) {
           derivedStatus = 'Closed';
@@ -366,6 +236,7 @@ export const Contracts: React.FC = () => {
 
       return {
         id: c.contract_id,
+        proposalId: c.proposal_id,
         title: c.job_title || c.contract_type,
         contractType: c.contract_type === 'job' ? 'Job' : 'Gig',
         clientName: c.client_name || c.client_handle,
@@ -397,9 +268,23 @@ export const Contracts: React.FC = () => {
           ? c.target_milestone_tasks
           : (typeof c.target_milestone_tasks === 'string' ? JSON.parse(c.target_milestone_tasks || '[]') : []),
         jobAllMilestones: c.job_all_milestones || [],
-        addOnRate: c.additional_work_rate ? `+${c.additional_work_rate}% / Revision` : "N/A",
+        addOnRate: (() => {
+          const raw = c.additional_work_rate !== null && c.additional_work_rate !== undefined
+            ? Number(c.additional_work_rate)
+            : (c.revision_price_credits !== null && c.revision_price_credits !== undefined ? Number(c.revision_price_credits) : null);
+          if (raw !== null && !isNaN(raw)) {
+            return raw > 0 ? `${raw.toLocaleString()} Credits / Revision` : "0 Credits (Free Revisions)";
+          }
+          return "Standard Platform Policy";
+        })(),
         freelancerTosTitle: c.terms_title || "Standard Terms",
-        freelancerTosContent: c.terms_content || "Standard terms apply.",
+        freelancerTosContent: c.terms_content || "Standard platform terms and milestone fulfillment policies apply to this agreement. All deliverables will be provided in accordance with agreed milestone specifications and quality standards.",
+        initiatorRole: (c.initiator_role === 'client' || c.initiator_role === 'Client') ? 'Client' : 'Freelancer',
+        isExistingProject: Boolean(c.is_existing_project),
+        existingProjectId: c.existing_project_id || undefined,
+        requireNDA: Boolean(c.require_nda),
+        portfolioUseAllowed: Boolean(c.portfolio_use_allowed),
+        portfolioDuration: c.portfolio_use_duration_seconds || 60,
         milestones: mappedMilestones
       };
     });
@@ -410,16 +295,9 @@ export const Contracts: React.FC = () => {
       const res = await api.get('/api/contracts');
       if (res.data?.success) {
         const mapped = mapBackendContracts(res.data.data);
-        const validStatuses = ["Active", "Waiting", "Done", "Closed", "Cancelled"];
+        const validStatuses = ["Active", "Waiting", "Done", "Closed", "Cancelled", "Pending Signature"];
         const filtered = mapped.filter((c: DetailedContract) => validStatuses.includes(c.status));
         setContracts(filtered);
-
-        setSelectedContract((prev) => {
-          if (!prev) return null;
-          const updated = mapped.find((c: DetailedContract) => c.id === prev.id);
-          return updated || prev;
-        });
-
         return mapped;
       }
     } catch (err) {
@@ -430,179 +308,14 @@ export const Contracts: React.FC = () => {
     return [];
   }, [mapBackendContracts]);
 
-  const fetchCancellationRequest = useCallback(async (contractId: string) => {
-    try {
-      const res = await api.get(`/api/contracts/${contractId}/cancellation-request`);
-      if (res.data?.success) {
-        setActiveCancellation(res.data.data || null);
-      }
-    } catch (err) {
-      console.error("Failed to fetch cancellation request:", err);
-      setActiveCancellation(null);
-    }
-  }, []);
-
-  const handleSubmitCancellationRequest = async () => {
-    if (!selectedContract || submittingCancellation) return;
-    setSubmittingCancellation(true);
-    try {
-      const res = await api.post(`/api/contracts/${selectedContract.id}/cancellation-request`, {
-        reason: cancellationReason,
-        message: cancellationMessage.trim() || undefined
-      });
-      showSuccessToast(res.data?.message || 'Mutual cancellation requested. The other party has 72 hours to respond.');
-      setCancellationModalOpen(false);
-      setCancellationReason("Mutual agreement to end project");
-      setCancellationMessage("");
-      await fetchContracts();
-      await fetchCancellationRequest(selectedContract.id);
-    } catch (err: any) {
-      console.error("Failed to submit cancellation request:", err);
-      showErrorToast(err?.response?.data?.message || 'Failed to submit cancellation request.');
-    } finally {
-      setSubmittingCancellation(false);
-    }
-  };
-
-  const handleAcceptCancellation = async () => {
-    if (!selectedContract || !activeCancellation || actionLoading) return;
-    if (isCancellationInitiator) {
-      showErrorToast("You cannot accept your own cancellation request. You may only withdraw it.");
-      return;
-    }
-    const confirmed = window.confirm(
-      "Are you sure you want to accept mutual cancellation? Held escrow for uncompleted milestones will be refunded to the client. Completed milestone earnings are retained by the freelancer. This action is final."
-    );
-    if (!confirmed) return;
-
-    setActionLoading(true);
-    try {
-      const res = await api.post(`/api/contracts/${selectedContract.id}/cancellation-request/${activeCancellation.request_id}/respond`, {
-        action: 'accept'
-      });
-      showSuccessToast(res.data?.message || 'Mutual cancellation accepted. Unfinished escrow has been refunded.');
-      await fetchContracts();
-      await fetchCancellationRequest(selectedContract.id);
-    } catch (err: any) {
-      console.error("Failed to accept cancellation:", err);
-      showErrorToast(err?.response?.data?.message || 'Failed to accept cancellation.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleDeclineCancellation = async () => {
-    if (!selectedContract || !activeCancellation || actionLoading) return;
-    if (isCancellationInitiator) {
-      showErrorToast("You cannot decline your own cancellation request.");
-      return;
-    }
-    setActionLoading(true);
-    try {
-      const res = await api.post(`/api/contracts/${selectedContract.id}/cancellation-request/${activeCancellation.request_id}/respond`, {
-        action: 'decline',
-        declineReason: declineReason.trim() || undefined
-      });
-      showSuccessToast(res.data?.message || 'Cancellation request declined. The contract remains active.');
-      setDeclineModalOpen(false);
-      setDeclineReason("");
-      await fetchContracts();
-      await fetchCancellationRequest(selectedContract.id);
-    } catch (err: any) {
-      console.error("Failed to decline cancellation:", err);
-      showErrorToast(err?.response?.data?.message || 'Failed to decline cancellation.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleWithdrawCancellation = async () => {
-    if (!selectedContract || !activeCancellation || actionLoading) return;
-    if (!isCancellationInitiator) {
-      showErrorToast("Only the party who initiated the cancellation request can withdraw it.");
-      return;
-    }
-    const confirmed = window.confirm("Are you sure you want to withdraw your cancellation request? The contract will remain active.");
-    if (!confirmed) return;
-
-    setActionLoading(true);
-    try {
-      const res = await api.post(`/api/contracts/${selectedContract.id}/cancellation-request/${activeCancellation.request_id}/withdraw`);
-      showSuccessToast(res.data?.message || 'Cancellation request withdrawn.');
-      await fetchContracts();
-      await fetchCancellationRequest(selectedContract.id);
-    } catch (err: any) {
-      console.error("Failed to withdraw cancellation request:", err);
-      showErrorToast(err?.response?.data?.message || 'Failed to withdraw cancellation request.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleMilestoneAction = async (action: 'cancel' | 'approve' | 'extend' | 'revision', milestone: MilestoneItem, contractId: string) => {
-    if (milestoneLoading) return;
-    if (action === 'cancel' && !milestone.id) {
-      setCancellationReason("Mutual agreement to end project");
-      setCancellationMessage("");
-      setCancellationModalOpen(true);
-      return;
-    }
-    setMilestoneLoading(true);
-    try {
-      const body = action === 'extend' ? { extensionDays } : {};
-      const url = action === 'extend'
-        ? `/api/contracts/${contractId}/extend`
-        : `/api/contracts/${contractId}/milestones/${milestone.id}/${action}`;
-      await api.post(url, body);
-      showSuccessToast(
-        action === 'extend'
-          ? `Milestone deadline extended by ${extensionDays} days`
-          : action === 'cancel'
-          ? 'Milestone cancelled and escrow refunded to your wallet.'
-          : action === 'approve'
-          ? 'Milestone approved and credits released.'
-          : 'Milestone revision requested.'
-      );
-      await fetchContracts();
-      setMilestoneAction(null);
-    } catch (err: any) {
-      console.error(`Milestone ${action} failed:`, err);
-      showErrorToast(err?.response?.data?.message || `Failed to ${action} milestone. Please try again.`);
-    } finally {
-      setMilestoneLoading(false);
-    }
-  };
-
-  const { id } = useParams<{ id?: string }>();
-  const navigate = useNavigate();
-
   useEffect(() => {
-    const init = async () => {
-      const mapped = await fetchContracts();
-      if (id && mapped.length > 0) {
-        const found = mapped.find((c: DetailedContract) => c.id === id);
-        if (found) setSelectedContract(found);
-      }
-    };
-    init();
-  }, [id, fetchContracts]);
-
-  // Fetch active cancellation request whenever selectedContract changes
-  useEffect(() => {
-    if (selectedContract?.id) {
-      fetchCancellationRequest(selectedContract.id);
-    } else {
-      setActiveCancellation(null);
-    }
-  }, [selectedContract?.id, fetchCancellationRequest]);
+    fetchContracts();
+  }, [fetchContracts]);
 
   // Realtime updates via Socket.IO
   useEffect(() => {
     const handleUpdate = () => {
       fetchContracts();
-      if (selectedContract?.id) {
-        fetchCancellationRequest(selectedContract.id);
-      }
     };
 
     socket.on('cancellation_request_updated', handleUpdate);
@@ -612,41 +325,49 @@ export const Contracts: React.FC = () => {
       socket.off('cancellation_request_updated', handleUpdate);
       socket.off('notification', handleUpdate);
     };
-  }, [fetchContracts, selectedContract?.id, fetchCancellationRequest]);
+  }, [fetchContracts]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setSelectedContract(null);
-        navigate('/contracts');
-      }
-    };
-    if (selectedContract) {
-      window.addEventListener("keydown", handleKeyDown);
-    }
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedContract]);
+  const activeContracts = contracts.filter((c) => !c.isArchived && c.status !== "Pending Signature");
+  const pendingContracts = contracts.filter((c) => c.status === "Pending Signature");
+  const archivedContracts = contracts.filter((c) => c.isArchived && c.status !== "Pending Signature");
 
-  const filteredContracts = contracts.filter((c) =>
-    activeTab === "active" ? !c.isArchived : c.isArchived
-  );  
+  const filteredContracts = contracts.filter((c) => {
+    if (activeTab === "active") return !c.isArchived && c.status !== "Pending Signature";
+    if (activeTab === "pending") return c.status === "Pending Signature";
+    if (activeTab === "archived") return c.isArchived && c.status !== "Pending Signature";
+    return false;
+  });
 
   const getStatusBadge = (status: ContractStatus) => {
-    let color = 'bg-zinc-500/10 text-gray-500 dark:text-zinc-400 border-zinc-500/20';
-    if (status === 'Active') color = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
-    else if (status === 'Waiting') color = 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20';
-    else if (status === 'Closed' || status === 'Done') color = 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20';
-    else if (status === 'Cancelled') color = 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20';
+    let color = 'bg-zinc-100 text-zinc-900 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-700';
+    let dotColor = 'bg-zinc-500';
+    if (status === 'Pending Signature') {
+      color = 'bg-amber-100 text-amber-950 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800';
+      dotColor = 'bg-amber-500 animate-ping';
+    } else if (status === 'Active') {
+      color = 'bg-emerald-100 text-emerald-950 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-800';
+      dotColor = 'bg-emerald-600 animate-pulse';
+    } else if (status === 'Waiting') {
+      color = 'bg-sky-100 text-sky-950 border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-800';
+      dotColor = 'bg-sky-600';
+    } else if (status === 'Closed' || status === 'Done') {
+      color = 'bg-violet-100 text-violet-950 border-violet-300 dark:bg-violet-950/60 dark:text-violet-200 dark:border-violet-800';
+      dotColor = 'bg-violet-600';
+    } else if (status === 'Cancelled') {
+      color = 'bg-rose-100 text-rose-950 border-rose-300 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-800';
+      dotColor = 'bg-rose-600';
+    }
 
     return (
-      <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${color}`}>
-        {status}
+      <span className={`inline-flex items-center gap-1.5 text-xs uppercase font-bold px-2.5 py-1 rounded-full border shadow-2xs ${color}`}>
+        <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
+        {status === 'Pending Signature' ? 'Pending Offer' : status}
       </span>
     );
   };
 
   return (
-    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white font-['Plus_Jakarta_Sans']">
+    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-zinc-900 dark:text-white font-['Plus_Jakarta_Sans'] pb-16">
       {/* Top Header */}
       <UserHeader pageTitle="My Contracts" />
       {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="contracts" />}
@@ -656,41 +377,41 @@ export const Contracts: React.FC = () => {
       ) : (
         <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in">
           {/* Banner */}
-          <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-dark-surface/60 shadow-sm dark:shadow-none p-6 md:p-8 backdrop-blur-xl">
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface/60 shadow-xs p-6 md:p-8 backdrop-blur-xl">
+            <div className="relative z-10 space-y-3">
               <div>
                 <h1
-                  className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white md:text-3xl"
+                  className="text-2xl font-extrabold tracking-tight text-zinc-900 dark:text-white md:text-3xl"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
                   My Contracts & Agreements
                 </h1>
-                <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">
-                  Select any contract card to view its full formal agreement, escrow breakdown, and TOS terms.
+                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                  Select any contract card to open its formal agreement, milestone tracker, and escrow ledger.
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3 text-xs text-gray-600 dark:text-zinc-300">
-                <Shield className="h-4 w-4 text-blue-400" />
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-zinc-200 dark:border-white/10 bg-zinc-100/80 dark:bg-white/5 text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                <Shield className="h-3 w-3 text-zinc-500 dark:text-zinc-400" />
                 <span>Protected by Ensemble Escrow & Platform Policy</span>
               </div>
             </div>
           </div>
 
-          {/* Smooth Framer Motion Underline Tab Navigation */}
-          <div className="border-b border-gray-200 dark:border-white/10 flex justify-between items-end relative">
-            <div className="flex gap-1 relative">
+          {/* Tab Navigation */}
+          <div className="border-b border-zinc-200 dark:border-white/10 flex justify-between items-end relative">
+            <div className="flex gap-1 relative overflow-x-auto no-scrollbar">
               <button
                 onClick={() => setActiveTab("active")}
-                className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
-                  activeTab === "active" ? "text-blue-400 font-bold" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
+                className={`relative flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors duration-200 shrink-0 ${
+                  activeTab === "active" ? "text-blue-600 dark:text-blue-400 font-bold" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-t-lg"
                 }`}
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 <span className="relative z-10 flex items-center gap-2">
-                  <Shield className="h-4 w-4" /> Active Contracts
-                  <span className="rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.2 text-[10px] text-gray-600 dark:text-zinc-300">
-                    {contracts.filter((c) => !c.isArchived).length}
+                  <ScrollText className="h-4 w-4" /> Active
+                  <span className="rounded-full bg-zinc-100 dark:bg-white/10 border border-zinc-200 dark:border-transparent px-2 py-0.5 text-[10px] font-bold text-zinc-700 dark:text-zinc-300">
+                    {activeContracts.length}
                   </span>
                 </span>
 
@@ -703,7 +424,41 @@ export const Contracts: React.FC = () => {
                     />
                     <motion.div
                       layoutId="activeContractTabUnderline"
-                      className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
+                      className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-600 dark:bg-blue-500 z-10"
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                    />
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveTab("pending")}
+                className={`relative flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors duration-200 shrink-0 ${
+                  activeTab === "pending" ? "text-blue-600 dark:text-blue-400 font-bold" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-t-lg"
+                }`}
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                <span className="relative z-10 flex items-center gap-2">
+                  <Clock className="h-4 w-4" /> Pending
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+                    pendingContracts.length > 0
+                      ? 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/70 dark:text-blue-200 dark:border-blue-700'
+                      : 'bg-zinc-100 dark:bg-white/10 border-zinc-200 dark:border-transparent text-zinc-700 dark:text-zinc-300'
+                  }`}>
+                    {pendingContracts.length}
+                  </span>
+                </span>
+
+                {activeTab === "pending" && (
+                  <>
+                    <motion.div
+                      layoutId="activeContractTabGlow"
+                      className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                    />
+                    <motion.div
+                      layoutId="activeContractTabUnderline"
+                      className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-600 dark:bg-blue-500 z-10"
                       transition={{ duration: 0.2, ease: "easeOut" }}
                     />
                   </>
@@ -712,15 +467,15 @@ export const Contracts: React.FC = () => {
 
               <button
                 onClick={() => setActiveTab("archived")}
-                className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
-                  activeTab === "archived" ? "text-blue-400 font-bold" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
+                className={`relative flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors duration-200 shrink-0 ${
+                  activeTab === "archived" ? "text-blue-600 dark:text-blue-400 font-bold" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-t-lg"
                 }`}
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 <span className="relative z-10 flex items-center gap-2">
-                  <Archive className="h-4 w-4" /> Archived Contracts
-                  <span className="rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.2 text-[10px] text-gray-600 dark:text-zinc-300">
-                    {contracts.filter((c) => c.isArchived).length}
+                  <Archive className="h-4 w-4" /> Archived
+                  <span className="rounded-full bg-zinc-100 dark:bg-white/10 border border-zinc-200 dark:border-transparent px-2 py-0.5 text-[10px] font-bold text-zinc-700 dark:text-zinc-300">
+                    {archivedContracts.length}
                   </span>
                 </span>
 
@@ -733,7 +488,34 @@ export const Contracts: React.FC = () => {
                     />
                     <motion.div
                       layoutId="activeContractTabUnderline"
-                      className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
+                      className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-600 dark:bg-blue-500 z-10"
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                    />
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveTab("guide")}
+                className={`relative flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors duration-200 shrink-0 ${
+                  activeTab === "guide" ? "text-blue-600 dark:text-blue-400 font-bold" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-t-lg"
+                }`}
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                <span className="relative z-10 flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" /> Terms & Guide
+                </span>
+
+                {activeTab === "guide" && (
+                  <>
+                    <motion.div
+                      layoutId="activeContractTabGlow"
+                      className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                    />
+                    <motion.div
+                      layoutId="activeContractTabUnderline"
+                      className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-600 dark:bg-blue-500 z-10"
                       transition={{ duration: 0.2, ease: "easeOut" }}
                     />
                   </>
@@ -743,7 +525,7 @@ export const Contracts: React.FC = () => {
 
             <button
               onClick={() => navigate('/contracts/dispute-form')}
-              className="flex items-center justify-center gap-1.5 rounded-lg border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors mb-2 mr-2 md:mr-0"
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-red-300 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors mb-2 mr-2 md:mr-0 shadow-2xs shrink-0"
             >
               <AlertCircle className="h-3.5 w-3.5" />
               Report a Dispute
@@ -759,14 +541,188 @@ export const Contracts: React.FC = () => {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.25, ease: "easeInOut" }}
             >
-              {filteredContracts.length === 0 ? (
-                <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02] p-12 text-center text-xs text-gray-500 dark:text-zinc-500">
-                  No contracts found under this tab.
-                </div>
+              {activeTab === "guide" ? (
+                <ContractsTerminologyGuide />
+              ) : activeTab === "pending" ? (
+                pendingContracts.length === 0 ? (
+                  <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-12 text-center shadow-xs">
+                    <div className="h-12 w-12 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center mx-auto mb-3">
+                      <Clock className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-base font-bold text-zinc-900 dark:text-white">No Pending Contract Offers</h3>
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto">
+                      Contracts sent to you for your decision (accept or reject) or offers you extended to freelancers will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-5 md:grid-cols-2">
+                    {pendingContracts.map((contract) => {
+                      const isFreelancer = user?.account_id === contract.freelancerAccountId;
+                      const otherPartyName = isFreelancer ? contract.clientName : contract.freelancerName;
+                      const otherPartyAvatar = isFreelancer ? contract.clientAvatar : contract.freelancerAvatar;
+                      const otherPartyRole = isFreelancer ? "Client (Hirer)" : "Freelancer (Contractor)";
+                      const avatarUrl = constructAvatarUrl(otherPartyAvatar, otherPartyName);
+
+                      const handleCardClick = () => {
+                        if (contract.proposalId) {
+                          navigate(`/jobs/proposals/sent/${contract.proposalId}/offer/${contract.id}`);
+                        } else {
+                          navigate(`/contracts/${contract.id}`);
+                        }
+                      };
+
+                      return (
+                        <motion.div
+                          key={contract.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.98 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ duration: 0.2 }}
+                          onClick={handleCardClick}
+                          className="group relative cursor-pointer overflow-hidden rounded-2xl border-2 border-amber-500/40 dark:border-amber-500/30 bg-white dark:bg-dark-surface/60 shadow-sm hover:shadow-xl hover:shadow-amber-500/10 hover:border-amber-500 dark:hover:border-amber-500 transition-all duration-300"
+                        >
+                          {/* Top amber accent line */}
+                          <div className="h-1.5 w-full bg-amber-500" />
+
+                          <div className="p-6 space-y-4">
+                            {/* Header pill & Escrow amount */}
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-950 border border-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-700 shadow-2xs">
+                                <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+                                {isFreelancer ? "Action Required • Offer Received" : "Awaiting Freelancer Review"}
+                              </span>
+
+                              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-950 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-200 dark:border-emerald-800">
+                                <CreditIcon className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                <span>{contract.totalValueCredits.toLocaleString()} Credits Escrow</span>
+                              </div>
+                            </div>
+
+                            {/* Job Title & Badges */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-300">
+                                  {contract.contractType} Contract
+                                </span>
+                                {contract.targetMilestoneTitle ? (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-100 dark:bg-purple-950/50 border border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                                    <Users className="h-2.5 w-2.5" /> Team Position
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-100 dark:bg-blue-950/50 border border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300">
+                                    Fixed Price
+                                  </span>
+                                )}
+                              </div>
+
+                              <h3 className="font-extrabold text-zinc-900 dark:text-white text-lg tracking-tight group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors leading-snug line-clamp-2">
+                                {contract.title}
+                              </h3>
+                            </div>
+
+                            {/* Sender / Counterparty card */}
+                            <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200/80 dark:border-white/5">
+                              <img
+                                src={avatarUrl}
+                                alt={otherPartyName}
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = getFallbackAvatarUrl(otherPartyName);
+                                }}
+                                className="h-10 w-10 rounded-full object-cover border-2 border-zinc-200 dark:border-zinc-700 bg-zinc-200 dark:bg-zinc-800 shrink-0"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] uppercase font-bold text-zinc-500 dark:text-zinc-400">
+                                    {otherPartyRole}
+                                  </span>
+                                  <span className="text-[10px] text-zinc-400">
+                                    Sent {new Date(contract.dateCreated).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+                                  </span>
+                                </div>
+                                <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">{otherPartyName}</p>
+                              </div>
+                            </div>
+
+                            {/* Assigned Milestone & Checklist (if Team Project) */}
+                            {contract.targetMilestoneTitle && (
+                              <div className="p-3.5 rounded-xl bg-purple-500/5 dark:bg-purple-500/10 border border-purple-500/20 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                                    <Layers className="h-3 w-3" /> Assigned Milestone Role
+                                  </span>
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                    {contract.targetMilestoneTasks?.length || 0} Deliverables
+                                  </span>
+                                </div>
+                                <p className="text-xs font-bold text-zinc-900 dark:text-white">{contract.targetMilestoneTitle}</p>
+                                {contract.targetMilestoneDescription && (
+                                  <p className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-relaxed line-clamp-2">
+                                    {contract.targetMilestoneDescription}
+                                  </p>
+                                )}
+
+                                {contract.targetMilestoneTasks && contract.targetMilestoneTasks.length > 0 && (
+                                  <div className="pt-2 border-t border-purple-500/15 space-y-1.5">
+                                    {contract.targetMilestoneTasks.slice(0, 3).map((task, idx) => (
+                                      <div
+                                        key={idx}
+                                        className="flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-800/80 border border-purple-500/10 dark:border-white/5 text-zinc-800 dark:text-zinc-200 font-medium"
+                                      >
+                                        <Check className="h-3 w-3 text-purple-500 shrink-0" />
+                                        <span className="truncate flex-1">{task}</span>
+                                      </div>
+                                    ))}
+                                    {contract.targetMilestoneTasks.length > 3 && (
+                                      <p className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 pl-1">
+                                        +{contract.targetMilestoneTasks.length - 3} more assigned tasks
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Action CTA */}
+                            <div className="pt-3 border-t border-zinc-200 dark:border-white/10 flex items-center justify-between gap-3">
+                              <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
+                                {isFreelancer ? "Decision required to form contract" : "Awaiting signature"}
+                              </span>
+                              <div className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md shadow-amber-500/20 group-hover:translate-x-0.5 transition-transform">
+                                <span>{isFreelancer ? "Review Offer & Decide" : "View Sent Offer"}</span>
+                                <ArrowRight className="h-3.5 w-3.5" />
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : filteredContracts.length === 0 ? (
+                activeTab === "active" ? (
+                  <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-12 text-center shadow-xs">
+                    <div className="h-12 w-12 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center mx-auto mb-3">
+                      <ScrollText className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-base font-bold text-zinc-900 dark:text-white">No Active Contracts</h3>
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto">
+                      You currently have no active or in-progress contracts. When a contract offer is accepted and funded, it will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-12 text-center shadow-xs">
+                    <div className="h-12 w-12 rounded-full bg-zinc-500/10 text-zinc-500 dark:text-zinc-400 flex items-center justify-center mx-auto mb-3">
+                      <Archive className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-base font-bold text-zinc-900 dark:text-white">No Archived Contracts</h3>
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto">
+                      Completed and closed contracts that have finished all milestones and ratings will be safely archived here.
+                    </p>
+                  </div>
+                )
               ) : (
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-5 md:grid-cols-2">
                   {filteredContracts.map((contract) => {
-                    const isWaiting = contract.status === "Waiting";
                     const isArchived = contract.isArchived;
                     const claimedCount = contract.milestones.filter(
                       (m) => m.status === "Claimed"
@@ -781,88 +737,127 @@ export const Contracts: React.FC = () => {
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.2 }}
                         onClick={() => {
-                          setSelectedContract(contract);
                           navigate(`/contracts/${contract.id}`);
                         }}
-                        className={`group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 shadow-sm dark:shadow-none transition-all duration-300 hover:border-blue-500/50 hover:bg-gray-50 dark:hover:bg-dark-surface/80 hover:shadow-xl hover:shadow-blue-500/5 ${
-                          isArchived ? "opacity-40 grayscale-[50%] hover:opacity-100 hover:grayscale-0" : ""
+                        className={`group relative cursor-pointer overflow-hidden rounded-2xl border border-zinc-200/90 dark:border-white/10 bg-white dark:bg-dark-surface/40 shadow-xs transition-all duration-300 hover:border-blue-500 dark:hover:border-blue-500/60 hover:shadow-xl hover:shadow-blue-500/5 ${
+                          isArchived ? "opacity-60 grayscale-[30%] hover:opacity-100 hover:grayscale-0" : ""
                         }`}
                       >
                         {/* Top accent bar */}
-                        <div className={`h-1 w-full ${
+                        <div className={`h-1.5 w-full ${
                           contract.status === 'Active' ? 'bg-emerald-500' : 
-                          contract.status === 'Waiting' ? 'bg-blue-500' : 
-                          contract.status === 'Done' ? 'bg-purple-500' : 'bg-gray-300 dark:bg-zinc-700'
+                          contract.status === 'Waiting' ? 'bg-sky-500' : 
+                          contract.status === 'Done' ? 'bg-purple-500' : 'bg-zinc-300 dark:bg-zinc-700'
                         }`} />
 
-                        <div className="p-5 space-y-4">
-                          {/* Card Header */}
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                                <span className="rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-1.5 py-0.5 text-[9px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider border border-gray-100 dark:border-white/5">
-                                  {contract.contractType}
-                                </span>
-                                {contract.targetMilestoneTitle && (
-                                  <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">
-                                    <Users className="h-2.5 w-2.5" />
-                                    {contract.targetMilestoneTitle}
-                                  </span>
+                        <div className="p-6 space-y-4">
+                          {/* Card Header: Type, Role, Status */}
+                          <div className="flex items-center justify-between gap-2.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border shadow-2xs ${
+                                contract.contractType === 'Job'
+                                  ? 'bg-zinc-100 text-zinc-900 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-700'
+                                  : 'bg-purple-100 text-purple-950 border-purple-300 dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-800'
+                              }`}>
+                                {contract.contractType === 'Job' ? (
+                                  <Briefcase className="w-3.5 h-3.5 text-zinc-700 dark:text-zinc-300" />
+                                ) : (
+                                  <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                                 )}
-                                {getStatusBadge(contract.status)}
-                                {(() => {
-                                  const isClient = user?.account_id === contract.clientAccountId;
-                                  return (
-                                    <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
-                                      isClient 
-                                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' 
-                                        : 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
-                                    }`}>
-                                      {isClient ? 'Client' : 'Freelancer'}
-                                    </span>
-                                  );
-                                })()}
+                                {contract.contractType} Contract
+                              </span>
+
+                              {(() => {
+                                const isClient = user?.account_id === contract.clientAccountId;
+                                return (
+                                  <span className={`inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg border shadow-2xs ${
+                                    isClient 
+                                      ? 'bg-amber-100 text-amber-950 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800' 
+                                      : 'bg-blue-100 text-blue-950 border-blue-300 dark:bg-blue-950/60 dark:text-blue-200 dark:border-blue-800'
+                                  }`}>
+                                    {isClient ? 'Client' : 'Freelancer'}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {getStatusBadge(contract.status)}
+                              {contract.jobId && (
+                                <a
+                                  href={`/jobs/postings/${contract.jobId}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-zinc-500 hover:text-blue-600 dark:text-zinc-400 dark:hover:text-blue-400 transition-colors p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-white/5 border border-transparent hover:border-zinc-200 dark:hover:border-white/10"
+                                  title="View Original Job Post"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Title */}
+                          <div>
+                            <h3 className="font-extrabold text-zinc-900 dark:text-white text-lg tracking-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors leading-snug line-clamp-2">
+                              {contract.title}
+                            </h3>
+                          </div>
+
+                          {/* Stats Grid: Value, Milestones, Deadline */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-zinc-50/90 dark:bg-white/[0.03] border border-zinc-200/80 dark:border-white/5">
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Escrow Value</span>
+                              <div className="flex items-center gap-1.5 text-zinc-900 dark:text-amber-400 font-extrabold text-sm">
+                                <CreditIcon className="h-4 w-4 text-amber-500 shrink-0" />
+                                <span>{contract.totalValueCredits.toLocaleString()}</span>
+                                <span className="text-zinc-500 font-medium text-[11px]">Credits</span>
                               </div>
-                              <h3 className="font-bold text-gray-900 dark:text-white text-sm tracking-tight truncate group-hover:text-blue-400 transition-colors leading-snug">
-                                {contract.title}
-                              </h3>
                             </div>
-                            {contract.jobId && (
-                              <a href={`/jobs/postings/${contract.jobId}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-gray-400 dark:text-zinc-600 hover:text-blue-400 transition-colors shrink-0 mt-1" title="View Original Job Post">
-                                <ExternalLink className="h-3.5 w-3.5" />
-                              </a>
-                            )}
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Milestones</span>
+                              <div className="text-zinc-900 dark:text-zinc-100 font-bold text-sm">
+                                {totalMilestones} {totalMilestones === 1 ? 'Phase' : 'Phases'}
+                              </div>
+                            </div>
+                            <div className="space-y-0.5 col-span-2 sm:col-span-1">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Deadline</span>
+                              <div className="text-xs font-bold truncate">
+                                {contract.dueDate ? (
+                                  <span className="text-rose-700 dark:text-rose-400 font-bold">Due {new Date(contract.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                ) : (
+                                  <span className="text-zinc-700 dark:text-zinc-300">Flexible Delivery</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
 
-                          {/* Bid / Value */}
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-1.5 text-xs font-bold">
-                              <CreditIcon className="h-4 w-4 text-yellow-500" />
-                              <span className="text-yellow-500 text-sm">{contract.totalValueCredits.toLocaleString()}</span>
-                              <span className="text-gray-400 dark:text-zinc-500 font-medium text-[10px]">Credits</span>
+                          {/* Assigned Milestone Tag (Moved above Milestone Progress, neutral gray) */}
+                          {contract.targetMilestoneTitle && (
+                            <div className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100/90 text-zinc-700 dark:bg-white/5 dark:text-zinc-300 border border-zinc-200/90 dark:border-white/10 px-2.5 py-1 text-xs font-medium">
+                              <Users className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400 shrink-0" />
+                              <span>Assigned Milestone: <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{contract.targetMilestoneTitle}</strong></span>
                             </div>
-                            <span className="text-[10px] font-medium text-gray-500 dark:text-zinc-400">
-                              {totalMilestones} {totalMilestones === 1 ? 'Milestone' : 'Milestones'}
-                            </span>
-                          </div>
+                          )}
 
-                          {/* Progress Bar Section */}
-                          <div className="space-y-2 pt-1">
-                            <div className="flex items-center justify-between text-[11px]">
-                              <span className="font-medium text-gray-600 dark:text-zinc-400 flex items-center gap-1.5">
+                          {/* Milestone Progress Section */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs font-bold">
+                              <span className="text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                                 Milestone Progress
                               </span>
-                              <span className="font-mono text-[10px] font-semibold text-gray-700 dark:text-zinc-300">
-                                {claimedCount}/{totalMilestones} Completed ({totalMilestones > 0 ? Math.round((claimedCount / totalMilestones) * 100) : 0}%)
+                              <span className="font-mono text-zinc-900 dark:text-zinc-100">
+                                {claimedCount}/{totalMilestones} Approved ({totalMilestones > 0 ? Math.round((claimedCount / totalMilestones) * 100) : 0}%)
                               </span>
                             </div>
-                            <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-white/10 overflow-hidden relative">
+                            <div className="h-2.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 border border-zinc-300/80 dark:border-white/10 overflow-hidden relative shadow-2xs">
                               <div
                                 className={`h-full rounded-full transition-all duration-500 ${
                                   claimedCount === totalMilestones && totalMilestones > 0
-                                    ? 'bg-emerald-500'
+                                    ? 'bg-emerald-600'
                                     : contract.status === 'Active'
-                                    ? 'bg-blue-500'
+                                    ? 'bg-blue-600'
                                     : 'bg-amber-500'
                                 }`}
                                 style={{
@@ -870,7 +865,6 @@ export const Contracts: React.FC = () => {
                                 }}
                               />
                             </div>
-                            {/* Segmented Milestones Dot Line */}
                             {totalMilestones > 1 && (
                               <div className="flex gap-1.5 pt-0.5">
                                 {contract.milestones.map((m) => (
@@ -879,10 +873,10 @@ export const Contracts: React.FC = () => {
                                     title={`${m.name}: ${m.status}`}
                                     className={`h-1.5 flex-1 rounded-full transition-all ${
                                       m.status === "Claimed"
-                                        ? "bg-emerald-400"
+                                        ? "bg-emerald-500"
                                         : m.status === "In Progress"
-                                        ? "bg-blue-400 animate-pulse"
-                                        : "bg-gray-200 dark:bg-white/10"
+                                        ? "bg-blue-500 animate-pulse"
+                                        : "bg-zinc-200 dark:bg-zinc-800 border border-zinc-300/60 dark:border-white/5"
                                     }`}
                                   />
                                 ))}
@@ -890,73 +884,82 @@ export const Contracts: React.FC = () => {
                             )}
                           </div>
 
-                          {/* Assigned Tasks / Deliverables if present (Team Job) */}
+                          {/* Assigned Tasks / Deliverables Checklist */}
                           {contract.targetMilestoneTasks && contract.targetMilestoneTasks.length > 0 && (
-                            <div className="rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] p-2.5 space-y-1.5">
-                              <div className="flex items-center justify-between text-[10px]">
-                                <span className="font-semibold text-gray-700 dark:text-zinc-300 flex items-center gap-1.5">
-                                  <ListTodo className="h-3 w-3 text-blue-500" />
-                                  Role Deliverables ({contract.targetMilestoneTasks.length})
+                            <div className="rounded-xl border border-zinc-200/80 dark:border-white/10 bg-zinc-50/60 dark:bg-white/[0.02] p-3 space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                                  <ListTodo className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                  Role Deliverables
+                                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                    {contract.targetMilestoneTasks.length}
+                                  </span>
                                 </span>
-                                <span className="font-medium text-gray-500 dark:text-zinc-400">
+                                <span className="text-[11px] font-semibold">
                                   {claimedCount === totalMilestones ? (
-                                    <span className="text-emerald-500 font-semibold">Done</span>
+                                    <span className="text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> Completed
+                                    </span>
                                   ) : (
-                                    <span>Checklist</span>
+                                    <span className="text-zinc-600 dark:text-zinc-300">Checklist</span>
                                   )}
                                 </span>
                               </div>
-                              <div className="flex flex-wrap gap-1">
+                              <div className="space-y-1.5">
                                 {contract.targetMilestoneTasks.slice(0, 3).map((task, idx) => (
-                                  <span
+                                  <div
                                     key={idx}
-                                    className="inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-md bg-white dark:bg-zinc-800/80 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 max-w-full"
+                                    className="flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-white/10 text-zinc-800 dark:text-zinc-200 shadow-2xs font-medium"
                                   >
-                                    <CheckCircle2
-                                      className={`h-2.5 w-2.5 shrink-0 ${
-                                        claimedCount === totalMilestones ? 'text-emerald-500' : 'text-gray-400 dark:text-zinc-500'
-                                      }`}
-                                    />
-                                    <span className="truncate max-w-[160px]">{task}</span>
-                                  </span>
+                                    <div className={`h-4 w-4 rounded-full flex items-center justify-center shrink-0 border ${
+                                      claimedCount === totalMilestones 
+                                        ? 'bg-emerald-100 border-emerald-400 text-emerald-700 dark:bg-emerald-950 dark:border-emerald-600' 
+                                        : 'bg-zinc-100 border-zinc-300 text-zinc-500 dark:bg-zinc-800 dark:border-zinc-600'
+                                    }`}>
+                                      <Check className="h-2.5 w-2.5" />
+                                    </div>
+                                    <span className="truncate flex-1">{task}</span>
+                                  </div>
                                 ))}
                                 {contract.targetMilestoneTasks.length > 3 && (
-                                  <span className="text-[9px] text-gray-400 dark:text-zinc-500 self-center pl-1">
-                                    +{contract.targetMilestoneTasks.length - 3} more
-                                  </span>
+                                  <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 pl-1">
+                                    + {contract.targetMilestoneTasks.length - 3} more deliverables
+                                  </p>
                                 )}
                               </div>
                             </div>
                           )}
 
-                          {/* Footer: Avatar + Dates */}
-                          <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between gap-3">
+                          {/* Footer: Avatar + Action CTA */}
+                          <div className="pt-3.5 border-t border-zinc-200 dark:border-white/10 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2.5 min-w-0">
                               {(() => {
                                 const isClient = user?.account_id === contract.clientAccountId;
                                 const displayAvatar = isClient ? contract.freelancerAvatar : contract.clientAvatar;
                                 const displayName = isClient ? contract.freelancerName : contract.clientName;
-                                const roleLabel = isClient ? 'Freelancer' : 'Client';
+                                const roleLabel = isClient ? 'Specialist / Freelancer' : 'Principal / Client';
+                                const avatarUrl = constructAvatarUrl(displayAvatar, displayName);
                                 return (
                                   <>
                                     <img
-                                      src={displayAvatar || "https://i.pravatar.cc/150?u=a042581f4e29026704d"}
-                                      alt="avatar"
-                                      className="h-7 w-7 rounded-full object-cover border-2 border-gray-200 dark:border-zinc-700 shrink-0"
+                                      src={avatarUrl}
+                                      alt={displayName}
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src = getFallbackAvatarUrl(displayName);
+                                      }}
+                                      className="h-8 w-8 rounded-full object-cover border-2 border-zinc-200 dark:border-zinc-700 bg-zinc-200 dark:bg-zinc-800 shrink-0 shadow-2xs"
                                     />
                                     <div className="min-w-0">
-                                      <p className="text-xs font-semibold text-gray-800 dark:text-zinc-200 truncate">{displayName}</p>
-                                      <p className="text-[10px] text-gray-400 dark:text-zinc-500">{roleLabel}</p>
+                                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">{displayName}</p>
+                                      <p className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">{roleLabel}</p>
                                     </div>
                                   </>
                                 );
                               })()}
                             </div>
-                            <div className="flex flex-col items-end gap-0.5 text-[10px] text-gray-400 dark:text-zinc-500 shrink-0">
-                              <span>Started <strong className="text-emerald-500">{new Date(contract.dateStarted || contract.dateCreated).toLocaleDateString()}</strong></span>
-                              {contract.dueDate && (
-                                <span>Due <strong className="text-rose-400">{new Date(contract.dueDate).toLocaleDateString()}</strong></span>
-                              )}
+                            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 group-hover:translate-x-1 transition-transform">
+                              <span>View Details</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
                             </div>
                           </div>
                         </div>
@@ -970,966 +973,6 @@ export const Contracts: React.FC = () => {
         </div>
       )}
 
-      {/* ============================================================================ */}
-      {/* FULL CONTRACT POPUP MODAL (EXPANDED FORMAL VIEW) */}
-      {/* ============================================================================ */}
-      {selectedContract && (
-        <div
-          className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in font-['Plus_Jakarta_Sans']"
-          onClick={() => {
-            setSelectedContract(null);
-            navigate('/contracts');
-          }}
-        >
-          <div
-            className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0a0d18] shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-surface/80 px-6 py-4">
-              <div className="flex items-center gap-2.5">
-                <FileText className="h-5 w-5 text-blue-400" />
-                <span className="text-xs font-bold uppercase tracking-widest text-gray-600 dark:text-zinc-300">
-                  Formal Contract Details
-                </span>
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedContract(null);
-                  navigate('/contracts');
-                }}
-                className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-1.5 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Scrollable Formal Contract Body */}
-            <div className="p-6 md:p-8 space-y-8 max-h-[78vh] overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-[#0f1115]">
-              {/* MUTUAL CANCELLATION REQUEST BANNER */}
-              {activeCancellation && activeCancellation.status === 'pending' && (
-                <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 dark:bg-amber-950/20 p-5 space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-500 shrink-0">
-                        <Clock className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                            Mutual Contract Cancellation Requested
-                          </h4>
-                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                            Pending Response
-                          </span>
-                        </div>
-                        <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mt-0.5">
-                          {isCancellationInitiator
-                            ? `You requested mutual cancellation. The other party has 72 hours to respond.`
-                            : `${activeCancellation.initiator_name || (activeCancellation.initiator_role === 'client' ? 'Client' : 'Freelancer')} requested to cancel this contract mutually.`
-                          }
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="text-left sm:text-right shrink-0">
-                      <span className="text-[11px] font-mono font-semibold text-amber-700 dark:text-amber-300 block">
-                        Auto-resolves: {new Date(activeCancellation.auto_cancel_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
-                        ⏱ {formatRemainingTime(activeCancellation.auto_cancel_at)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Reason & Message */}
-                  <div className="rounded-xl border border-amber-500/20 bg-white/70 dark:bg-black/20 p-3.5 space-y-2 text-xs">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <span className="text-[10px] uppercase font-mono tracking-wider text-gray-500 dark:text-zinc-400 block">Stated Reason</span>
-                        <span className="font-semibold text-gray-900 dark:text-zinc-100">{activeCancellation.reason}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[10px] uppercase font-mono tracking-wider text-gray-500 dark:text-zinc-400 block">Initiated By</span>
-                        <span className="font-semibold text-gray-900 dark:text-zinc-100">
-                          {activeCancellation.initiator_name || (activeCancellation.initiator_role === 'client' ? 'Client' : 'Freelancer')} ({activeCancellation.initiator_role})
-                        </span>
-                      </div>
-                    </div>
-                    {activeCancellation.message && (
-                      <div className="pt-2 border-t border-amber-500/10">
-                        <span className="text-[10px] uppercase font-mono tracking-wider text-gray-500 dark:text-zinc-400 block">Message</span>
-                        <p className="text-gray-700 dark:text-zinc-300 italic whitespace-pre-wrap">{activeCancellation.message}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Escrow disposition preview */}
-                  <div className="rounded-xl bg-gray-50 dark:bg-white/5 p-3 text-xs space-y-1.5 border border-gray-200 dark:border-white/10">
-                    <div className="flex justify-between text-gray-600 dark:text-zinc-400">
-                      <span>Completed milestones (kept by freelancer):</span>
-                      <span className="font-semibold text-emerald-500">
-                        {selectedContract.milestones.filter(m => m.status === 'Claimed').reduce((acc, m) => acc + (m.credits || 0), 0).toLocaleString()} Credits
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-gray-600 dark:text-zinc-400 border-t border-gray-200 dark:border-white/10 pt-1">
-                      <span>Unfinished escrow (refunded to client):</span>
-                      <span className="font-bold text-rose-500">
-                        {selectedContract.milestones.filter(m => m.status !== 'Claimed' && m.status !== 'Cancelled').reduce((acc, m) => acc + (m.credits || 0), 0).toLocaleString()} Credits
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex items-center justify-end gap-3 pt-1">
-                    {isCancellationInitiator ? (
-                      <button
-                        type="button"
-                        onClick={handleWithdrawCancellation}
-                        disabled={actionLoading}
-                        className="rounded-xl border border-gray-300 dark:border-white/20 bg-white dark:bg-white/10 px-4 py-2 text-xs font-semibold text-gray-800 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/20 transition disabled:opacity-50"
-                      >
-                        {actionLoading ? 'Processing...' : 'Undo / Withdraw Request'}
-                      </button>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDeclineReason('');
-                            setDeclineModalOpen(true);
-                          }}
-                          disabled={actionLoading}
-                          className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 transition disabled:opacity-50"
-                        >
-                          Decline Request
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleAcceptCancellation}
-                          disabled={actionLoading}
-                          className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50"
-                        >
-                          {actionLoading ? 'Processing...' : 'Accept Cancellation & Refund Escrow'}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Header Title & Financial Summary */}
-              <div className="text-center space-y-2 border-b border-gray-200 dark:border-zinc-800 pb-5">
-                <div className="flex justify-center mb-2">
-                  {getStatusBadge(selectedContract.status)}
-                </div>
-                
-                <h2
-                  className="text-xl font-bold tracking-tight text-gray-900 dark:text-zinc-100 uppercase"
-                  style={{ fontFamily: "'Inter', sans-serif" }}
-                >
-                  Formal Contract Details
-                </h2>
-
-                {/* Type of Contract (Job / Gigs) */}
-                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-                  <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-zinc-500">
-                    Type of Contract:
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30">
-                    {selectedContract.contractType === 'Gig'
-                      ? `Gig Contract (Tier: ${selectedContract.targetMilestoneTitle || 'Selected Tier'})`
-                      : `Job Contract (${selectedContract.jobHiringType === 'multiple' || selectedContract.targetMilestoneTitle ? 'Team Milestone Job' : 'Individual Freelancer Job'})`
-                    }
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30">
-                    Fixed Price Escrow
-                  </span>
-                </div>
-                
-                <div className="flex flex-col items-center gap-1 pt-1 text-[11px] text-gray-500 dark:text-zinc-400 uppercase tracking-widest">
-                  <span className="flex items-center gap-1.5">
-                    <Calendar className="h-3 w-3 text-gray-500 dark:text-zinc-500" /> Date Created: <strong className="text-gray-700 dark:text-zinc-200">{selectedContract.dateCreated}</strong>
-                  </span>
-                  {selectedContract.status === "Waiting" && selectedContract.dateStarted && (
-                    <span className="flex items-center gap-1.5 text-gray-600 dark:text-zinc-300 font-bold mt-1">
-                      <Clock className="h-3 w-3 text-gray-500 dark:text-zinc-500" /> Starts In: {selectedContract.dateStarted}
-                    </span>
-                  )}
-                </div>
-
-                <div className="pt-4 max-w-sm mx-auto space-y-1 text-center">
-                  <p className="text-xs font-semibold text-gray-600 dark:text-zinc-300 flex items-center justify-center gap-1.5 uppercase tracking-wider">
-                    Total Contract Value:
-                    <span className="text-gray-900 dark:text-zinc-100 font-bold">
-                      {selectedContract.totalValueCredits.toLocaleString()} Credits
-                    </span>
-                  </p>
-
-                  <div className="text-[10px] space-y-1 pt-1.5 font-mono text-gray-500 dark:text-zinc-500 mx-auto">
-                    <div className="flex justify-between items-center px-2 py-0.5">
-                      <span className="uppercase">Client Range:</span>
-                      <span className="text-gray-500 dark:text-zinc-400">{selectedContract.clientRange}</span>
-                    </div>
-                    <div className="flex justify-between items-center px-2 py-0.5">
-                      <span className="uppercase">Accepted Bid:</span>
-                      <span className="text-gray-600 dark:text-zinc-300">{selectedContract.totalValueCredits.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center px-2 py-0.5">
-                      <span className="uppercase">Platform Fee ({selectedContract.platformFeePercent}%):</span>
-                      <span className="text-gray-500 dark:text-zinc-400">- {Math.floor(selectedContract.totalValueCredits * 0.2).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center font-bold text-gray-700 dark:text-zinc-200 border-t border-gray-200 dark:border-zinc-800 px-2 py-1.5 mt-1">
-                      <span className="uppercase tracking-widest">Net Value:</span>
-                      <span>{Math.floor(selectedContract.totalValueCredits * 0.8).toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* I. PARTIES INVOLVED */}
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-zinc-100">
-                  I. Parties Involved
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 dark:bg-white/[0.02] p-4 rounded-2xl border border-gray-200 dark:border-zinc-800">
-                  <div className="flex items-center gap-3">
-                    {selectedContract.clientAvatar ? (
-                      <img src={selectedContract.clientAvatar} alt="" className="h-10 w-10 rounded-full object-cover border border-purple-500/30 shrink-0" />
-                    ) : (
-                      <div className="h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 font-bold text-sm flex items-center justify-center shrink-0">
-                        {selectedContract.clientName?.charAt(0) || "C"}
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <span className="text-[10px] text-gray-400 dark:text-zinc-400 font-bold uppercase tracking-wider block">
-                        Client (Hirer)
-                      </span>
-                      <p className="text-xs font-bold text-gray-900 dark:text-zinc-100 truncate">
-                        {selectedContract.clientName}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    {selectedContract.freelancerAvatar ? (
-                      <img src={selectedContract.freelancerAvatar} alt="" className="h-10 w-10 rounded-full object-cover border border-emerald-500/30 shrink-0" />
-                    ) : (
-                      <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-sm flex items-center justify-center shrink-0">
-                        {selectedContract.freelancerName?.charAt(0) || "F"}
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <span className="text-[10px] text-gray-400 dark:text-zinc-400 font-bold uppercase tracking-wider block">
-                        Freelancer (Contractor)
-                      </span>
-                      <p className="text-xs font-bold text-gray-900 dark:text-zinc-100 truncate">
-                        {selectedContract.freelancerName}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* II. SCOPE OF WORK */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-zinc-100">
-                    II. Scope of Work
-                  </h3>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                    {selectedContract.contractType === 'Gig'
-                      ? 'Gig Tier Service'
-                      : (selectedContract.jobHiringType === 'multiple' || selectedContract.targetMilestoneTitle ? 'Team Position' : 'Individual Scope')
-                    }
-                  </span>
-                </div>
-                <div className="overflow-hidden border-y border-gray-200 dark:border-zinc-800 bg-transparent text-xs font-mono">
-                  <div className="px-3 py-3 border-b border-gray-200 dark:border-zinc-800/50 space-y-2">
-                    <span className="text-gray-500 dark:text-zinc-500 uppercase tracking-wider block">
-                      {selectedContract.contractType === 'Gig' ? 'Gig Service Title' : 'Job Post Title'}
-                    </span>
-                    <p className="text-gray-700 dark:text-zinc-200 font-semibold leading-relaxed whitespace-pre-line text-xs font-sans">
-                      "{selectedContract.title}"
-                    </p>
-                  </div>
-
-                  {selectedContract.contractType === 'Gig' && selectedContract.targetMilestoneTitle && (
-                    <div className="px-3 py-3 border-b border-gray-200 dark:border-zinc-800/50 space-y-1.5 bg-blue-50/50 dark:bg-blue-500/5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block">
-                        Selected Service Tier
-                      </span>
-                      <p className="text-xs font-bold text-gray-800 dark:text-zinc-100">
-                        {selectedContract.targetMilestoneTitle}
-                      </p>
-                      {selectedContract.targetMilestoneDescription && (
-                        <p className="text-[11px] text-gray-600 dark:text-zinc-300 leading-relaxed">
-                          {selectedContract.targetMilestoneDescription}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {selectedContract.contractType === 'Job' && (selectedContract.jobHiringType === 'multiple' || selectedContract.targetMilestoneTitle) && (
-                    <div className="px-3 py-3 border-b border-gray-200 dark:border-zinc-800/50 space-y-2 bg-purple-50/50 dark:bg-purple-500/5">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 block mb-0.5">
-                          Assigned Milestone Role
-                        </span>
-                        <p className="text-xs font-bold text-gray-800 dark:text-zinc-100">
-                          {selectedContract.targetMilestoneTitle || "Designated Team Role"}
-                        </p>
-                        {selectedContract.targetMilestoneDescription && (
-                          <p className="text-[11px] text-gray-600 dark:text-zinc-300 leading-relaxed mt-0.5">
-                            {selectedContract.targetMilestoneDescription}
-                          </p>
-                        )}
-                      </div>
-
-                      {selectedContract.targetMilestoneTasks && selectedContract.targetMilestoneTasks.length > 0 && (
-                        <div className="pt-2 border-t border-purple-500/20 space-y-1.5">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
-                            <ListTodo className="h-3 w-3" />
-                            Assigned Deliverables / Tasks Checklist ({selectedContract.targetMilestoneTasks.length})
-                          </span>
-                          <div className="grid gap-1">
-                            {selectedContract.targetMilestoneTasks.map((task: string, tIdx: number) => (
-                              <div key={tIdx} className="flex items-start gap-2 text-xs text-gray-800 dark:text-zinc-200 bg-white/60 dark:bg-black/20 p-2 rounded-lg border border-purple-500/10 shadow-xs">
-                                <span className="text-purple-500 font-bold text-xs mt-0.5">✓</span>
-                                <span className="leading-snug">{task}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="px-3 py-3 border-b border-gray-200 dark:border-zinc-800/50 space-y-2">
-                    <span className="text-gray-500 dark:text-zinc-500 uppercase tracking-wider block">
-                      {selectedContract.contractType === 'Gig' ? 'Gig Service Description' : 'Job Description'}
-                    </span>
-                    <p className="text-gray-600 dark:text-zinc-300 leading-relaxed whitespace-pre-line">
-                      {selectedContract.jobDescription}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between px-3 py-2">
-                    <span className="text-gray-500 dark:text-zinc-500 uppercase tracking-wider">Add-On Work Rate</span>
-                    <span className="font-semibold text-gray-600 dark:text-zinc-300">{selectedContract.addOnRate}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* III. LOCKED MILESTONES WITH CLAIMED INDICATORS */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-zinc-100">
-                    III. Locked Milestones
-                  </h3>
-                  {(selectedContract.jobHiringType === 'multiple' || selectedContract.targetMilestoneTitle) && selectedContract.contractType === 'Job' && (
-                    <span className="text-[10px] font-semibold text-purple-600 dark:text-purple-400">
-                      (Showing deliverables for your assigned part)
-                    </span>
-                  )}
-                </div>
-                <div className="overflow-x-auto border-y border-gray-200 dark:border-zinc-800 bg-transparent">
-                  <table className="w-full text-left text-xs font-mono">
-                    <thead>
-                      <tr className="border-b border-gray-200 dark:border-zinc-800/50 text-gray-500 dark:text-zinc-500">
-                        <th className="px-3 py-2 text-center w-8 uppercase font-normal">#</th>
-                        <th className="px-3 py-2 uppercase font-normal">Milestone Name</th>
-                        <th className="px-3 py-2 text-center uppercase font-normal">Status</th>
-                        <th className="px-3 py-2 text-center uppercase font-normal">Revs</th>
-                        <th className="px-3 py-2 text-center uppercase font-normal">Deadline</th>
-                        <th className="px-3 py-2 text-right uppercase font-normal">Credits</th>
-                        {user?.account_id === selectedContract.clientAccountId && selectedContract.status === 'Active' && (
-                          <th className="px-3 py-2 text-right uppercase font-normal">Actions</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-800/30 text-gray-600 dark:text-zinc-300">
-                      {selectedContract.milestones.map((m, index) => {
-                        const isClient = user?.account_id === selectedContract.clientAccountId;
-                        const isOverdue = m.status === 'Overdue' || m.status === 'Stalled' || m.status === 'Abandoned';
-                        const isUnderReview = m.status === 'Under Review';
-                        const statusColor =
-                          m.status === 'Claimed'      ? 'text-emerald-500' :
-                          m.status === 'In Progress'  ? 'text-amber-400' :
-                          m.status === 'Under Review' ? 'text-blue-400' :
-                          m.status === 'Overdue'      ? 'text-rose-400' :
-                          m.status === 'Stalled'      ? 'text-orange-400' :
-                          m.status === 'Abandoned'    ? 'text-red-600' :
-                          m.status === 'Cancelled'    ? 'text-zinc-400 dark:text-zinc-500 line-through' :
-                          'text-gray-500 dark:text-zinc-500';
-
-                        return (
-                          <tr key={m.id} className="hover:bg-white/5 transition-colors">
-                            <td className="px-3 py-2 text-center text-gray-500 dark:text-zinc-500">{index + 1}</td>
-                            <td className="px-3 py-2 font-medium text-gray-700 dark:text-zinc-200">{m.name}</td>
-                            <td className="px-3 py-2 text-center">
-                              <span className={`uppercase tracking-widest text-[8px] font-bold ${statusColor}`}>
-                                {m.status}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-center">{m.revisions}</td>
-                            <td className="px-3 py-2 text-center">{m.deadline}</td>
-                            <td className="px-3 py-2 text-right font-medium">
-                              <div className="flex items-center justify-end gap-1.5 text-gray-600 dark:text-zinc-300">
-                                <CreditIcon className="h-2.5 w-2.5 opacity-50 grayscale" />
-                                <span>{m.credits.toLocaleString()}</span>
-                              </div>
-                            </td>
-                            {isClient && selectedContract.status === 'Active' && (
-                              <td className="px-3 py-2 text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  {isUnderReview && (
-                                    <>
-                                      <button onClick={() => handleMilestoneAction('approve', m, selectedContract.id)} disabled={milestoneLoading} className="rounded px-2 py-0.5 text-[9px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500/20 transition disabled:opacity-50">✓ Approve</button>
-                                      <button onClick={() => handleMilestoneAction('revision', m, selectedContract.id)} disabled={milestoneLoading} className="rounded px-2 py-0.5 text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition disabled:opacity-50">↩ Revise</button>
-                                      <button onClick={() => navigate(`/contracts/dispute-form?contractId=${selectedContract.id}&milestoneId=${m.id}`)} className="rounded px-2 py-0.5 text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition">⚠ Dispute</button>
-                                    </>
-                                  )}
-                                  {isOverdue && (
-                                    <>
-                                      <button onClick={() => setMilestoneAction({ type: 'extend', milestoneId: String(m.id), milestoneName: m.name })} disabled={milestoneLoading} className="rounded px-2 py-0.5 text-[9px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition disabled:opacity-50">↗ Extend</button>
-                                      <button onClick={() => setMilestoneAction({ type: 'cancel', milestoneId: String(m.id), milestoneName: m.name })} disabled={milestoneLoading} className="rounded px-2 py-0.5 text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition disabled:opacity-50">✕ Cancel</button>
-                                      <button onClick={() => navigate(`/contracts/dispute-form?contractId=${selectedContract.id}&milestoneId=${m.id}`)} className="rounded px-2 py-0.5 text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition">⚠ Dispute</button>
-                                    </>
-                                  )}
-                                </div>
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* IV. TERMS OF SERVICE & ESCROW */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-zinc-100">
-                    IV. Agreed Terms of Service (TOS)
-                  </h3>
-                  <span className="text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider">
-                    Preset: {selectedContract.freelancerTosTitle}
-                  </span>
-                </div>
-                <div className="border-y border-gray-200 dark:border-zinc-800 bg-transparent p-4 text-xs font-mono text-gray-700 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
-                  {selectedContract.freelancerTosContent}
-                </div>
-              </div>
-
-              {/* V. WORKFLOW & TERMS */}
-              <div className="space-y-2">
-                <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-zinc-100">
-                  V. Workflow &amp; Terms
-                </h3>
-                <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] p-4 sm:p-5 space-y-4">
-                  <div className="flex items-start gap-3">
-                    <XCircle className="w-5 h-5 text-slate-400 dark:text-zinc-500 shrink-0 mt-0.5" />
-                    <div>
-                      <h5 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-zinc-100">
-                        Client initiates the project?
-                      </h5>
-                      <p className="text-[11px] sm:text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                        No, the freelancer is expected to create the project.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <XCircle className="w-5 h-5 text-slate-400 dark:text-zinc-500 shrink-0 mt-0.5" />
-                    <div>
-                      <h5 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-zinc-100">
-                        Client linked an existing project?
-                      </h5>
-                      <p className="text-[11px] sm:text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                        No, a project has not been linked yet.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                    <div>
-                      <h5 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-zinc-100">
-                        Require Confidentiality (NDA)?
-                      </h5>
-                      <p className="text-[11px] sm:text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                        Yes, freelancers cannot share details about this project during development.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                    <div>
-                      <h5 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-zinc-100">
-                        Allow Portfolio Use?
-                      </h5>
-                      <p className="text-[11px] sm:text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                        Yes, allowed to use output for portfolio (Up to 45 secs).
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* VI. PLATFORM POLICIES */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-zinc-100">
-                    VI. Platform Policies
-                  </h3>
-                  <span className="text-[10px] font-mono text-blue-500 font-semibold uppercase tracking-wider">
-                    Binding Terms
-                  </span>
-                </div>
-
-                <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] p-4 sm:p-5 space-y-4 text-xs leading-relaxed">
-                  <div className="space-y-1">
-                    <h5 className="font-bold text-gray-900 dark:text-zinc-100 text-xs sm:text-sm">
-                      Review Window &amp; Inaction Rule
-                    </h5>
-                    <p className="text-gray-600 dark:text-zinc-300 text-[11px] sm:text-xs leading-relaxed">
-                      Clients have <strong>{selectedContract.contractType === 'Gig' ? '3 days' : '5 days'}</strong> to review submitted milestones. If no review, revision request, or dispute is submitted within this window, the milestone <strong>automatically approves</strong> and held escrow credits are released to the freelancer.
-                    </p>
-                  </div>
-
-                  <div className="border-t border-gray-200/80 dark:border-white/10 pt-3 space-y-1">
-                    <h5 className="font-bold text-gray-900 dark:text-zinc-100 text-xs sm:text-sm">
-                      Overdue &amp; Refund Policy
-                    </h5>
-                    <p className="text-gray-600 dark:text-zinc-300 text-[11px] sm:text-xs leading-relaxed">
-                      If the freelancer misses the agreed milestone deadline without submission, the client holds the right to <strong>extend the deadline</strong> or <strong>cancel the milestone for a 100% credit refund</strong> to their wallet.
-                    </p>
-                  </div>
-
-                  <div className="border-t border-gray-200/80 dark:border-white/10 pt-3 space-y-1">
-                    <h5 className="font-bold text-gray-900 dark:text-zinc-100 text-xs sm:text-sm">
-                      Manual Cancellation Policy
-                    </h5>
-                    <p className="text-gray-600 dark:text-zinc-300 text-[11px] sm:text-xs leading-relaxed">
-                      Either party may request mutual contract cancellation. The recipient has <strong>72 hours</strong> to accept or decline. Unanswered requests auto-approve. Completed milestones stay with the freelancer, and unfinished escrow is refunded to the client.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* VII. AGREEMENT CONFIRMATION */}
-              <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-white/5">
-                <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-zinc-100">
-                  VII. Agreement Confirmation
-                </h3>
-                <div className="p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-500/5 border border-emerald-500/20 space-y-2 text-xs">
-                  <div className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <span className="font-semibold text-gray-800 dark:text-zinc-200">
-                      Client Agreed to the Freelancer's Terms of Service
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <span className="font-semibold text-gray-800 dark:text-zinc-200">
-                      Freelancer Accepts Contract Milestones &amp; Delivery Schedule
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <span className="font-semibold text-gray-800 dark:text-zinc-200">
-                      Both Parties Agree to Ensemble Escrow Protection, Inaction, &amp; 72h Mutual Cancellation Policies
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between border-t border-gray-100 dark:border-white/5 bg-gray-50/80 dark:bg-[#0a0c10] px-6 py-3.5">
-              <div className="flex items-center gap-3">
-                <div className="relative group inline-flex">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigate(`/contracts/dispute-form?contractId=${selectedContract.id}`);
-                    }}
-                    className="inline-flex items-center gap-1.5 text-xs text-rose-500 hover:text-rose-400 font-semibold px-3 py-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 transition-all shadow-sm"
-                  >
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>Dispute</span>
-                  </button>
-                  <div className="pointer-events-none absolute bottom-full left-0 mb-2 hidden group-hover:flex flex-col items-start z-50 whitespace-nowrap animate-in fade-in zoom-in-95 duration-100">
-                    <div className="rounded-md bg-white dark:bg-zinc-800 text-[10px] font-semibold text-gray-800 dark:text-zinc-100 px-2.5 py-1 shadow-md border border-gray-200 dark:border-zinc-700">
-                      Report an issue or file an official dispute
-                    </div>
-                    <div className="w-1.5 h-1.5 bg-white dark:bg-zinc-800 rotate-45 -mt-0.5 ml-3 border-r border-b border-gray-200 dark:border-zinc-700" />
-                  </div>
-                </div>
-                <span className="text-[11px] text-gray-400 dark:text-zinc-500 hidden sm:inline-block font-mono">
-                  Press ESC to close
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
-                {(selectedContract.status === 'Active' || selectedContract.status === 'Waiting') && (
-                  user?.account_id === selectedContract.freelancerAccountId ? (
-                    <>
-                      {selectedContract.status === 'Active' && (
-                        <div className="relative group inline-flex">
-                          <button
-                            onClick={() => navigate(`/dashboard/tasks/${selectedContract.id}`)}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-sm"
-                          >
-                            <ListTodo className="w-3.5 h-3.5 shrink-0" />
-                            <span>Tasks</span>
-                          </button>
-                          <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center z-50 whitespace-nowrap animate-in fade-in zoom-in-95 duration-100">
-                            <div className="rounded-md bg-white dark:bg-zinc-800 text-[10px] font-semibold text-gray-800 dark:text-zinc-100 px-2.5 py-1 shadow-md border border-gray-200 dark:border-zinc-700">
-                              Open task tracker &amp; submit deliverables
-                            </div>
-                            <div className="w-1.5 h-1.5 bg-white dark:bg-zinc-800 rotate-45 -mt-0.5 border-r border-b border-gray-200 dark:border-zinc-700" />
-                          </div>
-                        </div>
-                      )}
-                      {!activeCancellation && (
-                        <div className="relative group inline-flex">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCancellationReason("Mutual agreement to end project");
-                              setCancellationMessage("");
-                              setCancellationModalOpen(true);
-                            }}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 text-xs font-semibold text-rose-500 hover:bg-rose-500/20 transition-all shadow-sm"
-                          >
-                            <Ban className="w-3.5 h-3.5 shrink-0" />
-                            <span>Cancel</span>
-                          </button>
-                          <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center z-50 whitespace-nowrap animate-in fade-in zoom-in-95 duration-100">
-                            <div className="rounded-md bg-white dark:bg-zinc-800 text-[10px] font-semibold text-gray-800 dark:text-zinc-100 px-2.5 py-1 shadow-md border border-gray-200 dark:border-zinc-700">
-                              Request mutual cancellation (72h review window)
-                            </div>
-                            <div className="w-1.5 h-1.5 bg-white dark:bg-zinc-800 rotate-45 -mt-0.5 border-r border-b border-gray-200 dark:border-zinc-700" />
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {selectedContract.status === 'Active' && (
-                        <div className="relative group inline-flex">
-                          <button
-                            type="button"
-                            onClick={() => setMilestoneAction({ type: 'extend', milestoneId: '', milestoneName: selectedContract.title })}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-all shadow-sm"
-                          >
-                            <CalendarPlus className="w-3.5 h-3.5 shrink-0" />
-                            <span>Extend</span>
-                          </button>
-                          <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center z-50 whitespace-nowrap animate-in fade-in zoom-in-95 duration-100">
-                            <div className="rounded-md bg-white dark:bg-zinc-800 text-[10px] font-semibold text-gray-800 dark:text-zinc-100 px-2.5 py-1 shadow-md border border-gray-200 dark:border-zinc-700">
-                              Propose an extension for contract milestones
-                            </div>
-                            <div className="w-1.5 h-1.5 bg-white dark:bg-zinc-800 rotate-45 -mt-0.5 border-r border-b border-gray-200 dark:border-zinc-700" />
-                          </div>
-                        </div>
-                      )}
-                      {selectedContract.status === 'Active' && (
-                        <div className="relative group inline-flex">
-                          <button
-                            onClick={() => navigate(`/dashboard/review/${selectedContract.id}`)}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-all shadow-sm"
-                          >
-                            <Eye className="w-3.5 h-3.5 shrink-0" />
-                            <span>Review</span>
-                          </button>
-                          <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center z-50 whitespace-nowrap animate-in fade-in zoom-in-95 duration-100">
-                            <div className="rounded-md bg-white dark:bg-zinc-800 text-[10px] font-semibold text-gray-800 dark:text-zinc-100 px-2.5 py-1 shadow-md border border-gray-200 dark:border-zinc-700">
-                              Review submitted milestone deliverables
-                            </div>
-                            <div className="w-1.5 h-1.5 bg-white dark:bg-zinc-800 rotate-45 -mt-0.5 border-r border-b border-gray-200 dark:border-zinc-700" />
-                          </div>
-                        </div>
-                      )}
-                      {!activeCancellation && (
-                        <div className="relative group inline-flex">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCancellationReason("Mutual agreement to end project");
-                              setCancellationMessage("");
-                              setCancellationModalOpen(true);
-                            }}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 text-xs font-semibold text-rose-500 hover:bg-rose-500/20 transition-all shadow-sm"
-                          >
-                            <Ban className="w-3.5 h-3.5 shrink-0" />
-                            <span>Cancel</span>
-                          </button>
-                          <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center z-50 whitespace-nowrap animate-in fade-in zoom-in-95 duration-100">
-                            <div className="rounded-md bg-white dark:bg-zinc-800 text-[10px] font-semibold text-gray-800 dark:text-zinc-100 px-2.5 py-1 shadow-md border border-gray-200 dark:border-zinc-700">
-                              Request mutual cancellation (72h review window)
-                            </div>
-                            <div className="w-1.5 h-1.5 bg-white dark:bg-zinc-800 rotate-45 -mt-0.5 border-r border-b border-gray-200 dark:border-zinc-700" />
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )
-                )}
-                <div className="relative group inline-flex">
-                  <button
-                    onClick={() => {
-                      setSelectedContract(null);
-                      navigate('/contracts');
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/10 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-white transition hover:bg-gray-100 dark:hover:bg-white/20 shadow-sm"
-                  >
-                    <X className="w-3.5 h-3.5 shrink-0" />
-                    <span>Close</span>
-                  </button>
-                  <div className="pointer-events-none absolute bottom-full right-0 mb-2 hidden group-hover:flex flex-col items-end z-50 whitespace-nowrap animate-in fade-in zoom-in-95 duration-100">
-                    <div className="rounded-md bg-white dark:bg-zinc-800 text-[10px] font-semibold text-gray-800 dark:text-zinc-100 px-2.5 py-1 shadow-md border border-gray-200 dark:border-zinc-700">
-                      Close contract modal
-                    </div>
-                    <div className="w-1.5 h-1.5 bg-white dark:bg-zinc-800 rotate-45 -mt-0.5 mr-3 border-r border-b border-gray-200 dark:border-zinc-700" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Milestone Confirm Modal */}
-      {milestoneAction && selectedContract && (
-        <div className="fixed inset-0 z-[199999] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in font-['Plus_Jakarta_Sans']">
-          <div className="w-full max-w-sm rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0f1115] p-6 shadow-2xl space-y-4">
-            {milestoneAction.type === 'cancel' ? (
-              <>
-                <h3 className="text-base font-bold text-rose-500">
-                  {milestoneAction.milestoneId ? 'Cancel Milestone & Refund' : 'Request Contract Cancellation'}
-                </h3>
-                <div className="text-sm text-gray-600 dark:text-zinc-300 space-y-2">
-                  {milestoneAction.milestoneId ? (
-                    <p>Are you sure you want to cancel <strong>"{milestoneAction.milestoneName}"</strong>? The milestone credits will be refunded to your wallet. This cannot be undone.</p>
-                  ) : (
-                    <>
-                      <p>To cancel the entire contract for <strong>"{selectedContract.title}"</strong>, a mutual cancellation request will be submitted with 72 hours for the other party to respond.</p>
-                      <div className="rounded-lg bg-gray-50 dark:bg-white/5 p-3 text-xs space-y-1.5 border border-gray-200 dark:border-white/10">
-                        <div className="flex justify-between text-gray-600 dark:text-zinc-400">
-                          <span>Completed milestones (kept by freelancer):</span>
-                          <span className="font-semibold text-emerald-500">{selectedContract.milestones.filter(m => m.status === 'Claimed').reduce((acc, m) => acc + (m.credits || 0), 0).toLocaleString()} Credits</span>
-                        </div>
-                        <div className="flex justify-between text-gray-600 dark:text-zinc-400 border-t border-gray-200 dark:border-white/10 pt-1">
-                          <span>Unfinished escrow (refunded to client):</span>
-                          <span className="font-bold text-rose-500">{selectedContract.milestones.filter(m => m.status !== 'Claimed' && m.status !== 'Cancelled').reduce((acc, m) => acc + (m.credits || 0), 0).toLocaleString()} Credits</span>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-                <div className="flex gap-3 justify-end pt-2">
-                  <button onClick={() => setMilestoneAction(null)} className="rounded-xl border border-gray-200 dark:border-white/15 px-4 py-2 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 transition">Keep Contract</button>
-                  <button onClick={() => {
-                    if (!milestoneAction.milestoneId) {
-                      setMilestoneAction(null);
-                      setCancellationReason("Mutual agreement to end project");
-                      setCancellationMessage("");
-                      setCancellationModalOpen(true);
-                    } else {
-                      handleMilestoneAction('cancel', { id: milestoneAction.milestoneId, name: milestoneAction.milestoneName } as any, selectedContract.id);
-                    }
-                  }} disabled={milestoneLoading} className="rounded-xl bg-rose-500 px-4 py-2 text-xs font-bold text-white hover:bg-rose-600 transition disabled:opacity-50">
-                    {milestoneAction.milestoneId ? (milestoneLoading ? 'Processing...' : 'Yes, Cancel & Refund') : 'Proceed to Request'}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <h3 className="text-base font-bold text-blue-400">Extend Contract Deadline</h3>
-                <p className="text-sm text-gray-600 dark:text-zinc-300">
-                  How many additional days do you want to extend this contract's delivery schedule by? This extends the overall contract deadline and active milestones dynamically.
-                </p>
-                <div className="flex items-center gap-3">
-                  <input type="number" min={1} max={90} value={extensionDays} onChange={e => setExtensionDays(Number(e.target.value))} className="w-24 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <span className="text-sm text-gray-500 dark:text-zinc-400">days</span>
-                </div>
-                <div className="flex gap-3 justify-end pt-2">
-                  <button onClick={() => setMilestoneAction(null)} className="rounded-xl border border-gray-200 dark:border-white/15 px-4 py-2 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 transition">Cancel</button>
-                  <button onClick={() => handleMilestoneAction('extend', { id: milestoneAction.milestoneId, name: milestoneAction.milestoneName } as any, selectedContract.id)} disabled={milestoneLoading || extensionDays < 1} className="rounded-xl bg-blue-500 px-4 py-2 text-xs font-bold text-white hover:bg-blue-600 transition disabled:opacity-50">{milestoneLoading ? 'Processing...' : `Extend Contract by ${extensionDays} day${extensionDays !== 1 ? 's' : ''}`}</button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Mutual Cancellation Request Modal */}
-      {cancellationModalOpen && selectedContract && (
-        <div className="fixed inset-0 z-[199999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in font-['Plus_Jakarta_Sans']">
-          <div className="w-full max-w-lg rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0f1115] p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-3">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-rose-500" />
-                <h3 className="text-base font-bold text-gray-900 dark:text-white">
-                  Request Mutual Contract Cancellation
-                </h3>
-              </div>
-              <button
-                onClick={() => setCancellationModalOpen(false)}
-                className="p-1 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/10 transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-4 text-xs text-gray-600 dark:text-zinc-300">
-              <p>
-                You are requesting to mutually end the contract for <strong>"{selectedContract.title}"</strong>. The other party will have <strong>72 hours</strong> to review and accept or decline.
-              </p>
-
-              {/* Reason Select */}
-              <div className="space-y-1.5">
-                <label className="font-semibold text-gray-800 dark:text-zinc-200 block">
-                  Reason for Cancellation <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={cancellationReason}
-                  onChange={(e) => setCancellationReason(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-2 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="Mutual agreement to end project">Mutual agreement to end project</option>
-                  <option value="Scope or technical requirements changed">Scope or technical requirements changed</option>
-                  <option value="Unresponsive or lack of communication">Unresponsive or lack of communication</option>
-                  <option value="Unable to meet milestone schedule / deadlines">Unable to meet milestone schedule / deadlines</option>
-                  <option value="Quality or expectations mismatch">Quality or expectations mismatch</option>
-                  <option value="Personal emergency / Scheduling conflict">Personal emergency / Scheduling conflict</option>
-                  <option value="Other">Other reason</option>
-                </select>
-              </div>
-
-              {/* Optional Message */}
-              <div className="space-y-1.5">
-                <label className="font-semibold text-gray-800 dark:text-zinc-200 block">
-                  Additional Details / Notes for Other Party
-                </label>
-                <textarea
-                  rows={3}
-                  value={cancellationMessage}
-                  onChange={(e) => setCancellationMessage(e.target.value)}
-                  placeholder="Explain why you are requesting cancellation and any specific handover notes..."
-                  className="w-full rounded-xl border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-3 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
-              </div>
-
-              {/* Escrow & Policy Box */}
-              <div className="rounded-xl bg-gray-50 dark:bg-white/5 p-3.5 space-y-2 border border-gray-200 dark:border-white/10">
-                <div className="flex items-center gap-1.5 text-blue-500 font-bold">
-                  <Shield className="w-3.5 h-3.5" />
-                  <span>Platform Policy & Escrow Disposition (TOS Section 6)</span>
-                </div>
-                <div className="space-y-1 text-[11px] text-gray-500 dark:text-zinc-400">
-                  <div className="flex justify-between">
-                    <span>Completed milestone payout:</span>
-                    <span className="font-semibold text-emerald-500">
-                      {selectedContract.milestones.filter(m => m.status === 'Claimed').reduce((acc, m) => acc + (m.credits || 0), 0).toLocaleString()} Credits (kept by freelancer)
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-t border-gray-200 dark:border-white/10 pt-1">
-                    <span>Unfinished escrow refund:</span>
-                    <span className="font-bold text-rose-500">
-                      {selectedContract.milestones.filter(m => m.status !== 'Claimed' && m.status !== 'Cancelled').reduce((acc, m) => acc + (m.credits || 0), 0).toLocaleString()} Credits (returned to client)
-                    </span>
-                  </div>
-                </div>
-                <p className="text-[10px] text-gray-500 dark:text-zinc-500 pt-1 border-t border-gray-200 dark:border-white/10">
-                  ⏳ If the recipient does not respond within 72 hours, the platform will automatically approve this cancellation and refund unfinished escrow.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-200 dark:border-white/10">
-              <button
-                type="button"
-                onClick={() => setCancellationModalOpen(false)}
-                className="rounded-xl border border-gray-200 dark:border-white/15 px-4 py-2 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmitCancellationRequest}
-                disabled={submittingCancellation || !cancellationReason.trim()}
-                className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 transition disabled:opacity-50"
-              >
-                {submittingCancellation ? 'Submitting...' : 'Send Cancellation Request'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Decline Cancellation Modal */}
-      {declineModalOpen && activeCancellation && (
-        <div className="fixed inset-0 z-[199999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in font-['Plus_Jakarta_Sans']">
-          <div className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0f1115] p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-3">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-amber-500" />
-                <h3 className="text-base font-bold text-gray-900 dark:text-white">
-                  Decline Cancellation Request
-                </h3>
-              </div>
-              <button
-                onClick={() => setDeclineModalOpen(false)}
-                className="p-1 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/10 transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs text-gray-600 dark:text-zinc-300">
-              <p>
-                Declining this request will keep the contract active and resume normal milestone obligations. Please state your reason for declining so the other party understands your position.
-              </p>
-              <div className="space-y-1.5">
-                <label className="font-semibold text-gray-800 dark:text-zinc-200 block">
-                  Reason for Declining (Optional)
-                </label>
-                <textarea
-                  rows={3}
-                  value={declineReason}
-                  onChange={(e) => setDeclineReason(e.target.value)}
-                  placeholder="e.g. Work is already completed and ready for submission..."
-                  className="w-full rounded-xl border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-3 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-200 dark:border-white/10">
-              <button
-                type="button"
-                onClick={() => setDeclineModalOpen(false)}
-                className="rounded-xl border border-gray-200 dark:border-white/15 px-4 py-2 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 transition"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={handleDeclineCancellation}
-                disabled={actionLoading}
-                className="rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white hover:bg-amber-700 transition disabled:opacity-50"
-              >
-                {actionLoading ? 'Declining...' : 'Confirm Decline'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Custom Styles */}
       <style>{`
         @keyframes fadeIn {
@@ -1938,16 +981,6 @@ export const Contracts: React.FC = () => {
         }
         .animate-fade-in {
           animation: fadeIn 0.35s ease-out forwards;
-        }
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.02);
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.15);
-          border-radius: 4px;
         }
       `}</style>
     </div>

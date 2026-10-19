@@ -1,5 +1,6 @@
 const { pool } = require('../lib/Database');
 const NotificationRepositories = require('./NotificationRepositories');
+const TeamProjectRepositories = require('./TeamProjectRepositories');
 
 async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt) {
     const client = await pool.connect();
@@ -8,7 +9,8 @@ async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt) {
 
         // 1. Verify proposal exists and belongs to a job owned by this client
         const proposalRes = await client.query(`
-            SELECT p.freelancer_account_id, COALESCE(p.revision_price_credits, 0) AS revision_price_credits, j.job_id, j.title, j.client_account_id
+            SELECT p.freelancer_account_id, COALESCE(p.revision_price_credits, 0) AS revision_price_credits, 
+                   j.job_id, j.title, j.client_account_id, j.hiring_type, j.no_of_hires
             FROM proposals p
             JOIN jobs j ON p.job_id = j.job_id
             WHERE p.proposal_id = $1 AND j.client_account_id = ANY($2::uuid[]) AND p.deleted_at IS NULL
@@ -18,7 +20,7 @@ async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt) {
             throw new Error("Proposal not found or unauthorized");
         }
 
-        const { freelancer_account_id, revision_price_credits, job_id, title, client_account_id: clientId } = proposalRes.rows[0];
+        const { freelancer_account_id, revision_price_credits, job_id, title, client_account_id: clientId, hiring_type, no_of_hires } = proposalRes.rows[0];
 
         // 2. Check client's wallet balance
         const walletRes = await client.query(`
@@ -126,7 +128,7 @@ async function acceptJobOffer(freelancerIds, contractId) {
         // 1. Verify contract belongs to a proposal owned by this freelancer
         const contractRes = await client.query(`
             SELECT c.contract_id, c.starts_at, c.rate_credits, p.proposal_id, p.freelancer_account_id,
-                   j.job_id, j.no_of_hires, j.title, j.client_account_id,
+                   j.job_id, j.no_of_hires, j.hiring_type, j.title, j.client_account_id,
                    j.timeline_min, j.timeline_max, j.rough_deadline, j.rough_duration_hrs
             FROM contracts c
             JOIN job_contracts jc ON c.contract_id = jc.contract_id
@@ -141,7 +143,7 @@ async function acceptJobOffer(freelancerIds, contractId) {
         }
 
         const {
-            starts_at, proposal_id, job_id, no_of_hires, title, client_account_id,
+            starts_at, proposal_id, job_id, no_of_hires, hiring_type, title, client_account_id,
             freelancer_account_id: freelancerId, timeline_min, timeline_max,
             rough_deadline, rough_duration_hrs
         } = contractRes.rows[0];
@@ -279,6 +281,17 @@ async function acceptJobOffer(freelancerIds, contractId) {
             WHERE proposal_id = $1
         `, [proposal_id]);
 
+        // 4b. Ensure Contractual Team Project workspace and membership are synchronized
+        if (hiring_type === 'team' || Number(no_of_hires) > 1) {
+            await TeamProjectRepositories.ensureContractualTeamProject(client, {
+                jobId: job_id,
+                clientAccountId: client_account_id,
+                contractId,
+                proposalId: proposal_id,
+                freelancerAccountId: freelancerId,
+            });
+        }
+
         // 5. Notify the Client
         await NotificationRepositories.createNotification({
             account_id: client_account_id,
@@ -367,7 +380,7 @@ async function rejectJobOffer(freelancerIds, contractId, reason) {
             throw new Error("Contract not found or not pending signature for this user");
         }
 
-        const { proposal_id, title, client_account_id } = contractRes.rows[0];
+        const { proposal_id, title, client_account_id, rate_credits } = contractRes.rows[0];
 
         // 2. Update Contract Status
         await client.query(`
@@ -382,6 +395,39 @@ async function rejectJobOffer(freelancerIds, contractId, reason) {
             SET status = 'Pending', reject_reason = $1
             WHERE proposal_id = $2
         `, [reason || 'Applicant rejected the contract offer.', proposal_id]);
+
+        // 3b. Refund Client Escrow Hold back to Personal Wallet
+        const transferAmount = Number(rate_credits);
+        if (transferAmount > 0) {
+            const escrowWalletRes = await client.query(`
+                SELECT w.wallet_id FROM account_wallets aw JOIN wallets w ON aw.wallet_id = w.wallet_id
+                WHERE aw.account_id = $1 AND w.type = 'escrow wallets' FOR UPDATE OF w
+            `, [client_account_id]);
+            const personalWalletRes = await client.query(`
+                SELECT w.wallet_id FROM account_wallets aw JOIN wallets w ON aw.wallet_id = w.wallet_id
+                WHERE aw.account_id = $1 AND w.type = 'account_wallets' FOR UPDATE OF w
+            `, [client_account_id]);
+
+            if (escrowWalletRes.rows[0] && personalWalletRes.rows[0]) {
+                await client.query(`
+                    UPDATE wallets
+                    SET balance_credits = balance_credits - $1
+                    WHERE wallet_id = $2 AND balance_credits >= $1
+                `, [transferAmount, escrowWalletRes.rows[0].wallet_id]);
+
+                await client.query(`
+                    UPDATE wallets
+                    SET balance_credits = balance_credits + $1
+                    WHERE wallet_id = $2
+                `, [transferAmount, personalWalletRes.rows[0].wallet_id]);
+
+                await client.query(`
+                    INSERT INTO credit_transactions (
+                        type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
+                    ) VALUES ('Escrow Refund', $1, 'completed', $2, $3, 'contracts', $4)
+                `, [transferAmount, escrowWalletRes.rows[0].wallet_id, personalWalletRes.rows[0].wallet_id, contractId]);
+            }
+        }
 
         // 4. Notify the Client
         await NotificationRepositories.createNotification({
@@ -432,7 +478,7 @@ async function getContractsByUserId(accountIds) {
             COALESCE(c.deadline_at, j.rough_deadline) as job_deadline,
             j.rate_credits_min,
             j.rate_credits_max,
-            p.revision_price_credits as additional_work_rate,
+            COALESCE(c.revision_price_credits, p.revision_price_credits, 0) as additional_work_rate,
             client_acc.display_name as client_name,
             client_acc.handle as client_handle,
             client_f.path as client_avatar,
@@ -443,6 +489,12 @@ async function getContractsByUserId(accountIds) {
             p.freelancer_account_id,
             COALESCE(t.terms_title, global_t.terms_title, 'Ensemble Standard Job Terms') as terms_title,
             COALESCE(t.terms_description, global_t.terms_description, 'Standard terms from job') as terms_content,
+            COALESCE(j.initiator_role, 'freelancer') as initiator_role,
+            COALESCE(j.is_existing_project, false) as is_existing_project,
+            j.existing_project_id,
+            COALESCE(j.require_nda, false) as require_nda,
+            COALESCE(j.portfolio_use_allowed, false) as portfolio_use_allowed,
+            j.portfolio_use_duration_seconds,
             (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = p.freelancer_account_id LIMIT 1) as client_rating,
             (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = j.client_account_id LIMIT 1) as freelancer_rating,
             COALESCE(
@@ -495,6 +547,12 @@ async function getContractsByUserId(accountIds) {
             g.freelancer_account_id as freelancer_account_id,
             COALESCE(t.terms_title, global_t.terms_title, 'Ensemble Standard Gig Terms') as terms_title,
             COALESCE(t.terms_description, global_t.terms_description, 'Standard terms from gig') as terms_content,
+            COALESCE(gr.initiator_role, 'client') as initiator_role,
+            CASE WHEN gr.linked_project_id IS NOT NULL THEN true ELSE false END as is_existing_project,
+            gr.linked_project_id as existing_project_id,
+            false as require_nda,
+            true as portfolio_use_allowed,
+            60 as portfolio_use_duration_seconds,
             (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as client_rating,
             (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as freelancer_rating,
             COALESCE(

@@ -313,7 +313,10 @@ async function maybeAutoSuspendAfterWarning(accountId, staffId = null) {
     return { suspended: false, alreadySuspended: true, activeCount, max };
   }
 
-  await pool.query(`UPDATE accounts SET status = 'Suspended' WHERE account_id = $1`, [accountId]);
+  await pool.query(
+    `UPDATE accounts SET status = 'Suspended', suspension_ends_at = NOW() + INTERVAL '7 days' WHERE account_id = $1`,
+    [accountId]
+  );
   await recordAccountActivity({
     accountId,
     action: `Auto-suspended after ${activeCount} active warning(s) (limit ${max})`,

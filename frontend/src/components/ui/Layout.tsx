@@ -36,7 +36,40 @@ const Layout = () => {
   const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
   const isSidebarCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
+  const setIsSidebarCollapsed = useGlobalState((state) => state.setIsSidebarCollapsed);
   const initializeChat = useChatState((state) => state.initialize);
+
+  // Auto-collapse sidebar when viewport is narrow (< 1024px)
+  useEffect(() => {
+    let wasAutoCollapsed = false;
+    let prevWidth = window.innerWidth;
+
+    const handleResize = () => {
+      const currentWidth = window.innerWidth;
+      const wentNarrow = prevWidth >= 1024 && currentWidth < 1024;
+      const wentWide = prevWidth < 1024 && currentWidth >= 1024;
+      prevWidth = currentWidth;
+
+      const currentCollapsed = useGlobalState.getState().isSidebarCollapsed;
+
+      if (wentNarrow && !currentCollapsed) {
+        setIsSidebarCollapsed(true);
+        wasAutoCollapsed = true;
+      } else if (wentWide && currentCollapsed && wasAutoCollapsed) {
+        setIsSidebarCollapsed(false);
+        wasAutoCollapsed = false;
+      }
+    };
+
+    // Auto-collapse on initial mount if screen is already narrow
+    if (window.innerWidth < 1024 && !useGlobalState.getState().isSidebarCollapsed) {
+      setIsSidebarCollapsed(true);
+      wasAutoCollapsed = true;
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [setIsSidebarCollapsed]);
   const openDirectChat = useChatState((state) => state.openDirectChat);
   const openFloatingConversation = useChatState(
     (state) => state.openFloatingConversation
@@ -74,6 +107,12 @@ const Layout = () => {
   }, [isStaffView, location.pathname, navigate]);
 
   const isInboxPage = location.pathname.startsWith("/inbox");
+  const isTeamProjectChat =
+    (location.pathname.startsWith("/team-project") || location.pathname.startsWith("/team-projects")) &&
+    new URLSearchParams(location.search).get("tab") === "chat";
+  const isFloatingChatHidden = useGlobalState((state) => state.isFloatingChatHidden);
+
+  const shouldHideFloatingChat = isInboxPage || isStaffView || isTeamProjectChat || isFloatingChatHidden;
   const currentUserId = String(user?.account_id || "");
 
   const recentChats = useMemo(() => {
@@ -225,15 +264,29 @@ const Layout = () => {
     <div
       className={`flex relative w-full ${
         isInboxPage ? "h-screen overflow-hidden" : "min-h-screen"
-      }`}
+      } print:min-h-0 print:block print:w-full print:m-0 print:p-0`}
     >
-      <UserNav />
+      <div className="print:hidden">
+        <UserNav />
+      </div>
       <main
-        className={`flex-1 transition-all duration-300 min-w-0 flex flex-col ${
+        className={`flex-1 transition-all duration-300 min-w-0 flex flex-col print:p-0 print:m-0 print:w-full print:block ${
           isInboxPage ? "h-screen overflow-hidden" : "min-h-screen"
         }`}
         style={{ paddingLeft: marginLeft }}
       >
+        <style>{`
+          @media print {
+            main {
+              padding-left: 0 !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              display: block !important;
+            }
+          }
+        `}</style>
         {isStaffView && (
           <style>
             {`[data-staff-preview-hide]{display:none !important;}`}
@@ -242,18 +295,20 @@ const Layout = () => {
         <Outlet context={{ openChatWithUser }} />
       </main>
 
-      {!isInboxPage && !isStaffView && (
-        <ChatMain
-          activeUser={activeChatUser}
-          recentChats={recentChats}
-          onSelectChat={(chat) => void openFloatingConversation(chat)}
-          onRemoveChat={removeFloatingWindow}
-        />
-      )}
-      {!isStaffView && <CallOverlay />}
+      <div className="print:hidden">
+        {!shouldHideFloatingChat && (
+          <ChatMain
+            activeUser={activeChatUser}
+            recentChats={recentChats}
+            onSelectChat={(chat) => void openFloatingConversation(chat)}
+            onRemoveChat={removeFloatingWindow}
+          />
+        )}
+        {!isStaffView && <CallOverlay />}
 
-      <UtilScrollTop />
-      <VerificationRequiredModal />
+        <UtilScrollTop />
+        <VerificationRequiredModal />
+      </div>
     </div>
   );
 };

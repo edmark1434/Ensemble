@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ArrowRight, ChevronDown, Check, Percent, Bold, Italic, List, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, ChevronDown, Check, Percent, Bold, Italic, List, Eye, EyeOff, Wand2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Gig } from "../../../gig_components/gig_lists";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { GigRichText } from "../../../gig_components/GigRichText";
+import { showSuccessToast } from "@/components/utility/toast";
+import { handleRichTextPaste, autoFormatDescription } from "@/lib/markdownPaste";
 
 export const additionalWorkRates = [
   { label: "+10% per extra revision pass", value: 10 },
@@ -91,6 +93,17 @@ export const OrderPitchStep: React.FC<OrderPitchProps> = ({
     }, 0);
   };
 
+  const handleAutoFormat = () => {
+    if (!coverLetter.trim()) return;
+    const formatted = autoFormatDescription(coverLetter);
+    setCoverLetter(formatted);
+    setErrors(prev => {
+      const { coverLetter: _, ...rest } = prev;
+      return rest;
+    });
+    showSuccessToast("Formatted pitch with Markdown!");
+  };
+
   const formatCommaString = (val: string) => {
     if (!val) return "";
     const clean = val.replace(/,/g, "");
@@ -110,10 +123,10 @@ export const OrderPitchStep: React.FC<OrderPitchProps> = ({
       {/* Target Client Budget Banner */}
       {gig && (
         <div className="p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 flex items-center justify-between">
-          <span className="text-xs text-gray-500 dark:text-zinc-400 font-medium">Client's Budget Range</span>
           <span className="text-sm font-extrabold text-gray-900 dark:text-white flex items-center gap-1.5">
             <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400" /> {gig.priceRange}
           </span>
+          <span className="text-xs text-gray-500 dark:text-zinc-400 font-medium">Client's Budget Range</span>
         </div>
       )}
 
@@ -262,6 +275,16 @@ export const OrderPitchStep: React.FC<OrderPitchProps> = ({
             <button type="button" onClick={() => insertMarkdown('- ')} className="p-1 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors" title="Bullet List" disabled={isPreviewMode}>
               <List className="w-3.5 h-3.5" />
             </button>
+            <button
+              type="button"
+              onClick={handleAutoFormat}
+              className="p-1 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors flex items-center gap-1 px-1.5"
+              title="Auto-format AI / pasted text into Markdown (Bold headers, bullets, spacing)"
+              disabled={isPreviewMode || !coverLetter.trim()}
+            >
+              <Wand2 className="w-3.5 h-3.5 text-blue-500" />
+              <span className="text-[10px] font-semibold hidden sm:inline">Format</span>
+            </button>
             <div className="w-px h-4 bg-gray-100 dark:bg-white/10 mx-1" />
             <button type="button" onClick={() => setIsPreviewMode(!isPreviewMode)} className={`p-1 rounded transition-colors flex items-center gap-1 px-2 ${isPreviewMode ? 'bg-blue-500/20 text-blue-400' : 'bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-300'}`} title="Toggle Preview">
               {isPreviewMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -286,6 +309,15 @@ export const OrderPitchStep: React.FC<OrderPitchProps> = ({
             maxLength={2000}
             placeholder="Introduce yourself, your experience, and how you will execute this project..."
             value={coverLetter}
+            onPaste={(e) => {
+              const handled = handleRichTextPaste(e, coverLetter, setCoverLetter, 2000);
+              if (handled) {
+                setErrors((prev) => {
+                  const { coverLetter: _, ...rest } = prev;
+                  return rest;
+                });
+              }
+            }}
             onChange={(e) => {
               setCoverLetter(e.target.value);
               if (e.target.value.trim().length >= 50) {

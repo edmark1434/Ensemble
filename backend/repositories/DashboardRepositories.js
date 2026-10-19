@@ -182,6 +182,9 @@ async function getDashboardTasks(accountId) {
             c.revision_price_credits as revision_price_credits,
             j.title as job_title,
             j.job_id as job_id,
+            j.hiring_type as job_hiring_type,
+            j.no_of_hires as job_no_of_hires,
+            (SELECT t.team_id FROM teams t WHERE t.job_id = j.job_id AND t.team_type = 'contractual' AND t.deleted_at IS NULL LIMIT 1) as team_project_id,
             j.experience_level as job_difficulty,
             (SELECT f.path FROM job_attachments ja JOIN files f ON ja.file_id = f.file_id WHERE ja.job_id = j.job_id ORDER BY ja.index ASC LIMIT 1) as job_banner,
             (SELECT t.name FROM job_tags jt JOIN tags t ON jt.tag_id = t.tag_id WHERE jt.job_id = j.job_id LIMIT 1) as job_category,
@@ -196,6 +199,7 @@ async function getDashboardTasks(accountId) {
                     'id', cm.contract_milestone_id,
                     'index', cm.index,
                     'name', cm.name,
+                    'description', cm.description,
                     'status', cm.status,
                     'credits', cm.credits,
                     'revisions_max', cm.no_of_revisions_max,
@@ -229,6 +233,9 @@ async function getDashboardTasks(accountId) {
             c.revision_price_credits as revision_price_credits,
             g.title as job_title,
             g.gig_id as job_id,
+            'individual' as job_hiring_type,
+            1 as job_no_of_hires,
+            NULL::uuid as team_project_id,
             'N/A' as job_difficulty,
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id ORDER BY ga.index ASC LIMIT 1) as job_banner,
             (SELECT t.name FROM gig_tags gt JOIN tags t ON gt.tag_id = t.tag_id WHERE gt.gig_id = g.gig_id LIMIT 1) as job_category,
@@ -243,6 +250,7 @@ async function getDashboardTasks(accountId) {
                     'id', cm.contract_milestone_id,
                     'index', cm.index,
                     'name', cm.name,
+                    'description', cm.description,
                     'status', cm.status,
                     'credits', cm.credits,
                     'revisions_max', cm.no_of_revisions_max,
@@ -296,6 +304,11 @@ async function getTaskById(contractId, accountId) {
             c.revision_price_credits as revision_price_credits,
             j.title as job_title,
             j.job_id as job_id,
+            j.hiring_type as job_hiring_type,
+            j.no_of_hires as job_no_of_hires,
+            (SELECT t.team_id FROM teams t WHERE t.job_id = j.job_id AND t.team_type = 'contractual' AND t.deleted_at IS NULL LIMIT 1) as team_project_id,
+            jm.title as target_milestone_title,
+            COALESCE(jm.tasks, '[]'::jsonb) as target_milestone_tasks,
             client_acc.display_name as client_name,
             client_acc.account_id as client_account_id,
             client_f.path as client_avatar,
@@ -308,6 +321,7 @@ async function getTaskById(contractId, accountId) {
                         'id', cm.contract_milestone_id,
                         'index', cm.index,
                         'name', cm.name,
+                        'description', cm.description,
                         'status', cm.status,
                         'credits', cm.credits,
                         'revisions_max', cm.no_of_revisions_max,
@@ -338,6 +352,7 @@ async function getTaskById(contractId, accountId) {
         JOIN job_contracts jc ON c.contract_id = jc.contract_id
         JOIN proposals p ON jc.proposal_id = p.proposal_id
         JOIN jobs j ON p.job_id = j.job_id
+        LEFT JOIN job_milestones jm ON p.job_milestone_id = jm.job_milestone_id
         JOIN accounts client_acc ON j.client_account_id = client_acc.account_id
         LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
         JOIN accounts free_acc ON p.freelancer_account_id = free_acc.account_id
@@ -354,6 +369,11 @@ async function getTaskById(contractId, accountId) {
             c.revision_price_credits as revision_price_credits,
             g.title as job_title,
             g.gig_id as job_id,
+            'individual' as job_hiring_type,
+            1 as job_no_of_hires,
+            NULL::uuid as team_project_id,
+            NULL as target_milestone_title,
+            '[]'::jsonb as target_milestone_tasks,
             client_acc.display_name as client_name,
             client_acc.account_id as client_account_id,
             client_f.path as client_avatar,
@@ -366,6 +386,7 @@ async function getTaskById(contractId, accountId) {
                         'id', cm.contract_milestone_id,
                         'index', cm.index,
                         'name', cm.name,
+                        'description', cm.description,
                         'status', cm.status,
                         'credits', cm.credits,
                         'revisions_max', cm.no_of_revisions_max,
@@ -514,6 +535,36 @@ async function recordMilestoneAction({
             throw error;
         }
 
+        // Enforce that all milestone tasks must be completed before submitting deliverable for client review
+        if (submissionStatus === 'submitted_for_review') {
+            const incompleteTasksRes = await client.query(
+                `SELECT DISTINCT twt.task_id, twt.title, twt.status
+                 FROM team_workspace_tasks twt
+                 JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
+                 LEFT JOIN job_contracts jc ON jc.contract_id = tcw.contract_id
+                 LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+                 LEFT JOIN contract_milestones cm ON cm.contract_milestone_id = $2
+                 LEFT JOIN jobs j ON j.job_id = p.job_id
+                 LEFT JOIN job_milestones jm ON jm.job_id = j.job_id AND (jm.order_index = cm.index OR jm.order_index = (cm.index + 1))
+                 WHERE tcw.contract_id = $1
+                   AND twt.deleted_at IS NULL
+                   AND (
+                     twt.job_milestone_id = p.job_milestone_id
+                     OR (p.job_milestone_id IS NULL AND twt.job_milestone_id = jm.job_milestone_id)
+                     OR (p.job_milestone_id IS NULL AND jm.job_milestone_id IS NULL)
+                   )
+                   AND twt.status NOT IN ('completed', 'in_review')`,
+                [contractId, milestoneId]
+            );
+
+            if (incompleteTasksRes.rows.length > 0) {
+                const titles = incompleteTasksRes.rows.map(r => `"${r.title}"`).join(', ');
+                const error = new Error(`Cannot submit deliverable for review: All milestone tasks must be completed first. Incomplete task(s): ${titles}`);
+                error.statusCode = 400;
+                throw error;
+            }
+        }
+
         const submissionResult = await client.query(
             `INSERT INTO milestone_submits (
                 contract_milestone_id, index, message, attachments, status
@@ -532,6 +583,84 @@ async function recordMilestoneAction({
              RETURNING *`,
             [milestoneId, message, JSON.stringify(attachments || []), submissionStatus]
         );
+
+        // Automatically update milestone tasks to 'in_review' when submitted for review or submission update sent
+        if (submissionStatus === 'submitted_for_review' || submissionStatus === 'progress') {
+            await client.query(
+                `UPDATE team_workspace_tasks
+                    SET status = 'in_review',
+                        updated_at = NOW()
+                  WHERE task_id IN (
+                    SELECT DISTINCT twt.task_id
+                    FROM team_workspace_tasks twt
+                    JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
+                    LEFT JOIN job_contracts jc ON jc.contract_id = tcw.contract_id
+                    LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+                    LEFT JOIN contract_milestones cm ON cm.contract_milestone_id = $2
+                    LEFT JOIN jobs j ON j.job_id = p.job_id
+                    LEFT JOIN job_milestones jm ON jm.job_id = j.job_id AND (jm.order_index = cm.index OR jm.order_index = (cm.index + 1))
+                    WHERE tcw.contract_id = $1
+                      AND twt.deleted_at IS NULL
+                      AND (
+                        twt.job_milestone_id = p.job_milestone_id
+                        OR (p.job_milestone_id IS NULL AND twt.job_milestone_id = jm.job_milestone_id)
+                        OR (p.job_milestone_id IS NULL AND jm.job_milestone_id IS NULL)
+                      )
+                  )`,
+                [contractId, milestoneId]
+            );
+        } else if (submissionStatus === 'revision_request' || submissionStatus === 'revision_requested') {
+            // Revert milestone tasks back to 'in_progress' upon revision request
+            await client.query(
+                `UPDATE team_workspace_tasks
+                    SET status = 'in_progress',
+                        updated_at = NOW()
+                  WHERE task_id IN (
+                    SELECT DISTINCT twt.task_id
+                    FROM team_workspace_tasks twt
+                    JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
+                    LEFT JOIN job_contracts jc ON jc.contract_id = tcw.contract_id
+                    LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+                    LEFT JOIN contract_milestones cm ON cm.contract_milestone_id = $2
+                    LEFT JOIN jobs j ON j.job_id = p.job_id
+                    LEFT JOIN job_milestones jm ON jm.job_id = j.job_id AND (jm.order_index = cm.index OR jm.order_index = (cm.index + 1))
+                    WHERE tcw.contract_id = $1
+                      AND twt.deleted_at IS NULL
+                      AND (
+                        twt.job_milestone_id = p.job_milestone_id
+                        OR (p.job_milestone_id IS NULL AND twt.job_milestone_id = jm.job_milestone_id)
+                        OR (p.job_milestone_id IS NULL AND jm.job_milestone_id IS NULL)
+                      )
+                  )`,
+                [contractId, milestoneId]
+            );
+        } else if (milestoneStatus === 'completed' || submissionStatus === 'approval') {
+            // Mark milestone tasks as 'completed' when milestone is approved
+            await client.query(
+                `UPDATE team_workspace_tasks
+                    SET status = 'completed',
+                        completed_at = COALESCE(completed_at, NOW()),
+                        updated_at = NOW()
+                  WHERE task_id IN (
+                    SELECT DISTINCT twt.task_id
+                    FROM team_workspace_tasks twt
+                    JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
+                    LEFT JOIN job_contracts jc ON jc.contract_id = tcw.contract_id
+                    LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
+                    LEFT JOIN contract_milestones cm ON cm.contract_milestone_id = $2
+                    LEFT JOIN jobs j ON j.job_id = p.job_id
+                    LEFT JOIN job_milestones jm ON jm.job_id = j.job_id AND (jm.order_index = cm.index OR jm.order_index = (cm.index + 1))
+                    WHERE tcw.contract_id = $1
+                      AND twt.deleted_at IS NULL
+                      AND (
+                        twt.job_milestone_id = p.job_milestone_id
+                        OR (p.job_milestone_id IS NULL AND twt.job_milestone_id = jm.job_milestone_id)
+                        OR (p.job_milestone_id IS NULL AND jm.job_milestone_id IS NULL)
+                      )
+                  )`,
+                [contractId, milestoneId]
+            );
+        }
 
         if (milestoneStatus) {
             await client.query(

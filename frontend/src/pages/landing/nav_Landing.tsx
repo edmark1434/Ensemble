@@ -8,20 +8,14 @@ const T_NAV = {
 } as const;
 
 // ─── Logo Sub-Component ───────────────────────────────────────────────────────
-const Logo: FC<{ size?: number }> = ({ size = 22 }) => (
-  <div style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+const Logo: FC<{ size?: number }> = ({ size = 28 }) => (
+  <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} title="Ensemble" aria-label="Ensemble">
     <img 
       src="/ensemble_lg.svg" 
       alt="Ensemble Logo" 
-      style={{ width: size + 6, height: size + 6, display: "block" }} 
-      className="invert dark:invert-0" 
+      style={{ width: size, height: size, display: "block" }} 
+      className="invert dark:invert-0 transition-transform duration-200 hover:scale-105" 
     />
-    <span 
-      className="text-gray-900 dark:text-white"
-      style={{ fontSize: size, fontWeight: 700, fontFamily: T_NAV.fontDisplay, letterSpacing: .5 }}
-    >
-      Ensemble
-    </span>
   </div>
 );
 
@@ -239,7 +233,11 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isBgmMuted, isSfxM
       "Ask our Chatbot": "/landing/AskOurChatbot",
       "Submit a Ticket": "/support/ticket",
       "Support Us": "/landing/SupportUs",
-      "Submit a Feedback": "/landing/SendAFeedback"
+      "Submit a Feedback": "/landing/SendAFeedback",
+      "Client": "/landing/usecase/client",
+      "Freelancer": "/landing/usecase/freelancer",
+      "Asset Creator": "/landing/usecase/asset-creator",
+      "Enthusiast": "/landing/usecase/enthusiast"
     };
 
     const target = routeMap[item];
@@ -279,6 +277,17 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isBgmMuted, isSfxM
       </div>
 
       <div style={{ display: isMobile ? "none" : "flex", alignItems: "center", gap: 12 }}>
+        <NavDropdown
+          label="Usecases"
+          items={["Client", "Freelancer", "Asset Creator", "Enthusiast"]}
+          isOpen={openDD === "usecases"}
+          onToggle={toggle("usecases")}
+          onItemClick={handleDropdownItemAction}
+          onParentHover={playHover}
+          onChildHover={playMinimalHover}
+          onActionClick={playSoftClick}
+        />
+
         <NavDropdown
           label="About"
           items={["How to Hire", "How to Work", "About Us", "Terms of Service", "Privacy Policy"]}

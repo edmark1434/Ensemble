@@ -12,6 +12,12 @@ interface ProposalTermsProps {
   onAdvance: () => void;
 }
 
+const DEFAULT_STANDARD_TOS = `1. Scope of Work: The freelancer agrees to perform the services and deliver the milestones outlined in this proposal.
+2. Escrow & Milestones: Payment is held in secure escrow and released upon milestone completion and client review.
+3. Revisions: Revisions will be fulfilled according to the agreed milestone specifications.
+4. Ownership & Intellectual Property: Upon final payment, the client receives full rights and ownership of the delivered work.
+5. Dispute Resolution: Any disagreements will follow the platform's standard dispute resolution process.`;
+
 export const ProposalTermsStep: React.FC<ProposalTermsProps> = ({
   selectedTosId,
   setSelectedTosId,
@@ -29,28 +35,42 @@ export const ProposalTermsStep: React.FC<ProposalTermsProps> = ({
 
   // Only show Job terms
   const jobTerms = terms.filter(t => t.terms_type === 'jobs');
+  const effectiveTerms = jobTerms.length > 0 ? jobTerms : [
+    {
+      id: "default-standard",
+      terms_title: "Standard Platform Terms of Service",
+      terms_content: DEFAULT_STANDARD_TOS,
+      terms_type: "jobs",
+      is_default: true,
+    }
+  ];
 
-  // Set default if none selected
+  // Set default if none selected or if tosContent is empty
   useEffect(() => {
-    if (!selectedTosId && jobTerms.length > 0) {
-      const defaultTerm = jobTerms.find(t => t.is_default) || jobTerms[0];
+    if (!selectedTosId && effectiveTerms.length > 0) {
+      const defaultTerm = effectiveTerms.find(t => t.is_default) || effectiveTerms[0];
       setSelectedTosId(defaultTerm.id);
       if (!tosContent) {
         setTosContent(defaultTerm.terms_content);
       }
+    } else if (!tosContent && selectedTosId) {
+      const found = effectiveTerms.find(t => t.id === selectedTosId);
+      if (found) {
+        setTosContent(found.terms_content);
+      }
     }
-  }, [selectedTosId, jobTerms, setSelectedTosId, tosContent, setTosContent]);
+  }, [selectedTosId, effectiveTerms, setSelectedTosId, tosContent, setTosContent]);
 
   const handleSelectTemplate = (id: string) => {
     setSelectedTosId(id);
-    const found = jobTerms.find((t) => t.id === id);
+    const found = effectiveTerms.find((t) => t.id === id);
     if (found) {
       setTosContent(found.terms_content);
     }
   };
 
   const selectedName =
-    jobTerms.find((t) => t.id === selectedTosId)?.terms_title || "Select Terms of Service";
+    effectiveTerms.find((t) => t.id === selectedTosId)?.terms_title || "Standard Platform Terms of Service";
 
   return (
     <div className="space-y-5 text-left">
@@ -86,7 +106,7 @@ export const ProposalTermsStep: React.FC<ProposalTermsProps> = ({
                 exit={{ opacity: 0, y: -6 }}
                 className="absolute left-0 right-0 z-30 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1.5 shadow-2xl space-y-0.5"
               >
-                {jobTerms.map((tmpl) => {
+                {effectiveTerms.map((tmpl) => {
                   const isSelected = selectedTosId === tmpl.id;
                   return (
                     <button

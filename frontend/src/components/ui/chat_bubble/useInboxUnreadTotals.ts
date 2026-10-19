@@ -9,6 +9,14 @@ export const MARKETPLACE_CONVERSATION_TYPES = new Set([
   "revision",
 ]);
 
+export function isMarketplaceConversation(conversation: any): boolean {
+  if (!conversation) return false;
+  if (conversation.team_id || conversation.job_id || conversation.contract_id || conversation.listing_type) {
+    return true;
+  }
+  return MARKETPLACE_CONVERSATION_TYPES.has(conversation.conversation_type || "");
+}
+
 export function useInboxUnreadTotals() {
   const conversations = useChatState((state) => state.conversations);
   const unreadCounts = useChatState((state) => state.unreadCounts);
@@ -20,8 +28,8 @@ export function useInboxUnreadTotals() {
       const id = String(conversation._id);
       const count = unreadCounts[id] ?? conversation.unread_count ?? 0;
       if (count <= 0) continue;
-      if (MARKETPLACE_CONVERSATION_TYPES.has(conversation.conversation_type)) marketplace += count;
-      else if (DIRECT_CONVERSATION_TYPES.has(conversation.conversation_type)) direct += count;
+      if (isMarketplaceConversation(conversation)) marketplace += count;
+      else direct += count;
     }
     return { direct, marketplace, total: direct + marketplace };
   }, [conversations, unreadCounts]);

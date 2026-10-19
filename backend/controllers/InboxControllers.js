@@ -99,7 +99,22 @@ async function createRevisionChatController(req, res) {
 
 async function createMessageController(req, res) {
     try {
-        const result = await createMessageServices(req.body, accountId(req));
+        if (!req.body.message_content && req.body.message) {
+            req.body.message_content = req.body.message;
+        }
+        const io = getIo();
+        const result = await createMessageServices(req.body, accountId(req), {
+            onNotification: (recipientId, notification) => {
+                if (io) {
+                    if (notification) io.to(String(recipientId)).emit('notification', notification);
+                    io.to(String(recipientId)).emit('newMessage', result);
+                    io.to(String(recipientId)).emit('conversationMessageNotification', result);
+                }
+            },
+        });
+        if (io && result?.conversation_id) {
+            io.to(String(result.conversation_id)).emit('newMessage', result);
+        }
         return res.status(201).json(result);
     } catch (error) {
         return sendError(res, error);
@@ -108,11 +123,27 @@ async function createMessageController(req, res) {
 
 async function replyMessageController(req, res) {
     try {
+        if (!req.body.message_content && req.body.message) {
+            req.body.message_content = req.body.message;
+        }
+        const io = getIo();
         const result = await replyMessageServices(
             req.params.messageId,
             req.body,
-            accountId(req)
+            accountId(req),
+            {
+                onNotification: (recipientId, notification) => {
+                    if (io) {
+                        if (notification) io.to(String(recipientId)).emit('notification', notification);
+                        io.to(String(recipientId)).emit('messageReplied', result);
+                        io.to(String(recipientId)).emit('conversationMessageNotification', result);
+                    }
+                },
+            }
         );
+        if (io && result?.conversation_id) {
+            io.to(String(result.conversation_id)).emit('messageReplied', result);
+        }
         return res.status(201).json(result);
     } catch (error) {
         return sendError(res, error);

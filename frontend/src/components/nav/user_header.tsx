@@ -92,7 +92,7 @@ const constructAvatarUrl = (path?: string | null): string => {
 
 const getFallbackAvatar = (name?: string): string => {
   const cleanName = encodeURIComponent((name || 'User').trim());
-  return `https://ui-avatars.com/api/?name=${cleanName}&background=0D8ABC&color=fff&size=128`;
+  return `https://ui-avatars.com/api/?name=${cleanName}&background=71717a&color=fff&size=128`;
 };
 
 interface CachedHeaderData {
@@ -200,6 +200,9 @@ async function fetchHeaderData(accountId: string): Promise<HeaderFetchData | nul
   return pendingHeaderFetch;
 }
 
+// Cache of recent notification IDs to prevent duplicate toasts across renders or re-mounts
+const recentToastNotificationKeys = new Set<string>();
+
 const UserHeader: React.FC<UserHeaderProps> = ({
   pageTitle,
   credits: propCredits,
@@ -209,12 +212,68 @@ const UserHeader: React.FC<UserHeaderProps> = ({
 }) => {
   const navigate = useNavigate();
 
-  const isCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
+  const storeTheme = useGlobalState((state) => state.theme);
+  const searchTheme = typeof window !== "undefined" ? (new URLSearchParams(window.location.search).get('theme') as 'light' | 'dark' | null) : null;
+  const theme = searchTheme || storeTheme || 'dark';
 
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  useEffect(() => {
+    if (searchTheme) {
+      if (searchTheme === 'light') {
+        document.documentElement.classList.remove('dark');
+      } else {
+        document.documentElement.classList.add('dark');
+      }
+    }
+  }, [searchTheme]);
+
+  const [isProfileOpen, setIsProfileOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      return new URLSearchParams(window.location.search).get("openProfile") === "1";
+    }
+    return false;
+  });
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+
+  const [profilePillStyle, setProfilePillStyle] = useState<{
+    top: number;
+    height: number;
+    opacity: number;
+    isDestructive?: boolean;
+  }>({
+    top: 0,
+    height: 0,
+    opacity: 0,
+  });
+  const profileItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const handleProfileItemHover = (index: number, isDestructive = false) => {
+    const el = profileItemRefs.current[index];
+    if (!el) return;
+    setProfilePillStyle({
+      top: el.offsetTop,
+      height: el.offsetHeight,
+      opacity: 1,
+      isDestructive,
+    });
+  };
+
+  const handleProfileMenuLeave = () => {
+    setProfilePillStyle((prev) => ({ ...prev, opacity: 0 }));
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hoverItem = new URLSearchParams(window.location.search).get("hoverProfile");
+    if (hoverItem !== null) {
+      const idx = parseInt(hoverItem, 10);
+      if (!isNaN(idx) && idx >= 0 && idx < 5) {
+        const timer = setTimeout(() => handleProfileItemHover(idx, idx === 4), 250);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [isProfileOpen]);
 
   const [headerSearchInput, setHeaderSearchInput] = useState("");
   const [creatorSearchResults, setCreatorSearchResults] = useState<CreatorSearchResult[]>([]);
@@ -226,12 +285,25 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const creatorSearchRef = useRef<HTMLFormElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const userInfo = useGlobalState((state) => state.user);
+  const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const isPreviewMode = urlParams?.get("preview") === "true";
+
+  const rawUserInfo = useGlobalState((state) => state.user);
+  const userInfo = rawUserInfo || (isPreviewMode ? {
+    account_id: 999,
+    username: "alexander_chen",
+    display_name: "Alexander Chen",
+    subscription_plan: "Premium",
+    is_verified: true,
+    wallet: { balance_credits: 4250 },
+    avatar_url: "/icons/avatar/default_avatar.png"
+  } as any : null);
+
   const isStaffPreview = isStaffPlatformViewer(userInfo);
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isGlobalLoading = useGlobalState((state) => state.isLoading);
-  const isSessionLoading = isGlobalLoading || (!userInfo?.account_id && !isGuestMode);
-  const isGuestView = isGuestMode || (!isSessionLoading && !userInfo?.account_id);
+  const isSessionLoading = !isPreviewMode && (isGlobalLoading || (!userInfo?.account_id && !isGuestMode));
+  const isGuestView = !isPreviewMode && (isGuestMode || (!isSessionLoading && !userInfo?.account_id));
 
   const hasCachedData = Boolean(
     cachedHeaderData &&
@@ -352,224 +424,246 @@ useEffect(() => {
   };
 
   const handleNewNotification = (notification: Notification) => {
+    if (!notification) return;
+
+    const notifKey = notification.notification_id
+      ? String(notification.notification_id)
+      : (notification.reference_id && notification.reference_prefix)
+        ? `${notification.reference_prefix}:${notification.reference_id}:${notification.message || ''}`
+        : (notification.message ? `${notification.message}:${notification.created_at || ''}` : null);
+
+    // Deduplicate side effects (toasts and audio): if we already processed this notification recently, abort
+    if (notifKey) {
+      if (recentToastNotificationKeys.has(notifKey)) {
+        return;
+      }
+      recentToastNotificationKeys.add(notifKey);
+      if (recentToastNotificationKeys.size > 200) {
+        const oldestKey = recentToastNotificationKeys.values().next().value;
+        if (oldestKey) recentToastNotificationKeys.delete(oldestKey);
+      }
+    }
+
+    // Display visual toast alert (executed purely OUTSIDE setState to avoid StrictMode double-execution)
+    if (notification.message) {
+      const toastOptions = notifKey ? { id: `notif-${notifKey}` } : {};
+
+      if (notification.chatMessage && notification.userName) {
+        const getActionLabel = (action?: string) => {
+          switch (action) {
+            case 'progress': return 'Update';
+            case 'submitted_for_review': return 'Submission';
+            case 'revision_request': return 'Request For Revision';
+            case 'approval': return 'Approval';
+            case 'client_message': return 'Message';
+            default: return 'Message';
+          }
+        };
+        const typeLabel = notification.taskType ? notification.taskType.charAt(0).toUpperCase() + notification.taskType.slice(1) : 'Job';
+        const tagText = `${typeLabel} | ${getActionLabel(notification.chatAction)}`;
+
+        toast.custom((t) => (
+          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2`}>
+            <div className="absolute top-2 left-3">
+              <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
+                {tagText}
+              </span>
+            </div>
+            <div className="flex-1 w-0 flex items-start text-right justify-end">
+              <div className="mr-3 flex-1">
+                <p className="text-sm font-bold text-gray-900 dark:text-white">
+                  {notification.userName}
+                </p>
+                <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
+                  {notification.chatMessage}
+                </p>
+
+              </div>
+              <div className="flex-shrink-0 pt-0.5">
+                <img src={notification.userAvatar ? constructAvatarUrl(notification.userAvatar) : "/images/default_avatar.png"} alt={notification.userName} className="h-10 w-10 rounded-full object-cover" />
+              </div>
+            </div>
+          </div>
+        ), { ...toastOptions, duration: 5000 });
+      } else if (notification.reference_prefix === 'MILESTONE_FUNDS_RELEASED') {
+        const creditsMatch = notification.message.match(/^([\d,]+)\s+credits/);
+        const creditsAmount = creditsMatch ? creditsMatch[1] : '';
+        const milestoneMatch = notification.message.match(/milestone\s+"([^"]+)"/);
+        const milestoneName = milestoneMatch ? milestoneMatch[1] : '';
+
+        toast.custom((t) => (
+          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-emerald-200 dark:border-emerald-500/20 p-4`}>
+            <div className="flex-1 w-0 flex items-start">
+              <div className="flex-shrink-0 pt-0.5">
+                <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
+                  <span className="text-xl">💰</span>
+                </div>
+              </div>
+              <div className="ml-3 flex-1">
+                <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                  You Received {creditsAmount ? `${creditsAmount} Credits!` : 'Credits!'}
+                </p>
+                <p className="mt-1 text-xs font-medium text-gray-500 dark:text-zinc-400">
+                  {milestoneName ? `From milestone "${milestoneName}"` : 'Funds released to your wallet'}
+                </p>
+              </div>
+            </div>
+          </div>
+        ), { ...toastOptions, duration: 6000 });
+      } else if (notification.reference_prefix === 'MILESTONE_REVISION_PURCHASED') {
+        const milestoneMatch = notification.message.match(/revision for "([^"]+)"/);
+        const milestoneName = milestoneMatch ? milestoneMatch[1] : '';
+        const nameMatch = notification.message.match(/^([^]+?) purchased/);
+        const buyerName = nameMatch ? nameMatch[1] : 'Client';
+        
+        toast.custom((t) => (
+          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-blue-200 dark:border-blue-500/20 p-4 pt-7 mt-2`}>
+            <div className="absolute top-2 left-3">
+              <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
+                Revision Purchased
+              </span>
+            </div>
+            <div className="flex-1 w-0 flex items-start text-right justify-end">
+              <div className="mr-3 flex-1">
+                <p className="text-sm font-bold text-gray-900 dark:text-white">
+                  {buyerName}
+                </p>
+                <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
+                  Purchased an additional revision.
+                </p>
+                <p className="mt-2 text-[11px] font-medium text-gray-400 dark:text-zinc-500 line-clamp-1">
+                  {milestoneName ? `For milestone "${milestoneName}"` : ''}
+                </p>
+              </div>
+              <div className="flex-shrink-0 pt-0.5">
+                 <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
+                  <span className="text-xl">🔄</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ), { ...toastOptions, duration: 6000 });
+      } else if (notification.reference_prefix === 'CONTRACT_REVIEW') {
+        const stars = notification.reviewStars || 5;
+        const starsDisplay = Array.from({ length: 5 }, (_, i) => i < stars ? '★' : '☆').join('');
+        
+        toast.custom((t) => (
+          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2`}>
+            <div className="absolute top-2 left-3">
+              <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
+                NEW REVIEW
+              </span>
+            </div>
+            <div className="flex-1 w-0 flex items-center justify-between">
+              <div className="flex-shrink-0 pl-1 mr-2">
+                <span className="text-yellow-500 text-lg tracking-[0.15em] drop-shadow-sm">{starsDisplay}</span>
+              </div>
+              <div className="flex flex-1 items-start justify-end text-right">
+                <div className="mr-3 flex-1">
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">
+                    {notification.reviewerName || "User"}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 italic line-clamp-3">
+                    "{notification.reviewFeedback || notification.message}"
+                  </p>
+                </div>
+                <div className="flex-shrink-0 pt-0.5">
+                  <img src={notification.reviewerAvatar ? constructAvatarUrl(notification.reviewerAvatar) : "/images/default_avatar.png"} alt={notification.reviewerName || "User"} className="h-10 w-10 rounded-full object-cover" />
+                </div>
+              </div>
+            </div>
+          </div>
+        ), { ...toastOptions, duration: 6000 });
+      } else if (notification.reference_prefix === 'follow') {
+        toast.custom((t) => (
+          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-emerald-200 dark:border-emerald-500/20 p-4 pt-7 mt-2 cursor-pointer transition-all hover:scale-[1.02]`}
+               onClick={() => { toast.dismiss(t.id); window.location.href = notification.reference_path || '#'; }}>
+            <div className="absolute top-2 left-3">
+              <span className="text-[9px] font-bold tracking-wider uppercase text-emerald-500 dark:text-emerald-400">
+                NEW FOLLOWER
+              </span>
+            </div>
+            <div className="flex-1 w-0 flex items-start justify-between">
+              <div className="mr-3 flex-1 text-left mt-2">
+                <p className="text-sm font-bold text-gray-900 dark:text-white">
+                  {notification.followerName || 'Someone'}
+                </p>
+                <p className="mt-1 text-sm text-gray-800 dark:text-gray-200">
+                  started following you
+                </p>
+              </div>
+              <div className="flex-shrink-0 pt-0.5">
+                <AccountAvatar url={notification.followerAvatar ? constructAvatarUrl(notification.followerAvatar) : null} name={notification.followerName} />
+              </div>
+            </div>
+          </div>
+        ), { ...toastOptions, duration: 5000 });
+      } else if (notification.reference_prefix === 'WARNING' || notification.reference_prefix === 'ACCOUNT_WARNING') {
+        showAccountWarningToast({
+          violationId: notification.reference_id,
+          type: 'Account Warning',
+          message: notification.message,
+          onNavigate: () => navigate('/notifications'),
+        });
+      } else if (notification.reference_prefix === 'TICKET_INVITE' && notification.reference_id) {
+        const def = getNotificationIcon(notification.reference_prefix);
+        toast.custom((t) => (
+          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2`}>
+            <div className="absolute top-2 left-3">
+              <span className={`text-[9px] font-bold tracking-wider uppercase ${def.text}`}>
+                {getNotificationLabel(notification.reference_prefix)}
+              </span>
+            </div>
+            <p className="mt-2 text-sm text-gray-800 dark:text-gray-200">{notification.message}</p>
+            <TicketInviteActions
+              ticketId={notification.reference_id}
+              compact
+              onDone={(result, chatId) => {
+                toast.dismiss(t.id);
+                if (result === 'accepted' && chatId) navigate('/inbox/direct', { state: { conversationId: chatId } });
+              }}
+            />
+          </div>
+        ), { ...toastOptions, duration: 12000 });
+      } else {
+        const def = getNotificationIcon(notification.reference_prefix);
+        toast.custom((t) => (
+          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2 cursor-pointer transition-all hover:scale-[1.02]`}
+               onClick={() => { toast.dismiss(t.id); if (notification.reference_path) navigate(notification.reference_path); }}>
+            <div className="absolute top-2 left-3">
+              <span className={`text-[9px] font-bold tracking-wider uppercase ${def.text}`}>
+                {getNotificationLabel(notification.reference_prefix)}
+              </span>
+            </div>
+            <div className="flex-1 w-0 flex items-start justify-between">
+              <p className="mr-3 flex-1 mt-2 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
+                {notification.message}
+              </p>
+              <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/5 ${def.text}`}>
+                {def.icon}
+              </div>
+            </div>
+          </div>
+        ), { ...toastOptions, duration: 5000 });
+      }
+    }
+
+    // Play notification sound
+    try {
+      const audio = new Audio("/sounds/notification.mp3");
+      audio.play().catch(e => console.log("Audio play blocked:", e));
+    } catch {
+      // Notification audio is optional and may be blocked by the browser.
+    }
+
+    // Pure state updater
     setNotifications((prev) => {
       const exists = prev.some(
-        (item) =>
-          item.notification_id === notification.notification_id
+        (item) => item.notification_id && item.notification_id === notification.notification_id
       );
 
       if (exists) {
         return prev;
-      }
-
-      // Display visual toast alert
-      if (notification.message) {
-        if (notification.chatMessage && notification.userName) {
-          const getActionLabel = (action?: string) => {
-            switch (action) {
-              case 'progress': return 'Update';
-              case 'submitted_for_review': return 'Submission';
-              case 'revision_request': return 'Request For Revision';
-              case 'approval': return 'Approval';
-              case 'client_message': return 'Message';
-              default: return 'Message';
-            }
-          };
-          const typeLabel = notification.taskType ? notification.taskType.charAt(0).toUpperCase() + notification.taskType.slice(1) : 'Job';
-          const tagText = `${typeLabel} | ${getActionLabel(notification.chatAction)}`;
-
-          toast.custom((t) => (
-            <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2`}>
-              <div className="absolute top-2 left-3">
-                <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
-                  {tagText}
-                </span>
-              </div>
-              <div className="flex-1 w-0 flex items-start text-right justify-end">
-                <div className="mr-3 flex-1">
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">
-                    {notification.userName}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
-                    {notification.chatMessage}
-                  </p>
-
-                </div>
-                <div className="flex-shrink-0 pt-0.5">
-                  <img src={notification.userAvatar ? constructAvatarUrl(notification.userAvatar) : "/images/default_avatar.png"} alt={notification.userName} className="h-10 w-10 rounded-full object-cover" />
-                </div>
-              </div>
-            </div>
-          ), { duration: 5000 });
-        } else if (notification.reference_prefix === 'MILESTONE_FUNDS_RELEASED') {
-          const creditsMatch = notification.message.match(/^([\d,]+)\s+credits/);
-          const creditsAmount = creditsMatch ? creditsMatch[1] : '';
-          const milestoneMatch = notification.message.match(/milestone\s+"([^"]+)"/);
-          const milestoneName = milestoneMatch ? milestoneMatch[1] : '';
-
-          toast.custom((t) => (
-            <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-emerald-200 dark:border-emerald-500/20 p-4`}>
-              <div className="flex-1 w-0 flex items-start">
-                <div className="flex-shrink-0 pt-0.5">
-                  <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
-                    <span className="text-xl">💰</span>
-                  </div>
-                </div>
-                <div className="ml-3 flex-1">
-                  <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                    You Received {creditsAmount ? `${creditsAmount} Credits!` : 'Credits!'}
-                  </p>
-                  <p className="mt-1 text-xs font-medium text-gray-500 dark:text-zinc-400">
-                    {milestoneName ? `From milestone "${milestoneName}"` : 'Funds released to your wallet'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ), { duration: 6000 });
-        } else if (notification.reference_prefix === 'MILESTONE_REVISION_PURCHASED') {
-          const milestoneMatch = notification.message.match(/revision for "([^"]+)"/);
-          const milestoneName = milestoneMatch ? milestoneMatch[1] : '';
-          const nameMatch = notification.message.match(/^([^]+?) purchased/);
-          const buyerName = nameMatch ? nameMatch[1] : 'Client';
-          
-          toast.custom((t) => (
-            <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-blue-200 dark:border-blue-500/20 p-4 pt-7 mt-2`}>
-              <div className="absolute top-2 left-3">
-                <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
-                  Revision Purchased
-                </span>
-              </div>
-              <div className="flex-1 w-0 flex items-start text-right justify-end">
-                <div className="mr-3 flex-1">
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">
-                    {buyerName}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
-                    Purchased an additional revision.
-                  </p>
-                  <p className="mt-2 text-[11px] font-medium text-gray-400 dark:text-zinc-500 line-clamp-1">
-                    {milestoneName ? `For milestone "${milestoneName}"` : ''}
-                  </p>
-                </div>
-                <div className="flex-shrink-0 pt-0.5">
-                   <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
-                    <span className="text-xl">🔄</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ), { duration: 6000 });
-        } else if (notification.reference_prefix === 'CONTRACT_REVIEW') {
-          const stars = notification.reviewStars || 5;
-          const starsDisplay = Array.from({ length: 5 }, (_, i) => i < stars ? '★' : '☆').join('');
-          
-          toast.custom((t) => (
-            <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2`}>
-              <div className="absolute top-2 left-3">
-                <span className="text-[9px] font-bold tracking-wider uppercase text-blue-500 dark:text-blue-400">
-                  NEW REVIEW
-                </span>
-              </div>
-              <div className="flex-1 w-0 flex items-center justify-between">
-                <div className="flex-shrink-0 pl-1 mr-2">
-                  <span className="text-yellow-500 text-lg tracking-[0.15em] drop-shadow-sm">{starsDisplay}</span>
-                </div>
-                <div className="flex flex-1 items-start justify-end text-right">
-                  <div className="mr-3 flex-1">
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">
-                      {notification.reviewerName || "User"}
-                    </p>
-                    <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 italic line-clamp-3">
-                      "{notification.reviewFeedback || notification.message}"
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0 pt-0.5">
-                    <img src={notification.reviewerAvatar ? constructAvatarUrl(notification.reviewerAvatar) : "/images/default_avatar.png"} alt={notification.reviewerName || "User"} className="h-10 w-10 rounded-full object-cover" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          ), { duration: 6000 });
-          } else if (notification.reference_prefix === 'follow') {
-            toast.custom((t) => (
-              <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-emerald-200 dark:border-emerald-500/20 p-4 pt-7 mt-2 cursor-pointer transition-all hover:scale-[1.02]`}
-                   onClick={() => { toast.dismiss(t.id); window.location.href = notification.reference_path || '#'; }}>
-                <div className="absolute top-2 left-3">
-                  <span className="text-[9px] font-bold tracking-wider uppercase text-emerald-500 dark:text-emerald-400">
-                    NEW FOLLOWER
-                  </span>
-                </div>
-                <div className="flex-1 w-0 flex items-start justify-between">
-                  <div className="mr-3 flex-1 text-left mt-2">
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">
-                      {notification.followerName || 'Someone'}
-                    </p>
-                    <p className="mt-1 text-sm text-gray-800 dark:text-gray-200">
-                      started following you
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0 pt-0.5">
-                    <AccountAvatar url={notification.followerAvatar ? constructAvatarUrl(notification.followerAvatar) : null} name={notification.followerName} />
-                  </div>
-                </div>
-              </div>
-            ), { duration: 5000 });
-          } else if (notification.reference_prefix === 'WARNING' || notification.reference_prefix === 'ACCOUNT_WARNING') {
-            showAccountWarningToast({
-              violationId: notification.reference_id,
-              type: 'Account Warning',
-              message: notification.message,
-              onNavigate: () => navigate('/notifications'),
-            });
-          } else if (notification.reference_prefix === 'TICKET_INVITE' && notification.reference_id) {
-            const def = getNotificationIcon(notification.reference_prefix);
-            toast.custom((t) => (
-              <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2`}>
-                <div className="absolute top-2 left-3">
-                  <span className={`text-[9px] font-bold tracking-wider uppercase ${def.text}`}>
-                    {getNotificationLabel(notification.reference_prefix)}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm text-gray-800 dark:text-gray-200">{notification.message}</p>
-                <TicketInviteActions
-                  ticketId={notification.reference_id}
-                  compact
-                  onDone={(result, chatId) => {
-                    toast.dismiss(t.id);
-                    if (result === 'accepted' && chatId) navigate('/inbox/direct', { state: { conversationId: chatId } });
-                  }}
-                />
-              </div>
-            ), { duration: 12000 });
-          } else {
-            const def = getNotificationIcon(notification.reference_prefix);
-            toast.custom((t) => (
-              <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} relative max-w-sm w-full bg-white dark:bg-dark-surface shadow-xl rounded-xl pointer-events-auto flex border border-gray-200 dark:border-white/10 p-4 pt-7 mt-2 cursor-pointer transition-all hover:scale-[1.02]`}
-                   onClick={() => { toast.dismiss(t.id); if (notification.reference_path) navigate(notification.reference_path); }}>
-                <div className="absolute top-2 left-3">
-                  <span className={`text-[9px] font-bold tracking-wider uppercase ${def.text}`}>
-                    {getNotificationLabel(notification.reference_prefix)}
-                  </span>
-                </div>
-                <div className="flex-1 w-0 flex items-start justify-between">
-                  <p className="mr-3 flex-1 mt-2 text-sm text-gray-800 dark:text-gray-200 line-clamp-3">
-                    {notification.message}
-                  </p>
-                  <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/5 ${def.text}`}>
-                    {def.icon}
-                  </div>
-                </div>
-              </div>
-            ), { duration: 5000 });
-        }
-      }
-
-      // Play notification sound
-      try {
-        const audio = new Audio("/sounds/notification.mp3");
-        audio.play().catch(e => console.log("Audio play blocked:", e));
-      } catch {
-        // Notification audio is optional and may be blocked by the browser.
       }
 
       return [notification, ...prev];
@@ -710,7 +804,7 @@ useEffect(() => {
               ? /^https?:\/\//i.test(avatarPath)
                 ? avatarPath
                 : `${cloudfront}/${avatarPath.replace(/^\/+/, "")}`
-              : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`,
+              : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=71717a&color=fff`,
           };
         });
         if (!cancelled) setCreatorSearchResults(results);
@@ -747,6 +841,24 @@ useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+    if (isProfileOpen) {
+      document.addEventListener("mousedown", handleOutsideClick);
+      return () => document.removeEventListener("mousedown", handleOutsideClick);
+    }
+  }, [isProfileOpen]);
+
+  useEffect(() => {
+    if (!isProfileOpen) {
+      setProfilePillStyle({ top: 0, height: 0, opacity: 0 });
+    }
+  }, [isProfileOpen]);
 
   const handleTopUp = () => {
     if (onTopUp) {
@@ -1062,67 +1174,126 @@ useEffect(() => {
                           {userSubscriptionPlan || "Free"}
                         </p>
                     </div>
-                    <ChevronDown className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
+                    <ChevronDown className={`h-4 w-4 text-gray-500 dark:text-zinc-400 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] ${isProfileOpen ? "rotate-180" : ""}`} />
                   </button>
                   
                   {isProfileOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1a1b23] shadow-xl dark:shadow-2xl">
-                      <div className="p-2 space-y-1">
+                    <div className="absolute right-0 top-full mt-3.5 w-72 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] shadow-xl dark:shadow-[0_12px_32px_rgba(0,0,0,0.5)] origin-top-right transition-all duration-200 animate-in fade-in zoom-in-95">
+                      {/* Pointing tip */}
+                      <svg
+                        className="absolute -top-[7px] right-[5px] z-[2] overflow-visible"
+                        width="14"
+                        height="8"
+                        viewBox="0 0 14 8"
+                        aria-hidden="true"
+                      >
+                        {/* Triangle fill */}
+                        <path
+                          d="M0 8L5.58579 1.41421C6.36684 0.633165 7.63316 0.633165 8.41421 1.41421L14 8H0Z"
+                          className="fill-white dark:fill-[#18181b]"
+                        />
+                        {/* Angled borders */}
+                        <path
+                          d="M0 8L5.58579 1.41421C6.36684 0.633165 7.63316 0.633165 8.41421 1.41421L14 8"
+                          fill="none"
+                          className="stroke-zinc-200 dark:stroke-zinc-800"
+                          strokeWidth="1"
+                        />
+                        {/* Mask underlying card border */}
+                        <rect
+                          x="0.5"
+                          y="7"
+                          width="13"
+                          height="2"
+                          className="fill-white dark:fill-[#18181b]"
+                        />
+                      </svg>
+
+                      <div
+                        className="relative p-2 space-y-1 z-[1]"
+                        onMouseLeave={handleProfileMenuLeave}
+                      >
+                        {/* Animated sliding glide pill */}
+                        <span
+                          className="pointer-events-none absolute left-2 right-2 rounded-lg transition-all duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]"
+                          style={{
+                            top: `${profilePillStyle.top}px`,
+                            height: `${profilePillStyle.height}px`,
+                            opacity: profilePillStyle.opacity,
+                            backgroundColor: profilePillStyle.isDestructive
+                              ? (theme === "dark" ? "rgba(239, 68, 68, 0.14)" : "rgba(239, 68, 68, 0.08)")
+                              : (theme === "dark" ? "#27272a" : "#f1f5f9"),
+                            transitionProperty: "top, height, opacity, background-color",
+                          }}
+                          aria-hidden="true"
+                        />
+
                         <button
+                          ref={(el) => { profileItemRefs.current[0] = el; }}
+                          onMouseEnter={() => handleProfileItemHover(0, false)}
                           onClick={() => {
                             setIsProfileOpen(false);
                             navigate("/profile");
                           }}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+                          className="relative z-[1] flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 font-medium transition-colors duration-150 hover:text-gray-900 dark:hover:text-white outline-none"
                         >
-                          <User className="h-4 w-4" />
+                          <User className="h-4 w-4 shrink-0 text-gray-500 dark:text-zinc-400" />
                           Profile
                         </button>
+
                         <button
+                          ref={(el) => { profileItemRefs.current[1] = el; }}
+                          onMouseEnter={() => handleProfileItemHover(1, false)}
                           onClick={() => {
                             setIsProfileOpen(false);
                             navigate("/settings");
                           }}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+                          className="relative z-[1] flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 font-medium transition-colors duration-150 hover:text-gray-900 dark:hover:text-white outline-none"
                         >
-                          <Settings className="h-4 w-4" />
+                          <Settings className="h-4 w-4 shrink-0 text-gray-500 dark:text-zinc-400" />
                           Settings
                         </button>
                         
                         <button
+                          ref={(el) => { profileItemRefs.current[2] = el; }}
+                          onMouseEnter={() => handleProfileItemHover(2, false)}
                           onClick={() => {
                             setIsProfileOpen(false);
                             navigate("/landing/SendAFeedback");
                           }}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+                          className="relative z-[1] flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 font-medium transition-colors duration-150 hover:text-gray-900 dark:hover:text-white outline-none"
                         >
-                          <MessageSquare className="h-4 w-4" />
+                          <MessageSquare className="h-4 w-4 shrink-0 text-gray-500 dark:text-zinc-400" />
                           Submit Feedback
                         </button>
 
-                        <div className="my-2 border-t border-gray-200 dark:border-white/10" />
+                        <div className="my-2 border-t border-gray-100 dark:border-zinc-800" />
 
                         <button
+                          ref={(el) => { profileItemRefs.current[3] = el; }}
+                          onMouseEnter={() => handleProfileItemHover(3, false)}
                           onClick={() => {
                             setIsProfileOpen(false);
                             navigate("/support/ticket");
                           }}
-                          className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+                          className="relative z-[1] flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-gray-700 dark:text-zinc-300 font-medium transition-colors duration-150 hover:text-gray-900 dark:hover:text-white outline-none"
                         >
-                          <LifeBuoy className="mt-0.5 h-4 w-4 shrink-0" />
+                          <LifeBuoy className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-zinc-400" />
                           <span>
                             <span className="block text-sm">Get Support</span>
-                            <span className="block text-xs text-gray-500 dark:text-zinc-500">Help, tickets, and support requests</span>
+                            <span className="block text-xs font-normal text-gray-500 dark:text-zinc-500">Help, tickets, and support requests</span>
                           </span>
                         </button>
                         
-                        <div className="my-2 border-t border-gray-200 dark:border-white/10" />
+                        <div className="my-2 border-t border-gray-100 dark:border-zinc-800" />
                         
                         <button
+                          ref={(el) => { profileItemRefs.current[4] = el; }}
+                          onMouseEnter={() => handleProfileItemHover(4, true)}
                           onClick={() => setIsLogoutModalOpen(true)}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-500/10"
+                          className="relative z-[1] flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 transition-colors duration-150 hover:text-red-700 dark:hover:text-red-300 outline-none"
                         >
-                          <LogOut className="h-4 w-4" />
+                          <LogOut className="h-4 w-4 shrink-0" />
                           Sign out
                         </button>
                       </div>

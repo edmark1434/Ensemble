@@ -42,7 +42,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
     } else {
       finalAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(
         user.display_name || user.handle || "You"
-      )}&background=6366f1&color=fff`;
+      )}&background=71717a&color=fff`;
     }
 
     return {
@@ -105,7 +105,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
             } else {
               finalAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(
                 account.display_name || account.handle
-              )}&background=6366f1&color=fff`;
+              )}&background=71717a&color=fff`;
             }
 
             return {

@@ -21,7 +21,7 @@ export function useProjectRole(projectId: string | null | undefined): StoredProj
         }
         if (!res.ok) return; // couldn't tell: keep what we have
         const data = await res.json();
-        if (!cancelled) setRole((data.role as StoredProjectRole | undefined) ?? null);
+        if (!cancelled) setRole(data.frozen ? "Viewer" : ((data.role as StoredProjectRole | undefined) ?? null));
       } catch {
         // keep current role
       }

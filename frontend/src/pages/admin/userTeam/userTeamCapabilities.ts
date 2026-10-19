@@ -18,9 +18,10 @@ export type UserTeamCapabilities = {
   primaryActions: Set<string>;
 };
 
-const FULL_STATUS = ['ban', 'unban', 'suspend', 'unsuspend', 'lock', 'unlock', 'restore'] as const;
+const FULL_STATUS = ['ban', 'unban', 'suspend', 'unsuspend', 'lock', 'unlock', 'restore', 'timeout', 'clear_timeout'] as const;
 /** Specialist mods: enforce from a report — no ban / restore */
 const LIMITED_STATUS = ['suspend', 'unsuspend', 'lock', 'unlock'] as const;
+const FORUM_STATUS = [...LIMITED_STATUS, 'timeout', 'clear_timeout'] as const;
 
 function limitedEnforcementCaps(
   variant: 'forum' | 'marketplace' | 'jobs'
@@ -35,7 +36,7 @@ function limitedEnforcementCaps(
     canWarn: true,
     canSuspend: true,
     canLock: true,
-    statusActions: new Set(LIMITED_STATUS),
+    statusActions: new Set(variant === 'forum' ? FORUM_STATUS : LIMITED_STATUS),
     bulkActions: new Set(['suspend', 'lock', 'clear']),
     primaryActions: new Set(['view', 'history', 'export']),
   };

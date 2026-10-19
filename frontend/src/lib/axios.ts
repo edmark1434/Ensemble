@@ -5,7 +5,6 @@ import { showErrorToast } from "@/components/utility/toast";
 import { isStaffPreviewFrame } from "./staffPlatformView";
 
 const ACCOUNT_RESTRICTION_CODES = new Set([
-  "ACCOUNT_BANNED",
   "ACCOUNT_LOCKED",
   "ACCOUNT_DELETED",
 ]);
@@ -90,7 +89,24 @@ api.interceptors.response.use(
 
         const restrictionCode = err?.response?.data?.code;
         if (restrictionCode === "ACCOUNT_SUSPENDED") {
-            showErrorToast(err.response?.data?.message || "Your account is suspended. You can view your account and notifications. Actions are turned off until this is lifted.");
+            showErrorToast(err.response?.data?.message || "Your account is suspended. You can look around Ensemble. Actions stay off until this ends.");
+            return Promise.reject(err);
+        }
+
+        if (restrictionCode === "FORUM_TIMEOUT") {
+            showErrorToast(err.response?.data?.message || "You are timed out from the forums. You can read them, and you cannot post, comment, react, or change them.");
+            return Promise.reject(err);
+        }
+
+        if (restrictionCode === "ACCOUNT_BANNED") {
+            const standing = err.response?.data?.restriction;
+            const current = useGlobalState.getState().user;
+            if (current && standing) {
+                useGlobalState.getState().setUser({ ...current, status: "Banned", restriction: standing });
+            }
+            if (!window.location.pathname.startsWith("/account/access")) {
+                window.location.assign("/account/access");
+            }
             return Promise.reject(err);
         }
 

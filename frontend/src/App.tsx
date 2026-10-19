@@ -45,6 +45,7 @@ import ProposalsCreatePage from '@/pages/user/6_job_market/job_proposals/proposa
 import ProposalsEditPage from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_edit_page.tsx'
 import ProposalsViewDetailsAsApplicant from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_applicant'
 import ProposalsViewDetailsAsAuthor from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author'
+import JobProposalsFlowGuide from '@/pages/user/6_job_market/job_proposals/proposals_components/JobProposalsFlowGuide'
 import GigMain from '@/pages/user/7_gigs/gig_main.tsx'
 import GigServicesPage from '@/pages/user/7_gigs/gig_pages/gig_services_page.tsx'
 import GigSavesPage from '@/pages/user/7_gigs/gig_pages/gig_saves_page.tsx'
@@ -59,14 +60,17 @@ import IncomingOrders from '@/pages/user/7_gigs/gig_orders/incoming_orders.tsx'
 import IncomingOrderDetail from '@/pages/user/7_gigs/gig_orders/incoming_order_detail.tsx'
 import SentOrders from '@/pages/user/7_gigs/gig_orders/sent_orders.tsx'
 import SentOrderDetail from '@/pages/user/7_gigs/gig_orders/sent_order_detail.tsx'
+import GigOrdersFlowGuide from '@/pages/user/7_gigs/gig_orders/orders_components/GigOrdersFlowGuide'
 import BusinessVerification from '@/pages/user/9_verification/BusinessVerification.tsx'
 import TransactionHistoryMain from '@/pages/user/11_transactionhistory/main.tsx'
 import TosMain from '@/pages/user/terms_of_service/tos_main.tsx'
 import Contracts from '@/pages/user/contracts/contracts.tsx'
 import { DisputeFormPage } from '@/pages/user/contracts/DisputeFormPage.tsx'
+import ContractDetailsPage from '@/pages/user/contracts/ContractDetailsPage.tsx'
 import UserProfilesList from '@/components/nav/user_profiles_list.tsx'
 import { VerificationStatus } from '@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx'
 import { AccountRestrictionHost } from '@/components/ui/AccountStanding'
+import AccountAccessPage from '@/pages/user/account/AccountAccessPage'
 
 import './App.css'
 import OpenInEditor from "@/pages/user/2_projects/OpenInEditor.tsx";
@@ -80,6 +84,7 @@ const StaffLoginPage = lazyPage(() => import('./pages/auth/StaffLoginPage'));
 const SignupPage = lazyPage(() => import('./pages/auth/Signuppage'));
 const EmailVerification = lazyPage(() => import('./pages/EmailVerification'));
 const NotFound = lazyPage(() => import('@/pages/user/0_misc/NotFound.tsx'));
+const TeamProjectWorkspace = lazyPage(() => import('@/pages/user/3_teams/team_project/TeamProjectWorkspace'));
 const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage.tsx'));
 const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPage.tsx'));
 const NotificationsPage = lazyPage(() => import('@/pages/user/notifications/notifications_page.tsx'));
@@ -141,6 +146,7 @@ const PageTermsOfService = lazyPage(() => import('@/pages/landing/pages/page_Ter
 const PageSendAFeedback = lazyPage(() => import('./pages/landing/pages/page_SendAFeedback'));
 const PageSubmitATicket = lazyPage(() => import('./pages/landing/pages/page_SubmitATicket'));
 const PageSupportUs = lazyPage(() => import('./pages/landing/pages/page_SupportUs'));
+const PageUsecase = lazyPage(() => import('./pages/landing/pages/page_Usecase'));
 
 function App() {
   const theme = useGlobalState((state) => state.theme);
@@ -202,6 +208,10 @@ function App() {
           <Route path="SendAFeedback" element={<PageSendAFeedback />} />
           <Route path="TermsOfService" element={<PageTermsOfService />} />
           <Route path="PrivacyPolicy" element={<PagePrivacyPolicy />} />
+          <Route path="usecase/:usertype" element={<PageUsecase />} />
+          <Route path="usecase" element={<Navigate to="/landing/usecase/client" replace />} />
+          <Route path="usecases/:usertype" element={<PageUsecase />} />
+          <Route path="usecases" element={<Navigate to="/landing/usecase/client" replace />} />
         </Route>
 
         {/* Handoff page: no sidebar, but still behind RouteMiddleware */}
@@ -210,6 +220,7 @@ function App() {
         {/* User Dashboard Routes - All wrapped in Layout */}
         <Route element={<Layout />}>
           <Route path='/home' element={<Home />} />
+          <Route path='/account/access' element={<AccountAccessPage />} />
           <Route path='/support/ticket' element={<PageSubmitATicket />} />
             <Route path='/credits' element={<CreditShop />} />
             <Route path='/credits-subscriptions' element={<CreditShop />} />
@@ -243,6 +254,8 @@ function App() {
             <Route path=':id' element={<SelectedTeam />} />
           </Route>
 
+          <Route path='/team-project/:id' element={<TeamProjectWorkspace />} />
+
           <Route path='/discovery' element={<DiscoveryPage />} />
           <Route path='/discovery/:tab' element={<DiscoveryPage />} />
           <Route path='/assets' element={<AssetsLibrary />} />
@@ -269,6 +282,7 @@ function App() {
             <Route path='incoming/:jobPostId' element={<ProposalsIncomingPage />} />
             <Route path='sent' element={<ProposalsSentPage />} />
             <Route path='team-sent' element={<ProposalsSentPage />} />
+            <Route path='flow' element={<JobProposalsFlowGuide />} />
           </Route>
 
           {/* Standalone Creation, Edit & View Details Pages */}
@@ -295,6 +309,7 @@ function App() {
             <Route index element={<OrdersSelectGigPage />} />
             <Route path='incoming/:gigId' element={<IncomingOrders />} />
             <Route path='sent' element={<SentOrders />} />
+            <Route path='flow' element={<GigOrdersFlowGuide />} />
           </Route>
           <Route path='/gigs/orders/incoming/:gigId/order/:orderId' element={<IncomingOrderDetail />} />
           <Route path='/gigs/orders/sent/:orderId' element={<SentOrderDetail />} />
@@ -306,12 +321,15 @@ function App() {
           <Route path='/my-orders' element={<SectionPlaceholder title='MY ORDERS' />} />
           <Route path='/terms-of-services' element={<TosMain />} />
           <Route path='/contracts' element={<Contracts />} />
+          <Route path='/contract' element={<Navigate to="/contracts" replace />} />
           <Route path='/contracts/dispute-form' element={<DisputeFormPage />} />
-          <Route path='/contracts/:id' element={<Contracts />} />
+          <Route path='/contracts/:id' element={<ContractDetailsPage />} />
           <Route path='/dashboard' element={<DashboardMain />} />
           <Route path='/dashboard/tasks' element={<DashboardMain />} />
           <Route path='/dashboard/review' element={<DashboardMain />} />
+          <Route path='/dashboard/rate' element={<DashboardMain />} />
           <Route path='/dashboard/archived' element={<DashboardMain />} />
+          <Route path='/dashboard/flow' element={<DashboardMain />} />
           <Route path='/dashboard/tasks/:id' element={<DashboardTaskDetail />} />
           <Route path='/dashboard/update/:id' element={<DashboardTaskDetail />} />
           <Route path='/dashboard/review/:id' element={<DashboardTaskDetail />} />

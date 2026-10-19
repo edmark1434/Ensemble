@@ -7,6 +7,7 @@ import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 import { toast } from "react-hot-toast";
 import { ProfileTags } from "@/pages/user/7_profile/Utilities/ProfileTags";
+import { constructAvatarUrl } from "@/lib/accountAvatars";
 
 // --- STRUCTURAL INTERFACE ---
 interface UserProfile {
@@ -99,11 +100,7 @@ export const UserProfilesList: React.FC = () => {
             id: String(account.account_id),
             name,
             username: account.handle,
-            avatar: avatarPath
-              ? /^https?:\/\//i.test(avatarPath)
-                ? avatarPath
-                : `${cloudfront}/${avatarPath.replace(/^\/+/, "")}`
-              : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`,
+            avatar: constructAvatarUrl(avatarPath, name),
             location: "Global",
             bio: account.bio || "",
             tagline: account.tagline || "",

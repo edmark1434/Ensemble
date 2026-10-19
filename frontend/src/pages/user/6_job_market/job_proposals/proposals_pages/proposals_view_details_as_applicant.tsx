@@ -28,7 +28,11 @@ import {
   AlertCircle,
   ShieldCheck,
   Sparkles,
-  ListTodo
+  ListTodo,
+  FileCheck2,
+  ChevronDown,
+  ChevronUp,
+  Shield
 } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
@@ -71,6 +75,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isJobDescriptionExpanded, setIsJobDescriptionExpanded] = useState(false);
 
   // Auto-open modal if contractId is present in URL
   useEffect(() => {
@@ -267,7 +272,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
       );
       toast.success("You have successfully accepted the job offer!");
       setIsAcceptConfirmOpen(false);
-      navigate("/jobs/proposals");
+      navigate("/contracts");
     } catch (error: any) {
       console.error("Failed to accept offer:", error);
       showErrorToast(error.response?.data?.message || "Failed to accept offer.");
@@ -1016,64 +1021,123 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             </motion.div>
           </div>
         )}
-        {isAcceptConfirmOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
+        {isAcceptConfirmOpen && proposal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-2xl rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-2xl space-y-6 text-left my-8"
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="w-full max-w-3xl rounded-3xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-[#12141a] p-5 sm:p-7 shadow-2xl space-y-6 text-left my-6 overflow-hidden font-['Plus_Jakarta_Sans']"
             >
-              {/* Header with Type of Contract */}
-              <div className="flex items-start justify-between border-b border-gray-200 dark:border-white/10 pb-4">
-                <div className="space-y-1.5 text-left">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-emerald-500" />
-                    <h3 className="text-lg font-extrabold text-gray-900 dark:text-white">
-                      Formal Contract Details
-                    </h3>
+              {/* Header with Badges */}
+              <div className="flex items-start justify-between border-b border-zinc-200 dark:border-white/10 pb-4">
+                <div className="space-y-2 text-left">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-9 w-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                      <FileCheck2 className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-zinc-900 dark:text-white tracking-tight">
+                        Formal Contract Offer
+                      </h3>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        Binding milestone escrow agreement extended for your review and execution
+                      </p>
+                    </div>
                   </div>
-                  {/* Type of Contract (Job / Gigs) */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-zinc-500">
-                      Type of Contract:
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30 flex items-center gap-1">
+                      {proposal.jobHiringType === 'multiple' || proposal.target_milestone_title ? (
+                        <>
+                          <Users className="h-3 w-3" /> Team Milestone Job
+                        </>
+                      ) : (
+                        <>
+                          <User className="h-3 w-3" /> Individual Freelancer Job
+                        </>
+                      )}
                     </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30">
-                      Job Contract ({proposal.jobHiringType === 'multiple' || proposal.target_milestone_title ? 'Team Milestone Job' : 'Individual Freelancer Job'})
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 flex items-center gap-1">
+                      <ShieldCheck className="h-3 w-3" /> Fixed Price Escrow Protected
                     </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30">
-                      Fixed Price Escrow
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 flex items-center gap-1">
+                      <Clock className="h-3 w-3 animate-pulse" /> Pending Your Signature
                     </span>
                   </div>
                 </div>
+
                 <button
                   onClick={() => navigate(-1)}
-                  className="text-gray-400 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-white transition p-1"
+                  className="rounded-xl p-1.5 text-zinc-400 hover:text-zinc-900 dark:text-zinc-500 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 transition"
+                  title="Close Modal"
                 >
-                  <XCircle className="h-5 w-5" />
+                  <XCircle className="h-6 w-6" />
                 </button>
               </div>
 
-              <div className="space-y-6 max-h-[62vh] overflow-y-auto pr-2 custom-scrollbar">
+              {/* Escrow & Delivery Hero Strip */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200/80 dark:border-white/5">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
+                    Agreed Escrow Payout
+                  </span>
+                  <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-black text-xl">
+                    <CreditIcon className="h-5 w-5 text-amber-500 shrink-0" />
+                    <span>{proposal.bidAmount.toLocaleString()} Credits</span>
+                  </div>
+                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium block">
+                    Held securely in platform escrow
+                  </span>
+                </div>
+
+                <div className="space-y-0.5 border-t sm:border-t-0 sm:border-l border-zinc-200 dark:border-white/5 pt-2 sm:pt-0 sm:pl-4">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
+                    Milestone Phases
+                  </span>
+                  <p className="text-zinc-900 dark:text-zinc-100 font-extrabold text-sm pt-0.5">
+                    {proposal.milestones.length > 0 ? `${proposal.milestones.length} Phase${proposal.milestones.length > 1 ? 's' : ''}` : 'Single Phase Delivery'}
+                  </p>
+                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium block">
+                    Sequential verification &amp; release
+                  </span>
+                </div>
+
+                <div className="space-y-0.5 border-t sm:border-t-0 sm:border-l border-zinc-200 dark:border-white/5 pt-2 sm:pt-0 sm:pl-4">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
+                    Assigned Position
+                  </span>
+                  <p className="text-zinc-900 dark:text-zinc-100 font-extrabold text-sm pt-0.5 truncate">
+                    {proposal.target_milestone_title || "Full Job Scope"}
+                  </p>
+                  <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold block">
+                    {proposal.target_milestone_tasks?.length ? `${proposal.target_milestone_tasks.length} Deliverable tasks` : "Deliverables defined below"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Scrollable Agreement Body */}
+              <div className="space-y-6 max-h-[55vh] overflow-y-auto pr-2 custom-scrollbar">
                 {/* I. PARTIES INVOLVED */}
                 <div className="space-y-2">
-                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
-                    I. Parties Involved
+                  <h4 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>I. Parties Involved</span>
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 dark:bg-white/[0.02] p-4 rounded-2xl border border-gray-200 dark:border-white/10">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-zinc-50 dark:bg-white/[0.02] p-4 rounded-2xl border border-zinc-200 dark:border-white/10">
                     <div className="flex items-center gap-3">
                       {proposal.clientAvatar ? (
-                        <img src={proposal.clientAvatar} alt="" className="h-10 w-10 rounded-full object-cover border border-purple-500/30 shrink-0" />
+                        <img src={proposal.clientAvatar} alt="" className="h-11 w-11 rounded-full object-cover border-2 border-purple-500/40 shrink-0" />
                       ) : (
-                        <div className="h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 font-bold text-sm flex items-center justify-center shrink-0">
+                        <div className="h-11 w-11 rounded-full bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-300 font-bold text-sm flex items-center justify-center shrink-0 border border-purple-500/30">
                           {proposal.clientName?.charAt(0) || "C"}
                         </div>
                       )}
                       <div className="min-w-0">
-                        <span className="text-[10px] text-gray-400 dark:text-zinc-400 font-bold uppercase tracking-wider block">
+                        <span className="text-[10px] text-purple-700 dark:text-purple-300 font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-purple-100 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800">
                           Client (Hirer)
                         </span>
-                        <p className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                        <p className="text-xs font-bold text-zinc-900 dark:text-white truncate mt-1">
                           {proposal.clientName}
                         </p>
                       </div>
@@ -1081,17 +1145,17 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
 
                     <div className="flex items-center gap-3">
                       {proposal.freelancerAvatar ? (
-                        <img src={proposal.freelancerAvatar} alt="" className="h-10 w-10 rounded-full object-cover border border-emerald-500/30 shrink-0" />
+                        <img src={proposal.freelancerAvatar} alt="" className="h-11 w-11 rounded-full object-cover border-2 border-emerald-500/40 shrink-0" />
                       ) : (
-                        <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-sm flex items-center justify-center shrink-0">
+                        <div className="h-11 w-11 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 font-bold text-sm flex items-center justify-center shrink-0 border border-emerald-500/30">
                           {proposal.freelancerName?.charAt(0) || "F"}
                         </div>
                       )}
                       <div className="min-w-0">
-                        <span className="text-[10px] text-gray-400 dark:text-zinc-400 font-bold uppercase tracking-wider block">
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800">
                           Freelancer (Contractor)
                         </span>
-                        <p className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                        <p className="text-xs font-bold text-zinc-900 dark:text-white truncate mt-1">
                           {proposal.freelancerName}
                         </p>
                       </div>
@@ -1102,50 +1166,64 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 {/* II. SCOPE OF WORK */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
-                      II. Scope of Work
+                    <h4 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                      II. Scope of Work &amp; Assignment
                     </h4>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                      {proposal.jobHiringType === 'multiple' || proposal.target_milestone_title ? 'Team Position' : 'Individual Scope'}
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                      {proposal.jobHiringType === 'multiple' || proposal.target_milestone_title ? 'Team Position Scope' : 'Standard Scope'}
                     </span>
                   </div>
-                  <div className="bg-gray-50 dark:bg-white/[0.02] p-4 rounded-2xl border border-gray-200 dark:border-white/10 space-y-3">
+
+                  <div className="bg-zinc-50 dark:bg-white/[0.02] p-4 sm:p-5 rounded-2xl border border-zinc-200 dark:border-white/10 space-y-4">
                     <div>
-                      <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block mb-0.5">
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase font-bold tracking-wider block mb-1">
                         Job Posting Title
                       </span>
-                      <p className="text-xs font-bold text-gray-900 dark:text-white">
+                      <p className="text-sm font-extrabold text-zinc-900 dark:text-white leading-snug">
                         {proposal.jobTitle}
                       </p>
                     </div>
 
+                    {/* Assigned Milestone Box if team project */}
                     {(proposal.jobHiringType === 'multiple' || proposal.target_milestone_title) && (
-                      <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-2">
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 block mb-0.5">
-                            Assigned Milestone Role
-                          </span>
-                          <p className="text-xs font-bold text-gray-900 dark:text-white">
-                            {proposal.target_milestone_title || "Designated Team Role"}
-                          </p>
-                          {proposal.target_milestone_description && (
-                            <p className="text-[11px] text-gray-600 dark:text-zinc-300 mt-1 leading-relaxed">
-                              {proposal.target_milestone_description}
+                      <div className="p-4 rounded-2xl bg-purple-500/5 dark:bg-purple-500/10 border-2 border-purple-500/25 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                              <Layers className="h-3.5 w-3.5" /> Assigned Milestone Role
+                            </span>
+                            <p className="text-sm font-black text-zinc-900 dark:text-white">
+                              {proposal.target_milestone_title || "Designated Team Role"}
                             </p>
-                          )}
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                            Role Assignment
+                          </span>
                         </div>
 
+                        {proposal.target_milestone_description && (
+                          <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                            {proposal.target_milestone_description}
+                          </p>
+                        )}
+
                         {proposal.target_milestone_tasks && proposal.target_milestone_tasks.length > 0 && (
-                          <div className="pt-2 border-t border-purple-500/20 space-y-1.5">
+                          <div className="pt-2.5 border-t border-purple-500/20 space-y-2">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
-                              <ListTodo className="h-3 w-3" />
+                              <ListTodo className="h-3.5 w-3.5" />
                               Assigned Deliverables / Tasks Checklist ({proposal.target_milestone_tasks.length})
                             </span>
-                            <div className="grid gap-1">
+                            <div className="grid gap-1.5">
                               {proposal.target_milestone_tasks.map((task: string, tIdx: number) => (
-                                <div key={tIdx} className="flex items-start gap-2 text-xs text-gray-800 dark:text-zinc-200 bg-white/60 dark:bg-black/20 p-2 rounded-lg border border-purple-500/10 shadow-xs">
-                                  <span className="text-purple-500 font-bold text-xs mt-0.5">✓</span>
-                                  <span className="leading-snug">{task}</span>
+                                <div
+                                  key={tIdx}
+                                  className="flex items-center gap-2.5 text-xs text-zinc-800 dark:text-zinc-200 bg-white dark:bg-[#1a1d24] p-2.5 rounded-xl border border-purple-500/15 shadow-2xs font-medium"
+                                >
+                                  <div className="h-4 w-4 rounded-full bg-purple-100 dark:bg-purple-950 border border-purple-400 dark:border-purple-600 flex items-center justify-center shrink-0 text-purple-700 dark:text-purple-300 font-bold text-[10px]">
+                                    ✓
+                                  </div>
+                                  <span className="leading-snug flex-1 font-semibold">{task}</span>
+                                  <span className="text-[10px] text-zinc-400 font-medium">Required Deliverable</span>
                                 </div>
                               ))}
                             </div>
@@ -1154,55 +1232,68 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                       </div>
                     )}
 
+                    {/* Job Post Description with clean collapse */}
                     <div>
-                      <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block mb-0.5">
-                        Job Post Description
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase font-bold tracking-wider block mb-1">
+                        Full Job Post Brief
                       </span>
-                      <p className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                        {proposal.jobDescription || targetJob?.description || "Description not available. The scope is defined by the job posting and subsequent communications."}
-                      </p>
+                      <div className="relative">
+                        <div className={`text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap ${!isJobDescriptionExpanded ? 'max-h-24 overflow-hidden' : ''}`}>
+                          {proposal.jobDescription || targetJob?.description || "Description not available. The scope is defined by the job posting and subsequent communications."}
+                        </div>
+                        {((proposal.jobDescription || targetJob?.description || "").length > 200) && (
+                          <button
+                            type="button"
+                            onClick={() => setIsJobDescriptionExpanded(!isJobDescriptionExpanded)}
+                            className="mt-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                          >
+                            <span>{isJobDescriptionExpanded ? "Show less" : "Show full project description"}</span>
+                            {isJobDescriptionExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* III. LOCKED MILESTONES */}
+                {/* III. LOCKED MILESTONES & SCHEDULE */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
-                      III. Locked Milestones
+                    <h4 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                      III. Locked Milestones &amp; Schedule
                     </h4>
                     {(proposal.jobHiringType === 'multiple' || proposal.target_milestone_title) && (
                       <span className="text-[10px] font-semibold text-purple-600 dark:text-purple-400">
-                        (Showing deliverables for your assigned part)
+                        (Showing deliverables for your assigned role)
                       </span>
                     )}
                   </div>
-                  <div className="bg-gray-50 dark:bg-white/[0.02] rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden">
+                  <div className="bg-zinc-50 dark:bg-white/[0.02] rounded-2xl border border-zinc-200 dark:border-white/10 overflow-hidden">
                     {proposal.milestones.length > 0 ? (
                       <table className="w-full text-left">
-                        <thead className="border-b border-gray-200 dark:border-white/10 bg-gray-100/70 dark:bg-white/[0.04]">
+                        <thead className="border-b border-zinc-200 dark:border-white/10 bg-zinc-100/70 dark:bg-white/[0.04]">
                           <tr>
-                            <th className="px-4 py-2.5 text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase">Phase</th>
-                            <th className="px-4 py-2.5 text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase text-center">Revisions</th>
-                            <th className="px-4 py-2.5 text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase text-right">Hours</th>
+                            <th className="px-4 py-2.5 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase">Phase / Deliverable</th>
+                            <th className="px-4 py-2.5 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase text-center">Revisions</th>
+                            <th className="px-4 py-2.5 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase text-right">Hours</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                        <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
                           {proposal.milestones.map((m, i) => (
-                            <tr key={i} className="hover:bg-white dark:bg-white/5 transition-colors">
-                              <td className="px-4 py-2.5 text-xs text-gray-700 dark:text-zinc-200 font-medium">{m.name}</td>
-                              <td className="px-4 py-2.5 text-xs text-gray-500 dark:text-zinc-400 text-center">{m.revisions} pass{m.revisions === 1 ? '' : 'es'}</td>
-                              <td className="px-4 py-2.5 text-xs text-emerald-500 dark:text-emerald-400 font-bold text-right">{m.hours}h</td>
+                            <tr key={i} className="hover:bg-white dark:hover:bg-white/5 transition-colors">
+                              <td className="px-4 py-2.5 text-xs text-zinc-800 dark:text-zinc-200 font-semibold">{m.name}</td>
+                              <td className="px-4 py-2.5 text-xs text-zinc-500 dark:text-zinc-400 text-center">{m.revisions} pass{m.revisions === 1 ? '' : 'es'}</td>
+                              <td className="px-4 py-2.5 text-xs text-emerald-600 dark:text-emerald-400 font-bold text-right">{m.hours}h</td>
                             </tr>
                           ))}
                         </tbody>
-                        <tfoot className="border-t border-gray-200 dark:border-white/10 bg-gray-100/50 dark:bg-white/[0.02]">
+                        <tfoot className="border-t border-zinc-200 dark:border-white/10 bg-zinc-100/50 dark:bg-white/[0.02]">
                           <tr>
-                            <td className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-white" colSpan={3}>
+                            <td className="px-4 py-3 text-xs font-bold text-zinc-900 dark:text-white" colSpan={3}>
                               <div className="flex items-center justify-between">
-                                <span>Agreed Escrow Amount:</span>
-                                <span className="text-emerald-600 dark:text-emerald-400 text-sm font-extrabold flex items-center gap-1">
-                                  <CreditIcon className="h-3.5 w-3.5 text-yellow-500" />
+                                <span>Total Committed Escrow:</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 text-sm font-black flex items-center gap-1.5">
+                                  <CreditIcon className="h-4 w-4 text-amber-500" />
                                   {proposal.bidAmount.toLocaleString()} Credits
                                 </span>
                               </div>
@@ -1211,8 +1302,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                         </tfoot>
                       </table>
                     ) : (
-                      <div className="p-4 text-xs text-gray-500 dark:text-zinc-400 text-center">
-                        Single Phase Delivery &bull; Agreed Escrow: {proposal.bidAmount.toLocaleString()} Credits
+                      <div className="p-4 text-xs text-zinc-600 dark:text-zinc-300 text-center">
+                        Single Phase Delivery &bull; Agreed Escrow: <strong className="text-amber-500">{proposal.bidAmount.toLocaleString()} Credits</strong>
                       </div>
                     )}
                   </div>
@@ -1221,106 +1312,63 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 {/* IV. AGREED TERMS OF SERVICE */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                    <h4 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                       IV. Agreed Terms of Service (TOS)
                     </h4>
-                    <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase">
+                    <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase px-2 py-0.5 rounded bg-zinc-100 dark:bg-white/5">
                       Preset: {proposal.tosTitle}
                     </span>
                   </div>
-                  <div className="bg-gray-50 dark:bg-white/[0.02] p-4 rounded-2xl border border-gray-200 dark:border-white/10 space-y-2">
-                    <div className="text-[11px] text-gray-600 dark:text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap">
+                  <div className="bg-zinc-50 dark:bg-white/[0.02] p-4 rounded-2xl border border-zinc-200 dark:border-white/10">
+                    <div className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap max-h-36 overflow-y-auto thin-scrollbar">
                       {proposal.tosContent}
                     </div>
                   </div>
                 </div>
 
-                {/* V. WORKFLOW & TERMS */}
+                {/* V. WORKFLOW & PLATFORM GUARANTEES */}
                 <div className="space-y-2">
-                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
-                    V. Workflow &amp; Terms
+                  <h4 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                    V. Workflow &amp; Platform Protections
                   </h4>
-                  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] p-4 sm:p-5 space-y-4">
-                    <div className="flex items-start gap-3">
-                      <XCircle className="w-5 h-5 text-slate-400 dark:text-zinc-500 shrink-0 mt-0.5" />
-                      <div>
-                        <h5 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">
-                          Client initiates the project?
-                        </h5>
-                        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                          No, the freelancer is expected to create the project.
-                        </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-3.5 rounded-2xl border border-zinc-200 dark:border-white/10 bg-zinc-50/70 dark:bg-white/[0.02] space-y-1">
+                      <div className="flex items-center gap-2 text-xs font-bold text-zinc-900 dark:text-white">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <span>5-Day Inaction Approval</span>
                       </div>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <XCircle className="w-5 h-5 text-slate-400 dark:text-zinc-500 shrink-0 mt-0.5" />
-                      <div>
-                        <h5 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">
-                          Client linked an existing project?
-                        </h5>
-                        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                          No, a project has not been linked yet.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                      <div>
-                        <h5 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">
-                          Require Confidentiality (NDA)?
-                        </h5>
-                        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                          Yes, freelancers cannot share details about this project during development.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                      <div>
-                        <h5 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">
-                          Allow Portfolio Use?
-                        </h5>
-                        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                          Yes, allowed to use output for portfolio (Up to 45 secs).
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* VI. PLATFORM POLICIES */}
-                <div className="space-y-2">
-                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
-                    VI. Platform Policies
-                  </h4>
-                  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] p-4 sm:p-5 space-y-4 text-xs leading-relaxed">
-                    <div className="space-y-1">
-                      <h5 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
-                        Review Window &amp; Inaction Rule
-                      </h5>
-                      <p className="text-gray-600 dark:text-zinc-300 text-[11px] sm:text-xs leading-relaxed">
-                        Clients have <strong>5 days</strong> (Jobs) or <strong>3 days</strong> (Gigs) to review submitted deliverables. If no review, revision request, or dispute is submitted within this window, the milestone <strong>automatically approves</strong> and escrow releases.
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                        Clients have 5 days to review submitted deliverables. If inactive, the milestone automatically approves and escrow releases.
                       </p>
                     </div>
 
-                    <div className="border-t border-gray-200/80 dark:border-white/10 pt-3 space-y-1">
-                      <h5 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
-                        Overdue &amp; Refund Policy
-                      </h5>
-                      <p className="text-gray-600 dark:text-zinc-300 text-[11px] sm:text-xs leading-relaxed">
-                        If a freelancer misses an agreed milestone deadline without client extension, the client can <strong>extend the deadline</strong> or <strong>cancel for a 100% escrow refund</strong> returned directly to their wallet.
+                    <div className="p-3.5 rounded-2xl border border-zinc-200 dark:border-white/10 bg-zinc-50/70 dark:bg-white/[0.02] space-y-1">
+                      <div className="flex items-center gap-2 text-xs font-bold text-zinc-900 dark:text-white">
+                        <Shield className="h-4 w-4 text-blue-500 shrink-0" />
+                        <span>Protected Escrow Guarantee</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                        100% of milestone funds are held in platform escrow prior to work commencement, ensuring guaranteed payouts upon delivery.
                       </p>
                     </div>
 
-                    <div className="border-t border-gray-200/80 dark:border-white/10 pt-3 space-y-1">
-                      <h5 className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
-                        Manual Cancellation Policy
-                      </h5>
-                      <p className="text-gray-600 dark:text-zinc-300 text-[11px] sm:text-xs leading-relaxed">
-                        Either party may submit a mutual cancellation request with a <strong>72-hour review window</strong>. Completed milestones remain with the freelancer, and unfinished escrow refunds to the client.
+                    <div className="p-3.5 rounded-2xl border border-zinc-200 dark:border-white/10 bg-zinc-50/70 dark:bg-white/[0.02] space-y-1">
+                      <div className="flex items-center gap-2 text-xs font-bold text-zinc-900 dark:text-white">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <span>Confidentiality (NDA)</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                        Protected project scope and confidential asset handling guidelines apply during development.
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 rounded-2xl border border-zinc-200 dark:border-white/10 bg-zinc-50/70 dark:bg-white/[0.02] space-y-1">
+                      <div className="flex items-center gap-2 text-xs font-bold text-zinc-900 dark:text-white">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <span>Portfolio Rights</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                        Freelancers are permitted to showcase completed work in their platform portfolio following project sign-off.
                       </p>
                     </div>
                   </div>
@@ -1330,25 +1378,25 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               {/* Agreement Checkbox or Accepted State */}
               {proposal.status === "Hired" ? (
                 <div className="pt-2">
-                  <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 flex items-center justify-between text-emerald-400">
+                  <div className="p-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 flex items-center justify-between text-emerald-600 dark:text-emerald-400">
                     <div className="flex items-center gap-3">
-                      <CheckCircle2 className="w-5 h-5" />
-                      <span className="text-sm font-bold">You have already accepted this contract</span>
+                      <CheckCircle2 className="w-5 h-5 shrink-0" />
+                      <span className="text-sm font-bold">You have accepted this contract offer</span>
                     </div>
                   </div>
                 </div>
               ) : proposal.status === "Pending" ? (
                 <div className="pt-2">
-                  <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/10 flex items-center justify-between text-red-400">
+                  <div className="p-4 rounded-2xl border border-red-500/20 bg-red-500/10 flex items-center justify-between text-red-600 dark:text-red-400">
                     <div className="flex items-center gap-3">
-                      <XCircle className="w-5 h-5" />
-                      <span className="text-sm font-bold">You have rejected this contract offer</span>
+                      <XCircle className="w-5 h-5 shrink-0" />
+                      <span className="text-sm font-bold">You have declined this contract offer</span>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="pt-2">
-                  <label className="flex items-start gap-3 cursor-pointer group">
+                <div className="p-4 rounded-2xl border-2 border-emerald-500/30 dark:border-emerald-500/20 bg-emerald-500/5">
+                  <label className="flex items-start gap-3.5 cursor-pointer group">
                     <div className="relative flex items-center justify-center mt-0.5">
                       <input
                         type="checkbox"
@@ -1356,40 +1404,42 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                         checked={agreedToTerms}
                         onChange={(e) => setAgreedToTerms(e.target.checked)}
                       />
-                      <div className="w-5 h-5 rounded border-2 border-white/20 bg-white dark:bg-white/5 shadow-sm dark:shadow-none peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all flex items-center justify-center group-hover:border-emerald-400">
-                        <Check className={`w-3.5 h-3.5 text-gray-900 dark:text-white transition-opacity ${agreedToTerms ? 'opacity-100' : 'opacity-0'}`} strokeWidth={3} />
+                      <div className="w-5 h-5 rounded-lg border-2 border-zinc-400 dark:border-zinc-500 bg-white dark:bg-white/5 shadow-2xs peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all flex items-center justify-center group-hover:border-emerald-400">
+                        <Check className={`w-3.5 h-3.5 text-white transition-opacity ${agreedToTerms ? 'opacity-100' : 'opacity-0'}`} strokeWidth={3} />
                       </div>
                     </div>
-                    <div className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed flex-1">
-                      <strong className="text-gray-900 dark:text-white block mb-0.5">I Agree to Platform Terms</strong>
-                      I acknowledge that clicking accept forms a legally binding agreement. Escrow funds for the agreed bid will be locked into the contract, and work is expected to commence as per the stated scope and terms.
+                    <div className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed flex-1">
+                      <strong className="text-zinc-900 dark:text-white block mb-0.5 text-sm">
+                        I Agree to Platform Terms &amp; Binding Escrow Agreement
+                      </strong>
+                      I acknowledge that clicking accept forms a legally binding contract. Escrow funds will be committed for milestone fulfillment, and work will commence according to the stated deliverables.
                     </div>
                   </label>
                 </div>
               )}
 
               {/* Action Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-white/10">
+              <div className="flex items-center justify-between gap-3 pt-3 border-t border-zinc-200 dark:border-white/10">
                 {proposal.status === "Hired" ? (
                   <>
                     <button
                       onClick={() => navigate(`/jobs/proposals/sent/${proposal.id}`)}
-                      className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition"
+                      className="px-5 py-2.5 rounded-xl border border-zinc-200 dark:border-white/10 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition"
                     >
                       Return to Proposal
                     </button>
                     <button
                       onClick={() => navigate(`/contracts/${proposal.contractId}`)}
-                      className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-gray-900 dark:text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+                      className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 flex items-center gap-2"
                     >
                       <FileText className="w-4 h-4" />
-                      View Contract
+                      View Contract Workspace
                     </button>
                   </>
                 ) : proposal.status === "Pending" ? (
                   <button
                     onClick={() => navigate(`/jobs/proposals/sent/${proposal.id}`)}
-                    className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition"
+                    className="px-5 py-2.5 rounded-xl border border-zinc-200 dark:border-white/10 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition"
                   >
                     Return to Proposal
                   </button>
@@ -1398,27 +1448,29 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                     <button
                       onClick={() => setIsRejectOfferModalOpen(true)}
                       disabled={isProcessing}
-                      className="px-5 py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 text-xs font-bold text-red-400 hover:bg-red-500/20 transition disabled:opacity-50"
+                      className="px-5 py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-500/20 transition disabled:opacity-50"
                     >
                       Reject Offer
                     </button>
-                    <button
-                      onClick={() => navigate(`/jobs/proposals/sent/${proposal.id}`)}
-                      disabled={isProcessing}
-                      className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition disabled:opacity-50"
-                    >
-                      Close & Review Later
-                    </button>
-                    <button
-                      onClick={async () => {
-                        await handleConfirmAccept();
-                      }}
-                      disabled={isProcessing || !agreedToTerms}
-                      className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 flex items-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      {isProcessing ? "Processing..." : "Sign & Accept Contract"}
-                    </button>
+                    <div className="flex items-center gap-2.5">
+                      <button
+                        onClick={() => navigate(`/jobs/proposals/sent/${proposal.id}`)}
+                        disabled={isProcessing}
+                        className="px-5 py-2.5 rounded-xl border border-zinc-200 dark:border-white/10 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition disabled:opacity-50"
+                      >
+                        Close &amp; Review Later
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await handleConfirmAccept();
+                        }}
+                        disabled={isProcessing || !agreedToTerms}
+                        className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 flex items-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        {isProcessing ? "Processing..." : "Sign & Accept Contract"}
+                      </button>
+                    </div>
                   </>
                 )}
               </div>

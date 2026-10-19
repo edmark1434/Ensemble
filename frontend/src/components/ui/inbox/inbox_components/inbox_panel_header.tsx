@@ -124,7 +124,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
                 target.src = `https://ui-avatars.com/api/?name=${name.substring(
                   0,
                   2
-                )}&background=6366f1&color=fff&bold=true`;
+                )}&background=71717a&color=fff&bold=true`;
               }}
             />
           )}

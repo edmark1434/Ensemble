@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { updateProject } from "@/lib/db/projects";
+import { isProjectFrozen, updateProject } from "@/lib/db/projects";
 import { db } from "@/lib/db";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 import { canEditWithRole } from "@/features/editor/types/editor-role";
@@ -35,7 +35,8 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return NextResponse.json({ role: membership.role });
+  const frozen = await isProjectFrozen(id);
+  return NextResponse.json({ role: membership.role, frozen });
 }
 
 export async function PATCH(
@@ -62,6 +63,9 @@ export async function PATCH(
 
   if (!membership || !canEditWithRole(membership.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (await isProjectFrozen(id)) {
+    return NextResponse.json({ error: "This project is frozen" }, { status: 403 });
   }
 
   const { name, width, height } = await req.json();

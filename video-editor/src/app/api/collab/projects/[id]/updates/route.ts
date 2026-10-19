@@ -7,6 +7,7 @@ import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-se
 import { canEditWithRole } from "@/features/editor/types/editor-role";
 import { withProjectSnapshotLock } from "@/lib/collab/snapshot-lock";
 import { compactProject } from "@/lib/collab/persistence-store";
+import { isProjectFrozen } from "@/lib/db/projects";
 
 const COMPACT_AFTER_UPDATE_COUNT = 200;
 
@@ -30,6 +31,9 @@ export async function POST(
     .executeTakeFirst();
   if (!membership || !canEditWithRole(membership.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (await isProjectFrozen(projectId)) {
+    return NextResponse.json({ error: "This project is frozen" }, { status: 403 });
   }
 
   const sessionId = Number(request.nextUrl.searchParams.get("sessionId"));

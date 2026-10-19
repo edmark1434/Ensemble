@@ -120,11 +120,12 @@ export function ConfirmStatusModal({
   onConfirm,
 }: {
   entityName: string;
-  action: 'ban' | 'suspend' | 'restore' | 'lock' | 'unban' | 'unsuspend' | 'unlock';
+  action: 'ban' | 'suspend' | 'restore' | 'lock' | 'unban' | 'unsuspend' | 'unlock' | 'timeout' | 'clear_timeout';
   onClose: () => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: (options?: { days?: number | null }) => Promise<void>;
 }) {
   const [saving, setSaving] = useState(false);
+  const [days, setDays] = useState(action === 'suspend' ? '7' : '');
   const labels = {
     ban: { title: 'Ban account', verb: 'ban', result: 'Banned', tone: 'bg-rose-500/90 hover:bg-rose-500' },
     suspend: {
@@ -163,6 +164,18 @@ export function ConfirmStatusModal({
       result: 'Locked',
       tone: 'bg-zinc-200 text-zinc-900 hover:bg-white',
     },
+    timeout: {
+      title: 'Forum timeout',
+      verb: 'time out from the forums',
+      result: 'timed out from the forums',
+      tone: 'bg-amber-500/90 hover:bg-amber-500',
+    },
+    clear_timeout: {
+      title: 'Clear forum timeout',
+      verb: 'clear the forum timeout for',
+      result: 'able to use the forums',
+      tone: 'bg-emerald-500/90 hover:bg-emerald-500',
+    },
   }[action];
 
   return (
@@ -185,7 +198,13 @@ export function ConfirmStatusModal({
             onClick={async () => {
               setSaving(true);
               try {
-                await onConfirm();
+                const parsed = Number(days);
+                const duration = action === 'suspend'
+                  ? (Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 7)
+                  : action === 'timeout'
+                    ? (Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null)
+                    : undefined;
+                await onConfirm(duration === undefined ? undefined : { days: duration });
                 onClose();
               } catch (err) {
                 handleAccountActionError(err);
@@ -201,11 +220,31 @@ export function ConfirmStatusModal({
       }
     >
       <p className="text-sm text-zinc-300">
-        This updates the account status in the database immediately.
-        {['unban', 'unsuspend', 'unlock', 'restore'].includes(action)
-          ? ' The account will regain normal platform access.'
-          : ' Use Unban / Unsuspend / Unlock later to return them to Active.'}
+        {action === 'ban'
+          ? 'They can sign in only to file an appeal and view their tickets and disputes.'
+          : action === 'suspend'
+            ? 'They stay signed in and can read the whole platform. Every action stays off until this period ends.'
+            : action === 'timeout'
+              ? 'They can keep using Ensemble. Posts, comments, reactions, and other forum changes stay off.'
+              : action === 'lock'
+                ? 'They cannot sign in until a staff member unlocks the account. This is for a compromised or held account.'
+                : action === 'clear_timeout'
+                  ? 'They can post, comment, and react in the forums again.'
+                  : 'The account will regain normal platform access.'}
       </p>
+      {(action === 'suspend' || action === 'timeout') && (
+        <label className="mt-4 block text-sm text-zinc-300">
+          {action === 'suspend' ? 'Days' : 'Days (leave empty to keep it until you clear it)'}
+          <input
+            type="number"
+            min={1}
+            max={365}
+            value={days}
+            onChange={(event) => setDays(event.target.value)}
+            className="mt-1 w-full rounded-xl border border-white/10 bg-transparent px-3 py-2"
+          />
+        </label>
+      )}
     </ModalShell>
   );
 }

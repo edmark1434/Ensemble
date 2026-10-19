@@ -10,7 +10,7 @@ import {
 	MessageSquare,
 	Palette,
 	Send,
-	Shield,
+	ScrollText,
 	Users,
 	Wallet,
 } from "lucide-react";
@@ -38,7 +38,7 @@ const secondaryNav: NavItem[] = [
 	{ label: "Gig Posting", icon: Megaphone, to: "/gigs" },
 	{ label: "Incoming Orders", icon: Inbox, to: "/orders" },
 	{ label: "My Orders", icon: Handshake, to: "/my-orders" },
-	{ label: "My Contracts", icon: Shield, to: "/contracts" },
+	{ label: "My Contracts", icon: ScrollText, to: "/contracts" },
 	{ label: "Transaction History", icon: Wallet, to: "/transactions" },
 	{ label: "Inbox", icon: MessageSquare, to: "/inbox" },
 ];

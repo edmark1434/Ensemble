@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { getBlockProjectId } from "@/lib/db/blocks";
 import { getEffectiveBlockRole } from "@/lib/db/block-members";
 import { canEditWithRole } from "@/features/editor/types/editor-role";
+import { isProjectFrozen } from "@/lib/db/projects";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
 
 export async function POST(
@@ -29,6 +30,9 @@ export async function POST(
   const role = await getEffectiveBlockRole(blockId, projectId, decoded.userId);
   if (!canEditWithRole(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (await isProjectFrozen(projectId)) {
+    return NextResponse.json({ error: "This project is frozen" }, { status: 403 });
   }
 
   const body = Buffer.from(await req.arrayBuffer());

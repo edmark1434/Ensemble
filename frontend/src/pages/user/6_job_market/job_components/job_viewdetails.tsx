@@ -185,10 +185,10 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   <div className="flex flex-col">
                     {isTeamHiring ? (
                       <div>
-                        <p className="text-lg font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1.5 leading-none">
+                        <div className="text-lg font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1.5 leading-none">
                           <CreditIcon className="h-5 w-5 text-amber-500 dark:text-amber-400 shrink-0" />
                           <span>{selectedJob.minBudget ? selectedJob.minBudget.toLocaleString() : selectedJob.priceRange}</span>
-                        </p>
+                        </div>
                         <p className="text-[10px] text-gray-500 dark:text-zinc-400 mt-1">
                           Pool distributed across {selectedJob.milestones?.length || 0} milestones
                         </p>

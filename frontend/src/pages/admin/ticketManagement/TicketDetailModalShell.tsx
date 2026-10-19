@@ -142,7 +142,7 @@ function MessageBubble({
   own: boolean;
   busy: boolean;
   replyQuote: { id: string; author: string; body: string } | null;
-  onReply: () => void;
+  onReply?: () => void;
   onJumpToReply: (messageId: string) => void;
   onDelete: () => Promise<void>;
   onToggleInternal: (isInternal: boolean) => Promise<void>;
@@ -265,6 +265,7 @@ function MessageBubble({
           )}
           {!message.isUnsent && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {onReply && (
               <button
                 type="button"
                 disabled={busy}
@@ -274,7 +275,8 @@ function MessageBubble({
                 <CornerDownRight className="h-3 w-3" />
                 Reply
               </button>
-              {(own || staffReply) && own && !confirmDelete && (
+              )}
+              {onReply && (own || staffReply) && own && !confirmDelete && (
                 <button
                   type="button"
                   disabled={busy}
@@ -285,7 +287,7 @@ function MessageBubble({
                   Delete
                 </button>
               )}
-              {own && confirmDelete && (
+              {onReply && own && confirmDelete && (
                 <>
                   <button
                     type="button"
@@ -305,7 +307,7 @@ function MessageBubble({
                   </button>
                 </>
               )}
-              {staffReply && !message.isUnsent && (
+              {onReply && staffReply && !message.isUnsent && (
                 <button
                   type="button"
                   disabled={busy}
@@ -372,15 +374,32 @@ function Field({
 const selectCls =
   'rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none focus:border-white/25';
 
+function CloseTimer({ closesAt, scheduled = false }: { closesAt?: string | null; scheduled?: boolean }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!closesAt) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, [closesAt]);
+  if (!closesAt) return null;
+  const remaining = new Date(closesAt).getTime() - now;
+  const hours = Math.floor(remaining / 3600000);
+  const minutes = Math.floor((remaining % 3600000) / 60000);
+  const label = remaining <= 0
+    ? scheduled ? 'Scheduled close is due now' : 'Due to close automatically now'
+    : scheduled
+      ? `Closes in ${hours}h ${minutes}m`
+      : `Closes automatically in ${Math.floor(remaining / 86400000)}d ${hours % 24}h if nobody replies`;
+  return <p className="text-[11px] text-amber-200/80">{label}</p>;
+}
+
 function statusButtonClass(label: string, active: boolean) {
   const s = label.toLowerCase().replace(/_/g, ' ');
   if (!active) {
     return 'border-white/10 bg-transparent text-zinc-400 hover:border-white/20 hover:bg-white/[0.04] hover:text-zinc-200';
   }
-  if (s === 'open') return 'border-red-500/40 bg-red-500/20 text-red-200';
+  if (s === 'open') return 'border-rose-500/40 bg-rose-500/20 text-rose-200';
   if (s === 'in progress') return 'border-amber-500/40 bg-amber-500/20 text-amber-200';
-  if (s === 'escalated to dev') return 'border-sky-500/40 bg-sky-500/20 text-sky-200';
-  if (s === 'resolved') return 'border-emerald-500/40 bg-emerald-500/20 text-emerald-200';
   if (s === 'closed') return 'border-zinc-500/40 bg-zinc-500/25 text-zinc-200';
   return 'border-white/25 bg-white/10 text-white';
 }
@@ -440,6 +459,13 @@ export default function TicketDetailModalShell({
   }[]>([]);
   const [searchingPeople, setSearchingPeople] = useState(false);
   const [personBusy, setPersonBusy] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<{ accountId: string; name: string } | null>(null);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [savingTranscript, setSavingTranscript] = useState(false);
+  const [confirmSchedule, setConfirmSchedule] = useState(false);
+  const [scheduleChoice, setScheduleChoice] = useState('24');
+  const [customCloseAt, setCustomCloseAt] = useState('');
+  const [schedulingClose, setSchedulingClose] = useState(false);
   const [confirmPerson, setConfirmPerson] = useState<{
     accountId: string;
     name: string;
@@ -467,7 +493,8 @@ export default function TicketDetailModalShell({
     return escalateTypesForRole(escalateRole);
   }, [detail, escalateRole]);
 
-  const statusOptions = detail?.statuses?.length ? detail.statuses : [...TICKET_STATUS_OPTIONS];
+  const statusOptions = (detail?.statuses?.length ? detail.statuses : [...TICKET_STATUS_OPTIONS])
+    .filter((label) => label === 'Open' || label === 'In Progress' || label === 'Closed');
   const priorityOptions = detail?.priorities?.length ? detail.priorities : [...TICKET_PRIORITY_OPTIONS];
   const perms = detail?.permissions;
   const myStaffId = perms?.staffId != null ? String(perms.staffId) : '';
@@ -477,7 +504,9 @@ export default function TicketDetailModalShell({
     perms?.isAssignee ||
       (myStaffId && ticketAssigneeId && myStaffId.toLowerCase() === ticketAssigneeId.toLowerCase())
   );
-  const canAssignMyself = Boolean(
+  const ticketClosed = ['Closed', 'Resolved'].includes(String(detail?.ticket?.status || ''));
+  const canReply = !ticketClosed && Boolean(perms?.canReply ?? alreadyAssignedToMe);
+  const canAssignMyself = !ticketClosed && Boolean(
     !alreadyAssignedToMe &&
       (perms?.canAssignMyself || perms?.canSelfAssign)
   );
@@ -485,7 +514,7 @@ export default function TicketDetailModalShell({
   const canEscalate = Boolean(perms?.canEscalate || alreadyAssignedToMe || perms?.isAdmin);
   const isAdmin = Boolean(perms?.isAdmin);
   /** Locked for non-admins once someone is assigned; Admin may reassign anytime */
-  const assigneeLocked = Boolean(ticketAssigneeId) && !Boolean(perms?.canAssignOthers || isAdmin);
+  const assigneeLocked = ticketClosed || (Boolean(ticketAssigneeId) && !Boolean(perms?.canAssignOthers || isAdmin));
 
   const syncEscalateType = (role: string, preferred?: string) => {
     const opts =
@@ -618,6 +647,7 @@ export default function TicketDetailModalShell({
       setPersonQuery('');
       setPersonResults([]);
       setConfirmPerson(null);
+      setConfirmRemove(null);
       showSuccessToast(response.data?.message || (action === 'add' ? 'User added to the ticket' : 'User removed from the ticket'));
       onUpdated();
     } catch (err: unknown) {
@@ -635,6 +665,32 @@ export default function TicketDetailModalShell({
       if (String(message?.conversation_id || '') !== String(chatId)) return;
       const mapped = fromSocketMessage(message);
       if (mapped) placeMessage(mapped);
+    };
+    const refreshPeople = (payload: { conversation_id?: string; account_id?: string; status?: string }) => {
+      if (payload?.conversation_id && String(payload.conversation_id) !== String(chatId)) return;
+      const accountId = String(payload?.account_id || '');
+      if (accountId) {
+        setDetail((current) => {
+          if (!current) return current;
+          const invited = (current.pendingInvites || []).find((person) => person.accountId === accountId);
+          const pendingInvites = (current.pendingInvites || []).filter((person) => person.accountId !== accountId);
+          const alreadyThere = (current.participants || []).some((person) => person.accountId === accountId);
+          const participants = payload.status === 'active' && invited && !alreadyThere
+            ? [...(current.participants || []), {
+                accountId,
+                name: invited.name,
+                handle: invited.handle,
+                role: 'User',
+                status: 'active',
+                isRequester: false,
+                isStaff: false,
+                replyCount: 0,
+              }]
+            : current.participants;
+          return { ...current, pendingInvites, participants };
+        });
+      }
+      void refreshThread();
     };
     const markDeleted = (payload: { message_id?: string; messageId?: string; conversation_id?: string }) => {
       if (payload?.conversation_id && String(payload.conversation_id) !== String(chatId)) return;
@@ -661,6 +717,7 @@ export default function TicketDetailModalShell({
     socket.on('messageReplied', appendLiveMessage);
     socket.on('ticketInternalMessage', appendLiveMessage);
     socket.on('messageDeleted', markDeleted);
+    socket.on('ticketMembershipUpdated', refreshPeople);
 
     return () => {
       socket.off('connect', joinTicketRoom);
@@ -668,6 +725,7 @@ export default function TicketDetailModalShell({
       socket.off('messageReplied', appendLiveMessage);
       socket.off('ticketInternalMessage', appendLiveMessage);
       socket.off('messageDeleted', markDeleted);
+      socket.off('ticketMembershipUpdated', refreshPeople);
       socket.emit('leaveRoom', { conversation_id: String(chatId) });
     };
     // The room changes only when another ticket is opened.
@@ -751,7 +809,7 @@ export default function TicketDetailModalShell({
     setSaving(true);
     try {
       await api.patch(`${endpointBase}/${ticketId}`, {
-        status: 'In Progress',
+        status: 'Open',
         assigned_role: role,
         type,
         handled_by_staff_id: null,
@@ -843,7 +901,67 @@ export default function TicketDetailModalShell({
     target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
+  const toDatetimeLocal = (date: Date) => {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
+  const chosenCloseIso = () => {
+    if (scheduleChoice === 'custom') {
+      const parsed = new Date(customCloseAt);
+      return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+    }
+    const hours = Number(scheduleChoice);
+    if (!Number.isFinite(hours) || hours <= 0) return null;
+    return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+  };
+
+  const openSchedule = () => {
+    const existing = detail?.scheduledCloseAt ? new Date(detail.scheduledCloseAt) : new Date(Date.now() + 24 * 60 * 60 * 1000);
+    setCustomCloseAt(toDatetimeLocal(existing));
+    setScheduleChoice(detail?.scheduledCloseAt ? 'custom' : '24');
+    setConfirmSchedule(true);
+  };
+
+  const scheduleClose = async (cancel = false) => {
+    const closesAt = cancel ? null : chosenCloseIso();
+    if (!cancel && !closesAt) {
+      showErrorToast('Choose when this ticket should close');
+      return;
+    }
+    setSchedulingClose(true);
+    try {
+      const response = cancel
+        ? await api.delete(`/api/staff/tickets/${ticketId}/schedule-close`)
+        : await api.post(`/api/staff/tickets/${ticketId}/schedule-close`, { closesAt });
+      setDetail(response.data?.data || null);
+      setConfirmSchedule(false);
+      const savedAt = response.data?.data?.scheduledCloseAt;
+      showSuccessToast(cancel ? 'Scheduled close cancelled' : `Closes ${formatDateTime(savedAt)}`);
+      onUpdated();
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      showErrorToast(message || 'Could not update the scheduled close');
+    } finally {
+      setSchedulingClose(false);
+    }
+  };
+
+  const saveTranscript = async () => {
+    setSavingTranscript(true);
+    try {
+      const response = await api.post(`/api/staff/tickets/${ticketId}/transcript`);
+      if (response.data?.data) setDetail(response.data.data as TicketDetail);
+      showSuccessToast('Transcript is ready in this window');
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to generate transcript'));
+    } finally {
+      setSavingTranscript(false);
+    }
+  };
+
   const sendReply = async () => {
+    if (!canReply) return;
     const text = reply.trim();
     const files = screenshots;
     const target = replyTarget;
@@ -917,6 +1035,25 @@ export default function TicketDetailModalShell({
   };
 
   const t = detail?.ticket;
+  const involvedGroups = useMemo(() => {
+    const people = [...(detail?.participants || [])].filter((person) => person.status === 'active' || person.isRequester);
+    const assigneeId = t?.assignee?.accountId ? String(t.assignee.accountId) : '';
+    if (assigneeId && t?.assignee && !people.some((person) => String(person.accountId) === assigneeId)) {
+      people.push({
+        accountId: assigneeId,
+        name: t.assignee.name,
+        role: t.assignee.role,
+        status: 'active',
+        isRequester: false,
+        isStaff: true,
+        replyCount: 0,
+      });
+    }
+    const staff = people.filter((person) => person.isStaff || (assigneeId && String(person.accountId) === assigneeId));
+    const staffIds = new Set(staff.map((person) => String(person.accountId)));
+    const users = people.filter((person) => !staffIds.has(String(person.accountId)));
+    return { staff, users };
+  }, [detail?.participants, t?.assignee]);
   const typeMeta = detail?.typeDetails?.find((d) => d.label === currentType);
   const escalateTypeMeta = detail?.typeDetails?.find((d) => d.label === escalateType);
 
@@ -999,51 +1136,71 @@ export default function TicketDetailModalShell({
 
                 <section className="space-y-3 rounded-xl border border-white/10 bg-[#14151c] p-4">
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Involved</p>
-                    <p className="mt-1 text-[11px] text-zinc-500">People who joined this ticket and sent a reply.</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Who's involved</p>
+                    <p className="mt-1 text-[11px] text-zinc-500">Staff and other users on this ticket.</p>
                   </div>
-                  {(detail.involved || []).length === 0 ? (
-                    <p className="text-xs text-zinc-500">No one has replied yet.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {(detail.involved || []).map((person) => (
-                        <li key={`involved-${person.accountId}`} className="rounded-lg border border-white/10 px-3 py-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-white">{person.name}</p>
-                              <p className="truncate text-[11px] text-zinc-500">
-                                {person.handle ? `@${person.handle}` : 'No handle'}
-                                {person.isRequester ? ' · Opened ticket' : ''}
-                                {person.isStaff ? ' · Staff' : ''}
-                                {person.status !== 'active' ? ' · Removed' : ''}
-                              </p>
-                            </div>
-                            <p className="shrink-0 text-[11px] text-zinc-400">
-                              {person.replyCount} {person.replyCount === 1 ? 'reply' : 'replies'}
-                            </p>
-                          </div>
-                          <p className="mt-1 text-[11px] text-zinc-600">Last reply {formatDateTime(person.lastReplyAt)}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-200/80">Staff</p>
+                    {involvedGroups.staff.length === 0 ? (
+                      <p className="mt-1 text-xs text-zinc-500">No staff on this ticket yet.</p>
+                    ) : (
+                      <ul className="mt-1.5 space-y-1.5">
+                        {involvedGroups.staff.map((person) => {
+                          const isAssignee = Boolean(t?.assignee?.accountId) && String(person.accountId) === String(t?.assignee?.accountId);
+                          return (
+                            <li key={`staff-${person.accountId}`} className="text-xs text-zinc-200">
+                              <span className="font-medium text-white">{person.name}</span>
+                              <span className="text-zinc-500">
+                                {person.handle ? ` · @${person.handle}` : ''}
+                                {isAssignee ? ` · ${t?.assignee?.role || 'Assigned'}` : ' · Staff'}
+                                {person.replyCount > 0 ? ` · ${person.replyCount} ${person.replyCount === 1 ? 'reply' : 'replies'}` : ''}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200/80">Users</p>
+                    {involvedGroups.users.length === 0 ? (
+                      <p className="mt-1 text-xs text-zinc-500">No other users on this ticket.</p>
+                    ) : (
+                      <ul className="mt-1.5 space-y-1.5">
+                        {involvedGroups.users.map((person) => (
+                          <li key={`user-${person.accountId}`} className="text-xs text-zinc-200">
+                            <span className="font-medium text-white">{person.name}</span>
+                            <span className="text-zinc-500">
+                              {person.handle ? ` · @${person.handle}` : ''}
+                              {person.isRequester ? ' · Opened ticket' : ' · Added'}
+                              {person.replyCount > 0 ? ` · ${person.replyCount} ${person.replyCount === 1 ? 'reply' : 'replies'}` : ''}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
 
                   <div className="border-t border-white/10 pt-3">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">On this ticket</p>
                     <ul className="mt-2 space-y-1.5">
-                      {(detail.participants || []).map((person) => (
+                      {(detail.participants || []).map((person) => {
+                        const isAssignee = Boolean(t.assignee?.accountId) && String(person.accountId) === String(t.assignee?.accountId);
+                        const locked = person.isRequester || isAssignee;
+                        return (
                         <li key={`member-${person.accountId}`} className="flex items-center justify-between gap-2 text-xs">
                           <span className="min-w-0 truncate text-zinc-300">
                             {person.name}
                             <span className="text-zinc-600">
-                              {person.isRequester ? ' · requester' : person.isStaff ? ' · staff' : ''}
+                              {person.isRequester ? ' · opened ticket' : ''}
+                              {isAssignee ? ' · assigned' : person.isStaff && !isAssignee ? ' · staff' : ''}
                             </span>
                           </span>
-                          {detail.canManageParticipants && !person.isRequester && person.status === 'active' ? (
+                          {detail.canManageParticipants && !locked && person.status === 'active' ? (
                             <button
                               type="button"
                               disabled={personBusy}
-                              onClick={() => void changeParticipant(person.accountId, 'remove')}
+                              onClick={() => setConfirmRemove({ accountId: person.accountId, name: person.name })}
                               className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
                             >
                               <UserMinus className="h-3 w-3" />
@@ -1051,10 +1208,11 @@ export default function TicketDetailModalShell({
                             </button>
                           ) : null}
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
                     {detail.canManageParticipants ? (
-                      <p className="mt-2 text-[11px] text-zinc-600">The person who opened the ticket stays on it.</p>
+                      <p className="mt-2 text-[11px] text-zinc-600">The person who opened the ticket and the assigned staff member stay on it.</p>
                     ) : null}
                   </div>
 
@@ -1246,7 +1404,35 @@ export default function TicketDetailModalShell({
                       ))}
                     </div>
                   )}
-                  <Field label="Status">
+                  <Field label="Status" hint={t.status === 'Closed' ? 'This ticket is closed. A transcript is saved when it closes.' : undefined}>
+                    {t.status !== 'Closed' ? (
+                      <CloseTimer
+                        closesAt={detail.scheduledCloseAt || detail.autoClosesAt}
+                        scheduled={Boolean(detail.scheduledCloseAt)}
+                      />
+                    ) : null}
+                    {t.status !== 'Closed' ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          disabled={schedulingClose}
+                          onClick={openSchedule}
+                          className="w-fit rounded-lg border border-amber-400/40 px-2.5 py-1.5 text-xs text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
+                        >
+                          {detail.scheduledCloseAt ? 'Change close time' : 'Schedule close'}
+                        </button>
+                        {detail.scheduledCloseAt ? (
+                          <button
+                            type="button"
+                            disabled={schedulingClose}
+                            onClick={() => void scheduleClose(true)}
+                            className="w-fit rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-50"
+                          >
+                            {schedulingClose ? 'Cancelling…' : 'Cancel scheduled close'}
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {statusControl === 'buttons' ? (
                       <div
                         className="flex flex-wrap gap-1.5"
@@ -1319,7 +1505,12 @@ export default function TicketDetailModalShell({
                           </option>
                         ))}
                     </select>
-                    {assigneeLocked && (
+                    {ticketClosed && (
+                      <p className="mt-1 text-[11px] text-zinc-500">
+                        This ticket is closed. Open it again before anyone can claim it.
+                      </p>
+                    )}
+                    {assigneeLocked && !ticketClosed && (
                       <p className="mt-1 text-[11px] text-zinc-500">
                         Handler is locked. The assigned moderator must release the case before it can
                         be claimed by someone else.
@@ -1367,9 +1558,7 @@ export default function TicketDetailModalShell({
                     <div>
                       <p className="text-[10px] font-semibold tracking-wide text-amber-200/80">Move to another group</p>
                       <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-                        {allowEscalateToAdmin
-                          ? 'Any moderator can move this ticket to the right group and type. Moving it unassigns the current handler. Use Escalated to Dev when engineering needs to fix it without closing the ticket.'
-                          : 'Any moderator can move this ticket to the right group and type. Moving it unassigns the current handler.'}
+                        Any moderator can move this ticket to the right group and type. Moving it unassigns the current handler.
                       </p>
                     </div>
                     {allowEscalateToAdmin && (
@@ -1476,9 +1665,19 @@ export default function TicketDetailModalShell({
                     </span>
                   )}
                 </div>
-                {t.lastMessageAt && (
-                  <p className="text-[11px] text-zinc-600">Last {formatDateTime(t.lastMessageAt)}</p>
-                )}
+                <div className="flex items-center gap-3">
+                  {t.lastMessageAt && (
+                    <p className="text-[11px] text-zinc-600">Last {formatDateTime(t.lastMessageAt)}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowTranscript(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-zinc-200 hover:bg-white/5"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    Transcript
+                  </button>
+                </div>
               </div>
 
               <div ref={threadRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
@@ -1508,7 +1707,7 @@ export default function TicketDetailModalShell({
                       own={Boolean(viewerAccountId) && String(m.senderId || '') === String(viewerAccountId)}
                       busy={saving}
                       replyQuote={quoteFor(m.replyToId)}
-                      onReply={() => setReplyTarget(m)}
+                      onReply={canReply ? () => setReplyTarget(m) : undefined}
                       onJumpToReply={jumpToMessage}
                       onDelete={() => removeMessage(m.id)}
                       onToggleInternal={(isInternal) => changeMessage(m.id, { isInternal })}
@@ -1519,6 +1718,29 @@ export default function TicketDetailModalShell({
               </div>
 
               <div className="shrink-0 border-t border-white/10 bg-[#0f1016] p-4">
+                {!canReply ? (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                    <p className="text-sm text-zinc-200">
+                      {ticketClosed
+                        ? 'This ticket is closed. Open it again before replying.'
+                        : ticketAssigneeId
+                        ? 'Only the assigned staff member can reply on this ticket.'
+                        : 'Claim this ticket before replying. No one is assigned yet.'}
+                    </p>
+                    {canAssignMyself && (
+                      <button
+                        type="button"
+                        onClick={() => void assignMyself()}
+                        disabled={saving}
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 px-4 py-2 text-sm font-medium text-sky-100 hover:bg-sky-500/25 disabled:opacity-50"
+                      >
+                        <Hand className="h-4 w-4" />
+                        Assign myself
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                <>
                 {(() => {
                   const thread = (detail.messages || []).filter(
                     (message) =>
@@ -1621,11 +1843,258 @@ export default function TicketDetailModalShell({
                   </button>
                   </div>
                 </div>
+                </>
+                )}
               </div>
             </section>
           </div>
         ) : (
           <p className="py-16 text-center text-zinc-500">Ticket not found.</p>
+        )}
+
+        {showTranscript && t && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 p-4">
+            <div className="flex max-h-[85%] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#14151c] shadow-2xl">
+              <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Ticket transcript</p>
+                  <h3 className="mt-1 text-lg font-semibold text-white">{t.number}</h3>
+                  <p className="mt-1 text-sm text-zinc-400">{t.subject}</p>
+                  {detail.savedTranscript?.createdAt ? (
+                    <p className="mt-1 text-[11px] text-emerald-200/80">Saved transcript · {formatDateTime(detail.savedTranscript.createdAt)}</p>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-zinc-500">Generate transcript to save a copy you can read, copy, or download here.</p>
+                  )}
+                </div>
+                <button type="button" onClick={() => setShowTranscript(false)} aria-label="Close transcript" className="text-zinc-400 hover:text-white">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-violet-400/30 bg-violet-500/10 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-200">Staff</p>
+                    {involvedGroups.staff.length === 0 ? (
+                      <p className="mt-2 text-xs text-zinc-400">None</p>
+                    ) : (
+                      <ul className="mt-2 space-y-1">
+                        {involvedGroups.staff.map((person) => (
+                          <li key={`transcript-staff-${person.accountId}`} className="text-sm text-white">
+                            {person.name}
+                            <span className="text-xs text-violet-100/70">{person.handle ? ` @${person.handle}` : ''}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="rounded-xl border border-sky-400/30 bg-sky-500/10 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200">Users</p>
+                    {involvedGroups.users.length === 0 ? (
+                      <p className="mt-2 text-xs text-zinc-400">None</p>
+                    ) : (
+                      <ul className="mt-2 space-y-1">
+                        {involvedGroups.users.map((person) => (
+                          <li key={`transcript-user-${person.accountId}`} className="text-sm text-white">
+                            {person.name}
+                            <span className="text-xs text-sky-100/70">
+                              {person.handle ? ` @${person.handle}` : ''}
+                              {person.isRequester ? ' · opened ticket' : ''}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+                {detail.savedTranscript?.text ? (
+                  /^\s*<!doctype html/i.test(detail.savedTranscript.text) || /^\s*<html/i.test(detail.savedTranscript.text) ? (
+                    <iframe
+                      title="Saved ticket transcript"
+                      sandbox=""
+                      srcDoc={detail.savedTranscript.text}
+                      className="h-[28rem] w-full rounded-xl border border-white/10 bg-white"
+                    />
+                  ) : (
+                    <pre className="whitespace-pre-wrap rounded-xl border border-white/10 bg-[#0f1016] p-4 text-sm leading-relaxed text-zinc-100">{detail.savedTranscript.text}</pre>
+                  )
+                ) : (
+                <div className="space-y-3">
+                  {detail.messages.filter((message) => !message.isUnsent).map((message) => (
+                    <div key={`transcript-${message.id}`} className="border-b border-white/5 pb-3">
+                      <p className="text-[11px] text-zinc-500">
+                        {formatDateTime(message.createdAt)} · {message.authorName}
+                        {message.isInternal ? ' · internal note' : ''}
+                        {String(message.authorType).toLowerCase() === 'system' ? ' · system' : ''}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-100">{message.body || (message.attachments?.length ? 'Attachment' : '')}</p>
+                    </div>
+                  ))}
+                </div>
+                )}
+              </div>
+              <div className="flex justify-end gap-2 border-t border-white/10 px-5 py-3">
+                <button
+                  type="button"
+                  disabled={savingTranscript}
+                  onClick={() => void saveTranscript()}
+                  className="rounded-xl border border-sky-400/40 px-3 py-2 text-sm text-sky-100 hover:bg-sky-500/10 disabled:opacity-50"
+                >
+                  {savingTranscript ? 'Saving…' : 'Generate transcript'}
+                </button>
+                {detail.savedTranscript?.text ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const blob = new Blob([detail.savedTranscript?.text || ''], { type: 'text/html' });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.download = `${t.number || 'ticket'}-transcript.html`;
+                      link.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-200 hover:bg-white/5"
+                  >
+                    Download
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (detail.savedTranscript?.text) {
+                      void navigator.clipboard.writeText(detail.savedTranscript.text).then(
+                        () => showSuccessToast('Transcript copied'),
+                        () => showErrorToast('Could not copy the transcript')
+                      );
+                      return;
+                    }
+                    const lines = [
+                      `Ticket ${t.number}`,
+                      t.subject,
+                      '',
+                      'Staff',
+                      ...(involvedGroups.staff.length ? involvedGroups.staff.map((person) => `- ${person.name}${person.handle ? ` (@${person.handle})` : ''}`) : ['- None']),
+                      '',
+                      'Users',
+                      ...(involvedGroups.users.length ? involvedGroups.users.map((person) => `- ${person.name}${person.handle ? ` (@${person.handle})` : ''}${person.isRequester ? ' (opened ticket)' : ''}`) : ['- None']),
+                      '',
+                      'Transcript',
+                      ...detail.messages.filter((message) => !message.isUnsent).map((message) => {
+                        const label = message.isInternal ? 'internal note' : String(message.authorType).toLowerCase() === 'system' ? 'system' : 'message';
+                        return `[${formatDateTime(message.createdAt)}] ${message.authorName} (${label}): ${message.body || (message.attachments?.length ? 'Attachment' : '')}`;
+                      }),
+                    ];
+                    void navigator.clipboard.writeText(lines.join('\n')).then(
+                      () => showSuccessToast('Transcript copied'),
+                      () => showErrorToast('Could not copy the transcript')
+                    );
+                  }}
+                  className="rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-200 hover:bg-white/5"
+                >
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTranscript(false)}
+                  className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-black"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {confirmRemove && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-red-500/30 bg-[#14151c] p-5 shadow-2xl">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-red-200/80">Confirm remove</p>
+              <h3 className="mt-2 text-lg font-semibold text-white">Remove {confirmRemove.name}?</h3>
+              <p className="mt-2 text-sm text-zinc-400">They will leave this ticket and will not be able to open it.</p>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={personBusy}
+                  onClick={() => setConfirmRemove(null)}
+                  className="rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={personBusy}
+                  onClick={() => void changeParticipant(confirmRemove.accountId, 'remove')}
+                  className="rounded-xl bg-red-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  {personBusy ? 'Removing…' : 'Remove'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {confirmSchedule && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-[#14151c] p-5 shadow-2xl">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">Schedule close</p>
+              <h3 className="mt-2 text-lg font-semibold text-white">When should this ticket close?</h3>
+              <p className="mt-2 text-sm text-zinc-400">
+                The chat and the people on this ticket are notified now. They are notified again when it closes, and a transcript is saved.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {[
+                  ['1', '1 hour'],
+                  ['6', '6 hours'],
+                  ['24', '1 day'],
+                  ['72', '3 days'],
+                  ['168', '7 days'],
+                  ['custom', 'Custom'],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setScheduleChoice(value)}
+                    className={`rounded-lg border px-2.5 py-1.5 text-xs ${
+                      scheduleChoice === value
+                        ? 'border-amber-400/50 bg-amber-500/15 text-amber-100'
+                        : 'border-white/10 text-zinc-300 hover:bg-white/5'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {scheduleChoice === 'custom' ? (
+                <input
+                  type="datetime-local"
+                  value={customCloseAt}
+                  onChange={(event) => setCustomCloseAt(event.target.value)}
+                  className="mt-3 w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white"
+                />
+              ) : null}
+              <p className="mt-3 text-xs text-zinc-400">
+                Closes {formatDateTime(chosenCloseIso())}
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={schedulingClose}
+                  onClick={() => setConfirmSchedule(false)}
+                  className="rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={schedulingClose}
+                  onClick={() => void scheduleClose(false)}
+                  className="rounded-xl bg-amber-500 px-3 py-2 text-sm font-medium text-black disabled:opacity-50"
+                >
+                  {schedulingClose ? 'Scheduling…' : 'Set close time'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {confirmPerson && (

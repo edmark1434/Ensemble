@@ -277,7 +277,6 @@ async function createSupportTicket(input, session = null) {
 
   const type = normalizeTicketType(input?.type || input?.category || 'Other');
   const priority = resolveTicketPriority(type, input?.priority);
-  const status = normalizeTicketStatus(input?.status || 'Open');
   const requesterAccountId = input?.requesterAccountId || sessionAccountId(session);
   if (!requesterAccountId) throw new Error('Requester account is required');
 
@@ -290,6 +289,7 @@ async function createSupportTicket(input, session = null) {
   const ticketNumber = await nextTicketNumber();
   const handledBy =
     input?.handledByStaffId ?? input?.assignedStaffId ?? null;
+  const status = handledBy ? 'In Progress' : 'Open';
 
   const insert = await pool.query(
     `
@@ -348,7 +348,9 @@ async function createSupportTicket(input, session = null) {
       username: sessionDisplayName(session),
     };
     try {
-      await addTicketMessage(ticketId, description, authorSession, false, input?.attachments || []);
+      await addTicketMessage(ticketId, description, authorSession, false, input?.attachments || [], null, {
+        initial: true,
+      });
     } catch (err) {
       // Ticket metadata still exists; chat can be started later when Mongo is up.
       if (!err?.message?.includes('MongoDB')) throw err;
@@ -453,8 +455,9 @@ async function getTicketsOverview(staffSession = null) {
     pool.query(`
       SELECT
         COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE status = 'Open')::int AS open_count,
-        COUNT(*) FILTER (WHERE status = 'In Progress')::int AS in_progress,
+        COUNT(*) FILTER (WHERE status = 'Open')::int AS open_status,
+        COUNT(*) FILTER (WHERE status NOT IN ('Resolved', 'Closed'))::int AS open_count,
+        COUNT(*) FILTER (WHERE status NOT IN ('Resolved', 'Closed'))::int AS in_progress,
         COUNT(*) FILTER (WHERE status = 'Escalated to Dev')::int AS escalated_dev,
         COUNT(*) FILTER (WHERE status IN ('Resolved', 'Closed'))::int AS resolved,
         COUNT(*) FILTER (
@@ -532,10 +535,9 @@ async function getTicketsOverview(staffSession = null) {
   const rc = reportCounts.rows[0];
 
   const statusChart = [
-    { label: 'Open', value: Number(tc.open_count), color: '#f87171' },
-    { label: 'In Progress', value: Number(tc.in_progress), color: '#fbbf24' },
-    { label: 'Escalated to Dev', value: Number(tc.escalated_dev), color: '#38bdf8' },
-    { label: 'Resolved', value: Number(tc.resolved), color: '#34d399' },
+    { label: 'Open', value: Number(tc.open_status || 0), color: '#fb7185' },
+    { label: 'In Progress', value: Math.max(0, Number(tc.in_progress) - Number(tc.open_status || 0)), color: '#fbbf24' },
+    { label: 'Closed', value: Number(tc.resolved), color: '#a1a1aa' },
   ].filter((x) => x.value > 0);
 
   const catalog = await getTicketCatalog();
@@ -1138,6 +1140,7 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
       ru.email_address AS requester_email,
       ru.user_id AS requester_user_id,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
+      st.account_id AS assignee_account_id,
       st.role AS assignee_role,
       COALESCE(ea.display_name, es.first_name || ' ' || es.last_name) AS escalated_by_name,
       es.role AS escalated_by_role
@@ -1347,7 +1350,562 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     involved,
     pendingInvites,
     canManageParticipants: Boolean(staffSession) && isStaffSession(staffSession),
+    savedTranscript: await latestTicketTranscript(ticketId),
+    autoClosesAt: ticketAutoClosesAt(ticket),
+    scheduledCloseAt: row.scheduled_close_at || null,
   };
+}
+
+async function latestTicketTranscript(ticketId) {
+  try {
+    const result = await pool.query(
+      `SELECT metadata, created_at
+       FROM ticket_events
+       WHERE ticket_id = $1 AND event_type = 'transcript'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [ticketId]
+    );
+    const row = result.rows[0];
+    let metadata = row?.metadata;
+    if (typeof metadata === 'string') {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch (error) {
+        metadata = null;
+      }
+    }
+    const text = metadata?.transcript;
+    if (!text) return null;
+    return { text: String(text), createdAt: row.created_at };
+  } catch (error) {
+    return null;
+  }
+}
+
+function escapeTranscriptHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function buildTicketSummary(detail, staff, users, messages) {
+  const ticket = detail.ticket || {};
+  const opener = users.find((person) => person.isRequester) || users[0];
+  const publicMessages = messages.filter((message) => !message.isInternal && String(message.authorType || '').toLowerCase() !== 'system');
+  const first = publicMessages[0];
+  const last = publicMessages[publicMessages.length - 1];
+  const staffNames = staff.map((person) => person.name).filter(Boolean);
+  const userNames = users.map((person) => person.name).filter(Boolean);
+  const sentences = [];
+  sentences.push(`${opener ? opener.name : 'A member'} opened ticket ${ticket.number || ''} about ${ticket.subject || 'a support request'}.`.replace(/\s+/g, ' ').trim());
+  sentences.push(`Status: ${ticket.status || 'In Progress'}. Priority: ${ticket.priority || 'Medium'}.`);
+  sentences.push(staffNames.length ? `Staff involved: ${staffNames.join(', ')}.` : 'No staff member is listed on this ticket.');
+  sentences.push(userNames.length ? `Users involved: ${userNames.join(', ')}.` : 'No other users are listed on this ticket.');
+  sentences.push(`${publicMessages.length} message${publicMessages.length === 1 ? '' : 's'} are in this transcript.`);
+  if (first?.body) sentences.push(`It started with: ${String(first.body).replace(/\s+/g, ' ').trim().slice(0, 240)}`);
+  if (last?.body && last !== first) sentences.push(`The latest reply from ${last.authorName || 'someone'} was: ${String(last.body).replace(/\s+/g, ' ').trim().slice(0, 240)}`);
+  return sentences.join(' ');
+}
+
+function transcriptInitials(name) {
+  const parts = String(name || '?').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  const letters = parts.map((part) => part[0]).join('').toUpperCase();
+  return letters || '?';
+}
+
+function transcriptSpeaker(message) {
+  if (message.isInternal) return { side: 'note', label: 'Internal note' };
+  const type = String(message.authorType || message.messageType || '').toLowerCase();
+  if (type === 'system') return { side: 'system', label: 'System' };
+  if (type === 'staff' || message.isStaff) return { side: 'staff', label: 'Staff' };
+  return { side: 'user', label: 'User' };
+}
+
+function formatTranscriptWhen(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function transcriptDayKey(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function transcriptReadableText(value) {
+  const escaped = escapeTranscriptHtml(value);
+  return escaped
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')
+    .replace(/\n/g, '<br>');
+}
+
+function transcriptAttachmentName(file) {
+  if (!file || typeof file !== 'object') return 'Attachment';
+  return file.attachment_name || file.name || file.filename || 'Attachment';
+}
+
+function renderTicketTranscript(detail) {
+  const people = (detail.participants || []).filter((person) => person.status === 'active' || person.isRequester);
+  const staff = people.filter((person) => person.isStaff);
+  const users = people.filter((person) => !person.isStaff);
+  const messages = (detail.messages || []).filter((message) => !message.isUnsent);
+  const ticket = detail.ticket || {};
+  const summary = buildTicketSummary(detail, staff, users, messages);
+  const byId = new Map(messages.map((message) => [String(message.id), message]));
+  let lastDay = '';
+  const thread = messages.map((message) => {
+    const speaker = transcriptSpeaker(message);
+    const name = message.authorName || 'Unknown';
+    const when = formatTranscriptWhen(message.createdAt);
+    const day = transcriptDayKey(message.createdAt);
+    const dayBreak = day && day !== lastDay ? `<div class="day"><span>${escapeTranscriptHtml(day)}</span></div>` : '';
+    if (day) lastDay = day;
+    const body = message.body || (message.attachments?.length ? '' : '');
+    const parent = message.replyToId ? byId.get(String(message.replyToId)) : null;
+    const quote = parent
+      ? `<blockquote><strong>${escapeTranscriptHtml(parent.authorName || 'Message')}</strong><span>${transcriptReadableText(String(parent.body || 'Attachment').replace(/\s+/g, ' ').trim().slice(0, 180))}</span></blockquote>`
+      : '';
+    const files = (message.attachments || []).map((file) => (
+      `<li>${escapeTranscriptHtml(transcriptAttachmentName(file))}</li>`
+    )).join('');
+    const fileList = files ? `<ul class="files">${files}</ul>` : '';
+    if (speaker.side === 'system') {
+      return `${dayBreak}<p class="system"><span>System</span> ${transcriptReadableText(body || 'Update')}</p>`;
+    }
+    return `${dayBreak}<div class="row ${speaker.side}">
+      <article class="bubble ${speaker.side}">
+        <header>
+          <span class="avatar" aria-hidden="true">${escapeTranscriptHtml(transcriptInitials(name))}</span>
+          <span class="name">${escapeTranscriptHtml(name)}</span>
+          <span class="chip">${speaker.label}</span>
+          ${message.isEdited ? '<span class="chip quiet">Edited</span>' : ''}
+          <time>${escapeTranscriptHtml(when)}</time>
+        </header>
+        ${quote}
+        ${body ? `<p>${transcriptReadableText(body)}</p>` : ''}
+        ${fileList}
+      </article>
+    </div>`;
+  }).join('');
+  const personCard = (person) => {
+    const note = person.isRequester ? 'Opened the ticket' : person.isStaff ? 'Staff' : 'User';
+    const handle = person.handle ? `@${person.handle}` : 'No handle';
+    return `<article class="person">
+      <span class="avatar" aria-hidden="true">${escapeTranscriptHtml(transcriptInitials(person.name))}</span>
+      <div>
+        <strong>${escapeTranscriptHtml(person.name || 'Unknown')}</strong>
+        <p>${escapeTranscriptHtml(handle)} · ${escapeTranscriptHtml(note)}</p>
+      </div>
+    </article>`;
+  };
+  const summaryHtml = String(summary)
+    .split(/(?<=\.)\s+/)
+    .filter(Boolean)
+    .map((sentence) => `<p>${escapeTranscriptHtml(sentence)}</p>`)
+    .join('');
+  const meta = [
+    ticket.status,
+    ticket.priority ? `${ticket.priority} priority` : '',
+    ticket.type || '',
+    `${messages.length} message${messages.length === 1 ? '' : 's'}`,
+  ].filter(Boolean);
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeTranscriptHtml(ticket.number || 'Ticket')} transcript</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #eef1f4; color: #1c1c1f; font: 15px/1.55 system-ui, sans-serif; }
+    main { max-width: 820px; margin: 0 auto; padding: 28px 16px 72px; }
+    header.ticket { margin-bottom: 18px; padding: 20px; background: #fff; border: 1px solid #e4e4e7; border-radius: 16px; }
+    h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.02em; }
+    .subject { margin: 0; color: #3f3f46; font-size: 16px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+    .meta li { padding: 4px 8px; border-radius: 999px; background: #f4f4f5; color: #3f3f46; font-size: 12px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; color: #52525b; font-size: 12px; }
+    .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 999px; vertical-align: -1px; }
+    .legend .user { background: #fff; border: 1px solid #d4d4d8; }
+    .legend .staff { background: #dbe7f6; }
+    .legend .note { background: #f6e7c1; }
+    .thread { display: flex; flex-direction: column; gap: 10px; }
+    .day { display: flex; justify-content: center; margin: 8px 0; }
+    .day span { padding: 4px 10px; border-radius: 999px; background: #fff; color: #71717a; font-size: 12px; }
+    .row { display: flex; }
+    .row.user { justify-content: flex-start; }
+    .row.staff { justify-content: flex-end; }
+    .row.note { justify-content: center; }
+    .bubble { width: min(100%, 520px); padding: 12px 14px; border-radius: 16px; background: #fff; border: 1px solid #e4e4e7; }
+    .bubble.staff { background: #e7f0fb; border-color: #c9daf0; }
+    .bubble.note { width: min(100%, 640px); background: #fff8e8; border-color: #ead7a2; }
+    .bubble header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+    .avatar { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; background: #18181b; color: #fff; font-size: 11px; font-weight: 700; }
+    .bubble.staff .avatar { background: #1d4f91; }
+    .bubble.note .avatar { background: #8a5a12; }
+    .name { font-weight: 650; }
+    .chip { padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,0.06); font-size: 11px; }
+    .chip.quiet { color: #71717a; }
+    time { margin-left: auto; color: #71717a; font-size: 12px; }
+    .bubble p { margin: 0; white-space: normal; overflow-wrap: anywhere; }
+    blockquote { margin: 0 0 8px; padding: 8px 10px; border-left: 3px solid #a1a1aa; background: rgba(255,255,255,0.65); border-radius: 8px; color: #3f3f46; font-size: 13px; }
+    blockquote strong { display: block; font-size: 12px; }
+    .files { margin: 8px 0 0; padding-left: 18px; color: #3f3f46; font-size: 13px; }
+    .system { align-self: center; max-width: 640px; margin: 0; padding: 8px 12px; border-radius: 999px; background: #fff; color: #52525b; text-align: center; font-size: 13px; }
+    .system span { margin-right: 6px; font-weight: 650; }
+    a { color: #1d4f91; }
+    .end { margin-top: 28px; padding: 18px; background: #fff; border: 1px solid #e4e4e7; border-radius: 16px; }
+    .end h2 { margin: 18px 0 8px; font-size: 18px; }
+    .end h2:first-child { margin-top: 0; }
+    .people { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+    .person { display: flex; gap: 10px; align-items: center; padding: 10px; border: 1px solid #e4e4e7; border-radius: 12px; }
+    .person p { margin: 2px 0 0; color: #52525b; font-size: 13px; }
+    .summary p { margin: 0 0 8px; }
+    @media print {
+      body { background: #fff; }
+      .bubble, .person, header.ticket, .end { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="ticket">
+      <h1>${escapeTranscriptHtml(ticket.number || 'Ticket')}</h1>
+      <p class="subject">${escapeTranscriptHtml(ticket.subject || 'Support ticket')}</p>
+      <ul class="meta">${meta.map((item) => `<li>${escapeTranscriptHtml(item)}</li>`).join('')}</ul>
+    </header>
+    <p class="legend"><span><i class="user"></i>User</span><span><i class="staff"></i>Staff</span><span><i class="note"></i>Internal note</span></p>
+    <section class="thread">
+      ${thread || '<p class="system">No messages.</p>'}
+    </section>
+    <section class="end">
+      <h2>People involved</h2>
+      <h3>Staff</h3>
+      <div class="people">${staff.length ? staff.map(personCard).join('') : '<p>None</p>'}</div>
+      <h3>Users</h3>
+      <div class="people">${users.length ? users.map(personCard).join('') : '<p>None</p>'}</div>
+      <h2>Summary</h2>
+      <div class="summary">${summaryHtml}</div>
+    </section>
+  </main>
+</body>
+</html>`;
+}
+
+async function saveTicketCloseTranscript(ticketId, { reason = 'closed', actorStaffId = null, actorAccountId = null } = {}) {
+  try {
+    const detail = await getTicketDetail(ticketId);
+    if (!detail) return null;
+    const transcript = renderTicketTranscript(detail);
+    await recordTicketEvent({
+      ticketId,
+      eventType: 'transcript',
+      summary: reason === 'auto'
+        ? 'Auto-closed the ticket and saved the transcript'
+        : reason === 'manual'
+          ? 'Saved a transcript of this ticket'
+          : 'Saved the transcript when the ticket closed',
+      actorStaffId,
+      actorAccountId,
+      metadata: { transcript, reason },
+    });
+    return transcript;
+  } catch (error) {
+    console.error('Ticket transcript was not saved:', error.message);
+    return null;
+  }
+}
+
+const TICKET_AUTO_CLOSE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function ticketAutoClosesAt(ticket) {
+  if (!ticket || isClosedStatus(ticket.status)) return null;
+  const last = ticket.lastMessageAt || ticket.createdAt;
+  if (!last) return null;
+  return new Date(new Date(last).getTime() + TICKET_AUTO_CLOSE_MS).toISOString();
+}
+
+async function notifyTicketClosed({ ticketId, ticketNumber, requesterAccountId, reason, staffSession }) {
+  const chatId = await getTicketChatId(ticketId);
+  const body = reason === 'auto'
+    ? 'This ticket was closed automatically after 7 days without a reply. A transcript was saved.'
+    : reason === 'scheduled'
+      ? 'This ticket is now closed at the time staff scheduled. A transcript was saved.'
+      : 'This ticket was closed. A transcript was saved.';
+  if (chatId) {
+    await writeTicketMembershipNote(chatId, staffSession || {}, body);
+  }
+  const inbox = chatId ? await loadTicketInbox(chatId) : null;
+  const recipients = new Set();
+  if (requesterAccountId) recipients.add(String(requesterAccountId));
+  for (const member of inbox?.members || []) {
+    if (!ticketMemberIsActive(member)) continue;
+    if (['admin', 'staff', 'moderator'].includes(String(member.role || '').toLowerCase())) continue;
+    recipients.add(String(member.account_id));
+  }
+  const actorId = sessionAccountId(staffSession);
+  if (actorId) recipients.delete(String(actorId));
+  const message = reason === 'auto'
+    ? `Your ticket #${ticketNumber} was closed after 7 days without a reply. Open it to read the transcript.`
+    : reason === 'scheduled'
+      ? `Your ticket #${ticketNumber} is now closed. Open it to read the transcript.`
+      : `Your ticket #${ticketNumber} is closed. Open it to read the transcript.`;
+  const referencePath = chatId ? `/inbox/direct?conversation=${chatId}` : '/notifications';
+  await Promise.all([...recipients].map(async (accountId) => {
+    try {
+      const notification = await createNotificationServices({
+        account_id: accountId,
+        message,
+        is_read: false,
+        reference_table: 'tickets',
+        reference_prefix: 'TICKET_CLOSED',
+        reference_path: referencePath,
+        reference_id: String(ticketId),
+      });
+      const { getIo } = require('../lib/WebSocket');
+      const io = getIo();
+      if (io && notification) io.to(accountId).emit('notification', notification);
+    } catch (error) {
+      console.error('Ticket close notification failed:', error.message);
+    }
+  }));
+}
+
+async function generateTicketTranscript(ticketId, staffSession) {
+  if (!isStaffSession(staffSession)) throw ticketError('Only staff can generate a transcript', 403);
+  const existing = await pool.query(
+    `SELECT ticket_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  if (!existing.rows.length) return null;
+  const staff = await resolveDisputeStaffId(staffSession);
+  await saveTicketCloseTranscript(ticketId, {
+    reason: 'manual',
+    actorStaffId: staff?.staff_id || null,
+    actorAccountId: sessionAccountId(staffSession),
+  });
+  return getTicketDetail(ticketId, staffSession);
+}
+
+async function autoCloseInactiveTickets() {
+  const result = await pool.query(
+    `SELECT ticket_id, account_id, ticket_number
+     FROM tickets
+     WHERE deleted_at IS NULL
+       AND status NOT IN ('Closed', 'Resolved')
+       AND COALESCE(last_message_at, created_at) < NOW() - INTERVAL '7 days'
+     ORDER BY COALESCE(last_message_at, created_at) ASC
+     LIMIT 25`
+  );
+  let closed = 0;
+  for (const row of result.rows) {
+    const updated = await pool.query(
+      `UPDATE tickets
+       SET status = 'Closed',
+           resolved_at = COALESCE(resolved_at, NOW()),
+           updated_at = NOW()
+       WHERE ticket_id = $1
+         AND deleted_at IS NULL
+         AND status NOT IN ('Closed', 'Resolved')
+       RETURNING ticket_id`,
+      [row.ticket_id]
+    );
+    if (!updated.rows.length) continue;
+    await pool.query(
+      `UPDATE tickets SET scheduled_close_at = NULL WHERE ticket_id = $1`,
+      [row.ticket_id]
+    ).catch((error) => {
+      if (error?.code !== '42703') throw error;
+    });
+    await recordTicketEvent({
+      ticketId: row.ticket_id,
+      eventType: 'status',
+      summary: 'Auto-closed after 7 days without activity',
+    });
+    await saveTicketCloseTranscript(row.ticket_id, { reason: 'auto' });
+    await notifyTicketClosed({
+      ticketId: row.ticket_id,
+      ticketNumber: row.ticket_number,
+      requesterAccountId: row.account_id,
+      reason: 'auto',
+      staffSession: null,
+    });
+    closed += 1;
+  }
+  return { closed };
+}
+
+const TICKET_SCHEDULE_MIN_MS = 5 * 60 * 1000;
+const TICKET_SCHEDULE_MAX_MS = 90 * 24 * 60 * 60 * 1000;
+
+function describeCloseDelay(closesAt) {
+  const minutes = Math.max(1, Math.round((new Date(closesAt).getTime() - Date.now()) / 60000));
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.floor(minutes / 60);
+  const remain = minutes % 60;
+  if (hours < 48) {
+    if (!remain) return `${hours} hour${hours === 1 ? '' : 's'}`;
+    return `${hours} hour${hours === 1 ? '' : 's'} ${remain} minute${remain === 1 ? '' : 's'}`;
+  }
+  const days = Math.max(1, Math.round(minutes / (60 * 24)));
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
+function parseScheduledCloseAt(value) {
+  const closesAt = new Date(value);
+  if (!value || Number.isNaN(closesAt.getTime())) throw ticketError('Choose when this ticket should close', 400);
+  const delta = closesAt.getTime() - Date.now();
+  if (delta < TICKET_SCHEDULE_MIN_MS) throw ticketError('Choose a time at least 5 minutes from now', 400);
+  if (delta > TICKET_SCHEDULE_MAX_MS) throw ticketError('Choose a time within 90 days', 400);
+  return closesAt;
+}
+
+async function scheduleTicketClose(ticketId, staffSession, closesAtInput) {
+  if (!isStaffSession(staffSession)) throw ticketError('Only staff can schedule a close', 403);
+  const closesAt = parseScheduledCloseAt(closesAtInput);
+  const existing = await pool.query(
+    `SELECT ticket_id, status, ticket_number, account_id
+     FROM tickets
+     WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  if (!existing.rows.length) return null;
+  const row = existing.rows[0];
+  if (isClosedStatus(row.status)) throw ticketError('This ticket is already closed', 400);
+  try {
+    await pool.query(
+      `UPDATE tickets
+       SET scheduled_close_at = $2, updated_at = NOW()
+       WHERE ticket_id = $1 AND deleted_at IS NULL`,
+      [ticketId, closesAt]
+    );
+  } catch (error) {
+    if (error?.code === '42703') throw ticketError('Run the latest database migration, then try again', 503);
+    throw error;
+  }
+  const name = sessionDisplayName(staffSession) || 'Staff';
+  const delay = describeCloseDelay(closesAt);
+  await recordTicketEvent({
+    ticketId,
+    eventType: 'status',
+    summary: `${name} scheduled this ticket to close in ${delay}`,
+    actorStaffId: (await resolveDisputeStaffId(staffSession))?.staff_id || null,
+    actorAccountId: sessionAccountId(staffSession),
+  });
+  await announceInTicketChat({
+    ticketId,
+    ticket: row,
+    staffSession,
+    body: `${name} set this ticket to close in ${delay}. You will be notified again when it closes.`,
+    prefix: 'TICKET_CLOSE_SCHEDULED',
+  });
+  return getTicketDetail(ticketId, staffSession);
+}
+
+async function cancelScheduledTicketClose(ticketId, staffSession) {
+  if (!isStaffSession(staffSession)) throw ticketError('Only staff can cancel a scheduled close', 403);
+  const existing = await pool.query(
+    `SELECT ticket_id, status, ticket_number, account_id, scheduled_close_at
+     FROM tickets
+     WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  ).catch((error) => {
+    if (error?.code === '42703') throw ticketError('Run the latest database migration, then try again', 503);
+    throw error;
+  });
+  if (!existing.rows.length) return null;
+  const row = existing.rows[0];
+  if (!row.scheduled_close_at) throw ticketError('This ticket is not scheduled to close', 400);
+  await pool.query(
+    `UPDATE tickets SET scheduled_close_at = NULL, updated_at = NOW() WHERE ticket_id = $1`,
+    [ticketId]
+  );
+  const name = sessionDisplayName(staffSession) || 'Staff';
+  await recordTicketEvent({
+    ticketId,
+    eventType: 'status',
+    summary: `${name} cancelled the scheduled close`,
+    actorStaffId: (await resolveDisputeStaffId(staffSession))?.staff_id || null,
+    actorAccountId: sessionAccountId(staffSession),
+  });
+  await announceInTicketChat({
+    ticketId,
+    ticket: row,
+    staffSession,
+    body: `${name} cancelled the scheduled close. This ticket stays open.`,
+    prefix: 'TICKET_CLOSE_SCHEDULED',
+  });
+  return getTicketDetail(ticketId, staffSession);
+}
+
+async function closeScheduledTickets() {
+  let result;
+  try {
+    result = await pool.query(
+      `SELECT ticket_id, account_id, ticket_number
+       FROM tickets
+       WHERE deleted_at IS NULL
+         AND scheduled_close_at IS NOT NULL
+         AND scheduled_close_at <= NOW()
+         AND status NOT IN ('Closed', 'Resolved')
+       ORDER BY scheduled_close_at ASC
+       LIMIT 25`
+    );
+  } catch (error) {
+    if (error?.code === '42703') return { closed: 0 };
+    throw error;
+  }
+  let closed = 0;
+  for (const row of result.rows) {
+    const updated = await pool.query(
+      `UPDATE tickets
+       SET status = 'Closed',
+           scheduled_close_at = NULL,
+           resolved_at = COALESCE(resolved_at, NOW()),
+           updated_at = NOW()
+       WHERE ticket_id = $1
+         AND deleted_at IS NULL
+         AND scheduled_close_at IS NOT NULL
+         AND scheduled_close_at <= NOW()
+         AND status NOT IN ('Closed', 'Resolved')
+       RETURNING ticket_id`,
+      [row.ticket_id]
+    );
+    if (!updated.rows.length) continue;
+    await recordTicketEvent({
+      ticketId: row.ticket_id,
+      eventType: 'status',
+      summary: 'Closed at the time staff scheduled',
+    });
+    await saveTicketCloseTranscript(row.ticket_id, { reason: 'scheduled' });
+    await notifyTicketClosed({
+      ticketId: row.ticket_id,
+      ticketNumber: row.ticket_number,
+      requesterAccountId: row.account_id,
+      reason: 'scheduled',
+      staffSession: null,
+    });
+    closed += 1;
+  }
+  return { closed };
 }
 
 async function saveTicketInvite(chatId, invite) {
@@ -1704,6 +2262,11 @@ async function respondTicketInvite(ticketId, rawAccountId, action) {
   if (decision === 'decline') {
     if (!pending) throw ticketError('This invite is no longer available', 404);
     await clearTicketInvite(chatId, accountId);
+    emitTicketChat('ticketMembershipUpdated', chatId, {
+      conversation_id: String(chatId),
+      account_id: accountId,
+      status: 'declined',
+    });
     return { chatId: null, joined: false };
   }
 
@@ -1721,6 +2284,11 @@ async function respondTicketInvite(ticketId, rawAccountId, action) {
     { account_id: accountId, accountId },
     `${formatAccountIdentity(person)} joined this ticket.`
   );
+  emitTicketChat('ticketMembershipUpdated', chatId, {
+    conversation_id: String(chatId),
+    account_id: accountId,
+    status: 'active',
+  });
   return { chatId, joined: true };
 }
 
@@ -1740,6 +2308,15 @@ async function removeTicketParticipant(ticketId, rawAccountId, staffSession) {
   const ticket = ticketResult.rows[0];
   if (String(ticket.account_id) === accountId) {
     throw ticketError('The person who opened the ticket stays on it', 400);
+  }
+  if (ticket.handled_by_staff_id) {
+    const assignee = await pool.query(
+      `SELECT account_id FROM staff WHERE staff_id = $1`,
+      [ticket.handled_by_staff_id]
+    );
+    if (assignee.rows[0] && String(assignee.rows[0].account_id) === accountId) {
+      throw ticketError('The assigned staff member stays on this ticket', 400);
+    }
   }
 
   const chatId = await getTicketChatId(ticketId);
@@ -1798,7 +2375,7 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
   if (!staff) throw new Error('Could not match your login to a staff profile.');
 
   const fresh = await pool.query(
-    `SELECT handled_by_staff_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    `SELECT handled_by_staff_id, status FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
   );
   if (!fresh.rows.length) return null;
@@ -1806,6 +2383,9 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
   const perms = buildTicketPermissions(row, staff, sessionStaffId(staffSession));
 
   if (action === 'self_assign') {
+    if (isClosedStatus(row.status)) {
+      throw ticketError('Open this ticket before claiming it.', 400);
+    }
     if (!perms.canAssignMyself && !perms.canSelfAssign) {
       throw new Error('You cannot assign this ticket to yourself.');
     }
@@ -1813,10 +2393,21 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
       throw new Error('This ticket already has a handler. They must release the case first.');
     }
     await pool.query(
-      `UPDATE tickets SET handled_by_staff_id = $1, updated_at = NOW()
+      `UPDATE tickets
+       SET handled_by_staff_id = $1,
+           status = CASE WHEN status = 'Open' THEN 'In Progress' ELSE status END,
+           updated_at = NOW()
        WHERE ticket_id = $2 AND deleted_at IS NULL`,
       [staff.staff_id, ticketId]
     );
+    if (normalizeTicketStatus(row.status) === 'Open') {
+      await recordTicketEvent({
+        ticketId,
+        eventType: 'status',
+        summary: 'Status changed from Open to In Progress',
+        actorStaffId: staff.staff_id,
+      });
+    }
     await recordTicketEvent({
       ticketId,
       eventType: 'assign',
@@ -1831,18 +2422,26 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
     if (!perms.canRelease && !perms.isAssignee) {
       throw new Error('Only the current handler can release this case.');
     }
-    if (perms.isAdmin && !perms.isAssignee) {
-      await pool.query(
-        `UPDATE tickets SET handled_by_staff_id = NULL, updated_at = NOW()
-         WHERE ticket_id = $1 AND deleted_at IS NULL`,
-        [ticketId]
-      );
-    } else {
-      await pool.query(
-        `UPDATE tickets SET handled_by_staff_id = NULL, updated_at = NOW()
-         WHERE ticket_id = $1 AND deleted_at IS NULL AND handled_by_staff_id = $2`,
-        [ticketId, staff.staff_id]
-      );
+    const releaseSql = perms.isAdmin && !perms.isAssignee
+      ? `UPDATE tickets
+         SET handled_by_staff_id = NULL,
+             status = CASE WHEN status = 'In Progress' THEN 'Open' ELSE status END,
+             updated_at = NOW()
+         WHERE ticket_id = $1 AND deleted_at IS NULL`
+      : `UPDATE tickets
+         SET handled_by_staff_id = NULL,
+             status = CASE WHEN status = 'In Progress' THEN 'Open' ELSE status END,
+             updated_at = NOW()
+         WHERE ticket_id = $1 AND deleted_at IS NULL AND handled_by_staff_id = $2`;
+    const releaseParams = perms.isAdmin && !perms.isAssignee ? [ticketId] : [ticketId, staff.staff_id];
+    await pool.query(releaseSql, releaseParams);
+    if (normalizeTicketStatus(row.status) === 'In Progress') {
+      await recordTicketEvent({
+        ticketId,
+        eventType: 'status',
+        summary: 'Status changed from In Progress to Open',
+        actorStaffId: staff.staff_id,
+      });
     }
     await recordTicketEvent({
       ticketId,
@@ -1940,6 +2539,22 @@ async function updateTicket(ticketId, patch, staffSession) {
     }
   }
 
+  const nextAssigneeForStatus =
+    patch.handled_by_staff_id !== undefined
+      ? patch.handled_by_staff_id === null || patch.handled_by_staff_id === ''
+        ? null
+        : patch.handled_by_staff_id
+      : currentAssignee;
+  const assignedAfterSave = Boolean(normalizeStaffId(nextAssigneeForStatus));
+  const incomingStatus =
+    patch.status !== undefined ? normalizeTicketStatus(patch.status) : normalizeTicketStatus(currentStatus);
+  let enforcedStatus = incomingStatus;
+  if (!assignedAfterSave && enforcedStatus !== 'Closed') enforcedStatus = 'Open';
+  if (assignedAfterSave && enforcedStatus === 'Open') enforcedStatus = 'In Progress';
+  if (enforcedStatus !== normalizeTicketStatus(currentStatus) || (patch.status !== undefined && normalizeTicketStatus(patch.status) !== enforcedStatus)) {
+    patch.status = enforcedStatus;
+  }
+
   if (patch.status !== undefined) {
     sets.push(`status = $${idx}`);
     values.push(normalizeTicketStatus(patch.status));
@@ -1965,6 +2580,10 @@ async function updateTicket(ticketId, patch, staffSession) {
         : patch.handled_by_staff_id;
     const nextNorm = normalizeStaffId(nextAssignee);
     const curNorm = normalizeStaffId(currentAssignee);
+
+    if (isClosedStatus(currentStatus) && nextNorm && nextNorm !== curNorm) {
+      throw ticketError('Open this ticket before claiming or assigning it.', 400);
+    }
 
     if (curNorm && nextNorm !== curNorm) {
       // Locked while assigned — handler must Release case (or escalate). Admin may override.
@@ -2012,13 +2631,27 @@ async function updateTicket(ticketId, patch, staffSession) {
     );
 
     const actorStaffId = staff?.staff_id || null;
-    if (patch.status && normalizeTicketStatus(patch.status) !== normalizeTicketStatus(currentStatus)) {
+    const nextStatus = patch.status ? normalizeTicketStatus(patch.status) : null;
+    if (nextStatus && nextStatus !== normalizeTicketStatus(currentStatus)) {
       await recordTicketEvent({
         ticketId,
         eventType: 'status',
-        summary: `Status changed from ${currentStatus} to ${normalizeTicketStatus(patch.status)}`,
+        summary: `Status changed from ${normalizeTicketStatus(currentStatus)} to ${nextStatus}`,
         actorStaffId,
       });
+      if (nextStatus === 'Closed' && !isClosedStatus(currentStatus)) {
+        await pool.query(
+          `UPDATE tickets SET scheduled_close_at = NULL WHERE ticket_id = $1`,
+          [ticketId]
+        ).catch((error) => {
+          if (error?.code !== '42703') throw error;
+        });
+        await saveTicketCloseTranscript(ticketId, {
+          reason: 'closed',
+          actorStaffId,
+          actorAccountId: sessionAccountId(staffSession),
+        });
+      }
     }
     if (patch.priority) {
       await recordTicketEvent({
@@ -2077,19 +2710,14 @@ async function updateTicket(ticketId, patch, staffSession) {
 
       // 2. Notify requester on ticket resolution
       const isResolving = patch.status && isClosedStatus(patch.status) && !isClosedStatus(currentStatus);
-      if (isResolving && currentTicket.account_id && notifSettings?.notifyRequesterOnResolution !== false) {
-        const notif = await createNotificationServices({
-          account_id: String(currentTicket.account_id),
-          message: `Your ticket #${currentTicket.ticket_number} has been resolved.`,
-          is_read: false,
-          reference_table: 'tickets',
-          reference_prefix: 'TICKET_RESOLVED',
-          reference_path: `/tickets/${ticketId}`,
-          reference_id: randomUUID(),
+      if (isResolving && currentTicket.account_id) {
+        await notifyTicketClosed({
+          ticketId,
+          ticketNumber: currentTicket.ticket_number,
+          requesterAccountId: currentTicket.account_id,
+          reason: 'closed',
+          staffSession,
         });
-        if (io) {
-          io.to(String(currentTicket.account_id)).emit('notification', notif);
-        }
       }
     } catch (notifErr) {
       console.error('Error dispatching ticket configuration-based notifications:', notifErr.message);
@@ -2104,7 +2732,18 @@ async function updateTicket(ticketId, patch, staffSession) {
   return getTicketDetail(ticketId, staffSession);
 }
 
-async function addTicketMessage(ticketId, body, staffSession, isInternal = false, rawAttachments = [], replyToMessageId = null) {
+function assertStaffMayAnswerTicket(ticketRow, staffSession) {
+  const assigneeId = normalizeStaffId(ticketRow?.handled_by_staff_id);
+  if (!assigneeId) {
+    throw ticketError('Claim this ticket before replying. No one is assigned yet.', 403);
+  }
+  const actorId = normalizeStaffId(sessionStaffId(staffSession));
+  if (!actorId || actorId !== assigneeId) {
+    throw ticketError('Only the assigned staff member can reply on this ticket.', 403);
+  }
+}
+
+async function addTicketMessage(ticketId, body, staffSession, isInternal = false, rawAttachments = [], replyToMessageId = null, options = {}) {
   if (!getMongoClient()) {
     throw new Error('MongoDB is not connected — cannot send ticket chat messages');
   }
@@ -2114,6 +2753,21 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
     [ticketId]
   );
   if (!ticketResult.rows.length) return null;
+  const requesterId = ticketResult.rows[0].account_id;
+  const actorAccountId = sessionAccountId(staffSession);
+  const isRequester = requesterId && actorAccountId && String(requesterId) === String(actorAccountId);
+  if (!options.initial && isClosedStatus(ticketResult.rows[0].status)) {
+    throw ticketError('This ticket is closed. Open it again before replying.', 403);
+  }
+  if (isStaffSession(staffSession) && !options.initial) {
+    if (!isRequester) {
+      const actor = await resolveDisputeStaffId(staffSession);
+      const sessionForCheck = actor?.staff_id
+        ? { ...staffSession, staff_id: actor.staff_id, staffId: actor.staff_id }
+        : staffSession;
+      assertStaffMayAnswerTicket(ticketResult.rows[0], sessionForCheck);
+    }
+  }
 
   const chatId = await ensureTicketChat(ticketId, ticketResult.rows[0]);
   const now = new Date();
@@ -2318,10 +2972,15 @@ async function updateTicketMessage(ticketId, messageId, patch, staffSession) {
   if (!getMongoClient()) throw new Error('MongoDB is not connected — cannot update ticket chat messages');
   if (!isStaffSession(staffSession)) throw new Error('Only staff can change ticket replies');
   const ticketResult = await pool.query(
-    `SELECT ticket_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    `SELECT ticket_id, handled_by_staff_id, account_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
   );
   if (!ticketResult.rows.length) return null;
+  const editor = await resolveDisputeStaffId(staffSession);
+  assertStaffMayAnswerTicket(
+    ticketResult.rows[0],
+    editor?.staff_id ? { ...staffSession, staff_id: editor.staff_id, staffId: editor.staff_id } : staffSession
+  );
 
   const wantsBody = Object.prototype.hasOwnProperty.call(patch || {}, 'body');
   const wantsInternal = Object.prototype.hasOwnProperty.call(patch || {}, 'isInternal');
@@ -2380,10 +3039,15 @@ async function deleteTicketMessage(ticketId, messageId, staffSession) {
   if (!getMongoClient()) throw new Error('MongoDB is not connected — cannot delete ticket chat messages');
   if (!isStaffSession(staffSession)) throw new Error('Only staff can change ticket replies');
   const ticketResult = await pool.query(
-    `SELECT ticket_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    `SELECT ticket_id, handled_by_staff_id, account_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
     [ticketId]
   );
   if (!ticketResult.rows.length) return null;
+  const editor = await resolveDisputeStaffId(staffSession);
+  assertStaffMayAnswerTicket(
+    ticketResult.rows[0],
+    editor?.staff_id ? { ...staffSession, staff_id: editor.staff_id, staffId: editor.staff_id } : staffSession
+  );
 
   const { chatId, message } = await loadOwnedTicketMessage(ticketId, messageId);
   assertOwnTicketReply(message, staffSession);
@@ -3303,6 +3967,11 @@ module.exports = {
   nextTicketNumber,
   nextDisputeNumber,
   updateTicket,
+  autoCloseInactiveTickets,
+  scheduleTicketClose,
+  cancelScheduledTicketClose,
+  closeScheduledTickets,
+  generateTicketTranscript,
   addTicketMessage,
   updateTicketMessage,
   deleteTicketMessage,

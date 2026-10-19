@@ -71,6 +71,10 @@ onUpdateGroupName,
     selectedConversation.conversation_type === "group" &&
     (!currentMember ||
       ["left", "removed"].includes(currentMember.status || "active"));
+  const ticketStatus = String(selectedConversation.ticket_details?.status || "");
+  const ticketClosed =
+    selectedConversation.conversation_type === "ticket" &&
+    (ticketStatus === "Closed" || ticketStatus === "Resolved");
 
   return (
     <div className="flex h-full max-h-full w-full overflow-hidden bg-gray-50 dark:bg-dark-base relative">
@@ -116,6 +120,10 @@ onUpdateGroupName,
           {cannotSendToGroup ? (
             <div className="border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
               You cannot send messages to this group chat anymore.
+            </div>
+          ) : ticketClosed ? (
+            <div className="border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 text-center text-sm text-gray-500 dark:text-zinc-400">
+              This ticket is closed. You cannot reply.
             </div>
           ) : (
           <InboxPanelChatbox

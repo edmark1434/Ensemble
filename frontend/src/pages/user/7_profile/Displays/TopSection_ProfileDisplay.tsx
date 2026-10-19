@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X, Tag, Briefcase, Flag, ImageIcon } from "lucide-react";
 import { bannerPresetUrl } from "@/lib/profileBanners";
+import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 import { ProfileTags } from "../Utilities/ProfileTags.tsx";
 import useGlobalState from "@/lib/global_state";
 
@@ -149,11 +150,18 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             className={`h-28 w-28 rounded-full ring-4 ring-white dark:ring-dark-base bg-gradient-to-br from-gray-200 to-gray-300 dark:from-zinc-700 dark:to-zinc-800 p-0.5 shadow-xl shadow-gray-500/5 ${avatarUrl ? 'cursor-pointer hover:scale-105 transition-transform' : ''}`}
           >
             <div className="h-full w-full rounded-full bg-gray-100 dark:bg-dark-base overflow-hidden flex items-center justify-center">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="Profile Media" className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-3xl font-bold text-gray-400 dark:text-white">{name?.charAt(0)}</span>
-              )}
+              <img
+                src={constructAvatarUrl(avatarUrl, name)}
+                alt={name ? `${name}'s profile avatar` : "Profile Media"}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  const fallback = getFallbackAvatarUrl(name);
+                  if (target.src !== fallback) {
+                    target.src = fallback;
+                  }
+                }}
+              />
             </div>
           </div>
           {isOwner && (

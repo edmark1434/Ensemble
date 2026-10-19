@@ -21,6 +21,7 @@ async function fetchProjectRole(projectId: string): Promise<EditorRole | null | 
     if (res.status === 403) return null;
     if (!res.ok) return undefined;
     const data = await res.json();
+    if (data.frozen) return "Viewer";
     return (data.role as EditorRole | undefined) ?? null;
   } catch {
     return undefined;
