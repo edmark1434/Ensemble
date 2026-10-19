@@ -1,6 +1,7 @@
 // backend/repositories/JobRepositories.js
 const { pool } = require('../lib/Database');
-//jp
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 async function createJobRepositories(jobData) {
     const client = await pool.connect();
     try {
@@ -434,12 +435,32 @@ async function createProposalRepositories(proposalData) {
 
         // 0. Make a unique copy of the Terms of Service for this proposal
         let originalTitle = proposalData.tos_title || 'Custom Terms';
-        let termsId = proposalData.terms_id;
+        let termsId = (typeof proposalData.terms_id === 'string' && UUID_REGEX.test(proposalData.terms_id.trim()))
+            ? proposalData.terms_id.trim()
+            : null;
 
         if (termsId) {
             const origRes = await client.query('SELECT terms_title FROM terms_of_service WHERE terms_id = $1', [termsId]);
             if (origRes.rows.length > 0) {
                 originalTitle = origRes.rows[0].terms_title;
+            }
+        } else {
+            // Fallback to default platform job terms if no valid terms ID provided
+            const defRes = await client.query(
+                `SELECT terms_id, terms_title, terms_description 
+                 FROM terms_of_service 
+                 WHERE terms_type = 'jobs' AND (account_id IS NULL OR account_id = $1)
+                 ORDER BY is_default DESC, created_at ASC LIMIT 1`,
+                [proposalData.freelancer_account_id]
+            );
+            if (defRes.rows.length > 0) {
+                if (!proposalData.tos_title || proposalData.tos_title === 'Custom Terms') {
+                    originalTitle = defRes.rows[0].terms_title;
+                }
+                if (!proposalData.tos_content) {
+                    proposalData.tos_content = defRes.rows[0].terms_description;
+                }
+                termsId = defRes.rows[0].terms_id;
             }
         }
 
@@ -450,6 +471,29 @@ async function createProposalRepositories(proposalData) {
                 [proposalData.freelancer_account_id, `${originalTitle} (Proposal Copy)`, proposalData.tos_content, 'jobs']
             );
             termsId = tosRes.rows[0].terms_id;
+        }
+
+        let targetJobMilestoneId = (typeof proposalData.job_milestone_id === 'string' && UUID_REGEX.test(proposalData.job_milestone_id.trim())) 
+            ? proposalData.job_milestone_id.trim() 
+            : null;
+        if (targetJobMilestoneId) {
+            const milestoneCheck = await client.query(
+                `SELECT jm.slots_count,
+                        (SELECT COUNT(*) FROM proposals p WHERE p.job_milestone_id = jm.job_milestone_id AND p.status = 'Hired' AND p.deleted_at IS NULL) as hired_count
+                 FROM job_milestones jm
+                 WHERE jm.job_milestone_id = $1 AND jm.job_id = $2`,
+                [targetJobMilestoneId, proposalData.job_id]
+            );
+            if (!milestoneCheck.rows[0]) {
+                const error = new Error('The selected milestone role does not exist on this job.');
+                error.statusCode = 400;
+                throw error;
+            }
+            if (Number(milestoneCheck.rows[0].hired_count) >= Number(milestoneCheck.rows[0].slots_count)) {
+                const error = new Error('All openings for this milestone role have already been filled.');
+                error.statusCode = 409;
+                throw error;
+            }
         }
 
         // 1. Insert Proposal
@@ -464,7 +508,7 @@ async function createProposalRepositories(proposalData) {
         const values = [
             proposalData.job_id, proposalData.freelancer_account_id, proposalData.letter,
             proposalData.rate_credits, proposalData.revision_price_credits, 
-            termsId, 'Pending', proposalData.job_milestone_id || null
+            termsId, 'Pending', targetJobMilestoneId
         ];
         const res = await client.query(query, values);
         const proposalId = res.rows[0].proposal_id;
@@ -473,10 +517,16 @@ async function createProposalRepositories(proposalData) {
         if (proposalData.milestones && proposalData.milestones.length > 0) {
             for (let i = 0; i < proposalData.milestones.length; i++) {
                 const m = proposalData.milestones[i];
+                if (!m) continue;
+                const mName = String(m.title || m.name || `Milestone ${i + 1}`).trim().slice(0, 50);
+                const mDesc = String(m.description || '').trim();
+                const mDuration = Math.max(1, parseInt(m.est_hrs || m.duration_hrs || m.hours) || 24);
+                const mMaxRev = Math.max(0, parseInt(m.max_rev || m.no_of_revisions_max || m.revisions) || 0);
+
                 await client.query(
                     `INSERT INTO proposal_milestones (proposal_id, index, name, description, duration_hrs, no_of_revisions_max)
                      VALUES ($1, $2, $3, $4, $5, $6)`,
-                    [proposalId, i, m.title, m.description, m.est_hrs, m.max_rev]
+                    [proposalId, i, mName, mDesc, mDuration, mMaxRev]
                 );
             }
         }

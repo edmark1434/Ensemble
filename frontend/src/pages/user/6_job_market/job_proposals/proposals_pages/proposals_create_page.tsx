@@ -2,7 +2,9 @@ import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { AlertCircle } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
+import api from "@/lib/axios";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
 import { requireVerifiedAccount } from "@/lib/accountVerification";
@@ -68,8 +70,21 @@ const ProposalsCreatePage: React.FC = () => {
   useEffect(() => {
     const loadJob = async () => {
       try {
-        const fetchedJobs = await fetchJobs();
-        const found = fetchedJobs.find((j: any) => j.job_id === id);
+        let found: any = null;
+        try {
+          const singleRes = await api.get(`/api/jobs/${id}`);
+          if (singleRes.data?.data) {
+            found = singleRes.data.data;
+          }
+        } catch {
+          // fallback to list fetch
+        }
+
+        if (!found) {
+          const fetchedJobs = await fetchJobs();
+          found = fetchedJobs.find((j: any) => j.job_id === id);
+        }
+
         if (found) {
           setJob({
             id: found.job_id,
@@ -96,9 +111,10 @@ const ProposalsCreatePage: React.FC = () => {
             thumbnail: found.thumbnail_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${found.thumbnail_path}` : "/placeholder.svg",
             skills: found.tags || [],
             isSaved: found.is_saved || false,
-            isOwnPost: false,
+            isOwnPost: Boolean(found.is_own_post || found.isOwnPost),
+            isManageablePost: Boolean(found.is_manageable_post || found.isManageablePost),
             hiring_type: found.hiring_type || "single",
-            milestones: found.milestones || []
+            milestones: Array.isArray(found.milestones) ? found.milestones : []
           });
           if (found.milestones && found.milestones.length > 0) {
             setSelectedMilestoneId(found.milestones[0].job_milestone_id);
@@ -207,6 +223,8 @@ const ProposalsCreatePage: React.FC = () => {
       if (!actingTeamId) await requireVerifiedAccount();
       if (!id) throw new Error("Job ID is missing.");
       
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
       const payload = {
         job_id: id,
         rate_credits: parseInt(bidAmount),
@@ -214,9 +232,9 @@ const ProposalsCreatePage: React.FC = () => {
         letter: coverLetter,
         tos_title: "Custom Terms",
         tos_content: tosContent,
-        terms_id: selectedTosId || null,  
+        terms_id: (selectedTosId && UUID_REGEX.test(selectedTosId)) ? selectedTosId : null,  
         acting_team_id: actingTeamId || null,
-        job_milestone_id: selectedMilestoneId || null,
+        job_milestone_id: (selectedMilestoneId && UUID_REGEX.test(selectedMilestoneId)) ? selectedMilestoneId : null,
         milestones: milestones.map(m => ({
           title: m.name,
           description: m.description,
@@ -235,6 +253,36 @@ const ProposalsCreatePage: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
+  if (job?.isOwnPost) {
+    return (
+      <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6">
+        <div className="max-w-md w-full p-8 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface text-center space-y-4 shadow-xl">
+          <div className="h-12 w-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center mx-auto">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <h2 className="text-xl font-bold">Cannot Apply to Your Own Job</h2>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 leading-relaxed">
+            You cannot submit a proposal to a job listing posted by your account or an active Team you belong to.
+          </p>
+          <div className="pt-2 flex gap-3">
+            <button
+              onClick={() => navigate("/jobs/postings")}
+              className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer"
+            >
+              Back to Job Market
+            </button>
+            <button
+              onClick={() => navigate(`/jobs/postings/${id}/page`)}
+              className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition shadow-sm cursor-pointer"
+            >
+              View Job Page
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
