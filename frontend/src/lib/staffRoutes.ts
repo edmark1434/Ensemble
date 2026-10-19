@@ -1,3 +1,5 @@
+import { isStaffConsolePath } from "./staffPlatformView";
+
 export const STAFF_PORTAL_DASHBOARD = '/staff/dashboard';
 export const ADMIN_DASHBOARD = '/admin/dashboard';
 export const STAFF_LOGIN_PATH = '/staff';
@@ -39,6 +41,15 @@ export function getStaffPlatformViewPath(role?: string | null): string {
     return '/moderator/jobs/platform-view';
   }
   return '/staff/platform-view';
+}
+
+export function staffPlatformViewHref(consolePath: string, memberPath: string): string {
+  const base = platformViewPathForConsole(consolePath);
+  const target = memberPath.trim();
+  if (!target.startsWith("/") || target.startsWith("//") || isStaffConsolePath(target.split("?")[0])) {
+    return base;
+  }
+  return `${base}?path=${encodeURIComponent(target)}`;
 }
 
 export function platformViewPathForConsole(homeTo: string): string {

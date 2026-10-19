@@ -356,7 +356,11 @@ export default function RouteMiddleware() {
         if (isCheckingSession || resolvedUser?.type !== 'Staff') return;
         if (isStaffPreviewFrame()) return;
         if (isPublicRoute || isTicketFormRoute || isStaffConsolePath(location.pathname) || isOnboardingRoute) return;
-        navigate(getStaffPlatformViewPath(resolvedUser.role), { replace: true });
+        const memberPath = `${location.pathname}${location.search}${location.hash}`;
+        navigate(
+          `${getStaffPlatformViewPath(resolvedUser.role)}?path=${encodeURIComponent(memberPath)}`,
+          { replace: true },
+        );
     }, [isCheckingSession, resolvedUser, isPublicRoute, isTicketFormRoute, isOnboardingRoute, location.pathname, navigate]);
 
     if (onboardingVerificationFailed && !isBannedMember(resolvedUser)) {

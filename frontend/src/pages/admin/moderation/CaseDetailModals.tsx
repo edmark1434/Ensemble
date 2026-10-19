@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { ExternalLink, Hand, Loader2, ShieldAlert, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type { ModerationCase } from './moderationTypes';
 import type { DisputePermissions } from '@/pages/admin/ticketManagement/ticketTypes';
+import { staffPlatformViewHref } from '@/lib/staffRoutes';
 
 function titleCaseLabel(value: string) {
   return String(value || '')
@@ -99,6 +101,7 @@ export function ReportCaseDetailModal({
   endpointBase?: string;
   accent?: 'rose' | 'sky' | 'violet' | 'emerald' | 'amber';
 }) {
+  const location = useLocation();
   const [detail, setDetail] = useState<ReportDetailPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -170,10 +173,6 @@ export function ReportCaseDetailModal({
         status: overrideStatus || status,
         priority,
       };
-      // Resolve/Dismiss should not re-validate assignee assignment.
-      if (!overrideStatus && (!assigneeLocked || perms?.canAssignOthers || perms?.isAdmin)) {
-        payload.assigned_staff_id = assigneeId || null;
-      }
       const res = await api.patch(`${endpointBase}/${reportId}`, payload);
       if (!res.data?.success) throw new Error(res.data?.message || 'Failed to update report');
       showSuccessToast(
@@ -195,7 +194,7 @@ export function ReportCaseDetailModal({
     }
   };
 
-  const decide = async (action: 'sanction' | 'deny' | 'archive', extra: Record<string, unknown> = {}) => {
+  const decide = async (action: 'sanction' | 'deny', extra: Record<string, unknown> = {}) => {
     setSaving(true);
     try {
       const res = await api.patch(`${endpointBase}/${reportId}`, { action, ...extra });
@@ -203,9 +202,7 @@ export function ReportCaseDetailModal({
       showSuccessToast(
         action === 'sanction'
           ? 'Account sanctioned. The reporter has been notified.'
-          : action === 'deny'
-            ? 'Report denied'
-            : 'Report archived'
+          : 'Report denied'
       );
       setSanctionOpen(false);
       await load();
@@ -225,7 +222,7 @@ export function ReportCaseDetailModal({
     try {
       const res = await api.patch(`${endpointBase}/${reportId}`, { action: 'self_assign' });
       if (!res.data?.success) throw new Error(res.data?.message || 'Failed to assign yourself');
-      showSuccessToast('You are now assigned');
+      showSuccessToast('You claimed this report');
       await load();
       onUpdated();
     } catch (err: unknown) {
@@ -297,9 +294,7 @@ export function ReportCaseDetailModal({
                 {detail.subject?.links?.map((link) => (
                   <a
                     key={link.path}
-                    href={link.path}
-                    target="_blank"
-                    rel="noreferrer"
+                    href={staffPlatformViewHref(location.pathname, link.path)}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-sky-200 hover:bg-white/[0.08]"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
@@ -342,9 +337,10 @@ export function ReportCaseDetailModal({
                       <button
                         key={s}
                         type="button"
+                        disabled={!alreadyAssignedToMe}
                         onClick={() => setStatus(s)}
                         aria-pressed={active}
-                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${statusButtonClass(s, active)}`}
+                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${statusButtonClass(s, active)}`}
                       >
                         {titleCaseLabel(s)}
                       </button>
@@ -361,8 +357,9 @@ export function ReportCaseDetailModal({
                 Priority
                 <select
                   value={priority}
+                  disabled={!alreadyAssignedToMe}
                   onChange={(e) => setPriority(e.target.value)}
-                  className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
+                  className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {['low', 'medium', 'high'].map((p) => (
                     <option key={p} value={p}>
@@ -376,7 +373,7 @@ export function ReportCaseDetailModal({
                 <select
                   value={assigneeId}
                   onChange={(e) => setAssigneeId(e.target.value)}
-                  disabled={assigneeLocked}
+                  disabled
                   className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <option value="">Unassigned</option>
@@ -403,9 +400,9 @@ export function ReportCaseDetailModal({
                     Handler is locked. Ask Admin to reassign this report.
                   </span>
                 )}
-                {!assigneeLocked && reportAssigneeId && (perms?.canAssignOthers || perms?.isAdmin) && (
-                  <span className="text-[11px] text-violet-300/80">
-                    Admin can reassign this report freely (no release step).
+                {!alreadyAssignedToMe && (
+                  <span className="text-[11px] text-amber-200/90">
+                    Claim this report before you change it.
                   </span>
                 )}
               </label>
@@ -419,14 +416,14 @@ export function ReportCaseDetailModal({
                 className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 px-4 py-2 text-sm font-medium text-sky-100 hover:bg-sky-500/25 disabled:opacity-50"
               >
                 <Hand className="h-4 w-4" />
-                Assign myself
+                Claim report
               </button>
             )}
 
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                disabled={saving}
+                disabled={saving || !alreadyAssignedToMe}
                 onClick={() => void save()}
                 className={`rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${accentBtn}`}
               >
@@ -446,12 +443,12 @@ export function ReportCaseDetailModal({
                 <div>
                   <p className="text-sm font-medium text-white">Decision</p>
                   <p className="mt-1 text-xs text-zinc-500">
-                    Sanction notifies the reporter. Deny and archive do not.
+                    Sanction notifies the reporter. Deny does not.
                   </p>
                 </div>
-                {!perms?.canAct && (
+                {!alreadyAssignedToMe && (
                   <p className="text-xs text-amber-200/90">
-                    Assign this report to yourself before you sanction, deny, or archive it.
+                    Claim this report before you sanction or deny it.
                   </p>
                 )}
                 {sanctionOpen && (
@@ -495,7 +492,7 @@ export function ReportCaseDetailModal({
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    disabled={saving || !perms?.canAct}
+                    disabled={saving || !alreadyAssignedToMe}
                     onClick={() => {
                       if (!sanctionOpen) {
                         setSanctionReason((current) => current || titleCaseLabel(report.type));
@@ -515,19 +512,11 @@ export function ReportCaseDetailModal({
                   </button>
                   <button
                     type="button"
-                    disabled={saving || !perms?.canAct}
+                    disabled={saving || !alreadyAssignedToMe}
                     onClick={() => void decide('deny')}
                     className="rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:bg-white/[0.04] disabled:opacity-50"
                   >
                     Deny
-                  </button>
-                  <button
-                    type="button"
-                    disabled={saving || !perms?.canAct}
-                    onClick={() => void decide('archive')}
-                    className="rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:bg-white/[0.04] disabled:opacity-50"
-                  >
-                    Archive
                   </button>
                 </div>
               </div>

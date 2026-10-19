@@ -3610,7 +3610,7 @@ async function setDisputeMessageAudience(disputeId, messageId, audience, staffSe
   return getDisputeDetail(disputeId, staffSession);
 }
 
-const REPORT_DECISIONS = new Set(['deny', 'archive', 'sanction']);
+const REPORT_DECISIONS = new Set(['deny', 'sanction']);
 
 function reportDecisionError(message, statusCode = 400) {
   const error = new Error(message);
@@ -3671,15 +3671,18 @@ async function decideReport(reportId, action, patch, staffSession) {
   if (!fresh.rows.length) return null;
   const row = fresh.rows[0];
   const perms = buildReportPermissions(row, staff, staffSession);
-  if (!perms.canAct) {
-    throw reportDecisionError('Assign this report to yourself before you decide it.', 403);
+  if (!perms.isAssignee) {
+    throw reportDecisionError('Claim this report before you decide it.', 403);
   }
   const currentStatus = String(row.status || '').toLowerCase();
   if (CLOSED_REPORT_STATUSES.includes(currentStatus)) {
     throw reportDecisionError('This report is already closed.');
   }
+  if (action !== 'deny' && action !== 'sanction') {
+    throw reportDecisionError('Choose sanction or deny.', 400);
+  }
 
-  let nextStatus = action === 'deny' ? 'denied' : 'archived';
+  let nextStatus = 'denied';
   let violationId = null;
   if (action === 'sanction') {
     const sanction = await applyReportSanction(row, patch, staff.staff_id);
@@ -3779,8 +3782,8 @@ async function updateReport(reportId, patch, staffSession = null) {
     );
     if (!fresh.rows.length) return null;
     const perms = buildReportPermissions(fresh.rows[0], staff, staffSession);
-    if (!perms.isAssignee && !perms.isAdmin) {
-      throw new Error('Only the current handler or Admin can unassign this report.');
+    if (!perms.isAssignee) {
+      throw new Error('Claim this report before you change it.');
     }
 
     await pool.query(
@@ -3811,6 +3814,10 @@ async function updateReport(reportId, patch, staffSession = null) {
   const currentAssignee = fresh.rows[0].assigned_staff_id;
   const staffForAssign = staffSession ? await resolveDisputeStaffId(staffSession) : null;
   const reportPerms = buildReportPermissions(fresh.rows[0], staffForAssign, staffSession);
+  const wantsChange = ['status', 'priority', 'assigned_staff_id'].some((key) => patch[key] !== undefined);
+  if (wantsChange && !reportPerms.isAssignee) {
+    throw reportDecisionError('Claim this report before you change it.', 403);
+  }
 
   if (patch.assigned_staff_id !== undefined) {
     const nextNorm = normalizeStaffId(
@@ -3902,7 +3909,7 @@ function buildReportPermissions(row, staff, session = null) {
     isAssignee,
     isAdmin,
     canView: true,
-    canAct: Boolean(isAdmin || isAssignee || (unassigned && designated)),
+    canAct: Boolean(isAssignee),
     canAssignOthers: Boolean(isAdmin),
     canSelfAssign: Boolean(staffId && designated && !isAssignee && (unassigned || isAdmin)),
     canAssignMyself: Boolean(staffId && designated && !isAssignee && (unassigned || isAdmin)),

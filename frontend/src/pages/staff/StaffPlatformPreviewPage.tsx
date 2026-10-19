@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Eye } from "lucide-react";
-import { STAFF_PREVIEW_NAV_MESSAGE } from "@/lib/staffPlatformView";
+import { memberPreviewPath, STAFF_PREVIEW_NAV_MESSAGE } from "@/lib/staffPlatformView";
 
 const SECTIONS = [
   { label: "Home", path: "/home" },
@@ -20,9 +21,11 @@ function sectionForPath(pathname: string): string {
 }
 
 export default function StaffPlatformPreviewPage() {
-  const [shownPath, setShownPath] = useState("/home");
+  const [searchParams] = useSearchParams();
+  const requestedPath = memberPreviewPath(searchParams.get("path")) || "/home";
+  const [shownPath, setShownPath] = useState(requestedPath);
   const frameRef = useRef<HTMLIFrameElement>(null);
-  const pendingPath = useRef<string | null>(null);
+  const pendingPath = useRef<string | null>(requestedPath === "/home" ? null : requestedPath);
 
   useEffect(() => {
     const timer = window.setInterval(() => syncShownPath(frameRef.current), 500);
@@ -99,9 +102,10 @@ export default function StaffPlatformPreviewPage() {
             </p>
           </div>
           <iframe
+            key={requestedPath}
             ref={frameRef}
             title="Member platform preview"
-            src="/home"
+            src={requestedPath}
             onLoad={(event) => {
               syncShownPath(event.currentTarget);
               const nextPath = pendingPath.current;

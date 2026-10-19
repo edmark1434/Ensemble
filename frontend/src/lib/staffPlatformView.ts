@@ -14,6 +14,18 @@ const ACCOUNT_ONLY_PATH = /^\/(?:settings|credits(?:-subscriptions)?|notificatio
 const PASSIVE_CONTROL_LABEL =
   /\b(back|previous|next|close|menu|expand|collapse|theme|grid|list|filter|sort|search)\b/i;
 
+/** Member-site path that may be shown inside platform view. Staff console paths stay out. */
+export function memberPreviewPath(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const path = value.trim();
+  if (!path.startsWith("/") || path.startsWith("//") || path.includes("://") || path.includes("\\")) {
+    return null;
+  }
+  const pathname = path.split("?")[0].split("#")[0];
+  if (isStaffConsolePath(pathname)) return null;
+  return path;
+}
+
 export function isStaffConsolePath(pathname: string): boolean {
   return pathname === "/admin"
     || pathname === "/staff"
