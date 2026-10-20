@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LifeBuoy, Settings, LogOut, User, Search, Sparkles, MessageSquare } from "lucide-react";
+import { Bell, ChevronDown, LifeBuoy, Settings, LogOut, User, Search, Sparkles, MessageSquare, Plus } from "lucide-react";
 import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -1108,29 +1108,48 @@ useEffect(() => {
               </div>
             ) : (
               <>
-                {/* Credits */}
-                <div className="relative">
+                {/* Credits Balance & Top-Up Pill */}
+                <div
+                  className="relative flex items-center"
+                  onMouseEnter={() => setIsHovered(true)}
+                  onMouseLeave={() => setIsHovered(false)}
+                >
                   <button
                     onClick={handleTopUp}
-                    onMouseEnter={() => setIsHovered(true)}
-                    onMouseLeave={() => setIsHovered(false)}
-                    className="group relative flex items-center overflow-hidden rounded-full border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-amber-500/10 to-orange-500/10 px-3 py-1.5 transition-all duration-300 hover:scale-105"
+                    onFocus={() => setIsHovered(true)}
+                    onBlur={() => setIsHovered(false)}
+                    aria-label={`Credits balance: ${currentCredits !== null ? currentCredits.toLocaleString() : "loading"}. Click to top up.`}
+                    className="group relative flex items-center h-9 pl-2.5 pr-1.5 py-1 rounded-full border transition-all duration-200 select-none overflow-hidden border-amber-300/80 bg-amber-50/90 hover:bg-amber-100/90 hover:border-amber-400 shadow-xs dark:border-amber-500/30 dark:bg-zinc-900/90 dark:hover:bg-zinc-800/90 dark:hover:border-amber-400/60 dark:shadow-[0_0_15px_rgba(245,158,11,0.12)] hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                   >
-                    <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-                    <CreditIcon className={`h-4 w-4 text-yellow-500 transition-all duration-500 ${currentCredits === null ? "animate-pulse" : ""}`} />
+                    {/* Contained Hover Shine */}
+                    <div className="absolute inset-0 overflow-hidden rounded-full pointer-events-none">
+                      <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/40 dark:via-white/15 to-transparent" />
+                    </div>
+
+                    <CreditIcon className={`h-4 w-4 text-amber-500 shrink-0 transition-transform duration-300 group-hover:scale-110 ${currentCredits === null ? "animate-pulse" : ""}`} />
                     <span
-                      className={`text-sm font-bold text-gray-900 dark:text-yellow-200 overflow-hidden whitespace-nowrap transition-all duration-500 ease-out ${
-                        currentCredits === null ? "max-w-0 opacity-0 ml-0" : "max-w-[120px] opacity-100 ml-2"
+                      className={`text-xs sm:text-sm font-black tracking-tight text-amber-950 dark:text-amber-200 overflow-hidden whitespace-nowrap transition-all duration-500 ease-out ${
+                        currentCredits === null ? "max-w-0 opacity-0 ml-0" : "max-w-[120px] opacity-100 ml-1.5 sm:ml-2"
                       }`}
                     >
                       {currentCredits !== null ? currentCredits.toLocaleString() : ""}
                     </span>
-                    {isHovered && (
-                      <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] text-white shadow-lg animate-fade-in">
-                        Go to Credit Shop
-                      </span>
-                    )}
+
+                    <span
+                      className="ml-2 flex items-center justify-center h-5 w-5 rounded-full transition-all duration-200 shrink-0 bg-amber-200/70 text-amber-900 group-hover:bg-amber-500 group-hover:text-white dark:bg-amber-400/15 dark:text-amber-300 dark:group-hover:bg-amber-400 dark:group-hover:text-zinc-950"
+                      title="Add Credits"
+                    >
+                      <Plus className="h-3 w-3 stroke-[2.75]" />
+                    </span>
                   </button>
+
+                  {/* Tooltip positioned BELOW the pill */}
+                  {isHovered && (
+                    <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 dark:bg-zinc-800 border border-gray-700/50 dark:border-white/10 px-2.5 py-1 text-[11px] font-semibold text-white shadow-xl animate-fade-in pointer-events-none z-50">
+                      Top up Credits
+                      <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 dark:bg-zinc-800 border-t border-l border-gray-700/50 dark:border-white/10 rotate-45" />
+                    </div>
+                  )}
                 </div>
 
                 {/* Notifications */}
