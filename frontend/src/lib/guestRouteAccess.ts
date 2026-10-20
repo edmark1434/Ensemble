@@ -17,6 +17,7 @@ const GUEST_DETAIL_PATHS = [
   /^\/jobs\/postings\/[^/]+$/,
   /^\/gigs\/services\/[^/]+(?:\/page)?$/,
   /^\/profile\/[^/]+$/,
+  /^\/disputes\/[^/]+$/,
   /^\/teams\/(?:invite|join)\/[^/]+$/,
 ];
 

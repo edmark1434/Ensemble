@@ -57,7 +57,7 @@ function isBannedMember(user: Parameters<typeof isAppealLimitedMember>[0]) {
 }
 
 function isBannedAllowedPath(pathname: string) {
-    return pathname === APPEAL_PATH || pathname === '/account/access' || pathname === '/login';
+    return pathname === APPEAL_PATH || pathname === '/account/access' || pathname === '/login' || /^\/disputes\/[^/]+$/.test(pathname);
 }
 
 function getRedirectPath(user: { type?: string; role?: string | null; status?: string; restriction?: { banned?: boolean; code?: string } } | null) {

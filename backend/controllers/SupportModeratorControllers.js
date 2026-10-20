@@ -193,7 +193,8 @@ async function patchDispute(req, res) {
     const msg = err.message || 'Failed to update dispute';
     const isClient =
       /assign yourself|view only|cannot|only admin|only the requester|not found|invalid/i.test(msg);
-    res.status(isClient ? 400 : 500).json({ success: false, message: msg });
+    const statusCode = err.statusCode || (msg.includes('MongoDB') ? 503 : isClient ? 400 : 500);
+    res.status(statusCode).json({ success: false, message: msg });
   }
 }
 

@@ -329,7 +329,7 @@ const FORUM_TIMEOUT_MATCH = `
   AND (r.ends_at IS NULL OR r.ends_at > NOW())
 `;
 
-function publicStandingFromRow(row) {
+function publicStandingFromRow(row, banNotice = null) {
   if (!row) return null;
   const status = row.status || 'Active';
   const normalized = normalizeAccountStatus(status);
@@ -340,11 +340,43 @@ function publicStandingFromRow(row) {
       : normalized === 'locked'
         ? row.lock_ends_at
         : null;
+  const notice = normalized === 'banned' ? banNotice : null;
   return {
     status,
     endsAt: endsAt || null,
     forumTimeout: Boolean(row.forum_timeout),
     forumTimeoutEndsAt: row.timeout_ends_at || null,
+    banReason: notice?.banReason || null,
+    banDispute: notice?.banDispute || null,
+  };
+}
+
+async function loadBanNotice(accountId) {
+  const result = await pool.query(
+    `
+    SELECT metadata
+    FROM account_activity
+    WHERE account_id = $1
+      AND event_code = 'ACCOUNT_STATUS_CHANGED'
+      AND (
+        LOWER(COALESCE(metadata->>'status', '')) = 'banned'
+        OR LOWER(COALESCE(metadata->>'action', '')) = 'ban'
+      )
+    ORDER BY created_at DESC
+    LIMIT 1
+    `,
+    [accountId]
+  );
+  const metadata = result.rows[0]?.metadata || null;
+  if (!metadata || typeof metadata !== 'object') {
+    return { banReason: null, banDispute: null };
+  }
+  const disputeId = metadata.disputeId ? String(metadata.disputeId) : '';
+  return {
+    banReason: metadata.reason ? String(metadata.reason) : null,
+    banDispute: disputeId
+      ? { id: disputeId, number: metadata.disputeNumber ? String(metadata.disputeNumber) : null }
+      : null,
   };
 }
 
@@ -372,7 +404,11 @@ async function getPublicAccountStanding(accountId) {
     `,
     [accountId]
   );
-  return publicStandingFromRow(result.rows[0]);
+  const row = result.rows[0];
+  if (!row) return null;
+  const banned = normalizeAccountStatus(row.status) === 'banned';
+  const banNotice = banned ? await loadBanNotice(accountId) : null;
+  return publicStandingFromRow(row, banNotice);
 }
 
 async function getOwnAccountRecord(accountId) {
@@ -462,6 +498,7 @@ const BANNED_READ_ALLOWLIST = [
   /^\/api\/users\/tickets\/[^/]+$/,
   /^\/api\/users\/disputes$/,
   /^\/api\/users\/disputes\/[^/]+$/,
+  /^\/api\/accounts\/disputes\/[^/]+$/,
 ];
 
 const BANNED_WRITE_ALLOWLIST = [

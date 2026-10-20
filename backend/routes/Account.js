@@ -31,6 +31,7 @@ const {
     updateProfileUserController,
     updateProfileOnboardingController,
     getProfileByAccountIdController,
+    getPublicDisputeDiscussionController,
     getProfileReviewsController,
     updateProfileSocialMediaController,
     updateProfileDetailsController,
@@ -78,6 +79,7 @@ router.get('/:accountId/galleries', [optionalSession, optionalAuth], getUserGall
 router.post('/galleries', [checkSession, requireAuth], createGalleryItem);
 router.delete('/galleries/:galleryId', [checkSession, requireAuth], deleteGalleryItem);
 router.put('/galleries/:galleryId', [checkSession, requireAuth], updateGalleryItem);
+router.get('/disputes/:disputeId', [optionalSession, optionalAuth], getPublicDisputeDiscussionController);
 router.get('/profile/:accountId', [optionalSession, optionalAuth], getProfileByAccountIdController);
 router.get('/profile/:accountId/reviews', [optionalSession, optionalAuth], getProfileReviewsController);
 router.get('/links/:accountId', [optionalSession, optionalAuth], getAccountLinkByAccountIdController);

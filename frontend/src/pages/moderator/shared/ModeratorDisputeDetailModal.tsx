@@ -111,7 +111,6 @@ const STATUS_OPTIONS = [
   "closed",
 ];
 
-const SANCTION_OPTIONS = ["warn", "mute", "suspend", "ban", "credit_adjustment", "listing_removal"];
 const CLOSED_STATUS = "closed";
 
 function isDisputeClosed(status: string) {
@@ -166,7 +165,9 @@ export default function ModeratorDisputeDetailModal({
   const [priority, setPriority] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [resolutionNotes, setResolutionNotes] = useState("");
-  const [sanctionType, setSanctionType] = useState("");
+  const [banPromptOpen, setBanPromptOpen] = useState(false);
+  const [banReason, setBanReason] = useState("");
+  const [reopenPromptOpen, setReopenPromptOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -179,7 +180,6 @@ export default function ModeratorDisputeDetailModal({
         setPriority(toApiToken(d.dispute.priority));
         setAssigneeId(d.dispute.assignee?.staffId?.toString() || "");
         setResolutionNotes(d.dispute.resolutionNotes || "");
-        setSanctionType(d.dispute.sanctionType || "");
       }
     } catch {
       showErrorToast("Failed to load dispute");
@@ -223,6 +223,7 @@ export default function ModeratorDisputeDetailModal({
     ? Boolean(perms?.canRelease || alreadyAssignedToMe || (perms?.isAdmin && Boolean(assigneeStaffId)))
     : false;
   const viewOnly = adminMode && !canAct;
+  const canDecide = Boolean(perms?.canAct);
   const assigneeLocked =
     Boolean(assigneeStaffId) && !(canAssignOthers || Boolean(perms?.isAdmin));
   /** Handler dropdown: unlocked while unassigned, or Admin override */
@@ -244,11 +245,13 @@ export default function ModeratorDisputeDetailModal({
       showSuccessToast(successMsg);
       await load();
       onUpdated();
+      return true;
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         "Failed to update dispute";
       showErrorToast(msg);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -305,11 +308,6 @@ export default function ModeratorDisputeDetailModal({
       resolution_notes: resolutionNotes || null,
     };
     if (adminMode) {
-      if (isDisputeClosed(nextStatus)) {
-        if (sanctionType) payload.sanction_type = sanctionType;
-      } else {
-        payload.sanction_type = null;
-      }
       // Admin may change handler anytime; others use Release / Assign myself while locked.
       if (!assigneeLocked && (canAssignOthers || canAssignMyself)) {
         payload.handled_by_staff_id = assigneeId ? assigneeId : null;
@@ -393,6 +391,24 @@ export default function ModeratorDisputeDetailModal({
     } finally {
       setSaving(false);
     }
+  };
+
+  const confirmBan = async () => {
+    const reason = banReason.trim();
+    if (!reason) {
+      showErrorToast("A reason is required");
+      return;
+    }
+    const ok = await runAction({ action: "convict", reason }, "Permanent ban applied");
+    if (!ok) return;
+    setBanPromptOpen(false);
+    setBanReason("");
+  };
+
+  const confirmReopen = async () => {
+    const ok = await runAction({ action: "reopen" }, "Dispute reopened");
+    if (!ok) return;
+    setReopenPromptOpen(false);
   };
 
   const dispute = detail?.dispute;
@@ -522,13 +538,7 @@ export default function ModeratorDisputeDetailModal({
                         type="button"
                         disabled={viewOnly}
                         aria-pressed={active}
-                        onClick={() => {
-                          setStatus(s);
-                          if (!isDisputeClosed(s)) {
-                            setSanctionType("");
-                            setSanctionNotes("");
-                          }
-                        }}
+                        onClick={() => setStatus(s)}
                         className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed ${statusButtonClass(s, active)}`}
                       >
                         {titleCaseLabel(s)}
@@ -605,41 +615,60 @@ export default function ModeratorDisputeDetailModal({
               </label>
             </div>
 
-            {adminMode && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="flex flex-col gap-1 text-xs text-zinc-500">
-                  Sanction type
-                  <select
-                    value={sanctionType}
-                    onChange={(e) => setSanctionType(e.target.value)}
-                    disabled={viewOnly || !isDisputeClosed(status)}
-                    className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:opacity-50"
-                  >
-                    <option value="">—</option>
-                    {SANCTION_OPTIONS.map((o) => (
-                      <option key={o} value={o}>
-                        {titleCaseLabel(o)}
-                      </option>
-                    ))}
-                  </select>
-                  {!isDisputeClosed(status) && (
-                    <span className="text-[11px] text-zinc-600">
-                      Set status to Closed to apply a sanction.
-                    </span>
-                  )}
-                </label>
-                <label className="flex flex-col gap-1 text-xs text-zinc-500">
-                  Resolution notes
-                  <textarea
-                    value={resolutionNotes}
-                    onChange={(e) => setResolutionNotes(e.target.value)}
-                    rows={2}
-                    disabled={viewOnly}
-                    placeholder="How was (or will) this dispute be settled?"
-                    className="resize-none rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
-                  />
-                </label>
+            {canDecide && (
+              <div className="space-y-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                <p className="text-xs font-medium text-red-100">Final decision</p>
+                {String(dispute.sanctionType || "").toLowerCase() === "ban" &&
+                !isDisputeClosed(toApiToken(dispute.status)) ? (
+                  <p className="text-xs leading-relaxed text-zinc-400">
+                    @{dispute.respondent.username} is permanently banned from this dispute. The ban stays until you lift it on the account.
+                  </p>
+                ) : isDisputeClosed(toApiToken(dispute.status)) ? (
+                  <>
+                    <p className="text-xs leading-relaxed text-zinc-400">
+                      {String(dispute.sanctionType || "").toLowerCase() === "ban"
+                        ? `This case closed with a permanent ban on @${dispute.respondent.username}. Reopen it if they appeal. Reopening does not lift the ban.`
+                        : "This case is closed. Reopen it if you need to review an appeal."}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => setReopenPromptOpen(true)}
+                      className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white hover:bg-white/10 disabled:opacity-50"
+                    >
+                      Reopen case
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs leading-relaxed text-zinc-400">
+                      If the person who filed this is right, permanently ban @{dispute.respondent.username}. You will be asked for a reason. That reason is posted in the discussion, the case becomes visible, and the account is banned until staff lift it.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => setBanPromptOpen(true)}
+                      className="rounded-xl border border-red-500/40 bg-red-500/15 px-3 py-2 text-sm font-medium text-red-100 hover:bg-red-500/25 disabled:opacity-50"
+                    >
+                      Permanent ban
+                    </button>
+                  </>
+                )}
               </div>
+            )}
+
+            {adminMode && (
+              <label className="flex flex-col gap-1 text-xs text-zinc-500">
+                Resolution notes
+                <textarea
+                  value={resolutionNotes}
+                  onChange={(e) => setResolutionNotes(e.target.value)}
+                  rows={2}
+                  disabled={viewOnly}
+                  placeholder="How was (or will) this dispute be settled?"
+                  className="resize-none rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
+                />
+              </label>
             )}
 
             {!adminMode && (
@@ -857,6 +886,75 @@ export default function ModeratorDisputeDetailModal({
           <p className="py-12 text-center text-zinc-500">Dispute not found.</p>
         )}
       </div>
+
+      {banPromptOpen && dispute && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md space-y-3 rounded-2xl border border-white/10 bg-[#14151c] p-4">
+            <h3 className="text-sm font-semibold text-white">Permanent ban</h3>
+            <p className="text-xs leading-relaxed text-zinc-400">
+              This bans @{dispute.respondent.username} permanently, posts the reason in the discussion, and closes the case.
+            </p>
+            <label className="block text-xs text-zinc-500">
+              Reason
+              <textarea
+                value={banReason}
+                onChange={(event) => setBanReason(event.target.value)}
+                rows={4}
+                required
+                placeholder="Why this ban is being applied"
+                className="mt-1 w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none"
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setBanPromptOpen(false)}
+                className="rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving || !banReason.trim()}
+                onClick={() => void confirmBan()}
+                className="rounded-lg border border-red-500/40 bg-red-500/20 px-3 py-2 text-sm font-medium text-red-100 disabled:opacity-50"
+              >
+                {saving ? "Banning…" : "Ban permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reopenPromptOpen && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md space-y-3 rounded-2xl border border-white/10 bg-[#14151c] p-4">
+            <h3 className="text-sm font-semibold text-white">Reopen this case</h3>
+            <p className="text-xs leading-relaxed text-zinc-400">
+              The dispute goes back to under review so you can hear an appeal. A permanent ban stays until you lift it from the account.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setReopenPromptOpen(false)}
+                className="rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void confirmReopen()}
+                className="rounded-lg bg-white/10 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {saving ? "Reopening…" : "Reopen case"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

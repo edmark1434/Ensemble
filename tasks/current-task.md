@@ -1,14 +1,13 @@
-# Current Task: Refactor Incoming Team Proposals View & Remove Team Proposals Tab
+# Current Task: Dispute conviction and public standing
 
 ## Objective
-Remove the unused "Team Proposals" navigation tab from proposals tabs, and redesign the incoming team job proposals page to replace the cluttered "Roster & Cart" view with intuitive Milestone Sub-Tabs and readable, polished candidate cards.
+Let the assigned dispute handler issue a permanent ban with a reason, post that reason in the discussion, and reopen the case for an appeal. Show visible disputes and ban reasons on public profiles.
 
 ## Acceptance Criteria
-- [x] Remove "Team Proposals" tab from `proposals_tabs.tsx`.
-- [x] In `proposals_incoming_page.tsx`, replace the "Roster & Cart" view toggle with Milestone Sub-Tabs for jobs with milestones.
-- [x] Add compact, sleek active milestone status strip showing role need, slots filled/open, and budget percentage.
-- [x] Filter proposal cards by the selected milestone tab (or "All Roles").
-- [x] Refactor proposal cards to be clean, highly readable, and comfortable on the eyes in both List and Grid views.
-- [x] Include clear action buttons on each card: View Full Details, Chat / Interview, Shortlist toggle, and Accept / Hire candidate.
-- [x] Verify frontend with `npm run build`.
-- [x] Strictly do NOT git commit unless explicitly commanded by user.
+- [x] Assigned staff can permanently ban the respondent from a dispute after entering a reason.
+- [x] The reason is posted in the dispute discussion and the respondent is banned.
+- [x] Assigned staff can reopen a closed dispute without lifting the ban.
+- [x] A profile shows that account's visible disputes and their current status.
+- [x] A banned profile shows the ban reason, and a dispute ban also links to the discussion.
+- [x] TypeScript check passes. Full Vite build still fails on an existing missing `@hugeicons/react` import in `PromptBar.tsx`.
+- [ ] Do not git commit unless asked.

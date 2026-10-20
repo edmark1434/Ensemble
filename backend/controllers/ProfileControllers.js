@@ -131,6 +131,21 @@ async function hiddenProfileResponse(req, res, accountId) {
     return true;
 }
 
+async function getPublicDisputeDiscussionController(req, res) {
+    try {
+        const viewerId = req.session?.account_id || req.session?.accountId || null;
+        const { getPublicDisputeDiscussion } = require('../repositories/DisputeChatRepositories');
+        const data = await getPublicDisputeDiscussion(req.params.disputeId, viewerId);
+        if (!data) {
+            return res.status(404).json({ success: false, message: 'This dispute is not public.' });
+        }
+        return res.status(200).json({ success: true, data });
+    } catch (err) {
+        console.error('Error loading public dispute discussion:', err);
+        return res.status(500).json({ success: false, message: 'Could not load this dispute.' });
+    }
+}
+
 async function getProfileByAccountIdController(req, res) {
     try {
         const { accountId } = req.params;
@@ -313,6 +328,7 @@ module.exports = {
     updateProfileUserController,
     updateProfileOnboardingController,
     getProfileByAccountIdController,
+    getPublicDisputeDiscussionController,
     updateProfileSocialMediaController,
     updateProfileDetailsController,
     getProfileAvatarsByAccountIdController,

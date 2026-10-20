@@ -72,6 +72,7 @@ import UserProfilesList from '@/components/nav/user_profiles_list.tsx'
 import { VerificationStatus } from '@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx'
 import { AccountRestrictionHost } from '@/components/ui/AccountStanding'
 import AccountAccessPage from '@/pages/user/account/AccountAccessPage'
+import PublicDisputePage from '@/pages/user/disputes/PublicDisputePage'
 
 import './App.css'
 import OpenInEditor from "@/pages/user/2_projects/OpenInEditor.tsx";
@@ -231,6 +232,7 @@ function App() {
             <Route path='/credits/checkout' element={<Checkout />} />
             <Route path='/profile' element={<Profile />} />
             <Route path='/profile/:id' element={<ProfileRoute />} />
+            <Route path='/disputes/:id' element={<PublicDisputePage />} />
             <Route path='/account-verification-status' element={<VerificationStatus />} />
             <Route path='/search/user/:query' element={<UserProfilesList />} />
 

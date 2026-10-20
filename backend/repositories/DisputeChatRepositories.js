@@ -259,6 +259,99 @@ async function listAccountDisputes(accountId) {
   return result.rows.map(mapDisputeSummary);
 }
 
+const DISPUTE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function mapVisibleDispute(row, accountId) {
+  const filed = String(row.by_account_id) === String(accountId);
+  return {
+    id: row.dispute_id,
+    number: row.dispute_number || null,
+    title: row.title || 'Dispute',
+    type: row.type || 'General',
+    status: String(row.status || 'open').toLowerCase(),
+    updatedAt: row.updated_at || row.created_at || null,
+    role: filed ? 'filed' : 'respondent',
+  };
+}
+
+/** Disputes the dispute system has made visible. Hidden cases stay off public profiles. */
+async function listVisibleAccountDisputes(accountId) {
+  const result = await pool.query(
+    `
+    SELECT dispute_id, dispute_number, title, type, status, by_account_id, created_at, updated_at
+    FROM disputes
+    WHERE deleted_at IS NULL
+      AND visibility IS TRUE
+      AND (by_account_id = $1 OR for_account_id = $1)
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC
+    LIMIT 50
+    `,
+    [accountId]
+  );
+  return result.rows.map((row) => mapVisibleDispute(row, accountId));
+}
+
+/**
+ * Public discussion for a visible dispute.
+ * Public messages are shown to everyone. Party messages are shown only to the two parties.
+ */
+async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
+  if (!DISPUTE_UUID.test(String(disputeId || ''))) return null;
+  const result = await pool.query(
+    `
+    SELECT
+      d.dispute_id,
+      d.dispute_number,
+      d.title,
+      d.type,
+      d.status,
+      d.description,
+      d.visibility,
+      d.by_account_id,
+      d.for_account_id,
+      COALESCE(ia.display_name, NULLIF(TRIM(CONCAT_WS(' ', iu.first_name, iu.last_name)), '')) AS initiator_name,
+      ia.handle AS initiator_handle,
+      COALESCE(ra.display_name, NULLIF(TRIM(CONCAT_WS(' ', ru.first_name, ru.last_name)), '')) AS respondent_name,
+      ra.handle AS respondent_handle
+    FROM disputes d
+    LEFT JOIN accounts ia ON ia.account_id = d.by_account_id
+    LEFT JOIN users iu ON iu.account_id = ia.account_id
+    LEFT JOIN accounts ra ON ra.account_id = d.for_account_id
+    LEFT JOIN users ru ON ru.account_id = ra.account_id
+    WHERE d.dispute_id = $1
+      AND d.deleted_at IS NULL
+    `,
+    [disputeId]
+  );
+  const row = result.rows[0];
+  if (!row || !row.visibility) return null;
+
+  const viewer = viewerAccountId ? String(viewerAccountId) : '';
+  const isParty = Boolean(
+    viewer && (viewer === String(row.by_account_id) || viewer === String(row.for_account_id))
+  );
+  const chatId = await getDisputeChatId(disputeId);
+  const messages = (await listDisputeMessages(chatId)).filter((message) => {
+    if (message.isInternal || message.audience === 'staff' || message.audience === 'author_and_staff') {
+      return false;
+    }
+    if (message.audience === 'public') return true;
+    return message.audience === 'parties' && isParty;
+  });
+
+  return {
+    id: row.dispute_id,
+    number: row.dispute_number || null,
+    title: row.title || 'Dispute',
+    type: row.type || 'General',
+    status: String(row.status || 'open').toLowerCase(),
+    description: row.description || null,
+    initiator: { name: row.initiator_name || 'Unknown', handle: row.initiator_handle || null },
+    respondent: { name: row.respondent_name || 'Unknown', handle: row.respondent_handle || null },
+    messages,
+  };
+}
+
 async function getAccountDispute(disputeId, accountId) {
   const result = await pool.query(
     `
@@ -290,6 +383,8 @@ module.exports = {
   ensureDisputeChat,
   listDisputeMessages,
   listAccountDisputes,
+  listVisibleAccountDisputes,
+  getPublicDisputeDiscussion,
   getAccountDispute,
   createDisputeMessage,
   updateDisputeMessageAudience,

@@ -329,6 +329,8 @@ async function getProfileByAccountIdService(accountId) {
         if (profile) {
             const { getPublicAccountStanding } = require('../lib/AccountRestriction');
             profile.standing = await getPublicAccountStanding(profile.account_id);
+            const { listVisibleAccountDisputes } = require('../repositories/DisputeChatRepositories');
+            profile.disputes = await listVisibleAccountDisputes(profile.account_id);
             const badges = await getAccountBadges(accountId);
             profile.badges = badges.map(b => ({
                 id: b.registry_id,

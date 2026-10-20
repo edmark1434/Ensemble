@@ -3414,6 +3414,14 @@ async function updateDispute(disputeId, patch, staffSession) {
     return getDisputeDetail(disputeId, staffSession);
   }
 
+  if (action === 'convict' || action === 'ban') {
+    return convictDispute(disputeId, refreshed, patch, staff, staffSession, actPerms);
+  }
+
+  if (action === 'reopen') {
+    return reopenDispute(disputeId, refreshed, staff, staffSession, actPerms);
+  }
+
   // Generic field updates
   if (!actPerms.canAct) {
     throw new Error('View only — assign yourself to this dispute to make changes.');
@@ -3424,7 +3432,6 @@ async function updateDispute(disputeId, patch, staffSession) {
     'status',
     'priority',
     'resolution_notes',
-    'sanction_type',
     'visibility',
     'description',
   ];
@@ -3440,11 +3447,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     }
   }
 
-  // Reopening clears sanctions
   if (normalized.status && normalized.status !== 'closed') {
-    if (normalized.sanction_type === undefined) {
-      sets.push(`sanction_type = NULL`);
-    }
     sets.push(`resolved_at = NULL`);
   }
 
@@ -3607,6 +3610,144 @@ async function setDisputeMessageAudience(disputeId, messageId, audience, staffSe
 
   await updateDisputeMessageAudience(chatId, messageId, audience);
   await pool.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
+  return getDisputeDetail(disputeId, staffSession);
+}
+
+function disputeDecisionError(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+}
+
+function decisionReason(patch) {
+  const reason = String(patch?.reason || patch?.resolution_notes || '').trim();
+  if (!reason) throw disputeDecisionError('Invalid ban: a reason is required.');
+  if (reason.length > 2000) throw disputeDecisionError('Invalid ban: the reason is too long.');
+  return reason;
+}
+
+async function postDisputeDecisionMessage(row, staffSession, body) {
+  if (!isMongoReady()) {
+    throw new Error('MongoDB is not connected — cannot post the decision in the discussion.');
+  }
+  const chatId = await ensureDisputeChat(row.dispute_id, row);
+  await createDisputeMessage({
+    chatId,
+    body,
+    senderId: sessionAccountId(staffSession),
+    authorName: sessionDisplayName(staffSession) || 'Staff',
+    authorType: 'staff',
+    authorRole: 'staff',
+    audience: 'public',
+    audiences: ['public', 'parties'],
+    isInternal: false,
+  });
+}
+
+async function convictDispute(disputeId, row, patch, staff, staffSession, perms) {
+  if (!perms.canAct) {
+    throw disputeDecisionError('Assign yourself to this dispute before you can ban.');
+  }
+  const reason = decisionReason(patch);
+  const accountId = row.for_account_id;
+  if (!accountId) {
+    throw disputeDecisionError('Invalid ban: this dispute has no respondent to sanction.');
+  }
+  if (String(row.sanction_type || '').toLowerCase() === 'ban') {
+    throw disputeDecisionError('Cannot ban again. This dispute already ended in a permanent ban. Reopen it first.');
+  }
+
+  const handle = row.respondent_handle ? `@${row.respondent_handle}` : 'the respondent';
+  const name = row.respondent_name || 'The respondent';
+  const message = `${name} (${handle}) has been permanently banned.\nReason: ${reason}`;
+
+  const { updateAccountStatus } = require('./AdminUserTeamRepositories');
+  await updateAccountStatus(accountId, 'ban', staff.staff_id, {
+    reason,
+    duration: 'permanent',
+    disputeId: row.dispute_id,
+    disputeNumber: row.dispute_number || null,
+  });
+
+  await pool.query(
+    `
+    UPDATE disputes
+    SET status = 'closed',
+        visibility = TRUE,
+        sanction_type = 'ban',
+        resolution_notes = $1,
+        resolved_at = NOW(),
+        updated_at = NOW()
+    WHERE dispute_id = $2
+    `,
+    [reason, disputeId]
+  );
+
+  try {
+    await postDisputeDecisionMessage(row, staffSession, message);
+  } catch (err) {
+    const wrapped = new Error(
+      `${err.message || 'Could not post the discussion message.'} The account was still banned and the dispute was closed.`
+    );
+    wrapped.statusCode = /MongoDB/i.test(err.message || '') ? 503 : 500;
+    throw wrapped;
+  }
+
+  await recordAccountActivity({
+    accountId,
+    action: `Dispute ${row.dispute_number || disputeId} closed with a permanent ban`,
+    eventCode: 'DISPUTE_SANCTIONED',
+    referenceTable: 'disputes',
+    referencePrefix: 'DIS',
+    referenceId: disputeId,
+    actorStaffId: staff.staff_id,
+    metadata: { status: 'closed', sanctionType: 'ban', reason },
+  });
+
+  return getDisputeDetail(disputeId, staffSession);
+}
+
+async function reopenDispute(disputeId, row, staff, staffSession, perms) {
+  if (!perms.canAct) {
+    throw disputeDecisionError('Assign yourself to this dispute before you can reopen it.');
+  }
+  if (String(row.status || '').toLowerCase() !== 'closed') {
+    throw disputeDecisionError('Cannot reopen a dispute that is not closed.');
+  }
+
+  await pool.query(
+    `
+    UPDATE disputes
+    SET status = 'under_review',
+        resolved_at = NULL,
+        updated_at = NOW()
+    WHERE dispute_id = $1
+    `,
+    [disputeId]
+  );
+
+  const banned = String(row.sanction_type || '').toLowerCase() === 'ban';
+  const message = banned
+    ? 'This dispute has been reopened for appeal. The permanent ban stays in place until a staff member lifts it.'
+    : 'This dispute has been reopened.';
+
+  try {
+    await postDisputeDecisionMessage(row, staffSession, message);
+  } catch (err) {
+    console.error('Dispute reopened without a discussion message:', err.message);
+  }
+
+  await recordAccountActivity({
+    accountId: row.for_account_id || row.by_account_id,
+    action: `Dispute ${row.dispute_number || disputeId} reopened`,
+    eventCode: 'DISPUTE_REOPENED',
+    referenceTable: 'disputes',
+    referencePrefix: 'DIS',
+    referenceId: disputeId,
+    actorStaffId: staff.staff_id,
+    metadata: { status: 'under_review', sanctionType: row.sanction_type || null },
+  });
+
   return getDisputeDetail(disputeId, staffSession);
 }
 

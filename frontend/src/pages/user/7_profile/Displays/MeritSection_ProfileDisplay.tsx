@@ -1,5 +1,16 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { Star, ShieldCheck, Trophy, Briefcase, Package, ChevronDown, ChevronUp, AlertCircle, X, ShieldAlert, User } from "lucide-react";
+
+export type PublicProfileDispute = {
+  id: string;
+  number?: string | null;
+  title?: string;
+  type?: string;
+  status?: string;
+  updatedAt?: string | null;
+  role?: "filed" | "respondent";
+};
 
 interface MeritSectionProps {
   loading?: boolean;
@@ -20,12 +31,21 @@ interface MeritSectionProps {
   clientJobRating?: number;
   clientJobCount?: number;
   onNavigateToReviews?: (filter: "All" | "As Freelancer" | "As a Client" | "Asset Creation") => void;
+  disputes?: PublicProfileDispute[];
 }
 
-const mockDisputes = [
-  { id: "DIS-50041", type: "Marketplace", status: "Closed", date: "2026-03-14" },
-  { id: "DIS-50032", type: "Contract", status: "Closed", date: "2025-11-02" },
-];
+function disputeStatusLabel(status?: string) {
+  return String(status || "open")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function disputeWhen(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
 
 export const MeritSectionSkeleton: React.FC<{ viewMode?: "merit" | "ratings" | "both" }> = ({ viewMode = "both" }) => (
   <div className={`grid grid-cols-1 gap-4 animate-pulse ${viewMode === "both" ? "md:grid-cols-3" : "max-w-2xl mx-auto w-full"}`}>
@@ -56,9 +76,11 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
   clientServiceCount = 0,
   clientJobRating = 5.0,
   clientJobCount = 3,
-  onNavigateToReviews
+  onNavigateToReviews,
+  disputes = [],
 }) => {
   const [isDisputeModalOpen, setIsDisputeModalOpen] = useState(false);
+  const publicDisputes = disputes || [];
 
   if (loading) return <MeritSectionSkeleton viewMode={viewMode} />;
 
@@ -132,16 +154,17 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
             </div>
           </div>
 
-          {/* Dispute Action Trigger Button */}
+          {publicDisputes.length > 0 && (
           <div className="relative z-10 pt-2 border-t border-gray-200 dark:border-white/5 mt-1 animate-fadeIn">
             <button
               onClick={() => setIsDisputeModalOpen(true)}
               className="w-full py-1.5 px-3 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-200 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition"
             >
               <AlertCircle className="h-3.5 w-3.5 text-amber-500/80" />
-              <span>View Dispute History</span>
+              <span>Disputes ({publicDisputes.length})</span>
             </button>
           </div>
+          )}
         </div>
         )}
 
@@ -324,7 +347,7 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
             <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-3">
               <div className="flex items-center gap-2">
                 <ShieldAlert className="h-5 w-5 text-amber-500" />
-                <h3 className="text-base font-bold tracking-tight">Ecosystem Dispute Registry Log</h3>
+                <h3 className="text-base font-bold tracking-tight">Public disputes</h3>
               </div>
               <button
                 onClick={() => setIsDisputeModalOpen(false)}
@@ -345,14 +368,23 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-white/[0.03] text-gray-700 dark:text-zinc-300 font-mono">
-                  {mockDisputes.map((dispute) => (
+                  {publicDisputes.map((dispute) => (
                     <tr key={dispute.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.01] transition">
-                      <td className="py-2.5 font-bold text-blue-500 dark:text-blue-400">{dispute.id}</td>
-                      <td className="py-2.5 font-sans text-gray-600 dark:text-zinc-400">{dispute.type}</td>
-                      <td className="py-2.5 text-gray-500 dark:text-zinc-500">{dispute.date}</td>
+                      <td className="py-2.5 font-bold text-blue-500 dark:text-blue-400">
+                        <Link to={`/disputes/${dispute.id}`} className="hover:underline">
+                          {dispute.number || "Dispute"}
+                        </Link>
+                      </td>
+                      <td className="py-2.5 font-sans text-gray-600 dark:text-zinc-400">
+                        {dispute.type || "General"}
+                        <span className="mt-0.5 block text-[10px] uppercase tracking-wide text-gray-400">
+                          {dispute.role === "filed" ? "Filed by this account" : "Filed against this account"}
+                        </span>
+                      </td>
+                      <td className="py-2.5 text-gray-500 dark:text-zinc-500">{disputeWhen(dispute.updatedAt)}</td>
                       <td className="py-2.5 text-right font-sans">
-                        <span className="bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-200 dark:border-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px] font-medium">
-                          {dispute.status}
+                        <span className="bg-zinc-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 px-2 py-0.5 rounded text-[10px] font-medium">
+                          {disputeStatusLabel(dispute.status)}
                         </span>
                       </td>
                     </tr>

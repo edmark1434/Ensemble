@@ -1265,7 +1265,11 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       status,
       action: key,
       suspensionEndsAt,
+      banEndsAt,
+      lockEndsAt,
       reason,
+      ...(options.disputeId ? { disputeId: String(options.disputeId) } : {}),
+      ...(options.disputeNumber ? { disputeNumber: String(options.disputeNumber) } : {}),
     },
   });
 

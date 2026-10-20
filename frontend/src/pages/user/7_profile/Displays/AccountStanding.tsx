@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '@/lib/axios';
 
 export type PublicStanding = {
@@ -6,6 +7,8 @@ export type PublicStanding = {
   endsAt?: string | null;
   forumTimeout?: boolean;
   forumTimeoutEndsAt?: string | null;
+  banReason?: string | null;
+  banDispute?: { id: string; number?: string | null } | null;
 };
 
 type WarningRow = {
@@ -77,20 +80,42 @@ export function standingBadges(standing?: PublicStanding | null) {
   return badges;
 }
 
+export function BanNotice({ standing }: { standing?: PublicStanding | null }) {
+  const status = String(standing?.status || '').toLowerCase();
+  if (status !== 'banned' || !standing?.banReason) return null;
+  const dispute = standing.banDispute;
+  return (
+    <p className="max-w-xl text-xs leading-relaxed text-red-800 dark:text-red-200">
+      Reason: {standing.banReason}
+      {dispute?.id ? (
+        <>
+          {' '}
+          <Link to={`/disputes/${dispute.id}`} className="font-semibold underline">
+            {dispute.number || 'View dispute discussion'}
+          </Link>
+        </>
+      ) : null}
+    </p>
+  );
+}
+
 export function StandingBadges({ standing }: { standing?: PublicStanding | null }) {
   const badges = standingBadges(standing);
   if (badges.length === 0) return null;
   return (
-    <div className="flex flex-wrap items-center justify-center gap-1.5 md:justify-start">
-      {badges.map((badge) => (
-        <span
-          key={badge.label}
-          title={`${badge.label} ${badge.detail}`}
-          className={`rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${badgeClass(badge.tone)}`}
-        >
-          {badge.label}
-        </span>
-      ))}
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center justify-center gap-1.5 md:justify-start">
+        {badges.map((badge) => (
+          <span
+            key={badge.label}
+            title={`${badge.label} ${badge.detail}`}
+            className={`rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${badgeClass(badge.tone)}`}
+          >
+            {badge.label}
+          </span>
+        ))}
+      </div>
+      <BanNotice standing={standing} />
     </div>
   );
 }
@@ -130,11 +155,16 @@ export function AccountRecordSection() {
             {badges.length === 0 ? (
               <p className="mt-2 text-sm text-gray-700 dark:text-zinc-300">Active. No ban, suspension, lock, or timeout.</p>
             ) : (
-              <ul className="mt-2 space-y-1 text-sm text-gray-800 dark:text-zinc-200">
-                {badges.map((badge) => (
-                  <li key={badge.label}>{badge.label} {badge.detail}</li>
-                ))}
-              </ul>
+              <>
+                <ul className="mt-2 space-y-1 text-sm text-gray-800 dark:text-zinc-200">
+                  {badges.map((badge) => (
+                    <li key={badge.label}>{badge.label} {badge.detail}</li>
+                  ))}
+                </ul>
+                <div className="mt-2">
+                  <BanNotice standing={record} />
+                </div>
+              </>
             )}
           </div>
 

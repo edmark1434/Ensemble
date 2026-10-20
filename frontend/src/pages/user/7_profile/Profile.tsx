@@ -14,7 +14,8 @@ import { getFallbackAvatarUrl } from "@/lib/accountAvatars";
 
 // Modularized Profile Sub-Components
 import { TopSection_ProfileDisplay } from "./Displays/TopSection_ProfileDisplay.tsx";
-import { MeritSection_ProfileDisplay } from "./Displays/MeritSection_ProfileDisplay.tsx";
+import { MeritSection_ProfileDisplay, type PublicProfileDispute } from "./Displays/MeritSection_ProfileDisplay.tsx";
+import type { PublicStanding } from "./Displays/AccountStanding.tsx";
 import { BadgeSideSection_ProfileDisplay } from "./Displays/BadgeSideSection_ProfileDisplay.tsx";
 import { RatingsBudgetSideSection_ProfileDisplay } from "./Displays/RatingsBudgetSideSection_ProfileDisplay.tsx";
 import { SkillsSideSection_ProfileDisplay } from "./Displays/SkillsSideSection_ProfileDisplay.tsx";
@@ -110,6 +111,8 @@ interface UserDetail {
   client_service_count?: string | number;
   client_job_rating?: string | number;
   client_job_count?: string | number;
+  standing?: PublicStanding | null;
+  disputes?: PublicProfileDispute[];
 }
 
 const services = [
@@ -691,6 +694,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             client_job_rating: profileData.client_job_rating,
             client_job_count: profileData.client_job_count,
             standing: profileData.standing || null,
+            disputes: profileData.disputes || [],
           });
         } catch (skillsError) {
           console.error("Error fetching user skills:", skillsError);
@@ -735,6 +739,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             client_job_rating: profileData.client_job_rating,
             client_job_count: profileData.client_job_count,
             standing: profileData.standing || null,
+            disputes: profileData.disputes || [],
           });
         }
 
@@ -999,6 +1004,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
               clientJobCount={userDetails?.client_job_count ? Number(userDetails.client_job_count) : 0}
               viewMode="merit"
               isOwner={isOwner}
+              disputes={userDetails?.disputes || []}
             />
             <SocialLinksSection_ProfileDisplay
               loading={loading}
