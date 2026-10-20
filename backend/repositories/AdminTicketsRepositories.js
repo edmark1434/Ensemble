@@ -3378,7 +3378,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     );
     await recordAccountActivity({
       accountId: refreshed.by_account_id || refreshed.for_account_id,
-      action: `Dispute ${refreshed.dispute_number || disputeId} approved / made visible`,
+      action: `Dispute ${refreshed.dispute_number || disputeId} opened to the public`,
       eventCode: 'DISPUTE_APPROVED',
       referenceTable: 'disputes',
       referencePrefix: 'DIS',
@@ -3386,6 +3386,23 @@ async function updateDispute(disputeId, patch, staffSession) {
       actorStaffId: staff.staff_id,
       metadata: { status: 'open', visibility: true },
     });
+    try {
+      const NotificationRepositories = require('./NotificationRepositories');
+      const notice = `Dispute ${refreshed.dispute_number || ''} is now public.`.replace(/\s+/g, ' ').trim();
+      for (const accountId of [refreshed.by_account_id, refreshed.for_account_id]) {
+        if (!accountId) continue;
+        await NotificationRepositories.createNotification({
+          account_id: accountId,
+          message: notice,
+          reference_table: 'disputes',
+          reference_prefix: 'DIS',
+          reference_path: `/disputes/${disputeId}`,
+          reference_id: disputeId,
+        });
+      }
+    } catch (err) {
+      console.warn('Dispute public notice skipped:', err.message);
+    }
     return getDisputeDetail(disputeId, staffSession);
   }
 
@@ -3464,9 +3481,6 @@ async function updateDispute(disputeId, patch, staffSession) {
 
   if (normalized.status) {
     const status = String(normalized.status).toLowerCase();
-    if (status === 'open' && !Boolean(refreshed.visibility)) {
-      sets.push(`visibility = TRUE`);
-    }
     if (status === 'closed') {
       sets.push(`resolved_at = NOW()`);
     }
@@ -3497,6 +3511,260 @@ async function updateDispute(disputeId, patch, staffSession) {
   return getDisputeDetail(disputeId, staffSession);
 }
 
+function emptyDisputeCaseFile() {
+  return { contracts: [], transactions: [], relatedDisputes: [] };
+}
+
+function walletLabel(type) {
+  const raw = String(type || '').replace(/[_-]+/g, ' ').trim();
+  if (!raw) return 'Wallet';
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+async function loadDisputeCaseFile(row) {
+  const byId = row.by_account_id || null;
+  const forId = row.for_account_id || null;
+  const linkedContractId = row.contract_id || null;
+
+  const contractResult = byId && forId
+    ? await pool.query(
+      `
+      SELECT
+        c.contract_id,
+        c.contract_type,
+        c.payment_type,
+        c.status,
+        c.rate_credits,
+        c.revision_price_credits,
+        c.starts_at,
+        c.deadline_at,
+        c.created_at,
+        COALESCE(jc_info.title, gc_info.title, 'Contract') AS title,
+        COALESCE(jc_info.client_account_id, gc_info.client_account_id) AS client_account_id,
+        COALESCE(jc_info.freelancer_account_id, gc_info.freelancer_account_id) AS freelancer_account_id,
+        COALESCE(ca.display_name, cu.first_name || ' ' || cu.last_name, 'Client') AS client_name,
+        ca.handle AS client_handle,
+        COALESCE(fa.display_name, fu.first_name || ' ' || fu.last_name, 'Freelancer') AS freelancer_name,
+        fa.handle AS freelancer_handle
+      FROM contracts c
+      LEFT JOIN (
+        SELECT jc.contract_id, j.client_account_id, p.freelancer_account_id, j.title
+        FROM job_contracts jc
+        JOIN proposals p ON jc.proposal_id = p.proposal_id
+        JOIN jobs j ON p.job_id = j.job_id
+      ) jc_info ON c.contract_id = jc_info.contract_id
+      LEFT JOIN (
+        SELECT gc.contract_id, gr.client_account_id, g.freelancer_account_id, g.title
+        FROM gig_contracts gc
+        JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+        JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+        JOIN gigs g ON gt.gig_id = g.gig_id
+      ) gc_info ON c.contract_id = gc_info.contract_id
+      LEFT JOIN accounts ca ON ca.account_id = COALESCE(jc_info.client_account_id, gc_info.client_account_id)
+      LEFT JOIN users cu ON cu.account_id = ca.account_id
+      LEFT JOIN accounts fa ON fa.account_id = COALESCE(jc_info.freelancer_account_id, gc_info.freelancer_account_id)
+      LEFT JOIN users fu ON fu.account_id = fa.account_id
+      WHERE (
+          COALESCE(jc_info.client_account_id, gc_info.client_account_id) = $1
+          AND COALESCE(jc_info.freelancer_account_id, gc_info.freelancer_account_id) = $2
+        )
+        OR (
+          COALESCE(jc_info.client_account_id, gc_info.client_account_id) = $2
+          AND COALESCE(jc_info.freelancer_account_id, gc_info.freelancer_account_id) = $1
+        )
+        OR ($3::uuid IS NOT NULL AND c.contract_id = $3::uuid)
+      ORDER BY
+        CASE WHEN $3::uuid IS NOT NULL AND c.contract_id = $3::uuid THEN 0 ELSE 1 END,
+        c.created_at DESC
+      LIMIT 12
+      `,
+      [byId, forId, linkedContractId]
+    )
+    : { rows: [] };
+
+  const contractIds = contractResult.rows.map((contract) => contract.contract_id);
+  const milestoneResult = contractIds.length
+    ? await pool.query(
+      `
+      SELECT
+        contract_milestone_id,
+        contract_id,
+        index,
+        name,
+        description,
+        status,
+        credits,
+        no_of_revisions_max,
+        deadline_at,
+        started_at
+      FROM contract_milestones
+      WHERE contract_id = ANY($1::uuid[])
+      ORDER BY contract_id, index ASC
+      `,
+      [contractIds]
+    )
+    : { rows: [] };
+
+  const milestoneIds = milestoneResult.rows.map((milestone) => milestone.contract_milestone_id);
+  const transactionResult = await pool.query(
+    `
+    SELECT
+      ct.credit_transaction_id,
+      ct.type,
+      ct.amount_credits,
+      ct.status,
+      ct.created_at,
+      ct.reference_table,
+      ct.reference_id,
+      ct.related_dispute_id,
+      src_w.type AS source_wallet_type,
+      dst_w.type AS destination_wallet_type,
+      COALESCE(src_a.display_name, src_u.first_name || ' ' || src_u.last_name, 'Platform') AS source_name,
+      src_a.handle AS source_handle,
+      COALESCE(dst_a.display_name, dst_u.first_name || ' ' || dst_u.last_name, 'Platform') AS destination_name,
+      dst_a.handle AS destination_handle
+    FROM credit_transactions ct
+    JOIN wallets src_w ON src_w.wallet_id = ct.source_wallet_id
+    JOIN wallets dst_w ON dst_w.wallet_id = ct.destination_wallet_id
+    LEFT JOIN account_wallets src_aw ON src_aw.wallet_id = src_w.wallet_id
+    LEFT JOIN accounts src_a ON src_a.account_id = src_aw.account_id
+    LEFT JOIN users src_u ON src_u.account_id = src_a.account_id
+    LEFT JOIN account_wallets dst_aw ON dst_aw.wallet_id = dst_w.wallet_id
+    LEFT JOIN accounts dst_a ON dst_a.account_id = dst_aw.account_id
+    LEFT JOIN users dst_u ON dst_u.account_id = dst_a.account_id
+    WHERE ct.related_dispute_id = $1
+      OR ($2::uuid IS NOT NULL AND ct.credit_transaction_id = $2::uuid)
+      OR (ct.reference_table = 'contracts' AND ct.reference_id = ANY($3::uuid[]))
+      OR (ct.reference_table = 'contract_milestones' AND ct.reference_id = ANY($4::uuid[]))
+    ORDER BY ct.created_at ASC
+    LIMIT 80
+    `,
+    [
+      row.dispute_id,
+      row.related_credit_transaction_id || null,
+      contractIds,
+      milestoneIds,
+    ]
+  );
+
+  const relatedResult = byId && forId
+    ? await pool.query(
+      `
+      SELECT
+        d.dispute_id,
+        d.dispute_number,
+        d.title,
+        d.type,
+        d.status,
+        d.priority,
+        d.description,
+        d.visibility,
+        d.credit_amount_involved,
+        d.opened_at,
+        d.sanction_type,
+        d.resolution_notes,
+        COALESCE(ia.display_name, iu.first_name || ' ' || iu.last_name, 'Disputer') AS initiator_name,
+        ia.handle AS initiator_handle,
+        COALESCE(ra.display_name, ru.first_name || ' ' || ru.last_name, 'Disputee') AS respondent_name,
+        ra.handle AS respondent_handle
+      FROM disputes d
+      LEFT JOIN accounts ia ON ia.account_id = d.by_account_id
+      LEFT JOIN users iu ON iu.account_id = ia.account_id
+      LEFT JOIN accounts ra ON ra.account_id = d.for_account_id
+      LEFT JOIN users ru ON ru.account_id = ra.account_id
+      WHERE d.dispute_id <> $1
+        AND d.deleted_at IS NULL
+        AND (
+          (d.by_account_id = $2 AND d.for_account_id = $3)
+          OR (d.by_account_id = $3 AND d.for_account_id = $2)
+        )
+      ORDER BY d.opened_at DESC NULLS LAST, d.created_at DESC
+      LIMIT 20
+      `,
+      [row.dispute_id, byId, forId]
+    )
+    : { rows: [] };
+
+  const milestonesByContract = new Map();
+  for (const milestone of milestoneResult.rows) {
+    const list = milestonesByContract.get(milestone.contract_id) || [];
+    list.push({
+      id: milestone.contract_milestone_id,
+      index: Number(milestone.index || 0),
+      name: milestone.name,
+      description: milestone.description || null,
+      status: milestone.status,
+      credits: Number(milestone.credits || 0),
+      revisions: Number(milestone.no_of_revisions_max || 0),
+      deadlineAt: milestone.deadline_at || null,
+      startedAt: milestone.started_at || null,
+    });
+    milestonesByContract.set(milestone.contract_id, list);
+  }
+
+  const contractTitleById = new Map(contractResult.rows.map((contract) => [contract.contract_id, contract.title]));
+  const milestoneNameById = new Map(milestoneResult.rows.map((milestone) => [milestone.contract_milestone_id, milestone.name]));
+
+  return {
+    contracts: contractResult.rows.map((contract) => ({
+      id: contract.contract_id,
+      linked: Boolean(linkedContractId && String(contract.contract_id) === String(linkedContractId)),
+      title: contract.title,
+      contractType: contract.contract_type,
+      paymentType: contract.payment_type,
+      status: contract.status,
+      rateCredits: Number(contract.rate_credits || 0),
+      revisionPriceCredits: Number(contract.revision_price_credits || 0),
+      startsAt: contract.starts_at || null,
+      deadlineAt: contract.deadline_at || null,
+      clientName: contract.client_name,
+      clientHandle: contract.client_handle || '—',
+      freelancerName: contract.freelancer_name,
+      freelancerHandle: contract.freelancer_handle || '—',
+      milestones: milestonesByContract.get(contract.contract_id) || [],
+    })),
+    transactions: transactionResult.rows.map((tx) => ({
+      id: tx.credit_transaction_id,
+      type: tx.type,
+      amount: Number(tx.amount_credits || 0),
+      status: tx.status,
+      createdAt: tx.created_at,
+      referenceTable: tx.reference_table || null,
+      referenceLabel: tx.reference_table === 'contracts'
+        ? contractTitleById.get(tx.reference_id) || 'Contract'
+        : tx.reference_table === 'contract_milestones'
+          ? milestoneNameById.get(tx.reference_id) || 'Milestone'
+          : tx.reference_table || null,
+      sourceName: tx.source_name,
+      sourceHandle: tx.source_handle || null,
+      sourceWallet: walletLabel(tx.source_wallet_type),
+      destinationName: tx.destination_name,
+      destinationHandle: tx.destination_handle || null,
+      destinationWallet: walletLabel(tx.destination_wallet_type),
+      tiedToThisDispute: String(tx.related_dispute_id || '') === String(row.dispute_id)
+        || String(tx.credit_transaction_id) === String(row.related_credit_transaction_id || ''),
+    })),
+    relatedDisputes: relatedResult.rows.map((dispute) => ({
+      id: dispute.dispute_id,
+      number: dispute.dispute_number || null,
+      title: dispute.title || 'Dispute',
+      type: dispute.type || 'General',
+      status: String(dispute.status || 'open').toLowerCase(),
+      priority: String(dispute.priority || 'Medium'),
+      description: dispute.description || null,
+      visibility: Boolean(dispute.visibility),
+      creditAmount: Number(dispute.credit_amount_involved || 0),
+      openedAt: dispute.opened_at || null,
+      sanctionType: dispute.sanction_type || null,
+      resolutionNotes: dispute.resolution_notes || null,
+      initiatorName: dispute.initiator_name,
+      initiatorHandle: dispute.initiator_handle || '—',
+      respondentName: dispute.respondent_name,
+      respondentHandle: dispute.respondent_handle || '—',
+    })),
+  };
+}
+
 async function getDisputeDetail(disputeId, staffSession = null) {
   const row = await loadDisputeRow(disputeId);
   if (!row) return null;
@@ -3510,6 +3778,13 @@ async function getDisputeDetail(disputeId, staffSession = null) {
   let messages = [];
   let chatId = null;
   let chatAvailable = isMongoReady();
+  let caseFile = emptyDisputeCaseFile();
+
+  try {
+    caseFile = await loadDisputeCaseFile(row);
+  } catch (err) {
+    console.error('Error loading dispute case file:', err.message);
+  }
 
   try {
     chatId = await getDisputeChatId(disputeId);
@@ -3523,6 +3798,7 @@ async function getDisputeDetail(disputeId, staffSession = null) {
 
   return {
     dispute: mapDisputeRow(row),
+    caseFile,
     messages,
     chatId,
     chatAvailable,

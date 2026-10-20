@@ -146,6 +146,28 @@ async function getPublicDisputeDiscussionController(req, res) {
     }
 }
 
+async function postPublicDisputeCommentController(req, res) {
+    try {
+        const accountId = req.session?.account_id || req.session?.accountId || req.user?.account_id;
+        if (!accountId) {
+            return res.status(401).json({ success: false, message: 'Sign in to comment.' });
+        }
+        const { postPublicDisputeComment } = require('../repositories/DisputeChatRepositories');
+        await postPublicDisputeComment(req.params.disputeId, accountId, req.body?.body);
+        return res.status(201).json({
+            success: true,
+            message: 'Comment sent to staff. It stays private until a moderator publishes it.',
+        });
+    } catch (err) {
+        console.error('Error posting public dispute comment:', err);
+        const status = Number(err.statusCode) || (/MongoDB/i.test(err.message || '') ? 503 : 500);
+        return res.status(status).json({
+            success: false,
+            message: status >= 500 ? 'Could not send that comment.' : err.message,
+        });
+    }
+}
+
 async function getProfileByAccountIdController(req, res) {
     try {
         const { accountId } = req.params;
@@ -329,6 +351,7 @@ module.exports = {
     updateProfileOnboardingController,
     getProfileByAccountIdController,
     getPublicDisputeDiscussionController,
+    postPublicDisputeCommentController,
     updateProfileSocialMediaController,
     updateProfileDetailsController,
     getProfileAvatarsByAccountIdController,

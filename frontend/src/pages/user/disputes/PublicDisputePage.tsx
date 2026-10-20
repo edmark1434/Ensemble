@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "@/lib/axios";
+import toast from "react-hot-toast";
+import useGlobalState from "@/lib/global_state";
 
 type DiscussionMessage = {
   id: string;
@@ -49,9 +51,12 @@ function party(person?: { name?: string; handle?: string | null }) {
 
 export default function PublicDisputePage() {
   const { id } = useParams();
+  const isAuthenticated = useGlobalState((state) => state.isAuthenticated);
   const [discussion, setDiscussion] = useState<Discussion | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [comment, setComment] = useState("");
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -75,6 +80,20 @@ export default function PublicDisputePage() {
       cancelled = true;
     };
   }, [id]);
+
+  const sendComment = async () => {
+    if (!id || !comment.trim() || sending) return;
+    setSending(true);
+    try {
+      const res = await api.post(`/api/accounts/disputes/${id}/messages`, { body: comment.trim() });
+      setComment("");
+      toast.success(res.data?.message || "Comment sent to staff.");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Could not send that comment.");
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 text-gray-900 dark:text-white">
@@ -122,6 +141,37 @@ export default function PublicDisputePage() {
                   </p>
                 </div>
               ))
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-gray-200 p-4 dark:border-white/10">
+            <h2 className="text-sm font-semibold">Add a comment</h2>
+            <p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">
+              Comments stay private until staff publish them. Published comments appear in the discussion above.
+            </p>
+            {isAuthenticated ? (
+              <div className="mt-3 space-y-2">
+                <textarea
+                  value={comment}
+                  onChange={(event) => setComment(event.target.value)}
+                  maxLength={2000}
+                  rows={4}
+                  placeholder="Write a comment"
+                  className="w-full resize-none rounded-xl border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none dark:border-white/10"
+                />
+                <button
+                  type="button"
+                  onClick={() => void sendComment()}
+                  disabled={sending || !comment.trim()}
+                  className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-gray-900"
+                >
+                  {sending ? "Sending…" : "Send to staff"}
+                </button>
+              </div>
+            ) : (
+              <Link to="/login" className="mt-3 inline-block text-sm font-medium underline">
+                Sign in to comment
+              </Link>
             )}
           </section>
         </article>

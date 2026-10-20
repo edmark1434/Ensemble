@@ -13,42 +13,7 @@ import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts"
 import type { DisputeDetail } from "./moderatorTypes";
 import type { Accent } from "./ui";
 import { accentSpinner } from "./ui";
-
-const VISIBILITY_CACHE_KEY = "ensemble.disputeComposerVisibility";
-
-type VisibilityPrefs = {
-  parties: boolean;
-  public: boolean;
-};
-
-function loadVisibilityPrefs(): VisibilityPrefs {
-  try {
-    const raw = localStorage.getItem(VISIBILITY_CACHE_KEY);
-    if (!raw) return { parties: false, public: false };
-    const parsed = JSON.parse(raw) as Partial<VisibilityPrefs>;
-    return {
-      parties: Boolean(parsed.parties),
-      public: Boolean(parsed.public),
-    };
-  } catch {
-    return { parties: false, public: false };
-  }
-}
-
-function saveVisibilityPrefs(prefs: VisibilityPrefs) {
-  try {
-    localStorage.setItem(VISIBILITY_CACHE_KEY, JSON.stringify(prefs));
-  } catch {
-    /* ignore quota / private mode */
-  }
-}
-
-function audienceFromPrefs(prefs: VisibilityPrefs, internalNote: boolean): "staff" | "parties" | "public" {
-  if (internalNote) return "staff";
-  if (prefs.public) return "public";
-  if (prefs.parties) return "parties";
-  return "staff";
-}
+import DisputeCaseFilePanel from "./DisputeCaseFilePanel";
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
@@ -145,6 +110,7 @@ export default function ModeratorDisputeDetailModal({
   deskLabel,
   onClose,
   onUpdated,
+  onOpenDispute,
 }: {
   disputeId: number | string;
   endpointBase: string;
@@ -154,13 +120,12 @@ export default function ModeratorDisputeDetailModal({
   deskLabel?: string;
   onClose: () => void;
   onUpdated: () => void;
+  onOpenDispute?: (disputeId: string) => void;
 }) {
   const [detail, setDetail] = useState<DisputeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [internalNote, setInternalNote] = useState(false);
-  const [visibilityPrefs, setVisibilityPrefs] = useState<VisibilityPrefs>(() => loadVisibilityPrefs());
   const [status, setStatus] = useState("");
   const [priority, setPriority] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
@@ -229,14 +194,6 @@ export default function ModeratorDisputeDetailModal({
   /** Handler dropdown: unlocked while unassigned, or Admin override */
   const canEditHandler =
     !adminMode || canAssignOthers || canSelfAssign || canAssignMyself || !assigneeLocked;
-
-  const updateVisibilityPref = (key: keyof VisibilityPrefs, checked: boolean) => {
-    setVisibilityPrefs((prev) => {
-      const next = { ...prev, [key]: checked };
-      saveVisibilityPrefs(next);
-      return next;
-    });
-  };
 
   const runAction = async (body: Record<string, unknown>, successMsg: string) => {
     setSaving(true);
@@ -326,38 +283,17 @@ export default function ModeratorDisputeDetailModal({
     if (!message.trim()) return;
     setSaving(true);
     try {
-      // Non-handlers may only post staff-visible replies; assignee publishes later.
-      const audience = canAct
-        ? audienceFromPrefs(visibilityPrefs, internalNote)
-        : "staff";
+      const audience = "staff";
       await api.post(`${endpointBase}/${disputeId}/messages`, {
         body: message.trim(),
-        isInternal: !canAct || internalNote || audience === "staff",
-        visibleToParties: canAct && (audience === "parties" || audience === "public"),
-        visibleToPublic: canAct && audience === "public",
+        isInternal: true,
+        visibleToParties: false,
+        visibleToPublic: false,
         audience,
-        audiences: canAct
-          ? [
-              ...(internalNote || audience === "staff" ? (["staff"] as const) : []),
-              ...(visibilityPrefs.parties || visibilityPrefs.public
-                ? (["parties"] as const)
-                : []),
-              ...(visibilityPrefs.public ? (["public"] as const) : []),
-            ]
-          : (["staff"] as const),
+        audiences: ["staff"],
       });
       setMessage("");
-      showSuccessToast(
-        !canAct
-          ? "Staff reply posted — handler can publish when ready"
-          : audience === "public"
-            ? "Message posted (visible to the public)"
-            : audience === "parties"
-              ? "Message posted (visible to parties)"
-              : internalNote
-                ? "Internal note added"
-                : "Message sent"
-      );
+      showSuccessToast("Comment sent. It stays private until you make it public.");
       await load();
       onUpdated();
     } catch (err: unknown) {
@@ -376,10 +312,8 @@ export default function ModeratorDisputeDetailModal({
       await api.patch(`${endpointBase}/${disputeId}/messages/${messageId}`, { audience });
       const label =
         audience === "public"
-          ? "Comment published to the public"
-          : audience === "parties"
-            ? "Comment published to parties"
-            : "Comment unpublished";
+          ? "Comment is now public"
+          : "Comment is private again";
       showSuccessToast(label);
       await load();
       onUpdated();
@@ -415,7 +349,7 @@ export default function ModeratorDisputeDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0f1016] shadow-2xl">
+      <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0f1016] shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div>
             <p className={`text-[10px] font-semibold uppercase tracking-wide ${accentSpinner(accent)}`}>
@@ -440,7 +374,9 @@ export default function ModeratorDisputeDetailModal({
                 @{dispute.initiator.username} vs @{dispute.respondent.username} · {dispute.type || "General"} ·{" "}
                 {dispute.creditAmount.toLocaleString()} credits · opened {formatDateTime(dispute.openedAt)}
               </p>
-              {dispute.description && <p className="mt-2 text-sm text-zinc-400">{dispute.description}</p>}
+              {dispute.description && (
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-400">{dispute.description}</p>
+              )}
               <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                 <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
                   Status: {titleCaseLabel(dispute.status)}
@@ -455,6 +391,12 @@ export default function ModeratorDisputeDetailModal({
                 )}
               </div>
             </div>
+
+            <DisputeCaseFilePanel
+              dispute={dispute}
+              caseFile={detail.caseFile}
+              onOpenDispute={onOpenDispute}
+            />
 
             {adminMode && viewOnly && (
               <div className="flex items-start gap-2 rounded-xl border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-sm text-sky-100">
@@ -502,26 +444,26 @@ export default function ModeratorDisputeDetailModal({
                     Release case
                   </button>
                 )}
+                {canAct && !dispute.visibility && !isDisputeClosed(toApiToken(dispute.status)) && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void runAction({ action: "approve" }, "Dispute is now public")}
+                    className={`rounded-xl px-3 py-2 text-sm font-medium text-white disabled:opacity-50 ${ACCENT_BTN[accent]}`}
+                  >
+                    Open to the public
+                  </button>
+                )}
                 {canAct && toApiToken(dispute.status) === "pending_review" && (
-                  <>
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => void runAction({ action: "approve" }, "Dispute approved (now visible)")}
-                      className={`rounded-xl px-3 py-2 text-sm font-medium text-white disabled:opacity-50 ${ACCENT_BTN[accent]}`}
-                    >
-                      Approve (make visible)
-                    </button>
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => void runAction({ action: "dismiss" }, "Dispute dismissed")}
-                      className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.cancel}`}
-                    >
-                      <ShieldAlert className={HANDLER_ACTION_ICON} />
-                      Dismiss
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void runAction({ action: "dismiss" }, "Dispute dismissed")}
+                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.cancel}`}
+                  >
+                    <ShieldAlert className={HANDLER_ACTION_ICON} />
+                    Dismiss
+                  </button>
                 )}
               </div>
             )}
@@ -769,16 +711,6 @@ export default function ModeratorDisputeDetailModal({
                       <span className={`rounded-full border px-2 py-0.5 text-[10px] ${badge.className}`}>
                         {badge.label}
                       </span>
-                      {canChangeAudience && m.audience !== "parties" && m.audience !== "public" && (
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => void setMessageAudience(m.id, "parties")}
-                          className="text-[11px] text-emerald-300 hover:underline disabled:opacity-50"
-                        >
-                          Publish to parties
-                        </button>
-                      )}
                       {canChangeAudience && m.audience !== "public" && (
                         <button
                           type="button"
@@ -786,20 +718,15 @@ export default function ModeratorDisputeDetailModal({
                           onClick={() => void setMessageAudience(m.id, "public")}
                           className="text-[11px] text-violet-300 hover:underline disabled:opacity-50"
                         >
-                          Publish to public
+                          Make public
                         </button>
                       )}
-                      {canChangeAudience &&
-                        m.audience !== "staff" &&
-                        m.audience !== "author_and_staff" && (
+                      {canChangeAudience && m.audience === "public" && (
                         <button
                           type="button"
                           disabled={saving}
                           onClick={() =>
-                            void setMessageAudience(
-                              m.id,
-                              m.authorRole && m.authorRole !== "staff" ? "author_and_staff" : "staff"
-                            )
+                            void setMessageAudience(m.id, "staff")
                           }
                           className="text-[11px] text-sky-300 hover:underline disabled:opacity-50"
                         >
@@ -830,47 +757,15 @@ export default function ModeratorDisputeDetailModal({
                 placeholder={
                   !canReply
                     ? "You cannot reply on this dispute…"
-                    : viewOnly
-                      ? "Write a staff-only reply (handler publishes if needed)…"
-                      : "Write a message to discuss this dispute…"
+                    : "Write a comment. It stays private until you press Make public."
                 }
                 disabled={detail.chatAvailable === false || !canReply}
                 className="w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
               />
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-400">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={viewOnly ? true : internalNote}
-                      onChange={(e) => setInternalNote(e.target.checked)}
-                      disabled={detail.chatAvailable === false || !canReply || viewOnly}
-                    />
-                    Internal note (staff only)
-                  </label>
-                  {adminMode && canAct && (
-                    <>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={visibilityPrefs.parties}
-                          onChange={(e) => updateVisibilityPref("parties", e.target.checked)}
-                          disabled={detail.chatAvailable === false || internalNote}
-                        />
-                        Visible to parties
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={visibilityPrefs.public}
-                          onChange={(e) => updateVisibilityPref("public", e.target.checked)}
-                          disabled={detail.chatAvailable === false || internalNote}
-                        />
-                        Visible to the public
-                      </label>
-                    </>
-                  )}
-                </div>
+                <p className="text-xs text-zinc-500">
+                  New comments stay private. Use Make public on a comment to show it in the discussion.
+                </p>
                 <button
                   type="button"
                   onClick={() => void sendMessage()}

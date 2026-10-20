@@ -10,8 +10,81 @@ import type {
 
 export type { SupportTicket, Dispute, UserReport, ChartSegment, TicketDetail, TicketMessage, TicketActivity };
 
+export type DisputeCaseMilestone = {
+  id: string;
+  index: number;
+  name: string;
+  description: string | null;
+  status: string;
+  credits: number;
+  revisions: number;
+  deadlineAt: string | null;
+  startedAt: string | null;
+};
+
+export type DisputeCaseContract = {
+  id: string;
+  linked: boolean;
+  title: string;
+  contractType: string;
+  paymentType: string;
+  status: string;
+  rateCredits: number;
+  revisionPriceCredits: number;
+  startsAt: string | null;
+  deadlineAt: string | null;
+  clientName: string;
+  clientHandle: string;
+  freelancerName: string;
+  freelancerHandle: string;
+  milestones: DisputeCaseMilestone[];
+};
+
+export type DisputeCaseTransaction = {
+  id: string;
+  type: string;
+  amount: number;
+  status: string;
+  createdAt: string;
+  referenceTable: string | null;
+  referenceLabel: string | null;
+  sourceName: string;
+  sourceHandle: string | null;
+  sourceWallet: string;
+  destinationName: string;
+  destinationHandle: string | null;
+  destinationWallet: string;
+  tiedToThisDispute: boolean;
+};
+
+export type DisputeCaseRelated = {
+  id: string;
+  number: string | null;
+  title: string;
+  type: string;
+  status: string;
+  priority: string;
+  description: string | null;
+  visibility: boolean;
+  creditAmount: number;
+  openedAt: string | null;
+  sanctionType: string | null;
+  resolutionNotes: string | null;
+  initiatorName: string;
+  initiatorHandle: string;
+  respondentName: string;
+  respondentHandle: string;
+};
+
+export type DisputeCaseFile = {
+  contracts: DisputeCaseContract[];
+  transactions: DisputeCaseTransaction[];
+  relatedDisputes: DisputeCaseRelated[];
+};
+
 export type DisputeDetail = {
   dispute: Dispute;
+  caseFile?: DisputeCaseFile;
   messages: TicketMessage[];
   chatId?: string | null;
   chatAvailable?: boolean;

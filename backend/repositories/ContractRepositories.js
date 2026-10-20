@@ -665,7 +665,7 @@ async function createContractDispute(accountIds, contractId, { reason, details }
                 updated_at,
                 contract_id
             ) VALUES (
-                $1, 'Contract', $2, $3, 'pending_review', $4, $5, $6, $7, NOW(), true, NOW(), NOW(), $8
+                $1, 'Contract', $2, $3, 'pending_review', $4, $5, $6, $7, NOW(), false, NOW(), NOW(), $8
             ) RETURNING *
         `, [
             disputeNumber,

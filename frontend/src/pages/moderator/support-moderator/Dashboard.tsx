@@ -146,8 +146,10 @@ export default function SupportModeratorDashboard() {
           disputeId={selectedDisputeId}
           endpointBase="/api/moderator/support/disputes"
           accent="sky"
+          adminMode
           onClose={() => setSelectedDisputeId(null)}
           onUpdated={() => void load(true)}
+          onOpenDispute={(id) => setSelectedDisputeId(id)}
         />
       )}
       {selectedReportId != null && (

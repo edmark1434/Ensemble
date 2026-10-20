@@ -233,10 +233,11 @@ function mapDisputeSummary(row) {
   return {
     id: row.dispute_id,
     number: row.dispute_number,
-    title: row.title || row.reason,
+    title: row.title || row.description,
     type: row.type,
     status: row.status,
-    reason: row.reason,
+    reason: row.description || null,
+    visibility: Boolean(row.visibility),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -245,12 +246,12 @@ function mapDisputeSummary(row) {
 async function listAccountDisputes(accountId) {
   const result = await pool.query(
     `
-    SELECT dispute_id, dispute_number, title, type, status, reason, created_at, updated_at
+    SELECT dispute_id, dispute_number, title, type, status, description, visibility, created_at, updated_at
     FROM disputes
     WHERE deleted_at IS NULL
       AND (
         by_account_id = $1
-        OR for_account_id = $1
+        OR (for_account_id = $1 AND visibility IS TRUE)
       )
     ORDER BY updated_at DESC NULLS LAST, created_at DESC
     `,
@@ -326,18 +327,10 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
   const row = result.rows[0];
   if (!row || !row.visibility) return null;
 
-  const viewer = viewerAccountId ? String(viewerAccountId) : '';
-  const isParty = Boolean(
-    viewer && (viewer === String(row.by_account_id) || viewer === String(row.for_account_id))
-  );
   const chatId = await getDisputeChatId(disputeId);
-  const messages = (await listDisputeMessages(chatId)).filter((message) => {
-    if (message.isInternal || message.audience === 'staff' || message.audience === 'author_and_staff') {
-      return false;
-    }
-    if (message.audience === 'public') return true;
-    return message.audience === 'parties' && isParty;
-  });
+  const messages = (await listDisputeMessages(chatId)).filter(
+    (message) => message.audience === 'public' && !message.isInternal
+  );
 
   return {
     id: row.dispute_id,
@@ -355,7 +348,7 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
 async function getAccountDispute(disputeId, accountId) {
   const result = await pool.query(
     `
-    SELECT dispute_id, dispute_number, title, type, status, reason, created_at, updated_at, outcome
+    SELECT dispute_id, dispute_number, title, type, status, description, visibility, by_account_id, for_account_id, created_at, updated_at
     FROM disputes
     WHERE dispute_id = $1
       AND deleted_at IS NULL
@@ -368,11 +361,73 @@ async function getAccountDispute(disputeId, accountId) {
   );
   const row = result.rows[0];
   if (!row) return null;
+  const filer = String(row.by_account_id) === String(accountId);
+  if (!row.visibility && !filer) return null;
   const chatId = await getDisputeChatId(disputeId);
   const messages = (await listDisputeMessages(chatId)).filter(
-    (message) => !message.isInternal && (message.audience === 'parties' || message.audience === 'public')
+    (message) => message.audience === 'public' && !message.isInternal
   );
-  return { ...mapDisputeSummary(row), outcome: row.outcome || null, messages };
+  return { ...mapDisputeSummary(row), messages };
+}
+
+async function postPublicDisputeComment(disputeId, accountId, body) {
+  if (!DISPUTE_UUID.test(String(disputeId || ''))) {
+    const error = new Error('This dispute is not public.');
+    error.statusCode = 404;
+    throw error;
+  }
+  const text = String(body || '').trim();
+  if (!text) {
+    const error = new Error('Write a comment before sending.');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (text.length > 2000) {
+    const error = new Error('Comment is too long.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const result = await pool.query(
+    `
+    SELECT dispute_id, dispute_number, visibility, by_account_id, for_account_id
+    FROM disputes
+    WHERE dispute_id = $1 AND deleted_at IS NULL
+    `,
+    [disputeId]
+  );
+  const row = result.rows[0];
+  if (!row || !row.visibility) {
+    const error = new Error('This dispute is not public.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const account = await pool.query(
+    `SELECT display_name, handle FROM accounts WHERE account_id = $1`,
+    [accountId]
+  );
+  const profile = account.rows[0] || {};
+  const authorName = profile.display_name || profile.handle || 'Member';
+  const authorRole = String(row.by_account_id) === String(accountId)
+    ? 'disputer'
+    : String(row.for_account_id) === String(accountId)
+      ? 'disputee'
+      : 'public';
+
+  const chatId = await ensureDisputeChat(disputeId, row);
+  await createDisputeMessage({
+    chatId,
+    body: text,
+    senderId: accountId,
+    authorName,
+    authorType: 'user',
+    authorRole,
+    audience: 'staff',
+    audiences: ['staff'],
+    isInternal: true,
+  });
+  return { private: true };
 }
 
 module.exports = {
@@ -386,6 +441,7 @@ module.exports = {
   listVisibleAccountDisputes,
   getPublicDisputeDiscussion,
   getAccountDispute,
+  postPublicDisputeComment,
   createDisputeMessage,
   updateDisputeMessageAudience,
   mapMongoDisputeMessage,

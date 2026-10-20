@@ -772,6 +772,7 @@ export default function DisputeDesk({
           deskLabel={deskLabel}
           onClose={() => setSelectedId(null)}
           onUpdated={onUpdated}
+          onOpenDispute={(id) => setSelectedId(id)}
         />
       )}
     </div>
