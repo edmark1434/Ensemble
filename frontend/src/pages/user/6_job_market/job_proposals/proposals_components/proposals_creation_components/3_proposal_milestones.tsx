@@ -44,7 +44,7 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
   onAdvance,
   jobTimeline,
 }) => {
-  const isTeamJob = Boolean(job?.hiring_type === "team" || (Array.isArray(job?.milestones) && job.milestones.length > 0));
+  const isTeamJob = Boolean(job?.hiring_type === "team" || job?.is_team || job?.isTeam || job?.posted_as === "Team");
 
   const timelineText = job?.timeline || jobTimeline || "";
   const maxDaysMatch = timelineText.match(/-?\s*(\d+)\s*Days?/i);

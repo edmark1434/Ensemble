@@ -114,7 +114,7 @@ export const HomeFeaturedJobs: React.FC = () => {
           isSaved: j.is_saved || false,
           isOwnPost: Boolean(j.is_own_post || userInfo?.account_id === j.client_account_id),
           isManageablePost: Boolean(j.is_manageable_post),
-          hiring_type: j.hiring_type || (Array.isArray(j.milestones) && j.milestones.length > 0 ? "team" : "single"),
+          hiring_type: j.hiring_type || (j.posted_as === "Team" ? "team" : "single"),
           milestones: Array.isArray(j.milestones) ? j.milestones : [],
           is_team: Boolean(j.is_team || j.posted_as === 'Team' || j.team_id),
         }));
@@ -205,7 +205,7 @@ export const HomeFeaturedJobs: React.FC = () => {
 
                 {/* Bottom-left Hiring Type Tag */}
                 <div className="absolute bottom-2 left-2 z-10">
-                  {Boolean(job.hiring_type === "team" || (Array.isArray(job.milestones) && job.milestones.length > 0)) ? (
+                  {Boolean(job.hiring_type === "team" || job.is_team || job.isTeam || job.posted_as === "Team") ? (
                     <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
                       <Users className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
                       <span>Team</span>

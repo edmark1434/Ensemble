@@ -25,8 +25,7 @@ export function getBudgetDisplayInfo(params: {
   const positions = Math.max(1, Number(params.positionsNeeded) || 1);
   const isTeam = Boolean(
     params.isTeam ||
-    params.hiringType === "team" ||
-    (params.milestonesCount && params.milestonesCount > 0)
+    params.hiringType === "team"
   );
 
   // 1. Team Milestone Pool

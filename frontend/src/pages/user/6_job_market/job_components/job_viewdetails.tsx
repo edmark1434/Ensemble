@@ -33,7 +33,9 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
   const targetTeamId = selectedJob?.team_id || selectedJob?.teamId;
   const isTeamHiring = Boolean(
     selectedJob?.hiring_type === "team" ||
-    (Array.isArray(selectedJob?.milestones) && selectedJob.milestones.length > 0)
+    selectedJob?.is_team ||
+    selectedJob?.isTeam ||
+    selectedJob?.posted_as === "Team"
   );
 
   const handleViewProfile = () => {

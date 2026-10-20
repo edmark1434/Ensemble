@@ -113,7 +113,7 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [errorCountdown, setErrorCountdown] = useState<number | null>(null);
 
-  const isTeamJob = Boolean(job?.milestones && job.milestones.length > 0);
+  const isTeamJob = Boolean(job?.hiring_type === "team" || job?.is_team || job?.isTeam || job?.posted_as === "Team");
   const currentMilestone = isTeamJob
     ? (job?.milestones?.find((m: any) => m.job_milestone_id === selectedMilestoneId) || job?.milestones?.[0])
     : null;

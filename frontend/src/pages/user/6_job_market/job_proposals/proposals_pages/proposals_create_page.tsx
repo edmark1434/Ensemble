@@ -221,7 +221,7 @@ const ProposalsCreatePage: React.FC = () => {
   }, [id, fetchJobs]);
 
   const hasUnsavedChanges = Boolean(bidAmount || coverLetter);
-  const isTeamJob = Boolean(job?.hiring_type === "team" || (Array.isArray(job?.milestones) && job.milestones.length > 0));
+  const isTeamJob = Boolean(job?.hiring_type === "team" || job?.is_team || job?.isTeam || job?.posted_as === "Team");
 
   const handleReturnTrigger = () => {
     if (hasUnsavedChanges) {

@@ -90,7 +90,6 @@ const JobFullPage: React.FC = () => {
           const maxBudget = Number(j.rate_credits_max) || 0;
           const isTeamPost = Boolean(
             j.hiring_type === "team" ||
-            (Array.isArray(j.milestones) && j.milestones.length > 0) ||
             j.is_team ||
             j.posted_as === "Team"
           );
@@ -105,7 +104,6 @@ const JobFullPage: React.FC = () => {
 
           const isTeam = Boolean(
             j.hiring_type === "team" ||
-            (Array.isArray(j.milestones) && j.milestones.length > 0) ||
             j.is_team ||
             j.posted_as === "Team"
           );

@@ -144,7 +144,7 @@ const JobMain: React.FC = () => {
           priceRange: getBudgetDisplayInfo({
             minBudget: j.rate_credits_min,
             maxBudget: j.rate_credits_max,
-            isTeam: j.hiring_type === "team" || Boolean(j.milestones?.length),
+            isTeam: Boolean(j.hiring_type === "team" || j.is_team || j.posted_as === "Team"),
             positionsNeeded: j.positions_needed
           }).amountText,
           minBudget: j.rate_credits_min || 0,
@@ -178,7 +178,7 @@ const JobMain: React.FC = () => {
           is_team: Boolean(j.is_team || j.posted_as === 'Team' || j.team_id),
           isTeam: Boolean(j.is_team || j.posted_as === 'Team' || j.team_id),
           posted_as: j.posted_as,
-          hiring_type: j.hiring_type || (Array.isArray(j.milestones) && j.milestones.length > 0 ? "team" : "single"),
+          hiring_type: j.hiring_type || (j.posted_as === 'Team' ? "team" : "single"),
           milestones: Array.isArray(j.milestones) ? j.milestones : [],
           deadline: j.rough_deadline ? new Date(j.rough_deadline).toLocaleDateString() : undefined,
           requireNDA: j.require_nda || false,
@@ -306,7 +306,7 @@ const JobMain: React.FC = () => {
       const matchesMaxPrice = maxPrice === "" || job.minBudget <= parseInt(maxPrice);
       const matchesDiff = selectedDiffs.length === 0 || selectedDiffs.includes(job.difficulty);
       const matchesPos = posValue === "" || job.positionsNeeded === parseInt(posValue);
-      const isTeam = Boolean(job.hiring_type === "team" || (Array.isArray(job.milestones) && job.milestones.length > 0));
+      const isTeam = Boolean(job.hiring_type === "team" || job.is_team || job.isTeam || job.posted_as === "Team");
       const jobHiringType = isTeam ? "team" : "individual";
       const matchesHiringType = selectedHiringTypes.length === 0 || selectedHiringTypes.includes(jobHiringType);
 
