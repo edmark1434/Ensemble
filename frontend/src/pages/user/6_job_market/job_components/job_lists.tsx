@@ -203,7 +203,7 @@ const JobList: React.FC<JobListProps> = ({
             }`}
           >
       <AnimatePresence mode="popLayout">
-        {paginatedJobs.map((job) => {
+        {paginatedJobs.map((job, index) => {
           const isActive = activeJobId === job.id;
 
           /* --- GRID VIEW CARD (NO SKILLS DISPLAY) --- */
@@ -216,6 +216,7 @@ const JobList: React.FC<JobListProps> = ({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1.0] }}
+                data-tour={index === 0 ? "job-card-first" : undefined}
                 onClick={() => navigate(`${baseRoute}/${job.id}`)}
                 className={`group flex flex-col justify-between rounded-2xl border p-4 transition-colors duration-200 cursor-pointer ${
                   isActive
@@ -366,6 +367,7 @@ const JobList: React.FC<JobListProps> = ({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1.0] }}
+              data-tour={index === 0 ? "job-card-first" : undefined}
               onClick={() => navigate(`${baseRoute}/${job.id}`)}
               className={`group flex flex-col md:flex-row gap-5 rounded-2xl border p-5 transition-colors duration-200 cursor-pointer ${
                 isActive

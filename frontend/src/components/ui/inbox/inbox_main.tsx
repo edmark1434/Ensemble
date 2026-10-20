@@ -1265,7 +1265,7 @@ const InboxMain = () => {
     <div className="w-full h-full bg-gray-50 dark:bg-dark-base flex flex-col overflow-hidden">
       <UserHeader pageTitle="Inbox" />
 
-      <div className="w-full flex-1 min-h-0 overflow-hidden flex border-t border-gray-200 dark:border-white/10 relative">
+      <div className="w-full flex-1 min-h-0 overflow-hidden flex border-t border-gray-200 dark:border-white/10 relative" data-tour="inbox-container">
         {/* Animated Left Conversation Sidebar (Transitions smoothly between w-80/w-96 and compact w-20) */}
         <div
           className={`flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface transition-all duration-300 ease-in-out ${

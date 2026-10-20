@@ -1,18 +1,45 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Compass, Sparkles } from "lucide-react";
+import { useTourStore } from "@/lib/tour_state";
 
 export const UserSettingsHelp: React.FC = () => {
   const navigate = useNavigate();
+  const startWalkthrough = useTourStore((state) => state.startWalkthrough);
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Help & Support</h2>
-        <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">Access resources or connect with community assistance.</p>
+        <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">Access resources, platform walkthroughs, or connect with community assistance.</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Interactive Platform Walkthrough Trigger Card */}
+        <button
+          onClick={() => {
+            startWalkthrough();
+            navigate('/home');
+          }}
+          className="sm:col-span-2 p-4 rounded-xl border border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5 text-left hover:border-amber-500/60 dark:hover:bg-amber-500/10 transition-all group shadow-sm"
+        >
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-sm font-semibold text-amber-950 dark:text-amber-200 flex items-center gap-2">
+              <Compass className="h-4 w-4 text-amber-500" />
+              Platform Walkthrough
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                <Sparkles className="h-2.5 w-2.5" /> Interactive
+              </span>
+            </h3>
+            <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 group-hover:translate-x-0.5 transition-transform">
+              Launch Walkthrough &rarr;
+            </span>
+          </div>
+          <p className="text-xs text-amber-800/80 dark:text-zinc-400">
+            Re-run the interactive platform walkthrough to explore tools, tabs, workflows, and escrow features.
+          </p>
+        </button>
+
         <button
           onClick={() => navigate("/landing/FAQ")}
           className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-left hover:bg-gray-50 dark:hover:bg-white/10 transition-all group"

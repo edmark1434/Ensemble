@@ -40,7 +40,7 @@ export function UserSettingsDisplay() {
             Choose between light mode or dark mode for the application interface.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div data-tour="settings-theme-toggle" className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Light Mode Card */}
             <div
               onClick={() => handleThemeChange("light")}

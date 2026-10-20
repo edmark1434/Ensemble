@@ -304,7 +304,7 @@ export default function AssetsLibrary() {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-dark-base dark:text-white">
       <UserHeader pageTitle="Asset Library" />
-      <main className="mx-auto w-full max-w-7xl p-5 md:p-8">
+      <main data-tour="assets-catalog" className="mx-auto w-full max-w-7xl p-5 md:p-8">
         <div className="mb-6">
           <h1 className="text-2xl font-bold">Assets Library</h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">Discover images, videos, audio, and templates shared by the community.</p>

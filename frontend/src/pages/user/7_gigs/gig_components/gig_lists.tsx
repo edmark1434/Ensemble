@@ -164,7 +164,7 @@ export const GigList: React.FC<GigListProps> = ({
             }`}
           >
         <AnimatePresence mode="popLayout">
-          {paginatedGigs.map((gig) => {
+          {paginatedGigs.map((gig, index) => {
             const isActive = activeGigId === gig.id;
             const isOpen = gig.status?.toLowerCase() === "open" || !gig.status;
             const hasServiceRating = gig.ratingCount > 0;
@@ -178,6 +178,7 @@ export const GigList: React.FC<GigListProps> = ({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1.0] }}
+                  data-tour={index === 0 ? "gig-card-first" : undefined}
                   onClick={() => navigate(`${baseRoute}/${gig.id}`)}
                   className={`group flex flex-col justify-between rounded-2xl border p-4 transition-colors duration-200 cursor-pointer ${
                     isActive
@@ -337,6 +338,7 @@ export const GigList: React.FC<GigListProps> = ({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1.0] }}
+                data-tour={index === 0 ? "gig-card-first" : undefined}
                 onClick={() => navigate(`${baseRoute}/${gig.id}`)}
                 className={`group flex flex-col md:flex-row gap-6 rounded-2xl border p-5 transition-colors duration-200 cursor-pointer ${
                   isActive

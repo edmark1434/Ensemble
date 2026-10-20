@@ -28,9 +28,10 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, LayoutGroup } from "framer-motion";
 import useGlobalState from "@/lib/global_state";
+import { useTourStore, WALKTHROUGH_STEPS } from "@/lib/tour_state";
 import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { formatUnreadBadge, useInboxUnreadTotals } from "@/components/ui/chat_bubble/useInboxUnreadTotals";
 
@@ -71,6 +72,26 @@ let activityRecordsInitial: NavItem[] = [
     { label: "Inbox", icon: MessageSquare, to: "/inbox" },
 ];
 
+const getSidenavTourId = (path: string) => {
+    if (path === "/home") return "sidenav-home";
+    if (path === "/projects") return "sidenav-projects";
+    if (path === "/teams") return "sidenav-teams";
+    if (path === "/forums") return "sidenav-forums";
+    if (path === "/discovery") return "sidenav-discovery";
+    if (path === "/assets") return "sidenav-assets";
+    if (path === "/jobs") return "sidenav-jobs-posting";
+    if (path === "/jobs/proposals") return "sidenav-jobs-proposals";
+    if (path === "/gigs") return "sidenav-gigs-services";
+    if (path === "/gigs/orders") return "sidenav-gigs-orders";
+    if (path === "/dashboard") return "sidenav-deliveries";
+    if (path === "/terms-of-services") return "sidenav-tos";
+    if (path === "/contracts") return "sidenav-contracts";
+    if (path === "/contracts/disputes") return "sidenav-disputes";
+    if (path === "/transactions") return "sidenav-transactions";
+    if (path === "/inbox") return "sidenav-inbox";
+    return undefined;
+};
+
 interface UserNavProps {
     userName?: string;
     userTier?: string;
@@ -87,6 +108,21 @@ const UserNav: React.FC<UserNavProps> = () => {
     const hidePersonalNav = isGuestMode || isStaffPreview;
     const [isJobsOpen, setIsJobsOpen] = useState(false);
     const [isGigsOpen, setIsGigsOpen] = useState(false);
+    const isTourActive = useTourStore((state) => state.isWalkthroughActive);
+    const tourStepIndex = useTourStore((state) => state.currentStepIndex);
+    const currentTourStep = isTourActive ? WALKTHROUGH_STEPS[tourStepIndex] : null;
+
+    useEffect(() => {
+        if (!isTourActive || !currentTourStep) return;
+        const sId = currentTourStep.id;
+        const sel = currentTourStep.selector;
+        if (sId.includes('job') || sel.includes('jobs')) {
+            setIsJobsOpen(true);
+        }
+        if (sId.includes('gig') || sel.includes('gigs')) {
+            setIsGigsOpen(true);
+        }
+    }, [isTourActive, currentTourStep]);
     const inboxUnread = useInboxUnreadTotals().total;
 
     const primaryNavState = isGuestMode ? primaryNavInitial.filter(item => item.label !== "Teams") : primaryNavInitial;
@@ -180,7 +216,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                          {primaryNavState.map(({ label, icon: Icon, to }) => (
                             <li key={label}>
                                {!isCollapsed ? (
-                                  <NavLink to={to}>
+                                  <NavLink to={to} data-tour={getSidenavTourId(to)}>
                                      {({ isActive }) => (
                                         <div
                                            className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 ${
@@ -202,7 +238,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                ) : (
                                   /* Collapsed Floating Display for Primary Items */
                                   <div className="group w-full flex justify-center hover:z-50">
-                                     <NavLink to={to}>
+                                     <NavLink to={to} data-tour={getSidenavTourId(to)}>
                                         {({ isActive }) => (
                                            <div
                                               className={`relative flex items-center justify-center rounded-lg p-2 text-sm transition-colors duration-200 ${
@@ -250,7 +286,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                           {marketplaceTopState.map(({ label, icon: Icon, to }) => (
                              <li key={label}>
                                 {!isCollapsed ? (
-                                   <NavLink to={to}>
+                                   <NavLink to={to} data-tour={getSidenavTourId(to)}>
                                       {({ isActive }) => (
                                          <div
                                             className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 ${
@@ -271,7 +307,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                    </NavLink>
                                 ) : (
                                    <div className="group w-full flex justify-center hover:z-50">
-                                      <NavLink to={to}>
+                                      <NavLink to={to} data-tour={getSidenavTourId(to)}>
                                          {({ isActive }) => (
                                             <div
                                                className={`relative flex items-center justify-center rounded-lg p-2 text-sm transition-colors duration-200 ${
@@ -303,7 +339,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                       {/* Jobs Section */}
                       {!isCollapsed ? (
                          <div className="mb-2">
-                            <button onClick={() => setIsJobsOpen(!isJobsOpen)} className={sectionHeaderClassName()}>
+                            <button data-tour="sidenav-jobs-toggle" onClick={() => setIsJobsOpen(!isJobsOpen)} className={sectionHeaderClassName()}>
                                <Film className="h-4 w-4 shrink-0" />
                                <span className="flex-1 text-left text-sm font-medium">Jobs</span>
                                <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${isJobsOpen ? "rotate-180" : ""}`} />
@@ -315,7 +351,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                      const isActive = isJobItemActive(to);
                                      return (
                                         <li key={label}>
-                                           <NavLink to={to}>
+                                           <NavLink to={to} data-tour={getSidenavTourId(to)}>
                                               <div
                                                  className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors duration-200 ${
                                                     isActive ? "bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
@@ -369,7 +405,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                       {/* Gigs Section */}
                       {!isCollapsed ? (
                          <div className="mb-2">
-                            <button onClick={() => setIsGigsOpen(!isGigsOpen)} className={sectionHeaderClassName()}>
+                            <button data-tour="sidenav-gigs-toggle" onClick={() => setIsGigsOpen(!isGigsOpen)} className={sectionHeaderClassName()}>
                                <Clapperboard className="h-4 w-4 shrink-0" />
                                <span className="flex-1 text-left text-sm font-medium">Gigs</span>
                                <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${isGigsOpen ? "rotate-180" : ""}`} />
@@ -381,7 +417,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                      const isActive = isGigItemActive(to);
                                      return (
                                      <li key={label}>
-                                        <NavLink to={to}>
+                                        <NavLink to={to} data-tour={getSidenavTourId(to)}>
                                               <div
                                                  className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors duration-200 ${
                                                     isActive ? "bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
@@ -448,7 +484,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                            {activityState.map(({ label, icon: Icon, to }) => (
                             <li key={label} className="w-full">
                                {!isCollapsed ? (
-                                  <NavLink to={to} end={to === "/contracts"}>
+                                  <NavLink to={to} end={to === "/contracts"} data-tour={getSidenavTourId(to)}>
                                      {({ isActive }) => (
                                         <div
                                            className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 ${
@@ -475,7 +511,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                ) : (
                                   /* Collapsed Floating Display for Activity Items */
                                   <div className="group w-full flex justify-center hover:z-50">
-                                     <NavLink to={to} end={to === "/contracts"}>
+                                     <NavLink to={to} end={to === "/contracts"} data-tour={getSidenavTourId(to)}>
                                         {({ isActive }) => (
                                            <div
                                               className={`relative flex items-center justify-center rounded-lg p-2 text-sm transition-colors duration-200 ${
@@ -518,6 +554,7 @@ const UserNav: React.FC<UserNavProps> = () => {
              {/* Collapse Button */}
              <div className="border-t border-gray-200 dark:border-white/10 p-3">
                 <button
+                   data-tour="sidenav-collapse"
                    onClick={() => setIsCollapsed(!isCollapsed)}
                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white ${
                       isCollapsed ? "justify-center" : ""

@@ -820,11 +820,12 @@ const Projects: React.FC = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
       <UserHeader pageTitle="Projects" />
 
-      <div className="mx-auto max-w-7xl p-6 md:p-8">
+      <div className="mx-auto max-w-7xl p-6 md:p-8" data-tour="projects-workspace">
 
         {/* Action Bar */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
           <button
+            data-tour="projects-create-button"
             onClick={() => isGuestMode ? setIsModalOpen(true) : navigate("/projects/select")}
             className="shrink-0 flex items-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group"
           >
@@ -990,7 +991,8 @@ const Projects: React.FC = () => {
               Create your first project to get started
             </p>
             <button
-              onClick={() => isGuestMode ? setIsModalOpen(true) : navigate("/projects/select")}
+              data-tour="projects-create-button"
+            onClick={() => isGuestMode ? setIsModalOpen(true) : navigate("/projects/select")}
               className="mt-4 rounded-full bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-600"
             >
               Create Project

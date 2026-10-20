@@ -393,7 +393,7 @@ export default function DiscoveryPage() {
       <UserHeader pageTitle="Discovery" />
 
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        <div className="mx-auto max-w-6xl p-6 md:p-8 space-y-10">
+        <div className="mx-auto max-w-6xl p-6 md:p-8 space-y-10" data-tour="discovery-container">
 
           {/* TABS */}
             <div className="flex items-center gap-1 border-b border-zinc-200 dark:border-white/10 mb-6 -mt-4 relative">

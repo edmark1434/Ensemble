@@ -30,13 +30,13 @@ const JobSearchbar: React.FC<JobSearchbarProps> = ({ searchQuery, setSearchQuery
   return (
     <>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
-        <button
+        <button data-tour="jobs-create-button"
           onClick={handlePostClick}
           className="shrink-0 flex items-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition-all duration-200 hover:scale-105 active:scale-95 shadow-sm hover:shadow-md cursor-pointer select-none"
         >
           <Plus className="h-4 w-4" /> <span>Post a Job</span>
         </button>
-        <div className="relative flex-1">
+        <div data-tour="jobs-search-bar" className="relative flex-1">
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-zinc-500" />
           <input
             type="text"

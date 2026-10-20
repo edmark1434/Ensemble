@@ -12,6 +12,7 @@ import Checkout from '@/pages/payment/checkout.tsx'
 import Profile from '@/pages/user/7_profile/Profile.tsx'
 import ProfileRoute from '@/pages/user/7_profile/ProfileRoute.tsx'
 import UserSettings from '@/components/nav/Settings/user_settings.tsx'
+import PlatformTour from '@/components/tour/PlatformTour'
 import Layout from './components/ui/Layout.tsx'
 import Home from '@/pages/user/1_home/Home.tsx'
 import Projects from '@/pages/user/2_projects/Projects.tsx'
@@ -175,6 +176,7 @@ function App() {
       <ToastTestingWidget />
       <DevModeWidget />
       <AccountRestrictionHost />
+      <PlatformTour />
       <Suspense fallback={<GlobalLoader />}>
       <Routes>
       <Route path="/admin" element={<AdminLoginPage />} />

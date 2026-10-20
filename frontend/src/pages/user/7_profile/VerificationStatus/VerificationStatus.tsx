@@ -168,7 +168,7 @@ export const VerificationStatus: React.FC = () => {
   if (isVerified) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-dark-base font-['Plus Jakarta Sans',sans-serif] text-gray-900 dark:text-white overflow-y-auto selection:bg-blue-500/30">
-        <div className="mx-auto max-w-4xl p-6 md:p-8 animate-[fadeIn_0.4s_ease-out]">
+        <div className="mx-auto max-w-4xl p-6 md:p-8 animate-[fadeIn_0.4s_ease-out]" data-tour="verification-status">
           {/* Back Button */}
           <div className="flex items-center justify-between mb-6">
             <button

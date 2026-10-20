@@ -1,6 +1,7 @@
 // src/pages/user/1_home/home_components/home_banner_info.tsx
 import React, { useEffect, useState, useMemo } from "react";
-import { X, ChevronDown } from "lucide-react";
+import { X, ChevronDown, Compass } from "lucide-react";
+import { useTourStore } from "@/lib/tour_state";
 import { APP_VERSION } from "@/version.tsx";
 
 // ============================================================================
@@ -228,16 +229,30 @@ export const HomeBannerInfo: React.FC<HomeBannerInfoProps> = ({
 
           {/* Footer */}
           <div className="flex items-center justify-between border-t border-gray-200 dark:border-white/10 pt-4">
-            <span className="text-[11px] text-gray-500 dark:text-zinc-500">
+            <span className="text-[11px] text-gray-500 dark:text-zinc-500 hidden sm:inline">
               Press ESC or click Got It to dismiss
             </span>
-            <button
-              onClick={onClose}
-              className="rounded-xl border border-gray-200 dark:border-white/15 bg-gray-100 dark:bg-white/10 px-4 py-2 text-xs font-semibold text-gray-900 dark:text-white transition hover:bg-gray-200 dark:hover:bg-white/20"
-              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-            >
-              Got it
-            </button>
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  useTourStore.getState().startTour();
+                }}
+                className="flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-3.5 py-2 text-xs font-semibold text-amber-800 dark:text-amber-300 transition hover:bg-amber-100 dark:hover:bg-amber-500/20"
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                <Compass className="h-3.5 w-3.5" />
+                Walkthrough
+              </button>
+              <button
+                onClick={onClose}
+                className="rounded-xl border border-gray-200 dark:border-white/15 bg-gray-100 dark:bg-white/10 px-4 py-2 text-xs font-semibold text-gray-900 dark:text-white transition hover:bg-gray-200 dark:hover:bg-white/20"
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                Got it
+              </button>
+            </div>
           </div>
         </div>
       </div>

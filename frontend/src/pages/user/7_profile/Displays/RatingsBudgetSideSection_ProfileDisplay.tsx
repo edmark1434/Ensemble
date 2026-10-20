@@ -77,7 +77,7 @@ export const RatingsBudgetSideSection_ProfileDisplay: React.FC<RatingsBudgetSide
   );
 
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/90 p-4 text-gray-800 dark:text-zinc-300 shadow-xl font-['Plus Jakarta Sans',sans-serif] space-y-1 relative z-30">
+    <div data-tour="profile-budget" className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/90 p-4 text-gray-800 dark:text-zinc-300 shadow-xl font-['Plus Jakarta Sans',sans-serif] space-y-1 relative z-30">
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">
         <h3 className="text-[11px] font-extrabold text-gray-900 dark:text-white uppercase tracking-wider">Ratings &amp; Budget</h3>
         <div className="flex items-center gap-1.5">

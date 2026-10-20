@@ -74,7 +74,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
     <div className="space-y-5 font-['Plus Jakarta Sans',sans-serif]">
 
       {/* ==================== SMOOTH NAVIGATION BAR ==================== */}
-      <div className="flex flex-wrap gap-1 bg-gray-100/50 dark:bg-dark-base/40 border border-gray-200 dark:border-white/5 p-1 rounded-2xl w-fit">
+      <div data-tour="profile-tabs" className="flex flex-wrap gap-1 bg-gray-100/50 dark:bg-dark-base/40 border border-gray-200 dark:border-white/5 p-1 rounded-2xl w-fit">
         {tabOptions.filter((tab) => tab.key !== "record" || isOwner).map((tab) => {
           const isActive = activeTab === tab.key;
           return (

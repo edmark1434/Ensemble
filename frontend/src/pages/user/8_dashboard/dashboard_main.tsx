@@ -247,7 +247,7 @@ const DashboardMain = () => {
             {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="deliveries and tasks" />}
 
             {/* Main Content */}
-            <div className={`mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in`}>
+            <div className={`mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in`} data-tour="deliveries-dashboard">
                 {/* Banner Title */}
                 <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-dark-surface/60 shadow-sm dark:shadow-none p-6 md:p-8 backdrop-blur-xl">
                     <div className="relative z-10 flex flex-col sm:flex-row justify-between sm:items-center gap-4 w-full">

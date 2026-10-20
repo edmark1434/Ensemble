@@ -2480,6 +2480,7 @@ const Forums = () => {
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
               <button
                 type="button"
+                data-tour="forums-new-discussion"
                 onClick={handleActionClick}
                 className="shrink-0 flex items-center justify-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group whitespace-nowrap"
               >
@@ -2508,7 +2509,7 @@ const Forums = () => {
 
             <div className="mb-4 flex flex-col gap-3 border-b border-gray-200 dark:border-white/10 pb-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
+                <div data-tour="forums-tabs" className="flex flex-wrap items-center gap-2">
                   {tabOptions.filter((tab) => isForumAuthenticated || ["feed", "groups"].includes(tab.key)).map((tab) => (
                     <button
                       key={tab.key}

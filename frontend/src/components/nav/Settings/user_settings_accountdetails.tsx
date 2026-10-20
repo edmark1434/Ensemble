@@ -293,6 +293,7 @@ export const UserSettingsAccountDetails: React.FC<AccountDetailsProps> = ({
       <div className="flex items-center justify-between gap-4 py-2 flex-wrap border-b border-gray-200 dark:border-white/5 pb-4">
         <button
           type="button"
+          data-tour="settings-verification-button"
           onClick={() => navigate("/account-verification-status")}
           className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all text-xs font-semibold shadow-sm"
         >

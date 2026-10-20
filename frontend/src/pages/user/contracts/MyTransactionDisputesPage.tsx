@@ -110,7 +110,7 @@ export default function MyTransactionDisputesPage() {
   return (
     <div className="min-h-screen bg-gray-50 font-['Plus_Jakarta_Sans'] dark:bg-dark-base">
       <UserHeader pageTitle="Disputes" />
-      <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8">
+      <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8" data-tour="disputes-container">
         <div className="flex items-start gap-3">
           <Scale className="mt-1 h-5 w-5 text-zinc-500" />
           <div>

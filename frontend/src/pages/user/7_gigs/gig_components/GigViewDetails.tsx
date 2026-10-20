@@ -457,11 +457,13 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                       onClick={() => {
                         navigate(`/gigs/services/${selectedGig.id}/page`);
                       }}
+                      data-tour="gig-detail-view-full"
                       className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                     >
                       View Full
                     </button>
                     <button
+                          data-tour="gig-detail-order-button"
                           onClick={() => {
                             if (isGuestMode) return setIsModalOpen(true);
                             if (isVerified) handleOpenCheckout();

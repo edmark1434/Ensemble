@@ -117,7 +117,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
 
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white dark:from-white/[0.03] to-transparent p-6 shadow-xl font-['Plus Jakarta Sans',sans-serif]">
+    <div data-tour="profile-header" className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white dark:from-white/[0.03] to-transparent p-6 shadow-xl font-['Plus Jakarta Sans',sans-serif]">
       {/* Banner */}
       <div className="relative -mx-6 -mt-6 mb-4 aspect-[851/240] overflow-hidden border-b border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/[0.03]">
         {bannerUrl ? (
@@ -147,7 +147,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
       <div className="flex flex-col gap-6 md:flex-row items-center md:items-start">
 
         {/* Left Side: Avatar Asset Element */}
-        <div className="relative flex-shrink-0 -mt-20">
+        <div data-tour="profile-avatar" className="relative flex-shrink-0 -mt-20">
           <div 
             onClick={() => { if (avatarUrl) setIsAvatarExpanded(true); }}
             className={`h-28 w-28 rounded-full ring-4 ring-white dark:ring-dark-base bg-gradient-to-br from-gray-200 to-gray-300 dark:from-zinc-700 dark:to-zinc-800 p-0.5 shadow-xl shadow-gray-500/5 ${avatarUrl ? 'cursor-pointer hover:scale-105 transition-transform' : ''}`}

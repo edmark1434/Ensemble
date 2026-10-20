@@ -1,4 +1,5 @@
-import { Bell, ChevronDown, LifeBuoy, Settings, LogOut, User, Search, Sparkles, MessageSquare, Plus } from "lucide-react";
+import { Bell, ChevronDown, LifeBuoy, Settings, LogOut, User, Search, Sparkles, MessageSquare, Plus, Compass } from "lucide-react";
+import { useTourStore } from "@/lib/tour_state";
 import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -975,7 +976,7 @@ useEffect(() => {
 
             {!isGuestView && (
               <div className="flex items-center gap-3 w-full max-w-md">
-                <form ref={creatorSearchRef} onSubmit={handleHeaderSearchSubmit} className="relative w-full max-w-xs group">
+                <form data-tour="header-search-creators" ref={creatorSearchRef} onSubmit={handleHeaderSearchSubmit} className="relative w-full max-w-xs group">
                   <Search
                     onClick={handleHeaderSearchSubmit}
                     className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500 dark:text-zinc-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors cursor-pointer"
@@ -1041,6 +1042,7 @@ useEffect(() => {
                       navigate("/landing/AskOurChatbot");
                     }, 800);
                   }}
+                  data-tour="header-ask-ai"
                   className={`group relative flex items-center justify-center overflow-hidden rounded-full border transition-all duration-700 ease-in-out border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 hover:scale-105 hover:shadow-[0_0_15px_rgba(156,163,175,0.2)] h-[36px] bg-white dark:bg-dark-base ${
                     isAskAiLoaded ? 'w-[86px] px-3' : 'w-[36px] px-0'
                   }`}
@@ -1115,6 +1117,7 @@ useEffect(() => {
                   onMouseLeave={() => setIsHovered(false)}
                 >
                   <button
+                    data-tour="credits-pill"
                     onClick={handleTopUp}
                     onFocus={() => setIsHovered(true)}
                     onBlur={() => setIsHovered(false)}
@@ -1153,7 +1156,7 @@ useEffect(() => {
                 </div>
 
                 {/* Notifications */}
-                <div className="relative" ref={notificationRef}>
+                <div className="relative" ref={notificationRef} data-tour="notifications-button">
                   <button
                     onClick={() => {
                       setIsNotificationsOpen(!isNotificationsOpen);
@@ -1174,7 +1177,7 @@ useEffect(() => {
                 </div>
 
                 {/* Profile */}
-                <div className="relative" ref={dropdownRef}>
+                <div className="relative" ref={dropdownRef} data-tour="user-profile-button">
                   <button
                     onClick={() => {
                       setIsProfileOpen(!isProfileOpen);
@@ -1205,7 +1208,10 @@ useEffect(() => {
                   </button>
                   
                   {isProfileOpen && (
-                    <div className="absolute right-0 top-full mt-3.5 w-72 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] shadow-xl dark:shadow-[0_12px_32px_rgba(0,0,0,0.5)] origin-top-right transition-all duration-200 animate-in fade-in zoom-in-95">
+                    <div
+                      data-tour="user-profile-dropdown"
+                      className="absolute right-0 top-full mt-3.5 w-72 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] shadow-xl dark:shadow-[0_12px_32px_rgba(0,0,0,0.5)] origin-top-right transition-all duration-200 animate-in fade-in zoom-in-95"
+                    >
                       {/* Pointing tip */}
                       <svg
                         className="absolute -top-[7px] right-[5px] z-[2] overflow-visible"
@@ -1269,11 +1275,12 @@ useEffect(() => {
                         </button>
 
                         <button
+                          data-tour="profile-menu-settings"
                           ref={(el) => { profileItemRefs.current[1] = el; }}
                           onMouseEnter={() => handleProfileItemHover(1, false)}
                           onClick={() => {
                             setIsProfileOpen(false);
-                            navigate("/settings");
+                            navigate("/settings", { state: { tab: "account" } });
                           }}
                           className="relative z-[1] flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 font-medium transition-colors duration-150 hover:text-gray-900 dark:hover:text-white outline-none"
                         >
@@ -1286,8 +1293,29 @@ useEffect(() => {
                           onMouseEnter={() => handleProfileItemHover(2, false)}
                           onClick={() => {
                             setIsProfileOpen(false);
+                            useTourStore.getState().startTour();
+                            navigate("/home");
+                          }}
+                          className="relative z-[1] flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-gray-700 dark:text-zinc-300 font-medium transition-colors duration-150 hover:text-gray-900 dark:hover:text-white outline-none"
+                        >
+                          <Compass className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                          <span>
+                            <span className="block text-sm flex items-center gap-1.5">
+                              Platform Walkthrough
+                              <span className="inline-flex items-center rounded-full bg-amber-500/15 px-1.5 py-0.2 text-[9px] font-bold text-amber-600 dark:text-amber-400">Guide</span>
+                            </span>
+                            <span className="block text-xs font-normal text-gray-500 dark:text-zinc-500">Interactive guide to platform tools</span>
+                          </span>
+                        </button>
+
+                        <button
+                          ref={(el) => { profileItemRefs.current[3] = el; }}
+                          onMouseEnter={() => handleProfileItemHover(3, false)}
+                          onClick={() => {
+                            setIsProfileOpen(false);
                             navigate("/landing/SendAFeedback");
                           }}
+                          data-tour="profile-menu-feedback"
                           className="relative z-[1] flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 font-medium transition-colors duration-150 hover:text-gray-900 dark:hover:text-white outline-none"
                         >
                           <MessageSquare className="h-4 w-4 shrink-0 text-gray-500 dark:text-zinc-400" />
@@ -1297,12 +1325,13 @@ useEffect(() => {
                         <div className="my-2 border-t border-gray-100 dark:border-zinc-800" />
 
                         <button
-                          ref={(el) => { profileItemRefs.current[3] = el; }}
-                          onMouseEnter={() => handleProfileItemHover(3, false)}
+                          ref={(el) => { profileItemRefs.current[4] = el; }}
+                          onMouseEnter={() => handleProfileItemHover(4, false)}
                           onClick={() => {
                             setIsProfileOpen(false);
                             navigate("/support/ticket");
                           }}
+                          data-tour="profile-menu-support"
                           className="relative z-[1] flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-gray-700 dark:text-zinc-300 font-medium transition-colors duration-150 hover:text-gray-900 dark:hover:text-white outline-none"
                         >
                           <LifeBuoy className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-zinc-400" />
@@ -1315,8 +1344,8 @@ useEffect(() => {
                         <div className="my-2 border-t border-gray-100 dark:border-zinc-800" />
                         
                         <button
-                          ref={(el) => { profileItemRefs.current[4] = el; }}
-                          onMouseEnter={() => handleProfileItemHover(4, true)}
+                          ref={(el) => { profileItemRefs.current[5] = el; }}
+                          onMouseEnter={() => handleProfileItemHover(5, true)}
                           onClick={() => setIsLogoutModalOpen(true)}
                           className="relative z-[1] flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 transition-colors duration-150 hover:text-red-700 dark:hover:text-red-300 outline-none"
                         >

@@ -66,7 +66,7 @@ export const SkillsSideSection_ProfileDisplay: React.FC<SkillsSectionProps> = ({
 
   return (
     // FIXED: Adjusted z-index to z-10 so top-level page elements / tooltips stack over it properly
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-dark-base/60 backdrop-blur-md p-4 text-gray-800 dark:text-zinc-300 shadow-xl font-['Plus Jakarta Sans',sans-serif] space-y-3 relative z-10">
+    <div data-tour="profile-skills" className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-dark-base/60 backdrop-blur-md p-4 text-gray-800 dark:text-zinc-300 shadow-xl font-['Plus Jakarta Sans',sans-serif] space-y-3 relative z-10">
 
       {/* Header Panel */}
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">

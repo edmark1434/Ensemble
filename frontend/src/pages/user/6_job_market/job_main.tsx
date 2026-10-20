@@ -385,7 +385,7 @@ const JobMain: React.FC = () => {
         <UserHeader pageTitle="Job Market" />
       </div>
 
-      <div className="mx-auto max-w-7xl p-6 md:p-8 w-full">
+      <div className="mx-auto max-w-7xl p-6 md:p-8 w-full" data-tour="job-market">
         <JobSearchbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
 
         <div className="mb-8 flex flex-wrap items-center justify-between border-b border-gray-200 dark:border-white/10 gap-4">

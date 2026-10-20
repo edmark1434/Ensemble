@@ -382,7 +382,7 @@ export const Contracts: React.FC = () => {
       {loading ? (
         <ContractsSkeletonLoader />
       ) : (
-        <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in">
+        <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in" data-tour="contracts-container">
           {/* Banner */}
           <div className="relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface/60 shadow-xs p-6 md:p-8 backdrop-blur-xl">
             <div className="relative z-10 space-y-3">

@@ -210,7 +210,7 @@ const ProjectsSelection: React.FC = () => {
       <UserHeader pageTitle="Projects / Select Format" />
 
       {/* Main Content */}
-      <div className="relative z-10 mx-auto max-w-4xl p-6 md:p-8">
+      <div data-tour="projects-format-selection" className="relative z-10 mx-auto max-w-4xl p-6 md:p-8">
 
         {/* Return Button - Top Left */}
         <button

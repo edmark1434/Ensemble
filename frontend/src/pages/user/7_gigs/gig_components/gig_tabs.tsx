@@ -18,7 +18,7 @@ const GigTabs: React.FC = () => {
   const tabs = isGuestMode ? allTabs.filter(tab => tab.label === "All Services") : allTabs;
 
   return (
-    <div className="flex gap-1 relative">
+    <div data-tour="gigs-tabs" className="flex gap-1 relative">
       {tabs.map((tab) => {
         const isActive = location.pathname.startsWith(tab.path);
         return (

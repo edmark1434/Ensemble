@@ -142,7 +142,7 @@ export const TosMain: React.FC = () => {
       <UserHeader pageTitle="Terms of Service" />
       {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="terms of service" />}
 
-      <div className={`mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in`}>
+      <div className={`mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in`} data-tour="tos-container">
         <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-dark-surface/60 shadow-sm p-6 md:p-8 backdrop-blur-xl">
           <div className="relative z-10">
             <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white md:text-3xl">

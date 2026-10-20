@@ -18,7 +18,7 @@ const JobTabs: React.FC = () => {
   const tabs = isGuestMode ? allTabs.filter(tab => tab.label === "Postings") : allTabs;
 
   return (
-    <div className="flex gap-1 relative">
+    <div data-tour="jobs-tabs" className="flex gap-1 relative">
       {tabs.map((tab) => {
         const isActive = location.pathname.startsWith(tab.path);
         return (

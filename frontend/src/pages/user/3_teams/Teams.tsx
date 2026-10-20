@@ -442,7 +442,7 @@ export default function Teams() {
     <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
       <UserHeader pageTitle="Teams" />
 
-      <div className="mx-auto max-w-7xl p-6 md:p-8">
+      <div data-tour="teams-workspace" className="mx-auto max-w-7xl p-6 md:p-8">
         {/* Action Bar (Identical Layout to /projects) */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
           <button

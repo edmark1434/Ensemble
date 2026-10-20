@@ -257,7 +257,7 @@ export const TransactionHistoryMain = () => {
     <div className="min-h-screen w-full overflow-x-hidden bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white">
       <UserHeader pageTitle="Transaction History" />
 
-      <main className="mx-auto w-full max-w-7xl p-5 md:p-8">
+      <main className="mx-auto w-full max-w-7xl p-5 md:p-8" data-tour="transactions-table">
         <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div>
             <div className="mb-2 flex items-center gap-2 text-blue-400">

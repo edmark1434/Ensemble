@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { User, CreditCard, HelpCircle, FileText, ArrowLeft, AlertCircle, Monitor, Wallet, ShieldAlert, Power } from "lucide-react";
 
@@ -20,6 +20,7 @@ import { UserSettingsLegalPolicies } from "./user_settings_legalpolicies";
 import { UserSettingsDisplay } from "./user_settings_display";
 import { UserSettingsWallet } from "./user_settings_wallet";
 import { AccountStandingNotice, type AccountStanding } from "@/components/ui/AccountStanding";
+import { useTourStore, WALKTHROUGH_STEPS } from "@/lib/tour_state";
 type TabType = "account" | "wallet" | "subscription" | "help" | "legal" | "display" | "violations" | "deactivate";
 
 interface Preset {
@@ -32,7 +33,26 @@ export default function UserSettings() {
   const navigate = useNavigate();
   const globalUser = useGlobalState((state) => state.user);
 
-  const [activeTab, setActiveTab] = useState<TabType>("display");
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<TabType>(location.state?.tab || "display");
+
+  useEffect(() => {
+    if (location.state?.tab && location.state.tab !== activeTab) {
+      setActiveTab(location.state.tab);
+    }
+  }, [location.state?.tab]);
+  const isWalkthroughActive = useTourStore((state) => state.isWalkthroughActive);
+  const currentStepIndex = useTourStore((state) => state.currentStepIndex);
+  const currentTourStep = isWalkthroughActive ? WALKTHROUGH_STEPS[currentStepIndex] : null;
+
+  useEffect(() => {
+    if (currentTourStep?.id === "settings_verification" && activeTab !== "account") {
+      setActiveTab("account");
+    } else if (currentTourStep?.id === "settings_display" && activeTab !== "display") {
+      setActiveTab("display");
+    }
+  }, [currentTourStep?.id, activeTab]);
+
   const [loading, setLoading] = useState(true);
 
   // Unsaved changes state
@@ -322,6 +342,7 @@ export default function UserSettings() {
           <div className="flex items-center gap-4">
             <button
               onClick={handleGoBack}
+              data-tour="settings-back-button"
               className="group relative flex items-center h-10 rounded-full border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/20 transition-all duration-300 px-2.5 hover:px-4 overflow-hidden"
             >
               <ArrowLeft className="h-4 w-4 shrink-0 transition-transform duration-300 group-hover:-translate-x-0.5" />

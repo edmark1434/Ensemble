@@ -7,6 +7,7 @@ import { HomeQuickActButtons } from "./home_quickact_buttons";
 import { HomeBannerVersion } from "./home_banner_version";
 import { HomeBannerInfo } from "./home_banner_info";
 import useGlobalState from "@/lib/global_state";
+import { useTourStore } from "@/lib/tour_state";
 
 export const WelcomeCardSkeleton: React.FC = () => (
   <div className="mb-12 overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-8">
@@ -51,6 +52,13 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
 
   const user = useGlobalState((state) => state.user);
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isWalkthroughActive = useTourStore((state) => state.isWalkthroughActive);
+
+  useEffect(() => {
+    if (isWalkthroughActive && isCollapsed) {
+      setIsCollapsed(false);
+    }
+  }, [isWalkthroughActive, isCollapsed]);
 
   useEffect(() => {
     const hasVisited = sessionStorage.getItem("hasVisitedHome");
@@ -282,6 +290,7 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
             {/* Embedded Search Bar */}
             <div className="mt-6 mb-2 relative z-40">
               <motion.div
+                data-tour="home-search-bar"
                 initial={{ maxWidth: "48px", opacity: 0 }}
                 animate={{ maxWidth: "100%", opacity: 1 }}
                 transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
