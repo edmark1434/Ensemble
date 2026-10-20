@@ -1,10 +1,10 @@
-export type BudgetType = "open" | "ranged" | "fixed" | "milestone_pool" | "multi_hire";
+export type BudgetType = "open" | "ranged" | "milestone_pool" | "multi_hire";
 
 export interface BudgetDisplayInfo {
   type: BudgetType;
   amountText: string;     // e.g. "600+", "600 – 800", "8,000"
   rawPriceRange: string;  // e.g. "600+", "600 – 800"
-  tagLabel: string;       // e.g. "Open Bid", "Ranged Budget", "Fixed Price", "Milestone Pool", "Per Hire"
+  tagLabel: string;       // e.g. "Open Bid", "Ranged Budget", "Milestone Pool", "Per Hire"
   tagColorClass: string;  // Ensemble neutral gray badge classes
   subtitle: string;       // Explanatory microcopy
 }
@@ -71,27 +71,18 @@ export function getBudgetDisplayInfo(params: {
     };
   }
 
-  // 4. Ranged Budget (Min & Max specified, and Min !== Max)
-  if (min > 0 && max > 0 && min !== max) {
-    return {
-      type: "ranged",
-      amountText: `${min.toLocaleString()} – ${max.toLocaleString()}`,
-      rawPriceRange: `${min.toLocaleString()} – ${max.toLocaleString()}`,
-      tagLabel: "Ranged Budget",
-      tagColorClass: GRAY_TAG_CLASSES,
-      subtitle: "Negotiable within target range"
-    };
-  }
-
-  // 5. Fixed Price
-  const fixedVal = max || min || 0;
+  // 4. Ranged Budget (Individual)
+  const isRanged = min > 0 && max > 0 && min !== max;
+  const amountText = isRanged
+    ? `${min.toLocaleString()} – ${max.toLocaleString()}`
+    : `${(max || min).toLocaleString()}`;
   return {
-    type: "fixed",
-    amountText: `${fixedVal.toLocaleString()}`,
-    rawPriceRange: `${fixedVal.toLocaleString()}`,
-    tagLabel: "Fixed Price",
+    type: "ranged",
+    amountText,
+    rawPriceRange: amountText,
+    tagLabel: "Ranged Budget",
     tagColorClass: GRAY_TAG_CLASSES,
-    subtitle: "Non-negotiable fixed budget"
+    subtitle: "Negotiable within target range"
   };
 }
 
@@ -105,7 +96,7 @@ export function getJobBudgetType(job: {
   isTeam?: boolean;
   posted_as?: string;
   positionsNeeded?: number;
-}): "open" | "ranged" | "fixed" | "pooled" {
+}): "open" | "ranged" | "pooled" {
   const isTeam = Boolean(
     job.hiring_type === "team" ||
     job.is_team ||
@@ -116,6 +107,5 @@ export function getJobBudgetType(job: {
   const min = Number(job.minBudget ?? job.rate_credits_min) || 0;
   const max = Number(job.maxBudget ?? job.rate_credits_max) || 0;
   if (min > 0 && (!max || max === 0)) return "open";
-  if (min > 0 && max > 0 && min !== max) return "ranged";
-  return "fixed";
+  return "ranged";
 }

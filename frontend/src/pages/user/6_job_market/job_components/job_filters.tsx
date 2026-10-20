@@ -193,7 +193,6 @@ const JobFilters: React.FC<JobFiltersProps> = ({
             { id: "open", label: "Open Bid", context: "Individual" },
             { id: "ranged", label: "Ranged", context: "Individual" },
             { id: "pooled", label: "Pooled", context: "Team" },
-            { id: "fixed", label: "Fixed Price", context: "Individual" },
           ].map(({ id, label, context }) => {
             const isSelected = filters.selectedBudgetTypes.includes(id);
             const isOnlyIndividual =

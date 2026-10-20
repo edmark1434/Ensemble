@@ -65,8 +65,8 @@ const SAMPLE_JOBS_DATA = [
     difficulty: "Expert",
     hiring_type: "single",
     no_of_hires: 1,
-    minBudget: 5500,
-    maxBudget: 5500, // Fixed Price 5,500
+    minBudget: 4500,
+    maxBudget: 6000, // Ranged Budget 4,500 - 6,000
     timelineMin: 5,
     timelineMax: 7,
     thumbnail: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=800&q=80",
@@ -118,8 +118,8 @@ const SAMPLE_JOBS_DATA = [
     difficulty: "Expert",
     hiring_type: "single",
     no_of_hires: 1,
-    minBudget: 6000,
-    maxBudget: 6000, // Fixed Price 6,000
+    minBudget: 5000,
+    maxBudget: 7000, // Ranged Budget 5,000 - 7,000
     timelineMin: 10,
     timelineMax: 14,
     thumbnail: "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=800&q=80",
@@ -153,8 +153,8 @@ const SAMPLE_JOBS_DATA = [
     difficulty: "Expert",
     hiring_type: "single",
     no_of_hires: 1,
-    minBudget: 4000,
-    maxBudget: 4000, // Fixed Price 4,000
+    minBudget: 3500,
+    maxBudget: 4800, // Ranged Budget 3,500 - 4,800
     timelineMin: 3,
     timelineMax: 5,
     thumbnail: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80",
@@ -411,7 +411,11 @@ const SAMPLE_JOBS_DATA = [
 ];
 
 async function seedSampleJobs(userAccountIds) {
-  if (userAccountIds.length === 0) return;
+  if (!userAccountIds || userAccountIds.length === 0) {
+    const uRes = await pool.query(`SELECT account_id FROM accounts WHERE type = 'User' ORDER BY created_at ASC LIMIT 10`);
+    userAccountIds = uRes.rows.map(r => r.account_id);
+  }
+  if (!userAccountIds || userAccountIds.length === 0) return;
 
   for (let i = 0; i < SAMPLE_JOBS_DATA.length; i++) {
     const job = SAMPLE_JOBS_DATA[i];
