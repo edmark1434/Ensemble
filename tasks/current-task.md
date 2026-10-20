@@ -1,58 +1,29 @@
-# Current Task: Complete Job Market & Proposal Enhancements Suite
+# Current Task: Modernize Video Editing Job Posts Seeding Suite
 
 ## Objective
-Implement all requested Client & Freelancer improvements across Job Creation, Proposal Pitching, Negotiation, and Post Lifecycle:
-
-### 0. Local Auto-Save Drafts & Reset on Job Post Creation
-- **Job Creation Draft Caching**: Auto-saves form progress into `localStorage` (`ensemble_job_create_draft`).
-- **Restore & Clear Banners**: Detects existing drafts and provides a 1-click "Reset / Clear Draft" action or restores previously drafted job details.
-- **Auto-Clearing**: Automatically flushes cached draft from `localStorage` upon successful job publication.
-
-### 1. Client Improvements (Job Post Creation & Management)
-- **1.A Screening Questions / Dealbreaker Criteria**:
-  - Clients can configure 1–3 custom screening questions (e.g., portfolio links, framework experience) during Job Creation Step 1.
-  - Freelancers submitting proposals must provide text answers for each screening question.
-  - Clients view applicant answers prominently in incoming proposal details and matrix.
-- **1.B Multiple Project Brief Attachments & Reference Files**:
-  - Clients can upload project brief files (PDFs, ZIPs, moodboards, specs) alongside the thumbnail.
-  - Stored in `job_attachments` with indexes > 0.
-  - Displayed with direct CloudFront download links and size badges on the job posting full page (`job_full_page.tsx`).
-- **1.C Milestone Pre-Scoping for Single-Hire Jobs**:
-  - Clients posting single-hire jobs can outline a suggested milestone roadmap (phase title, percentage, summary).
-  - Proposal creation flow auto-adopts the client's pre-scoped roadmap as starting milestones for the freelancer.
-- **1.D Side-by-Side Proposal Comparison Matrix & Sidebar Toggle Collapse**:
-  - In `proposals_incoming_page.tsx`, clients can toggle between **Cards View** and **Comparison Matrix View**.
-  - Matrix table displays freelancer rating, proposed bid vs. job budget percentage, milestone phases, answered screening questions count, attached work samples count, status badges, and quick actions (Shortlist toggle, Discussion Chat, and Full View).
-  - Opening the Comparison Matrix auto-collapses the Proposal Statuses & Filter sidebar to provide 100% full horizontal width for table columns.
-  - Interactive **Toggle Sidebar** (`PanelLeftClose` / `PanelLeftOpen`) button and in-matrix status pills enable expanding/collapsing filters and filtering by status directly.
-- **1.E Unified Budget Benchmark & Tag Display System**:
-  - Centralized budget formatter (`getBudgetDisplayInfo` in `frontend/src/lib/formatBudget.ts`).
-  - Distinguishes Open Bid (`600+ Credits` with `Open Bid` tag), Ranged Budget (`600 – 800 Credits` with `Ranged Budget` tag), Fixed Price (`8,000 Credits` with `Fixed Price` tag), Milestone Pool (`Milestone Pool` tag), and Multi-Hire (`Per Hire` tag).
-  - Applied across Job Full Page, Job Preview Modal, Market Grid/List cards, Recommendation cards, and Proposal Pitch steps.
-
-### 2. Freelancer Improvements (Proposal Creation & Transparency)
-- **2.A Direct Portfolio & Work Sample Attachments**:
-  - Freelancers can upload up to 3 work samples/case studies directly within Proposal Step 1.
-  - Backed by `proposal_attachments` table with indexed `proposal_id` and `file_id`.
-  - Clients can view and download attached files in incoming proposal review.
-- **2.B 1-Click Milestone Quick-Fill Templates**:
-  - Single Milestone (100%), 2 Phases (40/60%), 3 Phases (25/45/30%), and Dev + QA (70/30%) presets with automated hour/credit allocation.
-- **2.C Proposal Auto-Save Drafts**:
-  - Keyed by `jobId` in `localStorage` with prompt restore banner and clear option.
-- **2.D Job Activity Insights (Transparency)**:
-  - Displayed on `job_full_page.tsx`: proposals received, shortlisted candidates count, client hire rate %, and client last active time.
-- **2.E Proposal Fee Refund on Abandoned Jobs**:
-  - In `deleteJobRepositories`, if a client deletes or cancels a job with 0 hires, all applicants receive a full 10-credit proposal fee refund credited from the platform wallet with transaction type `'Proposal Fee Refund'`.
-
-### 3. Negotiation & Bridge Improvements
-- **3.A Counter-Offers & Milestone Editing During Offer Creation**:
-  - Clients sending contract offers can customize and edit milestone deliverables, hours, and revisions in the modal before contract finalization.
-- **3.B Read Receipts / Micro-Status Tracker on Sent Proposals**:
-  - Freelancers tracking submitted proposals in Sent Proposals and Proposal Details see a clear micro-status tracker:
-    `Submitted` → `Viewed by Client` (`viewed_at`) → `Shortlisted` (`shortlisted_at`) → `Hired / Contract Offer`.
+Replace outdated seed job posts in the PostgreSQL database and frontend fallback datasets:
+1. **Strictly Video Editing Focus**: All 15 posts are curated around video editing workflows on Ensemble (YouTube long-form, TikTok/Reels short-form hooks, 4K wedding films, multicam podcast assembly, velocity gaming montages, archival historical documentaries, e-commerce product ads, DaVinci Resolve color grading, SaaS motion demos, cinematic travel vlogs, brand commercial post teams, YouTube scaling teams, documentary feature crews, music video VFX duos, and cinematography course production).
+2. **Individual vs. Team Separation**:
+   - Outdated individual posts with `no_of_hires > 1` eliminated.
+   - All 10 Individual Jobs strictly have `hiring_type = 'single'` and `no_of_hires = 1`.
+   - All 5 Team Jobs have `hiring_type = 'team'`, with `no_of_hires` matching the exact sum of milestone roles (`slots_count` totaling 2 or 3) and budget percentages totaling 100%.
+3. **Budget Diversity**:
+   - Open Bids (`minBudget+`, `maxBudget = null`).
+   - Ranged Budgets (`minBudget – maxBudget`).
+   - Fixed Budgets (`minBudget = maxBudget`).
+   - Team Milestone Pools.
+4. **Clean Slate (Zero Proposals)**:
+   - Cleaned all legacy test proposals, interviews, contracts, and attachments.
+   - Database has exactly 15 open video editing jobs and 0 proposals, ready for realistic testing.
+5. **Seed & Fallback Parity**:
+   - `backend/lib/SeedJobs.js`: Modular seed script containing the 15 jobs definition and `seedSampleJobs`.
+   - `backend/lib/Seed.js`: Imported and integrated `seedSampleJobs`.
+   - `frontend/src/pages/user/6_job_market/job_datasets.tsx`: Full fallback dataset updated to match all 15 jobs with matching metadata, tags, and milestones.
+   - `frontend/src/pages/user/6_job_market/job_proposals/proposals_datasets.tsx`: Proposal fallback titles updated.
+   - `frontend/src/pages/user/6_job_market/job_main.tsx` & proposal pages: Safely resolve thumbnail URLs using `getImageUrl`.
 
 ## Verification & Status
-- [x] Database migration `1824100000000_make-job-rate-credits-max-nullable.js` applied.
-- [x] Database migration `1824200000000_job_market_complete_enhancements.js` applied.
-- [x] Both light and dark modes adhere strictly to Ensemble design tokens with high contrast and no gradients.
+- [x] Database updated: 15 video editing jobs seeded (10 single, 5 team), 0 proposals, 14 milestones.
+- [x] All 10 single jobs have `no_of_hires = 1`.
+- [x] All 5 team jobs have `no_of_hires = 2` or `3` matching milestone slot allocations.
 - [x] `npm run build --prefix frontend` passes with zero errors and zero warnings.

@@ -1,4 +1,5 @@
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
+import { getImageUrl } from "@/lib/utils";
 import React, { useState, useEffect, useMemo } from "react";
 import { Filter } from "lucide-react";
 import { Outlet, useNavigate, useParams, useLocation } from "react-router-dom";
@@ -162,9 +163,7 @@ const JobMain: React.FC = () => {
           applicantsCount: parseInt(j.applicant_count) || 0,
           savesCount: parseInt(j.saves_count) || 0,
           timeline: `${j.timeline_min}-${j.timeline_max} Days`,
-          thumbnail: j.thumbnail_path 
-             ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${j.thumbnail_path}`
-             : "/placeholder.svg",
+          thumbnail: getImageUrl(j.thumbnail_path) || "/placeholder.svg",
           skills: j.tags || [],
           isSaved: j.is_saved || false,
           isOwnPost: Boolean(j.is_own_post),

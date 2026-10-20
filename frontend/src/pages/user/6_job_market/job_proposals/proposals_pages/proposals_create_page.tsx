@@ -187,7 +187,7 @@ const ProposalsCreatePage: React.FC = () => {
             applicantsCount: Number(found.applicant_count || 0),
             savesCount: Number(found.saves_count || 0),
             timeline: `${found.timeline_min}-${found.timeline_max} Days`,
-            thumbnail: found.thumbnail_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${found.thumbnail_path}` : "/placeholder.svg",
+            thumbnail: getImageUrl(found.thumbnail_path) || "/placeholder.svg",
             skills: found.tags || [],
             isSaved: found.is_saved || false,
             isOwnPost: Boolean(found.is_own_post || found.isOwnPost),

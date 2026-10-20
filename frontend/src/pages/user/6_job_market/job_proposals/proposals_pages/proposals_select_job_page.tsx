@@ -85,9 +85,7 @@ export const ProposalsSelectJobPage: React.FC = () => {
             positionsNeeded: j.no_of_hires || 1,
             postedAt: new Date(j.created_at).toLocaleString(),
             timeAgo: getTimeAgo(new Date(j.created_at)),
-            thumbnail: j.thumbnail_path 
-              ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${j.thumbnail_path}` 
-              : "/placeholder.svg"
+            thumbnail: getImageUrl(j.thumbnail_path) || "/placeholder.svg"
           }));
         setMyJobPosts(userJobs);
       } catch (err) {

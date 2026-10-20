@@ -5,7 +5,7 @@ export const sampleIncomingProposals: ProposalItemData[] = [
   {
     id: "PROP-IN-01",
     jobId: "JP002",
-    jobTitle: sampleJobs.find((j) => j.id === "JP002")?.title || "YouTube Channel Intro Animation",
+    jobTitle: sampleJobs.find((j) => j.id === "JP002")?.title || "Viral TikTok & IG Reels Short-Form Hook Editor",
     partyName: "Alex Rivera",
     rating: 4.9,
     bidAmount: 13000,
@@ -27,7 +27,7 @@ export const sampleIncomingProposals: ProposalItemData[] = [
   {
     id: "PROP-IN-02",
     jobId: "JP006",
-    jobTitle: sampleJobs.find((j) => j.id === "JP006")?.title || "Music Video Color Grading & VAX Effects",
+    jobTitle: sampleJobs.find((j) => j.id === "JP008")?.title || "DaVinci Resolve Colorist for Indie Music Video",
     partyName: "Daryl Vance",
     rating: 4.8,
     bidAmount: 38000,
@@ -49,7 +49,7 @@ export const sampleIncomingProposals: ProposalItemData[] = [
   {
     id: "PROP-IN-03",
     jobId: "JP002",
-    jobTitle: sampleJobs.find((j) => j.id === "JP002")?.title || "YouTube Channel Intro Animation",
+    jobTitle: sampleJobs.find((j) => j.id === "JP002")?.title || "Viral TikTok & IG Reels Short-Form Hook Editor",
     partyName: "Samantha Cruz",
     rating: 4.7,
     bidAmount: 12500,
@@ -69,7 +69,7 @@ export const sampleIncomingProposals: ProposalItemData[] = [
   {
     id: "PROP-IN-04",
     jobId: "JP006",
-    jobTitle: sampleJobs.find((j) => j.id === "JP006")?.title || "Music Video Color Grading & VAX Effects",
+    jobTitle: sampleJobs.find((j) => j.id === "JP008")?.title || "DaVinci Resolve Colorist for Indie Music Video",
     partyName: "Marcus Thorne",
     rating: 5.0,
     bidAmount: 42000,
@@ -89,7 +89,7 @@ export const sampleIncomingProposals: ProposalItemData[] = [
   {
     id: "PROP-IN-05",
     jobId: "JP002",
-    jobTitle: sampleJobs.find((j) => j.id === "JP002")?.title || "YouTube Channel Intro Animation",
+    jobTitle: sampleJobs.find((j) => j.id === "JP002")?.title || "Viral TikTok & IG Reels Short-Form Hook Editor",
     partyName: "Brandon Lee",
     rating: 4.2,
     bidAmount: 9000,
@@ -112,7 +112,7 @@ export const sampleSentProposals: ProposalItemData[] = [
   {
     id: "PROP-SENT-01",
     jobId: "JP001",
-    jobTitle: sampleJobs.find((j) => j.id === "JP001")?.title || "Wedding Video Edit - Romantic Style",
+    jobTitle: sampleJobs.find((j) => j.id === "JP001")?.title || "YouTube Tech Channel Long-Form Video Editor",
     partyName: "Edmark Talingting",
     rating: 4.5,
     bidAmount: 32000,
@@ -134,7 +134,7 @@ export const sampleSentProposals: ProposalItemData[] = [
   {
     id: "PROP-SENT-02",
     jobId: "JP003",
-    jobTitle: sampleJobs.find((j) => j.id === "JP003")?.title || "Corporate Brand Identity Video",
+    jobTitle: sampleJobs.find((j) => j.id === "JP003")?.title || "Cinematic Wedding 4K Highlight Reel Editor",
     partyName: "Sarah Chen",
     rating: 4.9,
     bidAmount: 50000,
@@ -154,7 +154,7 @@ export const sampleSentProposals: ProposalItemData[] = [
   {
     id: "PROP-SENT-03",
     jobId: "JP004",
-    jobTitle: sampleJobs.find((j) => j.id === "JP004")?.title || "TikTok & Reels Content Repurposing",
+    jobTitle: sampleJobs.find((j) => j.id === "JP004")?.title || "Multi-Camera Podcast Assembly & Audio Sync",
     partyName: "Dave Alcantara",
     rating: 4.7,
     bidAmount: 18000,

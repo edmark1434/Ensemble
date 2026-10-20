@@ -98,9 +98,7 @@ export const ProposalsIncomingPage: React.FC = () => {
             hiring_type: found.hiring_type || "single",
             budget_credits: found.budget_credits,
             milestones: Array.isArray(found.milestones) ? found.milestones : [],
-            thumbnail: found.thumbnail_path 
-              ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${found.thumbnail_path}` 
-              : "/placeholder.svg"
+            thumbnail: getImageUrl(found.thumbnail_path) || "/placeholder.svg"
           });
         }
 
