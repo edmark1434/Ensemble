@@ -67,6 +67,7 @@ import TransactionHistoryMain from '@/pages/user/11_transactionhistory/main.tsx'
 import TosMain from '@/pages/user/terms_of_service/tos_main.tsx'
 import Contracts from '@/pages/user/contracts/contracts.tsx'
 import { DisputeFormPage } from '@/pages/user/contracts/DisputeFormPage.tsx'
+import MyTransactionDisputesPage from '@/pages/user/contracts/MyTransactionDisputesPage.tsx'
 import ContractDetailsPage from '@/pages/user/contracts/ContractDetailsPage.tsx'
 import UserProfilesList from '@/components/nav/user_profiles_list.tsx'
 import { VerificationStatus } from '@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx'
@@ -331,6 +332,7 @@ function App() {
           <Route path='/contracts' element={<Contracts />} />
           <Route path='/contract' element={<Navigate to="/contracts" replace />} />
           <Route path='/contracts/dispute-form' element={<DisputeFormPage />} />
+          <Route path='/contracts/disputes' element={<MyTransactionDisputesPage />} />
           <Route path='/contracts/:id' element={<ContractDetailsPage />} />
           <Route path='/dashboard' element={<DashboardMain />} />
           <Route path='/dashboard/tasks' element={<DashboardMain />} />

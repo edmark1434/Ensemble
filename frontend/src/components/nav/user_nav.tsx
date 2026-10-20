@@ -9,6 +9,7 @@ import {
     MessageSquare,
     Palette,
     ScrollText,
+    Scale,
     Users,
     Wallet,
     ChevronLeft,
@@ -65,6 +66,7 @@ let activityRecordsInitial: NavItem[] = [
     { label: "Deliveries", icon: LayoutDashboard, to: "/dashboard" },
     { label: "My Terms", icon: FileText, to: "/terms-of-services" },
     { label: "My Contracts", icon: ScrollText, to: "/contracts" },
+    { label: "Disputes", icon: Scale, to: "/contracts/disputes" },
     { label: "Transaction History", icon: Wallet, to: "/transactions" },
     { label: "Inbox", icon: MessageSquare, to: "/inbox" },
 ];
@@ -446,7 +448,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                            {activityState.map(({ label, icon: Icon, to }) => (
                             <li key={label} className="w-full">
                                {!isCollapsed ? (
-                                  <NavLink to={to}>
+                                  <NavLink to={to} end={to === "/contracts"}>
                                      {({ isActive }) => (
                                         <div
                                            className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 ${
@@ -473,7 +475,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                ) : (
                                   /* Collapsed Floating Display for Activity Items */
                                   <div className="group w-full flex justify-center hover:z-50">
-                                     <NavLink to={to}>
+                                     <NavLink to={to} end={to === "/contracts"}>
                                         {({ isActive }) => (
                                            <div
                                               className={`relative flex items-center justify-center rounded-lg p-2 text-sm transition-colors duration-200 ${

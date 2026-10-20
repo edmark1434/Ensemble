@@ -524,6 +524,13 @@ export const Contracts: React.FC = () => {
             </div>
 
             <button
+              onClick={() => navigate('/contracts/disputes')}
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-1.5 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/10 transition-colors mb-2 shrink-0"
+            >
+              <AlertCircle className="h-3.5 w-3.5" />
+              Your disputes
+            </button>
+            <button
               onClick={() => navigate('/contracts/dispute-form')}
               className="flex items-center justify-center gap-1.5 rounded-lg border border-red-300 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors mb-2 mr-2 md:mr-0 shadow-2xs shrink-0"
             >
