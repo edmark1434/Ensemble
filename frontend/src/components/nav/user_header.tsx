@@ -1262,6 +1262,7 @@ useEffect(() => {
                         />
 
                         <button
+                          data-tour="profile-menu-profile"
                           ref={(el) => { profileItemRefs.current[0] = el; }}
                           onMouseEnter={() => handleProfileItemHover(0, false)}
                           onClick={() => {

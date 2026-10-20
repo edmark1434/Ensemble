@@ -90,7 +90,7 @@ export const HomeFeaturedAssets: React.FC<HomeFeaturedAssetsProps> = ({
   }, [searchQuery]);
 
   return (
-    <section>
+    <section data-tour="home-featured-assets">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2

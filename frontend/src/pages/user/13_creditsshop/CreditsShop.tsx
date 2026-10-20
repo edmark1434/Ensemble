@@ -533,7 +533,7 @@ const CreditShop: React.FC = () => {
         </div>
 
         {/* Current Balance Card */}
-        <div className="flex items-center justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-5 shadow-sm dark:shadow-xl backdrop-blur-xl">
+        <div data-tour="credits-balance-card" className="flex items-center justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-5 shadow-sm dark:shadow-xl backdrop-blur-xl">
           <div className="flex items-center gap-4">
             <WalletIcon className="h-12 w-12" />
             <div>
@@ -559,6 +559,7 @@ const CreditShop: React.FC = () => {
         <div className="border-b border-gray-200 dark:border-white/10">
           <nav className="flex gap-8" aria-label="Tabs">
             <button
+              data-tour="credits-tab-topup"
               onClick={() => handleTabChange("topup")}
               className={`relative pb-3 text-sm font-semibold transition-all ${
                 activeTab === "topup" ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-200"
@@ -574,6 +575,7 @@ const CreditShop: React.FC = () => {
               )}
             </button>
             <button
+              data-tour="credits-tab-membership"
               onClick={() => handleTabChange("membership")}
               className={`relative pb-3 text-sm font-semibold transition-all ${
                 activeTab === "membership" ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-200"
@@ -740,6 +742,7 @@ const CreditShop: React.FC = () => {
           {/* MEMBERSHIP SECTION */}
           {activeTab === "membership" && (
             <motion.div
+              data-tour="credits-plans-grid"
               key="membership"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}

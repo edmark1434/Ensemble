@@ -98,7 +98,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
         onClick={onClose}
       >
         {selectedGig && (
-          <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 text-xs font-medium animate-pulse backdrop-blur-md">
+          <div data-tour="gig-detail-exit-pill" className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 text-xs font-medium animate-pulse backdrop-blur-md cursor-pointer">
             <MousePointerClick className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
             <span>Click anywhere outside to close</span>
           </div>

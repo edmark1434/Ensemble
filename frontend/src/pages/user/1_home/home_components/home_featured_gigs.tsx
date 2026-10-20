@@ -78,7 +78,7 @@ export const HomeFeaturedGigs: React.FC = () => {
   }, []);
 
   return (
-    <section>
+    <section data-tour="home-featured-gigs">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2

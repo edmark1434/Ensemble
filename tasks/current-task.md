@@ -1,30 +1,25 @@
-# Current Task: Refine Platform Walkthrough (Sidebar Activity Tabs, Jobs/Gigs Deep-Dive, Header Credits/Search & Welcome Flow)
+# Current Task: Platform Walkthrough Flow & UX Redesign (Card Positioning, Detail Exit & Credits/Home Enhancements)
 
 ## Objective
-Implement user-requested walkthrough refinements:
-1. **Welcome Modal Personalization & Skip Option**:
-   - Welcome modal greets the user with their name: "Welcome to Ensemble, {displayName}!".
-   - Clear skip button: "Skip (I know Ensemble)" for users who know the platform.
-2. **Jobs & Gigs Marketplace Deep-Dive**:
-   - Jobs: Post a Job button (`jobs-create-button`), Search Bar (`jobs-search-bar`), Tabs (`jobs-tabs`), Job Listing Card (`job-card-first`) showing View Full & Send Proposal options, and Proposals tab (`sidenav-jobs-proposals`).
-   - Gigs: Post a Service button (`gigs-create-button`), Search Bar (`gigs-search-bar`), Tabs (`gigs-tabs`), Gig Card (`gig-card-first`) showing View Full & Order Package options, and Orders tab (`sidenav-gigs-orders`).
-3. **Sidebar-Only Highlighting for Activity Tabs (No Verification Wall)**:
-   - Deliveries (`sidenav-deliveries`), My Terms (`sidenav-tos`), and My Contracts (`sidenav-contracts`) are highlighted directly on the sidebar buttons with explanations.
-   - The browser does not navigate inside `/dashboard`, `/terms-of-services`, or `/contracts`, completely preventing the "Verify First to View" modal.
-4. **Ledger & Inbox**:
-   - Transaction History (`transactions-table`).
-   - Inbox messages (`inbox-container`).
-5. **Top Header Controls & Support Flow**:
-   - Credit Balance (`credits-pill`) explaining how to top up credits and fund projects.
-   - Creator Search (`header-search-creators` / Alt+K) for finding people across the platform.
-   - Sidebar Collapse (`sidenav-collapse`) explaining workspace maximization.
-   - Profile Menu Help & Feedback (`profile-menu-feedback` & `profile-menu-support`).
+Implement platform walkthrough enhancements requested by user:
+1. **Card Positioning & Taskbar Clearance**:
+   - Dynamic measurement of actual card height (`cardRef.current?.offsetHeight`).
+   - Increased safe bottom padding to 52px so cards never clip behind the Windows taskbar or browser chrome.
+   - Large container detection (`isLargeContainer`) for full-page workspaces (e.g. `projects-workspace`, discovery feed) to float cards comfortably centered inside without edge clipping or off-target arrows.
+2. **Details Drawer Exit Steps**:
+   - Added clickable exit steps (`jobs_detail_exit` and `gigs_detail_exit`) pointing to `[data-tour="job-detail-exit-pill"]` and `[data-tour="gig-detail-exit-pill"]` ("Click anywhere outside to close"), naturally closing the drawer before transitioning to Proposals and Orders.
+3. **Billing & Subscription Plans Flow**:
+   - Connected `header_credits` click to `/credits`.
+   - Added steps for Current Balance card (`credits-balance-card`), Top up Credits packs (`credits-tab-topup`), and Subscription Plans tab (`credits-tab-membership`).
+   - Highlights tiered membership plans grid (`credits-plans-grid`) displaying Free, Premium, and Business tiers.
+4. **Home Page Featured Content Steps**:
+   - Highlighted Latest Job Posts (`home-featured-jobs`).
+   - Highlighted Top Services (`home-featured-gigs`).
+   - Highlighted Popular Assets (`home-featured-assets`).
 
 ## Acceptance Criteria
-- [x] Welcome modal updated with user display name and explicit skip button.
-- [x] Activity tabs (Deliveries, My Terms, My Contracts) point to sidebar links without navigating inside (preventing verification wall).
-- [x] Jobs flow includes search, create button, tabs, job card, and proposals tab.
-- [x] Gigs flow includes search, create button, tabs, gig card, and orders tab.
-- [x] Header credits and Alt+K creator search included.
-- [x] Sidebar collapse button and profile feedback/help links highlighted.
+- [x] Card positioning algorithm updated with 52px safe bottom margin and container detection.
+- [x] Job & Gig detail exit steps added with backdrop pill targeting.
+- [x] Billing & Subscription plans added to walkthrough flow.
+- [x] Home featured sections (Latest Jobs, Top Services, Popular Assets) added to Section 1.
 - [x] `npm run build --prefix frontend` succeeds with 0 errors.

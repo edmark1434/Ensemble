@@ -11,6 +11,11 @@ export interface WalkthroughStep {
   targetName: string;
   text: string;
   preferredPlacement?: 'top' | 'bottom' | 'left' | 'right';
+  /** 'click' = user must click the highlighted element to advance (Next button is hidden).
+   *  'next' = passive observation step (Next button advances). Default: 'next'. */
+  actionType?: 'click' | 'next';
+  /** Section badge displayed in the card header (e.g. "Home", "Your Profile"). */
+  section?: string;
 }
 
 export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
@@ -23,6 +28,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Global Search',
     text: 'Use the **Global Search** bar to quickly find video assets, creator libraries, effects, and templates across the ecosystem.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Home',
   },
   {
     id: 'home_quick_actions',
@@ -32,6 +39,41 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Quick Action Buttons',
     text: 'These **Quick Action buttons** let you quickly start projects, find video services, or post job listings.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Home',
+  },
+  {
+    id: 'home_featured_jobs',
+    route: '/home',
+    selector: '[data-tour="home-featured-jobs"]',
+    tabHint: 'Latest Jobs',
+    targetName: 'Latest Job Posts',
+    text: 'Browse **Latest Job Posts** on the homepage to find urgent video editing contracts, client budgets, and hiring openings.',
+    preferredPlacement: 'top',
+    actionType: 'next',
+    section: 'Home',
+  },
+  {
+    id: 'home_featured_gigs',
+    route: '/home',
+    selector: '[data-tour="home-featured-gigs"]',
+    tabHint: 'Top Services',
+    targetName: 'Top Services',
+    text: 'Explore **Top Services** offered by vetted creators with upfront pricing, turnaround guarantees, and client reviews.',
+    preferredPlacement: 'top',
+    actionType: 'next',
+    section: 'Home',
+  },
+  {
+    id: 'home_featured_assets',
+    route: '/home',
+    selector: '[data-tour="home-featured-assets"]',
+    tabHint: 'Popular Assets',
+    targetName: 'Popular Assets',
+    text: 'Preview **Popular Assets** including video stock footage, visual presets, audio packs, and video templates.',
+    preferredPlacement: 'top',
+    actionType: 'next',
+    section: 'Home',
   },
   {
     id: 'header_notifications',
@@ -41,6 +83,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Notifications Bell',
     text: 'Click the **Notifications** bell to keep track of contract updates, proposal responses, and escrow payments.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Home',
   },
   {
     id: 'header_ask_ai',
@@ -50,6 +94,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Ask AI Assistant',
     text: 'Click **Ask AI** anytime in the top bar for instant 24/7 answers to questions across the platform.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Home',
   },
   {
     id: 'header_profile_nav',
@@ -59,6 +105,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Profile Avatar',
     text: 'Click your **Profile Avatar** in the top header and select **Profile** to view your setup and portfolio.',
     preferredPlacement: 'left',
+    actionType: 'click',
+    section: 'Home',
   },
 
   // --- SECTION 2: PROFILE PAGE ---
@@ -70,6 +118,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Profile Picture',
     text: 'This is where you change your **Profile Avatar**. Click the edit pen to upload a photo or choose an avatar preset.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Your Profile',
   },
   {
     id: 'profile_tabs',
@@ -79,6 +129,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Profile Tabs',
     text: 'These **Profile Tabs** let you navigate your Introduction, Portfolio showreels, Services, and Activity Records.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Your Profile',
   },
   {
     id: 'profile_budget',
@@ -88,6 +140,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Ratings & Budget',
     text: 'Set up your **Budget** here to indicate your planned spending and hiring capacity for creative video projects.',
     preferredPlacement: 'right',
+    actionType: 'next',
+    section: 'Your Profile',
   },
   {
     id: 'profile_badges',
@@ -97,6 +151,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Account Badges',
     text: 'Manage and arrange your **Account Badges** here to showcase earned achievements, tiers, and community standing.',
     preferredPlacement: 'right',
+    actionType: 'next',
+    section: 'Your Profile',
   },
   {
     id: 'profile_skills',
@@ -106,6 +162,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Skills Matrix',
     text: 'Add and edit your **Skills & Capabilities** here, displaying your software proficiencies and years of experience.',
     preferredPlacement: 'right',
+    actionType: 'next',
+    section: 'Your Profile',
   },
   {
     id: 'header_settings_nav',
@@ -113,8 +171,10 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     selector: '[data-tour="user-profile-button"]',
     tabHint: 'Settings Nav',
     targetName: 'Profile & Settings',
-    text: 'Click your **Profile Avatar** in the top header and select **Settings** to open account credentials and preferences.',
+    text: 'Click your **Profile Avatar** again and select **Settings** to open account credentials and preferences.',
     preferredPlacement: 'left',
+    actionType: 'click',
+    section: 'Your Profile',
   },
 
   // --- SECTION 3: SETTINGS & VERIFICATION FLOW ---
@@ -125,8 +185,10 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     selector: '[data-tour="settings-verification-button"]',
     tabHint: 'Account Details',
     targetName: 'Verification Status',
-    text: 'In **Settings > Account Details**, click here to view your **Identity Verification** status to unlock verified badges and escrow withdrawals.',
+    text: 'In **Settings › Account Details**, click here to view your **Identity Verification** status to unlock verified badges and escrow withdrawals.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Settings',
   },
   {
     id: 'settings_display',
@@ -135,8 +197,10 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     selector: '[data-tour="settings-theme-toggle"]',
     tabHint: 'Display Settings',
     targetName: 'Theme Toggle',
-    text: 'In **Display Settings**, you can switch between **Light and Dark mode** anytime to customize your workspace appearance.',
+    text: 'In **Display Settings**, switch between **Light and Dark mode** anytime to customize your workspace appearance.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Settings',
   },
   {
     id: 'settings_back',
@@ -146,6 +210,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Back Arrow',
     text: 'Click the **Back Arrow** button to exit Settings and return to your main workspace.',
     preferredPlacement: 'bottom',
+    actionType: 'click',
+    section: 'Settings',
   },
 
   // --- SECTION 4: PROJECTS WORKSPACE & CREATE PROJECT ---
@@ -157,6 +223,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Projects Tab',
     text: 'Click on **Projects** in the sidebar navigation to open your cloud projects workspace.',
     preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Projects',
   },
   {
     id: 'projects_workspace',
@@ -166,6 +234,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Projects Workspace',
     text: 'This is your **Projects Workspace**. Manage client footage, organize video cuts, and launch the built-in cloud editor.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Projects',
   },
   {
     id: 'projects_create',
@@ -175,6 +245,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Create a Project Button',
     text: 'Click **Create a Project** here to begin setting up a new editing timeline with custom canvas settings.',
     preferredPlacement: 'bottom',
+    actionType: 'click',
+    section: 'Projects',
   },
   {
     id: 'projects_format',
@@ -184,9 +256,22 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Aspect Ratio Selection',
     text: 'This is the area where you select your **Video Format** (Landscape 16:9, Portrait 9:16, or Square) and start editing.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Projects',
   },
 
   // --- SECTION 5: TEAMS ---
+  {
+    id: 'sidenav_teams',
+    route: '/projects/select',
+    selector: '[data-tour="sidenav-teams"]',
+    tabHint: 'Teams Navigation',
+    targetName: 'Teams Tab',
+    text: 'Click on **Teams** in the sidebar navigation to open the collaborative workspace.',
+    preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Teams',
+  },
   {
     id: 'teams_workspace',
     route: '/teams',
@@ -195,9 +280,22 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Teams Workspace',
     text: 'This is **Teams**. Collaborate with other editors, share media libraries, and assign client project deliverables.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Teams',
   },
 
   // --- SECTION 6: FORUMS ---
+  {
+    id: 'sidenav_forums',
+    route: '/teams',
+    selector: '[data-tour="sidenav-forums"]',
+    tabHint: 'Forums Navigation',
+    targetName: 'Forums Tab',
+    text: 'Click on **Forums** in the sidebar navigation to join discussions with other creators.',
+    preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Forums',
+  },
   {
     id: 'forums_tabs',
     route: '/forums',
@@ -206,6 +304,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Community Groups',
     text: 'In **Forums**, you can browse group feeds, join creator groups, or create your own community group.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Forums',
   },
   {
     id: 'forums_new_discussion',
@@ -215,9 +315,22 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'New Discussion Button',
     text: 'Click this **New Discussion** button to start a thread, ask editing questions, or share tips with other creators.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Forums',
   },
 
   // --- SECTION 7: DISCOVERY ---
+  {
+    id: 'sidenav_discovery',
+    route: '/forums',
+    selector: '[data-tour="sidenav-discovery"]',
+    tabHint: 'Discovery Navigation',
+    targetName: 'Discovery Tab',
+    text: 'Click on **Discovery** in the sidebar navigation to explore featured creators and edits.',
+    preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Discovery',
+  },
   {
     id: 'discovery_page',
     route: '/discovery',
@@ -226,9 +339,22 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Discovery Feed',
     text: 'This is **Discovery**. Browse featured video creators, trending edits, and community talent across Ensemble.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Discovery',
   },
 
   // --- SECTION 8: ASSET LIBRARY ---
+  {
+    id: 'sidenav_assets',
+    route: '/discovery',
+    selector: '[data-tour="sidenav-assets"]',
+    tabHint: 'Asset Library Navigation',
+    targetName: 'Asset Library Tab',
+    text: 'Click on **Asset Library** in the sidebar navigation to browse presets and footage.',
+    preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Asset Library',
+  },
   {
     id: 'assets_catalog',
     route: '/assets',
@@ -237,17 +363,21 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Asset Catalog',
     text: 'This is the **Asset Library**. Browse stock footage, visual presets, audio packs, and templates for your video pipeline.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Asset Library',
   },
 
   // --- SECTION 9: JOB MARKET FLOW ---
   {
-    id: 'jobs_market',
-    route: '/jobs/postings',
-    selector: '[data-tour="job-market"]',
-    tabHint: 'Job Market',
-    targetName: 'Job Postings',
-    text: 'This is the **Job Market**. Browse client job posts and submit milestone proposals with your custom rates.',
-    preferredPlacement: 'bottom',
+    id: 'sidenav_jobs',
+    route: '/assets',
+    selector: '[data-tour="sidenav-jobs-posting"]',
+    tabHint: 'Jobs Navigation',
+    targetName: 'Job Market Tab',
+    text: 'Click on **Jobs** in the sidebar navigation to enter the client hiring and proposal market.',
+    preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Job Market',
   },
   {
     id: 'jobs_search',
@@ -257,6 +387,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Job Search Bar',
     text: 'Use the **Search Bar** to find jobs matching specific video styles, editing tools, keywords, or client names.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Job Market',
   },
   {
     id: 'jobs_create',
@@ -266,6 +398,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Post a Job Button',
     text: 'Click **Post a Job** to hire creators for video editing, animation, sound design, or full post-production.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Job Market',
   },
   {
     id: 'jobs_tabs',
@@ -275,15 +409,52 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Job Market Tabs',
     text: 'Switch between active **Postings**, your bookmarked **Saved** listings, and **My Job Posts** to manage your hiring.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Job Market',
   },
   {
     id: 'jobs_card_details',
     route: '/jobs/postings',
     selector: '[data-tour="job-card-first"]',
-    tabHint: 'Job Details & Apply',
+    tabHint: 'Open Job Details',
     targetName: 'Job Listing Card',
-    text: 'Click any **Job Card** to open details where you can click **View Full** or click **Send Proposal** to apply.',
+    text: 'Click this **Job Card** to open the project details drawer.',
     preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Job Market',
+  },
+  {
+    id: 'jobs_detail_view_full',
+    route: '/jobs/postings',
+    selector: '[data-tour="job-detail-view-full"]',
+    tabHint: 'View Full Page',
+    targetName: 'View Full Page Button',
+    text: 'Click **View Full** here to view the complete job posting in a dedicated full page with attachments and client history.',
+    preferredPlacement: 'left',
+    actionType: 'next',
+    section: 'Job Market',
+  },
+  {
+    id: 'jobs_detail_send_proposal',
+    route: '/jobs/postings',
+    selector: '[data-tour="job-detail-send-proposal"]',
+    tabHint: 'Send Proposal',
+    targetName: 'Send Proposal Button',
+    text: 'This is where you apply! Click **Send Proposal** to submit your custom quote, milestone timeline, and pitch to the client.',
+    preferredPlacement: 'left',
+    actionType: 'next',
+    section: 'Job Market',
+  },
+  {
+    id: 'jobs_detail_exit',
+    route: '/jobs/postings',
+    selector: '[data-tour="job-detail-exit-pill"]',
+    tabHint: 'Exit Details',
+    targetName: 'Exit Detail View',
+    text: 'Click anywhere outside the drawer to close details and return to the job list.',
+    preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Job Market',
   },
   {
     id: 'jobs_proposals',
@@ -291,19 +462,23 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     selector: '[data-tour="sidenav-jobs-proposals"]',
     tabHint: 'Proposals',
     targetName: 'Proposals Tab',
-    text: 'The **Proposals** tab lets you track all sent milestone proposals, incoming applicant submissions, and client acceptances.',
+    text: 'Click **Proposals** in the sidebar to track all sent milestone proposals, incoming submissions, and client acceptances.',
     preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Job Market',
   },
 
   // --- SECTION 10: GIGS & VIDEO SERVICES FLOW ---
   {
-    id: 'gigs_services',
-    route: '/gigs/services',
-    selector: '[data-tour="gigs-catalog"]',
-    tabHint: 'Services',
-    targetName: 'Services Catalog',
-    text: 'This is **Gigs**. Browse packaged video editing services with upfront pricing and guaranteed turnaround times.',
-    preferredPlacement: 'bottom',
+    id: 'sidenav_gigs',
+    route: '/jobs/postings',
+    selector: '[data-tour="sidenav-gigs-services"]',
+    tabHint: 'Gigs Navigation',
+    targetName: 'Gigs & Services Tab',
+    text: 'Click on **Gigs** in the sidebar navigation to browse fixed-price editing services.',
+    preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Gigs & Services',
   },
   {
     id: 'gigs_search',
@@ -313,6 +488,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Gigs Search Bar',
     text: 'Search for editing services by category, software proficiencies, turnaround speed, or package price.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Gigs & Services',
   },
   {
     id: 'gigs_create',
@@ -322,6 +499,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Post a Service Button',
     text: 'Click **Post a Service** to package and publish your own tiered editing offers with custom pricing and delivery windows.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Gigs & Services',
   },
   {
     id: 'gigs_tabs',
@@ -329,17 +508,54 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     selector: '[data-tour="gigs-tabs"]',
     tabHint: 'Gigs Tabs',
     targetName: 'Service Market Tabs',
-    text: 'Easily navigate between **All Services**, your bookmarked **My Saved** packages, and **My Services** to track your offers.',
+    text: 'Navigate between **All Services**, your bookmarked **My Saved** packages, and **My Services** to track your offers.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Gigs & Services',
   },
   {
     id: 'gigs_card_details',
     route: '/gigs/services',
     selector: '[data-tour="gig-card-first"]',
-    tabHint: 'Gig Details & Order',
+    tabHint: 'Open Service Details',
     targetName: 'Service Card',
-    text: 'Click any **Gig Card** to preview showreels, inspect package tiers, and click **Order** to start an escrow order.',
+    text: 'Click this **Service Card** to open package tiers and order options.',
     preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Gigs & Services',
+  },
+  {
+    id: 'gigs_detail_view_full',
+    route: '/gigs/services',
+    selector: '[data-tour="gig-detail-view-full"]',
+    tabHint: 'View Full Showcase',
+    targetName: 'View Full Page Button',
+    text: 'Click **View Full** to inspect the entire service showcase, customer reviews, and full portfolio showreels.',
+    preferredPlacement: 'left',
+    actionType: 'next',
+    section: 'Gigs & Services',
+  },
+  {
+    id: 'gigs_detail_order',
+    route: '/gigs/services',
+    selector: '[data-tour="gig-detail-order-button"]',
+    tabHint: 'Order Package',
+    targetName: 'Package Tiers & Order Button',
+    text: 'Here in service details, review deliverables, compare tiers, and click **Order** to start an escrow-protected order.',
+    preferredPlacement: 'left',
+    actionType: 'next',
+    section: 'Gigs & Services',
+  },
+  {
+    id: 'gigs_detail_exit',
+    route: '/gigs/services',
+    selector: '[data-tour="gig-detail-exit-pill"]',
+    tabHint: 'Exit Details',
+    targetName: 'Exit Detail View',
+    text: 'Click anywhere outside the drawer to close details and return to the services catalog.',
+    preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Gigs & Services',
   },
   {
     id: 'gigs_orders',
@@ -347,8 +563,10 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     selector: '[data-tour="sidenav-gigs-orders"]',
     tabHint: 'Orders',
     targetName: 'Orders Tab',
-    text: 'The **Orders** tab tracks all active client service purchases, countdown timers, draft deliveries, and completed orders.',
+    text: 'Click **Orders** in the sidebar to track active service purchases, countdown timers, draft deliveries, and completed orders.',
     preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Gigs & Services',
   },
 
   // --- SECTION 11: ACTIVITY TABS (SIDEBAR BUTTONS ONLY - NO VERIFICATION WALL) ---
@@ -360,6 +578,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Deliveries Tab',
     text: 'In **Deliveries**, manage client video cuts, submit draft versions for review, and track milestone release approvals.',
     preferredPlacement: 'right',
+    actionType: 'next',
+    section: 'Deliveries & Contracts',
   },
   {
     id: 'terms_nav',
@@ -369,6 +589,8 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'My Terms Tab',
     text: 'In **My Terms**, set your turnaround windows, revision limits, and raw footage retention terms for all client agreements.',
     preferredPlacement: 'right',
+    actionType: 'next',
+    section: 'Deliveries & Contracts',
   },
   {
     id: 'contracts_nav',
@@ -378,9 +600,22 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'My Contracts Tab',
     text: 'In **My Contracts**, review ongoing legal agreements, escrow-protected milestone payments, and project deadlines.',
     preferredPlacement: 'right',
+    actionType: 'next',
+    section: 'Deliveries & Contracts',
   },
 
   // --- SECTION 12: LEDGER & INBOX ---
+  {
+    id: 'sidenav_transactions',
+    route: '/gigs/services',
+    selector: '[data-tour="sidenav-transactions"]',
+    tabHint: 'Transactions Navigation',
+    targetName: 'Transactions Tab',
+    text: 'Click on **Transactions** in the sidebar navigation to view your ledger balance.',
+    preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Ledger',
+  },
   {
     id: 'transaction_history',
     route: '/transactions',
@@ -389,6 +624,19 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Transaction History',
     text: 'This is your **Transaction History**. Review your credit balance ledger, payouts, and deposit records.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Ledger',
+  },
+  {
+    id: 'sidenav_inbox',
+    route: '/transactions',
+    selector: '[data-tour="sidenav-inbox"]',
+    tabHint: 'Inbox Navigation',
+    targetName: 'Inbox Tab',
+    text: 'Click on **Inbox** in the sidebar navigation to open client chats.',
+    preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Inbox & Credits',
   },
   {
     id: 'inbox_messages',
@@ -398,44 +646,100 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     targetName: 'Inbox Messages',
     text: 'This is your **Inbox**. Chat with clients in real time, share video files, or start 1-click Google Meet video calls.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Inbox & Credits',
   },
 
-  // --- SECTION 13: CREDITS, CREATOR SEARCH, SIDEBAR & HELP ---
+  // --- SECTION 13: BILLING & SUBSCRIPTIONS ---
   {
     id: 'header_credits',
     route: '/inbox',
     selector: '[data-tour="credits-pill"]',
     tabHint: 'Top-up Credits',
     targetName: 'Credit Balance',
-    text: 'This displays your **Credits Balance**. Click the **+** button anytime to purchase credit bundles and top up your wallet.',
+    text: 'Click your **Credit Balance** in the header to open the Billing & Credits store.',
     preferredPlacement: 'bottom',
+    actionType: 'click',
+    section: 'Billing & Credits',
   },
   {
+    id: 'credits_balance',
+    route: '/credits',
+    selector: '[data-tour="credits-balance-card"]',
+    tabHint: 'Current Balance',
+    targetName: 'Current Credits Balance',
+    text: 'View your real-time **Credits Balance** here, protected and funded for escrow milestones.',
+    preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Billing & Credits',
+  },
+  {
+    id: 'credits_topup',
+    route: '/credits',
+    selector: '[data-tour="credits-tab-topup"]',
+    tabHint: 'Top Up Packs',
+    targetName: 'Top up Credits',
+    text: 'Purchase discounted **Credit Bundles** or enter a custom amount with encrypted checkout.',
+    preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Billing & Credits',
+  },
+  {
+    id: 'credits_subscription_tab',
+    route: '/credits',
+    selector: '[data-tour="credits-tab-membership"]',
+    tabHint: 'Subscription Plans',
+    targetName: 'Subscription Plans Tab',
+    text: 'Click **Subscription Plans** to view tiered creator memberships and unlocks.',
+    preferredPlacement: 'bottom',
+    actionType: 'click',
+    section: 'Billing & Credits',
+  },
+  {
+    id: 'credits_subscription_plans',
+    route: '/credits-subscriptions',
+    selector: '[data-tour="credits-plans-grid"]',
+    tabHint: 'Membership Plans',
+    targetName: 'Membership Plans',
+    text: 'Choose between **Free**, **Premium**, and **Business** tiers for 4K video exports, AI tools, unlimited assets, and prioritized queues.',
+    preferredPlacement: 'top',
+    actionType: 'next',
+    section: 'Billing & Credits',
+  },
+
+  // --- SECTION 14: WORKSPACE TOOLS & SUPPORT ---
+  {
     id: 'header_creator_search',
-    route: '/inbox',
+    route: '/credits-subscriptions',
     selector: '[data-tour="header-search-creators"]',
     tabHint: 'Creator Search',
     targetName: 'Creator Search',
     text: 'Use the **Creator Search** (Alt+K) in the top header to look up editors, animators, and talent by name across the platform.',
     preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Workspace Tools',
   },
   {
     id: 'sidebar_collapse',
-    route: '/inbox',
+    route: '/credits-subscriptions',
     selector: '[data-tour="sidenav-collapse"]',
     tabHint: 'Collapse Sidebar',
     targetName: 'Collapse Button',
     text: 'Click here to **Collapse or Expand** the sidebar navigation anytime to maximize your creative editing workspace.',
     preferredPlacement: 'right',
+    actionType: 'click',
+    section: 'Workspace Tools',
   },
   {
     id: 'header_feedback_support',
-    route: '/inbox',
+    route: '/credits-subscriptions',
     selector: '[data-tour="user-profile-button"]',
     tabHint: 'Help & Feedback',
     targetName: 'Help & Support',
-    text: 'Need assistance? Open your **Profile Menu** to submit feedback, file support tickets, or replay this walkthrough anytime.',
+    text: 'Open your **Profile Menu** anytime to submit feedback, file support tickets, or replay this walkthrough whenever you need!',
     preferredPlacement: 'left',
+    actionType: 'next',
+    section: 'Workspace Tools',
   },
 ];
 
@@ -490,6 +794,8 @@ interface WalkthroughState {
   resetWalkthroughHistory: () => void;
 }
 
+let lastAdvanceTimestamp = 0;
+
 export const useTourStore = create<WalkthroughState>((set, get) => ({
   isWalkthroughActive: false,
   isWelcomeOpen: false,
@@ -518,6 +824,7 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
 
   startWalkthrough: (role?: UserPlatformRole) => {
     const currentRole = role || get().userRole || 'freelancer';
+    lastAdvanceTimestamp = Date.now();
     set({
       userRole: currentRole,
       isWelcomeOpen: false,
@@ -530,6 +837,13 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
   startTour: (role?: UserPlatformRole) => get().startWalkthrough(role),
 
   nextStep: () => {
+    const now = Date.now();
+    // 450ms debounce guard to prevent double-advance when click + route change fire simultaneously
+    if (now - lastAdvanceTimestamp < 450) {
+      return;
+    }
+    lastAdvanceTimestamp = now;
+
     const { currentStepIndex } = get();
     if (currentStepIndex < WALKTHROUGH_STEPS.length - 1) {
       set({ currentStepIndex: currentStepIndex + 1 });
@@ -539,6 +853,12 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
   },
 
   prevStep: () => {
+    const now = Date.now();
+    if (now - lastAdvanceTimestamp < 300) {
+      return;
+    }
+    lastAdvanceTimestamp = now;
+
     const { currentStepIndex } = get();
     if (currentStepIndex > 0) {
       set({ currentStepIndex: currentStepIndex - 1 });
@@ -547,6 +867,7 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
 
   goToStep: (index: number) => {
     if (index >= 0 && index < WALKTHROUGH_STEPS.length) {
+      lastAdvanceTimestamp = Date.now();
       set({ currentStepIndex: index });
     }
   },

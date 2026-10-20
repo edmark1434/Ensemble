@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTourStore, WALKTHROUGH_STEPS, type UserPlatformRole } from '@/lib/tour_state';
 import useGlobalState from '@/lib/global_state';
@@ -27,14 +27,14 @@ export const PlatformTour: React.FC = () => {
   const closeWelcome = useTourStore((state) => state.closeWelcome);
   const closeGraduation = useTourStore((state) => state.closeGraduation);
 
-  // Initialize once user is available
+  // Initialize once user is available on /home
   useEffect(() => {
     if (isAuthenticated && user && !isGuestMode && location.pathname === '/home') {
       initFromUser(user);
     }
   }, [isAuthenticated, user, isGuestMode, location.pathname, initFromUser]);
 
-  // Synchronize route navigation ONLY when currentStepIndex changes
+  // Synchronize route navigation when currentStepIndex changes
   useEffect(() => {
     if (!isWalkthroughActive) return;
     const step = WALKTHROUGH_STEPS[currentStepIndex];
@@ -52,10 +52,9 @@ export const PlatformTour: React.FC = () => {
     }
   }, [isWalkthroughActive, currentStepIndex]);
 
-  const prevPathRef = React.useRef(location.pathname);
+  const prevPathRef = useRef(location.pathname);
 
-  // If the user navigates on their own (e.g. clicking Profile in dropdown, or clicking Projects in sidebar),
-  // advance to next step ONLY if the route actually changed to that next step's route!
+  // Route change detector: advance step if the user's navigation reached the next step's route
   useEffect(() => {
     if (!isWalkthroughActive) {
       prevPathRef.current = location.pathname;
@@ -72,13 +71,71 @@ export const PlatformTour: React.FC = () => {
       prevPath !== location.pathname &&
       currentStepObj &&
       location.pathname !== currentStepObj.route &&
-      nextStepObj &&
-      (location.pathname === nextStepObj.route ||
-        (nextStepObj.selector.includes('sidenav') && location.pathname !== '/settings' && location.pathname !== '/'))
+      nextStepObj
     ) {
-      nextStep();
+      // If staying within sub-routes of the same feature (e.g. opening /jobs/postings/:id drawer),
+      // and the next step is part of this feature, do NOT auto-advance the route!
+      const isSubRouteOfCurrent =
+        currentStepObj.route !== '/' &&
+        location.pathname.startsWith(currentStepObj.route + '/') &&
+        nextStepObj.route === currentStepObj.route;
+
+      if (isSubRouteOfCurrent) {
+        return;
+      }
+
+      const matchesNext =
+        location.pathname === nextStepObj.route ||
+        (nextStepObj.route !== '/' && location.pathname.startsWith(nextStepObj.route + '/')) ||
+        (location.pathname !== '/' && nextStepObj.route.startsWith(location.pathname)) ||
+        (nextStepObj.selector.includes('sidenav') && location.pathname !== '/settings' && location.pathname !== '/');
+
+      if (matchesNext) {
+        nextStep();
+      }
     }
   }, [isWalkthroughActive, location.pathname, currentStepIndex, nextStep]);
+
+  // Direct element click listener for 'click'-type steps
+  useEffect(() => {
+    if (!isWalkthroughActive) return;
+    const step = WALKTHROUGH_STEPS[currentStepIndex];
+    if (!step || step.actionType !== 'click') return;
+
+    // Header profile steps open the menu first, then navigate on selecting the item
+    if (step.id === 'header_profile_nav' || step.id === 'header_settings_nav') {
+      return;
+    }
+
+    let cleanedUp = false;
+    let targetEl: Element | null = null;
+    let clickHandler: (() => void) | null = null;
+
+    const tryAttach = () => {
+      if (cleanedUp || targetEl) return;
+      const el = document.querySelector(step.selector);
+      if (el) {
+        targetEl = el;
+        clickHandler = () => {
+          setTimeout(() => {
+            nextStep();
+          }, 100);
+        };
+        el.addEventListener('click', clickHandler, { once: true });
+      }
+    };
+
+    tryAttach();
+    const interval = setInterval(tryAttach, 100);
+
+    return () => {
+      cleanedUp = true;
+      clearInterval(interval);
+      if (targetEl && clickHandler) {
+        targetEl.removeEventListener('click', clickHandler);
+      }
+    };
+  }, [isWalkthroughActive, currentStepIndex, nextStep]);
 
   // Handle next action with route transition
   const handleNext = useCallback(() => {
@@ -86,7 +143,7 @@ export const PlatformTour: React.FC = () => {
     if (nextIndex < WALKTHROUGH_STEPS.length) {
       const nextStepObj = WALKTHROUGH_STEPS[nextIndex];
       if (nextStepObj) {
-        if (location.pathname !== nextStepObj.route) {
+        if (location.pathname !== nextStepObj.route && !location.pathname.startsWith(nextStepObj.route + '/')) {
           navigate(nextStepObj.route, { state: nextStepObj.routeState });
         } else if (nextStepObj.routeState) {
           navigate(nextStepObj.route, { state: nextStepObj.routeState, replace: true });
@@ -104,7 +161,7 @@ export const PlatformTour: React.FC = () => {
     if (prevIndex >= 0) {
       const prevStepObj = WALKTHROUGH_STEPS[prevIndex];
       if (prevStepObj) {
-        if (location.pathname !== prevStepObj.route) {
+        if (location.pathname !== prevStepObj.route && !location.pathname.startsWith(prevStepObj.route + '/')) {
           navigate(prevStepObj.route, { state: prevStepObj.routeState });
         } else if (prevStepObj.routeState) {
           navigate(prevStepObj.route, { state: prevStepObj.routeState, replace: true });
@@ -114,17 +171,21 @@ export const PlatformTour: React.FC = () => {
     }
   }, [currentStepIndex, location.pathname, navigate, prevStep]);
 
-  // Keyboard navigation
+  // Keyboard navigation (skip arrow advance on click-required steps)
   useEffect(() => {
     if (!isWalkthroughActive) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      const step = WALKTHROUGH_STEPS[currentStepIndex];
       if (e.key === 'Escape') {
         e.preventDefault();
         skipWalkthrough();
       } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        handleNext();
+        // Only allow arrow advance on 'next'-type steps
+        if (step?.actionType !== 'click') {
+          e.preventDefault();
+          handleNext();
+        }
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         handlePrev();
@@ -133,7 +194,7 @@ export const PlatformTour: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isWalkthroughActive, handleNext, handlePrev, skipWalkthrough]);
+  }, [isWalkthroughActive, currentStepIndex, handleNext, handlePrev, skipWalkthrough]);
 
   // Start walkthrough handler from welcome modal
   const handleStartWalkthrough = useCallback((role: UserPlatformRole) => {
@@ -156,7 +217,7 @@ export const PlatformTour: React.FC = () => {
         onStart={handleStartWalkthrough}
       />
 
-      {/* 2. Active Walkthrough Spotlight Card (Matching Image 3) */}
+      {/* 2. Active Walkthrough Spotlight Card */}
       {isWalkthroughActive && (
         <TourSpotlightCard
           onNext={handleNext}

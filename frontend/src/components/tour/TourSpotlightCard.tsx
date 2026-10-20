@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MessageCircle } from 'lucide-react';
+import { X, Sparkles, MousePointerClick, ChevronRight, ChevronLeft } from 'lucide-react';
 import { WALKTHROUGH_STEPS, useTourStore } from '@/lib/tour_state';
 import useGlobalState from '@/lib/global_state';
 
@@ -12,11 +12,11 @@ interface TourSpotlightCardProps {
 
 export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({ onNext, onPrev, onSkip }) => {
   const currentStepIndex = useTourStore((state) => state.currentStepIndex);
-  const goToStep = useTourStore((state) => state.goToStep);
 
   const currentStep = WALKTHROUGH_STEPS[currentStepIndex];
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [isElementFound, setIsElementFound] = useState<boolean>(false);
+  const [isDropdownItemActive, setIsDropdownItemActive] = useState<boolean>(false);
   const [shakeCard, setShakeCard] = useState<boolean>(false);
   const [windowSize, setWindowSize] = useState({
     width: typeof window !== 'undefined' ? window.innerWidth : 1920,
@@ -28,28 +28,70 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({ onNext, on
   const updateTargetRect = useCallback(() => {
     if (!currentStep) return;
 
-    // Special case for header profile step: if dropdown is open, union bounds!
-    if (currentStep.id === 'header_profile_nav' || currentStep.id === 'header_settings_nav' || currentStep.id === 'header_feedback_support') {
-      const btnEl = document.querySelector('[data-tour="user-profile-button"]');
-      const dropdownEl = document.querySelector('[data-tour="user-profile-dropdown"]');
-      if (btnEl) {
-        const bRect = btnEl.getBoundingClientRect();
-        if (dropdownEl) {
-          const dRect = dropdownEl.getBoundingClientRect();
-          if (dRect.width > 0 && dRect.height > 0) {
-            const unionRect = new DOMRect(
-              Math.min(bRect.left, dRect.left),
-              Math.min(bRect.top, dRect.top),
-              Math.max(bRect.right, dRect.right) - Math.min(bRect.left, dRect.left),
-              Math.max(bRect.bottom, dRect.bottom) - Math.min(bRect.top, dRect.top)
-            );
-            setTargetRect(unionRect);
-            setIsElementFound(true);
-            return;
-          }
+    // Special case for header profile steps: point directly to the specific menu item when dropdown is open
+    if (currentStep.id === 'header_profile_nav') {
+      const profileItem = document.querySelector('[data-tour="profile-menu-profile"]');
+      if (profileItem) {
+        const rect = profileItem.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          setTargetRect(rect);
+          setIsElementFound(true);
+          setIsDropdownItemActive(true);
+          return;
         }
-        if (bRect.width > 0 && bRect.height > 0) {
-          setTargetRect(bRect);
+      }
+      setIsDropdownItemActive(false);
+      const btnEl = document.querySelector('[data-tour="user-profile-button"]');
+      if (btnEl) {
+        const rect = btnEl.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          setTargetRect(rect);
+          setIsElementFound(true);
+          return;
+        }
+      }
+    }
+
+    if (currentStep.id === 'header_settings_nav') {
+      const settingsItem = document.querySelector('[data-tour="profile-menu-settings"]');
+      if (settingsItem) {
+        const rect = settingsItem.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          setTargetRect(rect);
+          setIsElementFound(true);
+          setIsDropdownItemActive(true);
+          return;
+        }
+      }
+      setIsDropdownItemActive(false);
+      const btnEl = document.querySelector('[data-tour="user-profile-button"]');
+      if (btnEl) {
+        const rect = btnEl.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          setTargetRect(rect);
+          setIsElementFound(true);
+          return;
+        }
+      }
+    }
+
+    if (currentStep.id === 'header_feedback_support') {
+      const feedbackItem = document.querySelector('[data-tour="profile-menu-feedback"]');
+      if (feedbackItem) {
+        const rect = feedbackItem.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          setTargetRect(rect);
+          setIsElementFound(true);
+          setIsDropdownItemActive(true);
+          return;
+        }
+      }
+      setIsDropdownItemActive(false);
+      const btnEl = document.querySelector('[data-tour="user-profile-button"]');
+      if (btnEl) {
+        const rect = btnEl.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          setTargetRect(rect);
           setIsElementFound(true);
           return;
         }
@@ -62,11 +104,13 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({ onNext, on
       if (rect.width > 0 && rect.height > 0) {
         setTargetRect(rect);
         setIsElementFound(true);
+        setIsDropdownItemActive(false);
         return;
       }
     }
     setTargetRect(null);
     setIsElementFound(false);
+    setIsDropdownItemActive(false);
   }, [currentStep]);
 
   useEffect(() => {
@@ -97,14 +141,22 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({ onNext, on
       'header_creator_search',
       'header_feedback_support',
       'sidebar_collapse',
-      'ask_ai',
-      'credits_and_transactions',
       'sidenav_projects',
+      'sidenav_teams',
+      'sidenav_forums',
+      'sidenav_discovery',
+      'sidenav_assets',
+      'sidenav_jobs',
+      'sidenav_gigs',
       'sidenav_deliveries',
       'sidenav_tos',
       'sidenav_contracts',
+      'sidenav_transactions',
+      'sidenav_inbox',
       'sidenav_jobs_proposals',
       'sidenav_gigs_orders',
+      'jobs_detail_exit',
+      'gigs_detail_exit',
     ].includes(currentStep?.id || '') || currentStep?.selector?.includes('sidenav');
 
     if (!skipScroll && currentStep) {
@@ -131,11 +183,16 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({ onNext, on
   if (!currentStep) return null;
 
   const totalSteps = WALKTHROUGH_STEPS.length;
-  const CARD_WIDTH = Math.min(360, windowSize.width - 32);
-  const CARD_HEIGHT = 185;
-  const PADDING = 16;
+  const isClickStep = currentStep.actionType === 'click';
+  const CARD_WIDTH = Math.min(380, windowSize.width - 32);
+  const actualCardHeight = cardRef.current?.offsetHeight || 230;
 
-  // Highlight pad & bounds
+  // Safe screen margins (guarantees card never clips into bottom taskbar)
+  const TOP_SAFE_PADDING = 24;
+  const BOTTOM_SAFE_PADDING = 52;
+  const SIDE_SAFE_PADDING = 20;
+
+  // Highlight padding & bounds
   const highlightPad = 6;
   const hlTop = targetRect && isElementFound ? Math.max(0, targetRect.top - highlightPad) : 0;
   const hlLeft = targetRect && isElementFound ? Math.max(0, targetRect.left - highlightPad) : 0;
@@ -160,9 +217,9 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({ onNext, on
       : `M 0 0 H ${windowSize.width} V ${windowSize.height} H 0 Z`;
 
   // Compute popover placement and arrow positioning
-  let placement: 'top' | 'bottom' | 'left' | 'right' = currentStep.preferredPlacement || 'bottom';
-  let cardTop = windowSize.height / 2 - CARD_HEIGHT / 2;
-  let cardLeft = windowSize.width / 2 - CARD_WIDTH / 2;
+  let placement: 'top' | 'bottom' | 'left' | 'right' | 'none' = currentStep.preferredPlacement || 'bottom';
+  let cardTop = Math.max(TOP_SAFE_PADDING, windowSize.height / 2 - actualCardHeight / 2);
+  let cardLeft = Math.max(SIDE_SAFE_PADDING, windowSize.width / 2 - CARD_WIDTH / 2);
   let arrowOffset = CARD_WIDTH / 2;
 
   if (targetRect && isElementFound) {
@@ -171,48 +228,63 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({ onNext, on
     const spaceLeft = targetRect.left;
     const spaceRight = windowSize.width - targetRect.right;
 
-    // Validate preferred placement
-    if (placement === 'left') {
-      if (spaceLeft < CARD_WIDTH + 20) {
-        placement = spaceBelow >= CARD_HEIGHT + 20 ? 'bottom' : (spaceAbove >= CARD_HEIGHT + 20 ? 'top' : 'bottom');
-      }
-    } else if (placement === 'right') {
-      if (spaceRight < CARD_WIDTH + 20) {
-        placement = spaceBelow >= CARD_HEIGHT + 20 ? 'bottom' : (spaceAbove >= CARD_HEIGHT + 20 ? 'top' : 'bottom');
-      }
-    } else if (placement === 'top') {
-      if (spaceAbove < CARD_HEIGHT + 20 && spaceBelow >= CARD_HEIGHT + 20) {
-        placement = 'bottom';
-      }
-    } else {
-      if (spaceBelow < CARD_HEIGHT + 20 && spaceAbove >= CARD_HEIGHT + 20) {
-        placement = 'top';
-      }
-    }
+    // Detect if target is a large container occupying most of the viewport
+    const isLargeContainer =
+      targetRect.height > windowSize.height * 0.48 || targetRect.width > windowSize.width * 0.85;
 
-    if (placement === 'left') {
-      cardLeft = Math.max(PADDING, targetRect.left - CARD_WIDTH - 14);
-      cardTop = Math.max(PADDING, Math.min(windowSize.height - CARD_HEIGHT - PADDING, targetRect.top + targetRect.height / 2 - CARD_HEIGHT / 2));
-      arrowOffset = targetRect.top + targetRect.height / 2 - cardTop;
-      arrowOffset = Math.max(22, Math.min(CARD_HEIGHT - 22, arrowOffset));
-    } else if (placement === 'right') {
-      cardLeft = Math.min(windowSize.width - CARD_WIDTH - PADDING, targetRect.right + 14);
-      cardTop = Math.max(PADDING, Math.min(windowSize.height - CARD_HEIGHT - PADDING, targetRect.top + targetRect.height / 2 - CARD_HEIGHT / 2));
-      arrowOffset = targetRect.top + targetRect.height / 2 - cardTop;
-      arrowOffset = Math.max(22, Math.min(CARD_HEIGHT - 22, arrowOffset));
-    } else if (placement === 'top') {
-      cardTop = Math.max(PADDING, targetRect.top - CARD_HEIGHT - 14);
-      const targetCenter = targetRect.left + targetRect.width / 2;
-      cardLeft = Math.max(PADDING, Math.min(windowSize.width - CARD_WIDTH - PADDING, targetCenter - CARD_WIDTH / 2));
-      arrowOffset = targetCenter - cardLeft;
-      arrowOffset = Math.max(22, Math.min(CARD_WIDTH - 22, arrowOffset));
+    if (isLargeContainer) {
+      // For full workspace/containers, float cleanly centered inside the bottom half with ample clearance
+      cardLeft = Math.max(SIDE_SAFE_PADDING, Math.min(windowSize.width - CARD_WIDTH - SIDE_SAFE_PADDING, (windowSize.width - CARD_WIDTH) / 2));
+      cardTop = Math.max(TOP_SAFE_PADDING, windowSize.height - actualCardHeight - BOTTOM_SAFE_PADDING - 16);
+      placement = 'none'; // No awkward arrow pointing into the container
     } else {
-      // bottom
-      cardTop = Math.min(windowSize.height - CARD_HEIGHT - PADDING, targetRect.bottom + 14);
-      const targetCenter = targetRect.left + targetRect.width / 2;
-      cardLeft = Math.max(PADDING, Math.min(windowSize.width - CARD_WIDTH - PADDING, targetCenter - CARD_WIDTH / 2));
-      arrowOffset = targetCenter - cardLeft;
-      arrowOffset = Math.max(22, Math.min(CARD_WIDTH - 22, arrowOffset));
+      // Validate and adapt preferred placement
+      if (placement === 'left') {
+        if (spaceLeft < CARD_WIDTH + 24) {
+          placement = spaceBelow >= actualCardHeight + 30 ? 'bottom' : (spaceAbove >= actualCardHeight + 30 ? 'top' : 'bottom');
+        }
+      } else if (placement === 'right') {
+        if (spaceRight < CARD_WIDTH + 24) {
+          placement = spaceBelow >= actualCardHeight + 30 ? 'bottom' : (spaceAbove >= actualCardHeight + 30 ? 'top' : 'bottom');
+        }
+      } else if (placement === 'top') {
+        if (spaceAbove < actualCardHeight + 30 && spaceBelow >= actualCardHeight + 30) {
+          placement = 'bottom';
+        }
+      } else {
+        if (spaceBelow < actualCardHeight + 30 && spaceAbove >= actualCardHeight + 30) {
+          placement = 'top';
+        }
+      }
+
+      const maxCardTop = windowSize.height - actualCardHeight - BOTTOM_SAFE_PADDING;
+
+      if (placement === 'left') {
+        cardLeft = Math.max(SIDE_SAFE_PADDING, targetRect.left - CARD_WIDTH - 14);
+        const desiredTop = targetRect.top + targetRect.height / 2 - actualCardHeight / 2;
+        cardTop = Math.max(TOP_SAFE_PADDING, Math.min(maxCardTop, desiredTop));
+        arrowOffset = targetRect.top + targetRect.height / 2 - cardTop;
+        arrowOffset = Math.max(24, Math.min(actualCardHeight - 24, arrowOffset));
+      } else if (placement === 'right') {
+        cardLeft = Math.min(windowSize.width - CARD_WIDTH - SIDE_SAFE_PADDING, targetRect.right + 14);
+        const desiredTop = targetRect.top + targetRect.height / 2 - actualCardHeight / 2;
+        cardTop = Math.max(TOP_SAFE_PADDING, Math.min(maxCardTop, desiredTop));
+        arrowOffset = targetRect.top + targetRect.height / 2 - cardTop;
+        arrowOffset = Math.max(24, Math.min(actualCardHeight - 24, arrowOffset));
+      } else if (placement === 'top') {
+        cardTop = Math.max(TOP_SAFE_PADDING, targetRect.top - actualCardHeight - 14);
+        const targetCenter = targetRect.left + targetRect.width / 2;
+        cardLeft = Math.max(SIDE_SAFE_PADDING, Math.min(windowSize.width - CARD_WIDTH - SIDE_SAFE_PADDING, targetCenter - CARD_WIDTH / 2));
+        arrowOffset = targetCenter - cardLeft;
+        arrowOffset = Math.max(24, Math.min(CARD_WIDTH - 24, arrowOffset));
+      } else {
+        // bottom
+        cardTop = Math.min(maxCardTop, targetRect.bottom + 14);
+        const targetCenter = targetRect.left + targetRect.width / 2;
+        cardLeft = Math.max(SIDE_SAFE_PADDING, Math.min(windowSize.width - CARD_WIDTH - SIDE_SAFE_PADDING, targetCenter - CARD_WIDTH / 2));
+        arrowOffset = targetCenter - cardLeft;
+        arrowOffset = Math.max(24, Math.min(CARD_WIDTH - 24, arrowOffset));
+      }
     }
   }
 
@@ -231,6 +303,38 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({ onNext, on
     });
   };
 
+  const progressPercent = Math.round(((currentStepIndex + 1) / totalSteps) * 100);
+
+  // Dynamic titles and instructions when menu items are visible
+  let displayTitle = currentStep.targetName;
+  let displayText = currentStep.text;
+
+  if (currentStep.id === 'header_profile_nav') {
+    if (isDropdownItemActive) {
+      displayTitle = 'Select Profile';
+      displayText = 'Click **Profile** in the menu to open your portfolio and setup page.';
+    } else {
+      displayTitle = 'Profile Menu';
+      displayText = 'Click your **Profile Avatar** in the top header to open your account options.';
+    }
+  } else if (currentStep.id === 'header_settings_nav') {
+    if (isDropdownItemActive) {
+      displayTitle = 'Select Settings';
+      displayText = 'Click **Settings** in the menu to open account credentials and display preferences.';
+    } else {
+      displayTitle = 'Profile Menu';
+      displayText = 'Click your **Profile Avatar** to open your account options.';
+    }
+  } else if (currentStep.id === 'header_feedback_support') {
+    if (isDropdownItemActive) {
+      displayTitle = 'Feedback & Support';
+      displayText = 'Click **Submit Feedback** or file a ticket anytime you need assistance or want to share thoughts.';
+    } else {
+      displayTitle = 'Profile Menu';
+      displayText = 'Click your **Profile Avatar** to find help and submit feedback.';
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-[10000] overflow-hidden pointer-events-none">
       {/* 1. Seamless Fullscreen SVG Overlay with EvenOdd Cutout */}
@@ -247,7 +351,11 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({ onNext, on
       {/* 2. Target Element Spotlight Ring (Glowing Border Around Target) */}
       {targetRect && isElementFound && (
         <div
-          className="fixed pointer-events-none border-2 border-white/90 ring-4 ring-amber-500/40 shadow-[0_0_24px_rgba(255,255,255,0.35)] transition-all duration-300 ease-out"
+          className={`fixed pointer-events-none border-2 transition-all duration-300 ease-out ${
+            isClickStep
+              ? 'border-amber-400 ring-4 ring-amber-500/50 shadow-[0_0_28px_rgba(245,158,11,0.5)] animate-pulse'
+              : 'border-white/90 ring-4 ring-amber-500/40 shadow-[0_0_24px_rgba(255,255,255,0.35)]'
+          }`}
           style={{
             top: `${hlTop}px`,
             left: `${hlLeft}px`,
@@ -259,7 +367,7 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({ onNext, on
         />
       )}
 
-      {/* 3. Floating Walkthrough Popover Card (or Loading indicator while waiting for target) */}
+      {/* 3. Floating Walkthrough Popover Card */}
       <AnimatePresence mode="wait">
         {!isElementFound ? (
           <motion.div
@@ -267,23 +375,24 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({ onNext, on
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="fixed bottom-6 right-6 z-[10002] flex items-center gap-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121524] px-4 py-2.5 text-xs font-medium text-gray-800 dark:text-zinc-200 shadow-2xl backdrop-blur-md pointer-events-auto"
+            className="fixed bottom-10 right-6 z-[10002] flex items-center gap-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121524] px-4 py-2.5 text-xs font-medium text-gray-800 dark:text-zinc-200 shadow-2xl backdrop-blur-md pointer-events-auto"
           >
             <div className="h-3.5 w-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin shrink-0" />
             <span>Loading {currentStep.tabHint || 'page view'}...</span>
           </motion.div>
         ) : (
           <motion.div
-            key={currentStep.id}
+            key={`${currentStep.id}-${isDropdownItemActive ? 'item' : 'btn'}`}
             ref={cardRef}
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0.95, y: 4 }}
             animate={{
               opacity: 1,
               scale: 1,
-              x: shakeCard ? [-4, 4, -4, 4, 0] : 0,
+              y: 0,
+              x: shakeCard ? [-5, 5, -5, 5, 0] : 0,
             }}
             exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
             style={{
               position: 'fixed',
               top: `${cardTop}px`,
@@ -291,7 +400,7 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({ onNext, on
               width: `${CARD_WIDTH}px`,
               zIndex: 10002,
             }}
-            className="pointer-events-auto relative rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121524] text-gray-800 dark:text-zinc-100 shadow-2xl p-5 md:p-6"
+            className="pointer-events-auto relative rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121524] text-gray-800 dark:text-zinc-100 shadow-2xl p-5"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Arrow Pointer: Top (points UP) */}
@@ -370,67 +479,81 @@ export const TourSpotlightCard: React.FC<TourSpotlightCardProps> = ({ onNext, on
               </div>
             )}
 
-            {/* Close (X) button at top right */}
-            <button
-              type="button"
-              onClick={onSkip}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 dark:text-zinc-500 dark:hover:text-white transition-colors"
-              title="Exit Walkthrough"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            {/* Top Bar: Section Badge + Counter + Close Button */}
+            <div className="flex items-center justify-between pb-2 mb-2">
+              <div className="flex items-center gap-2">
+                {currentStep.section && (
+                  <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    <Sparkles className="h-2.5 w-2.5" />
+                    {currentStep.section}
+                  </span>
+                )}
+                <span className="text-[11px] font-semibold text-gray-400 dark:text-zinc-500">
+                  {currentStepIndex + 1} / {totalSteps}
+                </span>
+              </div>
 
-            {/* Top Pagination Dots */}
-            <div className="flex items-center justify-center gap-1.5 mb-3">
-              {WALKTHROUGH_STEPS.map((_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => goToStep(i)}
-                  className={`rounded-full transition-all duration-300 ${
-                    i === currentStepIndex
-                      ? 'w-2 h-2 bg-amber-500 ring-2 ring-amber-500/25'
-                      : 'w-1.5 h-1.5 bg-gray-300 dark:bg-zinc-700 hover:bg-gray-400 dark:hover:bg-zinc-500'
-                  }`}
-                  title={`Jump to step ${i + 1}`}
-                />
-              ))}
+              <button
+                type="button"
+                onClick={onSkip}
+                className="rounded-lg p-1 text-gray-400 hover:text-gray-700 dark:text-zinc-500 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
+                title="Exit Walkthrough"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
+
+            {/* Sleek Progress Bar */}
+            <div className="h-1 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden mb-3">
+              <div
+                style={{ width: `${progressPercent}%` }}
+                className="h-full bg-amber-500 transition-all duration-300 ease-out"
+              />
+            </div>
+
+            {/* Target Title */}
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-1.5 flex items-center gap-1.5">
+              <span>{displayTitle}</span>
+            </h3>
 
             {/* Main Direct Instruction */}
-            <div className="text-center text-xs sm:text-sm leading-relaxed text-gray-700 dark:text-zinc-300 my-3 font-normal">
-              {renderFormattedText(currentStep.text)}
+            <div className="text-xs sm:text-[13px] leading-relaxed text-gray-600 dark:text-zinc-300 mb-4 font-normal">
+              {renderFormattedText(displayText)}
             </div>
 
-            {/* Footer Controls: < Prev on left, Next > on right */}
-            <div className="flex items-center justify-between pt-3 mt-1 border-t border-gray-100 dark:border-white/5">
+            {/* Footer Controls */}
+            <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-white/5">
               <button
                 type="button"
                 onClick={onPrev}
                 disabled={currentStepIndex === 0}
-                className={`flex items-center gap-1 text-xs font-semibold transition-colors ${
+                className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg transition-colors ${
                   currentStepIndex === 0
-                    ? 'text-gray-300 dark:text-zinc-700 cursor-not-allowed opacity-40'
-                    : 'text-gray-500 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-white'
+                    ? 'text-gray-300 dark:text-zinc-700 cursor-not-allowed opacity-30'
+                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/5'
                 }`}
               >
-                <span>&#9664;</span> Prev
+                <ChevronLeft className="h-3.5 w-3.5" />
+                <span>Prev</span>
               </button>
 
-              <div className="flex items-center gap-3">
+              {isClickStep ? (
+                /* Click-to-Advance Interactive Pill (No Next button shown) */
+                <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 px-3 py-1.5 text-xs font-bold text-amber-700 dark:text-amber-300 animate-pulse">
+                  <MousePointerClick className="h-3.5 w-3.5 shrink-0" />
+                  <span>{isDropdownItemActive ? 'Click highlighted option' : 'Click highlighted element'}</span>
+                </div>
+              ) : (
+                /* Standard Next Button for passive observe steps */
                 <button
                   type="button"
                   onClick={onNext}
-                  className="flex items-center gap-1 rounded-lg bg-amber-500 hover:bg-amber-600 active:bg-amber-700 px-3.5 py-1.5 text-xs font-bold text-zinc-950 transition-colors shadow-sm"
+                  className="flex items-center gap-1 rounded-lg bg-amber-500 hover:bg-amber-600 active:bg-amber-700 px-4 py-1.5 text-xs font-bold text-zinc-950 transition-colors shadow-sm"
                 >
-                  {currentStepIndex === totalSteps - 1 ? 'Finish' : 'Next'}
-                  <span>&#9654;</span>
+                  <span>{currentStepIndex === totalSteps - 1 ? 'Finish' : 'Next'}</span>
+                  <ChevronRight className="h-3.5 w-3.5" />
                 </button>
-
-                <span className="text-gray-300 dark:text-zinc-600" title="Ensemble Walkthrough">
-                  <MessageCircle className="h-4 w-4" />
-                </span>
-              </div>
+              )}
             </div>
           </motion.div>
         )}

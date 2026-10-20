@@ -147,7 +147,7 @@ export const HomeFeaturedJobs: React.FC = () => {
 
   if (loading) {
     return (
-      <section>
+      <section data-tour="home-featured-jobs">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Latest Job Posts</h2>
@@ -167,7 +167,7 @@ export const HomeFeaturedJobs: React.FC = () => {
   }
 
   return (
-    <section>
+    <section data-tour="home-featured-jobs">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2
