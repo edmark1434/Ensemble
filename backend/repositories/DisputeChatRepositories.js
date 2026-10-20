@@ -427,7 +427,52 @@ async function postPublicDisputeComment(disputeId, accountId, body) {
     audiences: ['staff'],
     isInternal: true,
   });
+  const number = row.dispute_number || 'Dispute';
+  await notifyDisputeParties(row, {
+    message: `New reply on dispute ${number}. It shows in the discussion after staff publish it.`,
+    path: `/disputes/${disputeId}`,
+    excludeAccountId: accountId,
+  });
   return { private: true };
+}
+
+async function notifyDisputeParties(row, { message, path, excludeAccountId = null, onlyFiler = false } = {}) {
+  if (!row?.dispute_id || !message) return;
+  const NotificationRepositories = require('./NotificationRepositories');
+  let io = null;
+  try {
+    io = require('../lib/WebSocket').getIo();
+  } catch {
+    io = null;
+  }
+
+  const disputeId = row.dispute_id;
+  const recipients = onlyFiler
+    ? [row.by_account_id]
+    : [row.by_account_id, row.for_account_id];
+  const referencePath = path || (row.visibility ? `/disputes/${disputeId}` : '/contracts/disputes');
+  const seen = new Set();
+
+  for (const accountId of recipients) {
+    if (!accountId) continue;
+    const key = String(accountId);
+    if (seen.has(key)) continue;
+    if (excludeAccountId && key === String(excludeAccountId)) continue;
+    seen.add(key);
+    try {
+      const notification = await NotificationRepositories.createNotification({
+        account_id: accountId,
+        message,
+        reference_table: 'disputes',
+        reference_prefix: 'DIS',
+        reference_path: referencePath,
+        reference_id: disputeId,
+      });
+      if (io && notification) io.to(key).emit('notification', notification);
+    } catch (err) {
+      console.warn('Dispute notification skipped:', err.message);
+    }
+  }
 }
 
 module.exports = {
@@ -442,6 +487,7 @@ module.exports = {
   getPublicDisputeDiscussion,
   getAccountDispute,
   postPublicDisputeComment,
+  notifyDisputeParties,
   createDisputeMessage,
   updateDisputeMessageAudience,
   mapMongoDisputeMessage,

@@ -31,6 +31,7 @@ const {
   listDisputeMessages,
   createDisputeMessage,
   updateDisputeMessageAudience,
+  notifyDisputeParties,
 } = require('./DisputeChatRepositories');
 const {
   ROLE_TO_TICKET_TYPES,
@@ -3387,19 +3388,11 @@ async function updateDispute(disputeId, patch, staffSession) {
       metadata: { status: 'open', visibility: true },
     });
     try {
-      const NotificationRepositories = require('./NotificationRepositories');
-      const notice = `Dispute ${refreshed.dispute_number || ''} is now public.`.replace(/\s+/g, ' ').trim();
-      for (const accountId of [refreshed.by_account_id, refreshed.for_account_id]) {
-        if (!accountId) continue;
-        await NotificationRepositories.createNotification({
-          account_id: accountId,
-          message: notice,
-          reference_table: 'disputes',
-          reference_prefix: 'DIS',
-          reference_path: `/disputes/${disputeId}`,
-          reference_id: disputeId,
-        });
-      }
+      const number = refreshed.dispute_number || 'Dispute';
+      await notifyDisputeParties(refreshed, {
+        message: `Dispute ${number} is now open.`,
+        path: `/disputes/${disputeId}`,
+      });
     } catch (err) {
       console.warn('Dispute public notice skipped:', err.message);
     }
@@ -3506,6 +3499,13 @@ async function updateDispute(disputeId, patch, staffSession) {
         status: normalized.status || refreshed.status,
         visibility: normalized.visibility,
       },
+    });
+  }
+  if (normalized.visibility === true && !Boolean(refreshed.visibility)) {
+    const number = refreshed.dispute_number || 'Dispute';
+    await notifyDisputeParties(refreshed, {
+      message: `Dispute ${number} is now open.`,
+      path: `/disputes/${disputeId}`,
     });
   }
   return getDisputeDetail(disputeId, staffSession);
@@ -3861,6 +3861,17 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
     isInternal,
   });
 
+  const number = row.dispute_number || 'Dispute';
+  const visible = Boolean(row.visibility) && audience === 'public';
+  await notifyDisputeParties(row, {
+    message: visible
+      ? `New reply on dispute ${number}.`
+      : `New reply on dispute ${number}. It shows in the discussion after staff publish it.`,
+    path: visible ? `/disputes/${disputeId}` : '/contracts/disputes',
+    excludeAccountId: sessionAccountId(staffSession),
+    onlyFiler: !row.visibility,
+  });
+
   await pool.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
   return getDisputeDetail(disputeId, staffSession);
 }
@@ -3886,6 +3897,13 @@ async function setDisputeMessageAudience(disputeId, messageId, audience, staffSe
 
   await updateDisputeMessageAudience(chatId, messageId, audience);
   await pool.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
+  if (String(audience).toLowerCase() === 'public') {
+    const number = row.dispute_number || 'Dispute';
+    await notifyDisputeParties(row, {
+      message: `A reply on dispute ${number} is now public.`,
+      path: `/disputes/${disputeId}`,
+    });
+  }
   return getDisputeDetail(disputeId, staffSession);
 }
 
@@ -3917,6 +3935,12 @@ async function postDisputeDecisionMessage(row, staffSession, body) {
     audience: 'public',
     audiences: ['public', 'parties'],
     isInternal: false,
+  });
+  const number = row.dispute_number || 'Dispute';
+  await notifyDisputeParties(row, {
+    message: `New reply on dispute ${number}.`,
+    path: `/disputes/${row.dispute_id}`,
+    excludeAccountId: sessionAccountId(staffSession),
   });
 }
 

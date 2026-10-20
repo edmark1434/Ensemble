@@ -760,6 +760,7 @@ export const ContractDetailsPage: React.FC = () => {
         portfolioUseAllowed: Boolean(foundRaw.portfolio_use_allowed),
         portfolioDuration: foundRaw.portfolio_use_duration_seconds || 60,
         milestones: mappedMilestones,
+        activeDispute: foundRaw.active_dispute || null,
       };
 
       setContract(mapped);
@@ -1132,16 +1133,31 @@ export const ContractDetailsPage: React.FC = () => {
 
                     <div className="border-t border-zinc-100 dark:border-white/5 my-1" />
 
-                    <button
-                      onClick={() => {
-                        setActionsMenuOpen(false);
-                        navigate(`/contracts/dispute-form?contractId=${contract.id}`);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-left font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition"
-                    >
-                      <AlertCircle className="w-4 h-4 text-rose-500" />
-                      <span>Report a Dispute</span>
-                    </button>
+                    {contract.activeDispute ? (
+                      <button
+                        onClick={() => {
+                          setActionsMenuOpen(false);
+                          navigate(contract.activeDispute?.visibility
+                            ? `/disputes/${contract.activeDispute.id}`
+                            : "/contracts/disputes");
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-left font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition"
+                      >
+                        <AlertCircle className="w-4 h-4 text-rose-500" />
+                        <span>View active dispute</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setActionsMenuOpen(false);
+                          navigate(`/contracts/dispute-form?contractId=${contract.id}`);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-left font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition"
+                      >
+                        <AlertCircle className="w-4 h-4 text-rose-500" />
+                        <span>Report a Dispute</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1275,11 +1291,47 @@ export const ContractDetailsPage: React.FC = () => {
               </div>
             )}
 
+            {contract.activeDispute ? (
+              <div className="flex flex-col gap-3 rounded-2xl border border-rose-300 bg-rose-50 p-4 shadow-sm dark:border-rose-500/40 dark:bg-rose-500/10 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600 dark:text-rose-300" />
+                  <div>
+                    <p className="text-sm font-bold text-rose-900 dark:text-rose-100">This contract is under dispute</p>
+                    <p className="mt-1 text-xs text-rose-800 dark:text-rose-200">
+                      {contract.activeDispute.visibility
+                        ? (contract.activeDispute.number
+                          ? `Dispute ${contract.activeDispute.number} is open to both parties.`
+                          : "This dispute is open to both parties.")
+                        : "You filed this dispute. It stays with staff until they open it."}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate(contract.activeDispute?.visibility
+                    ? `/disputes/${contract.activeDispute.id}`
+                    : "/contracts/disputes")}
+                  className="shrink-0 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700"
+                >
+                  View dispute
+                </button>
+              </div>
+            ) : null}
+
             {/* Contract Hero Header & Financial Summary */}
-            <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 sm:p-8 shadow-sm space-y-6">
+            <div className={`rounded-2xl border bg-white dark:bg-dark-surface p-6 sm:p-8 shadow-sm space-y-6 ${
+              contract.activeDispute
+                ? "border-rose-300 dark:border-rose-500/40"
+                : "border-zinc-200 dark:border-white/10"
+            }`}>
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 pb-6 border-b border-zinc-200 dark:border-white/10">
                 <div className="space-y-3 flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
+                    {contract.activeDispute ? (
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 dark:bg-rose-500/15 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-500/40">
+                        Under dispute
+                      </span>
+                    ) : null}
                     {getStatusBadge(contract.status)}
                     <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-purple-50 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30">
                       {contract.contractType === "Gig"

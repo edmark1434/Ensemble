@@ -41,14 +41,22 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
   const open = isOpen(dispute);
   const publicDiscussion = Boolean(dispute.visibility);
   return (
-    <article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-xs dark:border-white/10 dark:bg-dark-surface/40">
+    <article className={`rounded-2xl border bg-white p-4 shadow-xs dark:bg-dark-surface/40 ${
+      open
+        ? "border-rose-300 dark:border-rose-500/40"
+        : "border-zinc-200 dark:border-white/10"
+    }`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs text-zinc-500">{dispute.number || "Dispute"}</p>
           <h2 className="mt-1 text-base font-bold text-zinc-900 dark:text-white">{dispute.title || "Transaction dispute"}</h2>
         </div>
-        <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-600 dark:border-white/10 dark:text-zinc-300">
-          {label(dispute.status)}
+        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+          open
+            ? "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-200"
+            : "border-zinc-200 text-zinc-600 dark:border-white/10 dark:text-zinc-300"
+        }`}>
+          {open ? "Active" : label(dispute.status)}
         </span>
       </div>
       {dispute.reason ? (
@@ -57,11 +65,14 @@ function DisputeCard({ dispute }: { dispute: DisputeRow }) {
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
         <span>{when(dispute.updatedAt)}</span>
         {publicDiscussion ? (
-          <Link to={`/disputes/${dispute.id}`} className="font-semibold text-blue-600 hover:underline dark:text-blue-400">
-            Open discussion
+          <Link
+            to={`/disputes/${dispute.id}`}
+            className="rounded-lg bg-rose-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-rose-700"
+          >
+            View dispute
           </Link>
         ) : open ? (
-          <span>Waiting for staff to open this dispute</span>
+          <span className="font-semibold text-rose-700 dark:text-rose-300">Waiting for staff to open this dispute</span>
         ) : (
           <span>Closed before it was made public</span>
         )}

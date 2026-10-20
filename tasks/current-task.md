@@ -1,10 +1,12 @@
-# Current Task: User transaction dispute list
+# Current Task: Show disputed contracts
 
 ## Objective
-Give members a normal page for their active contract disputes.
+Mark a contract that has an open dispute, and give a button that opens that dispute.
 
 ## Acceptance Criteria
-- [x] Activity nav includes Disputes.
-- [x] The page lists open contract and transaction disputes for the signed-in account.
-- [x] A public dispute opens its discussion. A hidden filing stays marked as waiting for staff.
+- [x] My Contracts shows an Active disputes button when the signed-in account can see an open dispute.
+- [x] A disputed contract card uses a rose border, an Under dispute label, and a View dispute button.
+- [x] Contract details show the same state and replace Report a Dispute with View active dispute.
+- [x] The other party does not see a filing until staff open it.
+- [ ] The contract badge needs the `disputes.contract_id` migration. Run `npm run migrate` in `backend` when the database is reachable.
 - [ ] Do not git commit unless asked.

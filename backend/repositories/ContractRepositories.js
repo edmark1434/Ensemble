@@ -451,6 +451,49 @@ async function rejectJobOffer(freelancerIds, contractId, reason) {
     }
 }
 
+async function openDisputesForContracts(contractIds, viewerAccountIds) {
+    const map = new Map();
+    const ids = [...new Set((contractIds || []).filter(Boolean).map(String))];
+    if (!ids.length) return map;
+
+    const column = await pool.query(`
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'disputes'
+          AND column_name = 'contract_id'
+    `);
+    if (!column.rows.length) return map;
+
+    const viewers = new Set((viewerAccountIds || []).map(String));
+    const result = await pool.query(`
+        SELECT DISTINCT ON (contract_id)
+            dispute_id,
+            dispute_number,
+            contract_id,
+            status,
+            visibility,
+            by_account_id
+        FROM disputes
+        WHERE contract_id = ANY($1::uuid[])
+          AND deleted_at IS NULL
+          AND lower(COALESCE(status, '')) <> 'closed'
+        ORDER BY contract_id, opened_at DESC NULLS LAST, created_at DESC
+    `, [ids]);
+
+    for (const row of result.rows) {
+        const filedByViewer = viewers.has(String(row.by_account_id));
+        if (!filedByViewer && !row.visibility) continue;
+        map.set(String(row.contract_id), {
+            id: row.dispute_id,
+            number: row.dispute_number || null,
+            visibility: Boolean(row.visibility),
+            status: row.status,
+        });
+    }
+    return map;
+}
+
 async function getContractsByUserId(accountIds) {
     const query = `
         SELECT 
@@ -575,7 +618,12 @@ async function getContractsByUserId(accountIds) {
         ORDER BY created_at DESC
     `;
     const res = await pool.query(query, [accountIds]);
-    return res.rows;
+    const rows = res.rows;
+    const disputes = await openDisputesForContracts(rows.map((row) => row.contract_id), accountIds);
+    return rows.map((row) => ({
+        ...row,
+        active_dispute: disputes.get(String(row.contract_id)) || null,
+    }));
 }
 
 async function createContractDispute(accountIds, contractId, { reason, details }) {
