@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowUp, ArrowDown, RotateCcw } from "lucide-react";
+import { ArrowUp, ArrowDown, RotateCcw, PanelLeftClose } from "lucide-react";
 
 export interface ProposalFilterState {
   minPrice: string;
@@ -25,12 +25,14 @@ interface ProposalsFiltersProps {
   filters: ProposalFilterState;
   setters: ProposalFilterSetters;
   onClear: () => void;
+  onCollapse?: () => void;
 }
 
 export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
   filters,
   setters,
   onClear,
+  onCollapse,
 }) => {
   return (
     <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-4 backdrop-blur-sm space-y-4 text-left">
@@ -38,12 +40,24 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
         <h2 className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-[0.2em]">
           Filter & Sorting
         </h2>
-        <button
-          onClick={onClear}
-          className="text-[10px] font-semibold text-gray-500 dark:text-zinc-500 hover:text-red-400 transition-colors flex items-center gap-1"
-        >
-          <RotateCcw className="h-3 w-3" /> Reset All
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onClear}
+            className="text-[10px] font-semibold text-gray-500 dark:text-zinc-500 hover:text-red-400 transition-colors flex items-center gap-1 cursor-pointer"
+          >
+            <RotateCcw className="h-3 w-3" /> Reset All
+          </button>
+          {onCollapse && (
+            <button
+              type="button"
+              onClick={onCollapse}
+              className="p-1 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer"
+              title="Collapse sidebar"
+            >
+              <PanelLeftClose className="h-3 w-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 1. Bid Price Range & Asc/Desc Sort */}

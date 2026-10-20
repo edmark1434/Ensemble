@@ -1,3 +1,4 @@
+import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Clock, ArrowRight, Wrench, Bookmark, Users, User } from "lucide-react";
@@ -64,14 +65,13 @@ export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) 
 
               const minBudget = Number(j.rate_credits_min) || 0;
               const maxBudget = Number(j.rate_credits_max) || 0;
-              let priceRange = "0 Credits";
-              if (minBudget && maxBudget && minBudget !== maxBudget) {
-                priceRange = `${minBudget.toLocaleString()} ~ ${maxBudget.toLocaleString()} Credits`;
-              } else if (minBudget) {
-                priceRange = `${minBudget.toLocaleString()} Credits`;
-              } else if (maxBudget) {
-                priceRange = `${maxBudget.toLocaleString()} Credits`;
-              }
+              const bInfo = getBudgetDisplayInfo({
+                minBudget,
+                maxBudget,
+                isTeam: Boolean(j.hiring_type === "team" || j.is_team),
+                positionsNeeded: j.positions_needed
+              });
+              const priceRange = bInfo.amountText;
 
               return {
                 id: j.job_id || j.id,
@@ -264,11 +264,25 @@ export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) 
                     </span>
                   </div>
 
-                  {/* Price */}
-                  <div className="text-amber-500 dark:text-amber-400 text-sm font-black mb-1 flex items-center gap-1">
-                    <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0" />
-                    <span>{job.priceRange}</span>
-                  </div>
+                  {/* Price & Tag */}
+                  {(() => {
+                    const bDisplay = getBudgetDisplayInfo({
+                      minBudget: job.minBudget,
+                      maxBudget: job.maxBudget,
+                      positionsNeeded: 1,
+                    });
+                    return (
+                      <div className="flex items-center justify-between gap-1.5 mb-1.5 flex-wrap">
+                        <div className="text-amber-500 dark:text-amber-400 text-sm font-black flex items-center gap-1">
+                          <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0" />
+                          <span>{bDisplay.amountText}</span>
+                        </div>
+                        <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-semibold ${bDisplay.tagColorClass}`}>
+                          {bDisplay.tagLabel}
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   {/* Title */}
                   <h3

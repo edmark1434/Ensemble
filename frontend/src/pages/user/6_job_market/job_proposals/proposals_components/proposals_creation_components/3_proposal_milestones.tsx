@@ -166,6 +166,102 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
     );
   };
 
+  const handleApplyTemplate = (type: "single" | "two_phase" | "three_phase" | "qa_phase") => {
+    const totalH = allocatedHours > 0 ? allocatedHours : 24;
+    let newMilestones: Milestone[] = [];
+
+    if (type === "single") {
+      newMilestones = [
+        {
+          id: `ms-${Date.now()}-1`,
+          name: "Complete Deliverable & Final Handover",
+          description: "Full end-to-end execution, delivery of source files, and final client sign-off.",
+          hours: totalH,
+          revisions: 2,
+          percentage: 100,
+        },
+      ];
+    } else if (type === "two_phase") {
+      const h1 = Math.max(1, Math.round(totalH * 0.4));
+      const h2 = Math.max(1, totalH - h1);
+      newMilestones = [
+        {
+          id: `ms-${Date.now()}-1`,
+          name: "Phase 1: Initial Working Prototype / Draft",
+          description: "Deliver rough cut, core architecture, or initial layout for review.",
+          hours: h1,
+          revisions: 2,
+          percentage: 40,
+        },
+        {
+          id: `ms-${Date.now()}-2`,
+          name: "Phase 2: Final Polish & Master Export",
+          description: "Apply feedback, polish visual details, and complete final deliverables.",
+          hours: h2,
+          revisions: 2,
+          percentage: 60,
+        },
+      ];
+    } else if (type === "three_phase") {
+      const h1 = Math.max(1, Math.round(totalH * 0.25));
+      const h2 = Math.max(1, Math.round(totalH * 0.45));
+      const h3 = Math.max(1, totalH - h1 - h2);
+      newMilestones = [
+        {
+          id: `ms-${Date.now()}-1`,
+          name: "Phase 1: Discovery, Concepts & Wireframes",
+          description: "Research, concept exploration, and initial structural blueprint.",
+          hours: h1,
+          revisions: 1,
+          percentage: 25,
+        },
+        {
+          id: `ms-${Date.now()}-2`,
+          name: "Phase 2: Core Development / Main Production",
+          description: "Implementation of primary components, assets, and working functionality.",
+          hours: h2,
+          revisions: 2,
+          percentage: 45,
+        },
+        {
+          id: `ms-${Date.now()}-3`,
+          name: "Phase 3: Revisions, QA & Final Assets",
+          description: "Review passes, bug fixes/polish, and final delivery handover.",
+          hours: h3,
+          revisions: 2,
+          percentage: 30,
+        },
+      ];
+    } else if (type === "qa_phase") {
+      const h1 = Math.max(1, Math.round(totalH * 0.7));
+      const h2 = Math.max(1, totalH - h1);
+      newMilestones = [
+        {
+          id: `ms-${Date.now()}-1`,
+          name: "Phase 1: Complete Feature Build / Draft Pass",
+          description: "Primary implementation and functional deliverables.",
+          hours: h1,
+          revisions: 2,
+          percentage: 70,
+        },
+        {
+          id: `ms-${Date.now()}-2`,
+          name: "Phase 2: Quality Assurance, Testing & Deployment",
+          description: "Testing, verification, client review adjustments, and deployment.",
+          hours: h2,
+          revisions: 1,
+          percentage: 30,
+        },
+      ];
+    }
+
+    setMilestones(newMilestones);
+    setErrors((prev) => {
+      const { milestones: _, ...rest } = prev;
+      return rest;
+    });
+  };
+
   if (isTeamJob && job?.milestones && job.milestones.length > 0) {
     const selectedM = job.milestones.find((m: any) => m.job_milestone_id === selectedMilestoneId) || job.milestones[0];
     const slots = Math.max(1, selectedM?.slots_count || 1);
@@ -514,6 +610,64 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
       </div>
 
       {errors.milestones && <p className="text-[11px] text-red-400">{errors.milestones}</p>}
+
+      {/* 1-Click Milestone Quick Templates */}
+      <div className="p-3.5 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] space-y-2.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-bold text-gray-700 dark:text-zinc-300 flex items-center gap-1.5 uppercase tracking-wider">
+            <Sparkles className="h-3.5 w-3.5 text-blue-500" />
+            Quick-Fill Templates
+          </span>
+          <span className="text-[10px] text-gray-500 dark:text-zinc-500">
+            Auto-generate deliverables & phase splits
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <button
+            type="button"
+            onClick={() => handleApplyTemplate("single")}
+            className="px-3 py-2 rounded-xl text-left border text-xs font-semibold transition-all border-gray-200 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-400 bg-white dark:bg-white/5 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 text-gray-800 dark:text-zinc-200"
+          >
+            <div className="font-bold flex items-center gap-1 text-[11px] text-gray-900 dark:text-white">
+              <span>Single Phase</span>
+            </div>
+            <div className="text-[10px] text-gray-500 dark:text-zinc-400">100% on delivery</div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleApplyTemplate("two_phase")}
+            className="px-3 py-2 rounded-xl text-left border text-xs font-semibold transition-all border-gray-200 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-400 bg-white dark:bg-white/5 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 text-gray-800 dark:text-zinc-200"
+          >
+            <div className="font-bold flex items-center gap-1 text-[11px] text-gray-900 dark:text-white">
+              <span>2 Phases</span>
+            </div>
+            <div className="text-[10px] text-gray-500 dark:text-zinc-400">40% Draft / 60% Final</div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleApplyTemplate("three_phase")}
+            className="px-3 py-2 rounded-xl text-left border text-xs font-semibold transition-all border-gray-200 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-400 bg-white dark:bg-white/5 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 text-gray-800 dark:text-zinc-200"
+          >
+            <div className="font-bold flex items-center gap-1 text-[11px] text-gray-900 dark:text-white">
+              <span>3 Phases</span>
+            </div>
+            <div className="text-[10px] text-gray-500 dark:text-zinc-400">25% / 45% / 30%</div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleApplyTemplate("qa_phase")}
+            className="px-3 py-2 rounded-xl text-left border text-xs font-semibold transition-all border-gray-200 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-400 bg-white dark:bg-white/5 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 text-gray-800 dark:text-zinc-200"
+          >
+            <div className="font-bold flex items-center gap-1 text-[11px] text-gray-900 dark:text-white">
+              <span>Dev + QA</span>
+            </div>
+            <div className="text-[10px] text-gray-500 dark:text-zinc-400">70% Build / 30% QA</div>
+          </button>
+        </div>
+      </div>
 
       {/* Milestone Cards List */}
       <Reorder.Group axis="y" values={milestones} onReorder={setMilestones} className="space-y-4">

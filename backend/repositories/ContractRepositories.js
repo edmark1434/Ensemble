@@ -3,7 +3,7 @@ const { normalizeDisputePriority } = require('../lib/DisputeEnums');
 const NotificationRepositories = require('./NotificationRepositories');
 const TeamProjectRepositories = require('./TeamProjectRepositories');
 
-async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt) {
+async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt, customMilestones = null) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -92,12 +92,31 @@ async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt) {
             VALUES ($1, $2)
         `, [contractId, proposalId]);
 
+        // 6. Optional: Update milestones if customized by client
+        if (Array.isArray(customMilestones) && customMilestones.length > 0) {
+            await client.query(`DELETE FROM proposal_milestones WHERE proposal_id = $1`, [proposalId]);
+            for (let i = 0; i < customMilestones.length; i++) {
+                const m = customMilestones[i];
+                if (!m) continue;
+                const mName = String(m.name || m.title || `Milestone ${i + 1}`).trim().slice(0, 50);
+                const mDesc = String(m.description || '').trim();
+                const mDuration = Math.max(1, parseInt(m.duration_hrs || m.hours) || 24);
+                const mMaxRev = Math.max(0, parseInt(m.no_of_revisions_max || m.revisions) || 0);
+
+                await client.query(
+                    `INSERT INTO proposal_milestones (proposal_id, index, name, description, duration_hrs, no_of_revisions_max)
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [proposalId, i, mName, mDesc, mDuration, mMaxRev]
+                );
+            }
+        }
+
         // 7. Update Proposal Status
         await client.query(`
             UPDATE proposals
-            SET status = 'Approved'
+            SET status = 'Approved', rate_credits = $2
             WHERE proposal_id = $1
-        `, [proposalId]);
+        `, [proposalId, rateCredits]);
 
         // 8. Send Notification to Freelancer
         await NotificationRepositories.createNotification({

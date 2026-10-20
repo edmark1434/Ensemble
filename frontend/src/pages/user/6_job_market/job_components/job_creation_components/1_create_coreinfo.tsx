@@ -1,5 +1,5 @@
 import React, { useRef, useState, type ChangeEvent } from "react";
-import { ArrowRight, Image as ImageIcon, ChevronDown, Check, Bold, Italic, List, Eye, EyeOff, Wand2 } from "lucide-react";
+import { ArrowRight, Image as ImageIcon, ChevronDown, Check, Bold, Italic, List, Eye, EyeOff, Wand2, HelpCircle, Plus, Trash2, Paperclip, FileText, X } from "lucide-react";
 import { JobRichText } from "../JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
@@ -51,6 +51,10 @@ interface CreateCoreInfoProps {
   setIsDragging: (val: boolean) => void;
   errors: Record<string, string>;
   setErrors: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  screeningQuestions?: string[];
+  setScreeningQuestions?: React.Dispatch<React.SetStateAction<string[]>>;
+  briefFiles?: File[];
+  setBriefFiles?: React.Dispatch<React.SetStateAction<File[]>>;
   onNext: () => void;
   onDiscard: () => void;
 }
@@ -146,6 +150,10 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
   setIsDragging,
   errors,
   setErrors,
+  screeningQuestions = [],
+  setScreeningQuestions,
+  briefFiles = [],
+  setBriefFiles,
   onNext,
   onDiscard,
 }) => {
@@ -383,6 +391,135 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
         )}
         
         {errors.description && <p className="text-[11px] text-red-400">{errors.description}</p>}
+      </div>
+
+      {/* 1.A: Screening Questions / Dealbreaker Criteria */}
+      <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-white/5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">
+              Screening Questions <span className="text-gray-400 font-normal lowercase">(optional • max 3)</span>
+            </label>
+            <div className="group relative flex items-center">
+              <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-56 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2.5 py-1.5 text-center text-[10px] text-gray-700 dark:text-gray-300 shadow-lg group-hover:block z-10 pointer-events-none">
+                Ask specific questions applicants must answer when proposing, helping filter out generic copy-pasted pitches.
+              </div>
+            </div>
+          </div>
+          {setScreeningQuestions && screeningQuestions.length < 3 && (
+            <button
+              type="button"
+              onClick={() => setScreeningQuestions([...screeningQuestions, ""])}
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              <Plus className="h-3 w-3" /> Add Question
+            </button>
+          )}
+        </div>
+
+        {screeningQuestions.length === 0 ? (
+          <p className="text-[11px] text-gray-400 dark:text-zinc-500 italic">
+            No screening questions added. Click "Add Question" to ask for portfolio links, software proficiency, or specific requirements.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {screeningQuestions.map((q, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 w-4">Q{idx + 1}.</span>
+                <input
+                  type="text"
+                  maxLength={150}
+                  value={q}
+                  placeholder={`e.g. ${idx === 0 ? 'Link to your relevant DaVinci Resolve or After Effects portfolio reel' : idx === 1 ? 'Have you worked with Three.js or WebGL before?' : 'What is your turnaround time for the first rough cut?'}`}
+                  onChange={(e) => {
+                    if (!setScreeningQuestions) return;
+                    const updated = [...screeningQuestions];
+                    updated[idx] = e.target.value;
+                    setScreeningQuestions(updated);
+                  }}
+                  className="flex-1 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                />
+                {setScreeningQuestions && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = screeningQuestions.filter((_, i) => i !== idx);
+                      setScreeningQuestions(updated);
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                    title="Remove Question"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 1.B: Project Brief & Reference Files */}
+      <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-white/5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">
+              Project Brief & Reference Documents <span className="text-gray-400 font-normal lowercase">(optional • max 5)</span>
+            </label>
+            <div className="group relative flex items-center">
+              <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-56 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2.5 py-1.5 text-center text-[10px] text-gray-700 dark:text-gray-300 shadow-lg group-hover:block z-10 pointer-events-none">
+                Upload script drafts, style guidelines, storyboard PDFs, or asset zip files to help freelancers accurately estimate scope.
+              </div>
+            </div>
+          </div>
+          {setBriefFiles && briefFiles.length < 5 && (
+            <label className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
+              <Paperclip className="h-3 w-3" /> Attach Files
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.zip,.doc,.docx,.png,.jpg,.jpeg"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) {
+                    const newFiles = Array.from(e.target.files);
+                    setBriefFiles((prev) => [...prev, ...newFiles].slice(0, 5));
+                  }
+                }}
+              />
+            </label>
+          )}
+        </div>
+
+        {briefFiles.length === 0 ? (
+          <p className="text-[11px] text-gray-400 dark:text-zinc-500 italic">
+            No reference documents attached. You can attach PDFs, moodboards, or zip files.
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            {briefFiles.map((file, idx) => (
+              <div key={idx} className="flex items-center justify-between px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-xs">
+                <div className="flex items-center gap-2 truncate pr-2">
+                  <FileText className="h-4 w-4 text-blue-500 shrink-0" />
+                  <span className="font-semibold text-gray-900 dark:text-white truncate text-[11px]">{file.name}</span>
+                  <span className="text-[10px] text-gray-400 dark:text-zinc-500 shrink-0">
+                    ({(file.size / 1024 / 1024).toFixed(1)} MB)
+                  </span>
+                </div>
+                {setBriefFiles && (
+                  <button
+                    type="button"
+                    onClick={() => setBriefFiles(briefFiles.filter((_, i) => i !== idx))}
+                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Actions */}

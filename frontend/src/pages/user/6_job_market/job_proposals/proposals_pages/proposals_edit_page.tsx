@@ -90,7 +90,9 @@ export const ProposalsEditPage: React.FC = () => {
               title: foundJob.title,
               minBudget: parseFloat(foundJob.rate_credits_min) || 0,
               maxBudget: parseFloat(foundJob.rate_credits_max) || 0,
-              priceRange: `${(parseFloat(foundJob.rate_credits_min) || 0).toLocaleString()} - ${(parseFloat(foundJob.rate_credits_max) || 0).toLocaleString()}`,
+              priceRange: !foundJob.rate_credits_max
+                ? `${(parseFloat(foundJob.rate_credits_min) || 0).toLocaleString()}+`
+                : `${(parseFloat(foundJob.rate_credits_min) || 0).toLocaleString()} - ${(parseFloat(foundJob.rate_credits_max) || 0).toLocaleString()}`,
               description: foundJob.description || "",
               createdAt: foundJob.created_at || "",
               status: foundJob.status || "",

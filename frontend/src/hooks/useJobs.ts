@@ -177,10 +177,10 @@ export const useJobs = () => {
     };
 
     // Contracts (Job Offers)
-    const sendJobOffer = async (proposalId: string, rateCredits: number, startsAt?: string) => {
+    const sendJobOffer = async (proposalId: string, rateCredits: number, startsAt?: string, milestones?: any[]) => {
         setLoading(true);
         try {
-            const res = await api.post('/api/contracts/job-offer', { proposalId, rateCredits, startsAt });
+            const res = await api.post('/api/contracts/job-offer', { proposalId, rateCredits, startsAt, milestones });
             return res.data;
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to send job offer');

@@ -62,12 +62,12 @@ async function createJobRepositories(jobData) {
                 rough_deadline, rough_no_of_revisions,
                 portfolio_use_allowed, portfolio_use_duration_seconds,
                 is_existing_project, existing_project_id, initiator_role, require_nda,
-                hiring_type
+                hiring_type, screening_questions
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                 $15, 0,
                 $16, $17, $18, $19, $20, $21,
-                $22
+                $22, $23
             ) RETURNING job_id;
         `;
         
@@ -80,7 +80,7 @@ async function createJobRepositories(jobData) {
         const jobValues = [
             jobData.client_account_id, jobData.title, jobData.description, 
             jobData.category, jobData.payment_type, jobData.experience_level, 
-            jobData.no_of_hires || 1, jobData.rate_credits_min, jobData.rate_credits_max,
+            jobData.no_of_hires || 1, jobData.rate_credits_min, (jobData.rate_credits_max ? parseInt(jobData.rate_credits_max, 10) : null),
             jobData.timeline_min, jobData.timeline_max, jobData.posted_as, 
             jobData.team_id || null, jobData.status || 'Open',
             deadline,
@@ -90,18 +90,30 @@ async function createJobRepositories(jobData) {
             jobData.existing_project_id || null,
             jobData.initiator_role || null,
             jobData.require_nda || false,
-            jobData.hiring_type || 'single'
+            jobData.hiring_type || 'single',
+            JSON.stringify(Array.isArray(jobData.screening_questions) ? jobData.screening_questions : [])
         ];
         
         const res = await client.query(jobQuery, jobValues);
         const jobId = res.rows[0].job_id;
 
-        // 2. Insert Thumbnail (Attachment)
+        // 2. Insert Thumbnail & Additional Brief Attachments
         if (jobData.file_id) {
             await client.query(
-                `INSERT INTO job_attachments (job_id, file_id, index) VALUES ($1, $2, $3)`,
+                `INSERT INTO job_attachments (job_id, file_id, index) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
                 [jobId, jobData.file_id, 0]
             );
+        }
+        if (Array.isArray(jobData.file_ids) && jobData.file_ids.length > 0) {
+            for (let i = 0; i < jobData.file_ids.length; i++) {
+                const fId = jobData.file_ids[i];
+                if (fId && fId !== jobData.file_id) {
+                    await client.query(
+                        `INSERT INTO job_attachments (job_id, file_id, index) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+                        [jobId, fId, i + 1]
+                    );
+                }
+            }
         }
 
         // 3. Insert Tags
@@ -201,7 +213,37 @@ async function getAllJobsRepositories(filters = {}, accountId = null, actorIds =
                     )
                     FROM job_milestones jm
                     WHERE jm.job_id = j.job_id
-                ) as milestones
+                ) as milestones,
+                COALESCE(j.screening_questions, '[]'::jsonb) as screening_questions,
+                (
+                    SELECT COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'file_id', ja.file_id,
+                                'name', f.name,
+                                'path', f.path,
+                                'mime_type', f.mime_type,
+                                'size_bytes', f.size_bytes,
+                                'index', ja.index
+                            ) ORDER BY ja.index ASC
+                        ),
+                        '[]'::json
+                    )
+                    FROM job_attachments ja
+                    JOIN files f ON ja.file_id = f.file_id
+                    WHERE ja.job_id = j.job_id AND ja.index > 0
+                ) as attachments,
+                (SELECT COUNT(*) FROM proposals p WHERE p.job_id = j.job_id AND p.status = 'Shortlisted' AND p.deleted_at IS NULL) as shortlisted_count,
+                (
+                    SELECT CASE 
+                        WHEN COUNT(*) = 0 THEN 100 
+                        ELSE ROUND((COUNT(*) FILTER (WHERE p.status = 'Hired')::numeric / COUNT(*)::numeric) * 100) 
+                    END
+                    FROM jobs j2
+                    JOIN proposals p ON j2.job_id = p.job_id
+                    WHERE j2.client_account_id = j.client_account_id AND j2.deleted_at IS NULL
+                ) as client_hire_rate,
+                COALESCE(j.updated_at, j.created_at) as client_last_active
             FROM jobs j
             LEFT JOIN accounts a ON j.client_account_id = a.account_id
             LEFT JOIN teams tm ON (
@@ -334,11 +376,55 @@ async function deleteJobRepositories(jobId, accountIds) {
             throw new Error('Job not found or unauthorized.');
         }
 
-        // Archive pending proposals
+        // Refund 10 Credits Proposal Fee on abandoned job (0 hires)
+        const platformWalletRes = await client.query(`
+            SELECT wallet_id FROM wallets WHERE type = 'platform wallets' LIMIT 1 FOR UPDATE
+        `);
+        const platformWalletId = platformWalletRes.rows[0]?.wallet_id;
+
+        const applicantsToRefund = await client.query(`
+            SELECT p.proposal_id, p.freelancer_account_id
+            FROM proposals p
+            WHERE p.job_id = $1 AND p.deleted_at IS NULL AND p.status IN ('Pending', 'Shortlisted', 'Interviewing')
+        `, [jobId]);
+
+        for (const applicant of applicantsToRefund.rows) {
+            const userWalletRes = await client.query(`
+                SELECT w.wallet_id 
+                FROM wallets w
+                JOIN account_wallets aw ON w.wallet_id = aw.wallet_id
+                WHERE aw.account_id = $1 AND w.type = 'account wallets'
+                FOR UPDATE
+            `, [applicant.freelancer_account_id]);
+
+            if (userWalletRes.rows.length > 0 && platformWalletId) {
+                const userWalletId = userWalletRes.rows[0].wallet_id;
+                // Credit user wallet +10
+                await client.query(`
+                    UPDATE wallets SET balance_credits = balance_credits + 10, updated_at = NOW() WHERE wallet_id = $1
+                `, [userWalletId]);
+
+                // Deduct platform wallet -10
+                await client.query(`
+                    UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - 10), updated_at = NOW() WHERE wallet_id = $1
+                `, [platformWalletId]);
+
+                // Record transaction
+                await client.query(`
+                    INSERT INTO credit_transactions (
+                        type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
+                    ) VALUES (
+                        'Proposal Fee Refund', 10, 'Completed', $1, $2, 'jobs', $3
+                    )
+                `, [platformWalletId, userWalletId, jobId]);
+            }
+        }
+
+        // Archive non-hired proposals
         await client.query(`
             UPDATE proposals
             SET status = 'Archived', updated_at = NOW()
-            WHERE job_id = $1 AND status = 'Pending' AND deleted_at IS NULL
+            WHERE job_id = $1 AND status != 'Hired' AND deleted_at IS NULL
         `, [jobId]);
 
         await client.query('COMMIT');
@@ -500,15 +586,16 @@ async function createProposalRepositories(proposalData) {
         const query = `
             INSERT INTO proposals (
                 job_id, freelancer_account_id, letter, rate_credits, 
-                revision_price_credits, terms_id, status, job_milestone_id
+                revision_price_credits, terms_id, status, job_milestone_id, screening_answers
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8
+                $1, $2, $3, $4, $5, $6, $7, $8, $9
             ) RETURNING proposal_id;
         `;
         const values = [
             proposalData.job_id, proposalData.freelancer_account_id, proposalData.letter,
             proposalData.rate_credits, proposalData.revision_price_credits, 
-            termsId, 'Pending', targetJobMilestoneId
+            termsId, 'Pending', targetJobMilestoneId,
+            JSON.stringify(Array.isArray(proposalData.screening_answers) ? proposalData.screening_answers : [])
         ];
         const res = await client.query(query, values);
         const proposalId = res.rows[0].proposal_id;
@@ -528,6 +615,18 @@ async function createProposalRepositories(proposalData) {
                      VALUES ($1, $2, $3, $4, $5, $6)`,
                     [proposalId, i, mName, mDesc, mDuration, mMaxRev]
                 );
+            }
+        }
+
+        // 3. Insert Proposal Attachments (Work samples, briefs, PDFs)
+        if (Array.isArray(proposalData.attachment_file_ids) && proposalData.attachment_file_ids.length > 0) {
+            for (const fileId of proposalData.attachment_file_ids) {
+                if (fileId) {
+                    await client.query(
+                        `INSERT INTO proposal_attachments (proposal_id, file_id) VALUES ($1, $2)`,
+                        [proposalId, fileId]
+                    );
+                }
             }
         }
 
@@ -562,7 +661,29 @@ async function getProposalsByJobIdRepositories(jobId, accountIds) {
                 jm.budget_credits as target_milestone_budget,
                 jm.slots_count as target_milestone_slots,
                 jm.duration_hours as target_milestone_duration_hours,
-                jm.order_index as target_milestone_order
+                jm.order_index as target_milestone_order,
+                (
+                    SELECT COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'file_id', pa.file_id,
+                                'name', f.name,
+                                'path', f.path,
+                                'mime_type', f.mime_type,
+                                'size_bytes', f.size_bytes
+                            )
+                        ),
+                        '[]'::json
+                    )
+                    FROM proposal_attachments pa
+                    JOIN files f ON pa.file_id = f.file_id
+                    WHERE pa.proposal_id = p.proposal_id
+                ) as attachments,
+                (
+                    SELECT COALESCE(AVG(r.stars_out_of_five), 5.0)::float
+                    FROM ratings r
+                    WHERE r.account_id = p.freelancer_account_id AND r.deleted_at IS NULL
+                ) as freelancer_rating
             FROM proposals p
             LEFT JOIN accounts a ON p.freelancer_account_id = a.account_id
             LEFT JOIN jobs j ON p.job_id = j.job_id
@@ -599,7 +720,29 @@ async function getProposalsByFreelancerRepositories(accountIds) {
                 jm.budget_credits as target_milestone_budget,
                 jm.slots_count as target_milestone_slots,
                 jm.duration_hours as target_milestone_duration_hours,
-                jm.order_index as target_milestone_order
+                jm.order_index as target_milestone_order,
+                (
+                    SELECT COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'file_id', pa.file_id,
+                                'name', f.name,
+                                'path', f.path,
+                                'mime_type', f.mime_type,
+                                'size_bytes', f.size_bytes
+                            )
+                        ),
+                        '[]'::json
+                    )
+                    FROM proposal_attachments pa
+                    JOIN files f ON pa.file_id = f.file_id
+                    WHERE pa.proposal_id = p.proposal_id
+                ) as attachments,
+                (
+                    SELECT COALESCE(AVG(r.stars_out_of_five), 5.0)::float
+                    FROM ratings r
+                    WHERE r.account_id = p.freelancer_account_id AND r.deleted_at IS NULL
+                ) as freelancer_rating
             FROM proposals p
             LEFT JOIN jobs j ON p.job_id = j.job_id
             LEFT JOIN accounts c ON j.client_account_id = c.account_id
@@ -656,9 +799,32 @@ async function getProposalByIdRepositories(proposalId, accountIds) {
                 jm.slots_count as target_milestone_slots,
                 jm.duration_hours as target_milestone_duration_hours,
                 jm.order_index as target_milestone_order,
+                (
+                    SELECT COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'file_id', pa.file_id,
+                                'name', f.name,
+                                'path', f.path,
+                                'mime_type', f.mime_type,
+                                'size_bytes', f.size_bytes
+                            )
+                        ),
+                        '[]'::json
+                    )
+                    FROM proposal_attachments pa
+                    JOIN files f ON pa.file_id = f.file_id
+                    WHERE pa.proposal_id = p.proposal_id
+                ) as attachments,
+                (
+                    SELECT COALESCE(AVG(r.stars_out_of_five), 5.0)::float
+                    FROM ratings r
+                    WHERE r.account_id = p.freelancer_account_id AND r.deleted_at IS NULL
+                ) as freelancer_rating,
                 (SELECT jc.contract_id FROM job_contracts jc JOIN contracts ct ON jc.contract_id = ct.contract_id WHERE jc.proposal_id = p.proposal_id ORDER BY ct.created_at DESC LIMIT 1) as contract_id,
                 (SELECT COUNT(*) FROM proposals p2 WHERE p2.job_id = p.job_id AND p2.deleted_at IS NULL AND p2.status != 'Archived') as total_applicants,
-                (SELECT COALESCE(AVG(p2.rate_credits), 0) FROM proposals p2 WHERE p2.job_id = p.job_id AND p2.deleted_at IS NULL AND p2.status != 'Archived') as avg_bid
+                (SELECT COALESCE(AVG(p2.rate_credits), 0) FROM proposals p2 WHERE p2.job_id = p.job_id AND p2.deleted_at IS NULL AND p2.status != 'Archived') as avg_bid,
+                COALESCE(j.screening_questions, '[]'::jsonb) as job_screening_questions
             FROM proposals p
             LEFT JOIN jobs j ON p.job_id = j.job_id
             LEFT JOIN accounts c ON j.client_account_id = c.account_id
@@ -670,6 +836,12 @@ async function getProposalByIdRepositories(proposalId, accountIds) {
               AND (p.freelancer_account_id = ANY($2::uuid[]) OR j.client_account_id = ANY($2::uuid[]))
         `;
         const res = await pool.query(query, [proposalId, accountIds]);
+        if (res.rows[0] && res.rows[0].client_account_id && accountIds.includes(res.rows[0].client_account_id)) {
+            if (!res.rows[0].viewed_at) {
+                await pool.query(`UPDATE proposals SET viewed_at = NOW() WHERE proposal_id = $1 AND viewed_at IS NULL`, [proposalId]);
+                res.rows[0].viewed_at = new Date();
+            }
+        }
         return res.rows[0];
     } catch (err) {
         console.error('Error in getProposalByIdRepositories:', err);
@@ -698,7 +870,10 @@ async function updateProposalStatusRepositories(proposalId, accountIds, status, 
         // This is mainly for Client updating status (Accept/Reject/Shortlist)
         const query = `
             UPDATE proposals p
-            SET status = $1, reject_reason = $2, updated_at = NOW()
+            SET status = $1::varchar, 
+                reject_reason = $2, 
+                shortlisted_at = CASE WHEN $1::varchar = 'Shortlisted' THEN COALESCE(p.shortlisted_at, NOW()) ELSE p.shortlisted_at END,
+                updated_at = NOW()
             FROM jobs j
             WHERE p.proposal_id = $3 AND p.job_id = j.job_id AND j.client_account_id = ANY($4::uuid[])
             RETURNING p.*, j.title as job_title, j.client_account_id;

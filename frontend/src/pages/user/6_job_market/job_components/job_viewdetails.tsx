@@ -1,3 +1,4 @@
+import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useState } from "react";
 import { Calendar, Clock, Briefcase, Users, Star, Send, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText, Bookmark, CheckCircle2, XCircle, HelpCircle, Maximize2 } from "lucide-react";
 import { JobRichText } from "./JobRichText";
@@ -181,52 +182,36 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               {/* Price, Timeline & Deadline */}
               <div className="p-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none flex flex-wrap gap-4 items-center justify-between">
                 <div>
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <p className="text-[9px] uppercase font-bold text-gray-500 dark:text-zinc-500">
-                      {isTeamHiring ? "Total Project Budget" : `Budget Range ${selectedJob.positionsNeeded > 1 ? "(Divided)" : ""}`}
-                    </p>
-                    {!isTeamHiring && selectedJob.positionsNeeded > 1 && (
-                      <div className="group relative flex items-center">
-                        <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1.5 hidden group-hover:block w-48 bg-white dark:bg-gray-900 text-gray-800 dark:text-white border border-gray-200 dark:border-gray-800 text-[10px] p-2 rounded-lg shadow-xl text-center z-10 before:content-[''] before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-white dark:before:border-t-gray-900">
-                          This job requires {selectedJob.positionsNeeded} positions. The total budget pool is divided to show the estimated budget per freelancer.
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col">
-                    {isTeamHiring ? (
+{(() => {
+                    const bDisplay = getBudgetDisplayInfo({
+                      minBudget: selectedJob.minBudget,
+                      maxBudget: selectedJob.maxBudget,
+                      isTeam: isTeamHiring,
+                      milestonesCount: selectedJob.milestones?.length || 0,
+                      positionsNeeded: selectedJob.positionsNeeded,
+                    });
+                    return (
                       <div>
-                        <div className="text-lg font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1.5 leading-none">
-                          <CreditIcon className="h-5 w-5 text-amber-500 dark:text-amber-400 shrink-0" />
-                          <span>{selectedJob.minBudget ? selectedJob.minBudget.toLocaleString() : selectedJob.priceRange}</span>
-                        </div>
-                        <p className="text-[10px] text-gray-500 dark:text-zinc-400 mt-1">
-                          Pool distributed across {selectedJob.milestones?.length || 0} milestones
-                        </p>
-                      </div>
-                    ) : selectedJob.positionsNeeded > 1 ? (
-                      <>
-                        <div className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 line-through mb-0.5 flex items-center gap-1">
-                          <CreditIcon className="h-3 w-3 shrink-0" />
-                          <span>{selectedJob.priceRange}</span>
-                        </div>
-                        <div className="text-lg font-extrabold text-blue-500 flex items-center gap-1.5 leading-none">
-                          <CreditIcon className="h-5 w-5 text-blue-500 shrink-0" />
-                          <span>
-                            {Math.round(selectedJob.minBudget / selectedJob.positionsNeeded) === Math.round((selectedJob.maxBudget || selectedJob.minBudget) / selectedJob.positionsNeeded)
-                              ? Math.round(selectedJob.minBudget / selectedJob.positionsNeeded).toLocaleString()
-                              : `${Math.round(selectedJob.minBudget / selectedJob.positionsNeeded).toLocaleString()} ~ ${Math.round((selectedJob.maxBudget || selectedJob.minBudget) / selectedJob.positionsNeeded).toLocaleString()}`}
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="text-[9px] uppercase font-bold text-gray-500 dark:text-zinc-500">
+                            Budget Benchmark
+                          </p>
+                          <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-semibold ${bDisplay.tagColorClass}`}>
+                            {bDisplay.tagLabel}
                           </span>
                         </div>
-                      </>
-                    ) : (
-                      <div className="text-lg font-extrabold text-yellow-500 flex items-center gap-1.5 leading-none">
-                        <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
-                        <span>{selectedJob.priceRange}</span>
+                        <div className="flex flex-col">
+                          <div className="text-lg font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1.5 leading-none">
+                            <CreditIcon className="h-5 w-5 text-amber-500 dark:text-amber-400 shrink-0" />
+                            <span>{bDisplay.amountText}</span>
+                          </div>
+                          <p className="text-[10px] text-gray-500 dark:text-zinc-400 mt-1">
+                            {bDisplay.subtitle}
+                          </p>
+                        </div>
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </div>
                 <div className="flex gap-6 text-right">
                   <div>

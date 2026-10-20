@@ -1,3 +1,4 @@
+import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -22,7 +23,10 @@ import {
   HelpCircle,
   ZoomIn,
   X,
-  ChevronDown
+  ChevronDown,
+  Paperclip,
+  ExternalLink,
+  Sparkles
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import UserHeader from "@/components/nav/user_header";
@@ -84,14 +88,20 @@ const JobFullPage: React.FC = () => {
 
           const minBudget = Number(j.rate_credits_min) || 0;
           const maxBudget = Number(j.rate_credits_max) || 0;
-          let priceRange = "0 Credits";
-          if (minBudget && maxBudget && minBudget !== maxBudget) {
-            priceRange = `${minBudget.toLocaleString()} ~ ${maxBudget.toLocaleString()} Credits`;
-          } else if (minBudget) {
-            priceRange = `${minBudget.toLocaleString()} Credits`;
-          } else if (maxBudget) {
-            priceRange = `${maxBudget.toLocaleString()} Credits`;
-          }
+          const isTeamPost = Boolean(
+            j.hiring_type === "team" ||
+            (Array.isArray(j.milestones) && j.milestones.length > 0) ||
+            j.is_team ||
+            j.posted_as === "Team"
+          );
+          const bInfo = getBudgetDisplayInfo({
+            minBudget,
+            maxBudget,
+            isTeam: isTeamPost,
+            milestonesCount: Array.isArray(j.milestones) ? j.milestones.length : 0,
+            positionsNeeded: j.positions_needed
+          });
+          const priceRange = bInfo.amountText;
 
           const isTeam = Boolean(
             j.hiring_type === "team" ||
@@ -148,7 +158,12 @@ const JobFullPage: React.FC = () => {
             portfolioDuration: j.portfolio_use_duration_seconds || null,
             isExistingProject: Boolean(j.is_existing_project),
             existingProjectId: j.existing_project_id || null,
-            initiatorRole: j.initiator_role || "Client"
+            initiatorRole: j.initiator_role || "Client",
+            attachments: Array.isArray(j.attachments) ? j.attachments : [],
+            screeningQuestions: Array.isArray(j.screening_questions) ? j.screening_questions : [],
+            shortlistedCount: parseInt(j.shortlisted_count) || 0,
+            clientHireRate: typeof j.client_hire_rate === "number" ? j.client_hire_rate : (parseInt(j.client_hire_rate) || 100),
+            clientLastActive: j.client_last_active ? getTimeAgo(new Date(j.client_last_active)) : undefined
           };
 
           setJob(mappedJob);
@@ -490,6 +505,67 @@ const JobFullPage: React.FC = () => {
                 </div>
               </section>
 
+              {/* Project Briefs & Reference Attachments (1.B) */}
+              {job.attachments && job.attachments.length > 0 && (
+                <section className="space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 flex items-center gap-1.5">
+                    <Paperclip className="h-3.5 w-3.5 text-blue-500" />
+                    Project Briefs & Attached Documents ({job.attachments.length})
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {job.attachments.map((att: any, idx: number) => {
+                      const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || "";
+                      const fileUrl = att.url || (att.path ? `${cloudFrontUrl}/${att.path.replace(/^\//, "")}` : "#");
+                      const fileName = att.file_name || `Project Brief #${idx + 1}`;
+                      const sizeStr = att.size_bytes ? `${(att.size_bytes / 1024 / 1024).toFixed(1)} MB` : "";
+                      return (
+                        <a
+                          key={att.file_id || idx}
+                          href={fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download
+                          className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] hover:border-blue-500/50 hover:bg-blue-50/30 dark:hover:bg-blue-500/5 transition group cursor-pointer"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="font-semibold text-xs text-gray-900 dark:text-white truncate block group-hover:text-blue-500 transition-colors">
+                              {fileName}
+                            </span>
+                            {sizeStr && (
+                              <span className="text-[10px] text-gray-400 dark:text-zinc-500">
+                                {sizeStr}
+                              </span>
+                            )}
+                          </div>
+                          <ExternalLink className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-500 shrink-0" />
+                        </a>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
+              {/* Screening Questions Notice (1.A) */}
+              {job.screeningQuestions && job.screeningQuestions.length > 0 && (
+                <section className="p-4 rounded-2xl border border-blue-200/60 dark:border-blue-500/20 bg-blue-50/50 dark:bg-blue-500/5 space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Client Screening Questions Required ({job.screeningQuestions.length})
+                  </h4>
+                  <p className="text-xs text-gray-600 dark:text-zinc-300">
+                    The client has set dealbreaker questions for applicants. You will be prompted to answer them when submitting your proposal:
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-xs text-gray-700 dark:text-zinc-200 pl-1 font-medium">
+                    {job.screeningQuestions.map((q: string, idx: number) => (
+                      <li key={idx}>{q}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
               {/* Team Milestones (When applicable) */}
               {isTeamHiring && Array.isArray(job.milestones) && job.milestones.length > 0 && (
                 <section className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 shadow-sm overflow-hidden backdrop-blur-xl">
@@ -678,51 +754,34 @@ const JobFullPage: React.FC = () => {
               {/* Budget & Action Box */}
               <div className="rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base shadow-sm p-6 space-y-5">
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-500 tracking-wider">
-                      {isTeamHiring ? "Total Project Budget" : `Budget Range ${job.positionsNeeded > 1 ? "(Divided)" : ""}`}
-                    </span>
-                    {!isTeamHiring && job.positionsNeeded > 1 && (
-                      <div className="group relative flex items-center">
-                        <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
-                        <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover:block w-48 bg-white dark:bg-gray-900 text-gray-800 dark:text-white border border-gray-200 dark:border-gray-800 text-[10px] p-2 rounded-lg shadow-xl text-center z-20">
-                          This job requires {job.positionsNeeded} positions. The total budget pool is divided to show estimated budget per freelancer.
+{(() => {
+                    const bDisplay = getBudgetDisplayInfo({
+                      minBudget: job.minBudget,
+                      maxBudget: job.maxBudget,
+                      isTeam: isTeamHiring,
+                      milestonesCount: job.milestones?.length || 0,
+                      positionsNeeded: job.positionsNeeded,
+                    });
+                    return (
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-500 tracking-wider">
+                            Budget Benchmark
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-semibold ${bDisplay.tagColorClass}`}>
+                            {bDisplay.tagLabel}
+                          </span>
                         </div>
+                        <div className="text-2xl font-black text-amber-500 dark:text-amber-400 flex items-center gap-2 leading-none">
+                          <CreditIcon className="h-6 w-6 text-amber-500 dark:text-amber-400 shrink-0" />
+                          <span>{bDisplay.amountText}</span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+                          {bDisplay.subtitle}
+                        </p>
                       </div>
-                    )}
-                  </div>
-
-                  {isTeamHiring ? (
-                    <div>
-                      <div className="text-2xl font-black text-amber-500 dark:text-amber-400 flex items-center gap-1.5 leading-none">
-                        <CreditIcon className="h-6 w-6 text-amber-500 dark:text-amber-400 shrink-0" />
-                        <span>{job.minBudget ? job.minBudget.toLocaleString() : job.priceRange}</span>
-                      </div>
-                      <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
-                        Distributed across {job.milestones?.length || 0} milestones
-                      </p>
-                    </div>
-                  ) : job.positionsNeeded > 1 ? (
-                    <div>
-                      <div className="text-xs font-bold text-gray-400 dark:text-zinc-500 line-through mb-0.5 flex items-center gap-1">
-                        <CreditIcon className="h-3.5 w-3.5 shrink-0" />
-                        <span>{job.priceRange}</span>
-                      </div>
-                      <div className="text-2xl font-black text-blue-500 flex items-center gap-1.5 leading-none">
-                        <CreditIcon className="h-6 w-6 text-blue-500 shrink-0" />
-                        <span>
-                          {Math.round(job.minBudget / job.positionsNeeded) === Math.round((job.maxBudget || job.minBudget) / job.positionsNeeded)
-                            ? Math.round(job.minBudget / job.positionsNeeded).toLocaleString()
-                            : `${Math.round(job.minBudget / job.positionsNeeded).toLocaleString()} ~ ${Math.round((job.maxBudget || job.minBudget) / job.positionsNeeded).toLocaleString()}`}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-2xl font-black text-amber-500 dark:text-amber-400 flex items-center gap-1.5 leading-none">
-                      <CreditIcon className="h-6 w-6 text-amber-500 dark:text-amber-400 shrink-0" />
-                      <span>{job.priceRange}</span>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 {/* Key stats row */}
@@ -815,6 +874,36 @@ const JobFullPage: React.FC = () => {
                       >
                         <Users className="h-3.5 w-3.5 text-blue-400" /> Manage Applicants
                       </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Job Activity Insights (2.D) */}
+              <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-5 space-y-3.5 shadow-sm backdrop-blur-xl">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-blue-500" /> Activity on this Job
+                  </h3>
+                  <span className="text-[10px] text-gray-500 dark:text-zinc-500 font-mono">Live stats</span>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between py-1.5 border-b border-gray-100 dark:border-white/5">
+                    <span className="text-gray-500 dark:text-zinc-400">Proposals received:</span>
+                    <span className="font-bold text-gray-900 dark:text-white font-mono">{job.applicantsCount}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-1.5 border-b border-gray-100 dark:border-white/5">
+                    <span className="text-gray-500 dark:text-zinc-400">Interviewing / Shortlisted:</span>
+                    <span className="font-bold text-amber-500 font-mono">{job.shortlistedCount ?? 0}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-1.5 border-b border-gray-100 dark:border-white/5">
+                    <span className="text-gray-500 dark:text-zinc-400">Client hire rate:</span>
+                    <span className="font-bold text-emerald-500 font-mono">{job.clientHireRate ?? 100}%</span>
+                  </div>
+                  {job.clientLastActive && (
+                    <div className="flex items-center justify-between py-1.5">
+                      <span className="text-gray-500 dark:text-zinc-400">Client last active:</span>
+                      <span className="font-bold text-gray-800 dark:text-zinc-300 font-mono">{job.clientLastActive}</span>
                     </div>
                   )}
                 </div>

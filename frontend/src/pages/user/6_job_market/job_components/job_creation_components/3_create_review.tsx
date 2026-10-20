@@ -28,6 +28,7 @@ interface CreateReviewProps {
   previewUrl: string | null;
   minBudget: string;
   maxBudget: string;
+  budgetType?: "range" | "open";
   minTimeline: string;
   maxTimeline: string;
   deadline: string;
@@ -50,6 +51,9 @@ interface CreateReviewProps {
   onBack: () => void;
   onSubmit: () => void;
   isSubmitting?: boolean;
+  screeningQuestions?: string[];
+  briefFiles?: File[];
+  preScopedMilestones?: any[];
 }
 
 interface CustomSelectProps {
@@ -151,6 +155,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   previewUrl,
   minBudget,
   maxBudget,
+  budgetType = "range",
   minTimeline,
   maxTimeline,
   deadline,
@@ -173,6 +178,9 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   onBack,
   onSubmit,
   isSubmitting,
+  screeningQuestions = [],
+  briefFiles = [],
+  preScopedMilestones = [],
 }) => {
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [agreedToFee, setAgreedToFee] = useState(false);
@@ -260,9 +268,15 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
               <div className="line-clamp-3">
                 <JobRichText content={description} />
               </div>
-              <div className="flex gap-4 pt-1 text-gray-500 dark:text-zinc-500 text-[10px]">
+              <div className="flex flex-wrap gap-3 pt-1 text-gray-500 dark:text-zinc-500 text-[10px]">
                 <span>Category: <strong className="text-gray-600 dark:text-zinc-300">{category}</strong></span>
                 <span>Competency Target: <strong className="text-gray-600 dark:text-zinc-300">{difficulty}</strong></span>
+                {screeningQuestions.length > 0 && (
+                  <span className="text-blue-500 font-semibold">• {screeningQuestions.length} Screening Question{screeningQuestions.length > 1 ? "s" : ""}</span>
+                )}
+                {briefFiles.length > 0 && (
+                  <span className="text-amber-500 font-semibold">• {briefFiles.length} Brief Document{briefFiles.length > 1 ? "s" : ""}</span>
+                )}
               </div>
             </div>
           </div>
@@ -278,19 +292,27 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           {/* ROW 1: Dedicated Budget Pool Range */}
           <div className="flex flex-col gap-2">
             <div className="p-3 rounded-xl border border-yellow-500/20 bg-yellow-500/5 flex items-center justify-between">
-              <span className="text-gray-600 dark:text-zinc-300 text-[11px] font-semibold">Budget Pool Range</span>
+              <span className="text-gray-600 dark:text-zinc-300 text-[11px] font-semibold">
+                {budgetType === "open" ? "Open Bid Starting Minimum" : "Budget Pool Range"}
+              </span>
               <span className="text-sm font-extrabold text-yellow-500 flex items-center gap-1.5">
                 <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
-                {formatCommaString(minBudget)} ~ {formatCommaString(maxBudget)}
+                {budgetType === "open"
+                  ? `From ${formatCommaString(minBudget)} Credits (Open Ceiling)`
+                  : `${formatCommaString(minBudget)} ~ ${formatCommaString(maxBudget)}`}
               </span>
             </div>
 
             {positions > 1 && (
               <div className="p-3 rounded-xl border border-blue-500/20 bg-blue-500/5 flex items-center justify-between">
-                <span className="text-gray-600 dark:text-zinc-300 text-[11px] font-semibold">Divided Budget (Per Person)</span>
+                <span className="text-gray-600 dark:text-zinc-300 text-[11px] font-semibold">
+                  {budgetType === "open" ? "Starting Bid (Per Person)" : "Divided Budget (Per Person)"}
+                </span>
                 <span className="text-sm font-extrabold text-blue-500 flex items-center gap-1.5">
                   <CreditIcon className="h-4 w-4 shrink-0 text-blue-500" />
-                  {formatCommaString((parseInt(minBudget.replace(/,/g, '')) / positions).toFixed(0))} ~ {formatCommaString((parseInt(maxBudget.replace(/,/g, '')) / positions).toFixed(0))}
+                  {budgetType === "open"
+                    ? `From ${formatCommaString((parseInt(minBudget.replace(/,/g, "") || "0") / positions).toFixed(0))} Credits`
+                    : `${formatCommaString((parseInt(minBudget.replace(/,/g, "") || "0") / positions).toFixed(0))} ~ ${formatCommaString((parseInt(maxBudget.replace(/,/g, "") || "0") / positions).toFixed(0))}`}
                 </span>
               </div>
             )}
@@ -327,6 +349,19 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
               <span className="text-sm font-bold text-gray-900 dark:text-white">{positions} Slots</span>
             </div>
           </div>
+
+          {preScopedMilestones && preScopedMilestones.length > 0 && (
+            <div className="pt-3 border-t border-gray-200 dark:border-white/10">
+              <span className="text-gray-500 dark:text-zinc-400 block mb-2 text-[10px]">Pre-Scoped Roadmap ({preScopedMilestones.length} Phases):</span>
+              <div className="flex flex-wrap gap-2">
+                {preScopedMilestones.map((m: any, idx: number) => (
+                  <span key={idx} className="px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-700 dark:text-blue-300 text-[10px] font-semibold">
+                    Phase {idx + 1}: {m.title} ({m.budget_percentage}%)
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Mandatory Skills */}
           <div className="pt-3 border-t border-gray-200 dark:border-white/10">

@@ -77,7 +77,9 @@ export const ProposalsSelectJobPage: React.FC = () => {
             category: j.category,
             difficulty: j.experience_level,
             status: j.status,
-            priceRange: `${j.rate_credits_min?.toLocaleString() || 0} ~ ${j.rate_credits_max?.toLocaleString() || 0}`,
+            priceRange: !j.rate_credits_max
+              ? `${j.rate_credits_min?.toLocaleString() || 0}+`
+              : `${j.rate_credits_min?.toLocaleString() || 0} ~ ${j.rate_credits_max?.toLocaleString() || 0}`,
             applicantsCount: Number(j.applicant_count || 0),
             hiredCount: parseInt(j.hired_count) || 0,
             positionsNeeded: j.no_of_hires || 1,

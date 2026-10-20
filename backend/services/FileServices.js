@@ -15,9 +15,9 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 // Read from environment variables with defaults
-const DEFAULT_UPLOAD_FOLDERS = ['profile', 'documents', 'assets', 'asset-originals', 'forum', 'gallery', 'jobs', 'chat-attachments', 'forum-discussions', 'forum-group', 'forum-covers', 'gig_orders', 'gig_thumbnails', 'gig_galleries', 'ticket-attachments'];
+const DEFAULT_UPLOAD_FOLDERS = ['profile', 'documents', 'assets', 'asset-originals', 'forum', 'gallery', 'jobs', 'proposals', 'chat-attachments', 'forum-discussions', 'forum-group', 'forum-covers', 'gig_orders', 'gig_thumbnails', 'gig_galleries', 'ticket-attachments'];
 const ALLOWED_FOLDERS = process.env.UPLOAD_ALLOWED_FOLDERS
-    ? [...new Set([...process.env.UPLOAD_ALLOWED_FOLDERS.split(',').map(f => f.trim()), 'ticket-attachments'])]
+    ? [...new Set([...process.env.UPLOAD_ALLOWED_FOLDERS.split(',').map(f => f.trim()), 'ticket-attachments', 'proposals', 'jobs'])]
     : DEFAULT_UPLOAD_FOLDERS;
 
 const ALLOWED_CONTENT_TYPES = (process.env.UPLOAD_ALLOWED_TYPES
@@ -63,6 +63,7 @@ const UPLOAD_POLICIES = {
     'chat-attachments': { types: [...IMAGE_TYPES, 'application/pdf', ...VIDEO_TYPES, ...AUDIO_TYPES, ...ARCHIVE_TYPES], imageLimit: 25 * MB, pdfLimit: 25 * MB, videoLimit: 250 * MB, audioLimit: 50 * MB, archiveLimit: 100 * MB },
     documents: { types: [...IMAGE_TYPES, 'application/pdf', ...VIDEO_TYPES, ...AUDIO_TYPES, ...ARCHIVE_TYPES], imageLimit: 25 * MB, pdfLimit: 25 * MB, videoLimit: 250 * MB, audioLimit: 50 * MB, archiveLimit: 100 * MB },
     jobs: { types: [...IMAGE_TYPES, 'application/pdf', ...VIDEO_TYPES, ...ARCHIVE_TYPES], imageLimit: 25 * MB, pdfLimit: 25 * MB, videoLimit: 100 * MB, archiveLimit: 100 * MB },
+    proposals: { types: [...IMAGE_TYPES, 'application/pdf', ...VIDEO_TYPES, ...AUDIO_TYPES, ...ARCHIVE_TYPES], imageLimit: 25 * MB, pdfLimit: 25 * MB, videoLimit: 100 * MB, audioLimit: 50 * MB, archiveLimit: 100 * MB },
     assets: { types: [...IMAGE_TYPES, ...VIDEO_TYPES, ...AUDIO_TYPES], imageLimit: 25 * MB, videoLimit: 100 * MB, audioLimit: 50 * MB },
     'asset-originals': { types: [...IMAGE_TYPES, ...VIDEO_TYPES, ...AUDIO_TYPES, 'application/pdf', ...ARCHIVE_TYPES], imageLimit: 25 * MB, videoLimit: 100 * MB, audioLimit: 50 * MB, pdfLimit: 25 * MB, archiveLimit: 100 * MB },
     gig_thumbnails: { types: IMAGE_TYPES, imageLimit: 5 * MB },

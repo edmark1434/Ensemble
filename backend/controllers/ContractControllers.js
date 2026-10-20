@@ -9,13 +9,13 @@ async function sendJobOfferController(req, res) {
         // req.user from auth middleware (assuming verifyToken is used)
         const personalAccountId = req.user.account_id || req.user.accountId;
         const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
-        const { proposalId, rateCredits, startsAt } = req.body;
+        const { proposalId, rateCredits, startsAt, milestones } = req.body;
 
         if (!proposalId || !rateCredits) {
             return res.status(400).json({ success: false, message: 'Proposal ID and rate are required' });
         }
 
-        const result = await ContractRepositories.sendJobOffer(actorIds, proposalId, rateCredits, startsAt);
+        const result = await ContractRepositories.sendJobOffer(actorIds, proposalId, rateCredits, startsAt, milestones);
         const clientId = result.client_account_id;
 
         try {

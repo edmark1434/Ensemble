@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { Sparkles } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
@@ -92,6 +93,7 @@ const JobCreatePostPage: React.FC = () => {
   const [skillInput, setSkillInput] = useState("");
   const [minBudget, setMinBudget] = useState("");
   const [maxBudget, setMaxBudget] = useState("");
+  const [budgetType, setBudgetType] = useState<"range" | "open">("range");
   const [minTimeline, setMinTimeline] = useState("");
   const [maxTimeline, setMaxTimeline] = useState("");
   const [deadline, setDeadline] = useState("");
@@ -104,6 +106,112 @@ const JobCreatePostPage: React.FC = () => {
   const [existingProjectId, setExistingProjectId] = useState<string | null>(null);
   const [initiatorRole, setInitiatorRole] = useState("Freelancer");
   const [requireNDA, setRequireNDA] = useState(false);
+
+  // --- ADVANCED OPTIONS (SCREENING, BRIEFS, MILESTONE PRE-SCOPING) ---
+  const [screeningQuestions, setScreeningQuestions] = useState<string[]>([]);
+  const [briefFiles, setBriefFiles] = useState<File[]>([]);
+  const [preScopedMilestones, setPreScopedMilestones] = useState<any[]>([]);
+
+  // --- LOCALSTORAGE AUTO-SAVE DRAFT ---
+  const [isDraftRestored, setIsDraftRestored] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ensemble_job_create_draft");
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.title) setTitle(data.title);
+        if (data.description) setDescription(data.description);
+        if (data.category) setCategory(data.category);
+        if (data.difficulty) setDifficulty(data.difficulty);
+        if (data.skills) setSkills(data.skills);
+        if (data.minBudget) setMinBudget(data.minBudget);
+        if (data.maxBudget) setMaxBudget(data.maxBudget);
+        if (data.budgetType) setBudgetType(data.budgetType);
+        if (data.minTimeline) setMinTimeline(data.minTimeline);
+        if (data.maxTimeline) setMaxTimeline(data.maxTimeline);
+        if (data.deadline) setDeadline(data.deadline);
+        if (data.positions) setPositions(data.positions);
+        if (data.screeningQuestions && Array.isArray(data.screeningQuestions)) setScreeningQuestions(data.screeningQuestions);
+        if (data.preScopedMilestones && Array.isArray(data.preScopedMilestones)) setPreScopedMilestones(data.preScopedMilestones);
+        if (data.portfolioUseAllowed !== undefined) setPortfolioUseAllowed(data.portfolioUseAllowed);
+        if (data.portfolioDuration) setPortfolioDuration(data.portfolioDuration);
+        if (data.requireNDA !== undefined) setRequireNDA(data.requireNDA);
+        setIsDraftRestored(true);
+      }
+    } catch (e) {
+      console.error("Failed to restore job draft", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const draftData = {
+          title,
+          description,
+          category,
+          difficulty,
+          skills,
+          minBudget,
+          maxBudget,
+          budgetType,
+          minTimeline,
+          maxTimeline,
+          deadline,
+          positions,
+          screeningQuestions,
+          preScopedMilestones,
+          portfolioUseAllowed,
+          portfolioDuration,
+          requireNDA,
+        };
+        const hasContent = Boolean(title || description || category || minBudget || skills.length > 0);
+        if (hasContent) {
+          localStorage.setItem("ensemble_job_create_draft", JSON.stringify(draftData));
+        }
+      } catch (e) {
+        console.error("Failed to auto-save job draft", e);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [
+    title, description, category, difficulty, skills, minBudget, maxBudget, budgetType,
+    minTimeline, maxTimeline, deadline, positions, screeningQuestions, preScopedMilestones,
+    portfolioUseAllowed, portfolioDuration, requireNDA
+  ]);
+
+  const handleClearDraft = () => {
+    try {
+      localStorage.removeItem("ensemble_job_create_draft");
+      setTitle("");
+      setDescription("");
+      setCategory("");
+      setDifficulty("");
+      setSkills([]);
+      setMinBudget("");
+      setMaxBudget("");
+      setBudgetType("range");
+      setMinTimeline("");
+      setMaxTimeline("");
+      setDeadline("");
+      setPositions(1);
+      setScreeningQuestions([]);
+      setPreScopedMilestones([]);
+      setPortfolioUseAllowed(false);
+      setPortfolioDuration("");
+      setRequireNDA(false);
+      setThumbnail("");
+      setThumbnailFile(null);
+      setPreviewUrl(null);
+      setBriefFiles([]);
+      setErrors({});
+      setIsDraftRestored(false);
+      toast.success("Job post draft cleared.");
+    } catch (e) {
+      console.error("Failed to clear draft", e);
+    }
+  };
 
   // --- ERROR & VALIDATION STATES ---
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -169,9 +277,11 @@ const JobCreatePostPage: React.FC = () => {
       stepErrors.skills = `At least 3 skills are required. You currently have ${skills.length}.`;
     }
     if (!minBudget || rawMinBudget <= 0) stepErrors.minBudget = "Minimum budget must be greater than 0.";
-    if (!maxBudget || rawMaxBudget <= 0) stepErrors.maxBudget = "Maximum budget must be greater than 0.";
-    if (rawMinBudget > 0 && rawMaxBudget > 0 && rawMaxBudget < rawMinBudget) {
-      stepErrors.maxBudget = "Maximum budget value cannot be lower than the minimum budget.";
+    if (budgetType === "range") {
+      if (!maxBudget || rawMaxBudget <= 0) stepErrors.maxBudget = "Maximum budget must be greater than 0.";
+      if (rawMinBudget > 0 && rawMaxBudget > 0 && rawMaxBudget < rawMinBudget) {
+        stepErrors.maxBudget = "Maximum budget value cannot be lower than the minimum budget.";
+      }
     }
     if (!minTimeline) stepErrors.minTimeline = "Min timeline required.";
     if (!maxTimeline) stepErrors.maxTimeline = "Max timeline required.";
@@ -255,6 +365,14 @@ const JobCreatePostPage: React.FC = () => {
         fileId = await uploadAttachment(thumbnailFile, "jobs");
       }
 
+      const briefFileIds: string[] = [];
+      if (briefFiles.length > 0) {
+        for (const bf of briefFiles) {
+          const uploadedId = await uploadAttachment(bf, "jobs");
+          if (uploadedId) briefFileIds.push(uploadedId);
+        }
+      }
+
       const finalJobPayload = {
         title,
         description,
@@ -268,21 +386,28 @@ const JobCreatePostPage: React.FC = () => {
         payment_type: "Fixed",
         experience_level: difficulty,
         rate_credits_min: rawMinBudget,
-        rate_credits_max: rawMaxBudget,
+        rate_credits_max: budgetType === "open" ? null : rawMaxBudget,
         timeline_min: parseInt(minTimeline) || 0,
         timeline_max: parseInt(maxTimeline) || 0,
         deadline,
         no_of_hires: positions,
         file_id: fileId,
+        file_ids: briefFileIds,
+        screening_questions: screeningQuestions.filter((q) => q.trim()),
+        milestones: preScopedMilestones.filter((m) => m.title && m.title.trim()),
         portfolio_use_allowed: portfolioUseAllowed,
         portfolio_use_duration_seconds: portfolioDuration ? parseInt(portfolioDuration) : null,
         is_existing_project: isExistingProject,
         existing_project_id: isExistingProject ? existingProjectId : null,
         initiator_role: initiatorRole,
-          require_nda: requireNDA
+        require_nda: requireNDA
       };
 
       await createJob(finalJobPayload);
+      try {
+        localStorage.removeItem("ensemble_job_create_draft");
+      } catch (_) {}
+      setIsDraftRestored(false);
       setIsSuccessOpen(true);
     } catch (err: any) {
       console.error(err);
@@ -351,6 +476,22 @@ const JobCreatePostPage: React.FC = () => {
           />
         </motion.div>
 
+        {isDraftRestored && (
+          <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-between text-xs text-blue-600 dark:text-blue-400 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 shrink-0 text-blue-500" />
+              <span>Draft restored from your last session. Progress is saved automatically.</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleClearDraft}
+              className="text-[11px] font-bold text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:underline px-2 py-0.5 rounded focus:outline-none"
+            >
+              Reset / Clear Draft
+            </button>
+          </div>
+        )}
+
         {/* Form Box Wrapper with Slide Transition */}
         <motion.div
           initial={{ opacity: 0, y: 20, scale: 0.98 }}
@@ -384,6 +525,10 @@ const JobCreatePostPage: React.FC = () => {
                   setIsDragging={setIsDragging}
                   errors={errors}
                   setErrors={setErrors}
+                  screeningQuestions={screeningQuestions}
+                  setScreeningQuestions={setScreeningQuestions}
+                  briefFiles={briefFiles}
+                  setBriefFiles={setBriefFiles}
                   onNext={handleNextSlide}
                   onDiscard={handleReturnTrigger}
                 />
@@ -407,6 +552,10 @@ const JobCreatePostPage: React.FC = () => {
                   setMinBudget={setMinBudget}
                   maxBudget={maxBudget}
                   setMaxBudget={setMaxBudget}
+                  budgetType={budgetType}
+                  setBudgetType={setBudgetType}
+                  preScopedMilestones={preScopedMilestones}
+                  setPreScopedMilestones={setPreScopedMilestones}
                   minTimeline={minTimeline}
                   setMinTimeline={setMinTimeline}
                   maxTimeline={maxTimeline}
@@ -469,6 +618,7 @@ const JobCreatePostPage: React.FC = () => {
                   previewUrl={previewUrl}
                   minBudget={minBudget}
                   maxBudget={maxBudget}
+                  budgetType={budgetType}
                   minTimeline={minTimeline}
                   maxTimeline={maxTimeline}
                   deadline={deadline}
@@ -490,6 +640,9 @@ const JobCreatePostPage: React.FC = () => {
                   onEditStep={setCurrentSlide}
                   onBack={() => setCurrentSlide(3)}
                   onSubmit={handleSubmit}
+                  screeningQuestions={screeningQuestions}
+                  briefFiles={briefFiles}
+                  preScopedMilestones={preScopedMilestones}
                   isSubmitting={isSubmitting}
                 />
               </motion.div>

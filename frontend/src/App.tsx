@@ -301,6 +301,7 @@ function App() {
           <Route path='/jobs/:id/make-proposal' element={<ProposalsCreatePage />} />
           <Route path='/jobs/proposals/edit/:proposalId' element={<ProposalsEditPage />} />
           <Route path='/jobs/proposals/received/:proposalId' element={<ProposalsViewDetailsAsAuthor />} />
+          <Route path='/jobs/proposals/incoming/details/:proposalId' element={<ProposalsViewDetailsAsAuthor />} />
           <Route path='/jobs/proposals/sent/:proposalId' element={<ProposalsViewDetailsAsApplicant />} />
           <Route path='/jobs/proposals/sent/:proposalId/offer/:contractId' element={<ProposalsViewDetailsAsApplicant />} />
 

@@ -2,7 +2,7 @@ import useGlobalState from "@/lib/global_state";
 import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
 import React, { useState, useEffect, useMemo } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import { Filter } from "lucide-react";
+import { Filter, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 
 // Modular Proposal Components
@@ -21,6 +21,7 @@ import type { ProposalStatus } from "./proposals_components/proposals_list";
 export interface ProposalsMainContext {
   searchQuery: string;
   activeStatus: "All" | ProposalStatus;
+  setActiveStatus: React.Dispatch<React.SetStateAction<"All" | ProposalStatus>>;
   minPrice: string;
   maxPrice: string;
   priceSort: "inc" | "dec" | null;
@@ -31,6 +32,7 @@ export interface ProposalsMainContext {
   viewType: ViewType;
   loading: boolean;
   showFilters: boolean;
+  setShowFilters: React.Dispatch<React.SetStateAction<boolean>>;
   setChildProposalsCounts: React.Dispatch<React.SetStateAction<Record<string, number> | null>>;
 }
 
@@ -178,14 +180,15 @@ export const ProposalsMain: React.FC = () => {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center justify-center p-2 rounded-lg transition-colors border ${
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors border text-xs font-semibold cursor-pointer ${
                   showFilters
                     ? "bg-gray-100 dark:bg-white/10 border-gray-300 dark:border-white/20 text-gray-900 dark:text-white"
                     : "bg-white dark:bg-white/5 shadow-sm dark:shadow-none border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10"
                 }`}
-                title="Toggle Filters"
+                title={showFilters ? "Collapse Proposal Statuses and Filters" : "Expand Proposal Statuses and Filters"}
               >
-                <Filter className="h-4 w-4" />
+                {showFilters ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+                <span className="hidden sm:inline">{showFilters ? "Collapse Sidebar" : "Filters and Statuses"}</span>
               </button>
               <ProposalsListViewType viewType={viewType} onViewTypeChange={setViewType} />
             </div>
@@ -197,7 +200,7 @@ export const ProposalsMain: React.FC = () => {
           {/* Sidebar */}
           {!isFullWidthPage && (
             <div className={`transition-all duration-300 origin-left ease-in-out shrink-0 ${
-              showFilters ? "opacity-100 w-full lg:w-72" : "opacity-0 w-0 h-0 lg:h-auto overflow-hidden hidden lg:block"
+              showFilters ? "opacity-100 w-full lg:w-72" : "opacity-0 w-0 h-0 overflow-hidden hidden"
             }`}>
               <div className="space-y-6 sticky top-24 w-full">
                 {loading ? (
@@ -208,6 +211,7 @@ export const ProposalsMain: React.FC = () => {
                       statuses={statusCounts}
                       activeStatus={activeStatus}
                       onStatusChange={setActiveStatus}
+                      onCollapse={() => setShowFilters(false)}
                     />
 
                     <ProposalsFilters
@@ -230,6 +234,7 @@ export const ProposalsMain: React.FC = () => {
                         setDateSort,
                       }}
                       onClear={handleClearFilters}
+                      onCollapse={() => setShowFilters(false)}
                     />
                   </>
                 )}
@@ -254,6 +259,8 @@ export const ProposalsMain: React.FC = () => {
                   viewType,
                   loading,
                   showFilters,
+                  setShowFilters,
+                  setActiveStatus,
                   setChildProposalsCounts,
                 } satisfies ProposalsMainContext
               }

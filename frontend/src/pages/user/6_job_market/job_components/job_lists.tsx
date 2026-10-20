@@ -1,3 +1,4 @@
+import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useState, useEffect } from "react";
 import { Star, Clock, Bookmark, Edit2, Flag, Wrench, Send, Users, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -54,6 +55,11 @@ export interface Job {
   initiatorRole?: string;
   hiring_type?: "single" | "team" | string;
   milestones?: any[];
+  attachments?: any[];
+  screeningQuestions?: string[];
+  shortlistedCount?: number;
+  clientHireRate?: number;
+  clientLastActive?: string;
 }
 
 interface JobListProps {
@@ -302,11 +308,26 @@ const JobList: React.FC<JobListProps> = ({
                     </span>
                   </div>
 
-                  {/* Price & Title */}
-                  <div className="text-amber-500 dark:text-amber-400 text-base font-black mb-1 flex items-center gap-1">
-                    <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0" />
-                    <span>{job.priceRange}</span>
-                  </div>
+                  {/* Price & Tag */}
+                  {(() => {
+                    const bDisplay = getBudgetDisplayInfo({
+                      minBudget: job.minBudget,
+                      maxBudget: job.maxBudget,
+                      isTeam: Boolean(job.hiring_type === "team"),
+                      positionsNeeded: job.positionsNeeded,
+                    });
+                    return (
+                      <div className="flex items-center justify-between gap-1.5 mb-1.5 flex-wrap">
+                        <div className="text-amber-500 dark:text-amber-400 text-base font-black flex items-center gap-1">
+                          <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0" />
+                          <span>{bDisplay.amountText}</span>
+                        </div>
+                        <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-semibold ${bDisplay.tagColorClass}`}>
+                          {bDisplay.tagLabel}
+                        </span>
+                      </div>
+                    );
+                  })()}
                   <h3 className="text-gray-900 dark:text-white text-base font-bold mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
                     {job.title}
                   </h3>
@@ -432,11 +453,26 @@ const JobList: React.FC<JobListProps> = ({
                       </div>
                   </div>
 
-                  {/* Price */}
-                  <div className="text-amber-500 dark:text-amber-400 text-lg font-black mb-1 flex items-center gap-1.5">
-                    <CreditIcon className="h-5 w-5 text-amber-500 dark:text-amber-400 shrink-0" />
-                    <span>{job.priceRange}</span>
-                  </div>
+                  {/* Price & Tag */}
+                  {(() => {
+                    const bDisplay = getBudgetDisplayInfo({
+                      minBudget: job.minBudget,
+                      maxBudget: job.maxBudget,
+                      isTeam: Boolean(job.hiring_type === "team"),
+                      positionsNeeded: job.positionsNeeded,
+                    });
+                    return (
+                      <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
+                        <div className="text-amber-500 dark:text-amber-400 text-lg font-black flex items-center gap-1.5">
+                          <CreditIcon className="h-5 w-5 text-amber-500 dark:text-amber-400 shrink-0" />
+                          <span>{bDisplay.amountText}</span>
+                        </div>
+                        <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-semibold ${bDisplay.tagColorClass}`}>
+                          {bDisplay.tagLabel}
+                        </span>
+                      </div>
+                    );
+                  })()}
                   <h3 className="text-gray-900 dark:text-white text-xl font-bold mb-1.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{job.title}</h3>
                   <div className="mb-3">
                     <JobRichText content={job.description} truncate={2} />

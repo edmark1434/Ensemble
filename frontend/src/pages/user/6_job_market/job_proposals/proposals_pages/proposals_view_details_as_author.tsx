@@ -23,6 +23,15 @@ import {
   Send,
   UserCheck2,
   Users,
+  Sparkles,
+  CheckSquare,
+  Paperclip,
+  Play,
+  Eye,
+  Film,
+  Download,
+  Image as ImageIcon,
+  X,
 } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
@@ -56,6 +65,22 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
 
   // Decision Modal States
   const [isShortlistModalOpen, setIsShortlistModalOpen] = useState(false);
+  const [previewItem, setPreviewItem] = useState<{
+    url: string;
+    name: string;
+    type: "video" | "image" | "pdf" | "other";
+  } | null>(null);
+
+  const getCleanFileName = (rawName: string): string => {
+    if (!rawName) return "Work Sample";
+    if (rawName.length > 28) {
+      const extIndex = rawName.lastIndexOf(".");
+      const ext = extIndex !== -1 ? rawName.slice(extIndex) : "";
+      const base = extIndex !== -1 ? rawName.slice(0, extIndex) : rawName;
+      return `${base.slice(0, 14)}...${base.slice(-6)}${ext}`;
+    }
+    return rawName;
+  };
   const [shortlistMessage, setShortlistMessage] = useState("");
   const [isShortlisting, setIsShortlisting] = useState(false);
   const [isUnshortlistModalOpen, setIsUnshortlistModalOpen] = useState(false);
@@ -70,6 +95,24 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [contractStartsAt, setContractStartsAt] = useState("");
+  const [customMilestones, setCustomMilestones] = useState<any[]>([]);
+  const [customBidAmount, setCustomBidAmount] = useState<number>(0);
+  const [isCustomizingMilestones, setIsCustomizingMilestones] = useState(false);
+
+  useEffect(() => {
+    if (proposal) {
+      setCustomBidAmount(proposal.bidAmount);
+      setCustomMilestones(
+        (proposal.milestones || []).map((m: any, idx: number) => ({
+          id: m.id || `m-${idx}`,
+          name: m.name || m.title || `Milestone ${idx + 1}`,
+          description: m.description || "",
+          hours: m.hours || 24,
+          revisions: m.revisions || 2,
+        }))
+      );
+    }
+  }, [proposal]);
 
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
@@ -114,7 +157,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
             jobBanner: p.job_thumbnail_path
               ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.job_thumbnail_path.startsWith('/') ? '' : '/'}${p.job_thumbnail_path}`
               : undefined,
-            rating: 5.0, // Default since we don't fetch real rating yet
+            rating: p.freelancer_rating != null ? Number(p.freelancer_rating) : 5.0,
             bidAmount: parseFloat(p.rate_credits) || 0,
             additionalWorkRate: parseFloat(p.revision_price_credits) || 0,
             coverLetter: p.letter || "",
@@ -129,6 +172,8 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
             status: p.status,
             type: isIncoming ? "incoming" : "sent",
             rejectionReason: p.reject_reason,
+            screening_answers: p.screening_answers || [],
+            attachments: p.attachments || [],
             job_milestone_id: p.job_milestone_id,
             target_milestone_title: p.target_milestone_title,
             target_milestone_description: p.target_milestone_description,
@@ -342,15 +387,17 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
     if (!proposal) return;
     const personalAccountId = user?.account_id;
     const usesPersonalWallet = String(proposal.clientAccountId) === String(personalAccountId);
-    if (usesPersonalWallet && walletBalance < proposal.bidAmount) {
+    const effectiveBid = isCustomizingMilestones && customBidAmount > 0 ? customBidAmount : proposal.bidAmount;
+    if (usesPersonalWallet && walletBalance < effectiveBid) {
       toast.error("Insufficient wallet balance to accept this proposal. Please top up your wallet.");
       return;
     }
     try {
       await sendJobOffer(
         proposal.id, 
-        proposal.bidAmount, 
-        contractStartsAt ? new Date(contractStartsAt).toISOString() : undefined
+        effectiveBid, 
+        contractStartsAt ? new Date(contractStartsAt).toISOString() : undefined,
+        isCustomizingMilestones ? customMilestones : undefined
       );
 
       setProposal((prev) =>
@@ -535,7 +582,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                     <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
                       <span className="flex items-center gap-1 text-amber-500 dark:text-amber-400 font-bold">
                         <Star className="h-3.5 w-3.5 fill-yellow-500" />
-                        {proposal.rating ? proposal.rating.toFixed(1) : "5.0"}
+                        {proposal.rating != null ? Number(proposal.rating).toFixed(1) : "5.0"}
                       </span>
                       <span>•</span>
                       <span className="text-gray-600 dark:text-zinc-300">Freelancer Rating</span>
@@ -750,6 +797,159 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                 <JobRichText content={proposal.coverLetter} />
               </div>
             </div>
+
+            {/* 1.A: Applicant Screening Answers */}
+            {proposal.screening_answers && proposal.screening_answers.length > 0 && (
+              <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 backdrop-blur-xl shadow-2xl space-y-4">
+                <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-2">
+                  <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <CheckSquare className="h-4 w-4 text-blue-500" />
+                    Applicant Screening Answers ({proposal.screening_answers.length})
+                  </h3>
+                  <span className="text-[10px] text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full font-bold">
+                    Direct Answers
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {proposal.screening_answers.map((sa: any, idx: number) => (
+                    <div key={idx} className="p-3.5 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02] space-y-1.5">
+                      <p className="text-xs font-bold text-gray-900 dark:text-white flex items-start gap-1.5">
+                        <span className="text-blue-500 font-bold shrink-0">Q{idx + 1}:</span>
+                        <span>{sa.question}</span>
+                      </p>
+                      <p className="text-xs text-gray-700 dark:text-zinc-300 pl-4 border-l-2 border-blue-500/40 font-medium leading-relaxed">
+                        {sa.answer || <span className="text-gray-400 italic">No answer provided</span>}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 2.A: Proposal Direct Work Samples */}
+            {proposal.attachments && proposal.attachments.length > 0 && (
+              <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 backdrop-blur-xl shadow-2xl space-y-4">
+                <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-2">
+                  <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Paperclip className="h-4 w-4 text-blue-500" />
+                    Attached Work Samples & Demos ({proposal.attachments.length})
+                  </h3>
+                  <span className="text-[10px] text-gray-400 font-mono">Click to preview</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {proposal.attachments.map((att: any, idx: number) => {
+                    const downloadUrl = att.path?.startsWith("http")
+                      ? att.path
+                      : `${import.meta.env.VITE_CLOUDFRONT_URL || ""}/${att.path?.startsWith("/") ? att.path.slice(1) : att.path}`;
+                    const mime = (att.mime_type || "").toLowerCase();
+                    const name = att.name || `Sample_${idx + 1}`;
+                    const ext = name.split(".").pop()?.toLowerCase() || "";
+                    const isVideo = mime.startsWith("video/") || ["mp4", "webm", "mov"].includes(ext);
+                    const isImage = mime.startsWith("image/") || ["png", "jpg", "jpeg", "webp", "gif"].includes(ext);
+                    const isPdf = mime === "application/pdf" || ext === "pdf";
+                    const isZip = mime.includes("zip") || ext === "zip";
+
+                    const cleanName = getCleanFileName(name);
+                    const sizeStr = att.size_bytes ? `${(att.size_bytes / 1024 / 1024).toFixed(1)} MB` : "";
+
+                    return (
+                      <div
+                        key={idx}
+                        className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] overflow-hidden hover:border-blue-500/40 transition-all flex flex-col justify-between group shadow-xs"
+                      >
+                        {/* Media Preview Box */}
+                        {isVideo ? (
+                          <div
+                            onClick={() => setPreviewItem({ url: downloadUrl, name, type: "video" })}
+                            className="relative h-32 bg-black flex items-center justify-center cursor-pointer overflow-hidden group/video"
+                          >
+                            <video
+                              src={downloadUrl}
+                              preload="metadata"
+                              className="w-full h-full object-cover opacity-65 group-hover/video:opacity-85 transition-opacity"
+                            />
+                            <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+                              <div className="w-11 h-11 rounded-full bg-blue-600/90 text-white flex items-center justify-center shadow-lg group-hover/video:scale-110 transition-transform">
+                                <Play className="w-5 h-5 fill-white ml-0.5" />
+                              </div>
+                            </div>
+                            <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded text-[9px] font-bold bg-blue-600 text-white shadow-xs">
+                              VIDEO DEMO
+                            </span>
+                          </div>
+                        ) : isImage ? (
+                          <div
+                            onClick={() => setPreviewItem({ url: downloadUrl, name, type: "image" })}
+                            className="relative h-32 bg-gray-100 dark:bg-white/5 flex items-center justify-center cursor-pointer overflow-hidden group/img"
+                          >
+                            <img
+                              src={downloadUrl}
+                              alt={name}
+                              className="w-full h-full object-cover group-hover/img:scale-105 transition-transform"
+                            />
+                            <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-600 text-white shadow-xs">
+                              IMAGE
+                            </span>
+                          </div>
+                        ) : isPdf ? (
+                          <div
+                            onClick={() => setPreviewItem({ url: downloadUrl, name, type: "pdf" })}
+                            className="h-32 bg-red-500/5 dark:bg-red-500/10 flex flex-col items-center justify-center gap-1.5 cursor-pointer border-b border-gray-200 dark:border-white/10 group/pdf"
+                          >
+                            <FileText className="w-8 h-8 text-red-500 group-hover/pdf:scale-110 transition-transform" />
+                            <span className="text-[10px] font-bold text-red-600 dark:text-red-400">PDF DOCUMENT</span>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={() => window.open(downloadUrl, "_blank")}
+                            className="h-32 bg-blue-500/5 dark:bg-blue-500/10 flex flex-col items-center justify-center gap-1.5 cursor-pointer border-b border-gray-200 dark:border-white/10"
+                          >
+                            <FileText className="w-8 h-8 text-blue-500" />
+                            <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                              {isZip ? "ZIP ARCHIVE" : "ATTACHED FILE"}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Card Meta / Actions */}
+                        <div className="p-3 space-y-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="text-xs font-bold text-gray-900 dark:text-white truncate block flex-1" title={name}>
+                              {cleanName}
+                            </span>
+                            <a
+                              href={downloadUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              download
+                              className="text-gray-400 hover:text-blue-500 transition-colors p-0.5"
+                              title="Download Raw File"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400">
+                            <span>{sizeStr || ext.toUpperCase()}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isVideo) setPreviewItem({ url: downloadUrl, name, type: "video" });
+                                else if (isImage) setPreviewItem({ url: downloadUrl, name, type: "image" });
+                                else if (isPdf) setPreviewItem({ url: downloadUrl, name, type: "pdf" });
+                                else window.open(downloadUrl, "_blank");
+                              }}
+                              className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline cursor-pointer"
+                            >
+                              <Eye className="w-3 h-3" /> Preview
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Attachments Portfolio */}
             <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 backdrop-blur-xl shadow-2xl space-y-6 mt-6">
@@ -1181,7 +1381,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-2xl space-y-4 text-left"
+              className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-2xl space-y-4 text-left"
             >
               <div className="space-y-2">
                 <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -1192,7 +1392,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                 </p>
                 <div className="text-[11px] text-gray-500 dark:text-zinc-400 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3 rounded-xl border border-gray-100 dark:border-white/5">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="block mb-1 text-gray-500 dark:text-zinc-400">Agreed Bid: <strong className="text-gray-900 dark:text-white text-xs">{proposal.bidAmount.toLocaleString()}</strong></span>
+                    <span className="block mb-1 text-gray-500 dark:text-zinc-400">Agreed Bid: <strong className="text-gray-900 dark:text-white text-xs">{(isCustomizingMilestones && customBidAmount > 0 ? customBidAmount : proposal.bidAmount).toLocaleString()}</strong></span>
                     {String(proposal.clientAccountId) === String(user?.account_id) ? (
                       <span className="block mb-1 text-gray-500 dark:text-zinc-400 text-[10px]">Available Balance: <strong className={walletBalance >= proposal.bidAmount ? "text-emerald-400" : "text-red-400"}>{walletBalance.toLocaleString()}</strong></span>
                     ) : (
@@ -1224,6 +1424,101 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                   <p className="text-[10px] text-gray-500 dark:text-zinc-500 mt-1.5">If left empty, contract starts immediately after applicant accepts.</p>
                 </div>
                 
+                {/* Milestone Customization Section */}
+                <div className="pt-2 border-t border-gray-100 dark:border-white/5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-gray-800 dark:text-zinc-200 flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-blue-500" />
+                      Negotiated Terms & Milestones
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomizingMilestones(!isCustomizingMilestones)}
+                      className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      {isCustomizingMilestones ? "Reset to Original" : "Customize Milestones"}
+                    </button>
+                  </div>
+
+                  {isCustomizingMilestones ? (
+                    <div className="space-y-3 p-3.5 rounded-2xl bg-gray-50/80 dark:bg-white/[0.03] border border-gray-200/80 dark:border-white/10">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-gray-600 dark:text-zinc-400 font-medium">Agreed Offer Amount (Credits):</span>
+                        <input
+                          type="number"
+                          min={10}
+                          value={customBidAmount || ""}
+                          onChange={(e) => setCustomBidAmount(Math.max(10, parseInt(e.target.value) || 10))}
+                          className="w-28 text-right rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface px-2.5 py-1 text-xs font-bold text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                        {customMilestones.map((m, idx) => (
+                          <div key={m.id || idx} className="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 space-y-2 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-[10px] uppercase text-gray-500 dark:text-zinc-400">Phase {idx + 1}</span>
+                              <div className="flex items-center gap-2 text-[10px] text-gray-500 dark:text-zinc-400">
+                                <span>{m.hours} hrs</span>
+                                <span>•</span>
+                                <span>{m.revisions} rev</span>
+                              </div>
+                            </div>
+                            <input
+                              type="text"
+                              value={m.name}
+                              onChange={(e) => {
+                                const updated = [...customMilestones];
+                                updated[idx].name = e.target.value;
+                                setCustomMilestones(updated);
+                              }}
+                              placeholder="Milestone title"
+                              className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 px-2.5 py-1.5 text-[11px] font-semibold text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                            />
+                            <div className="grid grid-cols-2 gap-2 text-[10px]">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-gray-500 dark:text-zinc-400">Est. Hours:</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={m.hours}
+                                  onChange={(e) => {
+                                    const updated = [...customMilestones];
+                                    updated[idx].hours = Math.max(1, parseInt(e.target.value) || 1);
+                                    setCustomMilestones(updated);
+                                  }}
+                                  className="w-16 rounded border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 px-1.5 py-0.5 text-gray-900 dark:text-white"
+                                />
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-gray-500 dark:text-zinc-400">Revisions:</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={m.revisions}
+                                  onChange={(e) => {
+                                    const updated = [...customMilestones];
+                                    updated[idx].revisions = Math.max(0, parseInt(e.target.value) || 0);
+                                    setCustomMilestones(updated);
+                                  }}
+                                  className="w-16 rounded border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 px-1.5 py-0.5 text-gray-900 dark:text-white"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-gray-400 dark:text-zinc-500 italic">
+                        Milestone updates are stored directly on the binding offer sent to the applicant.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02] text-[11px] text-gray-500 dark:text-zinc-400">
+                      Using applicant's proposed {proposal.milestones.length} milestone phase{proposal.milestones.length > 1 ? "s" : ""}. Click <strong>Customize Milestones</strong> to adjust deliverables or rates agreed in chat.
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-500/5 border border-blue-500/20 rounded-xl mt-3">
                   <input
                     type="checkbox"
@@ -1258,6 +1553,68 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Media Lightbox / Preview Modal */}
+      {previewItem && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-4xl bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-white/10 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0 pr-4">
+                {previewItem.type === "video" ? (
+                  <Film className="w-5 h-5 text-blue-500 shrink-0" />
+                ) : previewItem.type === "image" ? (
+                  <ImageIcon className="w-5 h-5 text-emerald-500 shrink-0" />
+                ) : (
+                  <FileText className="w-5 h-5 text-red-500 shrink-0" />
+                )}
+                <span className="font-bold text-sm text-gray-900 dark:text-white truncate">
+                  {previewItem.name}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={previewItem.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  download
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-xs font-bold text-gray-700 dark:text-zinc-200 transition"
+                >
+                  <Download className="w-3.5 h-3.5" /> Download
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewItem(null)}
+                  className="p-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 hover:text-gray-900 dark:hover:text-white transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 flex-1 flex items-center justify-center overflow-auto bg-gray-950/40">
+              {previewItem.type === "video" ? (
+                <video
+                  src={previewItem.url}
+                  controls
+                  autoPlay
+                  className="max-h-[70vh] w-auto max-w-full rounded-2xl shadow-xl border border-white/10"
+                />
+              ) : previewItem.type === "image" ? (
+                <img
+                  src={previewItem.url}
+                  alt={previewItem.name}
+                  className="max-h-[70vh] w-auto max-w-full object-contain rounded-2xl shadow-xl border border-white/10"
+                />
+              ) : (
+                <iframe
+                  src={previewItem.url}
+                  className="w-full h-[70vh] rounded-2xl border border-gray-200 dark:border-white/10 bg-white"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -56,6 +56,8 @@ export const ProposalsSentPage: React.FC = () => {
           coverLetter: p.letter || "",
           rejectionReason: p.reject_reason,
           milestones: p.milestones || [],
+          viewedAt: p.viewed_at,
+          shortlistedAt: p.shortlisted_at,
           type: "sent"
         }));
         setProposals(mapped);

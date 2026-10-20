@@ -1,5 +1,5 @@
 import React, { type FormEvent } from "react";
-import { ArrowRight, X, Plus, Minus, HelpCircle, Info, Calendar, AlertCircle } from "lucide-react";
+import { ArrowRight, X, Plus, Minus, HelpCircle, Info, Calendar, AlertCircle, Sparkles, Trash2 } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { SkillsAutocomplete } from "./SkillsAutocomplete";
 
@@ -27,6 +27,10 @@ interface CreateBudgetSkillsProps {
   minPositions?: number;
   isFixedBudget?: boolean;
   hidePositions?: boolean;
+  budgetType?: "range" | "open";
+  setBudgetType?: (val: "range" | "open") => void;
+  preScopedMilestones?: any[];
+  setPreScopedMilestones?: React.Dispatch<React.SetStateAction<any[]>>;
   onBack: () => void;
   onAdvance: () => void;
 }
@@ -55,6 +59,10 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
   minPositions,
   isFixedBudget = false,
   hidePositions = false,
+  budgetType = "range",
+  setBudgetType,
+  preScopedMilestones = [],
+  setPreScopedMilestones,
   onBack,
   onAdvance,
 }) => {
@@ -205,82 +213,177 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
           </div>
         ) : (
           <div>
-            <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">
-              Budget Estimate Range <span className="text-red-500">*</span>
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="relative">
-                <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
-                  <CreditIcon className="h-4 w-4" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+              <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">
+                {budgetType === "open" ? "Starting Minimum Bid" : "Budget Estimate Range"} <span className="text-red-500">*</span>
+              </label>
+
+              {setBudgetType && (
+                <div className="flex items-center p-0.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-[11px] font-bold self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBudgetType("range");
+                      setErrors(prev => {
+                        const { maxBudget: _, ...r } = prev;
+                        return r;
+                      });
+                    }}
+                    className={`px-3 py-1 rounded-lg transition-all ${
+                      budgetType === "range"
+                        ? "bg-white dark:bg-dark-surface text-gray-900 dark:text-white shadow-sm"
+                        : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                    }`}
+                  >
+                    Budget Range
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBudgetType("open");
+                      setMaxBudget("");
+                      setErrors(prev => {
+                        const { maxBudget: _, ...r } = prev;
+                        return r;
+                      });
+                    }}
+                    className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                      budgetType === "open"
+                        ? "bg-white dark:bg-dark-surface text-gray-900 dark:text-white shadow-sm"
+                        : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <Sparkles className="h-3 w-3 text-amber-500" />
+                    <span>Open Bid (Min Only)</span>
+                  </button>
                 </div>
-                <input
-                  type="text"
-                  placeholder="Min Value"
-                  value={formatCommaString(minBudget)}
-                  onChange={e => {
-                    setMinBudget(e.target.value.replace(/\D/g, ""));
-                    setErrors(prev => {
-                      const { minBudget, ...r } = prev;
-                      return r;
-                    });
-                  }}
-                  className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
-                    errors.minBudget ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
-                  }`}
-                />
-                <div className="group absolute right-2.5 top-2.5 flex items-center">
-                  <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
-                    The minimum credits you are willing to spend for this job.
-                  </div>
-                </div>
-                {errors.minBudget && <p className="text-[11px] text-red-400 mt-1">{errors.minBudget}</p>}
-              </div>
-              <div className="relative">
-                <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
-                  <CreditIcon className="h-4 w-4" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Max Value"
-                  value={formatCommaString(maxBudget)}
-                  onChange={e => {
-                    setMaxBudget(e.target.value.replace(/\D/g, ""));
-                    setErrors(prev => {
-                      const { maxBudget, ...r } = prev;
-                      return r;
-                    });
-                  }}
-                  className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
-                    errors.maxBudget ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
-                  }`}
-                />
-                <div className="group absolute right-2.5 top-2.5 flex items-center">
-                  <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
-                    The maximum credits you are willing to spend for this job.
-                  </div>
-                </div>
-                {errors.maxBudget && <p className="text-[11px] text-red-400 mt-1">{errors.maxBudget}</p>}
-              </div>
+              )}
             </div>
+
+            {budgetType === "open" ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
+                <div className="relative">
+                  <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
+                    <CreditIcon className="h-4 w-4" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Starting Minimum Bid (e.g. 500)"
+                    value={formatCommaString(minBudget)}
+                    onChange={e => {
+                      setMinBudget(e.target.value.replace(/\D/g, ""));
+                      setErrors(prev => {
+                        const { minBudget: _, ...r } = prev;
+                        return r;
+                      });
+                    }}
+                    className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
+                      errors.minBudget ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
+                    }`}
+                  />
+                  <div className="group absolute right-2.5 top-2.5 flex items-center">
+                    <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
+                      The minimum starting bid you expect applicants to bid from.
+                    </div>
+                  </div>
+                  {errors.minBudget && <p className="text-[11px] text-red-400 mt-1">{errors.minBudget}</p>}
+                </div>
+
+                <div className="flex items-center gap-2.5 p-3 rounded-xl border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] text-xs text-gray-600 dark:text-zinc-300">
+                  <Sparkles className="h-4 w-4 text-amber-500 shrink-0" />
+                  <span className="text-[11px] leading-relaxed">
+                    <strong>No Maximum Ceiling:</strong> Freelancers can submit competitive open bids at or above your starting minimum.
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="relative">
+                  <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
+                    <CreditIcon className="h-4 w-4" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Min Value"
+                    value={formatCommaString(minBudget)}
+                    onChange={e => {
+                      setMinBudget(e.target.value.replace(/\D/g, ""));
+                      setErrors(prev => {
+                        const { minBudget, ...r } = prev;
+                        return r;
+                      });
+                    }}
+                    className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
+                      errors.minBudget ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
+                    }`}
+                  />
+                  <div className="group absolute right-2.5 top-2.5 flex items-center">
+                    <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
+                      The minimum credits you are willing to spend for this job.
+                    </div>
+                  </div>
+                  {errors.minBudget && <p className="text-[11px] text-red-400 mt-1">{errors.minBudget}</p>}
+                </div>
+                <div className="relative">
+                  <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
+                    <CreditIcon className="h-4 w-4" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Max Value"
+                    value={formatCommaString(maxBudget)}
+                    onChange={e => {
+                      setMaxBudget(e.target.value.replace(/\D/g, ""));
+                      setErrors(prev => {
+                        const { maxBudget, ...r } = prev;
+                        return r;
+                      });
+                    }}
+                    className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-8 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
+                      errors.maxBudget ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
+                    }`}
+                  />
+                  <div className="group absolute right-2.5 top-2.5 flex items-center">
+                    <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
+                      The maximum credits you are willing to spend for this job.
+                    </div>
+                  </div>
+                  {errors.maxBudget && <p className="text-[11px] text-red-400 mt-1">{errors.maxBudget}</p>}
+                </div>
+              </div>
+            )}
+
             {(minBudget || maxBudget) && (
               <div className="mt-2 p-3 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/10">
                 <div className="flex items-start gap-2 text-gray-700 dark:text-zinc-300">
                   <Info className="h-4 w-4 mt-0.5 text-gray-400" />
                   <div className="text-xs">
-                    <span className="block font-medium mb-0.5 text-gray-900 dark:text-white">Total Budget Preview</span>
-                    {minBudget ? formatCommaString(minBudget) : "0"} - {maxBudget ? formatCommaString(maxBudget) : "0"} credits
+                    <span className="block font-medium mb-0.5 text-gray-900 dark:text-white">
+                      {budgetType === "open" ? "Open Bidding Benchmark" : "Target Budget Benchmark"}
+                    </span>
+                    {budgetType === "open" ? (
+                      <span>Starting from {minBudget ? formatCommaString(minBudget) : "0"} Credits (Open Bidding)</span>
+                    ) : (
+                      <span>{minBudget ? formatCommaString(minBudget) : "0"} - {maxBudget ? formatCommaString(maxBudget) : "0"} credits</span>
+                    )}
                     {positions > 1 && (
                       <span className="block mt-1 text-[11px] text-gray-500 dark:text-zinc-400">
                         That's approx.{" "}
                         <strong className="text-gray-700 dark:text-gray-300">
-                          {formatCommaString(String(Math.floor(parseInt(minBudget.replace(/\D/g, "") || "0") / positions)))} -{" "}
-                          {formatCommaString(String(Math.floor(parseInt(maxBudget.replace(/\D/g, "") || "0") / positions)))} credits
+                          {formatCommaString(String(Math.floor(parseInt(minBudget.replace(/\D/g, "") || "0") / positions)))}
+                          {budgetType === "open" ? "+ credits min" : ` - ${formatCommaString(String(Math.floor(parseInt(maxBudget.replace(/\D/g, "") || "0") / positions)))} credits`}
                         </strong>{" "}
                         per person
                       </span>
                     )}
+                    <span className="block mt-1.5 text-[10px] text-gray-500 dark:text-zinc-400">
+                      {budgetType === "open"
+                        ? "Freelancers will submit competitive bids starting from this amount. You can negotiate terms in chat before accepting."
+                        : "Freelancers will use this benchmark to structure milestone bids. You can negotiate terms in chat before accepting."}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -541,6 +644,90 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
                 </div>
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* 1.C: Milestone Pre-Scoping for Single-Hire Jobs */}
+      <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-white/5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">
+              Pre-Scoped Milestones / Delivery Roadmap <span className="text-gray-400 font-normal lowercase">(optional)</span>
+            </label>
+            <div className="group relative flex items-center">
+              <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-56 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2.5 py-1.5 text-center text-[10px] text-gray-700 dark:text-gray-300 shadow-lg group-hover:block z-10 pointer-events-none">
+                Pre-define the phases you expect so applicants can adopt or adjust them directly when proposing instead of inventing from scratch.
+              </div>
+            </div>
+          </div>
+          {setPreScopedMilestones && preScopedMilestones.length < 4 && (
+            <button
+              type="button"
+              onClick={() => {
+                const count = preScopedMilestones.length + 1;
+                setPreScopedMilestones([
+                  ...preScopedMilestones,
+                  { title: count === 1 ? "Phase 1: Initial Draft / Prototype" : `Phase ${count}: Final Delivery & Polish`, budget_percentage: 50, duration_hours: 24 }
+                ]);
+              }}
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              <Plus className="h-3 w-3" /> Add Phase
+            </button>
+          )}
+        </div>
+
+        {preScopedMilestones.length === 0 ? (
+          <p className="text-[11px] text-gray-400 dark:text-zinc-500 italic">
+            No pre-defined milestones. Applicants will propose their own milestone roadmap. Click "Add Phase" if you have a structured multi-phase expectation.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {preScopedMilestones.map((m, idx) => (
+              <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.02]">
+                <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 w-12 shrink-0">Phase {idx + 1}</span>
+                <input
+                  type="text"
+                  placeholder="Phase name (e.g. Wireframe / Mockup)"
+                  value={m.title}
+                  onChange={(e) => {
+                    const updated = [...preScopedMilestones];
+                    updated[idx].title = e.target.value;
+                    setPreScopedMilestones(updated);
+                  }}
+                  className="flex-1 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 px-2.5 py-1.5 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                />
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <div className="flex items-center gap-1 text-[11px] text-gray-500 dark:text-zinc-400 shrink-0">
+                    <span>Allocation:</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={m.budget_percentage}
+                      onChange={(e) => {
+                        const updated = [...preScopedMilestones];
+                        updated[idx].budget_percentage = Math.max(1, Math.min(100, parseInt(e.target.value) || 0));
+                        setPreScopedMilestones(updated);
+                      }}
+                      className="w-14 rounded border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 px-1.5 py-1 text-center text-xs text-gray-900 dark:text-white"
+                    />
+                    <span>%</span>
+                  </div>
+                  {setPreScopedMilestones && (
+                    <button
+                      type="button"
+                      onClick={() => setPreScopedMilestones(preScopedMilestones.filter((_, i) => i !== idx))}
+                      className="p-1 text-gray-400 hover:text-red-500 transition-colors ml-auto sm:ml-0"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

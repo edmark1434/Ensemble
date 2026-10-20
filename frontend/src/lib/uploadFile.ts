@@ -9,12 +9,34 @@ export type PreparedUpload = {
   uploadIntentId: string;
 };
 
+export function resolveContentType(file: File): string {
+  if (file.type && file.type !== "application/octet-stream") return file.type;
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'pdf': return 'application/pdf';
+    case 'zip': return 'application/zip';
+    case 'png': return 'image/png';
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg';
+    case 'webp': return 'image/webp';
+    case 'gif': return 'image/gif';
+    case 'mp4': return 'video/mp4';
+    case 'webm': return 'video/webm';
+    case 'mov': return 'video/quicktime';
+    case 'mp3': return 'audio/mpeg';
+    case 'wav': return 'audio/wav';
+    case 'ogg': return 'audio/ogg';
+    default: return file.type || 'application/octet-stream';
+  }
+}
+
 /** Uploads the bytes to the server-issued private staging key without consuming the intent. */
 export async function uploadFileToIntent(file: File, folder: string): Promise<PreparedUpload> {
+  const contentType = resolveContentType(file);
   const prepared = await api.post("/api/files/upload-url", {
     folder,
     filename: file.name,
-    contentType: file.type,
+    contentType,
   });
   const { uploadUrl, uploadIntentId, maxFileSize } = prepared.data || {};
   if (!uploadUrl || !uploadIntentId) throw new Error("Unable to prepare file upload");
@@ -24,7 +46,7 @@ export async function uploadFileToIntent(file: File, folder: string): Promise<Pr
 
   const uploaded = await fetch(uploadUrl, {
     method: "PUT",
-    headers: { "Content-Type": file.type },
+    headers: { "Content-Type": contentType },
     body: file,
   });
   if (!uploaded.ok) throw new Error(`Upload failed with status ${uploaded.status}`);

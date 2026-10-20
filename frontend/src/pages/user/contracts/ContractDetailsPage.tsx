@@ -204,7 +204,7 @@ const PaperContractDocument: React.FC<{ contract: DetailedContract }> = ({ contr
               <span className="font-bold text-xs text-zinc-900 block">
                 2.1 Official Title of Work:
               </span>
-              <div className="text-sm sm:text-base font-extrabold text-zinc-900 pl-3 border-l-2 border-blue-600 py-0.5 tracking-tight">
+              <div className="text-sm sm:text-base font-extrabold text-zinc-900 pl-3 border-l-2 border-blue-600 py-0.5 tracking-tight break-words [overflow-wrap:anywhere]">
                 "{contract.title}"
               </div>
             </div>
@@ -213,20 +213,20 @@ const PaperContractDocument: React.FC<{ contract: DetailedContract }> = ({ contr
               <span className="font-bold text-zinc-900 block">
                 2.2 Detailed Statement of Work (SOW):
               </span>
-              <div className="text-xs text-zinc-800 leading-relaxed font-normal">
+              <div className="text-xs text-zinc-800 leading-relaxed font-normal break-words [overflow-wrap:anywhere] max-w-full">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
-                    p: ({ node, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
-                    strong: ({ node, ...props }) => <strong className="font-bold text-zinc-900" {...props} />,
-                    em: ({ node, ...props }) => <em className="italic text-zinc-800" {...props} />,
-                    ul: ({ node, ...props }) => <ul className="list-disc list-outside ml-4 my-2 space-y-1" {...props} />,
-                    ol: ({ node, ...props }) => <ol className="list-decimal list-outside ml-4 my-2 space-y-1" {...props} />,
-                    li: ({ node, ...props }) => <li className="pl-1 leading-relaxed" {...props} />,
-                    h1: ({ node, ...props }) => <h1 className="text-sm font-bold text-zinc-900 mt-3 mb-1" {...props} />,
-                    h2: ({ node, ...props }) => <h2 className="text-xs font-bold text-zinc-900 mt-2.5 mb-1" {...props} />,
-                    h3: ({ node, ...props }) => <h3 className="text-xs font-bold text-zinc-900 mt-2 mb-1" {...props} />,
-                    h4: ({ node, ...props }) => <h4 className="text-xs font-semibold text-zinc-900 mt-1.5 mb-0.5" {...props} />,
+                    p: ({ node, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed break-words [overflow-wrap:anywhere]" {...props} />,
+                    strong: ({ node, ...props }) => <strong className="font-bold text-zinc-900 break-words" {...props} />,
+                    em: ({ node, ...props }) => <em className="italic text-zinc-800 break-words" {...props} />,
+                    ul: ({ node, ...props }) => <ul className="list-disc list-outside ml-4 my-2 space-y-1 break-words" {...props} />,
+                    ol: ({ node, ...props }) => <ol className="list-decimal list-outside ml-4 my-2 space-y-1 break-words" {...props} />,
+                    li: ({ node, ...props }) => <li className="pl-1 leading-relaxed break-words [overflow-wrap:anywhere]" {...props} />,
+                    h1: ({ node, ...props }) => <h1 className="text-sm font-bold text-zinc-900 mt-3 mb-1 break-words" {...props} />,
+                    h2: ({ node, ...props }) => <h2 className="text-xs font-bold text-zinc-900 mt-2.5 mb-1 break-words" {...props} />,
+                    h3: ({ node, ...props }) => <h3 className="text-xs font-bold text-zinc-900 mt-2 mb-1 break-words" {...props} />,
+                    h4: ({ node, ...props }) => <h4 className="text-xs font-semibold text-zinc-900 mt-1.5 mb-0.5 break-words" {...props} />,
                   }}
                 >
                   {contract.jobDescription || ''}
@@ -1345,7 +1345,7 @@ export const ContractDetailsPage: React.FC = () => {
                     </span>
                   </div>
 
-                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-white leading-tight">
+                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-white leading-tight break-words [overflow-wrap:anywhere]">
                     {contract.title}
                   </h1>
 
@@ -1425,7 +1425,7 @@ export const ContractDetailsPage: React.FC = () => {
             {/* 2-Column Document Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Left Column: Scope of Work, Deliverables, and Milestones (2 cols) */}
-              <div className="lg:col-span-2 space-y-6">
+              <div className="lg:col-span-2 space-y-6 min-w-0">
                 {/* SECTION I: SCOPE OF WORK & DELIVERABLES */}
                 <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-sm space-y-5">
                   <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/10 pb-4">
@@ -1501,19 +1501,19 @@ export const ContractDetailsPage: React.FC = () => {
                     <span className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
                       Full Project Description
                     </span>
-                    <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed font-sans">
+                    <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed font-sans break-words [overflow-wrap:anywhere] max-w-full">
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
-                          p: ({ node, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
-                          strong: ({ node, ...props }) => <strong className="font-bold text-zinc-900 dark:text-white" {...props} />,
-                          em: ({ node, ...props }) => <em className="italic" {...props} />,
-                          ul: ({ node, ...props }) => <ul className="list-disc list-outside ml-4 my-2 space-y-1" {...props} />,
-                          ol: ({ node, ...props }) => <ol className="list-decimal list-outside ml-4 my-2 space-y-1" {...props} />,
-                          li: ({ node, ...props }) => <li className="pl-1 leading-relaxed" {...props} />,
-                          h1: ({ node, ...props }) => <h1 className="text-sm font-bold text-zinc-900 dark:text-white mt-3 mb-1" {...props} />,
-                          h2: ({ node, ...props }) => <h2 className="text-xs font-bold text-zinc-900 dark:text-white mt-2.5 mb-1" {...props} />,
-                          h3: ({ node, ...props }) => <h3 className="text-xs font-bold text-zinc-900 dark:text-white mt-2 mb-1" {...props} />,
+                          p: ({ node, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed break-words [overflow-wrap:anywhere]" {...props} />,
+                          strong: ({ node, ...props }) => <strong className="font-bold text-zinc-900 dark:text-white break-words" {...props} />,
+                          em: ({ node, ...props }) => <em className="italic break-words" {...props} />,
+                          ul: ({ node, ...props }) => <ul className="list-disc list-outside ml-4 my-2 space-y-1 break-words" {...props} />,
+                          ol: ({ node, ...props }) => <ol className="list-decimal list-outside ml-4 my-2 space-y-1 break-words" {...props} />,
+                          li: ({ node, ...props }) => <li className="pl-1 leading-relaxed break-words [overflow-wrap:anywhere]" {...props} />,
+                          h1: ({ node, ...props }) => <h1 className="text-sm font-bold text-zinc-900 dark:text-white mt-3 mb-1 break-words" {...props} />,
+                          h2: ({ node, ...props }) => <h2 className="text-xs font-bold text-zinc-900 dark:text-white mt-2.5 mb-1 break-words" {...props} />,
+                          h3: ({ node, ...props }) => <h3 className="text-xs font-bold text-zinc-900 dark:text-white mt-2 mb-1 break-words" {...props} />,
                         }}
                       >
                         {contract.jobDescription || ''}
@@ -1640,7 +1640,7 @@ export const ContractDetailsPage: React.FC = () => {
               </div>
 
               {/* Right Column: Parties Involved & Escrow Policy (1 col) */}
-              <div className="space-y-6">
+              <div className="space-y-6 min-w-0">
                 {/* PARTIES INVOLVED CARD */}
                 <div className="rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-sm space-y-4">
                   <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider border-b border-zinc-200 dark:border-white/10 pb-3">

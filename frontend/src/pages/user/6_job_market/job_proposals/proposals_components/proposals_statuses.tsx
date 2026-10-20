@@ -1,5 +1,5 @@
 import React from "react";
-import { Clock, UserCheck, CheckCircle2, XCircle, Layers, Archive, MinusCircle, Briefcase } from "lucide-react";
+import { Clock, UserCheck, CheckCircle2, XCircle, Layers, Archive, MinusCircle, Briefcase, PanelLeftClose } from "lucide-react";
 import { motion } from "framer-motion";
 import type { ProposalStatus } from "./proposals_list";
 
@@ -12,6 +12,7 @@ interface ProposalsStatusesProps {
   statuses: StatusFilterItem[];
   activeStatus: "All" | ProposalStatus;
   onStatusChange: (status: "All" | ProposalStatus) => void;
+  onCollapse?: () => void;
 }
 
 const getStatusIcon = (label: string, isActive: boolean) => {
@@ -40,12 +41,25 @@ export const ProposalsStatuses: React.FC<ProposalsStatusesProps> = ({
   statuses,
   activeStatus,
   onStatusChange,
+  onCollapse,
 }) => {
   return (
     <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 backdrop-blur-sm space-y-3 text-left">
-      <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
-        Proposal Statuses
-      </h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
+          Proposal Statuses
+        </h3>
+        {onCollapse && (
+          <button
+            type="button"
+            onClick={onCollapse}
+            className="p-1 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer"
+            title="Collapse sidebar"
+          >
+            <PanelLeftClose className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
       <div className="flex flex-col gap-1.5">
         {statuses.map((st) => {
           const isActive = activeStatus === st.label;

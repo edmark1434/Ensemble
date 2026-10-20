@@ -67,6 +67,8 @@ export interface ProposalItemData {
   target_milestone_description?: string;
   target_milestone_budget?: number;
   target_milestone_slots?: number;
+  viewedAt?: string | null;
+  shortlistedAt?: string | null;
   milestones: {
     id: string;
     name: string;
@@ -242,7 +244,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                         <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400 shrink-0">
                           <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
                           <span className="font-bold text-gray-700 dark:text-zinc-200">
-                            {item.rating ? item.rating.toFixed(1) : "5.0"}
+                            {item.rating != null ? Number(item.rating).toFixed(1) : "5.0"}
                           </span>
                         </div>
                         <span
@@ -291,6 +293,35 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                       {item.submittedAgo || item.submittedAt}
                     </span>
                   </div>
+
+                  {item.type === "sent" && (
+                    <div className="pt-2 mt-1 border-t border-gray-100 dark:border-white/5">
+                      <div className="flex items-center text-[10px] sm:text-[11px] gap-1.5 sm:gap-2">
+                        <span className="flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> Submitted
+                        </span>
+                        <div className="h-0.5 w-4 sm:w-6 bg-emerald-500/40 rounded-full" />
+                        <span className={`flex items-center gap-1 font-semibold ${item.viewedAt ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400 dark:text-zinc-500"}`}>
+                          <CheckCircle2 className="w-3 h-3 shrink-0" /> {item.viewedAt ? "Viewed" : "Unread"}
+                        </span>
+                        <div className={`h-0.5 w-4 sm:w-6 rounded-full ${item.shortlistedAt || item.status === "Shortlisted" || item.status === "Accepted" || item.status === "Hired" ? "bg-amber-500/40" : "bg-gray-200 dark:bg-white/10"}`} />
+                        <span className={`flex items-center gap-1 font-semibold ${item.shortlistedAt || item.status === "Shortlisted" || item.status === "Accepted" || item.status === "Hired" ? "text-amber-500" : "text-gray-400 dark:text-zinc-500"}`}>
+                          <Star className={`w-3 h-3 shrink-0 ${item.shortlistedAt || item.status === "Shortlisted" ? "fill-amber-500 text-amber-500" : ""}`} /> Shortlisted
+                        </span>
+                        <div className={`h-0.5 w-4 sm:w-6 rounded-full ${item.status === "Accepted" || item.status === "Hired" ? "bg-emerald-500/40" : "bg-gray-200 dark:bg-white/10"}`} />
+                        <span className={`flex items-center gap-1 font-semibold ${item.status === "Accepted" || item.status === "Hired" ? "text-emerald-500" : item.status === "Rejected" ? "text-red-500" : "text-gray-400 dark:text-zinc-500"}`}>
+                          {item.status === "Accepted" || item.status === "Hired" ? (
+                            <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                          ) : item.status === "Rejected" ? (
+                            <span className="w-3 h-3 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center text-[8px] font-bold">✕</span>
+                          ) : (
+                            <span className="w-3 h-3 rounded-full border border-gray-300 dark:border-zinc-600 flex items-center justify-center text-[8px]">4</span>
+                          )}
+                          {item.status === "Accepted" || item.status === "Hired" ? "Hired" : item.status === "Rejected" ? "Not Selected" : "Offer"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Right Column: Bid + Specs + Actions */}
@@ -458,7 +489,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                         <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400 shrink-0">
                           <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
                           <span className="font-bold text-gray-700 dark:text-zinc-200">
-                            {item.rating ? item.rating.toFixed(1) : "5.0"}
+                            {item.rating != null ? Number(item.rating).toFixed(1) : "5.0"}
                           </span>
                         </div>
                       </div>
@@ -553,6 +584,28 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                 <div className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed line-clamp-3 min-h-[2.5rem]">
                   <JobRichText content={item.coverLetter} truncate={3} />
                 </div>
+
+                {item.type === "sent" && (
+                  <div className="pt-2 border-t border-gray-100 dark:border-white/5">
+                    <div className="flex items-center text-[10px] gap-1 sm:gap-1.5 justify-between">
+                      <span className="flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> Sent
+                      </span>
+                      <div className="h-0.5 flex-1 bg-emerald-500/40 rounded-full mx-1" />
+                      <span className={`flex items-center gap-1 font-semibold ${item.viewedAt ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400 dark:text-zinc-500"}`}>
+                        <CheckCircle2 className="w-3 h-3 shrink-0" /> {item.viewedAt ? "Viewed" : "Unread"}
+                      </span>
+                      <div className={`h-0.5 flex-1 rounded-full mx-1 ${item.shortlistedAt || item.status === "Shortlisted" || item.status === "Accepted" || item.status === "Hired" ? "bg-amber-500/40" : "bg-gray-200 dark:bg-white/10"}`} />
+                      <span className={`flex items-center gap-1 font-semibold ${item.shortlistedAt || item.status === "Shortlisted" || item.status === "Accepted" || item.status === "Hired" ? "text-amber-500" : "text-gray-400 dark:text-zinc-500"}`}>
+                        <Star className={`w-3 h-3 shrink-0 ${item.shortlistedAt || item.status === "Shortlisted" ? "fill-amber-500 text-amber-500" : ""}`} /> Shortlist
+                      </span>
+                      <div className={`h-0.5 flex-1 rounded-full mx-1 ${item.status === "Accepted" || item.status === "Hired" ? "bg-emerald-500/40" : "bg-gray-200 dark:bg-white/10"}`} />
+                      <span className={`flex items-center gap-1 font-semibold ${item.status === "Accepted" || item.status === "Hired" ? "text-emerald-500" : item.status === "Rejected" ? "text-red-500" : "text-gray-400 dark:text-zinc-500"}`}>
+                        {item.status === "Accepted" || item.status === "Hired" ? "Hired" : item.status === "Rejected" ? "Closed" : "Offer"}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 4. Action Area */}

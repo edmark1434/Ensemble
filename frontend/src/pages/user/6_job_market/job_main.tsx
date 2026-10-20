@@ -1,3 +1,4 @@
+import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useState, useEffect, useMemo } from "react";
 import { Filter } from "lucide-react";
 import { Outlet, useNavigate, useParams, useLocation } from "react-router-dom";
@@ -139,9 +140,12 @@ const JobMain: React.FC = () => {
           status: j.status,
           category: j.category,
           difficulty: j.experience_level,
-          priceRange: (j.rate_credits_min && j.rate_credits_min === j.rate_credits_max)
-            ? `${j.rate_credits_min.toLocaleString()}`
-            : `${j.rate_credits_min?.toLocaleString() || 0} ~ ${j.rate_credits_max?.toLocaleString() || 0}`,
+          priceRange: getBudgetDisplayInfo({
+            minBudget: j.rate_credits_min,
+            maxBudget: j.rate_credits_max,
+            isTeam: j.hiring_type === "team" || Boolean(j.milestones?.length),
+            positionsNeeded: j.positions_needed
+          }).amountText,
           minBudget: j.rate_credits_min || 0,
           maxBudget: j.rate_credits_max || 0,
           postedBy: j.client_name || j.client_handle || "Unknown",

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useOutletContext, useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Briefcase, ExternalLink, CheckCircle2, Users } from "lucide-react";
+import { ArrowLeft, Briefcase, ExternalLink, CheckCircle2, Users, Table, LayoutGrid, Star, MessageSquare, CheckSquare, Paperclip, Clock, Eye, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { CreditIcon } from "@/components/ui/credit-icon";
+import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 import ProposalsList, { type ProposalStatus } from "../proposals_components/proposals_list";
 import { useJobs } from "@/hooks/useJobs";
 import api from "@/lib/axios";
@@ -24,6 +26,8 @@ export const ProposalsIncomingPage: React.FC = () => {
     dateSort,
     viewType,
     showFilters,
+    setShowFilters,
+    setActiveStatus,
     setChildProposalsCounts,
   } = useOutletContext<ProposalsMainContext>();
 
@@ -31,6 +35,7 @@ export const ProposalsIncomingPage: React.FC = () => {
   const [targetJob, setTargetJob] = useState<any>(null);
   const [selectedMilestoneId, setSelectedMilestoneId] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"cards" | "matrix">("cards");
   const { fetchProposalsByJob, fetchJobs, updateProposalStatus } = useJobs();
 
   useEffect(() => {
@@ -61,6 +66,12 @@ export const ProposalsIncomingPage: React.FC = () => {
           target_milestone_budget: p.target_milestone_budget,
           target_milestone_slots: p.target_milestone_slots,
           target_milestone_order: p.target_milestone_order,
+          screening_answers: p.screening_answers || [],
+          attachments: p.attachments || [],
+          rating: p.freelancer_rating != null ? Number(p.freelancer_rating) : 5.0,
+          freelancerRating: p.freelancer_rating != null ? Number(p.freelancer_rating) : 5.0,
+          viewedAt: p.viewed_at,
+          shortlistedAt: p.shortlisted_at,
           type: "incoming"
         }));
         setProposals(mapped);
@@ -413,16 +424,264 @@ export const ProposalsIncomingPage: React.FC = () => {
             ? `${activeMilestone?.title || "Milestone"} Applicants (${filtered.length})`
             : `Received Proposal Applications (${filtered.length})`}
         </h2>
-        <span className="text-xs text-gray-500 dark:text-zinc-400 font-mono">Incoming</span>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center p-0.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode("cards");
+                setShowFilters(true);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                viewMode === "cards"
+                  ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-xs"
+                  : "text-gray-500 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-white"
+              }`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Cards
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode("matrix");
+                setShowFilters(false);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                viewMode === "matrix"
+                  ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-xs"
+                  : "text-gray-500 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-white"
+              }`}
+            >
+              <Table className="h-3.5 w-3.5" /> Comparison Matrix
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowFilters((prev) => !prev)}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition cursor-pointer ${
+              showFilters
+                ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/20"
+                : "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+            }`}
+            title={showFilters ? "Collapse Proposal Statuses & Filters sidebar" : "Expand Proposal Statuses & Filters sidebar"}
+          >
+            {showFilters ? (
+              <>
+                <PanelLeftClose className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Hide Sidebar</span>
+              </>
+            ) : (
+              <>
+                <PanelLeftOpen className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Filters & Statuses</span>
+              </>
+            )}
+          </button>
+
+          <span className="text-xs text-gray-500 dark:text-zinc-400 font-mono hidden sm:inline">Incoming</span>
+        </div>
       </div>
 
-      {/* Proposal Cards List / Grid */}
-      <ProposalsList
-        proposals={filtered}
-        viewType={viewType}
-        showFilters={showFilters}
-        onUpdateStatus={handleUpdateStatus}
-      />
+      {/* Proposal Cards List / Grid or Comparison Matrix */}
+      {viewMode === "matrix" ? (
+        <div className="space-y-3">
+          {/* Quick status bar for Comparison Matrix */}
+          <div className="flex items-center justify-between flex-wrap gap-2 px-1">
+            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+              {(["All", "Pending", "Shortlisted", "Accepted", "Hired", "Rejected"] as const).map((st) => {
+                const count = st === "All" ? proposals.length : proposals.filter((p) => p.status === st).length;
+                const isActive = activeStatus === st;
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setActiveStatus && setActiveStatus(st as any)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      isActive
+                        ? "bg-blue-600 text-white shadow-xs"
+                        : "bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-white/10"
+                    }`}
+                  >
+                    <span>{st}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      isActive ? "bg-white/20 text-white" : "bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-zinc-300"
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="text-xs text-gray-500 dark:text-zinc-400">
+              Showing <span className="font-bold text-gray-900 dark:text-white">{filtered.length}</span> of {proposals.length} applications
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface overflow-hidden shadow-xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-gray-50/80 dark:bg-white/[0.03] text-gray-500 dark:text-zinc-400 font-semibold border-b border-gray-200 dark:border-white/10 uppercase tracking-wider text-[11px]">
+                <tr>
+                  <th className="py-3 px-4">Freelancer</th>
+                  <th className="py-3 px-4">Proposed Bid</th>
+                  <th className="py-3 px-4">Milestones</th>
+                  <th className="py-3 px-4">Screening Q's</th>
+                  <th className="py-3 px-4">Work Samples</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-white/5 text-gray-700 dark:text-zinc-300">
+                {filtered.map((p) => {
+                  const isShortlisted = p.status === "Shortlisted";
+                  const ansCount = Array.isArray(p.screening_answers) ? p.screening_answers.length : 0;
+                  const attachCount = Array.isArray(p.attachments) ? p.attachments.length : 0;
+                  return (
+                    <tr
+                      key={p.id}
+                      className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors"
+                    >
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-2.5">
+                          {p.partyAvatar ? (
+                            <img
+                              src={p.partyAvatar}
+                              alt=""
+                              className="w-8 h-8 rounded-full object-cover border border-gray-200 dark:border-white/10"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-500 font-bold flex items-center justify-center text-xs">
+                              {p.partyName?.charAt(0)?.toUpperCase() || "F"}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <span className="font-bold text-gray-900 dark:text-white block truncate">
+                              {p.partyName}
+                            </span>
+                            <div className="flex items-center gap-1 text-[11px] text-amber-500">
+                              <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                              <span className="font-semibold">{Number(p.freelancerRating ?? 5.0).toFixed(1)}</span>
+                              <span className="text-gray-400 dark:text-zinc-500 text-[10px] ml-1">
+                                {p.submittedAt}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 font-mono">
+                        <div className="flex items-center gap-1.5 font-bold text-gray-900 dark:text-white">
+                          <CreditIcon className="w-3.5 h-3.5 text-blue-500" />
+                          <span>{p.bidAmount.toLocaleString()} Credits</span>
+                        </div>
+                        {targetJob?.budget_credits && (
+                          <span className="text-[10px] text-gray-400 dark:text-zinc-500 block">
+                            {p.bidAmount <= targetJob.budget_credits
+                              ? `${Math.round(((targetJob.budget_credits - p.bidAmount) / targetJob.budget_credits) * 100)}% under budget`
+                              : `${Math.round(((p.bidAmount - targetJob.budget_credits) / targetJob.budget_credits) * 100)}% over budget`}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-semibold bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300">
+                          <Clock className="w-3 h-3 text-gray-400" />
+                          {p.milestones?.length || 0} Phase{p.milestones?.length === 1 ? "" : "s"}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        {ansCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                            <CheckSquare className="w-3 h-3" />
+                            {ansCount} Answered
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 dark:text-zinc-500 text-[11px]">None</span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        {attachCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                            <Paperclip className="w-3 h-3" />
+                            {attachCount} Sample{attachCount === 1 ? "" : "s"}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 dark:text-zinc-500 text-[11px]">None</span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            p.status === "Shortlisted"
+                              ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                              : p.status === "Accepted" || p.status === "Hired"
+                              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                              : p.status === "Rejected"
+                              ? "bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30"
+                              : "bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30"
+                          }`}
+                        >
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleUpdateStatus(
+                                p.id,
+                                isShortlisted ? "Pending" : "Shortlisted"
+                              )
+                            }
+                            title={isShortlisted ? "Remove from Shortlist" : "Add to Shortlist"}
+                            className={`p-1.5 rounded-lg border text-xs font-semibold transition cursor-pointer ${
+                              isShortlisted
+                                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/20"
+                                : "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                            }`}
+                          >
+                            <Star className={`w-3.5 h-3.5 ${isShortlisted ? "fill-amber-500 text-amber-500" : ""}`} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void openMarketplaceConversation({
+                                contextType: "job_proposal",
+                                contextId: p.id,
+                                navigate,
+                              })
+                            }
+                            title="Message Freelancer"
+                            className="p-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-zinc-400 hover:text-blue-500 transition cursor-pointer"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/jobs/proposals/received/${p.id}`)}
+                            title="View Full Proposal"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] transition cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3" /> View
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        </div>
+      ) : (
+        <ProposalsList
+          proposals={filtered}
+          viewType={viewType}
+          showFilters={showFilters}
+          onUpdateStatus={handleUpdateStatus}
+        />
+      )}
     </div>
   );
 };

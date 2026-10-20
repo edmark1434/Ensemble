@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Sparkles } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import api from "@/lib/axios";
 import { useJobs } from "@/hooks/useJobs";
@@ -33,13 +33,15 @@ const ProposalsCreatePage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actingTeamId, setActingTeamId] = useState("");
   
-  const { createProposal, fetchJobs } = useJobs();
+  const { createProposal, fetchJobs, uploadAttachment } = useJobs();
 
   // Step 1: Pitch & Pricing States
   const [selectedMilestoneId, setSelectedMilestoneId] = useState<string>("");
   const [bidAmount, setBidAmount] = useState("");
   const [additionalWorkRate, setAdditionalWorkRate] = useState<number>(20);
   const [coverLetter, setCoverLetter] = useState("");
+  const [screeningAnswers, setScreeningAnswers] = useState<{ question: string; answer: string }[]>([]);
+  const [workSampleFiles, setWorkSampleFiles] = useState<File[]>([]);
 
   // Step 2: TOS States
   const [selectedTosId, setSelectedTosId] = useState("");
@@ -66,6 +68,81 @@ const ProposalsCreatePage: React.FC = () => {
   ]);
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [isDraftRestored, setIsDraftRestored] = useState(false);
+
+  // Restore draft from localStorage
+  useEffect(() => {
+    if (!id) return;
+    try {
+      const saved = localStorage.getItem(`ensemble_proposal_draft_${id}`);
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.bidAmount) setBidAmount(data.bidAmount);
+        if (data.coverLetter) setCoverLetter(data.coverLetter);
+        if (data.additionalWorkRate !== undefined) setAdditionalWorkRate(data.additionalWorkRate);
+        if (data.selectedTosId) setSelectedTosId(data.selectedTosId);
+        if (data.tosContent) setTosContent(data.tosContent);
+        if (Array.isArray(data.milestones) && data.milestones.length > 0) setMilestones(data.milestones);
+        if (data.selectedMilestoneId) setSelectedMilestoneId(data.selectedMilestoneId);
+        setIsDraftRestored(true);
+      }
+    } catch (e) {
+      console.error("Failed to restore proposal draft", e);
+    }
+  }, [id]);
+
+  // Debounced auto-save draft to localStorage
+  useEffect(() => {
+    if (!id) return;
+    if (!bidAmount && !coverLetter) return;
+    const timer = setTimeout(() => {
+      try {
+        const draftData = {
+          bidAmount,
+          coverLetter,
+          additionalWorkRate,
+          selectedTosId,
+          tosContent,
+          milestones,
+          selectedMilestoneId,
+          updatedAt: Date.now(),
+        };
+        localStorage.setItem(`ensemble_proposal_draft_${id}`, JSON.stringify(draftData));
+      } catch (e) {
+        console.error("Failed to auto-save proposal draft", e);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [id, bidAmount, coverLetter, additionalWorkRate, selectedTosId, tosContent, milestones, selectedMilestoneId]);
+
+  const handleClearDraft = () => {
+    if (id) {
+      localStorage.removeItem(`ensemble_proposal_draft_${id}`);
+    }
+    setBidAmount("");
+    setCoverLetter("");
+    setSelectedTosId("");
+    setTosContent("");
+    setMilestones([
+      {
+        id: "ms-1",
+        name: "Phase 1: Initial Draft & Rough Pass",
+        description: "Deliver rough cut / core framework for initial feedback.",
+        hours: 12,
+        revisions: 2,
+        percentage: 50,
+      },
+      {
+        id: "ms-2",
+        name: "Phase 2: Final Polish & Export",
+        description: "Apply color passes, audio sync, and final master deliverables.",
+        hours: 8,
+        revisions: 1,
+        percentage: 50,
+      },
+    ]);
+    setIsDraftRestored(false);
+  };
 
   useEffect(() => {
     const loadJob = async () => {
@@ -93,7 +170,9 @@ const ProposalsCreatePage: React.FC = () => {
             status: found.status,
             category: found.category,
             difficulty: found.experience_level,
-            priceRange: (found.rate_credits_min && found.rate_credits_min === found.rate_credits_max)
+            priceRange: !found.rate_credits_max
+              ? `${found.rate_credits_min?.toLocaleString() || 0}+`
+              : (found.rate_credits_min && found.rate_credits_min === found.rate_credits_max)
               ? `${found.rate_credits_min.toLocaleString()}`
               : `${found.rate_credits_min?.toLocaleString() || 0} ~ ${found.rate_credits_max?.toLocaleString() || 0}`,
             minBudget: found.rate_credits_min || 0,
@@ -114,8 +193,20 @@ const ProposalsCreatePage: React.FC = () => {
             isOwnPost: Boolean(found.is_own_post || found.isOwnPost),
             isManageablePost: Boolean(found.is_manageable_post || found.isManageablePost),
             hiring_type: found.hiring_type || "single",
+            screening_questions: found.screening_questions || [],
+            attachments: found.attachments || [],
             milestones: Array.isArray(found.milestones) ? found.milestones : []
           });
+          if (found.hiring_type !== "team" && Array.isArray(found.milestones) && found.milestones.length > 0) {
+            setMilestones(found.milestones.map((m: any, idx: number) => ({
+              id: `pre-ms-${idx}`,
+              name: m.title || `Phase ${idx + 1}`,
+              description: m.description || "",
+              hours: m.duration_hours || 24,
+              revisions: 2,
+              percentage: Number(m.budget_percentage) || Math.round(100 / found.milestones.length)
+            })));
+          }
           if (found.milestones && found.milestones.length > 0) {
             setSelectedMilestoneId(found.milestones[0].job_milestone_id);
           }
@@ -149,12 +240,8 @@ const ProposalsCreatePage: React.FC = () => {
     const maxBound = currentMs && job ? Math.round(((job.maxBudget * Number(currentMs.budget_percentage)) / 100) / Math.max(1, currentMs.slots_count || 1)) : (job?.maxBudget || 0);
 
     if (!isTeamJob) {
-      if (!bidAmount || rawBid <= 0) {
-        stepErrors.bidAmount = "A valid bid amount is required.";
-      } else if (minBound > 0 && rawBid < minBound) {
-        stepErrors.bidAmount = `Please increase your bid to the minimum budget of ${minBound.toLocaleString()}.`;
-      } else if (maxBound > 0 && rawBid > maxBound) {
-        stepErrors.bidAmount = `Please do not exceed the maximum budget of ${maxBound.toLocaleString()}.`;
+      if (!bidAmount || rawBid < 10) {
+        stepErrors.bidAmount = "A minimum bid of at least 10 Credits is required.";
       }
     } else {
       if (!bidAmount || rawBid <= 0) {
@@ -164,6 +251,16 @@ const ProposalsCreatePage: React.FC = () => {
     }
     if (!coverLetter.trim() || coverLetter.length < 50) {
       stepErrors.coverLetter = "Cover pitch must be at least 50 characters long.";
+    }
+
+    if (job?.screening_questions && job.screening_questions.length > 0) {
+      const hasUnanswered = job.screening_questions.some((q: string) => {
+        const foundAns = screeningAnswers.find(sa => sa.question === q)?.answer;
+        return !foundAns || !foundAns.trim();
+      });
+      if (hasUnanswered) {
+        stepErrors.screeningAnswers = "Please answer all client screening questions before continuing.";
+      }
     }
 
     if (Object.keys(stepErrors).length > 0) {
@@ -224,6 +321,15 @@ const ProposalsCreatePage: React.FC = () => {
       if (!id) throw new Error("Job ID is missing.");
       
       const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+      // Upload Work Sample Attachments
+      const attachmentFileIds: string[] = [];
+      if (workSampleFiles.length > 0) {
+        for (const f of workSampleFiles) {
+          const fId = await uploadAttachment(f, "jobs");
+          if (fId) attachmentFileIds.push(fId);
+        }
+      }
       
       const payload = {
         job_id: id,
@@ -235,6 +341,8 @@ const ProposalsCreatePage: React.FC = () => {
         terms_id: (selectedTosId && UUID_REGEX.test(selectedTosId)) ? selectedTosId : null,  
         acting_team_id: actingTeamId || null,
         job_milestone_id: (selectedMilestoneId && UUID_REGEX.test(selectedMilestoneId)) ? selectedMilestoneId : null,
+        screening_answers: screeningAnswers,
+        attachment_file_ids: attachmentFileIds,
         milestones: milestones.map(m => ({
           title: m.name,
           description: m.description,
@@ -244,6 +352,9 @@ const ProposalsCreatePage: React.FC = () => {
       };
 
       await createProposal(id, payload);
+      if (id) {
+        localStorage.removeItem(`ensemble_proposal_draft_${id}`);
+      }
       setIsSuccessOpen(true);
     } catch (err: any) {
       console.error(err);
@@ -315,6 +426,22 @@ const ProposalsCreatePage: React.FC = () => {
 
         <ProposalCreateHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
 
+        {isDraftRestored && (
+          <div className="p-3 rounded-2xl border border-blue-500/20 bg-blue-50/70 dark:bg-blue-950/20 flex items-center justify-between text-xs transition">
+            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-medium">
+              <Sparkles className="h-4 w-4 shrink-0" />
+              <span>Draft restored from your last session. Progress is saved automatically.</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleClearDraft}
+              className="text-[11px] font-bold text-gray-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-400 transition"
+            >
+              Clear Draft
+            </button>
+          </div>
+        )}
+
         <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
           <AnimatePresence mode="wait">
             {currentSlide === 1 && (
@@ -331,6 +458,10 @@ const ProposalsCreatePage: React.FC = () => {
                   setSelectedMilestoneId={setSelectedMilestoneId}
                   errors={errors}
                   setErrors={setErrors}
+                  screeningAnswers={screeningAnswers}
+                  setScreeningAnswers={setScreeningAnswers}
+                  workSampleFiles={workSampleFiles}
+                  setWorkSampleFiles={setWorkSampleFiles}
                   onNext={handlePitchAdvance}
                   onDiscard={handleReturnTrigger}
                 />
@@ -396,6 +527,9 @@ const ProposalsCreatePage: React.FC = () => {
       <PopupConfirmReturn
         isOpen={isDiscardOpen}
         onConfirm={() => {
+          if (id) {
+            localStorage.removeItem(`ensemble_proposal_draft_${id}`);
+          }
           setIsDiscardOpen(false);
           navigate("/jobs");
         }}
