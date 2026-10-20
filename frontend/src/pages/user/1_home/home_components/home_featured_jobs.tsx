@@ -10,13 +10,17 @@ import {
   Users,
   User,
   Edit2,
+  Film,
 } from "lucide-react";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
 import { JobRichText } from "../../6_job_market/job_components/JobRichText";
+import { getImageUrl } from "@/lib/utils";
+import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 
 function getTimeAgo(date: Date) {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+  if (isNaN(seconds) || seconds < 0) return "Just now";
   let interval = seconds / 31536000;
   if (interval > 1) return Math.floor(interval) + " years ago";
   interval = seconds / 2592000;
@@ -39,8 +43,10 @@ export interface Job {
   difficulty: "Beginner" | "Intermediate" | "Expert";
   priceRange: string;
   minBudget: number;
+  maxBudget?: number;
   postedBy: string;
   postedAt: string;
+  createdAt?: string;
   timeAgo: string;
   clientRating: number;
   ratingCount: number;
@@ -66,7 +72,7 @@ export const HomeFeaturedJobs: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const handleToggleSave = async (jobId: string) => {
-    if (!userInfo) return; // Prevent saving if not logged in (optional depending on global state)
+    if (!userInfo) return;
     try {
       await toggleJobSave(jobId);
       setJobs((prevJobs) =>
@@ -85,42 +91,50 @@ export const HomeFeaturedJobs: React.FC = () => {
         const fetchedJobs = await fetchJobs();
         if (!Array.isArray(fetchedJobs)) return;
 
-        const mappedJobs = fetchedJobs.map((j: any) => ({
-          id: j.job_id,
-          title: j.title,
-          description: j.description,
-          status: j.status,
-          category: j.category,
-          difficulty: j.experience_level,
-          priceRange: (j.rate_credits_min && j.rate_credits_min === j.rate_credits_max)
-            ? `${j.rate_credits_min.toLocaleString()}`
-            : `${j.rate_credits_min?.toLocaleString() || 0} ~ ${j.rate_credits_max?.toLocaleString() || 0}`,
-          minBudget: j.rate_credits_min || 0,
-          postedBy: j.client_name || j.client_handle || "Unknown",
-          postedAt: new Date(j.created_at).toLocaleString(),
-          timeAgo: getTimeAgo(new Date(j.created_at)),
-          clientRating: 5.0,
-          ratingCount: 0,
-          positionsNeeded: j.no_of_hires || 1,
-          applicantsCount: parseInt(j.applicant_count) || 0,
-          timeline: `${j.timeline_min}-${j.timeline_max} Days`,
-          thumbnail: j.thumbnail_path 
-             ? `${import.meta.env.VITE_CLOUDFRONT_URL}${j.thumbnail_path.startsWith('/') ? '' : '/'}${j.thumbnail_path}`
-             : "/placeholder.svg",
-          clientAvatar: j.client_avatar_path
-            ? `${import.meta.env.VITE_CLOUDFRONT_URL}${j.client_avatar_path.startsWith('/') ? '' : '/'}${j.client_avatar_path}`
-            : undefined,
-          skills: j.tags || [],
-          isSaved: j.is_saved || false,
-          isOwnPost: Boolean(j.is_own_post || userInfo?.account_id === j.client_account_id),
-          isManageablePost: Boolean(j.is_manageable_post),
-          hiring_type: j.hiring_type || (j.posted_as === "Team" ? "team" : "single"),
-          milestones: Array.isArray(j.milestones) ? j.milestones : [],
-          is_team: Boolean(j.is_team || j.posted_as === 'Team' || j.team_id),
-        }));
-        
-        // Only show Open jobs, and sort by newest
-        const openJobs = mappedJobs.filter(j => j.status === 'Open').sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
+        const mappedJobs = fetchedJobs.map((j: any) => {
+          const isTeam = Boolean(j.hiring_type === "team" || j.is_team || j.posted_as === "Team");
+          const bDisplay = getBudgetDisplayInfo({
+            minBudget: j.rate_credits_min,
+            maxBudget: j.rate_credits_max,
+            isTeam,
+            positionsNeeded: j.no_of_hires,
+          });
+
+          return {
+            id: j.job_id,
+            title: j.title,
+            description: j.description,
+            status: j.status,
+            category: j.category,
+            difficulty: j.experience_level,
+            priceRange: bDisplay.amountText,
+            minBudget: Number(j.rate_credits_min) || 0,
+            maxBudget: Number(j.rate_credits_max) || 0,
+            postedBy: j.client_name || j.client_handle || "Unknown",
+            postedAt: j.created_at ? new Date(j.created_at).toLocaleString() : "",
+            createdAt: j.created_at,
+            timeAgo: j.created_at ? getTimeAgo(new Date(j.created_at)) : "Just now",
+            clientRating: 5.0,
+            ratingCount: 0,
+            positionsNeeded: j.no_of_hires || 1,
+            applicantsCount: parseInt(j.applicant_count) || 0,
+            timeline: `${j.timeline_min}-${j.timeline_max} Days`,
+            thumbnail: getImageUrl(j.thumbnail_path),
+            clientAvatar: getImageUrl(j.client_avatar_path) || undefined,
+            skills: j.tags || [],
+            isSaved: j.is_saved || false,
+            isOwnPost: Boolean(j.is_own_post || userInfo?.account_id === j.client_account_id),
+            isManageablePost: Boolean(j.is_manageable_post),
+            hiring_type: j.hiring_type || (isTeam ? "team" : "single"),
+            milestones: Array.isArray(j.milestones) ? j.milestones : [],
+            is_team: isTeam,
+          };
+        });
+
+        // Only show Open jobs, sorted newest first
+        const openJobs = mappedJobs
+          .filter((j: any) => j.status?.toLowerCase() === "open" || !j.status)
+          .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
         setJobs(openJobs.slice(0, 3));
       } catch (err) {
         console.error(err);
@@ -132,24 +146,24 @@ export const HomeFeaturedJobs: React.FC = () => {
   }, [fetchJobs, userInfo]);
 
   if (loading) {
-      return (
-          <section>
-              <div className="mb-6 flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Latest Job Posts</h2>
-                </div>
-              </div>
-              <div className="grid gap-5 grid-cols-1 md:grid-cols-2 2xl:grid-cols-3">
-                  {[1, 2, 3].map((i, index) => (
-                      <div key={i} className={`h-72 bg-gray-100 dark:bg-white/5 animate-pulse rounded-2xl border border-gray-200 dark:border-white/10 ${index === 2 ? "hidden 2xl:block" : ""}`} />
-                  ))}
-              </div>
-          </section>
-      );
+    return (
+      <section>
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Latest Job Posts</h2>
+          </div>
+        </div>
+        <div className="grid gap-5 grid-cols-1 md:grid-cols-2 2xl:grid-cols-3">
+          {[1, 2, 3].map((i, index) => (
+            <div key={i} className={`h-72 bg-gray-100 dark:bg-white/5 animate-pulse rounded-2xl border border-gray-200 dark:border-white/10 ${index === 2 ? "hidden 2xl:block" : ""}`} />
+          ))}
+        </div>
+      </section>
+    );
   }
 
   if (jobs.length === 0) {
-      return null;
+    return null;
   }
 
   return (
@@ -187,14 +201,21 @@ export const HomeFeaturedJobs: React.FC = () => {
           >
             <div>
               {/* Thumbnail Image */}
-              <div className="h-40 w-full overflow-hidden rounded-xl bg-gray-200 dark:bg-zinc-900 border border-gray-100 dark:border-white/5 relative mb-3">
-                <img
-                  src={job.thumbnail}
-                  alt=""
-                  className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
-                
+              <div className="h-40 w-full overflow-hidden rounded-xl bg-gray-100 dark:bg-zinc-900 border border-gray-100 dark:border-white/5 relative mb-3 flex items-center justify-center">
+                {job.thumbnail ? (
+                  <img
+                    src={job.thumbnail}
+                    alt={job.title}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = "none";
+                    }}
+                    className="h-full w-full object-cover opacity-85 transition-transform duration-300 group-hover:scale-105"
+                  />
+                ) : (
+                  <Film className="h-8 w-8 text-gray-400 dark:text-zinc-600" />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
+
                 {/* Top-left Proposals count */}
                 <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
                   <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
@@ -205,7 +226,7 @@ export const HomeFeaturedJobs: React.FC = () => {
 
                 {/* Bottom-left Hiring Type Tag */}
                 <div className="absolute bottom-2 left-2 z-10">
-                  {Boolean(job.hiring_type === "team" || job.is_team || job.isTeam || job.posted_as === "Team") ? (
+                  {Boolean(job.hiring_type === "team" || job.is_team) ? (
                     <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
                       <Users className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
                       <span>Team</span>
@@ -269,11 +290,27 @@ export const HomeFeaturedJobs: React.FC = () => {
                 </span>
               </div>
 
-              {/* Price & Title */}
-              <div className="text-amber-500 dark:text-amber-400 text-base font-black mb-1 flex items-center gap-1">
-                <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0" />
-                <span>{job.priceRange}</span>
-              </div>
+              {/* Price & Tag */}
+              {(() => {
+                const bDisplay = getBudgetDisplayInfo({
+                  minBudget: job.minBudget,
+                  maxBudget: job.maxBudget,
+                  isTeam: Boolean(job.hiring_type === "team" || job.is_team),
+                  positionsNeeded: job.positionsNeeded,
+                });
+                return (
+                  <div className="flex items-center justify-between gap-1.5 mb-1.5 flex-wrap">
+                    <div className="text-amber-500 dark:text-amber-400 text-base font-black flex items-center gap-1">
+                      <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0" />
+                      <span>{bDisplay.amountText}</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-semibold ${bDisplay.tagColorClass}`}>
+                      {bDisplay.tagLabel}
+                    </span>
+                  </div>
+                );
+              })()}
+
               <h3
                 className="text-gray-900 dark:text-white text-base font-bold mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
@@ -289,12 +326,18 @@ export const HomeFeaturedJobs: React.FC = () => {
             <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 font-medium">
               <div className="flex items-center gap-1.5 truncate">
                 {job.clientAvatar ? (
-                  <img src={job.clientAvatar} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover border border-gray-200 dark:border-white/10" />
-                ) : (
-                  <div className="h-5 w-5 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-[9px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10">
-                    {job.postedBy.charAt(0)}
-                  </div>
-                )}
+                  <img
+                    src={job.clientAvatar}
+                    alt=""
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = "none";
+                    }}
+                    className="h-5 w-5 shrink-0 rounded-full object-cover border border-gray-200 dark:border-white/10"
+                  />
+                ) : null}
+                <div className={`h-5 w-5 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-[9px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 ${job.clientAvatar ? "hidden" : ""}`}>
+                  {job.postedBy.charAt(0).toUpperCase()}
+                </div>
                 <span className="truncate text-gray-700 dark:text-zinc-300 font-semibold">{job.postedBy}</span>
               </div>
 
