@@ -1,13 +1,8 @@
-# Current Task: Restrictions desk readability
+# Current Task: Dispute create priority constraint
 
 ## Objective
-Make the moderator Restrictions tab easier to scan and act on, without changing enforcement behavior.
+Let a contract party create a dispute without violating `disputes_priority_enum`.
 
 ## Acceptance Criteria
-- [x] Summary counts switch the visible list.
-- [x] Warnings, held accounts, and activity are separate, scannable views.
-- [x] Choosing an account opens a focused panel for a warning or a standing change.
-- [x] Existing search, issue, rescind, and standing actions still work.
-- [x] TypeScript check passes for the restrictions desk.
-- [ ] Browser pass is blocked until a staff session is available.
+- [x] New disputes store priority as `Low`, `Medium`, or `High`.
 - [ ] Do not git commit unless asked.

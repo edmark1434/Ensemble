@@ -1,4 +1,5 @@
 const { pool } = require('../lib/Database');
+const { normalizeDisputePriority } = require('../lib/DisputeEnums');
 const NotificationRepositories = require('./NotificationRepositories');
 const TeamProjectRepositories = require('./TeamProjectRepositories');
 
@@ -639,12 +640,13 @@ async function createContractDispute(accountIds, contractId, { reason, details }
             created_at,
             updated_at
         ) VALUES (
-            $1, 'Contract', $2, $3, 'pending_review', 'medium', $4, $5, $6, NOW(), true, NOW(), NOW()
+            $1, 'Contract', $2, $3, 'pending_review', $4, $5, $6, $7, NOW(), true, NOW(), NOW()
         ) RETURNING *
     `, [
         disputeNumber,
         `Contract Dispute: ${reason || contract.contract_title}`.slice(0, 255),
         details || reason || 'Dispute opened by contract participant.',
+        normalizeDisputePriority('medium'),
         userAccId,
         respondentId,
         creditAmount
