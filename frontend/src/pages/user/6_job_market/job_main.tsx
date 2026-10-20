@@ -1,4 +1,4 @@
-import { getBudgetDisplayInfo } from "@/lib/formatBudget";
+import { getBudgetDisplayInfo, getJobBudgetType } from "@/lib/formatBudget";
 import { getImageUrl } from "@/lib/utils";
 import React, { useState, useEffect, useMemo } from "react";
 import { Filter } from "lucide-react";
@@ -92,6 +92,7 @@ const JobMain: React.FC = () => {
   const [priceSort, setPriceSort] = useState<"inc" | "dec" | null>(null);
   const [selectedDiffs, setSelectedDifficulty] = useState<string[]>([]);
   const [selectedHiringTypes, setSelectedHiringTypes] = useState<string[]>([]);
+  const [selectedBudgetTypes, setSelectedBudgetTypes] = useState<string[]>([]);
   const [matchMySkills, setMatchMySkills] = useState<boolean>(false);
   const [posValue, setPosValue] = useState<string>("");
   const [posSort, setPosSort] = useState<"inc" | "dec" | null>(null);
@@ -261,6 +262,7 @@ const JobMain: React.FC = () => {
     setPriceSort(null);
     setSelectedDifficulty([]);
     setSelectedHiringTypes([]);
+    setSelectedBudgetTypes([]);
     setMatchMySkills(false);
     setPosValue("");
     setPosSort(null);
@@ -309,6 +311,8 @@ const JobMain: React.FC = () => {
       const isTeam = Boolean(job.hiring_type === "team" || job.is_team || job.isTeam || job.posted_as === "Team");
       const jobHiringType = isTeam ? "team" : "individual";
       const matchesHiringType = selectedHiringTypes.length === 0 || selectedHiringTypes.includes(jobHiringType);
+      const jobBudgetType = getJobBudgetType(job);
+      const matchesBudgetType = selectedBudgetTypes.length === 0 || selectedBudgetTypes.includes(jobBudgetType);
 
       // Skills Matching: Check if any declared profile skill matches job tags or appears in job title/description
       const matchesSkills = !matchMySkills || userSkills.length === 0 || (() => {
@@ -336,6 +340,7 @@ const JobMain: React.FC = () => {
         matchesDiff &&
         matchesPos &&
         matchesHiringType &&
+        matchesBudgetType &&
         matchesSkills
       );
     });
@@ -359,6 +364,7 @@ const JobMain: React.FC = () => {
     priceSort,
     selectedDiffs,
     selectedHiringTypes,
+    selectedBudgetTypes,
     matchMySkills,
     userSkills,
     posValue,
@@ -419,6 +425,7 @@ const JobMain: React.FC = () => {
                       priceSort,
                       selectedDiffs,
                       selectedHiringTypes,
+                      selectedBudgetTypes,
                       matchMySkills,
                       posValue,
                       posSort,
@@ -430,6 +437,7 @@ const JobMain: React.FC = () => {
                       setPriceSort,
                       setSelectedDifficulty,
                       setSelectedHiringTypes,
+                      setSelectedBudgetTypes,
                       setMatchMySkills,
                       setPosValue,
                       setPosSort,

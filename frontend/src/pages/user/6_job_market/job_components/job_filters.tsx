@@ -7,6 +7,7 @@ export interface FilterState {
   priceSort: "inc" | "dec" | null;
   selectedDiffs: string[];
   selectedHiringTypes: string[];
+  selectedBudgetTypes: string[];
   matchMySkills: boolean;
   posValue: string;
   posSort: "inc" | "dec" | null;
@@ -19,6 +20,7 @@ export interface FilterSetters {
   setPriceSort: (v: "inc" | "dec" | null) => void;
   setSelectedDifficulty: (v: (prev: string[]) => string[]) => void;
   setSelectedHiringTypes: (v: (prev: string[]) => string[]) => void;
+  setSelectedBudgetTypes: (v: (prev: string[]) => string[]) => void;
   setMatchMySkills: (v: boolean | ((prev: boolean) => boolean)) => void;
   setPosValue: (v: string) => void;
   setPosSort: (v: "inc" | "dec" | null) => void;
@@ -171,6 +173,79 @@ const JobFilters: React.FC<JobFiltersProps> = ({
             );
           })}
         </div>
+      </Section>
+
+      <Section>
+        <div className="flex items-center justify-between">
+          <span className={labelClass}>Budget Type</span>
+          {filters.selectedBudgetTypes.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setters.setSelectedBudgetTypes([])}
+              className="text-[10px] font-semibold text-gray-500 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            { id: "open", label: "Open Bid", context: "Individual" },
+            { id: "ranged", label: "Ranged", context: "Individual" },
+            { id: "pooled", label: "Pooled", context: "Team" },
+            { id: "fixed", label: "Fixed Price", context: "Individual" },
+          ].map(({ id, label, context }) => {
+            const isSelected = filters.selectedBudgetTypes.includes(id);
+            const isOnlyIndividual =
+              filters.selectedHiringTypes.length === 1 && filters.selectedHiringTypes[0] === "individual";
+            const isOnlyTeam =
+              filters.selectedHiringTypes.length === 1 && filters.selectedHiringTypes[0] === "team";
+
+            const isDimmed =
+              (context === "Team" && isOnlyIndividual) ||
+              (context === "Individual" && isOnlyTeam);
+
+            return (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={isSelected}
+                disabled={isDimmed}
+                title={
+                  isDimmed
+                    ? `${label} is only applicable to ${context} projects`
+                    : `${label} (${context})`
+                }
+                onClick={() =>
+                  setters.setSelectedBudgetTypes((prev) =>
+                    prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+                  )
+                }
+                className={`${chipBase} px-2.5 py-1.5 flex items-center gap-1.5 ${
+                  isDimmed
+                    ? "opacity-35 cursor-not-allowed border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] text-gray-400 dark:text-zinc-600"
+                    : isSelected
+                    ? chipActive
+                    : chipIdle
+                }`}
+              >
+                <span>{label}</span>
+                <span
+                  className={`text-[9px] px-1 py-0.5 rounded font-medium ${
+                    isSelected
+                      ? "bg-white/20 text-white"
+                      : "bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400"
+                  }`}
+                >
+                  {context}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] leading-snug text-gray-500 dark:text-zinc-400">
+          Open Bid and Ranged apply to Individual projects, while Team projects use Pooled milestones.
+        </p>
       </Section>
 
       <Section>

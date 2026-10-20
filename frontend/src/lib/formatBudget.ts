@@ -94,3 +94,28 @@ export function getBudgetDisplayInfo(params: {
     subtitle: "Non-negotiable fixed budget"
   };
 }
+
+export function getJobBudgetType(job: {
+  minBudget?: number | string | null;
+  maxBudget?: number | string | null;
+  rate_credits_min?: number | string | null;
+  rate_credits_max?: number | string | null;
+  hiring_type?: string;
+  is_team?: boolean;
+  isTeam?: boolean;
+  posted_as?: string;
+  positionsNeeded?: number;
+}): "open" | "ranged" | "fixed" | "pooled" {
+  const isTeam = Boolean(
+    job.hiring_type === "team" ||
+    job.is_team ||
+    job.isTeam ||
+    job.posted_as === "Team"
+  );
+  if (isTeam) return "pooled";
+  const min = Number(job.minBudget ?? job.rate_credits_min) || 0;
+  const max = Number(job.maxBudget ?? job.rate_credits_max) || 0;
+  if (min > 0 && (!max || max === 0)) return "open";
+  if (min > 0 && max > 0 && min !== max) return "ranged";
+  return "fixed";
+}
