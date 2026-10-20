@@ -224,7 +224,8 @@ async function createContractDisputeController(req, res) {
         });
     } catch (err) {
         console.error('Error creating contract dispute:', err);
-        return res.status(err.message?.includes('Unauthorized') ? 403 : 500).json({
+        const status = Number(err.statusCode) || (String(err.message || '').includes('Unauthorized') ? 403 : 500);
+        return res.status(status).json({
             success: false,
             message: err.message || 'Internal server error'
         });

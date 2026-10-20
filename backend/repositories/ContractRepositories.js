@@ -623,36 +623,69 @@ async function createContractDispute(accountIds, contractId, { reason, details }
 
     const disputeNumber = `DIS-${Date.now().toString().slice(-6)}`;
     const creditAmount = Math.max(0, parseInt(contract.rate_credits, 10) || 0);
+    const openDisputeError = () => {
+        const error = new Error('This contract already has an open dispute.');
+        error.statusCode = 409;
+        return error;
+    };
 
-    const disputeRes = await pool.query(`
-        INSERT INTO disputes (
-            dispute_number,
-            type,
-            title,
-            description,
-            status,
-            priority,
-            by_account_id,
-            for_account_id,
-            credit_amount_involved,
-            opened_at,
-            visibility,
-            created_at,
-            updated_at
-        ) VALUES (
-            $1, 'Contract', $2, $3, 'pending_review', $4, $5, $6, $7, NOW(), true, NOW(), NOW()
-        ) RETURNING *
-    `, [
-        disputeNumber,
-        `Contract Dispute: ${reason || contract.contract_title}`.slice(0, 255),
-        details || reason || 'Dispute opened by contract participant.',
-        normalizeDisputePriority('medium'),
-        userAccId,
-        respondentId,
-        creditAmount
-    ]);
+    const client = await pool.connect();
+    let createdDispute;
+    try {
+        await client.query('BEGIN');
+        await client.query(
+            'SELECT pg_advisory_xact_lock(hashtext($1::text)::bigint)',
+            [String(contractId)]
+        );
 
-    const createdDispute = disputeRes.rows[0];
+        const existing = await client.query(`
+            SELECT dispute_id
+            FROM disputes
+            WHERE contract_id = $1
+              AND deleted_at IS NULL
+              AND lower(COALESCE(status, '')) <> 'closed'
+            LIMIT 1
+        `, [contractId]);
+        if (existing.rows.length) throw openDisputeError();
+
+        const disputeRes = await client.query(`
+            INSERT INTO disputes (
+                dispute_number,
+                type,
+                title,
+                description,
+                status,
+                priority,
+                by_account_id,
+                for_account_id,
+                credit_amount_involved,
+                opened_at,
+                visibility,
+                created_at,
+                updated_at,
+                contract_id
+            ) VALUES (
+                $1, 'Contract', $2, $3, 'pending_review', $4, $5, $6, $7, NOW(), true, NOW(), NOW(), $8
+            ) RETURNING *
+        `, [
+            disputeNumber,
+            `Contract Dispute: ${reason || contract.contract_title}`.slice(0, 255),
+            details || reason || 'Dispute opened by contract participant.',
+            normalizeDisputePriority('medium'),
+            userAccId,
+            respondentId,
+            creditAmount,
+            contractId,
+        ]);
+        await client.query('COMMIT');
+        createdDispute = disputeRes.rows[0];
+    } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        if (err.code === '23505') throw openDisputeError();
+        throw err;
+    } finally {
+        client.release();
+    }
 
     const { applyDisputeAutomations } = require('../lib/ModerationPolicy');
     const enrichedDispute = await applyDisputeAutomations(createdDispute);

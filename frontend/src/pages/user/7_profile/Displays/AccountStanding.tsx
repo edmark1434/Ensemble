@@ -9,6 +9,9 @@ export type PublicStanding = {
   forumTimeoutEndsAt?: string | null;
   banReason?: string | null;
   banDispute?: { id: string; number?: string | null } | null;
+  underDispute?: boolean;
+  underDisputeId?: string | null;
+  underDisputeNumber?: string | null;
 };
 
 type WarningRow = {
@@ -77,6 +80,15 @@ export function standingBadges(standing?: PublicStanding | null) {
   if (standing.forumTimeout) {
     badges.push({ label: 'Timeout', detail: untilText(standing.forumTimeoutEndsAt), tone: 'amber' });
   }
+  if (standing.underDispute) {
+    badges.push({
+      label: 'Under dispute',
+      detail: standing.underDisputeNumber
+        ? `Open dispute ${standing.underDisputeNumber}`
+        : 'Named in an open dispute',
+      tone: 'amber',
+    });
+  }
   return badges;
 }
 
@@ -105,15 +117,30 @@ export function StandingBadges({ standing }: { standing?: PublicStanding | null 
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap items-center justify-center gap-1.5 md:justify-start">
-        {badges.map((badge) => (
-          <span
-            key={badge.label}
-            title={`${badge.label} ${badge.detail}`}
-            className={`rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${badgeClass(badge.tone)}`}
-          >
-            {badge.label}
-          </span>
-        ))}
+        {badges.map((badge) => {
+          const className = `rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${badgeClass(badge.tone)}`;
+          if (badge.label === 'Under dispute' && standing?.underDisputeId) {
+            return (
+              <Link
+                key={badge.label}
+                to={`/disputes/${standing.underDisputeId}`}
+                title={`${badge.label} ${badge.detail}`}
+                className={className}
+              >
+                {badge.label}
+              </Link>
+            );
+          }
+          return (
+            <span
+              key={badge.label}
+              title={`${badge.label} ${badge.detail}`}
+              className={className}
+            >
+              {badge.label}
+            </span>
+          );
+        })}
       </div>
       <BanNotice standing={standing} />
     </div>

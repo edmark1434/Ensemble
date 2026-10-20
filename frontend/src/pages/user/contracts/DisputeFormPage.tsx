@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, Loader2, ChevronDown, ArrowLeft } from "lucide-react";
@@ -36,6 +36,7 @@ export const DisputeFormPage: React.FC = () => {
   const [reason, setReason] = useState(paramMilestoneId ? "Milestone Submission Conflict" : "");
   const [details, setDetails] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     const fetchContracts = async () => {
@@ -133,7 +134,9 @@ export const DisputeFormPage: React.FC = () => {
   }
 
   const handleSubmit = async () => {
+    if (submittingRef.current) return;
     if (!selectedContractId || !reason || !details) return;
+    submittingRef.current = true;
     setIsSubmitting(true);
     
     try {
@@ -155,6 +158,7 @@ export const DisputeFormPage: React.FC = () => {
       console.error("Dispute submission error:", err);
       toast.error(err.response?.data?.message || "Failed to submit dispute. Please try again.");
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -321,6 +325,7 @@ export const DisputeFormPage: React.FC = () => {
 
           <div className="border-t border-gray-200 dark:border-white/10 px-6 py-5 flex justify-end gap-3 bg-transparent">
             <button
+              type="button"
               onClick={() => navigate("/contracts")}
               disabled={isSubmitting}
               className="px-4 py-2 text-sm font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition-colors"
@@ -328,6 +333,7 @@ export const DisputeFormPage: React.FC = () => {
               Cancel
             </button>
             <button
+              type="button"
               onClick={handleSubmit}
               disabled={!selectedContractId || !reason || !details || isSubmitting}
               className="flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 px-8 py-2.5 text-sm font-bold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(220,38,38,0.3)]"

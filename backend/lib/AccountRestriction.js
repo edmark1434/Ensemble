@@ -348,6 +348,9 @@ function publicStandingFromRow(row, banNotice = null) {
     forumTimeoutEndsAt: row.timeout_ends_at || null,
     banReason: notice?.banReason || null,
     banDispute: notice?.banDispute || null,
+    underDispute: Boolean(row.under_dispute),
+    underDisputeId: row.open_dispute_id || null,
+    underDisputeNumber: row.open_dispute_number || null,
   };
 }
 
@@ -398,8 +401,21 @@ async function getPublicAccountStanding(accountId) {
         WHERE r.account_id = a.account_id AND ${FORUM_TIMEOUT_MATCH}
         ORDER BY r.created_at DESC
         LIMIT 1
-      ) AS timeout_ends_at
+      ) AS timeout_ends_at,
+      open_dispute.dispute_id AS open_dispute_id,
+      open_dispute.dispute_number AS open_dispute_number,
+      (open_dispute.dispute_id IS NOT NULL) AS under_dispute
     FROM accounts a
+    LEFT JOIN LATERAL (
+      SELECT d.dispute_id, d.dispute_number
+      FROM disputes d
+      WHERE d.for_account_id = a.account_id
+        AND d.deleted_at IS NULL
+        AND d.visibility IS TRUE
+        AND lower(COALESCE(d.status, '')) <> 'closed'
+      ORDER BY d.opened_at DESC NULLS LAST, d.created_at DESC
+      LIMIT 1
+    ) open_dispute ON true
     WHERE a.account_id = $1
     `,
     [accountId]

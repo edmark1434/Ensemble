@@ -1,8 +1,11 @@
-# Current Task: Dispute create priority constraint
+# Current Task: One open contract dispute, profile tag
 
 ## Objective
-Let a contract party create a dispute without violating `disputes_priority_enum`.
+Stop one contract submission from opening two disputes, and show an Under dispute tag on a profile while that account is the respondent in a visible open dispute.
 
 ## Acceptance Criteria
-- [x] New disputes store priority as `Low`, `Medium`, or `High`.
+- [x] A second click cannot start another create request.
+- [x] A contract can have only one open dispute.
+- [x] The disputee profile shows an Under dispute tag that opens the dispute.
+- [ ] Migration applied on the local database.
 - [ ] Do not git commit unless asked.
