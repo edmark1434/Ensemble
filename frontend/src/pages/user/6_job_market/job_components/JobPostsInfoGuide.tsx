@@ -25,6 +25,7 @@ export const JobPostsInfoGuide: React.FC = () => {
       weight: "35 pts",
       title: "Client Trust & Baseline",
       detail: "Client Review Score (Bayesian Weighted)",
+      purpose: "Rewards reputable clients while giving first-time posters an equal fighting chance to attract top talent.",
       rules:
         "5.0★ clients receive full 35 pts. Brand-new clients with 0 reviews start at a fair 4.2★ baseline (29.4 pts), so first-time job posts are never buried.",
     },
@@ -33,6 +34,7 @@ export const JobPostsInfoGuide: React.FC = () => {
       weight: "25 pts",
       title: "14-Day New Job Spotlight",
       detail: "Days since publication + applicant count",
+      purpose: "Gives newly published job posts immediate visibility so freelancers can discover and apply quickly.",
       rules:
         "New jobs (< 7 days old) with fewer than 3 proposals per seat get the full 25 pts. Tapers smoothly to 0 after 14 days as proposals accumulate.",
     },
@@ -41,6 +43,7 @@ export const JobPostsInfoGuide: React.FC = () => {
       weight: "25 pts",
       title: "Type-Aware Brief Quality",
       detail: "Scope, budget realism, skills & attachments",
+      purpose: "Incentivizes well-defined scopes and fair budgets; unlocks the Rising badge for high-effort briefs.",
       rules:
         "Evaluated against tailored criteria for Open Bid, Budget Range, or Team Milestone Pool jobs. Reaching 85%+ quality unlocks the Rising badge.",
     },
@@ -49,6 +52,7 @@ export const JobPostsInfoGuide: React.FC = () => {
       weight: "15 pts",
       title: "Seat-Aware Open Capacity",
       detail: "Proposals per open hiring seat",
+      purpose: "Prevents applicant pile-ons and redistributes traffic to jobs that still genuinely need applicants.",
       rules:
         "Measures competition per seat. When an individual job reaches 15+ proposals (or all seats are hired), it steps back so unapplied jobs rise to the top.",
     },
@@ -115,9 +119,9 @@ export const JobPostsInfoGuide: React.FC = () => {
     {
       name: "Individual",
       badge: (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30">
-          <User className="h-2.5 w-2.5" />
-          Individual
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-zinc-200 border border-gray-300 dark:border-white/15 text-[11px] font-semibold shadow-2xs">
+          <User className="h-3 w-3 text-gray-600 dark:text-zinc-400" />
+          <span>Individual</span>
         </span>
       ),
       condition: "Single-freelancer or multi-seat individual hiring model.",
@@ -126,9 +130,9 @@ export const JobPostsInfoGuide: React.FC = () => {
     {
       name: "Team Project",
       badge: (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30">
-          <Users className="h-2.5 w-2.5" />
-          Team Project
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-zinc-200 border border-gray-300 dark:border-white/15 text-[11px] font-semibold shadow-2xs">
+          <Users className="h-3 w-3 text-gray-600 dark:text-zinc-400" />
+          <span>Team</span>
         </span>
       ),
       condition: "Multi-creator milestone pool hiring model.",
@@ -198,9 +202,10 @@ export const JobPostsInfoGuide: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-gray-50/75 dark:bg-white/[0.02] border-b border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400">
-                <th className="py-3 px-4 font-semibold w-16">Pillar</th>
-                <th className="py-3 px-4 font-semibold w-24 text-center">Max Pts</th>
-                <th className="py-3 px-4 font-semibold w-56">Metric</th>
+                <th className="py-3 px-4 font-semibold w-14">Pillar</th>
+                <th className="py-3 px-4 font-semibold w-24 text-center">Points</th>
+                <th className="py-3 px-4 font-semibold w-52">Metric</th>
+                <th className="py-3 px-4 font-semibold w-64 text-emerald-700 dark:text-emerald-400">Purpose</th>
                 <th className="py-3 px-4 font-semibold">Scoring Rule & Fair Play Mechanism</th>
               </tr>
             </thead>
@@ -213,8 +218,8 @@ export const JobPostsInfoGuide: React.FC = () => {
                   <td className="py-3.5 px-4 font-mono font-bold text-gray-500 dark:text-zinc-400">
                     {p.num}
                   </td>
-                  <td className="py-3.5 px-4 text-center">
-                    <span className="inline-block px-2 py-0.5 rounded font-mono font-bold text-[11px] bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10">
+                  <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                    <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md font-mono font-bold text-xs bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-zinc-100 border border-gray-300/80 dark:border-white/15 shadow-2xs">
                       {p.weight}
                     </span>
                   </td>
@@ -222,7 +227,10 @@ export const JobPostsInfoGuide: React.FC = () => {
                     <div className="font-bold text-gray-900 dark:text-white">{p.title}</div>
                     <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">{p.detail}</div>
                   </td>
-                  <td className="py-3.5 px-4 text-gray-600 dark:text-zinc-300 leading-relaxed">
+                  <td className="py-3.5 px-4 text-gray-900 dark:text-white font-medium leading-relaxed">
+                    {p.purpose}
+                  </td>
+                  <td className="py-3.5 px-4 text-gray-600 dark:text-zinc-300 leading-relaxed text-[11px]">
                     {p.rules}
                   </td>
                 </tr>

@@ -22,6 +22,7 @@ export const GigServicesInfoGuide: React.FC = () => {
       weight: "40 pts",
       title: "Fair Trust Rating",
       detail: "Client review score (Bayesian weighted)",
+      purpose: "Honors proven quality and completed orders while protecting new creators from getting overshadowed on Day 1.",
       rules:
         "Real completed 5★ orders boost your ranking. New services with 0 reviews are given a fair 4.2★ baseline (33.6 pts) so fresh creators aren't penalized.",
     },
@@ -30,6 +31,7 @@ export const GigServicesInfoGuide: React.FC = () => {
       weight: "25 pts",
       title: "14-Day Newcomer Spotlight",
       detail: "Days since publication + initial orders",
+      purpose: "Jumpstarts discovery for new creators so fresh services can land initial orders without prior reviews.",
       rules:
         "Newly published services receive the full 25 pts for their first 7 days, then gently taper over 14 days as order history builds.",
     },
@@ -38,6 +40,7 @@ export const GigServicesInfoGuide: React.FC = () => {
       weight: "20 pts",
       title: "Completeness & Effort",
       detail: "Tiers, gallery clips, milestones & terms",
+      purpose: "Gives creators 100% control over their score on launch day by rewarding rich media, clear tiers, and thorough terms.",
       rules:
         "You control this 100% on Day 1. Services with 3 pricing tiers, 3+ portfolio samples, milestones, and terms score the full 20 pts.",
     },
@@ -46,6 +49,7 @@ export const GigServicesInfoGuide: React.FC = () => {
       weight: "15 pts",
       title: "Queue Capacity & Availability",
       detail: "Active in-progress orders vs max slots",
+      purpose: "Protects creators from burnout and ensures clients are directed toward editors who have open turnaround bandwidth.",
       rules:
         "When an in-demand creator's active slots fill up, their listing steps back slightly to avoid burnout—giving available creators higher exposure.",
     },
@@ -95,8 +99,9 @@ export const GigServicesInfoGuide: React.FC = () => {
     {
       name: "New",
       badge: (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-900 text-gray-200 border border-gray-700 dark:bg-black/60 dark:text-zinc-300 dark:border-white/10">
-          New
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-900 text-white dark:bg-black/80 dark:text-zinc-200 border border-gray-700 dark:border-white/15 text-[11px] font-semibold shadow-2xs">
+          <Star className="h-3 w-3 fill-gray-400 text-gray-400" />
+          <span>New</span>
         </span>
       ),
       condition: "Published within the last 7 days with no client reviews yet.",
@@ -105,9 +110,10 @@ export const GigServicesInfoGuide: React.FC = () => {
     {
       name: "★ 5.0 (12)",
       badge: (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-900 text-yellow-400 border border-gray-700 dark:bg-black/60 dark:text-yellow-400 dark:border-white/10">
-          <Star className="h-2.5 w-2.5 fill-yellow-400" />
-          5.0 (12)
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-900 text-white dark:bg-black/80 dark:text-zinc-200 border border-gray-700 dark:border-white/15 text-[11px] font-semibold shadow-2xs">
+          <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+          <span className="font-bold text-yellow-400">5.0</span>
+          <span className="text-gray-300 text-[10px]">(12)</span>
         </span>
       ),
       condition: "Has received verified client reviews on completed orders.",
@@ -177,9 +183,10 @@ export const GigServicesInfoGuide: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-gray-50/75 dark:bg-white/[0.02] border-b border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400">
-                <th className="py-3 px-4 font-semibold w-16">Pillar</th>
-                <th className="py-3 px-4 font-semibold w-24 text-center">Max Pts</th>
-                <th className="py-3 px-4 font-semibold w-56">Metric</th>
+                <th className="py-3 px-4 font-semibold w-14">Pillar</th>
+                <th className="py-3 px-4 font-semibold w-24 text-center">Points</th>
+                <th className="py-3 px-4 font-semibold w-52">Metric</th>
+                <th className="py-3 px-4 font-semibold w-64 text-emerald-700 dark:text-emerald-400">Purpose</th>
                 <th className="py-3 px-4 font-semibold">Scoring Rule & Fair Play Mechanism</th>
               </tr>
             </thead>
@@ -192,8 +199,8 @@ export const GigServicesInfoGuide: React.FC = () => {
                   <td className="py-3.5 px-4 font-mono font-bold text-gray-500 dark:text-zinc-400">
                     {p.num}
                   </td>
-                  <td className="py-3.5 px-4 text-center">
-                    <span className="inline-block px-2 py-0.5 rounded font-mono font-bold text-[11px] bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10">
+                  <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                    <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md font-mono font-bold text-xs bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-zinc-100 border border-gray-300/80 dark:border-white/15 shadow-2xs">
                       {p.weight}
                     </span>
                   </td>
@@ -201,7 +208,10 @@ export const GigServicesInfoGuide: React.FC = () => {
                     <div className="font-bold text-gray-900 dark:text-white">{p.title}</div>
                     <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">{p.detail}</div>
                   </td>
-                  <td className="py-3.5 px-4 text-gray-600 dark:text-zinc-300 leading-relaxed">
+                  <td className="py-3.5 px-4 text-gray-900 dark:text-white font-medium leading-relaxed">
+                    {p.purpose}
+                  </td>
+                  <td className="py-3.5 px-4 text-gray-600 dark:text-zinc-300 leading-relaxed text-[11px]">
                     {p.rules}
                   </td>
                 </tr>

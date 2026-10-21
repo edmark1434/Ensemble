@@ -88,6 +88,9 @@ const QUICK_QUESTIONS = [
   "What subscription plans are available?",
   "How do I verify my account?",
   "How do credits and top-ups work?",
+  "How does job and gig ranking work?",
+  "How do I post a job or offer a gig?",
+  "How does escrow & payment protection work?",
   "How do I submit a support ticket?",
 ];
 
@@ -105,6 +108,8 @@ const PageAskOurChatbot: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState<string>("joed-ai");
   const endRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const hasConversation = messages.length > 1;
 
   useEffect(() => {
     // Phase 1 -> 2: Dedicated optical triangle expands and fades away, unveiling real Prism
@@ -384,7 +389,7 @@ const PageAskOurChatbot: React.FC = () => {
       )}
 
       <div
-        className={`ensemble-chat-shell transition-all duration-1000 ease-out transform ${
+        className={`ensemble-chat-shell ${hasConversation ? "has-conversation" : ""} transition-all duration-1000 ease-out transform ${
           loadingPhase === 'ready' ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6 pointer-events-none'
         }`}
       >
@@ -392,19 +397,21 @@ const PageAskOurChatbot: React.FC = () => {
           <ArrowLeft size={16} /> Back to Ensemble
         </button>
 
-        <section className="ensemble-chat-intro">
-          <span className="ensemble-eyebrow"><Sparkles size={14} /> Ensemble support</span>
-          <h1>How can we help?</h1>
-          <p>Get clear answers about Ensemble, grounded in our current platform documentation.</p>
-          <div className="ensemble-human-callout">
-            <p>Need a real person? Open a support ticket and a teammate will follow up.</p>
-            <button type="button" onClick={() => navigate("/support/ticket")}>
-              <Ticket size={14} /> Open a ticket
-            </button>
-          </div>
-        </section>
+        {!hasConversation && (
+          <section className="ensemble-chat-intro">
+            <span className="ensemble-eyebrow"><Sparkles size={14} /> Ensemble support</span>
+            <h1>How can we help?</h1>
+            <p>Get clear answers about Ensemble, grounded in our current platform documentation.</p>
+            <div className="ensemble-human-callout">
+              <p>Need a real person? Open a support ticket and a teammate will follow up.</p>
+              <button type="button" onClick={() => navigate("/support/ticket")}>
+                <Ticket size={14} /> Open a ticket
+              </button>
+            </div>
+          </section>
+        )}
 
-        <div className={`ensemble-chat-workspace ${isSidebarOpen ? "sidebar-open" : "sidebar-collapsed"}`}>
+        <div className={`ensemble-chat-workspace ${isSidebarOpen ? "sidebar-open" : "sidebar-collapsed"} ${hasConversation ? "has-conversation" : ""}`}>
           <aside className="ensemble-chat-sidebar">
             <div className="ensemble-sidebar-top-bar">
               <div className="ensemble-assistant-card">
@@ -580,6 +587,10 @@ const PageAskOurChatbot: React.FC = () => {
           z-index: 1;
           width: min(1160px, 100%);
           margin: 0 auto;
+          transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), max-width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .ensemble-chat-shell.has-conversation {
+          width: min(1380px, 100%);
         }
         .ensemble-back-button {
           display: inline-flex;
@@ -684,7 +695,11 @@ const PageAskOurChatbot: React.FC = () => {
           backdrop-filter: blur(24px);
           -webkit-backdrop-filter: blur(24px);
           box-shadow: ${theme === 'dark' ? "0 24px 70px rgba(0,0,0,.65)" : "0 20px 60px rgba(15,23,42,.08)"};
-          transition: grid-template-columns 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+          transition: grid-template-columns 0.3s cubic-bezier(0.16, 1, 0.3, 1), height 0.3s cubic-bezier(0.16, 1, 0.3, 1), max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .ensemble-chat-workspace.has-conversation {
+          height: calc(100vh - 120px);
+          max-height: calc(100vh - 120px);
         }
         .ensemble-chat-workspace.sidebar-collapsed {
           grid-template-columns: 0px minmax(0, 1fr);
