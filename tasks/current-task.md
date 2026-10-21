@@ -1,13 +1,12 @@
-# Current Task: Type-Aware Job Discovery Ranking Algorithm & 25 Seeded Job Posts
+# Current Task: Discovery Modern Segmented Tab Navigation
 
 ## Objective
-Implement the **100-Point Type-Aware Job Discovery Ranking Algorithm** for the Job Market (`/jobs`) across all 3 job post types (`Individual — Open Bid`, `Individual — Ranged / Multi-Seat`, and `Team — Milestone Pool`), add the green `Rising` badge (`TrendingUp`), add the collapsible gray `"Your Job Discovery Score"` owner card, add the `"How Ranking Works"` info tab (`/jobs/info`), and seed 25 realistic job posts in PostgreSQL.
+Replace the dated, full-bleed tab bar (which had an awkward pale blue box and full-width border) with a modern, sleek segmented capsule navigation bar matching Ensemble's Profile design language.
 
 ## Acceptance Criteria
-- [x] `backend/repositories/JobRepositories.js` returns real `client_rating` and `client_rating_count` from `ratings`.
-- [x] `frontend/src/pages/user/6_job_market/job_ranking.ts` computes the 100-point score tailored to `individual_open`, `individual_ranged`, and `team_pool`.
-- [x] Green `Rising` badge (`TrendingUp` icon) appears on qualifying jobs in Grid/List cards, drawer, and full page.
-- [x] Neutral gray, collapsible, closed-by-default `"Your Job Discovery Score"` card appears for job owners (`isOwnPost`).
-- [x] `/jobs/info` tab (`JobPostsInfoGuide.tsx`) explains the 4 pillars and the 3 type-aware quality checklists.
-- [x] 25 realistic jobs seeded via `backend/scripts/SeedJobsDataset.js`.
-- [x] Frontend build passes (`npm run build`).
+- [x] Converted the tab bar in [DiscoveryPage.tsx](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/14_discovery/DiscoveryPage.tsx) into an enclosed segmented capsule (`bg-zinc-100/80 dark:bg-zinc-800/60 p-1 rounded-2xl border border-zinc-200/80 dark:border-white/10 w-fit`).
+- [x] Completely removed the pale blue box (`bg-blue-500/5`), the bright blue text, and the blue underline.
+- [x] Added butter-smooth sliding pill animation via `framer-motion` (`layoutId="activeDiscoveryTabPill"`).
+- [x] Active tab renders as an elevated neutral card (`bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-xs border border-zinc-200/80 dark:border-white/10 font-semibold rounded-xl`).
+- [x] Added dynamic count badge on "Matched Editors" when candidate matches are found.
+- [x] Verified frontend build passes (`npm run build` completed with 0 errors).

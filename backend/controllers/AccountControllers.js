@@ -51,11 +51,14 @@ async function getAccountByHandle(req, res) {
 async function searchUserAccountsByHandleController(req, res) {
     try {
         const account_id = req.user?.account_id || req.user?.accountId || req.session?.account_id || req.session?.accountId;
+        const targetAccountId = req.query.account_id || req.query.accountId || null;
+        const includeSelf = req.query.include_self === 'true' || req.query.includeSelf === 'true' || Boolean(targetAccountId);
         const accounts = await searchUserAccountsByHandleService(
             req.query.handle,
-            account_id,
+            includeSelf ? null : account_id,
             req.query.role,
-            req.session?.type === 'Staff'
+            req.session?.type === 'Staff',
+            targetAccountId
         );
         return res.status(200).json({ success: true, data: accounts });
     } catch (err) {

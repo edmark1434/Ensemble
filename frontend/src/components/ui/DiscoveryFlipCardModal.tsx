@@ -241,20 +241,26 @@ export const DiscoveryFlipCardModal: React.FC<DiscoveryFlipCardModalProps> = ({ 
         />
         {!hideActions && (
           <div className="mt-6 flex flex-col gap-2 w-[340px]">
+            {onInvite && (
+              <button 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  onInvite(); 
+                }}
+                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white border border-transparent text-sm font-bold rounded-[16px] transition-all shadow-lg shadow-blue-500/20 z-[100]"
+              >
+                Invite to Job
+              </button>
+            )}
             <button 
               onClick={(e) => { 
                 e.stopPropagation(); 
-                onInvite?.(); 
+                onClose(); 
+                navigate(onInvite ? `/profile/${user.id}` : "/profile"); 
               }}
-              className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white border border-transparent text-sm font-bold rounded-[16px] transition-all shadow-lg shadow-blue-500/20 z-[100]"
-            >
-              Invite to Job
-            </button>
-            <button 
-              onClick={(e) => { e.stopPropagation(); onClose(); navigate(`/profile/${user.id}`); }}
               className="w-full py-3.5 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 active:scale-95 text-zinc-900 dark:text-white border border-zinc-200 dark:border-white/10 text-sm font-bold rounded-[16px] transition-all shadow-sm z-[100]"
             >
-              View Full Profile
+              {onInvite ? "View Full Profile" : "View My Profile"}
             </button>
           </div>
         )}

@@ -75,9 +75,9 @@ async function getAccountByHandleService(handle) {
     }
 }
 
-async function searchUserAccountsByHandleService(handle, accountId, role = null, includeDeactivated = false) {
+async function searchUserAccountsByHandleService(handle, accountId, role = null, includeDeactivated = false, targetAccountId = null) {
     const query = String(handle || '').replace(/^@/, '').trim();
-    return await searchUserAccountsByHandle(query, accountId, 50, role, includeDeactivated);
+    return await searchUserAccountsByHandle(query, accountId, 100, role, includeDeactivated, targetAccountId);
 }
 
 async function getAccountWalletService(accountId, type) { 

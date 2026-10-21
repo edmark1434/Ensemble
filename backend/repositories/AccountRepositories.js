@@ -124,7 +124,7 @@ async function reactivateAccount(accountId) {
     return result.rows[0] || null;
 }
 
-async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, role = null, includeDeactivated = false) {
+async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 100, role = null, includeDeactivated = false, targetAccountId = null) {
     const search = String(handle || '').replace(/^@/, '').trim();
     const escapedSearch = search ? search.replace(/[\\%_]/g, '\\\$&') : '';
 
@@ -138,6 +138,7 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, 
             p.name AS subscriptiontype,
             a.merit_score,
             (SELECT COALESCE(AVG(stars_out_of_five), 0) FROM ratings WHERE account_id = a.account_id) AS overall_rating,
+            (SELECT COUNT(*) FROM ratings WHERE account_id = a.account_id) AS rating_count,
             (SELECT COUNT(*) FROM account_followers WHERE followed_id = a.account_id) AS followers_count,
             (SELECT COUNT(*) FROM account_followers WHERE follower_id = a.account_id) AS following_count,
             EXISTS(SELECT 1 FROM account_followers WHERE follower_id = $1::uuid AND followed_id = a.account_id) AS is_following,
@@ -173,8 +174,20 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, 
          JOIN users u ON u.account_id = a.account_id
          LEFT JOIN files f ON f.file_id = a.avatar_file_id
          LEFT JOIN verifications v ON a.account_id = v.account_id
-         LEFT JOIN subscriptions s ON u.user_id = s.user_id
-         LEFT JOIN plans p ON s.plan_id = p.plan_id
+         LEFT JOIN LATERAL (
+             SELECT p.name
+             FROM subscriptions s
+             JOIN plans p ON s.plan_id = p.plan_id
+             WHERE s.user_id = u.user_id
+             ORDER BY
+               CASE
+                 WHEN LOWER(p.name) = 'business' THEN 1
+                 WHEN LOWER(p.name) = 'premium' THEN 2
+                 ELSE 3
+               END,
+               s.created_at DESC
+             LIMIT 1
+         ) p ON TRUE
          WHERE a.type = 'User'
            AND a.deleted_at IS NULL
            AND LOWER(COALESCE(a.status, '')) NOT IN ('deleted', 'inactive')
@@ -183,6 +196,12 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, 
            
     const values = [excludeAccountId || null, limit, Boolean(includeDeactivated)];
     let paramIndex = 4;
+
+    if (targetAccountId) {
+        query += ' AND a.account_id = $' + paramIndex + '::uuid';
+        values.push(targetAccountId);
+        paramIndex++;
+    }
 
     if (search) {
         query += ` AND (
@@ -222,7 +241,7 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, 
            END,
            a.display_name`;
     } else {
-        query += ` ORDER BY a.created_at DESC`;
+        query += ` ORDER BY RANDOM()`;
     }
 
     query += ` LIMIT $2`;
