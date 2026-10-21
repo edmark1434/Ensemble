@@ -225,6 +225,76 @@ async function markCashoutNotificationStatus(cashoutId, status) {
     );
 }
 
+async function transferAccountCredits({ senderAccountId, recipientAccountId, amountCredits, notes = null }) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const walletsRes = await client.query(
+            `SELECT aw.account_id, w.wallet_id, w.balance_credits, w.status, a.display_name, a.handle
+             FROM account_wallets aw
+             JOIN wallets w ON w.wallet_id = aw.wallet_id
+             JOIN accounts a ON a.account_id = aw.account_id
+             WHERE aw.account_id = ANY($1::uuid[]) AND w.type = 'account wallets'
+             ORDER BY w.wallet_id
+             FOR UPDATE OF w`,
+            [[senderAccountId, recipientAccountId]]
+        );
+
+        const senderRow = walletsRes.rows.find((r) => String(r.account_id) === String(senderAccountId));
+        const recipientRow = walletsRes.rows.find((r) => String(r.account_id) === String(recipientAccountId));
+
+        if (!senderRow) {
+            throw Object.assign(new Error('Sender account wallet not found.'), { code: 'SENDER_WALLET_NOT_FOUND' });
+        }
+        if (String(senderRow.status).toLowerCase() !== 'active') {
+            throw Object.assign(new Error('Your account wallet is not active.'), { code: 'SENDER_WALLET_INACTIVE' });
+        }
+        if (!recipientRow) {
+            throw Object.assign(new Error('Recipient account wallet not found.'), { code: 'RECIPIENT_WALLET_NOT_FOUND' });
+        }
+        if (String(recipientRow.status).toLowerCase() !== 'active') {
+            throw Object.assign(new Error('Recipient account wallet is not active.'), { code: 'RECIPIENT_WALLET_INACTIVE' });
+        }
+        if (Number(senderRow.balance_credits) < amountCredits) {
+            throw Object.assign(new Error('Insufficient balance for this transfer.'), { code: 'INSUFFICIENT_BALANCE' });
+        }
+
+        await client.query(
+            `UPDATE wallets SET balance_credits = balance_credits - $1 WHERE wallet_id = $2`,
+            [amountCredits, senderRow.wallet_id]
+        );
+
+        await client.query(
+            `UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2`,
+            [amountCredits, recipientRow.wallet_id]
+        );
+
+        const txRes = await client.query(
+            `INSERT INTO credit_transactions (
+                type, amount_credits, status, source_wallet_id, destination_wallet_id,
+                reference_table, reference_id
+             ) VALUES ('Fund Transfer', $1, 'completed', $2, $3, 'accounts', $4)
+             RETURNING *`,
+            [amountCredits, senderRow.wallet_id, recipientRow.wallet_id, recipientAccountId]
+        );
+
+        await client.query('COMMIT');
+        return {
+            transaction: txRes.rows[0],
+            sender: senderRow,
+            recipient: recipientRow,
+            amount_credits: amountCredits,
+            notes,
+        };
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
+}
+
 module.exports = {
     getWalletsByUserId,
     getWalletBalanceByUserId,
@@ -235,4 +305,5 @@ module.exports = {
     attachXenditPayout,
     applyCashoutStatus,
     markCashoutNotificationStatus,
+    transferAccountCredits,
 };

@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Landmark, Loader2, RefreshCw, Search, ShieldCheck, Wallet, X } from "lucide-react";
+import { ArrowRightLeft, Check, ChevronLeft, ChevronRight, Landmark, Loader2, RefreshCw, Search, Send, ShieldCheck, UserCheck, Wallet, X } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "@/lib/axios";
 import socket from "@/lib/socket";
+import { constructAvatarUrl } from "@/lib/accountAvatars";
 import gcashCashoutLogo from "@/assets/gcash-cashout-logo.jpg";
 import mayaCashoutLogo from "@/assets/maya-cashout-logo.png";
+
+type RecipientUser = {
+  account_id: string;
+  handle: string;
+  display_name: string;
+  avatar_url?: string;
+};
 
 type WalletRecord = {
   wallet_id: string;
@@ -90,6 +98,16 @@ export function UserSettingsWallet() {
   const [addressSelected, setAddressSelected] = useState(false);
   const [form, setForm] = useState({ channel_code: "GCASH", account_name: "", account_no: "", personal_mobile_number: "", receipt_email: "", street_line_1: "", city: "", province_state: "", postal_code: "", amount_credits: "" });
 
+  // Transfer state
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [recipientQuery, setRecipientQuery] = useState("");
+  const [recipientSuggestions, setRecipientSuggestions] = useState<RecipientUser[]>([]);
+  const [searchingRecipients, setSearchingRecipients] = useState(false);
+  const [selectedRecipient, setSelectedRecipient] = useState<RecipientUser | null>(null);
+  const [transferAmount, setTransferAmount] = useState("");
+  const [transferNotes, setTransferNotes] = useState("");
+  const [submittingTransfer, setSubmittingTransfer] = useState(false);
+
   const fetchWallets = useCallback(async () => {
     try {
       const { data } = await api.get("/api/cashouts/wallets", { params: { page: cashoutPage, page_size: 10, search: debouncedCashoutSearch, sort: cashoutSort, status: cashoutStatus, channel: cashoutChannel } });
@@ -112,6 +130,33 @@ export function UserSettingsWallet() {
     const timeout = window.setTimeout(() => { setCashoutPage(1); setDebouncedCashoutSearch(cashoutSearch.trim()); }, 350);
     return () => window.clearTimeout(timeout);
   }, [cashoutSearch]);
+
+  useEffect(() => {
+    if (!transferOpen || !recipientQuery.trim() || selectedRecipient) {
+      setRecipientSuggestions([]);
+      return;
+    }
+    const timer = window.setTimeout(async () => {
+      setSearchingRecipients(true);
+      try {
+        const { data } = await api.get("/api/accounts/search-users", {
+          params: { handle: recipientQuery.trim() },
+        });
+        const users = (data.data || []).map((u: any) => ({
+          account_id: u.account_id,
+          handle: u.handle,
+          display_name: u.display_name,
+          avatar_url: u.avatar_url || (u.avatar_file_id ? constructAvatarUrl(u.avatar_file_id, u.display_name) : undefined),
+        }));
+        setRecipientSuggestions(users);
+      } catch {
+        setRecipientSuggestions([]);
+      } finally {
+        setSearchingRecipients(false);
+      }
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [recipientQuery, selectedRecipient, transferOpen]);
 
   useEffect(() => {
     if (!open || addressQuery.trim().length < 3 || addressSelected) {
@@ -196,16 +241,64 @@ export function UserSettingsWallet() {
     }
   };
 
+  const submitTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRecipient) {
+      return toast.error("Please search and select a recipient.");
+    }
+    const amount = Number(transferAmount);
+    if (!Number.isInteger(amount) || amount <= 0) {
+      return toast.error("Enter a valid whole credit amount.");
+    }
+    if (amount > available) {
+      return toast.error("Transfer amount exceeds your available balance.");
+    }
+    setSubmittingTransfer(true);
+    try {
+      const { data } = await api.post("/api/cashouts/transfer", {
+        recipient_account_id: selectedRecipient.account_id,
+        amount_credits: amount,
+        notes: transferNotes.trim() || undefined,
+      });
+      toast.success(data.message || "Credits transferred successfully!");
+      setTransferOpen(false);
+      setSelectedRecipient(null);
+      setRecipientQuery("");
+      setTransferAmount("");
+      setTransferNotes("");
+      await fetchWallets();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Transfer could not be processed.");
+    } finally {
+      setSubmittingTransfer(false);
+    }
+  };
+
   return (
     <section className="space-y-7">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Wallet</h2>
-          <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">Review available and escrow balances, then request a secure payout.</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">Review available and escrow balances, transfer funds, or request a payout.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <button onClick={() => void fetchWallets()} className="rounded-lg border border-gray-200 dark:border-zinc-800 p-2.5 text-gray-500 dark:text-zinc-400 transition-colors hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white" aria-label="Refresh wallets">
             <RefreshCw className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            disabled={!accountWallet || available <= 0}
+            onClick={() => {
+              setTransferOpen(true);
+              setSelectedRecipient(null);
+              setRecipientQuery("");
+              setTransferAmount("");
+              setTransferNotes("");
+            }}
+            className="flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2.5 text-xs font-semibold text-blue-600 dark:text-blue-400 transition-colors hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5" />
+            Transfer
           </button>
           <button disabled={!accountWallet || available <= 0} onClick={() => setOpen(true)} className="rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">
             Cash out
@@ -316,6 +409,205 @@ export function UserSettingsWallet() {
             </div>
             <div className="mt-4 flex items-center gap-3 rounded-lg border border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-white/5 p-3 text-xs text-gray-500 dark:text-zinc-400"><Landmark className="h-4 w-4 shrink-0 text-blue-400" />Verify the account details carefully. Processing time depends on the receiving channel.</div>
             <div className="mt-4 flex justify-end gap-3"><button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-gray-200 dark:border-zinc-800 px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5">Cancel</button><button disabled={submitting || requestedCredits < cashoutConfig.minimum_credits || requestedCredits > available || netPayoutCents <= 0} className="flex items-center rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">{submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Submit cashout</button></div>
+          </form>
+        </div>
+      )}
+
+      {transferOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <form noValidate onSubmit={submitTransfer} className="max-h-[85vh] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-2xl [scrollbar-color:#3f3f46_#18181b] [scrollbar-width:thin]">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Transfer credits</h3>
+                <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">Send platform credits directly to another user&apos;s account wallet.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTransferOpen(false)}
+                className="rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-5 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-3.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-400">Available account-wallet balance</p>
+              <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+                {credits(available)} <span className="text-xs font-medium text-gray-500 dark:text-zinc-400">credits</span>
+              </p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">Transfers are deducted from your available account wallet balance.</p>
+            </div>
+
+            <div className="mt-4 space-y-3.5">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-zinc-300">Recipient</label>
+                {selectedRecipient ? (
+                  <div className="mt-2 flex items-center justify-between rounded-xl border border-blue-500/30 bg-blue-500/10 p-3">
+                    <div className="flex items-center gap-3">
+                      {selectedRecipient.avatar_url ? (
+                        <img src={selectedRecipient.avatar_url} alt="" className="h-9 w-9 rounded-full object-cover" />
+                      ) : (
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 font-bold text-xs text-white">
+                          {(selectedRecipient.display_name || selectedRecipient.handle || "U")[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{selectedRecipient.display_name}</p>
+                        <p className="text-xs text-blue-500 dark:text-blue-400">@{selectedRecipient.handle}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedRecipient(null);
+                        setRecipientQuery("");
+                      }}
+                      className="rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-700"
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative mt-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-3.5 h-4 w-4 text-gray-400 dark:text-zinc-500" />
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        value={recipientQuery}
+                        onChange={(e) => setRecipientQuery(e.target.value)}
+                        placeholder="Search by username (@handle)..."
+                        className="w-full rounded-lg border border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/50 py-3 pl-9 pr-10 text-sm text-gray-900 dark:text-white outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-600 focus:border-blue-500"
+                      />
+                      {searchingRecipients && (
+                        <Loader2 className="absolute right-3 top-3.5 h-4 w-4 animate-spin text-gray-400 dark:text-zinc-500" />
+                      )}
+                    </div>
+                    {recipientSuggestions.length > 0 && (
+                      <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 py-1 shadow-xl">
+                        {recipientSuggestions.map((user) => (
+                          <button
+                            key={user.account_id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedRecipient(user);
+                              setRecipientSuggestions([]);
+                            }}
+                            className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-white/5"
+                          >
+                            {user.avatar_url ? (
+                              <img src={user.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover" />
+                            ) : (
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 font-bold text-xs text-white">
+                                {(user.display_name || user.handle || "U")[0].toUpperCase()}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-semibold text-gray-900 dark:text-white">{user.display_name}</p>
+                              <p className="truncate text-[11px] text-gray-500 dark:text-zinc-400">@{user.handle}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-zinc-300">Amount in credits</label>
+                <input
+                  required
+                  min={1}
+                  max={available}
+                  step={1}
+                  type="number"
+                  value={transferAmount}
+                  onChange={(e) => setTransferAmount(e.target.value)}
+                  className="mt-2 w-full rounded-lg border border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/50 px-3 py-3 text-sm text-gray-900 dark:text-white outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-600 focus:border-blue-500"
+                  placeholder="Enter credit amount"
+                />
+                <div className="mt-2 flex items-center justify-between text-xs">
+                  <span className="text-[11px] text-gray-500 dark:text-zinc-500">Max available: {credits(available)} credits</span>
+                  <div className="flex gap-1.5">
+                    {[25, 50, 100].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => setTransferAmount(String(Math.floor((available * pct) / 100)))}
+                        className="rounded border border-gray-200 dark:border-zinc-700 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-600 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700"
+                      >
+                        {pct === 100 ? "Max" : `${pct}%`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-zinc-300">
+                  Note / Memo <span className="font-normal text-gray-400 dark:text-zinc-500">(optional)</span>
+                </label>
+                <input
+                  maxLength={255}
+                  value={transferNotes}
+                  onChange={(e) => setTransferNotes(e.target.value)}
+                  className="mt-2 w-full rounded-lg border border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/50 px-3 py-3 text-sm text-gray-900 dark:text-white outline-none placeholder:text-gray-400 dark:placeholder:text-zinc-600 focus:border-blue-500"
+                  placeholder="e.g. Project compensation, thumbnail bonus..."
+                />
+              </div>
+            </div>
+
+            {selectedRecipient && Number(transferAmount) > 0 && (
+              <div className="mt-4 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3.5">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-400">Transfer preview</h4>
+                <div className="mt-3 space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 dark:text-zinc-500">Recipient</span>
+                    <span className="font-medium text-gray-900 dark:text-white">@{selectedRecipient.handle}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 dark:text-zinc-500">Amount</span>
+                    <span className="font-bold text-blue-600 dark:text-blue-400">{credits(Number(transferAmount))} credits</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 dark:border-zinc-800 pt-2">
+                    <span className="text-gray-500 dark:text-zinc-500">Balance after transfer</span>
+                    <span className={`font-semibold ${Number(transferAmount) > available ? "text-red-500" : "text-gray-900 dark:text-white"}`}>
+                      {credits(Math.max(0, available - Number(transferAmount)))} credits
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 flex items-center gap-2.5 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3 text-xs text-amber-600 dark:text-amber-400">
+              <ShieldCheck className="h-4 w-4 shrink-0" />
+              <span>Transfers are processed immediately and are non-reversible.</span>
+            </div>
+
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setTransferOpen(false)}
+                className="rounded-lg border border-gray-200 dark:border-zinc-800 px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  submittingTransfer ||
+                  !selectedRecipient ||
+                  !transferAmount ||
+                  Number(transferAmount) <= 0 ||
+                  Number(transferAmount) > available
+                }
+                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {submittingTransfer && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Confirm &amp; Send
+              </button>
+            </div>
           </form>
         </div>
       )}

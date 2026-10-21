@@ -1,4 +1,11 @@
-const { CashoutError, getWalletOverviewServices, searchPhilippineAddressesServices, createCashoutRecordsServices, handleCashoutWebhookServices } = require('../services/CashoutServices');
+const {
+    CashoutError,
+    getWalletOverviewServices,
+    searchPhilippineAddressesServices,
+    createCashoutRecordsServices,
+    handleCashoutWebhookServices,
+    transferCreditsServices,
+} = require('../services/CashoutServices');
 
 function sendError(res, error) {
     console.error('Cashout error:', error.response?.data || error);
@@ -32,4 +39,25 @@ async function cashoutWebhookController(req, res) {
     } catch (error) { return sendError(res, error); }
 }
 
-module.exports = { getWalletOverviewController, searchCashoutAddressesController, createCashoutRecordsController, cashoutWebhookController };
+async function transferCreditsController(req, res) {
+    try {
+        const senderAccountId = req.session?.account_id || req.user?.account_id || req.user?.accountId;
+        const result = await transferCreditsServices({
+            senderAccountId,
+            recipientAccountId: req.body?.recipient_account_id,
+            amountCredits: req.body?.amount_credits,
+            notes: req.body?.notes,
+        });
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+module.exports = {
+    getWalletOverviewController,
+    searchCashoutAddressesController,
+    createCashoutRecordsController,
+    cashoutWebhookController,
+    transferCreditsController,
+};
