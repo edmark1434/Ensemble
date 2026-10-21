@@ -159,11 +159,11 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                           navigate("/jobs/info");
                         }}
                         title={`Rising Job Post — Click to see how this badge works (Score: ${rankInfo.totalScore})`}
-                        className="relative overflow-hidden inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 dark:hover:bg-emerald-500/25 transition-colors cursor-pointer"
+                        className="relative overflow-hidden inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100/90 text-emerald-800 border-2 border-emerald-400 hover:bg-emerald-200/90 dark:bg-emerald-500/25 dark:text-emerald-200 dark:border-emerald-400 dark:hover:bg-emerald-500/35 shadow-xs transition-colors cursor-pointer"
                       >
                         <TrendingUp className="relative z-10 h-2.5 w-2.5" />
                         <span className="relative z-10">Rising</span>
-                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-white/50 dark:via-white/30 to-transparent pointer-events-none" />
                       </button>
                     )}
                   </div>
@@ -213,10 +213,10 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                         Your Job Discovery Score
                       </span>
                       {rankInfo.isRisingJob && (
-                      <span className="relative overflow-hidden inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 shrink-0">
+                      <span className="relative overflow-hidden inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100/90 text-emerald-800 border-2 border-emerald-400 dark:bg-emerald-500/25 dark:text-emerald-200 dark:border-emerald-400 shrink-0 shadow-xs">
                         <TrendingUp className="relative z-10 h-2.5 w-2.5" />
                         <span className="relative z-10">Rising</span>
-                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-white/50 dark:via-white/30 to-transparent pointer-events-none" />
                       </span>
                       )}
                     </div>

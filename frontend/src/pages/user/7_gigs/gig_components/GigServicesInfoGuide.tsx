@@ -3,12 +3,11 @@ import { useNavigate } from "react-router-dom";
 import {
   TrendingUp,
   Star,
-  Clock,
   CheckCircle2,
-  Layers,
   ArrowRight,
   Plus,
   HelpCircle,
+  SlidersHorizontal,
 } from "lucide-react";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import useGlobalState from "@/lib/global_state";
@@ -20,95 +19,109 @@ export const GigServicesInfoGuide: React.FC = () => {
   const rankingPillars = [
     {
       num: "01",
-      weight: "40% Weight",
+      weight: "40 pts",
       title: "Fair Trust Rating",
-      badgeClass:
-        "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30",
-      desc: "Proven 5-star reviews boost your score, while low ratings pull it down. Brand-new creators with 0 reviews aren't punished—everyone starts at a fair 4.2★ baseline until real client reviews come in.",
+      detail: "Client review score (Bayesian weighted)",
+      rules:
+        "Real completed 5★ orders boost your ranking. New services with 0 reviews are given a fair 4.2★ baseline (33.6 pts) so fresh creators aren't penalized.",
     },
     {
       num: "02",
-      weight: "25% Weight",
+      weight: "25 pts",
       title: "14-Day Newcomer Spotlight",
-      badgeClass:
-        "bg-sky-100 text-sky-900 border-sky-300 dark:bg-sky-500/20 dark:text-sky-300 dark:border-sky-500/30",
-      desc: "Newly published services receive a temporary 2-week discovery boost so clients can spot fresh talent right away. This boost gently tapers off over 14 days as you gather your first orders.",
+      detail: "Days since publication + initial orders",
+      rules:
+        "Newly published services receive the full 25 pts for their first 7 days, then gently taper over 14 days as order history builds.",
     },
     {
       num: "03",
-      weight: "20% Weight",
-      title: "Service Completeness & Effort",
-      badgeClass:
-        "bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30",
-      desc: "You control this 100% on Day 1. Services with 3 pricing tiers, rich gallery samples, clear milestones, Terms of Service, and skill tags score maximum effort points.",
+      weight: "20 pts",
+      title: "Completeness & Effort",
+      detail: "Tiers, gallery clips, milestones & terms",
+      rules:
+        "You control this 100% on Day 1. Services with 3 pricing tiers, 3+ portfolio samples, milestones, and terms score the full 20 pts.",
     },
     {
       num: "04",
-      weight: "15% Weight",
-      title: "Open Queue & Slot Capacity",
-      badgeClass:
-        "bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30",
-      desc: "When a busy creator's active order slots are almost full, their listing steps back slightly to prevent burnout—giving creators with open hands higher visibility.",
+      weight: "15 pts",
+      title: "Queue Capacity & Availability",
+      detail: "Active in-progress orders vs max slots",
+      rules:
+        "When an in-demand creator's active slots fill up, their listing steps back slightly to avoid burnout—giving available creators higher exposure.",
     },
   ];
 
   const risingChecklist = [
     {
-      points: "+25%",
-      title: "Offer All 3 Pricing Tiers (Basic, Standard, Premium)",
-      desc: "Give clients flexible entry points—from a quick starter edit to a full production package.",
+      item: "Offer All 3 Pricing Tiers",
+      weight: "+25%",
+      detail: "Provide Basic, Standard, and Premium packages with clear pricing and delivery turnaround times.",
     },
     {
-      points: "+25%",
-      title: "Upload at Least 3 Gallery Samples",
-      desc: "Include high-resolution thumbnails, before/after stills, or video reel previews so clients can see your craft.",
+      item: "Upload 3+ Gallery Samples",
+      weight: "+25%",
+      detail: "Add high-resolution image stills, before/after comparisons, or video preview reels demonstrating your craft.",
     },
     {
-      points: "+20%",
-      title: "Define 3+ Delivery Milestones",
-      desc: "Break your workflow into clear phases (e.g., Rough Cut, Color & Sound Polish, Final Master) to build buyer confidence.",
+      item: "Define 3+ Project Milestones",
+      weight: "+20%",
+      detail: "Break your workflow into clear delivery stages (e.g. Rough Cut, Color & Audio Polish, Final Master).",
     },
     {
-      points: "+15%",
-      title: "Write a Detailed Description (120+ chars) & Terms of Service",
-      desc: "Clearly state what deliverables are included, turnaround expectations, and your revision policy.",
+      item: "Detailed Description & Terms",
+      weight: "+15%",
+      detail: "Include a thorough description (120+ chars) explaining deliverables, plus clear Terms of Service.",
     },
     {
-      points: "+15%",
-      title: "Add at Least 3 Relevant Skill Tags",
-      desc: "Tag your tools and specialties (e.g., DaVinci Resolve, After Effects, Sound Design) so search filters match your gig.",
+      item: "Add 3+ Relevant Skill Tags",
+      weight: "+15%",
+      detail: "Tag your tools and specialties (e.g. DaVinci Resolve, Motion Graphics, Sound Design) for search matching.",
     },
   ];
 
-  const badgeLegend = [
+  const badgeDefinitions = [
     {
       name: "Rising",
-      icon: <TrendingUp className="relative z-10 h-3 w-3" />,
-      shine: true,
-      badgeClass:
-        "relative overflow-hidden bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30",
-      desc: "Awarded to brand-new services (posted within 7 days, under 3 orders, 0 reviews) that achieve at least 85% Service Completeness.",
+      badge: (
+        <span className="relative overflow-hidden inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100/90 text-emerald-800 border-2 border-emerald-400 dark:bg-emerald-500/25 dark:text-emerald-200 dark:border-emerald-400 shadow-xs">
+          <TrendingUp className="relative z-10 h-2.5 w-2.5" />
+          <span className="relative z-10">Rising</span>
+          <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-white/50 dark:via-white/30 to-transparent pointer-events-none" />
+        </span>
+      ),
+      condition: "Published within 7 days, under 3 orders, 0 reviews, AND Service Completeness ≥ 85%.",
+      effect: "Puts fresh creators in top-row discovery on marketplace browsing and Home page Top Services.",
     },
     {
-      name: "★ New",
-      icon: null,
-      badgeClass:
-        "bg-gray-900 text-gray-200 border-gray-700 dark:bg-black/60 dark:text-zinc-300 dark:border-white/10",
-      desc: "Shown on the thumbnail of any service published within the last 7 days that hasn't received its first rating yet.",
+      name: "New",
+      badge: (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-900 text-gray-200 border border-gray-700 dark:bg-black/60 dark:text-zinc-300 dark:border-white/10">
+          New
+        </span>
+      ),
+      condition: "Published within the last 7 days with no client reviews yet.",
+      effect: "Signals to clients that the service is freshly listed.",
     },
     {
       name: "★ 5.0 (12)",
-      icon: null,
-      badgeClass:
-        "bg-gray-900 text-yellow-400 border-gray-700 dark:bg-black/60 dark:text-yellow-400 dark:border-white/10",
-      desc: "Verified client rating and total completed review count from real escrow orders on this specific service.",
+      badge: (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-900 text-yellow-400 border border-gray-700 dark:bg-black/60 dark:text-yellow-400 dark:border-white/10">
+          <Star className="h-2.5 w-2.5 fill-yellow-400" />
+          5.0 (12)
+        </span>
+      ),
+      condition: "Has received verified client reviews on completed orders.",
+      effect: "Displays genuine client satisfaction and order volume.",
     },
     {
       name: "Open",
-      icon: null,
-      badgeClass:
-        "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40",
-      desc: "Indicates the creator has available queue slots and is actively accepting new client orders right now.",
+      badge: (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40">
+          Open
+        </span>
+      ),
+      condition: "Creator has open slots available and is ready for work.",
+      effect: "Clients can order packages directly without queuing delays.",
     },
   ];
 
@@ -131,175 +144,176 @@ export const GigServicesInfoGuide: React.FC = () => {
     >
       {/* Header */}
       <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-xs">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="p-1.5 rounded-lg bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300">
             <HelpCircle className="w-4 h-4" />
           </span>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
             How Services Ranking & The "Rising" Badge Work
-          </h2>
+          </h1>
         </div>
-        <p className="text-xs sm:text-sm text-gray-500 dark:text-zinc-400 mt-1 leading-relaxed">
-          Our marketplace uses a <strong>100-Point Fair Discovery Ranking</strong> so talented new creators with complete portfolios can compete right alongside established pros.
+        <p className="text-xs sm:text-sm text-gray-600 dark:text-zinc-400 leading-relaxed max-w-4xl">
+          Services are ranked using a <strong>100-Point Fair Discovery Algorithm</strong>. This ensures
+          talented new creators who set up complete packages and show quality work can appear right alongside
+          top-rated veterans.
         </p>
       </div>
 
-      {/* 4 Ranking Pillars */}
-      <div>
-        <div className="flex items-center justify-between mb-3 px-1">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Layers className="w-4 h-4 text-blue-500" />
-            The 4 Pillars of Service Discovery (100 Points Total)
-          </h3>
-          <span className="text-xs text-gray-500 dark:text-zinc-400">
-            Default sort when browsing All Services
+      {/* Section 1: 4 Pillars Table */}
+      <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xs">
+        <div className="p-5 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4 text-gray-500 dark:text-zinc-400" />
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white">
+              The 4 Scoring Pillars (100 Points Total)
+            </h2>
+          </div>
+          <span className="text-xs text-gray-500 dark:text-zinc-400 font-mono">
+            Default sort order for All Services
           </span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {rankingPillars.map((p) => (
-            <div
-              key={p.num}
-              className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-xs flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-zinc-200 text-xs font-mono font-bold flex items-center justify-center border border-gray-200/80 dark:border-white/10">
-                    {p.num}
-                  </span>
-                  <span
-                    className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${p.badgeClass}`}
-                  >
-                    {p.weight}
-                  </span>
-                </div>
-                <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-1.5">
-                  {p.title}
-                </h4>
-                <p className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
-                  {p.desc}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
 
-      {/* How to Earn the Rising Badge + Badge Legend */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Left: Rising Creator Checklist (7 cols) */}
-        <div className="lg:col-span-7 bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-xs space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 dark:border-white/5 pb-3">
-            <div className="flex items-center gap-2">
-              <span className="relative overflow-hidden inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30">
-                <TrendingUp className="relative z-10 h-3 w-3" />
-                <span className="relative z-10">Rising</span>
-                <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
-              </span>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                How to Unlock the "Rising" Badge
-              </h3>
-            </div>
-            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-              Requires 85%+ Completeness Score
-            </span>
-          </div>
-
-          <p className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
-            New services published within the last <strong>7 days</strong> (with fewer than 3 orders and 0 reviews) automatically earn the{" "}
-            <strong className="text-emerald-600 dark:text-emerald-400">Rising</strong> badge and top-row placement when you complete at least <strong>85%</strong> of this setup checklist:
-          </p>
-
-          <div className="space-y-2.5">
-            {risingChecklist.map((item) => (
-              <div
-                key={item.title}
-                className="flex items-start gap-3 p-2.5 rounded-xl bg-gray-50/70 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5"
-              >
-                <span className="w-14 shrink-0 font-mono font-bold px-2 py-0.5 rounded text-center border text-[11px] bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30">
-                  {item.points}
-                </span>
-                <div className="space-y-0.5">
-                  <div className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    <span>{item.title}</span>
-                  </div>
-                  <p className="text-[11px] text-gray-500 dark:text-zinc-400 leading-relaxed">
-                    {item.desc}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right: Service Card Badges & Comparison (5 cols) */}
-        <div className="lg:col-span-5 flex flex-col gap-4">
-          <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-xs space-y-3 flex-1">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-              Service Card Badges Explained
-            </h3>
-            <div className="space-y-2.5">
-              {badgeLegend.map((b) => (
-                <div
-                  key={b.name}
-                  className="flex items-start gap-3 p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors"
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-gray-50/75 dark:bg-white/[0.02] border-b border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400">
+                <th className="py-3 px-4 font-semibold w-16">Pillar</th>
+                <th className="py-3 px-4 font-semibold w-24 text-center">Max Pts</th>
+                <th className="py-3 px-4 font-semibold w-56">Metric</th>
+                <th className="py-3 px-4 font-semibold">Scoring Rule & Fair Play Mechanism</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+              {rankingPillars.map((p) => (
+                <tr
+                  key={p.num}
+                  className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors"
                 >
-                  <span
-                    className={`w-24 shrink-0 inline-flex items-center justify-center gap-1 font-bold px-2 py-0.5 rounded text-center border text-[10px] ${b.badgeClass}`}
-                  >
-                    {b.icon}
-                    <span className="relative z-10">{b.name}</span>
-                    {(b as any).shine && (
-                      <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
-                    )}
-                  </span>
-                  <span className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
-                    {b.desc}
-                  </span>
-                </div>
+                  <td className="py-3.5 px-4 font-mono font-bold text-gray-500 dark:text-zinc-400">
+                    {p.num}
+                  </td>
+                  <td className="py-3.5 px-4 text-center">
+                    <span className="inline-block px-2 py-0.5 rounded font-mono font-bold text-[11px] bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10">
+                      {p.weight}
+                    </span>
+                  </td>
+                  <td className="py-3.5 px-4">
+                    <div className="font-bold text-gray-900 dark:text-white">{p.title}</div>
+                    <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">{p.detail}</div>
+                  </td>
+                  <td className="py-3.5 px-4 text-gray-600 dark:text-zinc-300 leading-relaxed">
+                    {p.rules}
+                  </td>
+                </tr>
               ))}
-            </div>
-          </div>
-
-          {/* Quick Example Card */}
-          <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-xs space-y-2.5">
-            <div className="flex items-center gap-2 text-xs font-bold text-gray-900 dark:text-white">
-              <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-              <span>Why Complete Newcomers Beat Incomplete Posts</span>
-            </div>
-            <p className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
-              A brand-new creator who fills out all 3 tiers, uploads 3+ portfolio clips, and sets clear milestones scores up to <strong>91.8 / 100</strong> on Day 1—appearing right alongside 5.0★ veterans, while a 1-sentence incomplete post drops to the bottom.
-            </p>
-            <div className="pt-1 flex items-center gap-2 text-[11px] text-gray-500 dark:text-zinc-400">
-              <Clock className="w-3.5 h-3.5 text-sky-500 shrink-0" />
-              <span>
-                You can also edit an existing service anytime to boost its completeness score!
-              </span>
-            </div>
-          </div>
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* Bottom Action Bar */}
-      <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
-            <TrendingUp className="w-5 h-5" />
-          </span>
+      {/* Section 2: Rising Checklist Table */}
+      <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xs">
+        <div className="p-5 border-b border-gray-200 dark:border-white/10 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h4 className="text-sm font-bold text-gray-900 dark:text-white">
-              Ready to Earn Your "Rising" Badge?
-            </h4>
-            <p className="text-xs text-gray-500 dark:text-zinc-400 leading-relaxed">
-              Publish a complete service with 3 tiers, gallery samples, and milestones to get featured in the discovery spotlight.
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <span>Service Completeness Checklist</span>
+              <span className="text-xs font-normal text-gray-500 dark:text-zinc-400">
+                (Pillar 03 — 20 Points)
+              </span>
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+              Complete at least <strong>85%</strong> of this checklist to automatically earn the green <strong>Rising</strong> badge.
             </p>
           </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-gray-50/75 dark:bg-white/[0.02] border-b border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400">
+                <th className="py-3 px-4 font-semibold w-1/4">Setup Action</th>
+                <th className="py-3 px-4 font-semibold w-20 text-center">Score</th>
+                <th className="py-3 px-4 font-semibold">Requirement & Details</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+              {risingChecklist.map((c) => (
+                <tr
+                  key={c.item}
+                  className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors"
+                >
+                  <td className="py-3.5 px-4 font-medium text-gray-900 dark:text-white flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>{c.item}</span>
+                  </td>
+                  <td className="py-3.5 px-4 text-center font-mono font-bold text-emerald-700 dark:text-emerald-400 text-[11px]">
+                    {c.weight}
+                  </td>
+                  <td className="py-3.5 px-4 text-gray-600 dark:text-zinc-300 leading-relaxed text-[11px]">
+                    {c.detail}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Section 3: Service Card Badges Reference Table */}
+      <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xs">
+        <div className="p-5 border-b border-gray-200 dark:border-white/10">
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">
+            Service Card Badges & Indicators
+          </h2>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+            Reference table explaining every badge displayed on service cards across the marketplace.
+          </p>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-gray-50/75 dark:bg-white/[0.02] border-b border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400">
+                <th className="py-3 px-4 font-semibold w-40">Badge</th>
+                <th className="py-3 px-4 font-semibold w-1/3">Qualification Criteria</th>
+                <th className="py-3 px-4 font-semibold">What It Signals</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+              {badgeDefinitions.map((b) => (
+                <tr
+                  key={b.name}
+                  className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors"
+                >
+                  <td className="py-3.5 px-4">{b.badge}</td>
+                  <td className="py-3.5 px-4 text-gray-700 dark:text-zinc-300 text-[11px] leading-relaxed">
+                    {b.condition}
+                  </td>
+                  <td className="py-3.5 px-4 text-gray-600 dark:text-zinc-400 text-[11px] leading-relaxed">
+                    {b.effect}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Bottom CTA / Action Bar */}
+      <div className="bg-white dark:bg-dark-surface/70 border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+            Ready to earn your "Rising" badge?
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+            Publish a service with all 3 tiers, 3+ samples, and delivery milestones to get featured in the spotlight.
+          </p>
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
           <button
             type="button"
             onClick={() => navigate("/gigs/services")}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 bg-gray-50 hover:bg-gray-100 text-gray-800 dark:bg-white/5 dark:hover:bg-white/10 dark:text-white transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 bg-gray-50 hover:bg-gray-100 text-gray-800 dark:bg-white/5 dark:hover:bg-white/10 dark:text-white transition-colors cursor-pointer"
           >
             <span>Browse Services</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -307,7 +321,7 @@ export const GigServicesInfoGuide: React.FC = () => {
           <button
             type="button"
             onClick={handleCreateService}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 transition-colors shadow-xs active:scale-98"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 transition-colors shadow-xs active:scale-98 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Post a Service</span>
