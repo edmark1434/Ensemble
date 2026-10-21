@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X, Tag, Briefcase, Flag, ImageIcon } from "lucide-react";
-import { bannerPresetUrl } from "@/lib/profileBanners";
+import { bannerPresetUrl, resolveBannerPreset } from "@/lib/profileBanners";
 import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 import { ProfileTags } from "../Utilities/ProfileTags.tsx";
 import { StandingBadges, type PublicStanding } from "./AccountStanding.tsx";
@@ -112,7 +112,8 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
 
   if (loading) return <div className="h-[420px] w-full bg-gray-200 dark:bg-dark-elevated animate-pulse rounded-2xl" />;
 
-  const bannerUrl = bannerPresetUrl(bannerPreset);
+  const effectivePreset = resolveBannerPreset(bannerPreset, username || name || emailAddress);
+  const bannerUrl = bannerPresetUrl(effectivePreset);
 
 
 
@@ -133,7 +134,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             </button>
           )
         )}
-        {isOwner && bannerUrl && (
+        {isOwner && (
           <button
             onClick={onEditBanner}
             className="absolute right-3 top-3 flex items-center gap-1.5 rounded-lg border border-white/20 bg-black/50 px-2.5 py-1.5 text-[11px] font-semibold text-white backdrop-blur-sm hover:bg-black/70 transition"

@@ -3,7 +3,7 @@ import { X, Star, Tag } from "lucide-react";
 import FlipCard from "./FlipCard";
 import { useNavigate } from "react-router-dom";
 import { badgesRegistry } from "@/pages/user/7_profile/Utilities/BadgesRegistry";
-import { bannerPresetUrl } from "@/lib/profileBanners";
+import { bannerPresetUrl, resolveBannerPreset } from "@/lib/profileBanners";
 import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 
 export interface DiscoveryFlipCardUser {
@@ -49,7 +49,8 @@ interface DiscoveryFlipCardModalProps {
 export const DiscoveryFlipCardModal: React.FC<DiscoveryFlipCardModalProps> = ({ user, onClose, onInvite, hideActions }) => {
   const navigate = useNavigate();
   const subscription = user.subscriptionType || "Free";
-  const bannerUrl = bannerPresetUrl(user.bannerPreset ?? null);
+  const effectivePreset = resolveBannerPreset(user.bannerPreset ?? null, user.username || user.name || user.id);
+  const bannerUrl = bannerPresetUrl(effectivePreset);
   const displayedBadges = (user.badges || [])
     .filter(b => b.display_order !== null)
     .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))

@@ -350,9 +350,27 @@ const JobList: React.FC<JobListProps> = ({
                   <h3 className="text-gray-900 dark:text-white text-base font-bold mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
                     {job.title}
                   </h3>
-                  <div className="mb-4">
+                  <div className="mb-3">
                     <JobRichText content={job.description} truncate={2} />
                   </div>
+                  {Array.isArray(job.skills) && job.skills.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                      <Wrench className="h-3 w-3 text-gray-400 dark:text-zinc-400 shrink-0 mr-0.5" />
+                      {job.skills.slice(0, 3).map((skill) => (
+                        <span
+                          key={skill}
+                          className="rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 dark:text-zinc-300"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                      {job.skills.length > 3 && (
+                        <span className="rounded-md border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400">
+                          +{job.skills.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 font-medium">
