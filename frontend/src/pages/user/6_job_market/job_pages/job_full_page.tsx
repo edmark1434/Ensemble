@@ -34,6 +34,7 @@ import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
+import { continueIfAccountVerified } from "@/lib/accountVerification";
 import { JobRichText } from "../job_components/JobRichText";
 import { JobsOtherPosts } from "../job_components/jobs_other_posts";
 import PopupReportJob from "../job_components/job_popups/popup_report_job";
@@ -845,17 +846,16 @@ const JobFullPage: React.FC = () => {
                       <button
                         onClick={() => {
                           if (isGuestMode) return setIsModalOpen(true);
-                          if (isVerified) navigate(`/jobs/${job.id}/make-proposal`);
+                          void continueIfAccountVerified(
+                            () => navigate(`/jobs/${job.id}/make-proposal`),
+                            false,
+                            "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
+                          );
                         }}
-                        disabled={!isGuestMode && !isVerified}
-                        className={`w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition shadow-lg cursor-pointer ${
-                          !isGuestMode && !isVerified
-                            ? "bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none"
-                            : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]"
-                        }`}
+                        className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition shadow-lg cursor-pointer bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]"
                       >
                         <Send className="h-4 w-4" />
-                        {isGuestMode ? "Login to Apply" : !isVerified ? "Verify First" : "Send Proposal"}
+                        {isGuestMode ? "Login to Apply" : "Send Proposal"}
                       </button>
                     )
                   ) : (

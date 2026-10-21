@@ -7,6 +7,7 @@ import type { Job } from "./job_lists";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import useGlobalState from "@/lib/global_state";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
+import { continueIfAccountVerified } from "@/lib/accountVerification";
 
 interface JobViewDetailsProps {
   selectedJob: Job | null;
@@ -532,17 +533,16 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                       data-tour="job-detail-send-proposal"
                       onClick={() => {
                         if (isGuestMode) return setIsModalOpen(true);
-                        if (isVerified) navigate(`/jobs/${selectedJob.id}/make-proposal`);
+                        void continueIfAccountVerified(
+                          () => navigate(`/jobs/${selectedJob.id}/make-proposal`),
+                          false,
+                          "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
+                        );
                       }}
-                      disabled={!isGuestMode && !isVerified}
-                      className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg ${
-                        (!isGuestMode && !isVerified)
-                          ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' 
-                          : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]'
-                      }`}
+                      className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]"
                     >
                       <Send className="h-3.5 w-3.5" /> 
-                      {isGuestMode ? "Login to Apply" : (!isVerified ? "Verify First" : "Send Proposal")}
+                      {isGuestMode ? "Login to Apply" : "Send Proposal"}
                     </button>
                   </div>
                 )

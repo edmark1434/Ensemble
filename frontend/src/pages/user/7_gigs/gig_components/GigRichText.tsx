@@ -864,16 +864,26 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                               onClick={() => {
                                 if (isOwner) return;
                                 if (isGuestMode) return setIsModalOpen(true);
-                                if (isVerified) navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
+                                void continueIfAccountVerified(
+                                  () => {
+                                    if (gig.hasPendingOrder && gig.pendingOrderId) {
+                                      navigate(`/gigs/orders/sent/${gig.pendingOrderId}`);
+                                    } else {
+                                      navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
+                                    }
+                                  },
+                                  false,
+                                  "Account Verification is required to place a Gig Order. Please verify your identity to proceed."
+                                );
                               }}
-                              disabled={isOwner || (!isGuestMode && !isVerified)}
+                              disabled={isOwner}
                               className={`w-full py-3.5 rounded-xl font-bold text-sm transition-colors shadow-lg ${
-                                isOwner ? 'bg-gray-400 dark:bg-zinc-700 cursor-not-allowed text-white shadow-none' :
-                                (!isGuestMode && !isVerified) ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' :
-                                'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
+                                isOwner
+                                  ? 'bg-gray-400 dark:bg-zinc-700 cursor-not-allowed text-white shadow-none'
+                                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
                               }`}
                             >
-                              {isOwner ? "You own this service" : isGuestMode ? "Login to Continue" : !isVerified ? "Verify First" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
+                              {isOwner ? "You own this service" : isGuestMode ? "Login to Continue" : gig.hasPendingOrder ? "View My Order" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
                             </button>
                         </div>
                       </div>
@@ -938,21 +948,28 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
 
                         <button
                           onClick={() => {
-                              if (isOwner || (!isGuestMode && !isVerified)) return;
-                              if (gig.hasPendingOrder && gig.pendingOrderId) {
-                                navigate(`/gigs/orders/sent/${gig.pendingOrderId}`);
-                              } else {
-                                navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
-                              }
+                              if (isOwner) return;
+                              if (isGuestMode) return setIsModalOpen(true);
+                              void continueIfAccountVerified(
+                                () => {
+                                  if (gig.hasPendingOrder && gig.pendingOrderId) {
+                                    navigate(`/gigs/orders/sent/${gig.pendingOrderId}`);
+                                  } else {
+                                    navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
+                                  }
+                                },
+                                false,
+                                "Account Verification is required to place a Gig Order. Please verify your identity to proceed."
+                              );
                             }}
-                            disabled={isOwner || (!isGuestMode && !isVerified)}
+                            disabled={isOwner}
                             className={`w-full py-3.5 rounded-xl font-bold text-sm transition-colors shadow-lg ${
-                              isOwner ? 'bg-gray-400 dark:bg-zinc-700 cursor-not-allowed text-white shadow-none' :
-                              (!isGuestMode && !isVerified) ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' :
-                              'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
+                              isOwner
+                                ? 'bg-gray-400 dark:bg-zinc-700 cursor-not-allowed text-white shadow-none'
+                                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
                             }`}
                           >
-                            {isOwner ? "You own this service" : isGuestMode ? "Login to Continue" : !isVerified ? "Verify First" : gig.hasPendingOrder ? "View My Order" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
+                            {isOwner ? "You own this service" : isGuestMode ? "Login to Continue" : gig.hasPendingOrder ? "View My Order" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
                         </button>
                       </motion.div>
                     </AnimatePresence>
@@ -997,17 +1014,22 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
               onClick={() => {
                   if (isOwner) return;
                   if (isGuestMode) return setIsModalOpen(true);
-                  if (!isVerified) return;
-                  if (gig.hasPendingOrder && gig.pendingOrderId) {
-                    navigate(`/gigs/orders/sent/${gig.pendingOrderId}`);
-                  } else {
-                    navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
-                  }
+                  void continueIfAccountVerified(
+                    () => {
+                      if (gig.hasPendingOrder && gig.pendingOrderId) {
+                        navigate(`/gigs/orders/sent/${gig.pendingOrderId}`);
+                      } else {
+                        navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
+                      }
+                    },
+                    false,
+                    "Account Verification is required to place a Gig Order. Please verify your identity to proceed."
+                  );
                 }}
-                disabled={isOwner || (!isGuestMode && !isVerified)}
+                disabled={isOwner}
                 className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
               >
-                {isOwner ? "You own this service" : isGuestMode ? "Login to Order" : !isVerified ? "Verify First" : gig.hasPendingOrder ? "View My Order" : "Order Now"}
+                {isOwner ? "You own this service" : isGuestMode ? "Login to Order" : gig.hasPendingOrder ? "View My Order" : "Order Now"}
             </button>
           </div>
         )}

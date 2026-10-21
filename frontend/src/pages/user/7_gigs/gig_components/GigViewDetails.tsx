@@ -466,15 +466,15 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                           data-tour="gig-detail-order-button"
                           onClick={() => {
                             if (isGuestMode) return setIsModalOpen(true);
-                            if (isVerified) handleOpenCheckout();
+                            void continueIfAccountVerified(
+                              () => handleOpenCheckout(),
+                              false,
+                              "Account Verification is required to place a Gig Order. Please verify your identity to proceed."
+                            );
                           }}
-                          disabled={!isGuestMode && !isVerified}
-                        className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg ${
-                          !isGuestMode && !isVerified ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' 
-                            : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]'
-                        }`}
+                        className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]"
                       >
-                        {isGuestMode ? "Login to Order" : (!isVerified ? "Verify First" : (selectedGig.hasPendingOrder ? "View My Order" : `Order ${activeTier?.tierName || "Package"}`))}
+                        {isGuestMode ? "Login to Order" : (selectedGig.hasPendingOrder ? "View My Order" : `Order ${activeTier?.tierName || "Package"}`)}
                       </button>
                   </div>
                 </>

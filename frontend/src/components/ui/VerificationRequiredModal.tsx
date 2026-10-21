@@ -23,7 +23,7 @@ const VerificationRequiredModal = () => {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className={`fixed top-0 bottom-0 right-0 left-0 \${isSidebarCollapsed ? 'md:left-20' : 'md:left-64'} z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-all duration-300`}
+          className={`fixed top-0 bottom-0 right-0 left-0 ${isSidebarCollapsed ? 'md:left-20' : 'md:left-64'} z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-all duration-300`}
         >
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-blue-500/10 blur-[80px]" />
