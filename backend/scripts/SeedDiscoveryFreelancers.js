@@ -47,7 +47,7 @@ const PERSONAS = [
     sub: 'Business',
     verified: true,
     ratings: [5, 5, 5, 5],
-    tagline: 'Lead Commercial Colorist & DaVinci Finishing',
+    tagline: 'Commercial Colorist',
     bio: 'Senior commercial colorist with 7+ years grading brand campaigns, music videos, and festival shorts. ACES pipeline & HDR deliverables.',
     skills: [
       ['Color Grading', 'Expert', 7],
@@ -57,13 +57,13 @@ const PERSONAS = [
     ],
   },
   {
-    firstName: 'ara',
+    firstName: 'Sora',
     lastName: 'Kurosawa',
     role: 'Freelancer',
     sub: 'Premium',
     verified: true,
     ratings: [5, 5, 4],
-    tagline: 'Retention-obsessed YouTube & Documentary Editor',
+    tagline: 'Documentary Editor',
     bio: 'Crafting high-retention long-form documentaries and creator essays. Specialized in narrative pacing, sound risers, and 3D motion callouts.',
     skills: [
       ['Video Editing', 'Expert', 5],
@@ -80,7 +80,7 @@ const PERSONAS = [
     sub: 'Free',
     verified: true,
     ratings: [], // Brand-new unrated talent with complete profile (great for testing cold-start boost!)
-    tagline: 'Short-Form Viral Reels & TikTok Growth Editor',
+    tagline: 'Short-Form Specialist',
     bio: 'Helping founders and educators scale on TikTok, Reels, and Shorts with kinetic typography, punchy B-roll, and sub-second hook pacing.',
     skills: [
       ['Video Editing', 'Advanced', 3],
@@ -97,7 +97,7 @@ const PERSONAS = [
     sub: 'Business',
     verified: true,
     ratings: [5, 5, 5, 5, 5],
-    tagline: 'VFX Compositor & 3D Motion Director',
+    tagline: 'VFX Compositor',
     bio: 'Nuke & After Effects compositor delivering clean plate removals, rotoscoping, matchmoving, and stylized HUD motion graphics for trailers.',
     skills: [
       ['Visual Effects (VFX)', 'Expert', 8],
@@ -113,7 +113,7 @@ const PERSONAS = [
     sub: 'Premium',
     verified: true,
     ratings: [5, 4, 5],
-    tagline: 'Podcast Multicam & Dialogue Mastering Specialist',
+    tagline: 'Podcast Editor',
     bio: 'Full-episode multicam switching, spectral audio denoise, LUFS loudness mastering, and viral vertical clip extraction for video podcasts.',
     skills: [
       ['Multi-camera Scene Editing', 'Expert', 4],
@@ -129,7 +129,7 @@ const PERSONAS = [
     sub: 'Free',
     verified: false,
     ratings: [5],
-    tagline: '2D Anime AMV & Kinetic Typography Artist',
+    tagline: 'Anime AMV Animator',
     bio: 'Frame-synced rhythm cuts, custom speed graphs, twixtor flow, and vibrant 2D typography overlays for gaming and music creators.',
     skills: [
       ['2D Animation', 'Advanced', 3],
@@ -145,7 +145,7 @@ const PERSONAS = [
     sub: 'Business',
     verified: true,
     ratings: [5, 5, 5],
-    tagline: 'Creative Director @ Vance Media Studio',
+    tagline: 'Creative Director',
     bio: 'Commissioning weekly post-production sprints for SaaS launch films, YouTube channels, and paid social ad creatives.',
     skills: [
       ['Video Editing', 'Advanced', 5],
@@ -160,7 +160,7 @@ const PERSONAS = [
     sub: 'Premium',
     verified: true,
     ratings: [5, 5],
-    tagline: 'Cinematic Wedding & Event Highlight Filmmaker',
+    tagline: 'Wedding Filmmaker',
     bio: 'Turning raw multi-cam event footage into emotional, sound-driven narrative films with natural skin-tone color grading.',
     skills: [
       ['Scene Assembly', 'Expert', 6],
@@ -177,7 +177,7 @@ const PERSONAS = [
     sub: 'Free',
     verified: true,
     ratings: [], // Unrated cold-start talent
-    tagline: 'Sound Designer & Foley Mixer for Indie Shorts',
+    tagline: 'Sound Designer',
     bio: 'Custom foley, cinematic impacts, atmospheric beds, and crisp dialogue cleanup in Pro Tools and Fairlight.',
     skills: [
       ['Sound Design', 'Expert', 4],
@@ -192,7 +192,7 @@ const PERSONAS = [
     sub: 'Premium',
     verified: true,
     ratings: [5, 5, 5, 4],
-    tagline: 'SaaS Product Explainers & UI Motion Graphics',
+    tagline: 'Motion Designer',
     bio: 'Clean, modern UI animations and product walkthrough videos that turn complex software features into high-converting demos.',
     skills: [
       ['Motion Graphics', 'Expert', 5],
@@ -208,7 +208,7 @@ const PERSONAS = [
     sub: 'Free',
     verified: true,
     ratings: [5, 4],
-    tagline: 'Esports & Gaming Montage Editor',
+    tagline: 'Gaming Editor',
     bio: 'High-octane FPS and variety gaming edits with 3D camera tracking, cine-cams, SFX layering, and comedic subtitle timing.',
     skills: [
       ['Video Editing', 'Advanced', 4],
@@ -225,7 +225,7 @@ const PERSONAS = [
     sub: 'Business',
     verified: true,
     ratings: [5, 5, 5],
-    tagline: 'Documentary Assembly & Multi-Cam Story Editor',
+    tagline: 'Lead Story Editor',
     bio: 'Long-form documentary editor experienced in paper edits, stringouts, archival integration, and ensemble interview weaving.',
     skills: [
       ['Ensemble Editing', 'Expert', 7],
@@ -242,7 +242,7 @@ const PERSONAS = [
     sub: 'Free',
     verified: false,
     ratings: [],
-    tagline: 'Indie Film Enthusiast & Experimental Colorist',
+    tagline: 'Indie Filmmaker',
     bio: 'Exploring 16mm film emulation, halation shaders, and collaborative timeline workflows on Ensemble.',
     skills: [
       ['Color Grading', 'Intermediate', 2],
@@ -257,7 +257,7 @@ const PERSONAS = [
     sub: 'Premium',
     verified: true,
     ratings: [5, 5, 4, 5],
-    tagline: 'Multilingual Subtitling, SRT & Localization Pro',
+    tagline: 'Localization Specialist',
     bio: 'Broadcast-compliant closed captioning, burned-in stylized subtitles, and timecode-accurate transcription for global releases.',
     skills: [
       ['Subtitling & Closed Captions', 'Expert', 5],
@@ -273,7 +273,7 @@ const PERSONAS = [
     sub: 'Premium',
     verified: true,
     ratings: [5, 5],
-    tagline: 'Head of Content @ Lumina Creators',
+    tagline: 'Content Director',
     bio: 'Managing a roster of 12 lifestyle and tech creators. Always scouting reliable editors for weekly retainers and team projects.',
     skills: [
       ['Video Editing', 'Intermediate', 3],
@@ -288,7 +288,7 @@ const PERSONAS = [
     sub: 'Free',
     verified: true,
     ratings: [5, 5],
-    tagline: 'Direct-Response UGC & Performance Ad Editor',
+    tagline: 'Performance Ad Editor',
     bio: 'Modular hook testing, split-screen social proof, and fast-paced DTC video ads built for Meta, TikTok, and YouTube Shorts.',
     skills: [
       ['Video Editing', 'Advanced', 4],
@@ -305,7 +305,7 @@ const PERSONAS = [
     sub: 'Business',
     verified: true,
     ratings: [5, 5, 5, 5],
-    tagline: 'Full-Stack Post-Production Lead & Ensemble Editor',
+    tagline: 'Post-Production Lead',
     bio: 'End-to-end post supervisor handling offline assembly, motion graphics packaging, color finishing, and stems delivery.',
     skills: [
       ['Ensemble Editing', 'Expert', 6],
@@ -322,7 +322,7 @@ const PERSONAS = [
     sub: 'Free',
     verified: false,
     ratings: [],
-    tagline: 'Fast-Turnaround Vlogs & Travel Creator Cuts',
+    tagline: 'Travel Vlog Editor',
     bio: 'getic story cuts, beat-matched transitions, and drone speed-ramping for travel and lifestyle YouTubers.',
     skills: [
       ['Video Editing', 'Intermediate', 2],
@@ -338,7 +338,7 @@ const PERSONAS = [
     sub: 'Premium',
     verified: true,
     ratings: [5, 4, 5],
-    tagline: 'Music Video Editor & Visual Rhythm Specialist',
+    tagline: 'Music Video Editor',
     bio: 'Cutting narrative and performance music videos with seamless match cuts, optical glow comps, and film grain textures.',
     skills: [
       ['Video Editing', 'Expert', 5],
@@ -354,7 +354,7 @@ const PERSONAS = [
     sub: 'Free',
     verified: true,
     ratings: [5],
-    tagline: 'Motion Typography & Title Sequence Designer',
+    tagline: 'Title Designer',
     bio: 'Passionate about kinetic type systems, brutalist title cards, and lower-third broadcast packages.',
     skills: [
       ['Motion Graphics', 'Advanced', 3],
@@ -370,7 +370,7 @@ const PERSONAS = [
     sub: 'Free',
     verified: true,
     ratings: [5, 5, 5],
-    tagline: 'Narrative Short Film & Continuity Editor',
+    tagline: 'Narrative Film Editor',
     bio: 'Focused on invisible cuts, dramatic eye-trace, performance selection, and L/J-cut dialogue flow for narrative fiction.',
     skills: [
       ['Continuity Editing', 'Expert', 5],
@@ -386,7 +386,7 @@ const PERSONAS = [
     sub: 'Premium',
     verified: true,
     ratings: [5, 5],
-    tagline: 'Real Estate, Luxury Architecture & Aerial Editor',
+    tagline: 'Aerial Filmmaker',
     bio: 'Stabilized FPV/drone speed ramps, sky replacement, day-to-dusk color grading, and luxury property tour sequences.',
     skills: [
       ['Color Grading', 'Expert', 5],
@@ -402,7 +402,7 @@ const PERSONAS = [
     sub: 'Business',
     verified: true,
     ratings: [5, 4, 5],
-    tagline: 'Executive Producer @ Apex Documentary Labs',
+    tagline: 'Executive Producer',
     bio: 'Hiring specialized editors, colorists, and sound mixers for investigative mini-docs and branded series.',
     skills: [
       ['Ensemble Editing', 'Advanced', 6],
@@ -416,7 +416,7 @@ const PERSONAS = [
     sub: 'Free',
     verified: true,
     ratings: [],
-    tagline: 'Course & EdTech Video Production Specialist',
+    tagline: 'EdTech Video Producer',
     bio: 'Transforming raw webinar and lecture recordings into polished, chaptered online courses with clean callout graphics.',
     skills: [
       ['Video Editing', 'Advanced', 4],
