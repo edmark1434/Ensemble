@@ -8,7 +8,7 @@
  *
  * Usage: node backend/scripts/SeedGigsDataset.js
  */
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+require('dotenv').config({ quiet: true, path: require('path').resolve(__dirname, '../.env') });
 const { pool } = require('../lib/Database');
 
 const DEFAULT_TOS =
@@ -689,7 +689,6 @@ async function replaceAndSeed25Gigs() {
     const buyerAccount = users[0];
 
     // 2. Cleanly remove all existing gigs and their dependent records
-    console.log('Cleaning existing services and dependent records...');
     await client.query(`
       DELETE FROM ratings
       WHERE contract_id IN (SELECT contract_id FROM gig_contracts)
@@ -711,10 +710,13 @@ async function replaceAndSeed25Gigs() {
     await client.query(`DELETE FROM gig_tiers`);
     await client.query(`DELETE FROM gigs`);
 
-    console.log(`Seeding ${GIGS_25.length} fresh services...`);
+    const archetypeStats = { A_RISING_CREATOR: 0, B_VETERAN_AVAILABLE: 0, C_VETERAN_BUSY_QUEUE: 0, D_LOW_EFFORT: 0 };
+    let totalOrdersCount = 0;
 
     for (let i = 0; i < GIGS_25.length; i++) {
       const item = GIGS_25[i];
+      archetypeStats[item.archetype] = (archetypeStats[item.archetype] || 0) + 1;
+      totalOrdersCount += (item.pendingOrdersToSeed || 0);
       const sellerAccount =
         item.preferOwnerName && randalUser
           ? randalUser
@@ -847,11 +849,16 @@ async function replaceAndSeed25Gigs() {
         );
       }
 
-      console.log(`  [${String(i + 1).padStart(2, '0')}/25] (${item.archetype}) ${item.title} — Owner: ${sellerAccount.display_name}`);
+
     }
 
     await client.query('COMMIT');
-    console.log('\n✅ Successfully replaced existing gigs with 25 fresh services!');
+    console.log('\n========================================================================');
+    console.log('  [4/4] SERVICES / GIGS DATASET SEED');
+    console.log('========================================================================');
+    console.log(`  ✔ Seeded ${GIGS_25.length} creative services across 4 ranking archetypes:`);
+    console.log(`    • ${archetypeStats.A_RISING_CREATOR} Rising | ${archetypeStats.B_VETERAN_AVAILABLE} Proven (Available) | ${archetypeStats.C_VETERAN_BUSY_QUEUE} Busy Queue | ${archetypeStats.D_LOW_EFFORT} Starter`);
+    console.log(`  ✔ Multi-tier packages, 3-phase milestones & ${totalOrdersCount} queued client orders`);
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Failed to seed 25 gigs:', err);

@@ -14,7 +14,7 @@
  *
  * Usage: node backend/scripts/SeedJobsDataset.js
  */
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+require('dotenv').config({ quiet: true, path: require('path').resolve(__dirname, '../.env') });
 const { pool } = require('../lib/Database');
 
 const JOBS_25 = [
@@ -776,7 +776,6 @@ async function replaceAndSeed25Jobs() {
     const applicantPool = otherUsers;
 
     // 2. Safely remove old non-contracted jobs so we have a clean 25-job marketplace
-    console.log('Cleaning existing non-contracted jobs and dependent records...');
     await client.query(`
       DELETE FROM proposal_milestones
       WHERE proposal_id IN (
@@ -847,10 +846,17 @@ async function replaceAndSeed25Jobs() {
       }
     }
 
-    console.log(`Seeding ${JOBS_25.length} realistic job posts across all 3 Job Types...`);
+    const typeStats = { individual_open: 0, individual_ranged: 0, team_pool: 0 };
+    const archetypeStats = { A_RISING_JOB: 0, B_TRUSTED_CLIENT: 0, C_CROWDED_JOB: 0, D_PARTIAL_BRIEF: 0 };
+    let totalProposalsCount = 0;
+    let totalMilestonesCount = 0;
 
     for (let i = 0; i < JOBS_25.length; i++) {
       const item = JOBS_25[i];
+      typeStats[item.jobType] = (typeStats[item.jobType] || 0) + 1;
+      archetypeStats[item.archetype] = (archetypeStats[item.archetype] || 0) + 1;
+      totalProposalsCount += (item.proposalsToSeed || 0);
+      totalMilestonesCount += (item.milestones?.length || 0);
 
       let clientAccount;
       if (item.preferOwnerName && randalUser) {
@@ -998,13 +1004,16 @@ async function replaceAndSeed25Jobs() {
         );
       }
 
-      console.log(
-        `  [${String(i + 1).padStart(2, '0')}/25] [${item.jobType}] (${item.archetype}) ${item.title} — Client: ${clientAccount.display_name}`
-      );
+
     }
 
     await client.query('COMMIT');
-    console.log('\n✅ Successfully seeded 25 realistic job posts across all 3 Job Types!');
+    console.log('\n========================================================================');
+    console.log('  [3/4] JOB MARKET DATASET SEED');
+    console.log('========================================================================');
+    console.log(`  ✔ Seeded ${JOBS_25.length} realistic jobs: ${typeStats.individual_open} Open Bid | ${typeStats.individual_ranged} Multi-Seat | ${typeStats.team_pool} Team Milestone Pool`);
+    console.log(`  ✔ Discovery Archetypes: ${archetypeStats.A_RISING_JOB} Rising | ${archetypeStats.B_TRUSTED_CLIENT} Trusted | ${archetypeStats.C_CROWDED_JOB} High Demand | ${archetypeStats.D_PARTIAL_BRIEF} Low Brief`);
+    console.log(`  ✔ Seeded ${totalMilestonesCount} milestone phases & ${totalProposalsCount} applicant proposals`);
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Failed to seed 25 jobs:', err);

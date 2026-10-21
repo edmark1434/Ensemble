@@ -372,7 +372,6 @@ async function seed() {
         ]
       );
       staffByRole[staff.role] = staffRes.rows[0].staff_id;
-      console.log(`✅ Created ${staff.displayName} — ${staff.role} (${staff.email} / @${staff.handle})`);
     }
 
     // 2. Seed Regular USERS (10 random users)
@@ -416,12 +415,15 @@ async function seed() {
     await seedDefaultTOS();
     await seedSampleJobs(userAccountIds);
 
-    console.log('');
-    console.log('🔑 Staff login (password: staff123):');
+    console.log('\n========================================================================');
+    console.log('  [1/4] CORE PLATFORM & STAFF SEED');
+    console.log('========================================================================');
+    console.log(`  ✔ Seeded ${userAccountIds.length} core user accounts, platform escrow wallets & settings`);
+    console.log(`  ✔ Seeded ${STAFF_SEED.length} staff accounts (password: staff123):`);
     for (const staff of STAFF_SEED) {
-      console.log(`   ${staff.role.padEnd(24)} ${staff.email}  /  @${staff.handle}  (${staff.displayName})`);
+      console.log(`    • ${staff.role.padEnd(22)} @${staff.handle.padEnd(16)} (${staff.email})`);
     }
-    console.log(`✨ Seeding complete! ${userAccountIds.length} users, ${STAFF_SEED.length} staff, portal + domain examples loaded.`);
+    console.log('  ✔ Support portal catalogs, domain samples & TOS templates initialized');
   } catch (err) {
     console.error("❌ Seeding Error:", err);
   } finally {

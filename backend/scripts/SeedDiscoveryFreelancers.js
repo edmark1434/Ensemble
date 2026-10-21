@@ -13,7 +13,7 @@
  *
  * Usage: node scripts/SeedDiscoveryFreelancers.js [count=32]
  */
-require('dotenv').config();
+require('dotenv').config({ quiet: true, path: require('path').resolve(__dirname, '../.env') });
 const { faker } = require('@faker-js/faker');
 const bcrypt = require('bcrypt');
 const { pool } = require('../lib/Database');
@@ -480,9 +480,15 @@ async function main() {
 
     const passwordHash = await bcrypt.hash('user123', 10);
     const createdAccountIds = [];
+    const roleStats = { Freelancer: 0, Client: 0, Enthusiast: 0 };
+    const subStats = { Business: 0, Premium: 0, Free: 0 };
+    let verifiedCount = 0;
 
     for (let i = 0; i < count; i++) {
       const persona = PERSONAS[i % PERSONAS.length];
+      roleStats[persona.role] = (roleStats[persona.role] || 0) + 1;
+      subStats[persona.sub] = (subStats[persona.sub] || 0) + 1;
+      if (persona.verified) verifiedCount++;
       const firstName = i < PERSONAS.length ? (persona.firstName === 'ara' ? 'Sora' : persona.firstName) : cap(faker.person.firstName(), 50);
       const lastName = i < PERSONAS.length ? persona.lastName : cap(faker.person.lastName(), 50);
       const displayName = cap(`${firstName} ${lastName}`, 50);
@@ -597,9 +603,7 @@ async function main() {
         }
       }
 
-      console.log(
-        `+ ${displayName} (@${handle}) [${persona.role} | ${persona.sub} | ${persona.verified ? 'Verified' : 'Unverified'} | ${persona.ratings.length} reviews]`
-      );
+
     }
 
     // 7. Seed realistic follower relationships among accounts
@@ -623,7 +627,13 @@ async function main() {
     }
 
     await client.query('COMMIT');
-    console.log(`\nSuccessfully seeded ${count} rich Discovery profiles! Password for all: user123`);
+    console.log('\n========================================================================');
+    console.log('  [2/4] DISCOVERY CREATORS SEED');
+    console.log('========================================================================');
+    console.log(`  ✔ Seeded ${count} discovery creators: ${roleStats.Freelancer || 0} Freelancers, ${roleStats.Client || 0} Clients, ${roleStats.Enthusiast || 0} Enthusiasts`);
+    console.log(`  ✔ Tiers: ${subStats.Business || 0} Business | ${subStats.Premium || 0} Premium | ${subStats.Free || 0} Free (${verifiedCount} Verified)`);
+    console.log('  ✔ Skills, experience depth, ratings, badges & follower graph populated');
+    console.log('  ✔ Universal login password for all seeded users: user123');
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Seeding failed:', err);
