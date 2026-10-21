@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Clock, Users, Star, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart, Flag, TrendingUp, HelpCircle, ChevronDown, Layers } from "lucide-react";
+import { Clock, Users, Star, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart, Flag, TrendingUp, HelpCircle, ChevronDown, Layers, Maximize2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import type { Gig } from "../gig_datasets";
@@ -123,22 +123,34 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
               />
               <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
 
-              {onToggleSave && !isGuestMode && (
+              <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
                 <button
-                  title="Save Gig"
+                  title="View Full Page"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onToggleSave(selectedGig.id);
+                    navigate(`/gigs/services/${selectedGig.id}/page`);
                   }}
-                  className={`absolute top-4 right-4 rounded-full p-2 backdrop-blur-sm transition z-10 ${
-                    selectedGig.isSaved
-                      ? "bg-black/50 text-yellow-500 hover:bg-black/70"
-                      : "bg-black/50 text-gray-500 dark:text-zinc-400 hover:text-gray-900 hover:bg-black/70"
-                  }`}
+                  className="rounded-full p-2 bg-black/50 text-white/80 hover:text-white hover:bg-black/70 backdrop-blur-sm transition cursor-pointer"
                 >
-                  <Bookmark className={`h-4 w-4 ${selectedGig.isSaved ? "fill-current" : ""}`} />
+                  <Maximize2 className="h-4 w-4" />
                 </button>
-              )}
+                {onToggleSave && !isGuestMode && (
+                  <button
+                    title="Save Gig"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleSave(selectedGig.id);
+                    }}
+                    className={`rounded-full p-2 backdrop-blur-sm transition cursor-pointer ${
+                      selectedGig.isSaved
+                        ? "bg-black/50 text-yellow-500 hover:bg-black/70"
+                        : "bg-black/50 text-gray-500 dark:text-zinc-400 hover:text-gray-900 hover:bg-black/70"
+                    }`}
+                  >
+                    <Bookmark className={`h-4 w-4 ${selectedGig.isSaved ? "fill-current" : ""}`} />
+                  </button>
+                )}
+              </div>
 
               {selectedGig.tiers && selectedGig.tiers.length > 0 && (
                 <div className="absolute bottom-3 left-5 z-10">

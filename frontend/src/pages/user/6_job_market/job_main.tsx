@@ -1,5 +1,6 @@
 import { getBudgetDisplayInfo, getJobBudgetType } from "@/lib/formatBudget";
 import { getImageUrl } from "@/lib/utils";
+import { resolveAvatarPath } from "@/lib/accountAvatars";
 import React, { useState, useEffect, useMemo } from "react";
 import { Filter } from "lucide-react";
 import { Outlet, useNavigate, useParams, useLocation } from "react-router-dom";
@@ -153,9 +154,7 @@ const JobMain: React.FC = () => {
           maxBudget: j.rate_credits_max || 0,
           postedBy: j.client_name || j.client_handle || "Unknown",
           client_account_id: j.client_account_id,
-          clientAvatar: j.client_avatar_path
-            ? `${import.meta.env.VITE_CLOUDFRONT_URL}${j.client_avatar_path.startsWith('/') ? '' : '/'}${j.client_avatar_path}`
-            : undefined,
+          clientAvatar: resolveAvatarPath(j.client_avatar_path),
           postedAt: new Date(j.created_at).toLocaleString(),
           createdAt: j.created_at,
           timeAgo: getTimeAgo(new Date(j.created_at)),

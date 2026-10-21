@@ -1,4 +1,5 @@
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
+import { resolveAvatarPath } from "@/lib/accountAvatars";
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -124,9 +125,7 @@ const JobFullPage: React.FC = () => {
             maxBudget,
             postedBy: j.client_name || j.client_handle || "Unknown",
             client_account_id: j.client_account_id,
-            clientAvatar: j.client_avatar_path
-              ? `${cloudFrontUrl}${j.client_avatar_path.startsWith("/") ? "" : "/"}${j.client_avatar_path}`
-              : undefined,
+            clientAvatar: resolveAvatarPath(j.client_avatar_path),
             postedAt: new Date(j.created_at).toLocaleString(),
             createdAt: j.created_at,
             updatedAt: j.updated_at ? `Updated ${new Date(j.updated_at).toLocaleDateString()}` : undefined,
@@ -732,17 +731,24 @@ const JobFullPage: React.FC = () => {
               {/* Profile Card */}
               <div className="p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 shadow-sm backdrop-blur-xl flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  {job.clientAvatar ? (
+                  <div className="relative h-10 w-10 shrink-0">
                     <img
                       src={job.clientAvatar}
                       alt={job.postedBy}
-                      className="h-10 w-10 rounded-full object-cover border border-gray-200 dark:border-white/10 shrink-0"
+                      className={`h-10 w-10 rounded-full object-cover border border-gray-200 dark:border-white/10 ${!job.clientAvatar ? 'hidden' : ''}`}
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const fallback = e.currentTarget.nextElementSibling;
+                        if (fallback) {
+                          fallback.classList.remove('hidden');
+                          fallback.classList.add('flex');
+                        }
+                      }}
                     />
-                  ) : (
-                    <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-xs text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 shrink-0">
-                      {job.postedBy.charAt(0)}
+                    <div className={`${job.clientAvatar ? 'hidden' : 'flex'} absolute inset-0 items-center justify-center rounded-full bg-gray-200 dark:bg-zinc-800 text-sm font-bold text-gray-700 dark:text-white border border-gray-200 dark:border-white/10 overflow-hidden`}>
+                      {job.postedBy ? job.postedBy.charAt(0).toUpperCase() : "U"}
                     </div>
-                  )}
+                  </div>
 
                   <div className="text-left min-w-0">
                     <p className="text-[10px] uppercase text-gray-500 dark:text-zinc-500 font-bold tracking-wider">

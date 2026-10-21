@@ -1,3 +1,4 @@
+import { resolveAvatarPath } from "@/lib/accountAvatars";
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -102,9 +103,7 @@ export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) 
                 clientRating: parseFloat(j.client_rating) || 0,
                 ratingCount: parseInt(j.client_rating_count) || 0,
                 postedBy: j.client_name || j.client_handle || "Unknown",
-                clientAvatar: j.client_avatar_path
-                  ? `${cloudFrontUrl}${j.client_avatar_path.startsWith("/") ? "" : "/"}${j.client_avatar_path}`
-                  : undefined,
+                clientAvatar: resolveAvatarPath(j.client_avatar_path),
                 postedAt: j.created_at ? new Date(j.created_at).toLocaleString() : "",
                 createdAt: j.created_at,
                 timeAgo: j.created_at ? getTimeAgo(new Date(j.created_at)) : "Just now",
@@ -384,18 +383,23 @@ export const JobsOtherPosts: React.FC<JobsOtherPostsProps> = ({ currentJobId }) 
                   {/* Footer */}
                   <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 font-medium">
                     <div className="flex items-center gap-1.5 truncate">
-                      {job.clientAvatar ? (
+                      <div className="relative h-5 w-5 shrink-0">
                         <img
                           src={job.clientAvatar}
                           alt=""
+                          className={`h-5 w-5 rounded-full object-cover border border-gray-200 dark:border-white/10 ${!job.clientAvatar ? 'hidden' : ''}`}
                           onError={(e) => {
-                            (e.currentTarget as HTMLElement).style.display = "none";
+                            e.currentTarget.style.display = 'none';
+                            const fallback = e.currentTarget.nextElementSibling;
+                            if (fallback) {
+                              fallback.classList.remove('hidden');
+                              fallback.classList.add('flex');
+                            }
                           }}
-                          className="h-5 w-5 shrink-0 rounded-full object-cover border border-gray-200 dark:border-white/10"
                         />
-                      ) : null}
-                      <div className={`h-5 w-5 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-[9px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 ${job.clientAvatar ? "hidden" : ""}`}>
-                        {job.postedBy.charAt(0).toUpperCase()}
+                        <div className={`${job.clientAvatar ? 'hidden' : 'flex'} absolute inset-0 items-center justify-center rounded-full bg-gray-200 dark:bg-zinc-800 text-[9px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 overflow-hidden`}>
+                          {job.postedBy ? job.postedBy.charAt(0).toUpperCase() : "U"}
+                        </div>
                       </div>
                       <span className="truncate text-gray-700 dark:text-zinc-300 font-semibold">
                         {job.postedBy}

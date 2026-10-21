@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import { X, Check, AlertTriangle, Trash2, Lock, Sparkles, Layers } from "lucide-react";
-import { PROFILE_BANNER_GROUPS, BANNER_REQUIRED_BADGES, bannerPresetLabel, bannerPresetUrl } from "@/lib/profileBanners";
+import { X, Check, AlertTriangle, Trash2, Lock, Sparkles, Layers, LayoutGrid, Crown, Palette, History, User, Laptop, Briefcase } from "lucide-react";
+import useGlobalState from "@/lib/global_state";
+import { resolveAvatarPath } from "@/lib/accountAvatars";
+import { motion } from "framer-motion";
+import { PROFILE_BANNER_GROUPS, PROFILE_BANNER_PRESETS, BANNER_REQUIRED_BADGES, bannerPresetLabel, bannerPresetUrl } from "@/lib/profileBanners";
 
 interface BannerEditModalProps {
   isOpen: boolean;
@@ -8,6 +11,11 @@ interface BannerEditModalProps {
   onSave: (bannerPreset: string | null) => Promise<void>;
   currentBanner?: string | null;
   ownedBadgeIds?: string[];
+  userName?: string;
+  userHandle?: string;
+  userAvatar?: string | null;
+  userRole?: string;
+  userTagline?: string;
 }
 
 export default function BannerEditModal({
@@ -16,12 +24,40 @@ export default function BannerEditModal({
   onSave,
   currentBanner = null,
   ownedBadgeIds = [],
+  userName,
+  userHandle,
+  userAvatar,
+  userRole,
+  userTagline,
 }: BannerEditModalProps) {
   const [selected, setSelected] = useState<string | null>(currentBanner);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [previewTab, setPreviewTab] = useState<"profile" | "card">("profile");
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [error, setError] = useState("");
+
+  const globalUser = useGlobalState((s) => s.user);
+
+  const getSafeString = (val: any, fallback: string): string => {
+    if (!val) return fallback;
+    if (typeof val === "string") return val;
+    if (typeof val === "object") {
+      if (val.role_name) return String(val.role_name);
+      if (val.name) return String(val.name);
+      if (val.handle) return String(val.handle);
+      if (val.tagline) return String(val.tagline);
+      if (Array.isArray(val) && val.length > 0) return getSafeString(val[0], fallback);
+      return fallback;
+    }
+    return String(val);
+  };
+
+  const displayName = getSafeString(userName || globalUser?.name, "Alex Morgan");
+  const displayHandle = getSafeString(userHandle || globalUser?.handle || globalUser?.username, "alex_editor");
+  const displayRole = getSafeString(userRole || globalUser?.role, "Freelancer");
+  const displayTagline = getSafeString(userTagline || globalUser?.tagline, "Creative Visual Storyteller");
+  const displayAvatar = resolveAvatarPath(userAvatar || globalUser?.avatar_preset_url || globalUser?.avatar);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -54,7 +90,27 @@ export default function BannerEditModal({
     if (!isSaving) onClose();
   };
 
-  const categories = ["All", ...PROFILE_BANNER_GROUPS.map((g) => g.label)];
+  const GROUP_ICONS: Record<string, React.ElementType> = {
+    "Ensemble Banners": Sparkles,
+    "Subscription Banners": Crown,
+    "Collection": Palette,
+    "Legacy": History,
+  };
+
+  const categories = [
+    {
+      id: "All",
+      label: "All",
+      icon: LayoutGrid,
+      count: PROFILE_BANNER_PRESETS.length,
+    },
+    ...PROFILE_BANNER_GROUPS.map((g) => ({
+      id: g.label,
+      label: g.label.replace(/ Banners$/, ""),
+      icon: GROUP_ICONS[g.label] || Layers,
+      count: g.presets.length,
+    })),
+  ];
 
   const visibleGroups =
     selectedCategory === "All"
@@ -93,43 +149,155 @@ export default function BannerEditModal({
           {/* Left Column (5 cols): Live Preview & Current Status */}
           <div className="md:col-span-5 p-5 sm:p-6 border-b md:border-b-0 md:border-r border-gray-100 dark:border-white/10 flex flex-col justify-between bg-gray-50/50 dark:bg-white/[0.01]">
             <div className="space-y-3.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
-                  Live Preview
-                </span>
-                {currentBanner && isUnchanged ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                    <Check className="h-3 w-3" />
-                    Current banner
-                  </span>
-                ) : selected ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400">
-                    <Sparkles className="h-3 w-3" />
-                    New selection
-                  </span>
-                ) : null}
+              {/* Preview Mode Switcher Header */}
+              <div className="flex items-center justify-start gap-2">
+                <div className="flex items-center p-0.5 rounded-lg bg-gray-200/60 dark:bg-white/10 border border-gray-200/80 dark:border-white/10 text-[11px] font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewTab("profile")}
+                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+                      previewTab === "profile"
+                        ? "bg-white dark:bg-dark-surface text-gray-900 dark:text-white shadow-2xs font-bold"
+                        : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <User className="h-3 w-3" />
+                    <span>Profile View</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewTab("card")}
+                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+                      previewTab === "card"
+                        ? "bg-white dark:bg-dark-surface text-gray-900 dark:text-white shadow-2xs font-bold"
+                        : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <Layers className="h-3 w-3" />
+                    <span>Card View</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Preview Box (True Banner Aspect Ratio) */}
-              <div
-                className={`w-full aspect-[851/270] rounded-xl overflow-hidden border-2 transition-all relative shadow-sm ${
-                  selected
-                    ? "border-blue-500 dark:border-blue-400 bg-gray-900"
-                    : "border-dashed border-gray-300 dark:border-zinc-700 bg-gray-100 dark:bg-white/5 flex items-center justify-center"
-                }`}
-              >
-                {previewUrl ? (
-                  <img
-                    src={previewUrl}
-                    alt={bannerPresetLabel(selected as string)}
-                    className="w-full h-full object-cover transition-opacity duration-300"
-                  />
-                ) : (
-                  <span className="text-xs font-medium text-gray-400 dark:text-zinc-500">
-                    Default banner assigned
-                  </span>
-                )}
-              </div>
+              {/* Dynamic Live Previews */}
+              {previewTab === "profile" ? (
+                /* 1. Profile Header Mockup */
+                <div className="w-full rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xs flex flex-col">
+                  {/* Banner */}
+                  <div className="relative aspect-[851/270] w-full bg-zinc-950 overflow-hidden">
+                    {previewUrl ? (
+                      <img
+                        src={previewUrl}
+                        alt=""
+                        className="w-full h-full object-cover transition-opacity duration-300"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-white/5 border-dashed border-gray-300 dark:border-zinc-700 text-xs font-medium text-gray-400 dark:text-zinc-500">
+                        Default banner assigned
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
+                  </div>
+
+                  {/* Profile Info Bar */}
+                  <div className="px-3 pb-3 pt-0 flex items-start gap-3">
+                    {/* Overlapping Avatar */}
+                    <div className="relative -mt-6 h-12 w-12 rounded-full ring-2 ring-white dark:ring-dark-surface bg-zinc-200 dark:bg-zinc-800 shadow-md shrink-0 overflow-hidden">
+                      <div className="absolute inset-0 flex items-center justify-center font-bold text-xs text-gray-700 dark:text-zinc-200">
+                        {displayName.charAt(0).toUpperCase()}
+                      </div>
+                      {displayAvatar && (
+                        <img
+                          src={displayAvatar}
+                          alt=""
+                          className="relative z-10 w-full h-full object-cover"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      )}
+                    </div>
+
+                    {/* Name & Handle */}
+                    <div className="pt-1 min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs text-gray-900 dark:text-white truncate">
+                          {displayName}
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border bg-gray-100 text-gray-600 border-gray-200 dark:bg-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/20 shrink-0">
+                          {displayRole.toLowerCase().includes("client") ? (
+                            <Briefcase className="w-2.5 h-2.5" />
+                          ) : displayRole.toLowerCase().includes("enthusiast") ? (
+                            <User className="w-2.5 h-2.5" />
+                          ) : (
+                            <Laptop className="w-2.5 h-2.5" />
+                          )}
+                          {displayRole}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-gray-500 dark:text-zinc-400 truncate mt-0.5">
+                        @{displayHandle}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* 2. Creator Card Mockup */
+                <div className="w-full max-w-[240px] mx-auto rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xs flex flex-col">
+                  {/* Card Banner Strip */}
+                  <div className="relative h-16 w-full bg-zinc-950 overflow-hidden shrink-0">
+                    {previewUrl ? (
+                      <img
+                        src={previewUrl}
+                        alt=""
+                        className="w-full h-full object-cover transition-opacity duration-300"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-white/5 text-[10px] text-gray-400 dark:text-zinc-500">
+                        Default
+                      </div>
+                    )}
+                    <span className="absolute top-1.5 right-2 px-1.5 py-0.5 rounded-full bg-black/50 text-white backdrop-blur-xs text-[9px] font-medium border border-white/10">
+                      Discovery
+                    </span>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="p-2.5 pt-0 flex flex-col items-center text-center">
+                    {/* Overlapping Avatar */}
+                    <div className="relative -mt-5 h-10 w-10 rounded-full ring-2 ring-white dark:ring-dark-surface bg-zinc-200 dark:bg-zinc-800 shadow-md shrink-0 overflow-hidden">
+                      <div className="absolute inset-0 flex items-center justify-center font-bold text-[11px] text-gray-700 dark:text-zinc-200">
+                        {displayName.charAt(0).toUpperCase()}
+                      </div>
+                      {displayAvatar && (
+                        <img
+                          src={displayAvatar}
+                          alt=""
+                          className="relative z-10 w-full h-full object-cover"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      )}
+                    </div>
+
+                    <div className="font-bold text-xs text-gray-900 dark:text-white truncate max-w-full mt-1">
+                      {displayName}
+                    </div>
+                    <div className="text-[10px] text-gray-500 dark:text-zinc-400 truncate max-w-full">
+                      @{displayHandle}
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-center">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border bg-gray-100 text-gray-600 border-gray-200 dark:bg-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/20">
+                        {displayRole.toLowerCase().includes("client") ? (
+                          <Briefcase className="w-2.5 h-2.5" />
+                        ) : displayRole.toLowerCase().includes("enthusiast") ? (
+                          <User className="w-2.5 h-2.5" />
+                        ) : (
+                          <Laptop className="w-2.5 h-2.5" />
+                        )}
+                        {displayRole}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Selected Banner Label & Details */}
               <div className="bg-white dark:bg-white/5 border border-gray-200/80 dark:border-white/10 rounded-xl p-3">
@@ -138,7 +306,7 @@ export default function BannerEditModal({
                 </div>
                 <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">
                   {selected
-                    ? "Displays across desktop and mobile profile headers."
+                    ? "Displays across desktop and mobile profile headers & cards."
                     : "Randomly assigned Ensemble banner (Blue, Purple, or Yellow)."}
                 </div>
               </div>
@@ -169,23 +337,58 @@ export default function BannerEditModal({
 
           {/* Right Column (7 cols): Filter Tabs & Grid Selector */}
           <div className="md:col-span-7 flex flex-col min-h-0 p-5 sm:p-6 overflow-hidden">
-            {/* Filter Tabs: full width, wrapped in a segmented control pill group with no hidden horizontal clipping */}
-            <div className="shrink-0 mb-4 p-1 rounded-xl bg-gray-100 dark:bg-white/[0.04] border border-gray-200/70 dark:border-white/10 flex flex-wrap gap-1">
+            {/* Adaptive Icon / Active-Expanded Capsule Tabs */}
+            <div className="shrink-0 mb-4 p-1 rounded-xl bg-gray-100/90 dark:bg-zinc-800/60 border border-gray-200/80 dark:border-white/10 flex items-center gap-1 w-fit shadow-2xs">
               {categories.map((cat) => {
-                const isActive = selectedCategory === cat;
+                const isActive = selectedCategory === cat.id;
+                const IconComponent = cat.icon;
                 return (
-                  <button
-                    key={cat}
+                  <motion.button
+                    layout
+                    key={cat.id}
                     type="button"
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`flex-1 min-w-[70px] px-2.5 py-1.5 rounded-lg text-xs transition-all text-center cursor-pointer ${
+                    onClick={() => setSelectedCategory(cat.id)}
+                    title={`${cat.label} (${cat.count})`}
+                    className={`relative flex items-center justify-center gap-1.5 rounded-lg py-1.5 transition-colors duration-200 cursor-pointer select-none whitespace-nowrap ${
                       isActive
-                        ? "bg-white dark:bg-dark-surface text-gray-900 dark:text-white font-bold shadow-xs border border-gray-200/60 dark:border-white/10"
-                        : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white font-medium"
+                        ? "px-3 text-gray-900 dark:text-white font-bold"
+                        : "px-2.5 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/50 dark:hover:bg-white/5"
                     }`}
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
                   >
-                    {cat}
-                  </button>
+                    {isActive && (
+                      <motion.div
+                        layoutId="activeBannerCategoryTab"
+                        className="absolute inset-0 bg-white dark:bg-zinc-900 rounded-lg shadow-xs border border-gray-200/80 dark:border-white/10"
+                        transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                      />
+                    )}
+                    <span className="relative z-10 flex items-center justify-center">
+                      <IconComponent className={`h-4 w-4 shrink-0 transition-colors ${isActive ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-zinc-400"}`} />
+                    </span>
+                    {isActive && (
+                      <motion.span
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
+                        className="relative z-10 text-xs font-bold text-gray-900 dark:text-white"
+                      >
+                        {cat.label}
+                      </motion.span>
+                    )}
+                    {isActive && (
+                      <motion.span
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        transition={{ duration: 0.15 }}
+                        className="relative z-10 px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold leading-none bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-zinc-300 border border-gray-200/60 dark:border-white/10"
+                      >
+                        {cat.count}
+                      </motion.span>
+                    )}
+                  </motion.button>
                 );
               })}
             </div>

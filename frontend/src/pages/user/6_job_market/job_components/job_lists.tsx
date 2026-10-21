@@ -375,13 +375,24 @@ const JobList: React.FC<JobListProps> = ({
 
                 <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 font-medium">
                   <div className="flex items-center gap-1.5 truncate">
-                    {job.clientAvatar ? (
-                      <img src={job.clientAvatar} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover border border-gray-200 dark:border-white/10" />
-                    ) : (
-                      <div className="h-5 w-5 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-[9px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10">
-                        {job.postedBy.charAt(0)}
+                    <div className="relative h-5 w-5 shrink-0">
+                      <img
+                        src={job.clientAvatar}
+                        alt=""
+                        className={`h-5 w-5 rounded-full object-cover border border-gray-200 dark:border-white/10 ${!job.clientAvatar ? 'hidden' : ''}`}
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fallback = e.currentTarget.nextElementSibling;
+                          if (fallback) {
+                            fallback.classList.remove('hidden');
+                            fallback.classList.add('flex');
+                          }
+                        }}
+                      />
+                      <div className={`${job.clientAvatar ? 'hidden' : 'flex'} absolute inset-0 items-center justify-center rounded-full bg-gray-200 dark:bg-zinc-800 text-[9px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 overflow-hidden`}>
+                        {job.postedBy ? job.postedBy.charAt(0).toUpperCase() : "U"}
                       </div>
-                    )}
+                    </div>
                     <span className="truncate text-gray-700 dark:text-zinc-300 font-semibold">{job.postedBy}</span>
                   </div>
 
@@ -556,13 +567,24 @@ const JobList: React.FC<JobListProps> = ({
 
                 <div className="mt-2 pt-4 border-t border-gray-200 dark:border-white/5 flex flex-wrap items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400 gap-3">
                   <div className="flex items-center gap-2">
-                    {job.clientAvatar ? (
-                      <img src={job.clientAvatar} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover border border-gray-200 dark:border-white/10" />
-                    ) : (
-                      <div className="h-6 w-6 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-[10px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 overflow-hidden">
-                        {job.postedBy.charAt(0)}
+                    <div className="relative h-6 w-6 shrink-0">
+                      <img
+                        src={job.clientAvatar}
+                        alt=""
+                        className={`h-6 w-6 rounded-full object-cover border border-gray-200 dark:border-white/10 ${!job.clientAvatar ? 'hidden' : ''}`}
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fallback = e.currentTarget.nextElementSibling;
+                          if (fallback) {
+                            fallback.classList.remove('hidden');
+                            fallback.classList.add('flex');
+                          }
+                        }}
+                      />
+                      <div className={`${job.clientAvatar ? 'hidden' : 'flex'} absolute inset-0 items-center justify-center rounded-full bg-gray-200 dark:bg-zinc-800 text-[10px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 overflow-hidden`}>
+                        {job.postedBy ? job.postedBy.charAt(0).toUpperCase() : "U"}
                       </div>
-                    )}
+                    </div>
                     <div className="text-left leading-tight">
                       <p className="text-xs font-bold text-gray-700 dark:text-zinc-300">{job.postedBy}</p>
                       <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">

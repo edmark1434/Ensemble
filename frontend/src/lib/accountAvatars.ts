@@ -29,6 +29,16 @@ export function resolveAvatarUrl(path?: string | null, name?: string | null): st
   return constructAvatarUrl(path, name);
 }
 
+export function resolveAvatarPath(path?: string | null): string | undefined {
+  if (!path || path.trim() === "") return undefined;
+  if (/^https?:\/\//i.test(path)) return path;
+  const presetMatch = path.match(/p\d+\.png$/i);
+  if (presetMatch) return `/profile_presets/${presetMatch[0]}`;
+  const cloudfrontUrl = (import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/$/, "");
+  const cleanPath = path.startsWith("/") ? path.substring(1) : path;
+  return cloudfrontUrl ? `${cloudfrontUrl}/${cleanPath}` : `/${cleanPath}`;
+}
+
 const cache = new Map<string, Promise<string | null>>();
 
 export function fetchAccountAvatarUrl(accountId: string): Promise<string | null> {

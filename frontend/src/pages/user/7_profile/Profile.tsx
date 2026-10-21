@@ -1052,6 +1052,11 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         onClose={() => setIsBannerModalOpen(false)}
         currentBanner={userDetails?.banner_preset ?? null}
         ownedBadgeIds={(userDetails?.badges || []).map(b => String(b.id))}
+        userName={userDetails?.name}
+        userHandle={userDetails?.username}
+        userAvatar={userDetails?.avatar_preset_url}
+        userRole={userDetails?.role?.role_name || (typeof userDetails?.role === 'string' ? userDetails?.role : undefined)}
+        userTagline={userDetails?.tagline}
         onSave={async (bannerPreset) => {
           const { data } = await api.put("/api/accounts/profile/banner", { banner_preset: bannerPreset });
           const saved = data?.data?.banner_preset ?? null;

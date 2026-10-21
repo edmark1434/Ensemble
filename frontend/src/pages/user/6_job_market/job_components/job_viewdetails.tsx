@@ -552,13 +552,24 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               {/* Client Profile Card (Moved into Footer) */}
               <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  {selectedJob.clientAvatar ? (
-                    <img src={selectedJob.clientAvatar} alt="" className="h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-white/10 shrink-0" />
-                  ) : (
-                    <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-xs text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 shrink-0">
-                      {selectedJob.postedBy.charAt(0)}
+                  <div className="relative h-8 w-8 shrink-0">
+                    <img
+                      src={selectedJob.clientAvatar}
+                      alt=""
+                      className={`h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-white/10 ${!selectedJob.clientAvatar ? 'hidden' : ''}`}
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const fallback = e.currentTarget.nextElementSibling;
+                        if (fallback) {
+                          fallback.classList.remove('hidden');
+                          fallback.classList.add('flex');
+                        }
+                      }}
+                    />
+                    <div className={`${selectedJob.clientAvatar ? 'hidden' : 'flex'} absolute inset-0 items-center justify-center rounded-full bg-gray-200 dark:bg-zinc-800 text-xs text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 overflow-hidden`}>
+                      {selectedJob.postedBy ? selectedJob.postedBy.charAt(0).toUpperCase() : "U"}
                     </div>
-                  )}
+                  </div>
                   <div className="text-left min-w-0">
                     <p className="text-[9px] uppercase text-gray-500 dark:text-zinc-500 font-bold tracking-wider">
                       Project Client

@@ -636,7 +636,6 @@ export default function DiscoveryPage() {
               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
           )}
-          <div className="absolute inset-0 bg-black/20 dark:bg-black/35" />
 
           {/* Discreet Top Right Indicator */}
           <div className="absolute top-2.5 right-3 flex items-center gap-1.5">
