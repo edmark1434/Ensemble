@@ -1,6 +1,6 @@
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useState } from "react";
-import { Calendar, Clock, Briefcase, Users, Star, Send, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText, Bookmark, CheckCircle2, XCircle, HelpCircle, Maximize2 } from "lucide-react";
+import { Calendar, Clock, Briefcase, Users, Star, Send, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText, Bookmark, CheckCircle2, XCircle, HelpCircle, Maximize2, TrendingUp, ChevronDown } from "lucide-react";
 import { JobRichText } from "./JobRichText";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
@@ -8,6 +8,8 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import useGlobalState from "@/lib/global_state";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
+import { motion, AnimatePresence } from "framer-motion";
+import { computeJobRankingBreakdown } from "../job_ranking";
 
 interface JobViewDetailsProps {
   selectedJob: Job | null;
@@ -18,6 +20,8 @@ interface JobViewDetailsProps {
 
 const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, onReportJob, onToggleSave }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isScoreOpen, setIsScoreOpen] = useState(false);
+  const rankInfo = selectedJob ? computeJobRankingBreakdown(selectedJob) : null;
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isVerified = useGlobalState((state) => state.isVerified);
@@ -131,9 +135,6 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                       {selectedJob.status}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300">
-                      {selectedJob.difficulty}
-                    </span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300">
                       {selectedJob.category}
                     </span>
                     {isTeamHiring ? (
@@ -146,6 +147,24 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                         <User className="h-2.5 w-2.5" />
                         Individual
                       </span>
+                    )}
+                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300">
+                      {selectedJob.difficulty}
+                    </span>
+                    {rankInfo?.isRisingJob && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          navigate("/jobs/info");
+                        }}
+                        title={`Rising Job Post — Click to see how this badge works (Score: ${rankInfo.totalScore})`}
+                        className="relative overflow-hidden inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 dark:hover:bg-emerald-500/25 transition-colors cursor-pointer"
+                      >
+                        <TrendingUp className="relative z-10 h-2.5 w-2.5" />
+                        <span className="relative z-10">Rising</span>
+                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+                      </button>
                     )}
                   </div>
 
@@ -180,6 +199,103 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   )}
                 </div>
               </div>
+
+              {/* Owner Job Discovery Score Card (Gray, Collapsible, Closed by Default) */}
+              {selectedJob.isOwnPost && rankInfo && (
+                <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/80 dark:bg-white/[0.03] overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setIsScoreOpen((prev) => !prev)}
+                    className="w-full p-3.5 flex items-center justify-between gap-2 hover:bg-gray-100/60 dark:hover:bg-white/[0.03] transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                        Your Job Discovery Score
+                      </span>
+                      {rankInfo.isRisingJob && (
+                      <span className="relative overflow-hidden inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 shrink-0">
+                        <TrendingUp className="relative z-10 h-2.5 w-2.5" />
+                        <span className="relative z-10">Rising</span>
+                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+                      </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-black text-gray-900 dark:text-white font-mono">
+                        {rankInfo.totalScore.toFixed(1)} / 100
+                      </span>
+                      <ChevronDown
+                        className={`h-4 w-4 text-gray-400 dark:text-zinc-400 transition-transform duration-200 ${
+                          isScoreOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </div>
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {isScoreOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden border-t border-gray-200/70 dark:border-white/10"
+                      >
+                        <div className="p-3.5 space-y-2.5">
+                          <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400">
+                            <span>Evaluated as: <strong className="text-gray-700 dark:text-zinc-200">{rankInfo.jobTypeLabel}</strong></span>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Trust (35)</div>
+                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                {(rankInfo.bayesianScore * 35).toFixed(1)}
+                              </div>
+                            </div>
+                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Freshness (25)</div>
+                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                {(rankInfo.freshnessScore * 25).toFixed(1)}
+                              </div>
+                            </div>
+                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Brief & Bid (25)</div>
+                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                {(rankInfo.completenessScore * 25).toFixed(1)} ({Math.round(rankInfo.completenessScore * 100)}%)
+                              </div>
+                            </div>
+                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Open Seats (15)</div>
+                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                {(rankInfo.availabilityScore * 15).toFixed(1)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 pt-0.5">
+                            <span>
+                              {rankInfo.completenessScore >= 0.85
+                                ? "Great job! Your job brief & bid structure is 85%+."
+                                : "Tip: Add 3+ skills, clear scope & visual to reach 85%+ quality."}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onClose();
+                                navigate("/jobs/info");
+                              }}
+                              className="inline-flex items-center gap-1 font-semibold text-gray-700 dark:text-zinc-200 hover:underline shrink-0 cursor-pointer"
+                            >
+                              <HelpCircle className="h-3 w-3" />
+                              How it works
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
 
               {/* Price & Budget Row */}
               {/* Price, Timeline & Deadline */}
@@ -453,7 +569,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                       </p>
                       <div className="flex items-center gap-1 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 border border-gray-100 dark:border-white/5 shrink-0">
                         <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
-                        <span>{selectedJob.clientRating} ({selectedJob.ratingCount})</span>
+                        <span>{selectedJob.ratingCount > 0 ? `${selectedJob.clientRating} (${selectedJob.ratingCount})` : "N/A"}</span>
                       </div>
                     </div>
                   </div>

@@ -35,6 +35,7 @@ import JobMain from '@/pages/user/6_job_market/job_main.tsx'
 import JobPostingPage from '@/pages/user/6_job_market/job_pages/job_posting_page.tsx'
 import JobSavesPage from '@/pages/user/6_job_market/job_pages/job_saves_page.tsx'
 import JobMyPostPage from '@/pages/user/6_job_market/job_pages/job_mypost_page.tsx'
+import JobPostsInfoGuide from '@/pages/user/6_job_market/job_components/JobPostsInfoGuide.tsx'
 import JobCreatePostPage from '@/pages/user/6_job_market/job_pages/job_createpost_page.tsx'
 import JobCreateTeamPostPage from '@/pages/user/6_job_market/job_pages/job_createteam_page.tsx'
 import JobEditPostPage from '@/pages/user/6_job_market/job_pages/job_editpost_page.tsx'
@@ -52,6 +53,7 @@ import GigMain from '@/pages/user/7_gigs/gig_main.tsx'
 import GigServicesPage from '@/pages/user/7_gigs/gig_pages/gig_services_page.tsx'
 import GigSavesPage from '@/pages/user/7_gigs/gig_pages/gig_saves_page.tsx'
 import GigMyPostPage from '@/pages/user/7_gigs/gig_pages/gig_mypost_page.tsx'
+import GigServicesInfoGuide from '@/pages/user/7_gigs/gig_components/GigServicesInfoGuide.tsx'
 import GigCreatePage from '@/pages/user/7_gigs/gig_pages/gig_create_page.tsx'
 import GigEditPage from '@/pages/user/7_gigs/gig_pages/gig_edit_page.tsx'
 import GigFullPage from '@/pages/user/7_gigs/gig_pages/gig_full_page.tsx'
@@ -283,6 +285,7 @@ function App() {
             <Route path='saved-posts/:id' element={<JobSavesPage />} />
             <Route path='my-job-post' element={<JobMyPostPage />} />
             <Route path='my-job-post/:id' element={<JobMyPostPage />} />
+            <Route path='info' element={<JobPostsInfoGuide />} />
           </Route>
 
           {/* Proposals Layout & Sub-Routes */}
@@ -316,6 +319,7 @@ function App() {
             <Route path='saved-services/:id' element={<GigSavesPage />} />
             <Route path='my-services' element={<GigMyPostPage />} />
             <Route path='my-services/:id' element={<GigMyPostPage />} />
+            <Route path='info' element={<GigServicesInfoGuide />} />
           </Route>
           <Route path='/gigs/orders' element={<OrdersMain />}>
             <Route index element={<OrdersSelectGigPage />} />

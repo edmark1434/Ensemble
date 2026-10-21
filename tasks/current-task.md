@@ -1,16 +1,13 @@
-# Current Task: Jobs & Gigs Verification Gate Button Behavior + Flow Scoring
+# Current Task: Type-Aware Job Discovery Ranking Algorithm & 25 Seeded Job Posts
 
 ## Objective
-1. Ensure that on both Jobs and Gigs detail views (slide-out drawer routes `/jobs/postings/:id` & `/gigs/services/:id` and standalone full-page routes `/jobs/postings/:id/page` & `/gigs/services/:id/page`), if the user is not verified, the action button ("Send Proposal" on Jobs, "Order ..." / "Continue ..." on Gigs) remains clickable with active styling and triggers the existing verification prompt (`VerificationRequiredModal` via `continueIfAccountVerified`).
-2. Ensure `VerificationRequiredModal` overlays slide-out drawers properly (`z-[200]` above `z-[101]`).
-3. Score and provide improvement recommendations for:
-   - Job Posting Flow
-   - Sending Proposal Flow
-   - Posting Gigs Flow
-   - Ordering Gigs Flow
+Implement the **100-Point Type-Aware Job Discovery Ranking Algorithm** for the Job Market (`/jobs`) across all 3 job post types (`Individual — Open Bid`, `Individual — Ranged / Multi-Seat`, and `Team — Milestone Pool`), add the green `Rising` badge (`TrendingUp`), add the collapsible gray `"Your Job Discovery Score"` owner card, add the `"How Ranking Works"` info tab (`/jobs/info`), and seed 25 realistic job posts in PostgreSQL.
 
 ## Acceptance Criteria
-- [x] Unverified logged-in users see an active, clickable "Send Proposal" button on `/jobs/postings/:id` and `/jobs/postings/:id/page` that opens `VerificationRequiredModal` when clicked.
-- [x] Unverified logged-in users see an active, clickable Order / Continue button on `/gigs/services/:id` and `/gigs/services/:id/page` that opens `VerificationRequiredModal` when clicked.
-- [x] `VerificationRequiredModal` renders above open Job/Gig drawers.
-- [x] `cd frontend && npm run build` passes cleanly.
+- [x] `backend/repositories/JobRepositories.js` returns real `client_rating` and `client_rating_count` from `ratings`.
+- [x] `frontend/src/pages/user/6_job_market/job_ranking.ts` computes the 100-point score tailored to `individual_open`, `individual_ranged`, and `team_pool`.
+- [x] Green `Rising` badge (`TrendingUp` icon) appears on qualifying jobs in Grid/List cards, drawer, and full page.
+- [x] Neutral gray, collapsible, closed-by-default `"Your Job Discovery Score"` card appears for job owners (`isOwnPost`).
+- [x] `/jobs/info` tab (`JobPostsInfoGuide.tsx`) explains the 4 pillars and the 3 type-aware quality checklists.
+- [x] 25 realistic jobs seeded via `backend/scripts/SeedJobsDataset.js`.
+- [x] Frontend build passes (`npm run build`).

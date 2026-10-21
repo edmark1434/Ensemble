@@ -2,8 +2,9 @@ import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Rocket } from "lucide-react";
+import { Rocket, Sparkles } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
+import PopupConfirmReturn from "@/pages/user/6_job_market/job_components/job_popups/popup_confirm_return";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
@@ -62,7 +63,7 @@ const GigCreatePage: React.FC = () => {
             true,
             "Account Verification is required to access Gig Creation. Please verify your identity to proceed."
           );
-          navigate("/");
+          navigate("/gigs/services");
         }
       });
 
@@ -111,16 +112,106 @@ const GigCreatePage: React.FC = () => {
   const [askNDA, setAskNDA] = useState<boolean>(true);
   const [askPortfolio, setAskPortfolio] = useState<boolean>(true);
 
+  // --- LOCALSTORAGE AUTO-SAVE DRAFT ---
+  const [isDraftRestored, setIsDraftRestored] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ensemble_gig_create_draft");
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.title) setTitle(data.title);
+        if (data.description) setDescription(data.description);
+        if (data.category) setCategory(data.category);
+        if (data.slots) setSlots(data.slots);
+        if (data.termsOfService) setTermsOfService(data.termsOfService);
+        if (Array.isArray(data.skills)) setSkills(data.skills);
+        if (data.firstDraftDelivery) setFirstDraftDelivery(data.firstDraftDelivery);
+        if (Array.isArray(data.tiers) && data.tiers.length > 0) setTiers(data.tiers);
+        if (Array.isArray(data.milestones) && data.milestones.length > 0) setMilestones(data.milestones);
+        if (data.additionalWorkRate !== undefined) setAdditionalWorkRate(data.additionalWorkRate);
+        if (Array.isArray(data.questionnaires)) setQuestionnaires(data.questionnaires);
+        if (data.askNDA !== undefined) setAskNDA(data.askNDA);
+        if (data.askPortfolio !== undefined) setAskPortfolio(data.askPortfolio);
+        setIsDraftRestored(true);
+      }
+    } catch (e) {
+      console.error("Failed to restore gig draft", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const hasContent = Boolean(title || description || category || termsOfService || skills.length > 0);
+        if (hasContent) {
+          const draftData = {
+            title,
+            description,
+            category,
+            slots,
+            termsOfService,
+            skills,
+            firstDraftDelivery,
+            tiers,
+            milestones,
+            additionalWorkRate,
+            questionnaires,
+            askNDA,
+            askPortfolio,
+          };
+          localStorage.setItem("ensemble_gig_create_draft", JSON.stringify(draftData));
+        }
+      } catch (e) {
+        console.error("Failed to auto-save gig draft", e);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [
+    title, description, category, slots, termsOfService, skills,
+    firstDraftDelivery, tiers, milestones, additionalWorkRate,
+    questionnaires, askNDA, askPortfolio
+  ]);
+
+  const handleClearDraft = () => {
+    try {
+      localStorage.removeItem("ensemble_gig_create_draft");
+      setTitle("");
+      setDescription("");
+      setCategory("");
+      setSlots(1);
+      setTermsOfService("");
+      setSkills([]);
+      setFirstDraftDelivery("");
+      setTiers([
+        { tierName: "Basic", title: "Essential Delivery", description: "Standard quality output perfect for simple projects.", daysOfDelivery: 1, revisions: 1, price: 100 },
+        { tierName: "Standard", title: "Pro Delivery", description: "High-quality output with source files and extra revisions.", daysOfDelivery: 3, revisions: 2, price: 300 }
+      ]);
+      setMilestones([
+        { id: "m1", name: "Phase 1: Discovery & Planning", description: "Initial setup, gathering requirements, and outlining the project scope." },
+        { id: "m2", name: "Phase 2: Core Development", description: "Executing the main deliverables and providing a first draft for review." },
+        { id: "m3", name: "Phase 3: Final Revisions & Handover", description: "Applying feedback and delivering the final source files." }
+      ]);
+      setAdditionalWorkRate(0);
+      setQuestionnaires([]);
+      setAskNDA(true);
+      setAskPortfolio(true);
+      setErrors({});
+      setIsDraftRestored(false);
+      toast.success("Gig post draft cleared.");
+    } catch (e) {
+      console.error("Failed to clear gig draft", e);
+    }
+  };
+
   // --- VALIDATION & ERRORS ---
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-  const hasUnsavedChanges = Boolean(title || description || category);
+  const hasUnsavedChanges = Boolean(title || description || category || termsOfService || skills.length > 0);
 
   const handleReturnTrigger = () => {
     if (hasUnsavedChanges) {
-      if (window.confirm("You have unsaved changes. Discard?")) {
-        navigate("/gigs");
-      }
+      setIsDiscardOpen(true);
     } else {
       navigate("/gigs");
     }
@@ -271,6 +362,10 @@ const GigCreatePage: React.FC = () => {
       };
 
       await api.post("/api/gigs", gigPayload);
+      try {
+        localStorage.removeItem("ensemble_gig_create_draft");
+      } catch (_) {}
+      setIsDraftRestored(false);
       setIsSuccessOpen(true);
     } catch (err: any) {
       console.error("Error creating gig:", err);
@@ -321,8 +416,23 @@ const GigCreatePage: React.FC = () => {
         </motion.div>
 
         {/* Header (Stepper) */}
-        <div className="mb-6 w-full">
+        <div className="mb-6 w-full space-y-4">
           <GigCreateHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} highestStepReached={highestStepReached} onJumpToReview={() => handleNext(6)} />
+          {isDraftRestored && (
+            <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-between text-xs text-blue-600 dark:text-blue-400 shadow-sm">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 shrink-0 text-blue-500" />
+                <span>Draft restored from your last session. Progress is saved automatically.</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleClearDraft}
+                className="text-[11px] font-bold text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:underline px-2 py-0.5 rounded focus:outline-none"
+              >
+                Reset / Clear Draft
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Content Area */}
@@ -499,6 +609,15 @@ const GigCreatePage: React.FC = () => {
       <CreationSuccess
         isOpen={isSuccessOpen}
         onConfirm={() => navigate("/gigs")}
+      />
+
+      <PopupConfirmReturn
+        isOpen={isDiscardOpen}
+        onConfirm={() => {
+          setIsDiscardOpen(false);
+          navigate("/gigs");
+        }}
+        onCancel={() => setIsDiscardOpen(false)}
       />
     </div>
   );

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { Sparkles } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
@@ -57,7 +58,7 @@ const JobCreateTeamPostPage: React.FC = () => {
             true,
             "Account Verification is required to access Job Creation. Please verify your identity to proceed."
           );
-          navigate("/");
+          navigate("/jobs/postings");
         }
       });
 
@@ -127,6 +128,117 @@ const JobCreateTeamPostPage: React.FC = () => {
   // --- REVIEW STEP (POSTING IDENTITY) STATES ---
   const [postingAs, setPostingAs] = useState<"self" | "team">("self");
   const [selectedTeam, setSelectedTeam] = useState("");
+
+  // --- LOCALSTORAGE AUTO-SAVE DRAFT ---
+  const [isDraftRestored, setIsDraftRestored] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ensemble_team_job_create_draft");
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.title) setTitle(data.title);
+        if (data.description) setDescription(data.description);
+        if (data.category) setCategory(data.category);
+        if (data.difficulty) setDifficulty(data.difficulty);
+        if (Array.isArray(data.skills)) setSkills(data.skills);
+        if (data.minBudget) setMinBudget(data.minBudget);
+        if (data.maxBudget) setMaxBudget(data.maxBudget);
+        if (data.minTimeline) setMinTimeline(data.minTimeline);
+        if (data.maxTimeline) setMaxTimeline(data.maxTimeline);
+        if (data.deadline) setDeadline(data.deadline);
+        if (data.positions) setPositions(data.positions);
+        if (Array.isArray(data.milestones) && data.milestones.length > 0) setMilestones(data.milestones);
+        if (data.portfolioUseAllowed !== undefined) setPortfolioUseAllowed(data.portfolioUseAllowed);
+        if (data.portfolioDuration) setPortfolioDuration(data.portfolioDuration);
+        if (data.requireNDA !== undefined) setRequireNDA(data.requireNDA);
+        setIsDraftRestored(true);
+      }
+    } catch (e) {
+      console.error("Failed to restore team job draft", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const draftData = {
+          title,
+          description,
+          category,
+          difficulty,
+          skills,
+          minBudget,
+          maxBudget,
+          minTimeline,
+          maxTimeline,
+          deadline,
+          positions,
+          milestones,
+          portfolioUseAllowed,
+          portfolioDuration,
+          requireNDA,
+        };
+        const hasContent = Boolean(title || description || category || minBudget || skills.length > 0);
+        if (hasContent) {
+          localStorage.setItem("ensemble_team_job_create_draft", JSON.stringify(draftData));
+        }
+      } catch (e) {
+        console.error("Failed to auto-save team job draft", e);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [
+    title, description, category, difficulty, skills, minBudget, maxBudget,
+    minTimeline, maxTimeline, deadline, positions, milestones,
+    portfolioUseAllowed, portfolioDuration, requireNDA
+  ]);
+
+  const handleClearDraft = () => {
+    try {
+      localStorage.removeItem("ensemble_team_job_create_draft");
+      setTitle("");
+      setDescription("");
+      setCategory("");
+      setDifficulty("");
+      setSkills([]);
+      setMinBudget("");
+      setMaxBudget("");
+      setMinTimeline("");
+      setMaxTimeline("");
+      setDeadline("");
+      setPositions(2);
+      setPortfolioUseAllowed(false);
+      setPortfolioDuration("");
+      setRequireNDA(false);
+      setThumbnail("");
+      setThumbnailFile(null);
+      setPreviewUrl(null);
+      setMilestones([
+        {
+          id: "ms-1",
+          title: "Milestone 1: Core Architecture",
+          description: "Initial foundational structure and setup.",
+          tasks: ["Initial workspace setup", "Core service integration"],
+          slots_count: 1,
+          budget_percentage: 50,
+        },
+        {
+          id: "ms-2",
+          title: "Milestone 2: Feature Implementation",
+          description: "Building out main user flows and deliverables.",
+          tasks: ["UI Implementation", "API connection"],
+          slots_count: 1,
+          budget_percentage: 50,
+        },
+      ]);
+      setErrors({});
+      setIsDraftRestored(false);
+      toast.success("Team job draft cleared.");
+    } catch (e) {
+      console.error("Failed to clear team job draft", e);
+    }
+  };
 
   // --- ERROR & VALIDATION STATES ---
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -433,6 +545,10 @@ const JobCreateTeamPostPage: React.FC = () => {
       };
 
       await createJob(finalJobPayload);
+      try {
+        localStorage.removeItem("ensemble_team_job_create_draft");
+      } catch (_) {}
+      setIsDraftRestored(false);
       setIsSuccessOpen(true);
     } catch (err: any) {
       console.error(err);
@@ -503,6 +619,22 @@ const JobCreateTeamPostPage: React.FC = () => {
             onJumpToReview={handleJumpToReview}
           />
         </motion.div>
+
+        {isDraftRestored && (
+          <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-between text-xs text-purple-600 dark:text-purple-400 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 shrink-0 text-purple-500" />
+              <span>Draft restored from your last session. Progress is saved automatically.</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleClearDraft}
+              className="text-[11px] font-bold text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:underline px-2 py-0.5 rounded focus:outline-none"
+            >
+              Reset / Clear Draft
+            </button>
+          </div>
+        )}
 
         {/* Form Box Wrapper */}
         <motion.div

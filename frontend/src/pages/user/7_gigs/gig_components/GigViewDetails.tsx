@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Clock, Users, Star, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart, Flag } from "lucide-react";
+import { Clock, Users, Star, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart, Flag, TrendingUp, HelpCircle, ChevronDown, Layers } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import type { Gig } from "../gig_datasets";
+import { computeGigRankingBreakdown } from "../gig_ranking";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import PopupReportGig from "./PopupReportGig";
 import api from "@/lib/axios";
@@ -24,8 +25,10 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
   const isVerified = useGlobalState((state) => state.isVerified);
   const [activeTierIdx, setActiveTierIdx] = useState(0);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isScoreOpen, setIsScoreOpen] = useState(false);
 
   const activeTier = selectedGig?.tiers[activeTierIdx];
+  const rankInfo = selectedGig ? computeGigRankingBreakdown(selectedGig) : null;
 
   const handleOpenCheckout = () => {
     if (selectedGig?.hasPendingOrder && selectedGig?.pendingOrderId) {
@@ -136,6 +139,15 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                   <Bookmark className={`h-4 w-4 ${selectedGig.isSaved ? "fill-current" : ""}`} />
                 </button>
               )}
+
+              {selectedGig.tiers && selectedGig.tiers.length > 0 && (
+                <div className="absolute bottom-3 left-5 z-10">
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[10px] font-semibold shadow-xs">
+                    <Layers className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
+                    <span>{selectedGig.tiers.length} {selectedGig.tiers.length === 1 ? "Tier" : "Tiers"}</span>
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-5 thin-scrollbar">
@@ -157,10 +169,21 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300">
                       {selectedGig.category}
                     </span>
-                    {selectedGig.tiers && selectedGig.tiers.length > 0 && (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                        {selectedGig.tiers.length} Tiers
-                      </span>
+                    {rankInfo?.isRisingCreator && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          navigate("/gigs/info");
+                        }}
+                        title={`Rising Creator — Click to see how this badge works (Score: ${rankInfo.totalScore})`}
+                        className="relative overflow-hidden inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 dark:hover:bg-emerald-500/25 transition-colors cursor-pointer"
+                      >
+                        <TrendingUp className="relative z-10 h-2.5 w-2.5" />
+                        <span className="relative z-10">Rising</span>
+                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+
+                      </button>
                     )}
                   </div>
 
@@ -187,6 +210,101 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     <span>First Draft: {selectedGig.firstDraftDelivery}</span>
                   </div>
                 </div>
+
+                {/* Owner Post Score & Breakdown Card (Gray, Collapsible, Closed by Default) */}
+                {selectedGig.isOwnGig && rankInfo && (
+                  <div className="mt-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/80 dark:bg-white/[0.03] overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setIsScoreOpen((prev) => !prev)}
+                      className="w-full p-3.5 flex items-center justify-between gap-2 hover:bg-gray-100/60 dark:hover:bg-white/[0.03] transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                          Your Service Discovery Score
+                        </span>
+                        {rankInfo.isRisingCreator && (
+                          <span className="relative overflow-hidden inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 shrink-0">
+                            <TrendingUp className="relative z-10 h-2.5 w-2.5" />
+                        <span className="relative z-10">Rising</span>
+                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+    
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-black text-gray-900 dark:text-white font-mono">
+                          {rankInfo.totalScore.toFixed(1)} / 100
+                        </span>
+                        <ChevronDown
+                          className={`h-4 w-4 text-gray-400 dark:text-zinc-400 transition-transform duration-200 ${
+                            isScoreOpen ? "rotate-180" : ""
+                          }`}
+                        />
+                      </div>
+                    </button>
+
+                    <AnimatePresence initial={false}>
+                      {isScoreOpen && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden border-t border-gray-200/70 dark:border-white/10"
+                        >
+                          <div className="p-3.5 space-y-2.5">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Trust (40)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                  {(rankInfo.bayesianScore * 40).toFixed(1)}
+                                </div>
+                              </div>
+                              <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Freshness (25)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                  {(rankInfo.freshnessScore * 25).toFixed(1)}
+                                </div>
+                              </div>
+                              <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Effort (20)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                  {(rankInfo.completenessScore * 20).toFixed(1)} ({Math.round(rankInfo.completenessScore * 100)}%)
+                                </div>
+                              </div>
+                              <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Open Slots (15)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                  {(rankInfo.availabilityScore * 15).toFixed(1)}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 pt-0.5">
+                              <span>
+                                {rankInfo.completenessScore >= 0.85
+                                  ? "Great job! Your listing completeness is 85%+."
+                                  : "Tip: Add 3 tiers, 3+ images & milestones to reach 85%+ effort."}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onClose();
+                                  navigate("/gigs/info");
+                                }}
+                                className="inline-flex items-center gap-1 font-semibold text-gray-700 dark:text-zinc-200 hover:underline shrink-0"
+                              >
+                                <HelpCircle className="h-3 w-3" />
+                                How it works
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
               </div>
 
               {/* Tiers Tabs */}

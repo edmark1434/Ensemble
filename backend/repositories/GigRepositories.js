@@ -251,8 +251,6 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
             questionnaires: [],
             postedAt: row.postedAt,
             timeAgo: 'Just now',
-            clientRating: 5.0,
-            ratingCount: 0,
             isSaved: row.isSaved,
             isOwnGig: affiliatedAccountIds.includes(String(row.freelancer_account_id)),
             canManageGig: actorIds.includes(String(row.freelancer_account_id)),

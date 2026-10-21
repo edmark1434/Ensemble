@@ -48,7 +48,8 @@ const startingPrice = (gig: Gig) => (gig.tiers?.length ? Math.min(...gig.tiers.m
 const fastestDelivery = (gig: Gig) => (gig.tiers?.length ? Math.min(...gig.tiers.map((t) => t.daysOfDelivery)) : Infinity);
 
 // Datasets & Types
-import type { Gig } from "./gig_datasets";
+import { sampleGigs, type Gig } from "./gig_datasets";
+import { computeGigRankingBreakdown } from "./gig_ranking";
 import GigViewDetails from "./gig_components/GigViewDetails";
 
 export interface GigMainContext {
@@ -111,7 +112,7 @@ const GigMain: React.FC = () => {
   const [priceSort, setPriceSort] = useState<Sort>(saved.priceSort ?? null);
   const [tiersCount, setTiersCount] = useState(saved.tiersCount ?? "");
   const [tiersSort, setTiersSort] = useState<Sort>(saved.tiersSort ?? null);
-  const [dateSort, setDateSort] = useState<Sort>(saved.dateSort !== undefined ? saved.dateSort : "dec");
+  const [dateSort, setDateSort] = useState<Sort>(saved.dateSort ?? null);
   const [deliverySort, setDeliverySort] = useState<Sort>(saved.deliverySort ?? null);
   const [revisions, setRevisions] = useState(saved.revisions ?? "");
   const [deliveryDays, setDeliveryDays] = useState(saved.deliveryDays ?? "");
@@ -181,14 +182,14 @@ const GigMain: React.FC = () => {
               gallery: (g.gallery || []).map((p: string) => mapUrl(p))
             };
           });
-          setGigsList(mappedGigs);
+          setGigsList(mappedGigs.length > 0 ? mappedGigs : sampleGigs);
         } else {
           console.error("API returned unsuccessful data", response.data);
-          setGigsList([]);
+          setGigsList(sampleGigs);
         }
       } catch (err) {
         console.error("Error fetching gigs:", err);
-        setGigsList([]);
+        setGigsList(sampleGigs);
       } finally {
         setLoading(false);
       }
@@ -207,14 +208,33 @@ const GigMain: React.FC = () => {
 
   const toggleSaveGig = async (e: React.MouseEvent, gigId: string) => {
     e.stopPropagation();
-    setGigsList((prev) => {
-      return prev.map((gig) => {
-        if (gig.id === gigId) {
-          return { ...gig, isSaved: !gig.isSaved };
-        }
-        return gig;
-      });
-    });
+    setGigsList((prev) =>
+      prev.map((gig) =>
+        gig.id === gigId
+          ? {
+              ...gig,
+              isSaved: !gig.isSaved,
+              savesCount: gig.isSaved ? Math.max(0, (gig.savesCount || 1) - 1) : (gig.savesCount || 0) + 1,
+            }
+          : gig
+      )
+    );
+    try {
+      await api.post(`/api/gigs/${gigId}/save`);
+    } catch (err) {
+      console.error("Failed to toggle save gig", err);
+      setGigsList((prev) =>
+        prev.map((gig) =>
+          gig.id === gigId
+            ? {
+                ...gig,
+                isSaved: !gig.isSaved,
+                savesCount: gig.isSaved ? Math.max(0, (gig.savesCount || 1) - 1) : (gig.savesCount || 0) + 1,
+              }
+            : gig
+        )
+      );
+    }
   };
 
   const handleClearFilters = () => {
@@ -317,7 +337,13 @@ const GigMain: React.FC = () => {
 
     // Sorting
     result = [...result].sort((a, b) => {
+      const aRank = computeGigRankingBreakdown(a);
+      const bRank = computeGigRankingBreakdown(b);
+
       if (ratingSort) {
+        if (bRank.bayesianRating !== aRank.bayesianRating) {
+          return bRank.bayesianRating - aRank.bayesianRating;
+        }
         const aRating = a.clientRating || 0;
         const bRating = b.clientRating || 0;
         if (aRating !== bRating) return bRating - aRating;
@@ -363,6 +389,12 @@ const GigMain: React.FC = () => {
         }
       }
 
+      // Default Recommended (Fair Discovery) Ranking:
+      // Combines Bayesian Rating (40%) + Newcomer Freshness (25%) + Listing Completeness (20%) + Slot Availability (15%)
+      if (bRank.totalScore !== aRank.totalScore) {
+        return bRank.totalScore - aRank.totalScore;
+      }
+
       return 0;
     });
 
@@ -386,7 +418,11 @@ const GigMain: React.FC = () => {
     location.pathname
   ]);
 
-  const isServicesTab = !location.pathname.includes("/saved-services") && !location.pathname.includes("/my-services");
+  const isInfoTab = location.pathname.includes("/gigs/info");
+  const isServicesTab =
+    !location.pathname.includes("/saved-services") &&
+    !location.pathname.includes("/my-services") &&
+    !isInfoTab;
   const getBudgetStatus = (gig: Gig): GigBudgetStatus => {
     if (!budgetMatch || budgetCredits === null || !isServicesTab) return null;
     const price = startingPrice(gig);
@@ -416,24 +452,26 @@ const GigMain: React.FC = () => {
 
         <div className="mb-8 flex flex-wrap items-center justify-between border-b border-gray-200 dark:border-white/10 gap-4">
           <GigTabs />
-          <div className="py-2 flex items-center gap-4">
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center justify-center p-2 rounded-lg transition-colors border ${
-                showFilters 
-                  ? 'bg-gray-100 dark:bg-white/10 border-gray-300 dark:border-white/20 text-gray-900 dark:text-white' 
-                  : 'bg-white dark:bg-white/5 shadow-sm dark:shadow-none border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10'
-              }`}
-              title="Toggle Filters"
-            >
-              <Filter className="h-5 w-5" />
-            </button>
-            <GigListViewType viewType={viewType} onViewTypeChange={setViewType} />
-          </div>
+          {!isInfoTab && (
+            <div className="py-2 flex items-center gap-4">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`flex items-center justify-center p-2 rounded-lg transition-colors border ${
+                  showFilters 
+                    ? 'bg-gray-100 dark:bg-white/10 border-gray-300 dark:border-white/20 text-gray-900 dark:text-white' 
+                    : 'bg-white dark:bg-white/5 shadow-sm dark:shadow-none border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10'
+                }`}
+                title="Toggle Filters"
+              >
+                <Filter className="h-5 w-5" />
+              </button>
+              <GigListViewType viewType={viewType} onViewTypeChange={setViewType} />
+            </div>
+          )}
         </div>
 
-        <div className={`grid grid-cols-1 ${showFilters ? 'lg:grid-cols-4' : 'lg:grid-cols-1'} gap-8 items-start`}>
-          {showFilters && (
+        <div className={`grid grid-cols-1 ${showFilters && !isInfoTab ? 'lg:grid-cols-4' : 'lg:grid-cols-1'} gap-8 items-start`}>
+          {showFilters && !isInfoTab && (
             <div className="space-y-6 sticky top-24 lg:col-span-1">
               {loading ? (
                 <SidebarSkeleton />
@@ -487,7 +525,7 @@ const GigMain: React.FC = () => {
             </div>
           )}
 
-          <div className={showFilters ? "lg:col-span-3" : "lg:col-span-1"}>
+          <div className={showFilters && !isInfoTab ? "lg:col-span-3" : "lg:col-span-1"}>
             <Outlet context={contextValue} />
           </div>
         </div>

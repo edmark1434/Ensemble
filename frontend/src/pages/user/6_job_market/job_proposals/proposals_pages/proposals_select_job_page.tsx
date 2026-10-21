@@ -134,7 +134,7 @@ export const ProposalsSelectJobPage: React.FC = () => {
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">No Job Postings Found</h3>
             <p className="text-xs text-gray-500 dark:text-zinc-400 max-w-sm">You haven't posted any jobs yet. Post a job to start receiving proposals from talented freelancers!</p>
             <button
-              onClick={() => continueIfAccountVerified(() => navigate('/jobs/create'))}
+              onClick={() => continueIfAccountVerified(() => navigate('/jobs/postings/choose'))}
               className="mt-4 px-6 py-2.5 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
             >
               <Plus className="h-4 w-4" /> Post a Job

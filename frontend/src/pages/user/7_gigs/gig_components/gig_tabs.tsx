@@ -1,5 +1,5 @@
 import React from "react";
-import { Grid3x3, Bookmark, Briefcase } from "lucide-react";
+import { Grid3x3, Bookmark, Briefcase, HelpCircle } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import useGlobalState from "@/lib/global_state";
@@ -12,10 +12,13 @@ const GigTabs: React.FC = () => {
   const allTabs = [
     { path: "/gigs/services", label: "All Services", icon: <Grid3x3 className="h-4 w-4" /> },
     { path: "/gigs/saved-services", label: "My Saved", icon: <Bookmark className="h-4 w-4" /> },
-    { path: "/gigs/my-services", label: "My Services", icon: <Briefcase className="h-4 w-4" /> }
+    { path: "/gigs/my-services", label: "My Services", icon: <Briefcase className="h-4 w-4" /> },
+    { path: "/gigs/info", label: "How Ranking Works", icon: <HelpCircle className="h-4 w-4" /> }
   ];
 
-  const tabs = isGuestMode ? allTabs.filter(tab => tab.label === "All Services") : allTabs;
+  const tabs = isGuestMode
+    ? allTabs.filter(tab => tab.label === "All Services" || tab.label === "How Ranking Works")
+    : allTabs;
 
   return (
     <div data-tour="gigs-tabs" className="flex gap-1 relative">

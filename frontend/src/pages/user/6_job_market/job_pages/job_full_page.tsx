@@ -26,7 +26,8 @@ import {
   ChevronDown,
   Paperclip,
   ExternalLink,
-  Sparkles
+  Sparkles,
+  TrendingUp
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import UserHeader from "@/components/nav/user_header";
@@ -39,6 +40,7 @@ import { JobRichText } from "../job_components/JobRichText";
 import { JobsOtherPosts } from "../job_components/jobs_other_posts";
 import PopupReportJob from "../job_components/job_popups/popup_report_job";
 import type { Job } from "../job_components/job_lists";
+import { computeJobRankingBreakdown } from "../job_ranking";
 import { formatDistanceToNow } from "date-fns";
 
 const JobFullPage: React.FC = () => {
@@ -54,6 +56,7 @@ const JobFullPage: React.FC = () => {
   const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
   const [isWorkflowOpen, setIsWorkflowOpen] = useState(true);
   const [isMilestonesOpen, setIsMilestonesOpen] = useState(true);
+  const [isScoreOpen, setIsScoreOpen] = useState(false);
 
   const getTimeAgo = (date: Date) => {
     try {
@@ -125,10 +128,11 @@ const JobFullPage: React.FC = () => {
               ? `${cloudFrontUrl}${j.client_avatar_path.startsWith("/") ? "" : "/"}${j.client_avatar_path}`
               : undefined,
             postedAt: new Date(j.created_at).toLocaleString(),
+            createdAt: j.created_at,
             updatedAt: j.updated_at ? `Updated ${new Date(j.updated_at).toLocaleDateString()}` : undefined,
             timeAgo: getTimeAgo(new Date(j.created_at)),
-            clientRating: 5.0,
-            ratingCount: 0,
+            clientRating: parseFloat(j.client_rating) || 0,
+            ratingCount: parseInt(j.client_rating_count) || 0,
             positionsNeeded: Number(j.no_of_hires) || 1,
             hiredCount: parseInt(j.hired_count) || 0,
             applicantsCount: parseInt(j.applicant_count) || 0,
@@ -190,6 +194,7 @@ const JobFullPage: React.FC = () => {
   const teamVisibility = String(job?.team_visibility || job?.teamVisibility || "").toLowerCase();
   const isPrivateTeam = isTeam && teamVisibility === "private";
   const targetTeamId = job?.team_id || job?.teamId;
+  const rankInfo = job ? computeJobRankingBreakdown(job) : null;
   const isTeamHiring = Boolean(
     job?.hiring_type === "team" ||
     (Array.isArray(job?.milestones) && job.milestones.length > 0)
@@ -359,10 +364,6 @@ const JobFullPage: React.FC = () => {
                   {job.category}
                 </span>
 
-                <span className="px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-bold text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
-                  {job.difficulty}
-                </span>
-
                 {isTeamHiring ? (
                   <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-purple-100 text-purple-700 border border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30 flex items-center gap-1.5 shadow-sm">
                     <Users className="h-3 w-3" />
@@ -375,6 +376,10 @@ const JobFullPage: React.FC = () => {
                   </span>
                 )}
 
+                <span className="px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-bold text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
+                  {job.difficulty}
+                </span>
+
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-medium text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
                   <Clock className="h-3.5 w-3.5 text-gray-500" />
                   <span>Timeline: {job.timeline}</span>
@@ -383,6 +388,20 @@ const JobFullPage: React.FC = () => {
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-medium text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
                   <Users className="h-3.5 w-3.5 text-gray-500" />
                   <span>{job.positionsNeeded} {job.positionsNeeded === 1 ? "Opening" : "Openings"}</span>
+                </div>
+                {rankInfo?.isRisingJob && (
+                  <button
+                    type="button"
+                    onClick={() => navigate("/jobs/info")}
+                    title={`Rising Job Post — Click to see how this badge works (Score: ${rankInfo.totalScore})`}
+                    className="relative overflow-hidden inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 dark:hover:bg-emerald-500/25 transition-colors cursor-pointer"
+                  >
+                    <TrendingUp className="relative z-10 h-3 w-3" />
+                    <span className="relative z-10">Rising</span>
+                    <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+                  </button>
+                )}
+                <div className="hidden">
                 </div>
               </div>
 
@@ -734,7 +753,7 @@ const JobFullPage: React.FC = () => {
                     </p>
                     <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500 dark:text-zinc-400">
                       <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
-                      <span>{job.clientRating || "5.0"}</span>
+                      <span>{job.ratingCount > 0 ? `${job.clientRating} (${job.ratingCount})` : "N/A"}</span>
                     </div>
                   </div>
                 </div>
@@ -749,6 +768,100 @@ const JobFullPage: React.FC = () => {
                   </button>
                 )}
               </div>
+
+              {/* Owner Job Discovery Score Card (Gray, Collapsible, Closed by Default) */}
+              {job.isOwnPost && rankInfo && (
+                <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/80 dark:bg-white/[0.03] overflow-hidden shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => setIsScoreOpen((prev) => !prev)}
+                    className="w-full p-4 flex items-center justify-between gap-2 hover:bg-gray-100/60 dark:hover:bg-white/[0.03] transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                        Your Job Discovery Score
+                      </span>
+                      {rankInfo.isRisingJob && (
+                      <span className="relative overflow-hidden inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 shrink-0">
+                        <TrendingUp className="relative z-10 h-2.5 w-2.5" />
+                        <span className="relative z-10">Rising</span>
+                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+                      </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-black text-gray-900 dark:text-white font-mono">
+                        {rankInfo.totalScore.toFixed(1)} / 100
+                      </span>
+                      <ChevronDown
+                        className={`h-4 w-4 text-gray-400 dark:text-zinc-400 transition-transform duration-200 ${
+                          isScoreOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </div>
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {isScoreOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden border-t border-gray-200/70 dark:border-white/10"
+                      >
+                        <div className="p-4 space-y-2.5">
+                          <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400">
+                            <span>Evaluated as: <strong className="text-gray-700 dark:text-zinc-200">{rankInfo.jobTypeLabel}</strong></span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Trust (35)</div>
+                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                {(rankInfo.bayesianScore * 35).toFixed(1)}
+                              </div>
+                            </div>
+                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Freshness (25)</div>
+                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                {(rankInfo.freshnessScore * 25).toFixed(1)}
+                              </div>
+                            </div>
+                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Brief & Bid (25)</div>
+                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                {(rankInfo.completenessScore * 25).toFixed(1)} ({Math.round(rankInfo.completenessScore * 100)}%)
+                              </div>
+                            </div>
+                            <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                              <div className="text-[10px] text-gray-500 dark:text-zinc-400">Open Seats (15)</div>
+                              <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                {(rankInfo.availabilityScore * 15).toFixed(1)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 pt-1">
+                            <span>
+                              {rankInfo.completenessScore >= 0.85
+                                ? "85%+ brief & bid quality!"
+                                : "Add 3+ skills & scope for 85%+"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => navigate("/jobs/info")}
+                              className="inline-flex items-center gap-1 font-semibold text-gray-700 dark:text-zinc-200 hover:underline shrink-0 cursor-pointer"
+                            >
+                              <HelpCircle className="h-3 w-3" />
+                              How it works
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
 
               {/* Budget & Action Box */}
               <div className="rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base shadow-sm p-6 space-y-5">

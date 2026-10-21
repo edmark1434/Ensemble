@@ -2,13 +2,14 @@ import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import {
   X, Star, Clock, Users, Bookmark, Share2,
-  ChevronRight, ChevronLeft, ChevronDown, PlayCircle, Edit2, Flag, Maximize2, User, FileText, CheckCircle2, HelpCircle, Wrench, MessageSquare, ZoomIn, ShoppingCart
+  ChevronRight, ChevronLeft, ChevronDown, PlayCircle, Edit2, Flag, Maximize2, User, FileText, CheckCircle2, HelpCircle, Wrench, MessageSquare, ZoomIn, ShoppingCart, TrendingUp
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Gig } from "../gig_datasets";
+import { computeGigRankingBreakdown } from "../gig_ranking";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import PopupReportGig from "./PopupReportGig";
 import api from "@/lib/axios";
@@ -49,6 +50,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   const [isMilestonesOpen, setIsMilestonesOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(true);
   const [isQuestionnairesOpen, setIsQuestionnairesOpen] = useState(false);
+  const [isScoreOpen, setIsScoreOpen] = useState(false);
   const [reviewFilter, setReviewFilter] = useState<number | null>(null);
 
   const formatTimeAgo = (dateStr: string | undefined) => {
@@ -221,6 +223,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
 
   const activeTier = gig?.tiers?.[activeTierIdx];
   const hasServiceRating = (gig.ratingCount || 0) > 0;
+  const rankInfo = computeGigRankingBreakdown(gig);
 
   const termsContent =
     gig?.termsOfService ||
@@ -637,7 +640,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => navigate(`/gigs/services/${gig.id}/full`)}
+                onClick={() => navigate(`/gigs/services/${gig.id}/page`)}
                 className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400 group relative"
                 title="View Full Page"
               >
@@ -686,6 +689,19 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                   <Users className="h-3.5 w-3.5 text-gray-500" />
                   {gig.slots} Slots
                 </div>
+                {rankInfo.isRisingCreator && (
+                  <button
+                    type="button"
+                    onClick={() => navigate("/gigs/info")}
+                    title={`Rising Creator — Click to see how this badge works (Score: ${rankInfo.totalScore})`}
+                    className="relative overflow-hidden inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 dark:hover:bg-emerald-500/25 transition-colors cursor-pointer"
+                  >
+                    <TrendingUp className="relative z-10 h-3 w-3" />
+                    <span className="relative z-10">Rising</span>
+                    <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+
+                  </button>
+                )}
               </div>
 
               {/* 1. TITLE & ACTIONS */}
@@ -907,6 +923,97 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
             {isPage && (
               <div className="w-full lg:w-[400px] shrink-0 sticky top-[148px] space-y-4">
                 {renderProfileCard()}
+
+                {isOwner && (
+                  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 shadow-sm overflow-hidden backdrop-blur-xl">
+                    <button
+                      type="button"
+                      onClick={() => setIsScoreOpen((prev) => !prev)}
+                      className="w-full p-4 flex items-center justify-between gap-2 hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                          Your Service Discovery Score
+                        </span>
+                        {rankInfo.isRisingCreator && (
+                          <span className="relative overflow-hidden inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 shrink-0">
+                            <TrendingUp className="relative z-10 h-2.5 w-2.5" />
+                            <span className="relative z-10">Rising</span>
+                            <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+        
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-black text-gray-900 dark:text-white font-mono">
+                          {rankInfo.totalScore.toFixed(1)} / 100
+                        </span>
+                        <ChevronDown
+                          className={`h-4 w-4 text-gray-400 dark:text-zinc-400 transition-transform duration-200 ${
+                            isScoreOpen ? "rotate-180" : ""
+                          }`}
+                        />
+                      </div>
+                    </button>
+
+                    <AnimatePresence initial={false}>
+                      {isScoreOpen && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden border-t border-gray-100 dark:border-white/5"
+                        >
+                          <div className="p-4 space-y-3 bg-gray-50/50 dark:bg-white/[0.01]">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Trust Rating (40)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                  {(rankInfo.bayesianScore * 40).toFixed(1)} pts
+                                </div>
+                              </div>
+                              <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Freshness (25)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                  {(rankInfo.freshnessScore * 25).toFixed(1)} pts
+                                </div>
+                              </div>
+                              <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Completeness (20)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                  {(rankInfo.completenessScore * 20).toFixed(1)} pts ({Math.round(rankInfo.completenessScore * 100)}%)
+                                </div>
+                              </div>
+                              <div className="p-2 rounded-lg bg-white dark:bg-dark-base/80 border border-gray-200/80 dark:border-white/10">
+                                <div className="text-[10px] text-gray-500 dark:text-zinc-400">Open Slots (15)</div>
+                                <div className="text-xs font-bold text-gray-900 dark:text-white font-mono">
+                                  {(rankInfo.availabilityScore * 15).toFixed(1)} pts
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 pt-0.5">
+                              <span>
+                                {rankInfo.completenessScore >= 0.85
+                                  ? "85%+ completeness achieved!"
+                                  : "Add 3 tiers, 3+ images & milestones for Rising."}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => navigate("/gigs/info")}
+                                className="inline-flex items-center gap-1 font-semibold text-gray-700 dark:text-zinc-200 hover:underline shrink-0"
+                              >
+                                <HelpCircle className="h-3 w-3" />
+                                How it works
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
 
                 {/* Pricing Packages Box */}
                 <section>

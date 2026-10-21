@@ -1,7 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Star, ArrowRight, Wrench, Bookmark, ShoppingCart } from "lucide-react";
+import {
+  Star,
+  ArrowRight,
+  Wrench,
+  Bookmark,
+  ShoppingCart,
+  Clock,
+  Layers,
+  TrendingUp,
+} from "lucide-react";
+import { CreditIcon } from "@/components/ui/credit-icon";
 import api from "@/lib/axios";
+import { formatDistanceToNow } from "date-fns";
+import { computeGigRankingBreakdown } from "../gig_ranking";
+import useGlobalState from "@/lib/global_state";
 
 interface GigsOtherServicesProps {
   currentGigId?: string;
@@ -9,8 +22,27 @@ interface GigsOtherServicesProps {
 
 export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGigId }) => {
   const navigate = useNavigate();
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const [gigs, setGigs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const formatTimeAgo = (dateStr: string | undefined) => {
+    if (!dateStr) return "Just now";
+    try {
+      let str = formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+      str = str
+        .replace(/minutes?/, (m) => (m === "minutes" ? "mins" : "min"))
+        .replace(/hours?/, (m) => (m === "hours" ? "hrs" : "hr"))
+        .replace(/seconds?/, (m) => (m === "seconds" ? "secs" : "sec"))
+        .replace(/days?/, "d")
+        .replace(/months?/, "m")
+        .replace(/years?/, (m) => (m === "years" ? "yrs" : "yr"))
+        .replace("about ", "");
+      return str;
+    } catch {
+      return "Just now";
+    }
+  };
 
   useEffect(() => {
     const fetchGigs = async () => {
@@ -28,13 +60,21 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
           const mappedGigs = response.data.data
             .filter((g: any) => {
               const isNotCurrent = g.id !== currentGigId && g.gig_id !== currentGigId;
-              const isOpen = (g.status || "").toLowerCase() === "open" || (g.status || "").toLowerCase() === "active";
+              const isOpen =
+                (g.status || "").toLowerCase() === "open" ||
+                (g.status || "").toLowerCase() === "active" ||
+                !g.status;
               return isNotCurrent && isOpen;
             })
+            .sort(
+              (a: any, b: any) =>
+                computeGigRankingBreakdown(b).totalScore -
+                computeGigRankingBreakdown(a).totalScore
+            )
             .slice(0, 3)
             .map((g: any) => {
-              const rawAvatar = g.client_avatar_path || g.clientAvatar;
-              const isValidAvatar = rawAvatar && !rawAvatar.includes('pravatar.cc');
+              const rawAvatar = g.client_avatar_path || g.clientAvatar || g.creator_avatar_path;
+              const isValidAvatar = rawAvatar && !rawAvatar.includes("pravatar.cc");
 
               return {
                 ...g,
@@ -52,6 +92,21 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
     };
     fetchGigs();
   }, [currentGigId]);
+
+  const handleToggleSave = async (e: React.MouseEvent, gigId: string) => {
+    e.stopPropagation();
+    if (isGuestMode) return;
+    try {
+      setGigs((prev) =>
+        prev.map((gig) => (gig.id === gigId ? { ...gig, isSaved: !gig.isSaved } : gig))
+      );
+      await api.post(`/api/gigs/${gigId}/save`);
+    } catch {
+      setGigs((prev) =>
+        prev.map((gig) => (gig.id === gigId ? { ...gig, isSaved: !gig.isSaved } : gig))
+      );
+    }
+  };
 
   if (!isLoading && gigs.length === 0) return null;
 
@@ -74,7 +129,7 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
         </div>
         <button
           onClick={() => navigate("/gigs/services")}
-          className="flex items-center gap-1 text-xs font-semibold text-gray-500 dark:text-zinc-400 transition-colors hover:text-blue-500 dark:hover:text-blue-400"
+          className="flex items-center gap-1 text-xs font-semibold text-gray-500 dark:text-zinc-400 transition-colors hover:text-blue-500 dark:hover:text-blue-400 cursor-pointer"
           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
         >
           View More Services <ArrowRight className="h-3.5 w-3.5" />
@@ -90,7 +145,7 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
               >
                 <div>
                   {/* Thumbnail Skeleton */}
-                  <div className="mb-3 h-36 w-full rounded-xl bg-gray-200 dark:bg-zinc-800" />
+                  <div className="mb-3 h-40 w-full rounded-xl bg-gray-200 dark:bg-zinc-800" />
 
                   {/* Badges Skeleton */}
                   <div className="mb-2 flex items-center gap-1.5">
@@ -131,8 +186,12 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                   ? Math.min(...gig.tiers.map((t: any) => Number(t.price) || 0))
                   : 0;
 
-              const hasValidAvatar = gig.clientAvatar && !gig.clientAvatar.includes('pravatar.cc');
+              const hasValidAvatar = gig.clientAvatar && !gig.clientAvatar.includes("pravatar.cc");
               const hasServiceRating = (gig.ratingCount || 0) > 0;
+              const isOpen = !(
+                gig.status?.toLowerCase() === "closed" || gig.status?.toLowerCase() === "close"
+              );
+              const rankInfo = computeGigRankingBreakdown(gig);
 
               return (
                 <div
@@ -145,7 +204,7 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                 >
                   <div>
                     {/* Thumbnail Image */}
-                    <div className="relative mb-3 h-36 w-full overflow-hidden rounded-xl border border-gray-100 dark:border-white/5 bg-gray-200 dark:bg-zinc-900">
+                    <div className="relative mb-3 h-40 w-full overflow-hidden rounded-xl border border-gray-100 dark:border-white/5 bg-gray-200 dark:bg-zinc-900">
                       <img
                         src={gig.thumbnail}
                         alt={gig.title}
@@ -154,59 +213,131 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
 
                       {/* Orders and Service Rating grouped together at top-left */}
-                      <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
+                      <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1.5 z-10">
                         <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
                           <ShoppingCart className="h-3 w-3" />
                           <span>{gig.ordersCount || 0} Orders</span>
                         </div>
                         <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-[10px] font-semibold border border-white/10 text-white">
-                          <Star className={`h-3 w-3 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
-                          <span className={hasServiceRating ? "text-yellow-400" : "text-gray-300 dark:text-zinc-400"}>
-                            {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
+                          <Star
+                            className={`h-3 w-3 ${
+                              hasServiceRating
+                                ? "fill-yellow-400 text-yellow-400"
+                                : "fill-gray-400 text-gray-400"
+                            }`}
+                          />
+                          <span
+                            className={
+                              hasServiceRating
+                                ? "text-yellow-400"
+                                : "text-gray-300 dark:text-zinc-400"
+                            }
+                          >
+                            {hasServiceRating
+                              ? `${gig.clientRating} (${gig.ratingCount})`
+                              : rankInfo.isNewListing
+                              ? "New"
+                              : "N/A"}
                           </span>
                         </div>
                       </div>
 
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                        }}
-                        className={`absolute top-2 right-2 rounded-full bg-white/80 dark:bg-black/50 p-1.5 backdrop-blur-sm transition ${
-                          gig.isSaved
-                            ? "text-yellow-500"
-                            : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
-                        }`}
-                      >
-                        <Bookmark
-                          className={`h-3.5 w-3.5 ${gig.isSaved ? "fill-current" : ""}`}
-                        />
-                      </button>
+                      {/* Bottom-left Tiers Count Tag on Thumbnail */}
+                      {gig.tiers && gig.tiers.length > 0 && (
+                        <div className="absolute bottom-2 left-2 z-10">
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                            <Layers className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
+                            <span>
+                              {gig.tiers.length} {gig.tiers.length === 1 ? "Tier" : "Tiers"}
+                            </span>
+                          </span>
+                        </div>
+                      )}
+
+                      {!isGuestMode && (
+                        <button
+                          onClick={(e) => handleToggleSave(e, gig.id)}
+                          className={`absolute top-2 right-2 rounded-full bg-white/80 dark:bg-black/50 p-1.5 backdrop-blur-sm transition ${
+                            gig.isSaved
+                              ? "text-amber-500 dark:text-amber-400"
+                              : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                          }`}
+                        >
+                          <Bookmark
+                            className={`h-3.5 w-3.5 ${gig.isSaved ? "fill-current" : ""}`}
+                          />
+                        </button>
+                      )}
                     </div>
 
-                    {/* Badges: Open Status + Category */}
-                    <div className="mb-2 flex items-center gap-1.5">
-                      <span className="rounded border border-emerald-300 dark:border-emerald-500/20 bg-emerald-100 dark:bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
-                        Open
-                      </span>
-                      <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
-                        {gig.category}
-                      </span>
+                    {/* Badges & Slots on Same Row */}
+                    <div className="mb-2 flex items-center justify-between gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span
+                          className={`relative overflow-hidden rounded border px-2 py-0.5 text-[10px] font-bold ${
+                            !isOpen
+                              ? "border-red-300 bg-red-100 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
+                              : "border-emerald-300 bg-emerald-100 text-emerald-700 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:border-emerald-500/40 dark:bg-emerald-500/20 dark:text-emerald-300"
+                          }`}
+                        >
+                          <span className="relative z-10">{isOpen ? "Open" : "Closed"}</span>
+                          {isOpen && (
+                            <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                          )}
+                        </span>
+                        <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
+                          {gig.category || "General"}
+                        </span>
+                        {rankInfo.isRisingCreator && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate("/gigs/info");
+                            }}
+                            title={`Rising Creator — Click to see how this badge works (Score: ${rankInfo.totalScore})`}
+                            className="relative overflow-hidden inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 dark:hover:bg-emerald-500/25 transition-colors cursor-pointer"
+                          >
+                            <TrendingUp className="relative z-10 h-2.5 w-2.5" />
+                            <span className="relative z-10">Rising</span>
+                            <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 dark:bg-zinc-800 text-[10px] font-semibold text-gray-600 dark:text-zinc-300 border border-gray-300 dark:border-white/10 shrink-0">
+                        <svg
+                          width="10"
+                          height="10"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                          <circle cx="9" cy="7" r="4" />
+                          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
+                        {gig.slots} Slots
+                      </div>
                     </div>
 
                     {/* Price */}
-                    <div className="mb-1 flex items-center gap-1.5">
-                      <div className="h-3 w-3 rounded-full bg-yellow-400" />
-                      <span className="text-base font-black text-yellow-500">
+                    <div className="mb-1 flex items-center gap-1 text-amber-500 dark:text-amber-400">
+                      <CreditIcon className="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0" />
+                      <span className="text-base font-black text-amber-500 dark:text-amber-400">
                         {startingPrice.toLocaleString()}
                       </span>
-                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+                      <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                         Starting at
                       </span>
                     </div>
 
                     {/* Title */}
                     <h3
-                      className="mb-1 text-[15px] font-bold leading-snug text-gray-900 dark:text-white line-clamp-1"
+                      className="mb-1 text-[15px] font-bold leading-snug text-gray-900 dark:text-white line-clamp-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors"
                       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
                       {gig.title}
@@ -247,21 +378,27 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                   {/* Footer */}
                   <div className="mt-auto pt-3 border-t border-gray-200 dark:border-white/5 flex items-center justify-between">
                     <div className="flex items-center gap-2 truncate">
-                      <div className="relative h-6 w-6 shrink-0">
+                      <div className="relative h-5 w-5 shrink-0">
                         <img
                           src={hasValidAvatar ? gig.clientAvatar : undefined}
                           alt={gig.postedBy}
-                          className={`h-6 w-6 rounded-full object-cover border border-gray-300 dark:border-zinc-700 ${!hasValidAvatar ? 'hidden' : ''}`}
+                          className={`h-5 w-5 rounded-full object-cover border border-gray-300 dark:border-zinc-700 ${
+                            !hasValidAvatar ? "hidden" : ""
+                          }`}
                           onError={(e) => {
-                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.style.display = "none";
                             const fallback = e.currentTarget.nextElementSibling;
                             if (fallback) {
-                              fallback.classList.remove('hidden');
-                              fallback.classList.add('flex');
+                              fallback.classList.remove("hidden");
+                              fallback.classList.add("flex");
                             }
                           }}
                         />
-                        <div className={`${hasValidAvatar ? 'hidden' : 'flex'} absolute inset-0 items-center justify-center rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 text-[10px] font-bold text-gray-700 dark:text-white`}>
+                        <div
+                          className={`${
+                            hasValidAvatar ? "hidden" : "flex"
+                          } absolute inset-0 items-center justify-center rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 text-[9px] font-bold text-gray-700 dark:text-white`}
+                        >
                           {gig.postedBy ? gig.postedBy.charAt(0) : "U"}
                         </div>
                       </div>
@@ -272,31 +409,18 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                         </span>
                         <div className="flex items-center gap-1 text-[10px] font-medium text-gray-500">
                           <Star className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" />
-                          <span className="text-gray-700 dark:text-zinc-300">
-                            {gig.clientRating || "5.0"}
+                          <span>
+                            {gig.ratingCount > 0
+                              ? `${gig.clientRating} (${gig.ratingCount})`
+                              : "N/A"}
                           </span>
-                          <span>({gig.ratingCount || 0})</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-100 dark:bg-zinc-800 text-[10px] font-semibold text-gray-600 dark:text-zinc-300 border border-gray-300 dark:border-white/10 shrink-0">
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                        <circle cx="9" cy="7" r="4" />
-                        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                      </svg>
-                      {gig.slots} Slots
+                    <div className="flex items-center gap-1 text-[10px] font-medium text-gray-400 dark:text-zinc-500 shrink-0 ml-2">
+                      <Clock className="h-3 w-3" />
+                      <span>{formatTimeAgo(gig.postedAt).replace(/^about\s+/i, "")}</span>
                     </div>
                   </div>
                 </div>

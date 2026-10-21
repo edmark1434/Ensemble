@@ -11,10 +11,12 @@ import {
   User,
   Edit2,
   Film,
+  TrendingUp,
 } from "lucide-react";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
 import { JobRichText } from "../../6_job_market/job_components/JobRichText";
+import { computeJobRankingBreakdown } from "../../6_job_market/job_ranking";
 import { getImageUrl } from "@/lib/utils";
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 
@@ -62,6 +64,11 @@ export interface Job {
   hiring_type?: string;
   milestones?: any[];
   is_team?: boolean;
+  hiredCount?: number;
+  savesCount?: number;
+  portfolioUseAllowed?: boolean;
+  requireNDA?: boolean;
+  screeningQuestions?: any[];
 }
 
 export const HomeFeaturedJobs: React.FC = () => {
@@ -114,10 +121,12 @@ export const HomeFeaturedJobs: React.FC = () => {
             postedAt: j.created_at ? new Date(j.created_at).toLocaleString() : "",
             createdAt: j.created_at,
             timeAgo: j.created_at ? getTimeAgo(new Date(j.created_at)) : "Just now",
-            clientRating: 5.0,
-            ratingCount: 0,
+            clientRating: parseFloat(j.client_rating) || 0,
+            ratingCount: parseInt(j.client_rating_count) || 0,
             positionsNeeded: j.no_of_hires || 1,
             applicantsCount: parseInt(j.applicant_count) || 0,
+            hiredCount: parseInt(j.hired_count) || 0,
+            savesCount: parseInt(j.saves_count) || 0,
             timeline: `${j.timeline_min}-${j.timeline_max} Days`,
             thumbnail: getImageUrl(j.thumbnail_path),
             clientAvatar: getImageUrl(j.client_avatar_path) || undefined,
@@ -128,6 +137,9 @@ export const HomeFeaturedJobs: React.FC = () => {
             hiring_type: j.hiring_type || (isTeam ? "team" : "single"),
             milestones: Array.isArray(j.milestones) ? j.milestones : [],
             is_team: isTeam,
+            portfolioUseAllowed: Boolean(j.portfolio_use_allowed),
+            requireNDA: Boolean(j.require_nda),
+            screeningQuestions: Array.isArray(j.screening_questions) ? j.screening_questions : [],
           };
         });
 
@@ -193,7 +205,9 @@ export const HomeFeaturedJobs: React.FC = () => {
       </div>
 
       <div className="grid gap-5 grid-cols-1 md:grid-cols-2 2xl:grid-cols-3">
-        {jobs.map((job: Job, index: number) => (
+        {jobs.map((job: Job, index: number) => {
+          const rankInfo = computeJobRankingBreakdown(job);
+          return (
           <div
             key={job.id}
             onClick={() => navigate(`/jobs/postings/${job.id}`)}
@@ -224,8 +238,8 @@ export const HomeFeaturedJobs: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Bottom-left Hiring Type Tag */}
-                <div className="absolute bottom-2 left-2 z-10">
+                {/* Bottom-left Hiring Type & Difficulty Tags */}
+                <div className="absolute bottom-2 left-2 flex items-center gap-1.5 z-10">
                   {Boolean(job.hiring_type === "team" || job.is_team) ? (
                     <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
                       <Users className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
@@ -237,6 +251,9 @@ export const HomeFeaturedJobs: React.FC = () => {
                       <span>Individual</span>
                     </span>
                   )}
+                  <span className="px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                    {job.difficulty || "Beginner"}
+                  </span>
                 </div>
 
                 {/* Top-right Actions */}
@@ -285,9 +302,21 @@ export const HomeFeaturedJobs: React.FC = () => {
                 <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                   {job.category || "General"}
                 </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                  {job.difficulty || "Beginner"}
-                </span>
+                {rankInfo.isRisingJob && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate("/jobs/info");
+                    }}
+                    title={`Rising Job Post — Click to see how this badge works (Score: ${rankInfo.totalScore})`}
+                    className="relative overflow-hidden inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 dark:hover:bg-emerald-500/25 transition-colors cursor-pointer"
+                  >
+                    <TrendingUp className="relative z-10 h-2.5 w-2.5" />
+                    <span className="relative z-10">Rising</span>
+                    <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+                  </button>
+                )}
               </div>
 
               {/* Price & Tag */}
@@ -347,7 +376,8 @@ export const HomeFeaturedJobs: React.FC = () => {
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Loader2, CheckCircle2, Check, CreditCard, Box, MapPin, PlayCircle, Search, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle2, Check, CreditCard, Box, MapPin, PlayCircle, Search, FileText, Sparkles } from "lucide-react";
+import { requireVerifiedAccount } from "@/lib/accountVerification";
 import api from "@/lib/axios";
 import type { Gig } from "../gig_datasets";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -103,6 +104,86 @@ const GigOrderPage: React.FC = () => {
   const [agreedToFreelancerTerms, setAgreedToFreelancerTerms] = useState(!!editOrderId);
   const [agreedToPlatformTerms, setAgreedToPlatformTerms] = useState(!!editOrderId);
   const [portfolioDuration, setPortfolioDuration] = useState<number>(15);
+  const [isDraftRestored, setIsDraftRestored] = useState(false);
+
+  const isVerified = useGlobalState((state) => state.isVerified);
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isGlobalLoading = useGlobalState((state) => state.isLoading);
+  const user = useGlobalState((state) => state.user);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (isGuestMode) {
+      navigate("/login");
+      return;
+    }
+    if (isGlobalLoading) return;
+    if (isVerified || user?.is_verified) {
+      if (!isVerified && user?.is_verified) {
+        useGlobalState.getState().setIsVerified(true);
+      }
+      return;
+    }
+    requireVerifiedAccount().catch(() => {
+      if (!cancelled) {
+        useGlobalState.getState().setIsVerificationModalOpen(
+          true,
+          "Account Verification is required to place a Gig Order. Please verify your identity to proceed."
+        );
+        navigate(id ? `/gigs/services/${id}` : "/gigs/services");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuestMode, isGlobalLoading, isVerified, user?.is_verified, navigate, id]);
+
+  useEffect(() => {
+    if (!id || editOrderId) return;
+    try {
+      const saved = localStorage.getItem(`ensemble_gig_order_draft_${id}`);
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.projectBrief) setProjectBrief(data.projectBrief);
+        if (data.questionAnswers && typeof data.questionAnswers === "object") setQuestionAnswers(data.questionAnswers);
+        if (data.tierIndex !== undefined && location.state?.tierIndex === undefined) setTierIndex(data.tierIndex);
+        if (data.portfolioDuration) setPortfolioDuration(data.portfolioDuration);
+        setIsDraftRestored(true);
+      }
+    } catch (e) {
+      console.error("Failed to restore gig order draft", e);
+    }
+  }, [id, editOrderId]);
+
+  useEffect(() => {
+    if (!id || editOrderId) return;
+    if (!projectBrief && Object.keys(questionAnswers).length === 0) return;
+    const timer = setTimeout(() => {
+      try {
+        const draftData = {
+          projectBrief,
+          questionAnswers,
+          tierIndex,
+          portfolioDuration,
+          updatedAt: Date.now(),
+        };
+        localStorage.setItem(`ensemble_gig_order_draft_${id}`, JSON.stringify(draftData));
+      } catch (e) {
+        console.error("Failed to auto-save gig order draft", e);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [id, editOrderId, projectBrief, questionAnswers, tierIndex, portfolioDuration]);
+
+  const handleClearDraft = () => {
+    if (id) {
+      localStorage.removeItem(`ensemble_gig_order_draft_${id}`);
+    }
+    setProjectBrief("");
+    setQuestionAnswers({});
+    setPortfolioDuration(15);
+    setIsDraftRestored(false);
+  };
 
   const [initiatorRole, setInitiatorRole] = useState<"Client" | "Freelancer">("Freelancer");
   const [isExistingProject, setIsExistingProject] = useState(false);
@@ -216,6 +297,7 @@ const GigOrderPage: React.FC = () => {
   const handleCheckout = async () => {
     setIsProcessing(true);
     try {
+      if (!actingTeamId) await requireVerifiedAccount();
             const payload = {
         tierId: activeTier?.tierId,
         projectBrief,
@@ -239,6 +321,9 @@ const GigOrderPage: React.FC = () => {
         await api.put(`/api/gigs/orders/${editOrderId}`, payload);
       } else {
         await api.post(`/api/gigs/${gig.id}/order`, payload);
+        if (id) {
+          localStorage.removeItem(`ensemble_gig_order_draft_${id}`);
+        }
       }
       setIsProcessing(false);
       setIsSuccessOpen(true);
@@ -310,6 +395,22 @@ const GigOrderPage: React.FC = () => {
         </div>
 
         <OrderCreateHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
+
+        {isDraftRestored && !editOrderId && (
+          <div className="p-3 rounded-2xl border border-blue-500/20 bg-blue-50/70 dark:bg-blue-950/20 flex items-center justify-between text-xs transition">
+            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-medium">
+              <Sparkles className="h-4 w-4 shrink-0" />
+              <span>Draft restored from your last session. Progress is saved automatically.</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleClearDraft}
+              className="text-[11px] font-bold text-gray-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-400 transition"
+            >
+              Clear Draft
+            </button>
+          </div>
+        )}
 
         <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
               <AnimatePresence mode="wait">

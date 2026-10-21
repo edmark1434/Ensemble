@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Star, Clock, Bookmark, Users, Flag, Edit2, Wrench, ShoppingCart, Heart, Send, CircleCheck, TrendingUp } from "lucide-react";
+import { Star, Clock, Bookmark, Users, Flag, Edit2, Wrench, ShoppingCart, Heart, Send, CircleCheck, TrendingUp, Layers } from "lucide-react";
+import { computeGigRankingBreakdown } from "../gig_ranking";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -168,6 +169,7 @@ export const GigList: React.FC<GigListProps> = ({
             const isActive = activeGigId === gig.id;
             const isOpen = gig.status?.toLowerCase() === "open" || !gig.status;
             const hasServiceRating = gig.ratingCount > 0;
+            const rankInfo = computeGigRankingBreakdown(gig);
 
             if (viewType === "grid") {
               return (
@@ -194,10 +196,10 @@ export const GigList: React.FC<GigListProps> = ({
                         className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
-                      <BudgetBadge status={getBudgetStatus?.(gig) ?? null} className="bottom-2 left-2" />
+                      <BudgetBadge status={getBudgetStatus?.(gig) ?? null} className="bottom-2 right-2" />
 
                       {/* Orders and Service Rating Badges grouped at top-left */}
-                      <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
+                      <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1.5 z-10">
                         <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
                           <ShoppingCart className="h-3 w-3" />
                           <span>{gig.ordersCount || 0} Orders</span>
@@ -205,10 +207,20 @@ export const GigList: React.FC<GigListProps> = ({
                         <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
                           <Star className={`h-3 w-3 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
                           <span className={hasServiceRating ? "text-yellow-400" : "text-gray-300 dark:text-zinc-400"}>
-                            {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
+                            {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : rankInfo.isNewListing ? "New" : "N/A"}
                           </span>
                         </div>
                       </div>
+
+                      {/* Bottom-left Tiers Count Tag (matches Jobs Team/Individual tag) */}
+                      {gig.tiers && gig.tiers.length > 0 && (
+                        <div className="absolute bottom-2 left-2 z-10">
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                            <Layers className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
+                            <span>{gig.tiers.length} {gig.tiers.length === 1 ? "Tier" : "Tiers"}</span>
+                          </span>
+                        </div>
+                      )}
 
                       <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
                         {!gig.isOwnGig && !isGuestMode && (
@@ -268,10 +280,21 @@ export const GigList: React.FC<GigListProps> = ({
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {gig.category || "General"}
                         </span>
-                      {gig.tiers && gig.tiers.length > 0 && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                          {gig.tiers.length} Tiers
-                        </span>
+                      {rankInfo.isRisingCreator && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate("/gigs/info");
+                          }}
+                          title={`Rising Creator — Click to see how this badge works (Score: ${rankInfo.totalScore})`}
+                          className="relative overflow-hidden inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 dark:hover:bg-emerald-500/25 transition-colors cursor-pointer"
+                        >
+                          <TrendingUp className="relative z-10 h-2.5 w-2.5" />
+                          <span className="relative z-10">Rising</span>
+                          <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+
+                        </button>
                       )}
                     </div>
 
@@ -354,21 +377,31 @@ export const GigList: React.FC<GigListProps> = ({
                     className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105 absolute inset-0"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent pointer-events-none" />
-                  <BudgetBadge status={getBudgetStatus?.(gig) ?? null} className="top-2 left-2" />
+                  <BudgetBadge status={getBudgetStatus?.(gig) ?? null} className="bottom-2 right-2" />
 
-                  {/* Orders and Service Rating badges grouped */}
-                  <div className="absolute bottom-2 left-2 flex items-center gap-2 z-10">
-                    <div className="flex items-center gap-1 text-white text-[11px] font-semibold drop-shadow-md">
+                  {/* Orders and Service Rating badges grouped at top-left */}
+                  <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1.5 z-10">
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
                       <ShoppingCart className="h-3 w-3" />
                       <span>{gig.ordersCount || 0} Orders</span>
                     </div>
-                    <div className="flex items-center gap-1 text-[11px] font-semibold drop-shadow-md">
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
                       <Star className={`h-3 w-3 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
                       <span className={hasServiceRating ? "text-yellow-400" : "text-gray-300 dark:text-zinc-400"}>
-                        {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
+                        {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : rankInfo.isNewListing ? "New" : "N/A"}
                       </span>
                     </div>
                   </div>
+
+                  {/* Bottom-left Tiers Count Tag on Thumbnail */}
+                  {gig.tiers && gig.tiers.length > 0 && (
+                    <div className="absolute bottom-2 left-2 z-10">
+                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                        <Layers className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
+                        <span>{gig.tiers.length} {gig.tiers.length === 1 ? "Tier" : "Tiers"}</span>
+                      </span>
+                    </div>
+                  )}
 
                   <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
                     {!gig.isOwnGig && !isGuestMode && (
@@ -427,10 +460,21 @@ export const GigList: React.FC<GigListProps> = ({
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {gig.category || "General"}
                       </span>
-                      {gig.tiers && gig.tiers.length > 0 && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                          {gig.tiers.length} Tiers
-                        </span>
+                      {rankInfo.isRisingCreator && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate("/gigs/info");
+                          }}
+                          title={`Rising Creator — Click to see how this badge works (Score: ${rankInfo.totalScore})`}
+                          className="relative overflow-hidden inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 dark:hover:bg-emerald-500/25 transition-colors cursor-pointer"
+                        >
+                          <TrendingUp className="relative z-10 h-2.5 w-2.5" />
+                          <span className="relative z-10">Rising</span>
+                          <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+
+                        </button>
                       )}
                     </div>
 

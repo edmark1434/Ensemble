@@ -1,12 +1,13 @@
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useState, useEffect } from "react";
-import { Star, Clock, Bookmark, Edit2, Flag, Wrench, Send, Users, User } from "lucide-react";
+import { Star, Clock, Bookmark, Edit2, Flag, Wrench, Send, Users, User, TrendingUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { JobRichText } from "./JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ViewType } from "./job_list_viewtype";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import useGlobalState from "@/lib/global_state";
+import { computeJobRankingBreakdown } from "../job_ranking";
 
 export interface Job {
   id: string;
@@ -22,6 +23,7 @@ export interface Job {
   client_account_id?: string;
   clientAvatar?: string;
   postedAt: string;
+  createdAt?: string;
   updatedAt?: string;
   timeAgo: string;
   clientRating: number;
@@ -205,6 +207,7 @@ const JobList: React.FC<JobListProps> = ({
       <AnimatePresence mode="popLayout">
         {paginatedJobs.map((job, index) => {
           const isActive = activeJobId === job.id;
+          const rankInfo = computeJobRankingBreakdown(job);
 
           /* --- GRID VIEW CARD (NO SKILLS DISPLAY) --- */
           if (viewType === "grid") {
@@ -241,7 +244,7 @@ const JobList: React.FC<JobListProps> = ({
                       </div>
 
                       {/* Bottom-left Hiring Type Tag */}
-                      <div className="absolute bottom-2 left-2 z-10">
+                      <div className="absolute bottom-2 left-2 flex items-center gap-1.5 z-10">
                         {Boolean(job.hiring_type === "team" || job.is_team || job.isTeam || job.posted_as === "Team") ? (
                           <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
                             <Users className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
@@ -253,6 +256,9 @@ const JobList: React.FC<JobListProps> = ({
                             <span>Individual</span>
                           </span>
                         )}
+                        <span className="px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                          {job.difficulty || "Beginner"}
+                        </span>
                       </div>
 
                     <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
@@ -304,9 +310,21 @@ const JobList: React.FC<JobListProps> = ({
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                       {job.category || "General"}
                     </span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                      {job.difficulty || "Beginner"}
-                    </span>
+                    {rankInfo.isRisingJob && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate("/jobs/info");
+                        }}
+                        title={`Rising Job Post — Click to see how this badge works (Score: ${rankInfo.totalScore})`}
+                        className="relative overflow-hidden inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 dark:hover:bg-emerald-500/25 transition-colors cursor-pointer"
+                      >
+                        <TrendingUp className="relative z-10 h-2.5 w-2.5" />
+                        <span className="relative z-10">Rising</span>
+                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+                      </button>
+                    )}
                   </div>
 
                   {/* Price & Tag */}
@@ -415,7 +433,7 @@ const JobList: React.FC<JobListProps> = ({
                 </div>
 
                 {/* Bottom-left Hiring Type Tag on Thumbnail */}
-                <div className="absolute bottom-2 left-2 z-10">
+                <div className="absolute bottom-2 left-2 flex items-center gap-1.5 z-10">
                   {Boolean(job.hiring_type === "team" || job.is_team || job.isTeam || job.posted_as === "Team") ? (
                     <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
                       <Users className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
@@ -427,6 +445,9 @@ const JobList: React.FC<JobListProps> = ({
                       <span>Individual</span>
                     </span>
                   )}
+                  <span className="px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                    {job.difficulty || "Beginner"}
+                  </span>
                 </div>
               </div>
 
@@ -434,25 +455,37 @@ const JobList: React.FC<JobListProps> = ({
                 <div>
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex flex-wrap items-center gap-1.5">
-                        <span
-                          className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
-                            job.status?.toLowerCase() === "open" || !job.status
-                              ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
-                              : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
-                          }`}
+                      <span
+                        className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          job.status?.toLowerCase() === "open" || !job.status
+                            ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
+                            : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
+                        }`}
+                      >
+                        <span className="relative z-10">{job.status?.toLowerCase() === "open" || !job.status ? "Open" : "Closed"}</span>
+                        {(job.status?.toLowerCase() === "open" || !job.status) && (
+                          <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                        )}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
+                        {job.category || "General"}
+                      </span>
+                      {rankInfo.isRisingJob && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate("/jobs/info");
+                          }}
+                          title={`Rising Job Post — Click to see how this badge works (Score: ${rankInfo.totalScore})`}
+                          className="relative overflow-hidden inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 dark:hover:bg-emerald-500/25 transition-colors cursor-pointer"
                         >
-                          <span className="relative z-10">{job.status?.toLowerCase() === "open" || !job.status ? "Open" : "Closed"}</span>
-                          {(job.status?.toLowerCase() === "open" || !job.status) && (
-                            <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
-                          )}
-                        </span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                          {job.category || "General"}
-                        </span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                          {job.difficulty || "Beginner"}
-                        </span>
-                      </div>
+                          <TrendingUp className="relative z-10 h-2.5 w-2.5" />
+                          <span className="relative z-10">Rising</span>
+                          <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/35 dark:via-emerald-300/25 to-transparent pointer-events-none" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Price & Tag */}
@@ -516,7 +549,7 @@ const JobList: React.FC<JobListProps> = ({
                       <p className="text-xs font-bold text-gray-700 dark:text-zinc-300">{job.postedBy}</p>
                       <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">
                         <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
-                        <span>{job.clientRating} ({job.ratingCount})</span>
+                        <span>{job.ratingCount > 0 ? `${job.clientRating} (${job.ratingCount})` : "N/A"}</span>
                       </div>
                     </div>
                   </div>

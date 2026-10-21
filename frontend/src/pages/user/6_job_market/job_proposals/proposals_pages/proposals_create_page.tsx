@@ -23,8 +23,39 @@ import type { Job } from "../../job_components/job_lists";
 
 const ProposalsCreatePage: React.FC = () => {
   const theme = useGlobalState((state) => state.theme);
+  const isVerified = useGlobalState((state) => state.isVerified);
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isGlobalLoading = useGlobalState((state) => state.isLoading);
+  const user = useGlobalState((state) => state.user);
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+
+  useEffect(() => {
+    let cancelled = false;
+    if (isGuestMode) {
+      navigate("/login");
+      return;
+    }
+    if (isGlobalLoading) return;
+    if (isVerified || user?.is_verified) {
+      if (!isVerified && user?.is_verified) {
+        useGlobalState.getState().setIsVerified(true);
+      }
+      return;
+    }
+    requireVerifiedAccount().catch(() => {
+      if (!cancelled) {
+        useGlobalState.getState().setIsVerificationModalOpen(
+          true,
+          "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
+        );
+        navigate(id ? `/jobs/postings/${id}` : "/jobs/postings");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuestMode, isGlobalLoading, isVerified, user?.is_verified, navigate, id]);
 
   const [currentSlide, setCurrentSlide] = useState<number>(1);
   const [job, setJob] = useState<Job | null>(null);
@@ -84,6 +115,7 @@ const ProposalsCreatePage: React.FC = () => {
         if (data.tosContent) setTosContent(data.tosContent);
         if (Array.isArray(data.milestones) && data.milestones.length > 0) setMilestones(data.milestones);
         if (data.selectedMilestoneId) setSelectedMilestoneId(data.selectedMilestoneId);
+        if (Array.isArray(data.screeningAnswers)) setScreeningAnswers(data.screeningAnswers);
         setIsDraftRestored(true);
       }
     } catch (e) {
@@ -105,6 +137,7 @@ const ProposalsCreatePage: React.FC = () => {
           tosContent,
           milestones,
           selectedMilestoneId,
+          screeningAnswers,
           updatedAt: Date.now(),
         };
         localStorage.setItem(`ensemble_proposal_draft_${id}`, JSON.stringify(draftData));
@@ -113,7 +146,7 @@ const ProposalsCreatePage: React.FC = () => {
       }
     }, 600);
     return () => clearTimeout(timer);
-  }, [id, bidAmount, coverLetter, additionalWorkRate, selectedTosId, tosContent, milestones, selectedMilestoneId]);
+  }, [id, bidAmount, coverLetter, additionalWorkRate, selectedTosId, tosContent, milestones, selectedMilestoneId, screeningAnswers]);
 
   const handleClearDraft = () => {
     if (id) {
@@ -123,6 +156,7 @@ const ProposalsCreatePage: React.FC = () => {
     setCoverLetter("");
     setSelectedTosId("");
     setTosContent("");
+    setScreeningAnswers([]);
     setMilestones([
       {
         id: "ms-1",

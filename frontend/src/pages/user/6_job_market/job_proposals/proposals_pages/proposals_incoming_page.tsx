@@ -247,7 +247,7 @@ export const ProposalsIncomingPage: React.FC = () => {
         <h3 className="text-lg font-bold text-gray-900 dark:text-white">No Proposals Received Yet</h3>
         <p className="text-xs text-gray-500 dark:text-zinc-400 max-w-sm">You haven't received any proposals for this job post yet, or you haven't created a job post.</p>
         <button
-          onClick={() => continueIfAccountVerified(() => navigate('/jobs/create'))}
+          onClick={() => continueIfAccountVerified(() => navigate('/jobs/postings/choose'))}
           className="mt-4 px-6 py-2.5 rounded-xl bg-blue-500 text-xs font-bold text-gray-900 dark:text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 cursor-pointer"
         >
           Create a Job Post

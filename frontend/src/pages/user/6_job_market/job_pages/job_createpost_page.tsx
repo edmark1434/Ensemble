@@ -57,7 +57,7 @@ const JobCreatePostPage: React.FC = () => {
             true,
             "Account Verification is required to access Job Creation. Please verify your identity to proceed."
           );
-          navigate("/");
+          navigate("/jobs/postings");
         }
       });
 

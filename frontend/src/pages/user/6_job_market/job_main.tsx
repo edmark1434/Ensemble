@@ -20,6 +20,7 @@ import api from "@/lib/axios";
 // Datasets & Types
 import { sampleJobs, sampleCategories } from "./job_datasets";
 import type { Job } from "./job_components/job_lists";
+import { computeJobRankingBreakdown } from "./job_ranking";
 
 function getTimeAgo(date: Date) {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -156,9 +157,10 @@ const JobMain: React.FC = () => {
             ? `${import.meta.env.VITE_CLOUDFRONT_URL}${j.client_avatar_path.startsWith('/') ? '' : '/'}${j.client_avatar_path}`
             : undefined,
           postedAt: new Date(j.created_at).toLocaleString(),
+          createdAt: j.created_at,
           timeAgo: getTimeAgo(new Date(j.created_at)),
-          clientRating: 5.0,
-          ratingCount: 0,
+          clientRating: parseFloat(j.client_rating) || 0,
+          ratingCount: parseInt(j.client_rating_count) || 0,
           positionsNeeded: j.no_of_hires || 1,
           hiredCount: parseInt(j.hired_count) || 0,
           applicantsCount: parseInt(j.applicant_count) || 0,
@@ -187,7 +189,12 @@ const JobMain: React.FC = () => {
           portfolioDuration: j.portfolio_use_duration_seconds || null,
           isExistingProject: j.is_existing_project || false,
           existingProjectId: j.existing_project_id || null,
-          initiatorRole: j.initiator_role || "Client"
+          initiatorRole: j.initiator_role || "Client",
+          attachments: Array.isArray(j.attachments) ? j.attachments : [],
+          screeningQuestions: Array.isArray(j.screening_questions) ? j.screening_questions : [],
+          shortlistedCount: parseInt(j.shortlisted_count) || 0,
+          clientHireRate: typeof j.client_hire_rate === "number" ? j.client_hire_rate : (parseInt(j.client_hire_rate) || 100),
+          clientLastActive: j.client_last_active ? getTimeAgo(new Date(j.client_last_active)) : undefined
         }));
         setJobsList(mappedJobs);
       } catch (err) {
@@ -351,7 +358,7 @@ const JobMain: React.FC = () => {
       if (posSort === "inc") return a.positionsNeeded - b.positionsNeeded;
       if (posSort === "dec") return b.positionsNeeded - a.positionsNeeded;
       if (ratingSort) return b.clientRating - a.clientRating;
-      return 0;
+      return computeJobRankingBreakdown(b).totalScore - computeJobRankingBreakdown(a).totalScore;
     });
 
     return result;
@@ -372,6 +379,8 @@ const JobMain: React.FC = () => {
     ratingSort,
   ]);
 
+  const isInfoTab = location.pathname.includes("/jobs/info");
+
   const getParentRoute = () => {
     if (location.pathname.includes("/saved-posts")) return "/jobs/saved-posts";
     if (location.pathname.includes("/my-job-post")) return "/jobs/my-job-post";
@@ -390,24 +399,26 @@ const JobMain: React.FC = () => {
 
         <div className="mb-8 flex flex-wrap items-center justify-between border-b border-gray-200 dark:border-white/10 gap-4">
           <JobTabs />
-          <div className="py-2 flex items-center gap-4">
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center justify-center p-2 rounded-lg transition-colors border ${
-                showFilters 
-                  ? 'bg-gray-100 dark:bg-white/10 border-gray-300 dark:border-white/20 text-gray-900 dark:text-white' 
-                  : 'bg-white dark:bg-white/5 shadow-sm dark:shadow-none border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10'
-              }`}
-              title="Toggle Filters"
-            >
-              <Filter className="h-5 w-5" />
-            </button>
-            <JobListViewType viewType={viewType} onViewTypeChange={setViewType} />
-          </div>
+          {!isInfoTab && (
+            <div className="py-2 flex items-center gap-4">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`flex items-center justify-center p-2 rounded-lg transition-colors border ${
+                  showFilters 
+                    ? 'bg-gray-100 dark:bg-white/10 border-gray-300 dark:border-white/20 text-gray-900 dark:text-white' 
+                    : 'bg-white dark:bg-white/5 shadow-sm dark:shadow-none border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10'
+                }`}
+                title="Toggle Filters"
+              >
+                <Filter className="h-5 w-5" />
+              </button>
+              <JobListViewType viewType={viewType} onViewTypeChange={setViewType} />
+            </div>
+          )}
         </div>
 
-        <div className={`grid grid-cols-1 ${showFilters ? 'lg:grid-cols-4' : 'lg:grid-cols-1'} gap-8 items-start`}>
-          {showFilters && (
+        <div className={`grid grid-cols-1 ${showFilters && !isInfoTab ? 'lg:grid-cols-4' : 'lg:grid-cols-1'} gap-8 items-start`}>
+          {showFilters && !isInfoTab && (
             <div className="space-y-6 sticky top-24 lg:col-span-1">
               {loading ? (
                 <SidebarSkeleton />
@@ -452,7 +463,7 @@ const JobMain: React.FC = () => {
             </div>
           )}
 
-          <div className={showFilters ? "lg:col-span-3" : "lg:col-span-1"}>
+          <div className={showFilters && !isInfoTab ? "lg:col-span-3" : "lg:col-span-1"}>
             <Outlet
               context={
                 {

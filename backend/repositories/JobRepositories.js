@@ -178,6 +178,8 @@ async function getAllJobsRepositories(filters = {}, accountId = null, actorIds =
                 a.display_name as client_name,
                 a.handle as client_handle,
                 (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as client_avatar_path,
+                COALESCE((SELECT ROUND(AVG(r.stars_out_of_five)::numeric, 1) FROM ratings r WHERE r.account_id = j.client_account_id), 0) as client_rating,
+                (SELECT COUNT(*) FROM ratings r WHERE r.account_id = j.client_account_id) as client_rating_count,
                 (SELECT COUNT(*) FROM proposals p WHERE p.job_id = j.job_id AND p.deleted_at IS NULL) as applicant_count,
                 (SELECT COUNT(*) FROM proposals p WHERE p.job_id = j.job_id AND p.status = 'Hired' AND p.deleted_at IS NULL) as hired_count,
                 (SELECT COUNT(*) FROM job_saves js WHERE js.job_id = j.job_id) as saves_count,

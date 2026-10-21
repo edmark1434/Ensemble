@@ -202,8 +202,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             setPortfolioItems(items);
           } catch (e: any) {
             console.error("Failed to load portfolio items", e);
-            // @ts-ignore
-            window.alert("Error fetching portfolio items: " + (e?.message || "Unknown error"));
+            toast.error("Error fetching portfolio items: " + (e?.message || "Unknown error"));
           }
         } else {
           setDebugInfo({ 
