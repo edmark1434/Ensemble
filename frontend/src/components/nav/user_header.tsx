@@ -1,4 +1,5 @@
 import { Bell, ChevronDown, LifeBuoy, Settings, LogOut, User, Search, Sparkles, MessageSquare, Plus, Compass } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useTourStore } from "@/lib/tour_state";
 import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { useState, useRef, useEffect } from "react";
@@ -346,6 +347,28 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const [showHeader, setShowHeader] = useState(canShowImmediately);
   const [isCheckingAccess, setIsCheckingAccess] = useState(!canShowImmediately);
   const [userCredits, setCredits] = useState<number | null>(initialCredits);
+  // --- CREDITS ANIMATION STATE ---
+  const prevCreditsRef = useRef<number | null>(null);
+  const pendingReloadDeltaRef = useRef<number | null>((() => {
+    try {
+      if (typeof window === "undefined") return null;
+      const saved = sessionStorage.getItem("ensemble:pending_credits_delta");
+      if (saved) {
+        sessionStorage.removeItem("ensemble:pending_credits_delta");
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed.diff === "number" && Date.now() - (parsed.time || 0) < 20000) {
+          return parsed.diff;
+        }
+      }
+    } catch (_) {}
+    return null;
+  })());
+  const [displayCredits, setDisplayCredits] = useState<number | null>(initialCredits);
+  const [creditDeltas, setCreditDeltas] = useState<
+    Array<{ id: number; amount: number; type: "added" | "deducted" }>
+  >([]);
+  const [pillAnimState, setPillAnimState] = useState<"idle" | "added" | "deducted">("idle");
+
   const [userAvatarState, setUserAvatarState] = useState<string>(initialAvatar);
   const [userSubscriptionPlan, setUserSubscriptionPlan] = useState<"Free" | "Premium" | "Business">(initialPlan);
   const [isVerified, setIsVerified] = useState<boolean>(initialVerified);
@@ -920,6 +943,158 @@ useEffect(() => {
         ? cachedHeaderData.credits
         : (propCredits !== undefined && propCredits !== null ? propCredits : null)));
 
+  // --- REAL-TIME CREDITS ADDED / DEDUCTED ANIMATION ENGINE ---
+  useEffect(() => {
+    if (currentCredits === null) return;
+
+    // First mount baseline: set display or trigger reload-persisted animation
+    if (prevCreditsRef.current === null) {
+      if (pendingReloadDeltaRef.current !== null && pendingReloadDeltaRef.current !== 0) {
+        const diff = pendingReloadDeltaRef.current;
+        pendingReloadDeltaRef.current = null;
+
+        // Baseline before the change
+        const preBalance = Math.max(0, currentCredits - diff);
+        prevCreditsRef.current = preBalance;
+        setDisplayCredits(preBalance);
+
+        // Schedule animation right after header mounts into view (350ms)
+        const t = setTimeout(() => {
+          const type: "added" | "deducted" = diff > 0 ? "added" : "deducted";
+          const deltaId = Date.now() + Math.random();
+
+          setCreditDeltas((prev) => [...prev, { id: deltaId, amount: diff, type }]);
+          setPillAnimState(type);
+
+          setTimeout(() => {
+            setCreditDeltas((prev) => prev.filter((d) => d.id !== deltaId));
+          }, 2400);
+
+          setTimeout(() => {
+            setPillAnimState("idle");
+          }, 900);
+
+          const startValue = preBalance;
+          const targetValue = currentCredits;
+          const startTime = performance.now();
+          const duration = 750;
+
+          let animFrameId: number;
+          const step = (now: number) => {
+            const elapsed = now - startTime;
+            const progress = Math.min(1, elapsed / duration);
+            const ease = 1 - Math.pow(1 - progress, 3);
+            const val = Math.round(startValue + (targetValue - startValue) * ease);
+            setDisplayCredits(val);
+
+            if (progress < 1) {
+              animFrameId = requestAnimationFrame(step);
+            } else {
+              setDisplayCredits(targetValue);
+            }
+          };
+
+          animFrameId = requestAnimationFrame(step);
+          prevCreditsRef.current = currentCredits;
+        }, 350);
+
+        return () => clearTimeout(t);
+      }
+
+      prevCreditsRef.current = currentCredits;
+      setDisplayCredits(currentCredits);
+      return;
+    }
+
+    if (currentCredits !== prevCreditsRef.current) {
+      const diff = currentCredits - prevCreditsRef.current;
+      const type: "added" | "deducted" = diff > 0 ? "added" : "deducted";
+      const deltaId = Date.now() + Math.random();
+
+      // Trigger floating delta bubble
+      setCreditDeltas((prev) => [...prev, { id: deltaId, amount: diff, type }]);
+      setPillAnimState(type);
+
+      // Dismiss floating bubble after 2.4s
+      const timerDelta = setTimeout(() => {
+        setCreditDeltas((prev) => prev.filter((d) => d.id !== deltaId));
+      }, 2400);
+
+      // Reset pill highlight after 900ms
+      const timerPill = setTimeout(() => {
+        setPillAnimState("idle");
+      }, 900);
+
+      // Smooth number count-up / count-down animation over 650ms
+      const startValue = displayCredits ?? prevCreditsRef.current;
+      const targetValue = currentCredits;
+      const startTime = performance.now();
+      const duration = 650;
+
+      let animFrameId: number;
+      const step = (now: number) => {
+        const elapsed = now - startTime;
+        const progress = Math.min(1, elapsed / duration);
+        // Ease out cubic
+        const ease = 1 - Math.pow(1 - progress, 3);
+        const val = Math.round(startValue + (targetValue - startValue) * ease);
+        setDisplayCredits(val);
+
+        if (progress < 1) {
+          animFrameId = requestAnimationFrame(step);
+        } else {
+          setDisplayCredits(targetValue);
+        }
+      };
+
+      animFrameId = requestAnimationFrame(step);
+      prevCreditsRef.current = currentCredits;
+
+      return () => {
+        clearTimeout(timerDelta);
+        clearTimeout(timerPill);
+        cancelAnimationFrame(animFrameId);
+      };
+    }
+  }, [currentCredits]);
+
+  // Global custom event listener & console test helper
+  useEffect(() => {
+    const handleCustomCreditAnimate = (e: any) => {
+      const { amount, newBalance } = e.detail || {};
+      if (typeof newBalance === "number") {
+        setCredits(newBalance);
+      } else if (typeof amount === "number" && currentCredits !== null) {
+        setCredits(currentCredits + amount);
+      }
+    };
+
+    window.addEventListener("ensemble:animate-credits" as any, handleCustomCreditAnimate);
+
+    if (typeof window !== "undefined") {
+      (window as any).simulateCreditChange = (diff: number) => {
+        const base = currentCredits ?? 3143;
+        const next = Math.max(0, base + diff);
+        setCredits(next);
+        const curUser = useGlobalState.getState().user;
+        if (curUser) {
+          useGlobalState.getState().setUser({
+            ...curUser,
+            wallet: {
+              ...(curUser.wallet || {}),
+              balance_credits: next,
+            },
+          });
+        }
+        console.log(`[Credits Animation] Simulated change: ${diff > 0 ? "+" : ""}${diff} (New: ${next})`);
+      };
+    }
+
+    return () => {
+      window.removeEventListener("ensemble:animate-credits" as any, handleCustomCreditAnimate);
+    };
+  }, [currentCredits]);
+
   if (isCheckingAccess) {
     return (
       <header
@@ -1110,41 +1285,131 @@ useEffect(() => {
               </div>
             ) : (
               <>
-                {/* Credits Balance & Top-Up Pill */}
+                {/* Credits Balance & Top-Up Pill with Animated Feedback */}
                 <div
                   className="relative flex items-center"
                   onMouseEnter={() => setIsHovered(true)}
                   onMouseLeave={() => setIsHovered(false)}
                 >
-                  <button
+                  {/* Floating Delta Badge (+Credits in Emerald, -Credits in Rose) */}
+                  <AnimatePresence>
+                    {creditDeltas.map((delta) => (
+                      <motion.div
+                        key={delta.id}
+                        initial={{
+                          opacity: 0,
+                          y: delta.type === "added" ? 6 : -6,
+                          scale: 0.6,
+                        }}
+                        animate={{
+                          opacity: [0, 1, 1, 0],
+                          y: delta.type === "added" ? -28 : 28,
+                          scale: [0.6, 1.1, 1, 0.9],
+                        }}
+                        exit={{ opacity: 0 }}
+                        transition={{
+                          duration: 2.2,
+                          times: [0, 0.15, 0.75, 1],
+                          ease: "easeOut",
+                        }}
+                        className={`pointer-events-none absolute z-50 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black shadow-lg backdrop-blur-md select-none ${
+                          delta.type === "added"
+                            ? "top-0 bg-emerald-500 text-white shadow-emerald-500/40 ring-2 ring-emerald-300/50"
+                            : "bottom-0 bg-rose-500 text-white shadow-rose-500/40 ring-2 ring-rose-300/50"
+                        }`}
+                      >
+                        <span>{delta.type === "added" ? `+${delta.amount.toLocaleString()}` : delta.amount.toLocaleString()}</span>
+                        <CreditIcon className="h-3 w-3 text-white fill-current shrink-0" />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+
+                  <motion.button
                     data-tour="credits-pill"
                     onClick={handleTopUp}
                     onFocus={() => setIsHovered(true)}
                     onBlur={() => setIsHovered(false)}
+                    animate={
+                      pillAnimState === "added"
+                        ? {
+                            scale: [1, 1.12, 0.96, 1.05, 1],
+                          }
+                        : pillAnimState === "deducted"
+                        ? {
+                            x: [0, -3, 3, -3, 3, 0],
+                            scale: [1, 0.94, 1],
+                          }
+                        : { scale: 1, x: 0 }
+                    }
+                    transition={{ duration: 0.6, ease: "easeOut" }}
                     aria-label={`Credits balance: ${currentCredits !== null ? currentCredits.toLocaleString() : "loading"}. Click to top up.`}
-                    className="group relative flex items-center h-9 pl-2.5 pr-1.5 py-1 rounded-full border transition-all duration-200 select-none overflow-hidden border-amber-300/80 bg-amber-50/90 hover:bg-amber-100/90 hover:border-amber-400 shadow-xs dark:border-amber-500/30 dark:bg-zinc-900/90 dark:hover:bg-zinc-800/90 dark:hover:border-amber-400/60 dark:shadow-[0_0_15px_rgba(245,158,11,0.12)] hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                    className={`group relative flex items-center h-9 pl-2.5 pr-1.5 py-1 rounded-full border transition-all duration-300 select-none overflow-hidden cursor-pointer ${
+                      pillAnimState === "added"
+                        ? "border-emerald-400 bg-emerald-50/90 dark:bg-emerald-950/40 ring-2 ring-emerald-400/60 shadow-[0_0_20px_rgba(52,211,153,0.4)]"
+                        : pillAnimState === "deducted"
+                        ? "border-rose-400 bg-rose-50/90 dark:bg-rose-950/40 ring-2 ring-rose-400/60 shadow-[0_0_18px_rgba(244,63,94,0.35)]"
+                        : "border-amber-300/80 bg-amber-50/90 hover:bg-amber-100/90 hover:border-amber-400 shadow-xs dark:border-amber-500/30 dark:bg-zinc-900/90 dark:hover:bg-zinc-800/90 dark:hover:border-amber-400/60 dark:shadow-[0_0_15px_rgba(245,158,11,0.12)] hover:scale-[1.02] active:scale-[0.98]"
+                    }`}
                   >
                     {/* Contained Hover Shine */}
                     <div className="absolute inset-0 overflow-hidden rounded-full pointer-events-none">
                       <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/40 dark:via-white/15 to-transparent" />
                     </div>
 
-                    <CreditIcon className={`h-4 w-4 text-amber-500 shrink-0 transition-transform duration-300 group-hover:scale-110 ${currentCredits === null ? "animate-pulse" : ""}`} />
+                    {/* Active Added Pulse Shine */}
+                    {pillAnimState === "added" && (
+                      <motion.div
+                        initial={{ x: "-100%" }}
+                        animate={{ x: "100%" }}
+                        transition={{ duration: 0.6, ease: "easeInOut" }}
+                        className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-300/40 dark:via-emerald-400/30 to-transparent pointer-events-none"
+                      />
+                    )}
+
+                    {/* Animated Coin Icon */}
+                    <motion.div
+                      animate={
+                        pillAnimState === "added"
+                          ? { rotate: [0, 360], scale: [1, 1.35, 1] }
+                          : pillAnimState === "deducted"
+                          ? { rotate: [-12, 12, -8, 8, 0], scale: [1, 0.85, 1] }
+                          : { rotate: 0, scale: 1 }
+                      }
+                      transition={{ duration: 0.6, ease: "easeOut" }}
+                      className="shrink-0 flex items-center justify-center"
+                    >
+                      <CreditIcon className={`h-4 w-4 text-amber-500 shrink-0 transition-transform duration-300 group-hover:scale-110 ${currentCredits === null ? "animate-pulse" : ""}`} />
+                    </motion.div>
+
+                    {/* Rolling Number Display with Dynamic Color Highlight */}
                     <span
-                      className={`text-xs sm:text-sm font-black tracking-tight text-amber-950 dark:text-amber-200 overflow-hidden whitespace-nowrap transition-all duration-500 ease-out ${
+                      className={`text-xs sm:text-sm font-black tracking-tight overflow-hidden whitespace-nowrap transition-colors duration-300 ${
+                        pillAnimState === "added"
+                          ? "text-emerald-700 dark:text-emerald-300"
+                          : pillAnimState === "deducted"
+                          ? "text-rose-700 dark:text-rose-300"
+                          : "text-amber-950 dark:text-amber-200"
+                      } ${
                         currentCredits === null ? "max-w-0 opacity-0 ml-0" : "max-w-[120px] opacity-100 ml-1.5 sm:ml-2"
                       }`}
                     >
-                      {currentCredits !== null ? currentCredits.toLocaleString() : ""}
+                      {displayCredits !== null ? displayCredits.toLocaleString() : (currentCredits !== null ? currentCredits.toLocaleString() : "")}
                     </span>
 
+                    {/* Plus Button */}
                     <span
-                      className="ml-2 flex items-center justify-center h-5 w-5 rounded-full transition-all duration-200 shrink-0 bg-amber-200/70 text-amber-900 group-hover:bg-amber-500 group-hover:text-white dark:bg-amber-400/15 dark:text-amber-300 dark:group-hover:bg-amber-400 dark:group-hover:text-zinc-950"
+                      className={`ml-2 flex items-center justify-center h-5 w-5 rounded-full transition-all duration-200 shrink-0 ${
+                        pillAnimState === "added"
+                          ? "bg-emerald-200 text-emerald-900 dark:bg-emerald-400/20 dark:text-emerald-300"
+                          : pillAnimState === "deducted"
+                          ? "bg-rose-200 text-rose-900 dark:bg-rose-400/20 dark:text-rose-300"
+                          : "bg-amber-200/70 text-amber-900 group-hover:bg-amber-500 group-hover:text-white dark:bg-amber-400/15 dark:text-amber-300 dark:group-hover:bg-amber-400 dark:group-hover:text-zinc-950"
+                      }`}
                       title="Add Credits"
                     >
                       <Plus className="h-3 w-3 stroke-[2.75]" />
                     </span>
-                  </button>
+                  </motion.button>
 
                   {/* Tooltip positioned BELOW the pill */}
                   {isHovered && (

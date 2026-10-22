@@ -409,6 +409,20 @@ const JobCreatePostPage: React.FC = () => {
       } catch (_) {}
       setIsDraftRestored(false);
       setIsSuccessOpen(true);
+
+      // Decrement global wallet balance by publication fee (50) to trigger animated deduction
+      const curUser = useGlobalState.getState().user;
+      if (curUser) {
+        const curBal = Number(curUser.wallet?.balance_credits ?? 0);
+        const nextBal = Math.max(0, curBal - 50);
+        useGlobalState.getState().setUser({
+          ...curUser,
+          wallet: {
+            ...(curUser.wallet || {}),
+            balance_credits: nextBal,
+          },
+        });
+      }
     } catch (err: any) {
       console.error(err);
       const message = err.response?.data?.message || err.message || "Failed to submit job post.";
@@ -446,7 +460,7 @@ const JobCreatePostPage: React.FC = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.3 }}
-        className="relative z-10 mx-auto max-w-3xl p-6 md:p-8 w-full space-y-6"
+        className="relative z-10 mx-auto max-w-6xl 2xl:max-w-7xl px-4 sm:px-6 lg:px-8 py-6 w-full space-y-6"
       >
         {/* Title Heading Display */}
         <motion.div
@@ -454,10 +468,10 @@ const JobCreatePostPage: React.FC = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: "easeOut" }}
         >
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
             Creating a Job Post
           </h1>
-          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-zinc-400 mt-1">
             Fill in the details below to publish a new job post to the marketplace.
           </p>
         </motion.div>
@@ -497,7 +511,7 @@ const JobCreatePostPage: React.FC = () => {
           initial={{ opacity: 0, y: 20, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.45, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-          className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6"
+          className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 sm:p-8 lg:p-10 backdrop-blur-xl shadow-2xl space-y-6"
         >
           <AnimatePresence mode="wait">
             {currentSlide === 1 && (

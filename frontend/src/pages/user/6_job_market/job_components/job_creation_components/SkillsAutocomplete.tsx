@@ -63,18 +63,20 @@ export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
   };
 
   return (
-    <div className="space-y-1.5 pt-2">
-      <div className="flex justify-between items-center mb-1.5">
-        <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+    <div className="space-y-2">
+      <div className="flex justify-between items-center">
+        <label className="text-[11px] font-bold text-gray-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
           Required Skills <span className="text-red-500">*</span>
           <div className="relative group flex items-center">
-            <HelpCircle className="h-3 w-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden w-48 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 px-2 py-1.5 text-center text-[10px] font-normal normal-case text-gray-700 dark:text-gray-300 opacity-0 transition-opacity group-hover:block group-hover:opacity-100 z-10 pointer-events-none shadow-lg">
-              These skills will be used for matching your job post with relevant freelancers in our system.
+            <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-56 rounded-xl bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 p-2.5 text-center text-xs text-gray-700 dark:text-gray-300 shadow-xl group-hover:block z-10 pointer-events-none">
+              Skills are used to match your post with relevant talent. Add at least 3 skills.
             </div>
           </div>
         </label>
-        <span className="text-[10px] text-gray-500 dark:text-zinc-500">{skills.length}/{maxSkills} Added</span>
+        <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400">
+          {skills.length}/{maxSkills} Added
+        </span>
       </div>
       
       <div className="relative">
@@ -83,11 +85,11 @@ export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
             skills.length >= maxSkills ? 'max-h-0 opacity-0 overflow-hidden' : 'max-h-32 opacity-100'
           }`}
         >
-          <form onSubmit={handleManualAdd} className="flex gap-2 mb-2">
+          <form onSubmit={handleManualAdd} className="flex gap-2 mb-2.5">
             <div className="relative flex-1">
               <input
                 type="text"
-                placeholder={isLoading ? "Loading skills..." : "e.g., Color Grading, Auto-captioning"}
+                placeholder={isLoading ? "Loading skills..." : "e.g., Color Grading, Sound Design"}
                 value={skillInput}
                 onChange={(e) => {
                   setSkillInput(e.target.value);
@@ -95,26 +97,25 @@ export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
                 }}
                 onFocus={() => setIsDropdownOpen(true)}
                 onBlur={() => {
-                  // Delay closing to allow clicking dropdown items
                   setTimeout(() => setIsDropdownOpen(false), 200);
                 }}
                 disabled={isLoading || skills.length >= maxSkills}
-                className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-2 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all pr-8"
+                className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-dark-base/60 shadow-sm px-4 py-2.5 text-xs sm:text-sm font-medium text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all pr-8 placeholder:text-gray-400 dark:placeholder:text-zinc-500"
               />
               <button
                 type="button"
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 disabled={isLoading || skills.length >= maxSkills}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
               >
-                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180 text-blue-500' : ''}`} />
               </button>
             </div>
             
             <button
               type="submit"
               disabled={skills.length >= maxSkills || !skillInput.trim()}
-              className="px-4 rounded-xl bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold hover:bg-white/20 transition text-gray-900 dark:text-white focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15 border border-gray-300 dark:border-white/10 text-xs font-bold transition text-gray-900 dark:text-white focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0"
             >
               Add
             </button>
@@ -122,13 +123,13 @@ export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
         </div>
 
         {isDropdownOpen && filteredSkills.length > 0 && skills.length < maxSkills && (
-          <div className="absolute top-10 left-0 z-[100] w-[calc(100%-70px)] mt-1 bg-white dark:bg-[#1a1c23] border border-gray-200 dark:border-white/10 rounded-lg max-h-40 overflow-y-auto shadow-xl">
+          <div className="absolute top-12 left-0 z-[100] w-[calc(100%-60px)] bg-white dark:bg-[#1a1c23] border border-gray-200 dark:border-white/10 rounded-xl max-h-48 overflow-y-auto shadow-2xl custom-scrollbar p-1">
             {filteredSkills.map((skill) => (
               <button
                 key={skill.tag_id}
                 type="button"
                 onClick={() => handleAddSkill(skill.name)}
-                className="w-full text-left px-3 py-2 text-xs text-gray-800 dark:text-white hover:bg-gray-100 dark:hover:bg-white/5 transition-colors border-b border-gray-100 dark:border-white/5 last:border-0"
+                className="w-full text-left px-3.5 py-2 text-xs font-medium text-gray-800 dark:text-zinc-200 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg transition-colors"
               >
                 {skill.name}
               </button>
@@ -137,17 +138,17 @@ export const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
         )}
       </div>
 
-      {error && <p className="text-[11px] text-red-400">{error}</p>}
+      {error && <p className="text-[11px] font-medium text-red-500">{error}</p>}
       
-      <div className="flex flex-wrap gap-1.5 pt-1">
+      <div className="flex flex-wrap gap-2 pt-1">
         {skills.map((s) => (
           <span
             key={s}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-200 shadow-sm"
           >
-            {s}{" "}
+            <span>{s}</span>
             <X
-              className="h-3 w-3 cursor-pointer hover:text-red-400 transition"
+              className="h-3.5 w-3.5 cursor-pointer text-gray-400 hover:text-red-500 transition-colors ml-0.5"
               onClick={() => handleRemoveSkill(s)}
             />
           </span>

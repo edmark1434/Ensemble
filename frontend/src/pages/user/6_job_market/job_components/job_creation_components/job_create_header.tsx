@@ -31,14 +31,14 @@ export const JobCreateHeader: React.FC<JobCreateHeaderProps> = ({
       {/* Compact Gray Pill Return Button */}
       <button
         onClick={onReturn}
-        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gray-100 dark:bg-zinc-800/80 hover:bg-gray-200 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition shrink-0 focus:outline-none shadow-sm"
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-gray-100 dark:bg-zinc-800/80 hover:bg-gray-200 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition shrink-0 focus:outline-none shadow-sm"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
         <span>Return</span>
       </button>
 
       {/* Stepper Assembly */}
-      <div className="flex items-center w-full max-w-md mx-auto md:mx-0 relative justify-between z-0">
+      <div className="flex items-center w-full max-w-xl md:max-w-2xl mx-auto md:mx-0 relative justify-between z-0">
         {WIZARD_STEPS.map((step, idx) => {
           const isCompleted = currentSlide > step.id;
           const isActive = currentSlide === step.id;
@@ -79,7 +79,7 @@ export const JobCreateHeader: React.FC<JobCreateHeaderProps> = ({
               </div>
 
               {idx < WIZARD_STEPS.length - 1 && (
-                <div className="flex-1 h-[2px] bg-white dark:bg-white/5 shadow-sm dark:shadow-none mx-4 relative top-[-6px] z-0">
+                <div className="flex-1 h-[2px] bg-gray-200 dark:bg-white/10 shadow-sm dark:shadow-none mx-4 relative top-[-6px] z-0">
                   <div
                     className="absolute inset-y-0 left-0 bg-green-500 transition-all duration-500"
                     style={{ width: isCompleted ? "100%" : "0%" }}

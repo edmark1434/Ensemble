@@ -587,7 +587,7 @@ const JobCreateTeamPostPage: React.FC = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.3 }}
-        className="relative z-10 mx-auto max-w-3xl p-6 md:p-8 w-full space-y-6"
+        className="relative z-10 mx-auto max-w-6xl 2xl:max-w-7xl px-4 sm:px-6 lg:px-8 py-6 w-full space-y-6"
       >
         {/* Title Heading Display */}
         <motion.div
@@ -598,10 +598,10 @@ const JobCreateTeamPostPage: React.FC = () => {
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 mb-2">
             Team & Multi-Role Wizard (5 Steps)
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
             Creating a Team Job Post
           </h1>
-          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-zinc-400 mt-1">
             Publish a collaborative team project with customizable milestones, deliverables, and role openings.
           </p>
         </motion.div>
@@ -641,7 +641,7 @@ const JobCreateTeamPostPage: React.FC = () => {
           initial={{ opacity: 0, y: 20, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.45, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-          className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-dark-surface/60 backdrop-blur-xl p-6 md:p-8 shadow-sm dark:shadow-2xl relative overflow-hidden"
+          className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 sm:p-8 lg:p-10 backdrop-blur-xl shadow-2xl space-y-6 relative overflow-hidden"
         >
           <AnimatePresence mode="wait">
             {currentSlide === 1 && (

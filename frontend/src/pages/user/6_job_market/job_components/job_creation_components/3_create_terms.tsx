@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { ArrowRight, HelpCircle, FileText, Settings, User } from "lucide-react";
+import { ArrowRight, ArrowLeft, HelpCircle, FileText, Settings, User } from "lucide-react";
 import api from "@/lib/axios";
 
 interface Project {
   id: string;
   name: string;
+  thumbnail?: string;
+  duration_seconds?: number;
+  width?: number;
+  height?: number;
+  size?: string;
 }
 
 interface CreateTermsProps {
@@ -63,23 +68,23 @@ export const CreateTerms: React.FC<CreateTermsProps> = ({
   }, [isExistingProject, initiatorRole, projects.length]);
 
   return (
-    <div className="space-y-5 text-left">
+    <div className="space-y-6 text-left">
       <div>
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-0.5">Workflow & Terms</h2>
-        <p className="text-xs text-gray-600 dark:text-zinc-300">Set the rules for the final output and collaboration initiation.</p>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">Workflow & Terms</h2>
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-zinc-400 mt-1">Set the rules for the final output, project initiation, and confidentiality agreements.</p>
       </div>
 
       <div className="space-y-4">
         {/* Initiator */}
-        <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">
-          <label className="text-sm font-semibold text-gray-900 dark:text-white block mb-0.5">
-            Who will initiate the Creation of the video project?
+        <div className="p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">
+          <label className="text-sm font-bold text-gray-900 dark:text-white block mb-0.5">
+            Who will initiate the creation of the video project?
           </label>
-          <p className="text-xs text-gray-500 dark:text-zinc-400 mb-3">
-            If this is a new project, who is responsible for creating and inviting the other party?
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mb-4">
+            If this is a new collaboration, who is responsible for initiating and inviting the other party?
           </p>
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2.5 cursor-pointer">
               <input
                 type="radio"
                 name="initiatorRole"
@@ -88,11 +93,11 @@ export const CreateTerms: React.FC<CreateTermsProps> = ({
                 onChange={(e) => {
                   setInitiatorRole(e.target.value);
                 }}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 bg-transparent"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-white/20 bg-transparent cursor-pointer"
               />
-              <span className="text-xs font-medium text-gray-700 dark:text-zinc-300">Me (Client)</span>
+              <span className="text-xs font-semibold text-gray-800 dark:text-zinc-200">Me (Client)</span>
             </label>
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className="flex items-center gap-2.5 cursor-pointer">
               <input
                 type="radio"
                 name="initiatorRole"
@@ -103,33 +108,33 @@ export const CreateTerms: React.FC<CreateTermsProps> = ({
                   setIsExistingProject(false);
                   setExistingProjectId(null);
                 }}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 bg-transparent"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-white/20 bg-transparent cursor-pointer"
               />
-              <span className="text-xs font-medium text-gray-700 dark:text-zinc-300">The Freelancer</span>
+              <span className="text-xs font-semibold text-gray-800 dark:text-zinc-200">The Freelancer</span>
             </label>
           </div>
         </div>
 
         {/* Confidentiality / NDA */}
-        <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">
-          <div className="flex items-start gap-3">
+        <div className="p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">
+          <div className="flex items-start gap-3.5">
             <input 
               type="checkbox" 
               checked={requireNDA}
               onChange={(e) => setRequireNDA(e.target.checked)}
-              className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 bg-transparent cursor-pointer"
+              className="mt-1 h-4 w-4 rounded border-gray-300 dark:border-white/20 text-blue-600 focus:ring-blue-500 bg-transparent cursor-pointer"
             />
             <div className="flex-1">
-              <label className="text-sm font-semibold text-gray-900 dark:text-white block">
+              <label className="text-sm font-bold text-gray-900 dark:text-white block cursor-pointer" onClick={() => setRequireNDA(!requireNDA)}>
                 Require Confidentiality (NDA)
               </label>
-              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                Let candidates know they cannot share any details about this project with anyone while it is in development.
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                Let candidates know they cannot share any details about this project with anyone while it is in active development.
                 {requireNDA && (
-                  <span className={`block mt-1.5 font-medium ${portfolioUseAllowed ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-300"}`}>
+                  <span className={`block mt-2 font-medium ${portfolioUseAllowed ? "text-blue-600 dark:text-blue-400" : "text-gray-700 dark:text-gray-300"}`}>
                     {portfolioUseAllowed 
-                      ? "✓ Since you allow Portfolio Use below, they will be permitted to share it only after the project is officially completed."
-                      : "ⓘ They will not be permitted to share it even after completion unless Portfolio Use is allowed."}
+                      ? "✓ Since you allow Portfolio Use below, they will be permitted to showcase approved clips only after the project is officially completed."
+                      : "ⓘ They will not be permitted to share the footage or finished edit even after completion unless Portfolio Use is explicitly allowed."}
                   </span>
                 )}
               </p>
@@ -138,8 +143,8 @@ export const CreateTerms: React.FC<CreateTermsProps> = ({
         </div>
 
         {/* Portfolio Use */}
-        <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">
-          <div className="flex items-start gap-3">
+        <div className="p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">
+          <div className="flex items-start gap-3.5">
             <input 
               type="checkbox" 
               checked={portfolioUseAllowed}
@@ -147,19 +152,23 @@ export const CreateTerms: React.FC<CreateTermsProps> = ({
                 setPortfolioUseAllowed(e.target.checked);
                 if (!e.target.checked) setPortfolioDuration("");
               }}
-              className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 bg-transparent"
+              className="mt-1 h-4 w-4 rounded border-gray-300 dark:border-white/20 text-blue-600 focus:ring-blue-500 bg-transparent cursor-pointer"
             />
             <div className="flex-1">
-              <label className="text-sm font-semibold text-gray-900 dark:text-white block">
+              <label className="text-sm font-bold text-gray-900 dark:text-white block cursor-pointer" onClick={() => {
+                const nextVal = !portfolioUseAllowed;
+                setPortfolioUseAllowed(nextVal);
+                if (!nextVal) setPortfolioDuration("");
+              }}>
                 Allow Freelancer Portfolio Use
               </label>
               <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                Agree to let the freelancer use the final project output for their personal portfolio.
+                Agree to let the freelancer showcase the final project cut in their personal portfolio reel.
               </p>
               {portfolioUseAllowed && (
-                <div className="mt-3">
-                  <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-2">
-                    Allowed Duration <span className="text-red-500">*</span>
+                <div className="mt-3.5 pt-3 border-t border-gray-100 dark:border-white/5">
+                  <label className="text-[11px] font-bold text-gray-800 dark:text-zinc-200 uppercase tracking-wider block mb-2">
+                    Allowed Showcase Duration <span className="text-red-500">*</span>
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {["5", "10", "15", "20", "30", "45", "60"].map(secs => (
@@ -167,17 +176,17 @@ export const CreateTerms: React.FC<CreateTermsProps> = ({
                         key={secs}
                         type="button"
                         onClick={() => setPortfolioDuration(secs)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
                           portfolioDuration === secs 
-                            ? "bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20" 
-                            : "bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-100 dark:hover:bg-white/10"
+                            ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20" 
+                            : "bg-gray-50 dark:bg-white/5 border-gray-300 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:border-gray-400 dark:hover:border-white/20 hover:bg-gray-100 dark:hover:bg-white/10"
                         }`}
                       >
                         {secs} secs
                       </button>
                     ))}
                   </div>
-                  {errors.portfolioDuration && <p className="text-[11px] text-red-400 mt-2">{errors.portfolioDuration}</p>}
+                  {errors.portfolioDuration && <p className="text-[11px] font-medium text-red-500 mt-2">{errors.portfolioDuration}</p>}
                 </div>
               )}
             </div>
@@ -186,8 +195,8 @@ export const CreateTerms: React.FC<CreateTermsProps> = ({
 
         {/* Existing Project Link */}
         {initiatorRole === "Client" && (
-          <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">
-            <div className="flex items-start gap-3">
+          <div className="p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02]">
+            <div className="flex items-start gap-3.5">
               <input 
                 type="checkbox" 
                 checked={isExistingProject}
@@ -195,18 +204,22 @@ export const CreateTerms: React.FC<CreateTermsProps> = ({
                   setIsExistingProject(e.target.checked);
                   if (!e.target.checked) setExistingProjectId(null);
                 }}
-                className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 bg-transparent"
+                className="mt-1 h-4 w-4 rounded border-gray-300 dark:border-white/20 text-blue-600 focus:ring-blue-500 bg-transparent cursor-pointer"
               />
               <div className="flex-1">
-                <label className="text-sm font-semibold text-gray-900 dark:text-white block">
+                <label className="text-sm font-bold text-gray-900 dark:text-white block cursor-pointer" onClick={() => {
+                  const nextVal = !isExistingProject;
+                  setIsExistingProject(nextVal);
+                  if (!nextVal) setExistingProjectId(null);
+                }}>
                   Link to Existing Project
                 </label>
                 <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                  Is this job part of an existing Ensemble project? (Helps with contract creation)
+                  Is this job part of an existing Ensemble project? (Helps auto-populate contract terms)
                 </p>
                 {isExistingProject && (
-                  <div className="mt-3">
-                    <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-2">
+                  <div className="mt-3.5 pt-3 border-t border-gray-100 dark:border-white/5">
+                    <label className="text-[11px] font-bold text-gray-800 dark:text-zinc-200 uppercase tracking-wider block mb-2">
                       Select Project <span className="text-red-500">*</span>
                     </label>
                     {loadingProjects ? (
@@ -214,8 +227,8 @@ export const CreateTerms: React.FC<CreateTermsProps> = ({
                     ) : existingProjectId ? (
                       <div className="flex flex-col gap-2">
                         {projects.filter(p => p.id === existingProjectId).map(p => (
-                          <div key={p.id} className="relative w-48 rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1a1d2d] shadow-sm">
-                            <div className="h-24 bg-gray-100 dark:bg-black/40 relative">
+                          <div key={p.id} className="relative w-56 rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1a1d2d] shadow-sm">
+                            <div className="h-28 bg-gray-100 dark:bg-black/40 relative">
                               {p.thumbnail && <img src={p.thumbnail} alt={p.name} className="w-full h-full object-cover" />}
                               {p.duration_seconds && (
                                 <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1">
@@ -223,9 +236,9 @@ export const CreateTerms: React.FC<CreateTermsProps> = ({
                                 </div>
                               )}
                             </div>
-                            <div className="p-2">
+                            <div className="p-2.5">
                               <div className="text-xs font-bold text-gray-900 dark:text-white truncate">{p.name}</div>
-                              <div className="flex justify-between items-center mt-1 text-[9px] text-gray-500">
+                              <div className="flex justify-between items-center mt-1 text-[10px] text-gray-500">
                                 <span>{p.width}x{p.height}</span>
                                 <span>{p.size}</span>
                               </div>
@@ -235,7 +248,7 @@ export const CreateTerms: React.FC<CreateTermsProps> = ({
                         <button 
                           type="button" 
                           onClick={() => setExistingProjectId(null)}
-                          className="text-[10px] text-blue-500 hover:underline text-left font-bold"
+                          className="text-xs text-blue-600 dark:text-blue-400 hover:underline text-left font-bold"
                         >
                           Change Project
                         </button>
@@ -247,19 +260,19 @@ export const CreateTerms: React.FC<CreateTermsProps> = ({
                             key={p.id}
                             type="button"
                             onClick={() => setExistingProjectId(p.id)}
-                            className="text-left relative rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 hover:border-blue-500 transition-colors bg-white dark:bg-[#1a1d2d] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="text-left relative rounded-xl overflow-hidden border border-gray-300 dark:border-white/10 hover:border-blue-500 transition-colors bg-white dark:bg-[#1a1d2d] focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             <div className="h-20 bg-gray-100 dark:bg-black/40 relative">
                               {p.thumbnail && <img src={p.thumbnail} alt={p.name} className="w-full h-full object-cover" />}
                             </div>
                             <div className="p-2">
-                              <div className="text-[11px] font-bold text-gray-900 dark:text-white truncate">{p.name}</div>
+                              <div className="text-xs font-bold text-gray-900 dark:text-white truncate">{p.name}</div>
                             </div>
                           </button>
                         ))}
                       </div>
                     )}
-                    {errors.existingProjectId && <p className="text-[11px] text-red-400 mt-1">{errors.existingProjectId}</p>}
+                    {errors.existingProjectId && <p className="text-[11px] font-medium text-red-500 mt-1">{errors.existingProjectId}</p>}
                   </div>
                 )}
               </div>
@@ -268,11 +281,21 @@ export const CreateTerms: React.FC<CreateTermsProps> = ({
         )}
       </div>
 
-      {/* Actions */}
-      <div className="pt-4 border-t border-gray-100 dark:border-white/5 flex gap-2.5">
-        <button type="button" onClick={onBack} className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 font-bold hover:text-gray-900 dark:text-white transition text-xs focus:outline-none">Go Back</button>
-        <button type="button" onClick={onAdvance} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-2.5 text-xs font-bold text-white hover:bg-blue-600 transition focus:outline-none shadow-lg shadow-blue-500/20">
-          Confirm and Review <ArrowRight className="h-3.5 w-3.5" />
+      {/* FULL-WIDTH ACTIONS */}
+      <div className="pt-6 border-t border-gray-200 dark:border-white/10 flex items-center justify-between gap-4">
+        <button
+          type="button"
+          onClick={onBack}
+          className="px-6 py-3 rounded-xl border border-gray-300 dark:border-white/10 text-gray-700 dark:text-zinc-300 font-bold hover:bg-gray-100 dark:hover:bg-white/5 transition text-sm focus:outline-none shadow-sm flex items-center gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" /> Go Back
+        </button>
+        <button
+          type="button"
+          onClick={onAdvance}
+          className="min-w-[220px] px-8 py-3.5 flex items-center justify-center gap-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-bold text-white transition focus:outline-none shadow-lg shadow-blue-500/25 hover:shadow-blue-500/35 active:scale-[0.99]"
+        >
+          Confirm and Review <ArrowRight className="h-4 w-4" />
         </button>
       </div>
     </div>
