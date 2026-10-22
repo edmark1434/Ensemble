@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Briefcase,
@@ -8,11 +8,15 @@ import {
   Info,
   Flag,
   MessageCircle,
+  UserPlus,
 } from 'lucide-react';
+import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 import useChatState from '@/components/ui/chat_bubble/chat_state';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
+import { SubcontractProposalModal } from '../team_modals/SubcontractProposalModal';
+import { SubcontractRequestsReview, type SubcontractProposal } from './SubcontractRequestsReview';
 
 export interface MilestoneItem {
   id: string;
@@ -49,9 +53,23 @@ export interface MemberItem {
   avatar_path?: string;
   team_role: string;
   milestone_role?: string;
+  milestone_order?: number;
   contract_id?: string;
   contract_status?: string;
   joined_at?: string;
+  is_subcontractor?: boolean;
+  parent_contractor_account_id?: string;
+  parent_contractor_name?: string;
+  parent_contractor_handle?: string;
+  parent_contractor_avatar_path?: string;
+  assigned_milestone_id?: string;
+  assigned_milestone_title?: string;
+  subcontractor_permissions?: {
+    can_view_tasks?: boolean;
+    can_update_task_status?: boolean;
+    can_upload_drafts?: boolean;
+    can_create_subtasks?: boolean;
+  };
 }
 
 interface ProjectContractAndMembersTabProps {
@@ -60,6 +78,7 @@ interface ProjectContractAndMembersTabProps {
   members: MemberItem[];
   currentUserAccountId: string;
   isClient: boolean;
+  milestones?: any[];
   defaultSubTab?: 'contracts' | 'members';
   onContractsUpdated?: () => void;
   onOpenRateModal?: (contractId: string, targetName: string) => void;
@@ -72,6 +91,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
   members,
   currentUserAccountId,
   isClient,
+  milestones = [],
   defaultSubTab = 'contracts',
   onContractsUpdated,
   onOpenRateModal,
@@ -80,6 +100,10 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
   const navigate = useNavigate();
   const { user } = useGlobalState();
   const [subTab, setSubTab] = useState<'contracts' | 'members'>(defaultSubTab);
+
+  const [proposals, setProposals] = useState<SubcontractProposal[]>([]);
+  const [isNominateModalOpen, setIsNominateModalOpen] = useState(false);
+  const [selectedContractForNomination, setSelectedContractForNomination] = useState<ContractItem | null>(null);
 
   const resolvedAccountId = String(
     currentUserAccountId || user?.account_id || user?.id || ''
@@ -94,6 +118,24 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
         return String(c.freelancer_account_id).trim() === resolvedAccountId;
       });
 
+  const myContract = contracts.find(
+    (c) => String(c.freelancer_account_id).trim() === resolvedAccountId
+  );
+
+  const fetchProposals = useCallback(async () => {
+    if (!teamId) return;
+    try {
+      const res = await api.get(`/api/team-projects/${teamId}/subcontracts/proposals`);
+      setProposals(res.data?.data || []);
+    } catch (err) {
+      console.error('Failed to load subcontract proposals:', err);
+    }
+  }, [teamId]);
+
+  useEffect(() => {
+    fetchProposals();
+  }, [fetchProposals]);
+
   const handleOpenContract = (contractId?: string) => {
     const targetUrl = contractId ? `/contracts/${contractId}` : '/contracts';
     window.open(targetUrl, '_blank', 'noopener,noreferrer');
@@ -107,11 +149,16 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
         avatarUrl: targetMember.avatar_path,
       });
       showSuccessToast(`Opened chat with ${targetMember.display_name}`);
-    } catch (err: any) {
+    } catch {
       navigate('/inbox/direct', {
         state: { other_account_id: targetMember.account_id },
       });
     }
+  };
+
+  const openNominationForContract = (contract: ContractItem) => {
+    setSelectedContractForNomination(contract);
+    setIsNominateModalOpen(true);
   };
 
   return (
@@ -146,28 +193,52 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
           </button>
         </div>
 
-        {subTab === 'contracts' ? (
-          <button
-            type="button"
-            onClick={() => window.open('/contracts', '_blank', 'noopener,noreferrer')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition shadow-2xs shrink-0 self-start sm:self-auto cursor-pointer"
-          >
-            <span>All Contracts</span>
-            <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
-          </button>
-        ) : (
-          !isClient &&
-          onOpenReportModal && (
+        <div className="flex items-center gap-2">
+          {/* Subcontractor nomination trigger in header if freelancer has contract */}
+          {!isClient && myContract && (
             <button
-              onClick={onOpenReportModal}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 transition shadow-2xs cursor-pointer self-start sm:self-auto"
+              type="button"
+              onClick={() => openNominationForContract(myContract)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 transition shadow-2xs cursor-pointer"
             >
-              <Flag className="w-3.5 h-3.5" />
-              <span>Report Team Project</span>
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Add Subcontractor under My Contract</span>
             </button>
-          )
-        )}
+          )}
+
+          {subTab === 'contracts' ? (
+            <button
+              type="button"
+              onClick={() => window.open('/contracts', '_blank', 'noopener,noreferrer')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition shadow-2xs shrink-0 self-start sm:self-auto cursor-pointer"
+            >
+              <span>All Contracts</span>
+              <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
+            </button>
+          ) : (
+            !isClient &&
+            onOpenReportModal && (
+              <button
+                onClick={onOpenReportModal}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 transition shadow-2xs cursor-pointer self-start sm:self-auto"
+              >
+                <Flag className="w-3.5 h-3.5" />
+                <span>Report Team Project</span>
+              </button>
+            )
+          )}
+        </div>
       </div>
+
+      {/* Subcontract Proposals & Client Review Queue */}
+      <SubcontractRequestsReview
+        teamId={teamId}
+        proposals={proposals}
+        isClient={isClient}
+        currentUserAccountId={resolvedAccountId}
+        onRefreshProposals={fetchProposals}
+        onMembersUpdated={onContractsUpdated}
+      />
 
       {/* ===================== SUBTAB 1: CONTRACTS ===================== */}
       {subTab === 'contracts' && (
@@ -224,11 +295,14 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                     ? contract.milestone_order + 1
                     : 1;
 
+                const isMyContractCard =
+                  String(contract.freelancer_account_id).trim() === resolvedAccountId;
+
                 return (
                   <div
                     key={contract.contract_id}
                     onClick={() => handleOpenContract(contract.contract_id)}
-                    className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all duration-200 cursor-pointer group"
+                    className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all duration-200 cursor-pointer group space-y-4"
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {
@@ -311,7 +385,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                     </div>
 
                     {/* 4 Metadata Columns */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1 text-xs">
                       <div>
                         <span className="text-zinc-500 dark:text-zinc-400 block mb-0.5">
                           Payment Type
@@ -354,17 +428,35 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                     </div>
 
                     {/* Card Action Footer */}
-                    <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/70 flex items-center justify-between text-xs text-zinc-400 dark:text-zinc-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
-                      <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                        {Array.isArray(contract.milestones) && contract.milestones.length > 0
-                          ? `${contract.milestones.length} milestone deliverable(s) attached`
-                          : 'Contract agreement active'}
-                      </span>
+                    <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                          {Array.isArray(contract.milestones) && contract.milestones.length > 0
+                            ? `${contract.milestones.length} milestone deliverable(s) attached`
+                            : 'Contract agreement active'}
+                        </span>
+                      </div>
 
-                      <span className="inline-flex items-center gap-1 font-semibold text-xs text-blue-600 dark:text-blue-400">
-                        <span>Open in /contracts</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </span>
+                      <div className="flex items-center gap-3">
+                        {!isClient && isMyContractCard && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openNominationForContract(contract);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 transition shadow-2xs cursor-pointer"
+                          >
+                            <UserPlus className="w-3.5 h-3.5" />
+                            <span>Add Subcontractor</span>
+                          </button>
+                        )}
+
+                        <span className="inline-flex items-center gap-1 font-semibold text-xs text-blue-600 dark:text-blue-400 group-hover:underline">
+                          <span>Open in /contracts</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -381,9 +473,9 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
           <div className="bg-blue-50/80 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/60 rounded-xl p-4 flex items-start gap-3">
             <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
             <div className="text-xs text-blue-900 dark:text-blue-200 space-y-1">
-              <p className="font-bold">Contractual Team Membership Policy</p>
+              <p className="font-bold">Contractual Team Membership & Subcontracting Policy</p>
               <p className="leading-relaxed opacity-90">
-                Membership in this team project is strictly automated and governed by the job contract. Contributors are added automatically upon offer acceptance and cannot be manually invited.
+                Membership in this team project is strictly automated and governed by the job contract. Primary contractors can nominate specialists under their contract milestone with client authorization.
               </p>
             </div>
           </div>
@@ -402,6 +494,9 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
             <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {members.map((member) => {
                 const isOwner = member.team_role === 'Owner';
+                const isSubcontractor =
+                  member.is_subcontractor || member.team_role === 'Subcontractor';
+
                 const isMe = Boolean(
                   (resolvedAccountId && String(member.account_id) === String(resolvedAccountId)) ||
                   (user?.handle && member.handle && String(member.handle).toLowerCase() === String(user.handle).toLowerCase()) ||
@@ -427,7 +522,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                         }}
                       />
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <h4
                             onClick={() => {
                               if (member.account_id) navigate(`/profile/${member.account_id}`);
@@ -436,27 +531,47 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                           >
                             {member.display_name}
                           </h4>
+
                           {isMe && (
                             <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
                               You
                             </span>
                           )}
+
                           <span
                             className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${
                               isOwner
                                 ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-800'
+                                : isSubcontractor
+                                ? 'bg-indigo-100 text-indigo-900 border-indigo-300 dark:bg-indigo-950/50 dark:text-indigo-200 dark:border-indigo-800'
                                 : 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/50 dark:text-blue-200 dark:border-blue-800'
                             }`}
                           >
-                            {isOwner ? 'Client Owner' : 'Contributor'}
+                            {isOwner
+                              ? 'Client Owner'
+                              : isSubcontractor
+                              ? 'Subcontractor'
+                              : 'Contributor'}
                           </span>
+
+                          {/* Distinct Badge showing who they are under */}
+                          {isSubcontractor && member.parent_contractor_handle && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
+                              <span>Under @{member.parent_contractor_handle}</span>
+                            </span>
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-zinc-500 dark:text-zinc-400 mt-1">
                           {member.handle && <span>@{member.handle}</span>}
                           {member.milestone_role && (
                             <span className="font-semibold text-zinc-700 dark:text-zinc-300">
                               Role: {member.milestone_role}
+                            </span>
+                          )}
+                          {member.assigned_milestone_title && (
+                            <span className="text-blue-600 dark:text-blue-400 font-medium">
+                              Scope: {member.assigned_milestone_title}
                             </span>
                           )}
                           {member.joined_at && (
@@ -484,7 +599,26 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
           </div>
         </div>
       )}
+
+      {/* Subcontract Proposal Nomination Modal */}
+      {selectedContractForNomination && (
+        <SubcontractProposalModal
+          isOpen={isNominateModalOpen}
+          onClose={() => {
+            setIsNominateModalOpen(false);
+            setSelectedContractForNomination(null);
+          }}
+          teamId={teamId}
+          contractId={selectedContractForNomination.contract_id}
+          contractTitle={selectedContractForNomination.milestone_title || 'Contract Agreement'}
+          milestones={milestones.length > 0 ? milestones : (selectedContractForNomination.milestones || [])}
+          existingMemberAccountIds={members.map((m) => m.account_id)}
+          onProposalCreated={() => {
+            fetchProposals();
+            onContractsUpdated?.();
+          }}
+        />
+      )}
     </div>
   );
 };
-export default ProjectContractAndMembersTab;

@@ -19,6 +19,11 @@ router.get('/:id/milestones', controller.getMilestones);
 router.get('/:id/history', controller.getHistory);
 router.get('/:id/members', controller.getMembers);
 
+router.get('/:id/subcontracts/proposals', controller.getSubcontractProposals);
+router.post('/:id/subcontracts/proposals', controller.createSubcontractProposal);
+router.post('/:id/subcontracts/proposals/:proposalId/decision', controller.decideSubcontractProposal);
+router.delete('/:id/subcontracts/proposals/:proposalId', controller.withdrawSubcontractProposal);
+
 router.post('/:id/report', controller.reportProject);
 router.post('/:id/chat', controller.getChat);
 

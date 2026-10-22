@@ -321,7 +321,8 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
   // Verify permissions: Viewer must be assigned to task OR be the client owner
   const permRes = await pool.query(`
     SELECT twt.task_id, t.account_id as team_account_id, j.client_account_id,
-           twta.account_id as assignee_account_id, twt.is_locked, twt.created_by_account_id
+           twta.account_id as assignee_account_id, twt.is_locked, twt.created_by_account_id,
+           twt.job_milestone_id
       FROM team_workspace_tasks twt
       JOIN team_contract_workspaces tcw ON twt.workspace_id = tcw.workspace_id
       JOIN teams t ON t.team_id = tcw.team_id
@@ -334,13 +335,53 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     throw new Error('Task not found in this team project.');
   }
 
-  const { client_account_id, assignee_account_id, is_locked, created_by_account_id } = permRes.rows[0];
+  const { client_account_id, assignee_account_id, is_locked, created_by_account_id, job_milestone_id } = permRes.rows[0];
   const isAssignee = String(viewerAccountId) === String(assignee_account_id);
   const isClient = String(viewerAccountId) === String(client_account_id);
   const isContractTask = String(created_by_account_id) === String(client_account_id);
 
-  if (!isAssignee && !isClient) {
-    throw new Error('You do not have permission to modify this task.');
+  // Check if viewer is a subcontractor in this workspace
+  const subRes = await pool.query(`
+    SELECT cs.assigned_milestone_id, cs.permissions, cs.parent_contractor_account_id
+      FROM contract_subcontractors cs
+      JOIN team_contract_workspaces tcw ON tcw.contract_id = cs.contract_id
+     WHERE tcw.team_id = $1 AND cs.account_id = $2
+     LIMIT 1
+  `, [teamId, viewerAccountId]);
+
+  const isSubcontractor = subRes.rows.length > 0;
+  if (isSubcontractor) {
+    const sub = subRes.rows[0];
+    const subPerms = sub.permissions || {};
+    // Strict milestone check: must belong to subcontractor's assigned milestone
+    if (sub.assigned_milestone_id && job_milestone_id && String(sub.assigned_milestone_id) !== String(job_milestone_id)) {
+      const err = new Error('Subcontractors can only view and modify tasks under their assigned contract milestone.');
+      err.statusCode = 403;
+      throw err;
+    }
+    if (status !== undefined && status !== null && subPerms.can_update_task_status === false) {
+      const err = new Error('Your subcontractor permissions do not allow modifying task status.');
+      err.statusCode = 403;
+      throw err;
+    }
+    if (isContractTask && (title !== undefined && title !== null)) {
+      throw new Error('Contract-defined milestone tasks cannot be renamed.');
+    }
+  } else if (!isAssignee && !isClient) {
+    // Check if viewer is the primary freelancer for this milestone's contract
+    const leadRes = await pool.query(`
+      SELECT 1 FROM team_contract_workspaces tcw
+        JOIN contracts c ON c.contract_id = tcw.contract_id
+        JOIN job_contracts jc ON jc.contract_id = c.contract_id
+        JOIN proposals p ON p.proposal_id = jc.proposal_id
+       WHERE tcw.team_id = $1 AND c.freelancer_account_id = $2
+         AND (p.job_milestone_id = $3 OR $3 IS NULL)
+       LIMIT 1
+    `, [teamId, viewerAccountId, job_milestone_id]);
+
+    if (leadRes.rows.length === 0) {
+      throw new Error('You do not have permission to modify this task.');
+    }
   }
 
   // Contract task title/description cannot be modified by contributors
@@ -348,8 +389,8 @@ async function updateProjectTask(teamId, taskId, viewerAccountId, { title, descr
     throw new Error('Contract-defined milestone tasks cannot be edited.');
   }
 
-  // Only the person assigned to the task can change its status
-  if (status !== undefined && status !== null && !isAssignee) {
+  // Only the person assigned to the task, the primary contractor, or client can change its status
+  if (status !== undefined && status !== null && !isAssignee && !isClient && !isSubcontractor) {
     throw new Error('Only the assigned team member can change the status of this task.');
   }
 
@@ -687,11 +728,19 @@ async function getProjectMembers(teamId) {
            a.account_id, a.display_name, a.handle,
            f.path as avatar_path,
            tm.role as team_role,
-           jm.title as milestone_role,
-           jm.order_index as milestone_order,
-           c.contract_id,
+           COALESCE(jm.title, cs_jm.title, cs.role_title) as milestone_role,
+           COALESCE(jm.order_index, cs_jm.order_index) as milestone_order,
+           COALESCE(c.contract_id, cs.contract_id) as contract_id,
            c.status as contract_status,
-           tm.joined_at
+           tm.joined_at,
+           (tm.role = 'Subcontractor' OR cs.account_id IS NOT NULL) as is_subcontractor,
+           cs.parent_contractor_account_id,
+           lead_acc.display_name as parent_contractor_name,
+           lead_acc.handle as parent_contractor_handle,
+           lead_f.path as parent_contractor_avatar_path,
+           COALESCE(p.job_milestone_id, cs.assigned_milestone_id) as assigned_milestone_id,
+           COALESCE(jm.title, cs_jm.title) as assigned_milestone_title,
+           cs.permissions as subcontractor_permissions
       FROM teams t
       JOIN team_members tm ON tm.team_id = t.team_id AND tm.status = 'Active'
       JOIN users u ON u.user_id = tm.user_id
@@ -701,8 +750,15 @@ async function getProjectMembers(teamId) {
       LEFT JOIN job_contracts jc ON jc.proposal_id = p.proposal_id
       LEFT JOIN contracts c ON c.contract_id = jc.contract_id
       LEFT JOIN job_milestones jm ON jm.job_milestone_id = p.job_milestone_id
+      LEFT JOIN contract_subcontractors cs ON cs.account_id = a.account_id
+           AND cs.contract_id IN (
+             SELECT tcw2.contract_id FROM team_contract_workspaces tcw2 WHERE tcw2.team_id = t.team_id
+           )
+      LEFT JOIN accounts lead_acc ON lead_acc.account_id = cs.parent_contractor_account_id
+      LEFT JOIN files lead_f ON lead_f.file_id = lead_acc.avatar_file_id
+      LEFT JOIN job_milestones cs_jm ON cs_jm.job_milestone_id = cs.assigned_milestone_id
      WHERE t.team_id = $1
-     ORDER BY a.account_id, tm.role = 'Owner' DESC, COALESCE(jm.order_index, 0) ASC
+     ORDER BY a.account_id, tm.role = 'Owner' DESC, COALESCE(jm.order_index, cs_jm.order_index, 0) ASC
   `;
   const res = await pool.query(query, [teamId]);
   return res.rows;
@@ -860,6 +916,444 @@ async function ensureContractualMember(teamId, accountId, role = 'Member') {
   `, [teamId, userId, role])).rows[0] || null;
 }
 
+async function getSubcontractProposals(teamId, viewerAccountId) {
+  const proposalsRes = await pool.query(`
+    SELECT p.proposal_id, p.team_id, p.contract_id, p.lead_account_id,
+           p.status, p.terms_accepted, p.terms_accepted_at,
+           p.proposal_notes, p.client_feedback,
+           p.reviewed_by_account_id, p.reviewed_at,
+           p.created_at, p.updated_at,
+           lead_acc.display_name as lead_name,
+           lead_acc.handle as lead_handle,
+           lead_f.path as lead_avatar_path,
+           rev_acc.display_name as reviewer_name,
+           rev_acc.handle as reviewer_handle
+      FROM team_subcontract_proposals p
+      JOIN accounts lead_acc ON lead_acc.account_id = p.lead_account_id
+      LEFT JOIN files lead_f ON lead_f.file_id = lead_acc.avatar_file_id
+      LEFT JOIN accounts rev_acc ON rev_acc.account_id = p.reviewed_by_account_id
+     WHERE p.team_id = $1
+     ORDER BY p.created_at DESC
+  `, [teamId]);
+
+  if (proposalsRes.rows.length === 0) return [];
+
+  const proposalIds = proposalsRes.rows.map((p) => p.proposal_id);
+
+  const membersRes = await pool.query(`
+    SELECT pm.proposal_member_id, pm.proposal_id, pm.contract_id,
+           pm.candidate_account_id, pm.role_title, pm.assigned_milestone_id,
+           pm.agreed_credits, pm.permissions, pm.status, pm.client_notes,
+           pm.decided_at, pm.created_at,
+           cand_acc.display_name as candidate_name,
+           cand_acc.handle as candidate_handle,
+           cand_f.path as candidate_avatar_path,
+           jm.title as milestone_title,
+           jm.order_index as milestone_order
+      FROM team_subcontract_proposal_members pm
+      JOIN accounts cand_acc ON cand_acc.account_id = pm.candidate_account_id
+      LEFT JOIN files cand_f ON cand_f.file_id = cand_acc.avatar_file_id
+      LEFT JOIN job_milestones jm ON jm.job_milestone_id = pm.assigned_milestone_id
+     WHERE pm.proposal_id = ANY($1::uuid[])
+     ORDER BY pm.created_at ASC
+  `, [proposalIds]);
+
+  const membersByProposal = {};
+  for (const m of membersRes.rows) {
+    if (!membersByProposal[m.proposal_id]) {
+      membersByProposal[m.proposal_id] = [];
+    }
+    membersByProposal[m.proposal_id].push(m);
+  }
+
+  return proposalsRes.rows.map((p) => ({
+    ...p,
+    members: membersByProposal[p.proposal_id] || [],
+  }));
+}
+
+async function createSubcontractProposal(teamId, viewerAccountId, { contract_id, members, proposal_notes, terms_accepted }) {
+  // 1. Verify contract belongs to team and viewer is the primary freelancer
+  const contractRes = await pool.query(`
+    SELECT c.contract_id, c.freelancer_account_id, j.client_account_id,
+           lead_acc.display_name as lead_name, lead_acc.handle as lead_handle
+      FROM team_contract_workspaces tcw
+      JOIN contracts c ON c.contract_id = tcw.contract_id
+      JOIN teams t ON t.team_id = tcw.team_id
+      JOIN jobs j ON j.job_id = t.job_id
+      JOIN accounts lead_acc ON lead_acc.account_id = c.freelancer_account_id
+     WHERE tcw.team_id = $1 AND c.contract_id = $2
+     LIMIT 1
+  `, [teamId, contract_id]);
+
+  if (contractRes.rows.length === 0) {
+    const err = new Error('Contract not found in this team project.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const { freelancer_account_id, client_account_id, lead_name, lead_handle } = contractRes.rows[0];
+
+  if (String(freelancer_account_id) !== String(viewerAccountId)) {
+    const err = new Error('Only the assigned contract freelancer can nominate subcontractors.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // 2. Validate candidates
+  for (const m of members) {
+    const candId = m.candidate_account_id || m.account_id;
+    if (!candId) {
+      const err = new Error('Each team member must specify a valid account ID.');
+      err.statusCode = 422;
+      throw err;
+    }
+    if (String(candId) === String(client_account_id)) {
+      const err = new Error('Cannot add the project client as a subcontractor.');
+      err.statusCode = 422;
+      throw err;
+    }
+    if (String(candId) === String(viewerAccountId)) {
+      const err = new Error('You cannot nominate yourself as a subcontractor.');
+      err.statusCode = 422;
+      throw err;
+    }
+
+    // Check if already an active member in this project team
+    const existingActive = await pool.query(`
+      SELECT 1 FROM team_members tm
+      JOIN users u ON u.user_id = tm.user_id
+      WHERE tm.team_id = $1 AND u.account_id = $2 AND tm.status = 'Active'
+      LIMIT 1
+    `, [teamId, candId]);
+
+    if (existingActive.rows.length > 0) {
+      const candUser = await pool.query('SELECT handle, display_name FROM accounts WHERE account_id = $1', [candId]);
+      const handle = candUser.rows[0]?.handle || candUser.rows[0]?.display_name || 'User';
+      const err = new Error(`@${handle} is already an active member in this project workspace.`);
+      err.statusCode = 409;
+      throw err;
+    }
+  }
+
+  // 3. Insert proposal and members in transaction
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const propRes = await client.query(`
+      INSERT INTO team_subcontract_proposals (
+        team_id, contract_id, lead_account_id, status, terms_accepted, terms_accepted_at, proposal_notes
+      ) VALUES ($1, $2, $3, 'pending', $4, NOW(), $5)
+      RETURNING *
+    `, [
+      teamId,
+      contract_id,
+      viewerAccountId,
+      Boolean(terms_accepted),
+      proposal_notes?.trim() || null,
+    ]);
+
+    const proposal = propRes.rows[0];
+    const createdMembers = [];
+
+    for (const m of members) {
+      const candId = m.candidate_account_id || m.account_id;
+      const memRes = await client.query(`
+        INSERT INTO team_subcontract_proposal_members (
+          proposal_id, contract_id, candidate_account_id, role_title,
+          assigned_milestone_id, agreed_credits, permissions, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+        RETURNING *
+      `, [
+        proposal.proposal_id,
+        contract_id,
+        candId,
+        m.role_title?.trim() || 'Video Editor',
+        m.assigned_milestone_id || null,
+        m.agreed_credits ? Number(m.agreed_credits) : null,
+        JSON.stringify(m.permissions || {
+          can_view_tasks: true,
+          can_update_task_status: true,
+          can_upload_drafts: true,
+          can_create_subtasks: false,
+        }),
+      ]);
+      createdMembers.push(memRes.rows[0]);
+    }
+
+    // Activity log
+    const wsRes = await client.query('SELECT workspace_id FROM team_contract_workspaces WHERE team_id = $1 LIMIT 1', [teamId]);
+    if (wsRes.rows[0]?.workspace_id) {
+      await client.query(`
+        INSERT INTO team_workspace_activity (workspace_id, actor_account_id, action, metadata)
+        VALUES ($1, $2, 'subcontract_proposal_submitted', $3)
+      `, [
+        wsRes.rows[0].workspace_id,
+        viewerAccountId,
+        JSON.stringify({
+          proposal_id: proposal.proposal_id,
+          member_count: members.length,
+          contract_id,
+        }),
+      ]);
+    }
+
+    await client.query('COMMIT');
+
+    return {
+      ...proposal,
+      lead_name,
+      lead_handle,
+      client_account_id,
+      members: createdMembers,
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function decideSubcontractProposal(teamId, proposalId, viewerAccountId, { decision, member_decisions, client_feedback }) {
+  // 1. Fetch proposal & verify client
+  const propRes = await pool.query(`
+    SELECT p.*, j.client_account_id, tcw.workspace_id,
+           lead_acc.display_name as lead_name, lead_acc.handle as lead_handle
+      FROM team_subcontract_proposals p
+      JOIN teams t ON t.team_id = p.team_id
+      JOIN jobs j ON j.job_id = t.job_id
+      LEFT JOIN team_contract_workspaces tcw ON tcw.team_id = t.team_id
+      JOIN accounts lead_acc ON lead_acc.account_id = p.lead_account_id
+     WHERE p.proposal_id = $1 AND p.team_id = $2
+     LIMIT 1
+  `, [proposalId, teamId]);
+
+  if (propRes.rows.length === 0) {
+    const err = new Error('Subcontract proposal not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const proposal = propRes.rows[0];
+
+  if (String(viewerAccountId) !== String(proposal.client_account_id)) {
+    const err = new Error('Only the project client can approve or reject subcontract requests.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  if (proposal.status !== 'pending') {
+    const err = new Error(`This proposal has already been resolved (${proposal.status}).`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const membersRes = await pool.query(
+    'SELECT * FROM team_subcontract_proposal_members WHERE proposal_id = $1',
+    [proposalId]
+  );
+  const proposalMembers = membersRes.rows;
+
+  const decisionsMap = {};
+  if (Array.isArray(member_decisions)) {
+    for (const d of member_decisions) {
+      decisionsMap[d.proposal_member_id] = d;
+    }
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let approvedCount = 0;
+    let rejectedCount = 0;
+
+    for (const member of proposalMembers) {
+      const explicitDecision = decisionsMap[member.proposal_member_id];
+      const memberStatus = explicitDecision ? explicitDecision.status : (decision === 'rejected' ? 'rejected' : 'approved');
+      const clientNotes = explicitDecision?.client_notes || client_feedback || null;
+
+      if (memberStatus === 'approved') {
+        approvedCount++;
+        await client.query(`
+          UPDATE team_subcontract_proposal_members
+             SET status = 'approved',
+                 client_notes = $1,
+                 decided_at = NOW()
+           WHERE proposal_member_id = $2
+        `, [clientNotes, member.proposal_member_id]);
+
+        // Find candidate user_id
+        const userRes = await client.query('SELECT user_id FROM users WHERE account_id = $1 LIMIT 1', [member.candidate_account_id]);
+        const candUserId = userRes.rows[0]?.user_id;
+
+        if (candUserId) {
+          // 1. Add to team_members as Subcontractor
+          await client.query(`
+            INSERT INTO team_members (team_id, user_id, role, status, joined_at, invited_by_account_id)
+            VALUES ($1, $2, 'Subcontractor', 'Active', NOW(), $3)
+            ON CONFLICT (team_id, user_id)
+            DO UPDATE SET role = 'Subcontractor', status = 'Active', deleted_at = NULL, updated_at = NOW()
+          `, [teamId, candUserId, proposal.lead_account_id]);
+
+          // 2. Upsert into contract_subcontractors
+          await client.query(`
+            INSERT INTO contract_subcontractors (
+              contract_id, account_id, role_title, agreed_credits,
+              assigned_milestone_id, parent_contractor_account_id,
+              permissions, proposal_member_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (contract_id, account_id)
+            DO UPDATE SET
+              role_title = EXCLUDED.role_title,
+              agreed_credits = EXCLUDED.agreed_credits,
+              assigned_milestone_id = EXCLUDED.assigned_milestone_id,
+              parent_contractor_account_id = EXCLUDED.parent_contractor_account_id,
+              permissions = EXCLUDED.permissions,
+              proposal_member_id = EXCLUDED.proposal_member_id
+          `, [
+            proposal.contract_id,
+            member.candidate_account_id,
+            member.role_title,
+            member.agreed_credits,
+            member.assigned_milestone_id,
+            proposal.lead_account_id,
+            member.permissions,
+            member.proposal_member_id,
+          ]);
+
+          // 3. Auto-assign to tasks under the milestone if assigned_milestone_id exists
+          if (member.assigned_milestone_id && proposal.workspace_id) {
+            await client.query(`
+              INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
+              SELECT twt.task_id, $1, $2
+                FROM team_workspace_tasks twt
+               WHERE twt.workspace_id = $3 AND twt.job_milestone_id = $4 AND twt.deleted_at IS NULL
+              ON CONFLICT (task_id, account_id) DO NOTHING
+            `, [
+              member.candidate_account_id,
+              viewerAccountId,
+              proposal.workspace_id,
+              member.assigned_milestone_id,
+            ]);
+          }
+        }
+      } else {
+        rejectedCount++;
+        await client.query(`
+          UPDATE team_subcontract_proposal_members
+             SET status = 'rejected',
+                 client_notes = $1,
+                 decided_at = NOW()
+           WHERE proposal_member_id = $2
+        `, [clientNotes, member.proposal_member_id]);
+      }
+    }
+
+    const finalStatus =
+      approvedCount > 0 && rejectedCount === 0
+        ? 'approved'
+        : approvedCount === 0 && rejectedCount > 0
+        ? 'rejected'
+        : 'partially_approved';
+
+    const updatedPropRes = await client.query(`
+      UPDATE team_subcontract_proposals
+         SET status = $1,
+             client_feedback = $2,
+             reviewed_by_account_id = $3,
+             reviewed_at = NOW(),
+             updated_at = NOW()
+       WHERE proposal_id = $4
+       RETURNING *
+    `, [
+      finalStatus,
+      client_feedback?.trim() || null,
+      viewerAccountId,
+      proposalId,
+    ]);
+
+    // Activity log
+    if (proposal.workspace_id) {
+      await client.query(`
+        INSERT INTO team_workspace_activity (workspace_id, actor_account_id, action, metadata)
+        VALUES ($1, $2, 'subcontract_proposal_decided', $3)
+      `, [
+        proposal.workspace_id,
+        viewerAccountId,
+        JSON.stringify({
+          proposal_id: proposalId,
+          status: finalStatus,
+          approved_count: approvedCount,
+          rejected_count: rejectedCount,
+        }),
+      ]);
+    }
+
+    await client.query('COMMIT');
+
+    return {
+      ...updatedPropRes.rows[0],
+      lead_account_id: proposal.lead_account_id,
+      lead_handle: proposal.lead_handle,
+      approved_count: approvedCount,
+      rejected_count: rejectedCount,
+      members: proposalMembers.map((m) => ({
+        ...m,
+        status: decisionsMap[m.proposal_member_id]?.status || (decision === 'rejected' ? 'rejected' : 'approved'),
+      })),
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function withdrawSubcontractProposal(teamId, proposalId, viewerAccountId) {
+  const propRes = await pool.query(`
+    SELECT * FROM team_subcontract_proposals
+     WHERE proposal_id = $1 AND team_id = $2
+     LIMIT 1
+  `, [proposalId, teamId]);
+
+  if (propRes.rows.length === 0) {
+    const err = new Error('Proposal not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const proposal = propRes.rows[0];
+  if (String(viewerAccountId) !== String(proposal.lead_account_id)) {
+    const err = new Error('Only the nominating freelancer can withdraw this proposal.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  if (proposal.status !== 'pending') {
+    const err = new Error('Only pending proposals can be withdrawn.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  await pool.query(`
+    UPDATE team_subcontract_proposals
+       SET status = 'withdrawn', updated_at = NOW()
+     WHERE proposal_id = $1
+  `, [proposalId]);
+
+  await pool.query(`
+    UPDATE team_subcontract_proposal_members
+       SET status = 'withdrawn'
+     WHERE proposal_id = $1
+  `, [proposalId]);
+
+  return { success: true, proposal_id: proposalId, status: 'withdrawn' };
+}
+
 module.exports = {
   ensureContractualTeamProject,
   getTeamProjectDetails,
@@ -874,6 +1368,10 @@ module.exports = {
   getProjectHistory,
   getProjectMembers,
   getProjectMilestones,
+  getSubcontractProposals,
+  createSubcontractProposal,
+  decideSubcontractProposal,
+  withdrawSubcontractProposal,
   ensureContractualMember,
 };
 
