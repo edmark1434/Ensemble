@@ -647,7 +647,7 @@ export default function DiscoveryPage() {
                 <Dices className="w-3 h-3" />
                 Random Pick
               </span>
-            ) : breakdown.matchPts > 0 ? (
+            ) : breakdown.matchedSkills.length > 0 ? (
               <span
                 title={`Matches ${breakdown.matchedSkills.length} of your open job skills`}
                 className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-black/60 text-white backdrop-blur-md border border-white/10 text-[10px] font-medium"
@@ -1372,15 +1372,21 @@ export default function DiscoveryPage() {
                         </p>
                         <div className="flex items-center gap-2 mt-3">
                           <img
-                            src={
-                              item.avatar_url
-                                ? item.avatar_url.startsWith("http")
-                                  ? item.avatar_url
-                                  : `${cloudfrontUrl}/${item.avatar_url}`
-                                : "/default-avatar.png"
-                            }
+                            src={constructAvatarUrl(
+                              item.avatar_url,
+                              item.handle || item.title
+                            )}
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              const fallback = getFallbackAvatarUrl(
+                                item.handle || item.title
+                              );
+                              if (target.src !== fallback) {
+                                target.src = fallback;
+                              }
+                            }}
                             alt=""
-                            className="w-6 h-6 rounded-full"
+                            className="w-6 h-6 rounded-full object-cover border border-white/20 bg-zinc-800 shrink-0"
                           />
                           <span className="text-white/90 text-xs font-medium">
                             @{item.handle}
@@ -2357,26 +2363,25 @@ export default function DiscoveryPage() {
                       </h2>
 
                       <div className="flex items-center gap-3 bg-white/50 dark:bg-black/20 p-2 rounded-xl border border-black/5 dark:border-white/5">
-                        {(() => {
-                          const avatarCleanPath =
-                            selectedGalleryItem.avatar_url?.startsWith("/")
-                              ? selectedGalleryItem.avatar_url.substring(1)
-                              : selectedGalleryItem.avatar_url;
-                          const cloudfrontUrl =
-                            import.meta.env.VITE_CLOUDFRONT_URL || "";
-                          const avatarUrl = avatarCleanPath?.startsWith("http")
-                            ? avatarCleanPath
-                            : avatarCleanPath
-                              ? `${cloudfrontUrl}/${avatarCleanPath}`
-                              : "/default-avatar.png";
-                          return (
-                            <img
-                              src={avatarUrl}
-                              alt=""
-                              className="w-8 h-8 rounded-full object-cover border border-zinc-200 dark:border-white/10"
-                            />
-                          );
-                        })()}
+                        <img
+                          src={constructAvatarUrl(
+                            selectedGalleryItem.avatar_url,
+                            selectedGalleryItem.display_name ||
+                              selectedGalleryItem.handle
+                          )}
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            const fallback = getFallbackAvatarUrl(
+                              selectedGalleryItem.display_name ||
+                                selectedGalleryItem.handle
+                            );
+                            if (target.src !== fallback) {
+                              target.src = fallback;
+                            }
+                          }}
+                          alt=""
+                          className="w-8 h-8 rounded-full object-cover border border-zinc-200 dark:border-white/10 bg-zinc-200 dark:bg-zinc-800 shrink-0"
+                        />
                         <div className="hidden sm:block">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
