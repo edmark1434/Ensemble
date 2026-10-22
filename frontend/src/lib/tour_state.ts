@@ -16,6 +16,8 @@ export interface WalkthroughStep {
   actionType?: 'click' | 'next';
   /** Section badge displayed in the card header (e.g. "Home", "Your Profile"). */
   section?: string;
+  /** Target user roles for role-filtered tours. If omitted or empty, step appears in all tours. */
+  roles?: UserPlatformRole[];
 }
 
 export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
@@ -30,6 +32,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Home',
+    roles: ['freelancer','client','explorer'],
   },
   {
     id: 'home_quick_actions',
@@ -41,6 +44,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Home',
+    roles: ['client','explorer'],
   },
   {
     id: 'home_featured_jobs',
@@ -52,6 +56,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'top',
     actionType: 'next',
     section: 'Home',
+    roles: ['freelancer'],
   },
   {
     id: 'home_featured_gigs',
@@ -63,6 +68,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'top',
     actionType: 'next',
     section: 'Home',
+    roles: ['freelancer','client'],
   },
   {
     id: 'home_featured_assets',
@@ -74,6 +80,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'top',
     actionType: 'next',
     section: 'Home',
+    roles: ['explorer'],
   },
   {
     id: 'header_notifications',
@@ -96,6 +103,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Home',
+    roles: ['explorer'],
   },
   {
     id: 'header_profile_nav',
@@ -120,6 +128,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Your Profile',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'profile_tabs',
@@ -131,6 +140,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Your Profile',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'profile_budget',
@@ -142,6 +152,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'next',
     section: 'Your Profile',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'profile_badges',
@@ -153,6 +164,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'next',
     section: 'Your Profile',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'profile_skills',
@@ -164,55 +176,9 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'next',
     section: 'Your Profile',
+    roles: ['freelancer', 'client', 'explorer'],
   },
-  {
-    id: 'header_settings_nav',
-    route: '/profile',
-    selector: '[data-tour="user-profile-button"]',
-    tabHint: 'Settings Nav',
-    targetName: 'Profile & Settings',
-    text: 'Click your **Profile Avatar** again and select **Settings** to open account credentials and preferences.',
-    preferredPlacement: 'left',
-    actionType: 'click',
-    section: 'Your Profile',
-  },
-
-  // --- SECTION 3: SETTINGS & VERIFICATION FLOW ---
-  {
-    id: 'settings_verification',
-    route: '/settings',
-    routeState: { tab: 'account' },
-    selector: '[data-tour="settings-verification-button"]',
-    tabHint: 'Account Details',
-    targetName: 'Verification Status',
-    text: 'In **Settings › Account Details**, click here to view your **Identity Verification** status to unlock verified badges and escrow withdrawals.',
-    preferredPlacement: 'bottom',
-    actionType: 'next',
-    section: 'Settings',
-  },
-  {
-    id: 'settings_display',
-    route: '/settings',
-    routeState: { tab: 'display' },
-    selector: '[data-tour="settings-theme-toggle"]',
-    tabHint: 'Display Settings',
-    targetName: 'Theme Toggle',
-    text: 'In **Display Settings**, switch between **Light and Dark mode** anytime to customize your workspace appearance.',
-    preferredPlacement: 'bottom',
-    actionType: 'next',
-    section: 'Settings',
-  },
-  {
-    id: 'settings_back',
-    route: '/settings',
-    selector: '[data-tour="settings-back-button"]',
-    tabHint: 'Return to Workspace',
-    targetName: 'Back Arrow',
-    text: 'Click the **Back Arrow** button to exit Settings and return to your main workspace.',
-    preferredPlacement: 'bottom',
-    actionType: 'click',
-    section: 'Settings',
-  },
+  
 
   // --- SECTION 4: PROJECTS WORKSPACE & CREATE PROJECT ---
   {
@@ -225,6 +191,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Projects',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'projects_workspace',
@@ -236,6 +203,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Projects',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'projects_create',
@@ -247,6 +215,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'click',
     section: 'Projects',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'projects_format',
@@ -263,7 +232,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
   // --- SECTION 5: TEAMS ---
   {
     id: 'sidenav_teams',
-    route: '/projects/select',
+    route: '/projects',
     selector: '[data-tour="sidenav-teams"]',
     tabHint: 'Teams Navigation',
     targetName: 'Teams Tab',
@@ -295,6 +264,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Forums',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'forums_tabs',
@@ -330,6 +300,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Discovery',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'discovery_page',
@@ -341,6 +312,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Discovery',
+    roles: ['freelancer', 'client', 'explorer'],
   },
 
   // --- SECTION 8: ASSET LIBRARY ---
@@ -354,6 +326,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Asset Library',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'assets_catalog',
@@ -378,6 +351,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Job Market',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'jobs_search',
@@ -389,6 +363,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Job Market',
+    roles: ['freelancer'],
   },
   {
     id: 'jobs_create',
@@ -400,6 +375,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Job Market',
+    roles: ['client'],
   },
   {
     id: 'jobs_tabs',
@@ -422,6 +398,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Job Market',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'jobs_detail_view_full',
@@ -444,6 +421,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'left',
     actionType: 'next',
     section: 'Job Market',
+    roles: ['freelancer'],
   },
   {
     id: 'jobs_detail_exit',
@@ -466,6 +444,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Job Market',
+    roles: ['freelancer', 'client', 'explorer'],
   },
 
   // --- SECTION 10: GIGS & VIDEO SERVICES FLOW ---
@@ -479,6 +458,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Gigs & Services',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'gigs_search',
@@ -490,6 +470,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Gigs & Services',
+    roles: ['client'],
   },
   {
     id: 'gigs_create',
@@ -501,6 +482,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Gigs & Services',
+    roles: ['freelancer'],
   },
   {
     id: 'gigs_tabs',
@@ -523,6 +505,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Gigs & Services',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'gigs_detail_view_full',
@@ -545,6 +528,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'left',
     actionType: 'next',
     section: 'Gigs & Services',
+    roles: ['client'],
   },
   {
     id: 'gigs_detail_exit',
@@ -567,6 +551,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Gigs & Services',
+    roles: ['freelancer', 'client', 'explorer'],
   },
 
   // --- SECTION 11: ACTIVITY TABS (SIDEBAR BUTTONS ONLY - NO VERIFICATION WALL) ---
@@ -580,6 +565,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'next',
     section: 'Deliveries & Contracts',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'terms_nav',
@@ -602,6 +588,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'next',
     section: 'Deliveries & Contracts',
+    roles: ['freelancer', 'client', 'explorer'],
   },
 
   // --- SECTION 12: LEDGER & INBOX ---
@@ -615,6 +602,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'right',
     actionType: 'click',
     section: 'Ledger',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'transaction_history',
@@ -626,6 +614,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Ledger',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'sidenav_inbox',
@@ -661,6 +650,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'click',
     section: 'Billing & Credits',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'credits_balance',
@@ -672,6 +662,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Billing & Credits',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'credits_topup',
@@ -683,6 +674,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     preferredPlacement: 'bottom',
     actionType: 'next',
     section: 'Billing & Credits',
+    roles: ['freelancer', 'client', 'explorer'],
   },
   {
     id: 'credits_subscription_tab',
@@ -730,16 +722,58 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     actionType: 'click',
     section: 'Workspace Tools',
   },
+  // --- SETTINGS & VERIFICATION ---
+  {
+    id: 'settings_verification',
+    route: '/settings',
+    routeState: { tab: 'account' },
+    selector: '[data-tour="settings-verification-button"]',
+    tabHint: 'Account Details',
+    targetName: 'Verification Status',
+    text: 'In **Settings › Account Details**, click here to view your **Identity Verification** status to unlock verified badges and escrow withdrawals.',
+    preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Settings',
+    roles: ['freelancer', 'client', 'explorer'],
+  },
+  {
+    id: 'settings_display',
+    route: '/settings',
+    routeState: { tab: 'display' },
+    selector: '[data-tour="settings-theme-toggle"]',
+    tabHint: 'Display Settings',
+    targetName: 'Theme Toggle',
+    text: 'In **Display Settings**, switch between **Light and Dark mode** anytime to customize your workspace appearance.',
+    preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Settings',
+    roles: ['freelancer', 'client', 'explorer'],
+  },
+
+  // --- HELP & FEEDBACK ---
   {
     id: 'header_feedback_support',
-    route: '/credits-subscriptions',
+    route: '/home',
     selector: '[data-tour="user-profile-button"]',
-    tabHint: 'Help & Feedback',
+    tabHint: 'Help & Support',
     targetName: 'Help & Support',
-    text: 'Open your **Profile Menu** anytime to submit feedback, file support tickets, or replay this walkthrough whenever you need!',
-    preferredPlacement: 'left',
+    text: 'Access the **Help Center** from your profile menu anytime for FAQs, editing guidelines, and dispute support.',
+    preferredPlacement: 'bottom',
     actionType: 'next',
-    section: 'Workspace Tools',
+    section: 'Help & Feedback',
+    roles: ['freelancer', 'client', 'explorer'],
+  },
+  {
+    id: 'submit_a_feedback',
+    route: '/home',
+    selector: '[data-tour="user-profile-button"]',
+    tabHint: 'Submit a Feedback',
+    targetName: 'Submit a Feedback',
+    text: 'Click **Submit a Feedback** in your profile menu to report bugs, suggest new tools, or request features directly from the development team.',
+    preferredPlacement: 'bottom',
+    actionType: 'next',
+    section: 'Help & Feedback',
+    roles: ['freelancer', 'client', 'explorer'],
   },
 ];
 
@@ -764,6 +798,13 @@ export function resolveUserRole(user: any): UserPlatformRole {
   return 'freelancer';
 }
 
+export function getActiveTourSteps(role?: UserPlatformRole): WalkthroughStep[] {
+  if (!role) return WALKTHROUGH_STEPS;
+  return WALKTHROUGH_STEPS.filter(
+    (step) => !step.roles || step.roles.length === 0 || step.roles.includes(role)
+  );
+}
+
 const STORAGE_KEY_COMPLETED = 'ensemble_platform_walkthrough_completed';
 const STORAGE_KEY_DISMISSED = 'ensemble_platform_walkthrough_dismissed';
 
@@ -774,6 +815,7 @@ interface WalkthroughState {
   isGraduationOpen: boolean;
   currentStepIndex: number;
   userRole: UserPlatformRole;
+  activeSteps: WalkthroughStep[];
   hasCompletedWalkthrough: boolean;
 
   // Actions
@@ -785,6 +827,7 @@ interface WalkthroughState {
   nextStep: () => void;
   prevStep: () => void;
   goToStep: (index: number) => void;
+  skipSection: () => void;
   skipWalkthrough: () => void;
   skipTour: () => void;
   finishWalkthrough: () => void;
@@ -802,6 +845,7 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
   isGraduationOpen: false,
   currentStepIndex: 0,
   userRole: 'freelancer',
+  activeSteps: getActiveTourSteps('freelancer'),
   hasCompletedWalkthrough: localStorage.getItem(STORAGE_KEY_COMPLETED) === 'true',
 
   initFromUser: (user: any) => {
@@ -809,7 +853,11 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
     const completed = localStorage.getItem(STORAGE_KEY_COMPLETED) === 'true';
     const dismissed = localStorage.getItem(STORAGE_KEY_DISMISSED) === 'true';
 
-    set({ userRole: role, hasCompletedWalkthrough: completed });
+    set({
+      userRole: role,
+      activeSteps: getActiveTourSteps(role),
+      hasCompletedWalkthrough: completed,
+    });
 
     if (!completed && !dismissed) {
       set({ isWelcomeOpen: true });
@@ -824,9 +872,11 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
 
   startWalkthrough: (role?: UserPlatformRole) => {
     const currentRole = role || get().userRole || 'freelancer';
+    const active = getActiveTourSteps(currentRole);
     lastAdvanceTimestamp = Date.now();
     set({
       userRole: currentRole,
+      activeSteps: active,
       isWelcomeOpen: false,
       isGraduationOpen: false,
       isWalkthroughActive: true,
@@ -844,8 +894,8 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
     }
     lastAdvanceTimestamp = now;
 
-    const { currentStepIndex } = get();
-    if (currentStepIndex < WALKTHROUGH_STEPS.length - 1) {
+    const { currentStepIndex, activeSteps } = get();
+    if (currentStepIndex < activeSteps.length - 1) {
       set({ currentStepIndex: currentStepIndex + 1 });
     } else {
       get().finishWalkthrough();
@@ -866,9 +916,27 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
   },
 
   goToStep: (index: number) => {
-    if (index >= 0 && index < WALKTHROUGH_STEPS.length) {
+    const { activeSteps } = get();
+    if (index >= 0 && index < activeSteps.length) {
       lastAdvanceTimestamp = Date.now();
       set({ currentStepIndex: index });
+    }
+  },
+
+  skipSection: () => {
+    const { currentStepIndex, activeSteps } = get();
+    const currentStep = activeSteps[currentStepIndex];
+    if (!currentStep) return;
+
+    const nextSectionIndex = activeSteps.findIndex(
+      (s, idx) => idx > currentStepIndex && s.section !== currentStep.section
+    );
+
+    if (nextSectionIndex !== -1) {
+      lastAdvanceTimestamp = Date.now();
+      set({ currentStepIndex: nextSectionIndex });
+    } else {
+      get().finishWalkthrough();
     }
   },
 
@@ -892,12 +960,23 @@ export const useTourStore = create<WalkthroughState>((set, get) => ({
 
   closeGraduation: () => set({ isGraduationOpen: false }),
 
-  setRole: (role: UserPlatformRole) => set({ userRole: role }),
+  setRole: (role: UserPlatformRole) =>
+    set({
+      userRole: role,
+      activeSteps: getActiveTourSteps(role),
+      currentStepIndex: 0,
+    }),
 
   resetWalkthroughHistory: () => {
     localStorage.removeItem(STORAGE_KEY_COMPLETED);
     localStorage.removeItem(STORAGE_KEY_DISMISSED);
-    set({ hasCompletedWalkthrough: false, isWelcomeOpen: true, isWalkthroughActive: false });
+    set({
+      hasCompletedWalkthrough: false,
+      isWelcomeOpen: true,
+      isWalkthroughActive: false,
+      activeSteps: getActiveTourSteps(get().userRole),
+      currentStepIndex: 0,
+    });
   },
 }));
 

@@ -20,21 +20,24 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
   const displayName = user?.display_name || user?.name || user?.username || 'Creator';
   const firstName = displayName.split(' ')[0];
 
-  const roleConfigs: Record<UserPlatformRole, { label: string; icon: typeof Coins; desc: string }> = {
+  const roleConfigs: Record<UserPlatformRole, { label: string; icon: typeof Coins; desc: string; badge: string }> = {
     freelancer: {
       label: 'Freelancer',
       icon: Coins,
       desc: 'Focus on finding editing jobs, submitting milestone proposals, and earning with escrow protection.',
+      badge: '~2 mins • 24 key steps',
     },
     client: {
       label: 'Client',
       icon: UserCheck,
       desc: 'Focus on posting video editing jobs, hiring talent via gigs, and managing project milestones.',
+      badge: '~2 mins • 19 key steps',
     },
     explorer: {
       label: 'Explorer',
       icon: Compass,
       desc: 'Explore the full creative suite: cloud video editor, community forums, and asset marketplace.',
+      badge: '~1.5 mins • 17 key steps',
     },
   };
 
@@ -62,7 +65,7 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
           onClick={(e) => e.stopPropagation()}
         >
           {/* Top highlight bar */}
-          <div className="h-1.5 w-full bg-amber-500" />
+          <div className="h-1.5 w-full bg-zinc-900 dark:bg-zinc-100" />
 
           {/* Close button */}
           <button
@@ -76,11 +79,11 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
           <div className="p-6 md:p-8 space-y-6">
             {/* Header */}
             <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 ring-1 ring-amber-500/20">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white ring-1 ring-zinc-200 dark:ring-white/10">
                 <Compass className="h-6 w-6" />
               </div>
               <div>
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/20">
+                <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 dark:bg-zinc-800/80 px-2.5 py-0.5 text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700">
                   <Sparkles className="h-3 w-3" /> Platform Walkthrough
                 </span>
                 <h2 className="mt-2 text-xl font-bold tracking-tight">
@@ -115,11 +118,11 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
                       onClick={() => setRole(r)}
                       className={`flex flex-col items-center justify-center rounded-lg p-2.5 text-center transition-all border ${
                         isSelected
-                          ? 'border-amber-500 bg-amber-50 dark:bg-amber-500/10 text-amber-900 dark:text-amber-200 shadow-sm font-semibold'
+                          ? 'border-zinc-900 dark:border-white bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white shadow-xs font-semibold'
                           : 'border-gray-200 dark:border-white/5 bg-white dark:bg-white/[0.02] text-gray-600 dark:text-zinc-400 hover:border-gray-300 dark:hover:border-white/10'
                       }`}
                     >
-                      <Icon className={`h-4 w-4 mb-1 ${isSelected ? 'text-amber-500' : 'text-gray-400 dark:text-zinc-500'}`} />
+                      <Icon className={`h-4 w-4 mb-1 ${isSelected ? 'text-zinc-900 dark:text-white' : 'text-gray-400 dark:text-zinc-500'}`} />
                       <span className="text-[11px] leading-tight capitalize">{cfg.label}</span>
                     </button>
                   );
@@ -129,6 +132,12 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
               <p className="text-xs text-gray-600 dark:text-zinc-400 pt-1 leading-relaxed">
                 {currentConfig.desc}
               </p>
+              <div className="pt-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
+                  <Sparkles className="h-3 w-3" />
+                  {currentConfig.badge}
+                </span>
+              </div>
             </div>
 
             {/* Quick Overview */}
@@ -138,22 +147,22 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
               </p>
               <ul className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
                 <li className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Profile & Verification
+                  <span className="h-1.5 w-1.5 rounded-full bg-zinc-700 dark:bg-zinc-300" /> Profile & Verification
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Job Market & Proposals
+                  <span className="h-1.5 w-1.5 rounded-full bg-zinc-700 dark:bg-zinc-300" /> Job Market & Proposals
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Gigs & Video Services
+                  <span className="h-1.5 w-1.5 rounded-full bg-zinc-700 dark:bg-zinc-300" /> Gigs & Video Services
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Projects & Cloud Editor
+                  <span className="h-1.5 w-1.5 rounded-full bg-zinc-700 dark:bg-zinc-300" /> Projects & Cloud Editor
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Deliveries & Milestones
+                  <span className="h-1.5 w-1.5 rounded-full bg-zinc-700 dark:bg-zinc-300" /> Deliveries & Milestones
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Credits, Inbox & Ask AI
+                  <span className="h-1.5 w-1.5 rounded-full bg-zinc-700 dark:bg-zinc-300" /> Credits, Inbox & Ask AI
                 </li>
               </ul>
             </div>
@@ -171,7 +180,7 @@ export const TourWelcomeModal: React.FC<TourWelcomeModalProps> = ({ isOpen, onCl
               <button
                 type="button"
                 onClick={() => onStart(userRole)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 px-5 py-2.5 text-xs font-bold text-zinc-950 transition-colors shadow-lg shadow-amber-500/10"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 active:bg-black dark:bg-white dark:hover:bg-zinc-100 dark:active:bg-zinc-200 px-5 py-2.5 text-xs font-bold text-white dark:text-zinc-900 transition-colors shadow-lg shadow-black/10"
               >
                 Start Walkthrough
                 <ArrowRight className="h-3.5 w-3.5" />
