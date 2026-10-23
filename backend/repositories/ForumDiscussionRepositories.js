@@ -20,15 +20,49 @@ function activeDiscussionFilter(filter = {}) {
     };
 }
 
+// Engagement weights: a save is the strongest signal of value, a comment shows
+// effort, and a like is a one-tap reaction.
+const FEED_WEIGHTS = { like: 1, comment: 3, save: 4 };
+// Trending only ranks discussions created within this window.
+const TRENDING_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Some discussions store created_at as an ISO string, others as a Date.
+const createdAtDateExpression = { $toDate: '$created_at' };
+
+// Counts distinct users in an engagement array, excluding the discussion author.
+function uniqueEngagersExpression(items) {
+    return {
+        $size: {
+            $setDifference: [
+                {
+                    $map: {
+                        input: items,
+                        as: 'item',
+                        in: { $toString: '$item.user_id' },
+                    },
+                },
+                [{ $toString: '$user_id' }, null],
+            ],
+        },
+    };
+}
+
 function feedScoreExpression(type) {
-    const likes = { $size: { $ifNull: ['$likes', []] } };
-    const comments = { $size: { $ifNull: ['$comments', []] } };
-    const saves = { $size: { $ifNull: ['$saves', []] } };
+    const likes = uniqueEngagersExpression({ $ifNull: ['$likes', []] });
+    const saves = uniqueEngagersExpression({ $ifNull: ['$saves', []] });
+    // Soft-deleted comments stay in the array as "[deleted]", so skip them.
+    const comments = uniqueEngagersExpression({
+        $filter: {
+            input: { $ifNull: ['$comments', []] },
+            as: 'comment',
+            cond: { $not: [{ $ifNull: ['$comment.deleted_at', false] }] },
+        },
+    });
     const engagement = {
         $add: [
-            { $multiply: [likes, 3] },
-            { $multiply: [comments, 2] },
-            saves,
+            { $multiply: [likes, FEED_WEIGHTS.like] },
+            { $multiply: [comments, FEED_WEIGHTS.comment] },
+            { $multiply: [saves, FEED_WEIGHTS.save] },
         ],
     };
 
@@ -37,11 +71,11 @@ function feedScoreExpression(type) {
         return {
             $add: [
                 { $log10: { $max: [engagement, 1] } },
-                { $divide: [{ $toLong: '$created_at' }, 45000000] },
+                { $divide: [{ $toLong: createdAtDateExpression }, 45000000] },
             ],
         };
     }
-    return { $toLong: '$created_at' };
+    return { $toLong: createdAtDateExpression };
 }
 
 async function getPaginatedForumDiscussions({
@@ -58,6 +92,13 @@ async function getPaginatedForumDiscussions({
                     $and: [
                         filter,
                         { deleted_at: null },
+                        ...(type === 'trending'
+                            ? [{
+                                $expr: {
+                                    $gte: [createdAtDateExpression, new Date(Date.now() - TRENDING_WINDOW_MS)],
+                                },
+                            }]
+                            : []),
                         {
                             $or: [
                                 { status: { $exists: false } },
