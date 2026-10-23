@@ -29,26 +29,7 @@ export const sampleJobs: Job[] = [
       "Link your top 2 favorite YouTube videos you have edited (preferably tech, reviews, or desk setups).",
       "What is your typical turnaround time for a 12-minute rough cut from 45 minutes of raw footage?"
     ],
-    milestones: [
-      {
-        title: "Rough Cut & A-Roll Pacing",
-        description: "Assembly of spoken tracks, trim dead air, and insert primary B-roll cutaways.",
-        budget_percentage: 50,
-        budget_credits: 900,
-        slots_count: 1,
-        duration_hours: 24,
-        tasks: ["Assemble A-roll dialog", "Trim pauses & flubs", "Place primary B-roll footage"]
-      },
-      {
-        title: "Graphics, Sound FX & Final Master",
-        description: "Add spec lower-thirds, sound effects, audio ducking, and deliver 4K 60fps export.",
-        budget_percentage: 50,
-        budget_credits: 900,
-        slots_count: 1,
-        duration_hours: 24,
-        tasks: ["Lower-third overlays", "Audio compression & leveling", "Final 4K export"]
-      }
-    ],
+    milestones: [],
     isSaved: false,
     isOwnPost: false
   },
@@ -328,56 +309,28 @@ export const sampleJobs: Job[] = [
     category: "Corporate",
     difficulty: "Expert",
     priceRange: "15,000",
-    minBudget: 15000,
+    minBudget: 10000,
     maxBudget: 15000,
     postedBy: "Apex Apparel Global",
     postedAt: "Oct 17, 2026 • 5:00 PM",
     timeAgo: "Posted 1 week ago",
     clientRating: 5.0,
     ratingCount: 45,
-    positionsNeeded: 3,
+    positionsNeeded: 1,
     hiredCount: 0,
     applicantsCount: 0,
     savesCount: 0,
     timeline: "10-14 Days",
     thumbnail: "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=600&q=80",
     skills: ["Commercial", "Post-Production Team", "3D Motion Graphics", "DaVinci Resolve", "Sound Mix"],
-    hiring_type: "team",
+    hiring_type: "single",
     is_team: true,
     isTeam: true,
     screeningQuestions: [
       "Which specific milestone role (Story Editor, Motion Graphics, or Color/Sound) are you pitching for?",
       "Show your strongest work sample relevant to your chosen role."
     ],
-    milestones: [
-      {
-        title: "Offline Story Editor & Narrative Cut",
-        description: "Ingest 6K RED footage, multi-cam assembly, rough cut pacing, director review revisions, and locked picture cut.",
-        budget_percentage: 40,
-        budget_credits: 6000,
-        slots_count: 1,
-        duration_hours: 96,
-        tasks: ["Footage ingest & proxy generation", "Assembly & rough cut", "Director review iterations", "Picture lock final conform"]
-      },
-      {
-        title: "3D Motion Graphics & Typography Artist",
-        description: "Create stylized 3D logo animation, kinetic product feature typographic titles, and screen compositing.",
-        budget_percentage: 30,
-        budget_credits: 4500,
-        slots_count: 1,
-        duration_hours: 72,
-        tasks: ["Brand typography animation", "3D product logo reveal", "Motion track screen replacements", "Alpha channel graphics export"]
-      },
-      {
-        title: "Colorist & Sound Design Engineer",
-        description: "DaVinci Resolve HDR color grade, 5.1 surround sound mix, custom foley design, and broadcast master loudness delivery (-24 LKFS).",
-        budget_percentage: 30,
-        budget_credits: 4500,
-        slots_count: 1,
-        duration_hours: 72,
-        tasks: ["ACES DaVinci Resolve color grade", "Foley soundscape design", "Dialogue EQ & noise cleaning", "Broadcast 5.1 & stereo loudness delivery"]
-      }
-    ],
+    milestones: [],
     isSaved: false,
     isOwnPost: false
   },
@@ -389,47 +342,28 @@ export const sampleJobs: Job[] = [
     category: "YouTube",
     difficulty: "Intermediate",
     priceRange: "9,000",
-    minBudget: 9000,
+    minBudget: 6000,
     maxBudget: 9000,
     postedBy: "MarketPulse Network",
     postedAt: "Oct 16, 2026 • 2:00 PM",
     timeAgo: "Posted 1 week ago",
     clientRating: 4.8,
     ratingCount: 20,
-    positionsNeeded: 2,
+    positionsNeeded: 1,
     hiredCount: 0,
     applicantsCount: 0,
     savesCount: 0,
     timeline: "7-10 Days",
     thumbnail: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&w=600&q=80",
     skills: ["YouTube", "Video Essay", "Shorts Repurposing", "Premiere Pro", "Motion Graphics"],
-    hiring_type: "team",
+    hiring_type: "single",
     is_team: true,
     isTeam: true,
     screeningQuestions: [
       "Are you applying for the Lead Long-Form role or the Shorts Repurposing role?",
       "Link a channel or video you've worked on in the finance/educational niche."
     ],
-    milestones: [
-      {
-        title: "Lead Long-Form Video Essayist Editor",
-        description: "Edit 2 complete 20-minute deep dive video essays with custom charts, B-roll archival research, and motion graphics.",
-        budget_percentage: 65,
-        budget_credits: 5850,
-        slots_count: 1,
-        duration_hours: 80,
-        tasks: ["Voiceover pacing & narrative cut", "Archival stock research", "Finance charts & visual graphic callouts", "Background soundscape mix"]
-      },
-      {
-        title: "Shorts & Reels Repurposing Specialist",
-        description: "Extract 10 engaging hooks from the long-form episodes, design kinetic subtitles, and optimize for 9:16 mobile feeds.",
-        budget_percentage: 35,
-        budget_credits: 3150,
-        slots_count: 1,
-        duration_hours: 40,
-        tasks: ["Identify high-engagement clips", "Vertical 9:16 crop & reframing", "Kinetic subtitle animation", "Sound effects & music sync"]
-      }
-    ],
+    milestones: [],
     isSaved: false,
     isOwnPost: false
   },
@@ -448,49 +382,21 @@ export const sampleJobs: Job[] = [
     timeAgo: "Posted 1 week ago",
     clientRating: 5.0,
     ratingCount: 34,
-    positionsNeeded: 3,
+    positionsNeeded: 1,
     hiredCount: 0,
     applicantsCount: 0,
     savesCount: 0,
     timeline: "20-30 Days",
     thumbnail: "https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=600&q=80",
     skills: ["Documentary", "Feature Film", "Audio Restoration", "After Effects", "Surround Sound"],
-    hiring_type: "team",
+    hiring_type: "single",
     is_team: true,
     isTeam: true,
     screeningQuestions: [
       "Which role on the documentary crew are you applying for?",
       "Describe your experience working with documentary directors on extended edits."
     ],
-    milestones: [
-      {
-        title: "Senior Assembly & Narrative Editor",
-        description: "Review 120 hours of raw interview and wildlife footage, craft three-act narrative arc, and deliver locked edit.",
-        budget_percentage: 45,
-        budget_credits: 8100,
-        slots_count: 1,
-        duration_hours: 120,
-        tasks: ["Interview transcript logging", "Three-act story assembly", "Director feedback passes", "Picture lock conform"]
-      },
-      {
-        title: "Archival Media Researcher & 2.5D Animator",
-        description: "Source high-resolution historical maps and government documents, reconstruct missing timelines with 2.5D photo camera projection.",
-        budget_percentage: 25,
-        budget_credits: 4500,
-        slots_count: 1,
-        duration_hours: 60,
-        tasks: ["Archival license clearing", "Photo restoration", "2.5D After Effects camera parallax", "Document callout animations"]
-      },
-      {
-        title: "Audio Post Engineer & Sound Designer",
-        description: "Clean noisy field audio, design immersive jungle/ocean ambiances, record custom foley, and produce final 5.1 theatrical surround mix.",
-        budget_percentage: 30,
-        budget_credits: 5400,
-        slots_count: 1,
-        duration_hours: 80,
-        tasks: ["Field dialogue noise reduction (iZotope)", "Ambience and foley design", "Original score stems mastering", "5.1 surround sound final delivery"]
-      }
-    ],
+    milestones: [],
     isSaved: false,
     isOwnPost: false
   },
@@ -509,40 +415,21 @@ export const sampleJobs: Job[] = [
     timeAgo: "Posted 1 week ago",
     clientRating: 4.9,
     ratingCount: 15,
-    positionsNeeded: 2,
+    positionsNeeded: 1,
     hiredCount: 0,
     applicantsCount: 0,
     savesCount: 0,
     timeline: "7-10 Days",
     thumbnail: "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=600&q=80",
     skills: ["VFX Compositing", "Music Video", "After Effects", "DaVinci Resolve", "Color Grading"],
-    hiring_type: "team",
+    hiring_type: "single",
     is_team: true,
     isTeam: true,
     screeningQuestions: [
       "Specify whether you are pitching as the VFX Compositor or the Colorist.",
       "Show 2 shots demonstrating your tracking, screen replacement, or neon color grading abilities."
     ],
-    milestones: [
-      {
-        title: "Lead VFX Compositor & Clean Plate Artist",
-        description: "30 VFX shots: planar screen replacements, holographic HUD elements, wire removal, and anamorphic lens flare compositing.",
-        budget_percentage: 55,
-        budget_credits: 6050,
-        slots_count: 1,
-        duration_hours: 60,
-        tasks: ["Planar screen tracking (Mocha)", "Wire removals and cleanup", "Holographic sci-fi HUD assets", "Compositing in Nuke/After Effects"]
-      },
-      {
-        title: "DaVinci Resolve Stylized Colorist",
-        description: "Neon teal-and-magenta palette separation, high-contrast film response curve, customized film halation, and final ACES master export.",
-        budget_percentage: 45,
-        budget_credits: 4950,
-        slots_count: 1,
-        duration_hours: 40,
-        tasks: ["Teal & magenta neon tone separation", "VFX shot matching and integration", "Custom halation pass", "ProRes 4444 delivery"]
-      }
-    ],
+    milestones: [],
     isSaved: false,
     isOwnPost: false
   },
@@ -561,40 +448,21 @@ export const sampleJobs: Job[] = [
     timeAgo: "Posted 1 week ago",
     clientRating: 4.8,
     ratingCount: 29,
-    positionsNeeded: 2,
+    positionsNeeded: 1,
     hiredCount: 0,
     applicantsCount: 0,
     savesCount: 0,
     timeline: "10-14 Days",
     thumbnail: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80",
     skills: ["Masterclass", "Course Editing", "Motion Graphics", "Multi-Cam", "Educational"],
-    hiring_type: "team",
+    hiring_type: "single",
     is_team: true,
     isTeam: true,
     screeningQuestions: [
       "Which position (Course Video Editor or Motion Graphics Animator) are you applying for?",
       "Do you have experience working with instructional or educational video content?"
     ],
-    milestones: [
-      {
-        title: "Course Lecture Video Editor",
-        description: "Cut 10 modules (approx 15 mins each), sync teleprompter audio, multi-angle camera switching, and chapter markers.",
-        budget_percentage: 55,
-        budget_credits: 4675,
-        slots_count: 1,
-        duration_hours: 70,
-        tasks: ["Sync A/B camera angles", "Audio EQ and compression", "Cut lecture flubs and pauses", "Render 10 master MP4 modules"]
-      },
-      {
-        title: "Educational Motion Graphics Animator",
-        description: "Design 25 animated diagrams explaining camera sensor sizes, lens focal lengths, aperture stops, and lighting ratios.",
-        budget_percentage: 45,
-        budget_credits: 3825,
-        slots_count: 1,
-        duration_hours: 50,
-        tasks: ["Storyboard visual diagrams", "Vector illustration & asset prep", "2D After Effects animation", "Alpha overlay exports for editor"]
-      }
-    ],
+    milestones: [],
     isSaved: false,
     isOwnPost: false
   }

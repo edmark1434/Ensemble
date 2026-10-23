@@ -17,6 +17,7 @@ import CreateTeamMilestones, { type MilestoneFormItem } from "../job_components/
 import CreateTeamReview from "../job_components/job_creation_components/5_create_teamreview";
 import CreationSuccess from "../job_components/job_creation_components/4_creation_success";
 import PopupConfirmReturn from "../job_components/job_popups/popup_confirm_return";
+import FloatingCreditsPill from "@/components/ui/FloatingCreditsPill";
 
 const JobCreateTeamPostPage: React.FC = () => {
   const navigate = useNavigate();
@@ -70,6 +71,17 @@ const JobCreateTeamPostPage: React.FC = () => {
   const theme = useGlobalState((state) => state.theme);
   const [currentSlide, setCurrentSlide] = useState<number>(1);
   const [hasReachedReview, setHasReachedReview] = useState(false);
+  const [maxReachedStep, setMaxReachedStep] = useState<number>(1);
+
+  useEffect(() => {
+    setMaxReachedStep((prev) => Math.max(prev, currentSlide));
+  }, [currentSlide]);
+
+  useEffect(() => {
+    if (hasReachedReview) {
+      setMaxReachedStep(4);
+    }
+  }, [hasReachedReview]);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
 
@@ -550,6 +562,20 @@ const JobCreateTeamPostPage: React.FC = () => {
       } catch (_) {}
       setIsDraftRestored(false);
       setIsSuccessOpen(true);
+
+      // Decrement global wallet balance by publication fee (50) to trigger animated deduction
+      const curUser = useGlobalState.getState().user;
+      if (curUser) {
+        const curBal = Number(curUser.wallet?.balance_credits ?? 0);
+        const nextBal = Math.max(0, curBal - 50);
+        useGlobalState.getState().setUser({
+          ...curUser,
+          wallet: {
+            ...(curUser.wallet || {}),
+            balance_credits: nextBal,
+          },
+        });
+      }
     } catch (err: any) {
       console.error(err);
       const message = err.response?.data?.message || err.message || "Failed to submit team job post.";
@@ -569,6 +595,9 @@ const JobCreateTeamPostPage: React.FC = () => {
 
   return (
     <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
+      {/* Floating Upper Right Credits Pill */}
+      <FloatingCreditsPill />
+
       {/* Background Grid Animation */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
         <ShapeGrid
@@ -736,6 +765,8 @@ const JobCreateTeamPostPage: React.FC = () => {
                   setErrors={setErrors}
                   onBack={() => setCurrentSlide(2)}
                   onAdvance={() => handleSlide3Advance(false)}
+                  isTeam={true}
+                  advanceButtonText="Continue to Milestones"
                 />
               </motion.div>
             )}
@@ -755,6 +786,7 @@ const JobCreateTeamPostPage: React.FC = () => {
                   maxBudget={maxBudget}
                   minTimeline={minTimeline}
                   maxTimeline={maxTimeline}
+                  category={category}
                   errors={errors}
                   setErrors={setErrors}
                   onBack={() => setCurrentSlide(3)}

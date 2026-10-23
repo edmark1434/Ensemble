@@ -75,7 +75,7 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
   isLockedToSingle = false,
   minPositions,
   isFixedBudget = false,
-  hidePositions = false,
+  hidePositions = true,
   budgetType = "range",
   setBudgetType,
   preScopedMilestones = [],
@@ -799,11 +799,11 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
                 </span>
               </div>
 
-              {/* Positions Line */}
+              {/* Positions / Contract Scope Line */}
               <div className="flex items-center justify-between">
-                <span className="text-gray-500 dark:text-zinc-400">Hires Needed:</span>
+                <span className="text-gray-500 dark:text-zinc-400">Awarded Scope:</span>
                 <span className="font-bold text-gray-900 dark:text-white">
-                  {positions} {positions === 1 ? "Creator (Individual)" : "Creators"}
+                  1 Project Workspace Contract
                 </span>
               </div>
 
@@ -812,7 +812,7 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
                 <span className="text-gray-500 dark:text-zinc-400">Duration:</span>
                 <span className="font-bold text-gray-900 dark:text-white">
                   {minTimeline && maxTimeline
-                    ? `${minTimeline} &ndash; ${maxTimeline} Days`
+                    ? `${minTimeline} – ${maxTimeline} Days`
                     : maxTimeline
                     ? `${maxTimeline} Days`
                     : <span className="text-gray-400 italic">Unset</span>}

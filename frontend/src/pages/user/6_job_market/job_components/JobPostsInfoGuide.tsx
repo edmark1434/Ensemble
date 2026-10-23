@@ -11,6 +11,7 @@ import {
   Users,
   Briefcase,
   SlidersHorizontal,
+  Sparkles,
 } from "lucide-react";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import useGlobalState from "@/lib/global_state";
@@ -36,49 +37,35 @@ export const JobPostsInfoGuide: React.FC = () => {
       detail: "Days since publication + applicant count",
       purpose: "Gives newly published job posts immediate visibility so freelancers can discover and apply quickly.",
       rules:
-        "New jobs (< 7 days old) with fewer than 3 proposals per seat get the full 25 pts. Tapers smoothly to 0 after 14 days as proposals accumulate.",
+        "New jobs (< 7 days old) with fewer than 3 proposals receive the full 25 pts. Tapers smoothly to 0 over 14 days as proposals accumulate.",
     },
     {
       num: "03",
       weight: "25 pts",
-      title: "Type-Aware Brief Quality",
+      title: "Scope & Brief Quality",
       detail: "Scope, budget realism, skills & attachments",
       purpose: "Incentivizes well-defined scopes and fair budgets; unlocks the Rising badge for high-effort briefs.",
       rules:
-        "Evaluated against tailored criteria for Open Bid, Budget Range, or Team Milestone Pool jobs. Reaching 85%+ quality unlocks the Rising badge.",
+        "Evaluated against tailored criteria for Budget Range or Open Bid job posts. Reaching 85%+ quality unlocks the Rising badge.",
     },
     {
       num: "04",
       weight: "15 pts",
-      title: "Seat-Aware Open Capacity",
-      detail: "Proposals per open hiring seat",
+      title: "Open Capacity & Low Congestion",
+      detail: "Active proposal count",
       purpose: "Prevents applicant pile-ons and redistributes traffic to jobs that still genuinely need applicants.",
       rules:
-        "Measures competition per seat. When an individual job reaches 15+ proposals (or all seats are hired), it steps back so unapplied jobs rise to the top.",
+        "Monitors application volume. Jobs with fewer applicants receive top capacity score, while heavily applied jobs step back so newer listings gain visibility.",
     },
   ];
 
   const jobTypeCriteria = [
     {
-      type: "Individual — Open Bid",
-      badge: "Floor Benchmark",
-      badgeClass: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20",
-      icon: <User className="h-4 w-4 text-blue-500 shrink-0" />,
-      desc: "Client sets a minimum starting floor; freelancers pitch their custom milestones and pricing.",
-      rows: [
-        { criteria: "Detailed Scope of Work", weight: "+30%", rule: "Description contains 150+ characters describing deliverables and project context." },
-        { criteria: "Realistic Floor Benchmark", weight: "+20%", rule: "Minimum budget is set to at least 300 Credits." },
-        { criteria: "Relevant Skill Tags", weight: "+20%", rule: "At least 3 specific tags added (e.g. Color Grading, Premiere Pro, Sound Design)." },
-        { criteria: "Custom Visual / Cover", weight: "+15%", rule: "Uploaded custom project thumbnail image or reference brief attachments." },
-        { criteria: "Timeline & Workflow Terms", weight: "+15%", rule: "Delivery timeline specified and Portfolio / NDA usage preferences selected." },
-      ],
-    },
-    {
-      type: "Individual — Budget Range",
+      type: "Budget Range Format",
       badge: "Min – Max Range",
       badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
       icon: <Briefcase className="h-4 w-4 text-emerald-500 shrink-0" />,
-      desc: "Client defines a fixed minimum and maximum budget bracket for 1 or more seats.",
+      desc: "Client defines a minimum and maximum budget bracket. Proposers define their phased milestone delivery within this ceiling.",
       rows: [
         { criteria: "Project Deliverables Scope", weight: "+25%", rule: "Clear scope and deliverables explanation (140+ characters)." },
         { criteria: "Focused Min–Max Spread", weight: "+25%", rule: "Realistic budget span where Max budget is within 3x of Min budget." },
@@ -88,17 +75,17 @@ export const JobPostsInfoGuide: React.FC = () => {
       ],
     },
     {
-      type: "Team — Milestone Pool",
-      badge: "Shared Credit Pool",
-      badgeClass: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-300 dark:border-purple-500/20",
-      icon: <Users className="h-4 w-4 text-purple-500 shrink-0" />,
-      desc: "Multi-role production where a collective budget pool is distributed across structured milestones.",
+      type: "Open Bid Format",
+      badge: "Floor Benchmark",
+      badgeClass: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20",
+      icon: <Sparkles className="h-4 w-4 text-blue-500 shrink-0" />,
+      desc: "Client sets a minimum starting floor with no upper ceiling. Proposers pitch their own custom roadmap rates and terms.",
       rows: [
-        { criteria: "Structured Milestone Shares", weight: "+30%", rule: "2 or more milestone phases defined with credit % allocations and seat counts." },
-        { criteria: "Milestone Task Checklists", weight: "+20%", rule: "Specific task breakdown defined inside each milestone phase." },
-        { criteria: "Comprehensive Production Brief", weight: "+20%", rule: "Detailed overview explaining team workflow and production goals (140+ chars)." },
-        { criteria: "Multi-Disciplinary Skills", weight: "+15%", rule: "At least 3 relevant skill tags spanning the required specialist roles." },
-        { criteria: "Cover Visual & Schedule", weight: "+15%", rule: "Custom cover visual and realistic production timeline attached." },
+        { criteria: "Detailed Scope of Work", weight: "+30%", rule: "Description contains 150+ characters describing deliverables and project context." },
+        { criteria: "Realistic Floor Benchmark", weight: "+20%", rule: "Minimum budget is set to at least 300 Credits." },
+        { criteria: "Relevant Skill Tags", weight: "+20%", rule: "At least 3 specific tags added (e.g. Color Grading, Premiere Pro, Sound Design)." },
+        { criteria: "Custom Visual / Cover", weight: "+15%", rule: "Uploaded custom project thumbnail image or reference brief attachments." },
+        { criteria: "Timeline & Workflow Terms", weight: "+15%", rule: "Delivery timeline specified and Portfolio / NDA usage preferences selected." },
       ],
     },
   ];
@@ -113,30 +100,29 @@ export const JobPostsInfoGuide: React.FC = () => {
           <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-white/50 dark:via-white/30 to-transparent pointer-events-none" />
         </span>
       ),
-      condition: "Job age ≤ 7 days, < 3 proposals per seat, client reviews = 0, AND Brief Quality Score ≥ 85%.",
+      condition: "Job age ≤ 7 days, < 3 proposals, client reviews = 0, AND Brief Quality Score ≥ 85%.",
       effect: "Grants prominent visibility on Job Market browse and Home page Latest Job Posts.",
     },
     {
-      name: "Individual",
+      name: "Budget Range",
       badge: (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-zinc-200 border border-gray-300 dark:border-white/15 text-[11px] font-semibold shadow-2xs">
-          <User className="h-3 w-3 text-gray-600 dark:text-zinc-400" />
-          <span>Individual</span>
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 text-[11px] font-semibold shadow-2xs">
+          <span>Budget Range</span>
         </span>
       ),
-      condition: "Single-freelancer or multi-seat individual hiring model.",
-      effect: "Freelancers submit direct proposals with their own rate and milestones.",
+      condition: "Client specifies min and max budget ceiling.",
+      effect: "Proposals are submitted with milestone roadmaps at or below the max budget ceiling.",
     },
     {
-      name: "Team Project",
+      name: "Open Bid",
       badge: (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-zinc-200 border border-gray-300 dark:border-white/15 text-[11px] font-semibold shadow-2xs">
-          <Users className="h-3 w-3 text-gray-600 dark:text-zinc-400" />
-          <span>Team</span>
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 text-[11px] font-semibold shadow-2xs">
+          <Sparkles className="h-3 w-3" />
+          <span>Open Bid</span>
         </span>
       ),
-      condition: "Multi-creator milestone pool hiring model.",
-      effect: "Freelancers apply for dedicated milestone roles from a shared credit pool.",
+      condition: "Client provides starting floor without an upper ceiling constraint.",
+      effect: "Freelancers and studios can propose their custom rate and delivery milestones without limits.",
     },
     {
       name: "Open",
@@ -156,7 +142,7 @@ export const JobPostsInfoGuide: React.FC = () => {
       return;
     }
     continueIfAccountVerified(
-      () => navigate("/jobs/postings/choose"),
+      () => navigate("/jobs/create"),
       false,
       "Account Verification is required to post a job. Please verify your identity to proceed."
     );

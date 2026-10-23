@@ -290,12 +290,8 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                 </div>
               </div>
 
-              {/* Bottom Left: Hiring Type & Difficulty */}
+              {/* Bottom Left: Difficulty */}
               <div className="absolute bottom-2 left-2 flex items-center gap-1.5 z-10">
-                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
-                  {postingAs === "team" ? <Users className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" /> : <User className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />}
-                  <span>{postingAs === "team" ? "Team" : "Individual"}</span>
-                </span>
                 <span className="px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
                   {difficulty || "Beginner"}
                 </span>
@@ -597,9 +593,9 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                   </span>
                 </div>
                 <div>
-                  <span className="text-[11px] text-gray-500 dark:text-zinc-400 block">Positions Open</span>
+                  <span className="text-[11px] text-gray-500 dark:text-zinc-400 block">Contract Scope</span>
                   <span className="font-bold text-gray-900 dark:text-white">
-                    {positions} {positions === 1 ? "Creator (Individual)" : "Creators"}
+                    1 Workspace Contract
                   </span>
                 </div>
               </div>
@@ -666,7 +662,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
             </p>
           </div>
           <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-3 py-1 rounded-full border border-blue-200 dark:border-blue-500/20 self-start sm:self-auto shrink-0">
-            <Check className="h-3.5 w-3.5" /> Individual Client
+            <Check className="h-3.5 w-3.5" /> Job Listing
           </span>
         </div>
 

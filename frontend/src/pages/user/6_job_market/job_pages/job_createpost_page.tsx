@@ -16,6 +16,7 @@ import CreateTerms from "../job_components/job_creation_components/3_create_term
 import CreateReview from "../job_components/job_creation_components/3_create_review";
 import CreationSuccess from "../job_components/job_creation_components/4_creation_success";
 import PopupConfirmReturn from "../job_components/job_popups/popup_confirm_return";
+import FloatingCreditsPill from "@/components/ui/FloatingCreditsPill";
 
 const JobCreatePostPage: React.FC = () => {
   const navigate = useNavigate();
@@ -68,6 +69,17 @@ const JobCreatePostPage: React.FC = () => {
   const theme = useGlobalState((state) => state.theme);
   const [currentSlide, setCurrentSlide] = useState<number>(1);
   const [hasReachedReview, setHasReachedReview] = useState(false);
+  const [maxReachedStep, setMaxReachedStep] = useState<number>(1);
+
+  useEffect(() => {
+    setMaxReachedStep((prev) => Math.max(prev, currentSlide));
+  }, [currentSlide]);
+
+  useEffect(() => {
+    if (hasReachedReview) {
+      setMaxReachedStep(4);
+    }
+  }, [hasReachedReview]);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
 
@@ -442,6 +454,9 @@ const JobCreatePostPage: React.FC = () => {
 
   return (
     <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
+      {/* Floating Upper Right Credits Pill */}
+      <FloatingCreditsPill />
+
       {/* Background Grid Animation */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
         <ShapeGrid
