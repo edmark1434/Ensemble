@@ -229,140 +229,150 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
 
             {/* Inputs Area */}
             {isFixedBudget ? (
-              <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-yellow-500 pointer-events-none">
-                  <CreditIcon className="h-4 w-4" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Total Budget (e.g. 1,000)"
-                  value={formatCommaString(minBudget)}
-                  onChange={(e) => {
-                    const cleaned = e.target.value.replace(/\D/g, "");
-                    setMinBudget(cleaned);
-                    setMaxBudget(cleaned);
-                    setErrors((prev) => {
-                      const { minBudget: _, maxBudget: __, ...r } = prev;
-                      return r;
-                    });
-                  }}
-                  className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm pl-11 pr-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
-                    errors.minBudget || errors.maxBudget
-                      ? "border-red-500 focus:border-red-500 ring-2 ring-red-500/20"
-                      : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                  }`}
-                />
-                {(errors.minBudget || errors.maxBudget) && (
-                  <p className="text-[11px] font-medium text-red-500 mt-1">{errors.minBudget || errors.maxBudget}</p>
-                )}
-              </div>
-            ) : budgetType === "open" ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-                <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-yellow-500 pointer-events-none">
+              <div>
+                <div className="relative h-12 flex items-center">
+                  <div className="absolute left-4 inset-y-0 flex items-center text-yellow-500 pointer-events-none">
                     <CreditIcon className="h-4 w-4" />
                   </div>
                   <input
                     type="text"
-                    placeholder="Starting Minimum Bid (e.g. 500)"
+                    placeholder="Total Budget (e.g. 1,000)"
                     value={formatCommaString(minBudget)}
                     onChange={(e) => {
-                      setMinBudget(e.target.value.replace(/\D/g, ""));
+                      const cleaned = e.target.value.replace(/\D/g, "");
+                      setMinBudget(cleaned);
+                      setMaxBudget(cleaned);
                       setErrors((prev) => {
-                        const { minBudget: _, ...r } = prev;
+                        const { minBudget: _, maxBudget: __, ...r } = prev;
                         return r;
                       });
                     }}
-                    className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm pl-11 pr-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
-                      errors.minBudget
+                    className={`w-full h-12 rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm pl-11 pr-4 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
+                      errors.minBudget || errors.maxBudget
                         ? "border-red-500 focus:border-red-500 ring-2 ring-red-500/20"
                         : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                     }`}
                   />
-                  {errors.minBudget && <p className="text-[11px] font-medium text-red-500 mt-1">{errors.minBudget}</p>}
                 </div>
-
-                <div className="flex items-center gap-3 px-4 py-2.5 min-h-[46px] rounded-xl border border-dashed border-gray-300 dark:border-white/15 bg-gray-50/70 dark:bg-white/[0.02] text-gray-700 dark:text-zinc-300">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
-                    <Sparkles className="h-3.5 w-3.5" />
-                  </div>
-                  <div className="text-xs leading-tight">
-                    <span className="font-bold text-gray-900 dark:text-white block">No Upper Limit</span>
-                    <span className="text-[11px] text-gray-500 dark:text-zinc-400">Proposals will quote flexible scopes</span>
-                  </div>
-                </div>
+                {(errors.minBudget || errors.maxBudget) && (
+                  <p className="text-[11px] font-medium text-red-500 mt-1.5">{errors.minBudget || errors.maxBudget}</p>
+                )}
               </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="relative">
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-yellow-500 pointer-events-none">
+            ) : budgetType === "open" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                <div>
+                  <div className="relative h-12 flex items-center">
+                    <div className="absolute left-4 inset-y-0 flex items-center text-yellow-500 pointer-events-none">
                       <CreditIcon className="h-4 w-4" />
                     </div>
                     <input
                       type="text"
-                      placeholder="Minimum Credits (e.g. 500)"
+                      placeholder="Starting Minimum Bid (e.g. 500)"
                       value={formatCommaString(minBudget)}
                       onChange={(e) => {
-                        const cleaned = e.target.value.replace(/\D/g, "");
-                        setMinBudget(cleaned);
-                        const minVal = parseInt(cleaned, 10) || 0;
-                        if (rawMaxBudget > 0 && minVal > 0 && rawMaxBudget < minVal) {
-                          setErrors((prev) => ({
-                            ...prev,
-                            minBudget: undefined as any,
-                            maxBudget: `Maximum budget cannot be lower than minimum budget (${formatCommaString(cleaned)} Credits).`,
-                          }));
-                        } else {
-                          setErrors((prev) => {
-                            const { minBudget: _, maxBudget: mErr, ...r } = prev;
-                            if (mErr && mErr.includes("cannot be lower than minimum budget")) {
-                              return r;
-                            }
-                            return { ...r, ...(mErr ? { maxBudget: mErr } : {}) };
-                          });
-                        }
+                        setMinBudget(e.target.value.replace(/\D/g, ""));
+                        setErrors((prev) => {
+                          const { minBudget: _, ...r } = prev;
+                          return r;
+                        });
                       }}
-                      className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm pl-11 pr-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
+                      className={`w-full h-12 rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm pl-11 pr-4 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
                         errors.minBudget
                           ? "border-red-500 focus:border-red-500 ring-2 ring-red-500/20"
                           : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                       }`}
                     />
-                    {errors.minBudget && <p className="text-[11px] font-medium text-red-500 mt-1">{errors.minBudget}</p>}
+                  </div>
+                  {errors.minBudget && <p className="text-[11px] font-medium text-red-500 mt-1.5">{errors.minBudget}</p>}
+                </div>
+
+                <div className="flex items-center gap-3 px-4 h-12 rounded-xl border border-dashed border-gray-300 dark:border-white/15 bg-gray-50/70 dark:bg-white/[0.02] text-gray-700 dark:text-zinc-300">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="text-xs leading-tight min-w-0">
+                    <span className="font-bold text-gray-900 dark:text-white block truncate">No Upper Limit</span>
+                    <span className="text-[11px] text-gray-500 dark:text-zinc-400 block truncate">Proposals will quote flexible scopes</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                  <div>
+                    <div className="relative h-12 flex items-center">
+                      <div className="absolute left-4 inset-y-0 flex items-center text-yellow-500 pointer-events-none">
+                        <CreditIcon className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Minimum Credits (e.g. 500)"
+                        value={formatCommaString(minBudget)}
+                        onChange={(e) => {
+                          const cleaned = e.target.value.replace(/\D/g, "");
+                          setMinBudget(cleaned);
+                          const minVal = parseInt(cleaned, 10) || 0;
+                          if (rawMaxBudget > 0 && minVal > 0 && rawMaxBudget < minVal) {
+                            setErrors((prev) => ({
+                              ...prev,
+                              minBudget: undefined as any,
+                              maxBudget: `Maximum budget cannot be lower than minimum budget (${formatCommaString(cleaned)} Credits).`,
+                            }));
+                          } else {
+                            setErrors((prev) => {
+                              const { minBudget: _, maxBudget: mErr, ...r } = prev;
+                              if (mErr && mErr.includes("cannot be lower than minimum budget")) {
+                                return r;
+                              }
+                              return { ...r, ...(mErr ? { maxBudget: mErr } : {}) };
+                            });
+                          }
+                        }}
+                        className={`w-full h-12 rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm pl-11 pr-4 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
+                          errors.minBudget
+                            ? "border-red-500 focus:border-red-500 ring-2 ring-red-500/20"
+                            : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        }`}
+                      />
+                    </div>
+                    {errors.minBudget && <p className="text-[11px] font-medium text-red-500 mt-1.5">{errors.minBudget}</p>}
                   </div>
 
-                  <div className="relative">
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-yellow-500 pointer-events-none">
-                      <CreditIcon className="h-4 w-4" />
+                  <div>
+                    <div className="relative h-12 flex items-center">
+                      <div className="absolute left-4 inset-y-0 flex items-center text-yellow-500 pointer-events-none">
+                        <CreditIcon className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Maximum Credits (e.g. 1,500)"
+                        value={formatCommaString(maxBudget)}
+                        onChange={(e) => {
+                          const cleaned = e.target.value.replace(/\D/g, "");
+                          setMaxBudget(cleaned);
+                          const maxVal = parseInt(cleaned, 10) || 0;
+                          if (rawMinBudget > 0 && maxVal > 0 && maxVal < rawMinBudget) {
+                            setErrors((prev) => ({
+                              ...prev,
+                              maxBudget: `Maximum budget cannot be lower than minimum budget (${formatCommaString(minBudget)} Credits).`,
+                            }));
+                          } else {
+                            setErrors((prev) => {
+                              const { maxBudget: _, ...r } = prev;
+                              return r;
+                            });
+                          }
+                        }}
+                        className={`w-full h-12 rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm pl-11 pr-4 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
+                          errors.maxBudget
+                            ? "border-red-500 focus:border-red-500 ring-2 ring-red-500/20"
+                            : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        }`}
+                      />
                     </div>
-                    <input
-                      type="text"
-                      placeholder="Maximum Credits (e.g. 1,500)"
-                      value={formatCommaString(maxBudget)}
-                      onChange={(e) => {
-                        const cleaned = e.target.value.replace(/\D/g, "");
-                        setMaxBudget(cleaned);
-                        const maxVal = parseInt(cleaned, 10) || 0;
-                        if (rawMinBudget > 0 && maxVal > 0 && maxVal < rawMinBudget) {
-                          setErrors((prev) => ({
-                            ...prev,
-                            maxBudget: `Maximum budget cannot be lower than minimum budget (${formatCommaString(minBudget)} Credits).`,
-                          }));
-                        } else {
-                          setErrors((prev) => {
-                            const { maxBudget: _, ...r } = prev;
-                            return r;
-                          });
-                        }
-                      }}
-                      className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm pl-11 pr-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
-                        errors.maxBudget
-                          ? "border-red-500 focus:border-red-500 ring-2 ring-red-500/20"
-                          : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                      }`}
-                    />
-                    {errors.maxBudget && <p className="text-[11px] font-medium text-red-500 mt-1">{errors.maxBudget}</p>}
+                    {errors.maxBudget && !isBudgetRangeInvalid && (
+                      <p className="text-[11px] font-medium text-red-500 mt-1.5">{errors.maxBudget}</p>
+                    )}
                   </div>
                 </div>
 
@@ -379,7 +389,7 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
             )}
 
             {/* Benchmark Note */}
-            {(minBudget || maxBudget) && (
+            {(minBudget || maxBudget) && !isBudgetRangeInvalid && (
               <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/10 flex items-start gap-2.5 text-xs">
                 <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
                 <div className="space-y-0.5">
