@@ -5,6 +5,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 import ProposalsList, { type ProposalStatus } from "../proposals_components/proposals_list";
 import { useJobs } from "@/hooks/useJobs";
+import { constructAvatarUrl } from "@/lib/accountAvatars";
 import api from "@/lib/axios";
 import type { ProposalsMainContext } from "../proposals_main";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
@@ -49,9 +50,7 @@ export const ProposalsIncomingPage: React.FC = () => {
           jobTitle: p.job_title || "Unknown Job",
           jobCategory: p.job_category || "Uncategorized",
           partyName: p.freelancer_name || p.freelancer_handle || "Unknown",
-          partyAvatar: p.freelancer_avatar_path
-            ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.freelancer_avatar_path.startsWith('/') ? '' : '/'}${p.freelancer_avatar_path}`
-            : undefined,
+          partyAvatar: constructAvatarUrl(p.freelancer_avatar_path, p.freelancer_name || p.freelancer_handle),
           freelancerAccountId: p.freelancer_account_id,
           partyAccountId: p.freelancer_account_id,
           bidAmount: parseFloat(p.rate_credits) || 0,
