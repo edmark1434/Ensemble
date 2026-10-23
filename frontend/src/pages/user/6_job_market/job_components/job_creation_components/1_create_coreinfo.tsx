@@ -36,7 +36,8 @@ import {
   Heart,
   Mic,
   Package,
-  Clapperboard
+  Clapperboard,
+  Loader2
 } from "lucide-react";
 import { JobRichText } from "../JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
@@ -310,10 +311,12 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
   // AI Generation Modal & 30s Cooldown State
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
+  const [aiError, setAiError] = useState<string | null>(null);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
   const aiPromptWordCount = aiPrompt.trim().split(/\s+/).filter(Boolean).length;
-  const isGenerateDisabled = aiPromptWordCount < 2 || cooldownSeconds > 0;
+  const isGenerateDisabled = aiPromptWordCount < 2 || cooldownSeconds > 0 || isGeneratingAi;
 
   useEffect(() => {
     if (cooldownSeconds <= 0) return;
@@ -323,11 +326,56 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
     return () => clearInterval(interval);
   }, [cooldownSeconds]);
 
-  const handleSimulateAiGenerate = () => {
+  const handleAiGenerate = async () => {
     if (isGenerateDisabled) return;
-    setIsAiModalOpen(false);
-    setCooldownSeconds(30);
-    showSuccessToast("Joed AI: Generation preview simulated! 30s cooldown active.");
+    setIsGeneratingAi(true);
+    setAiError(null);
+    try {
+      const res = await api.post("/api/chat/generate-job", {
+        prompt: aiPrompt.trim(),
+      });
+      const draft = res.data?.data;
+      if (draft) {
+        if (draft.title) {
+          setTitle(String(draft.title).slice(0, 300));
+          clearError("title");
+        }
+        if (draft.description) {
+          setDescription(String(draft.description).slice(0, 2000));
+          clearError("description");
+        }
+        if (draft.category && categories.includes(draft.category)) {
+          setCategory(draft.category);
+          clearError("category");
+        }
+        if (draft.difficulty && difficulties.includes(draft.difficulty)) {
+          setDifficulty(draft.difficulty);
+          clearError("difficulty");
+        }
+        if (
+          setScreeningQuestions &&
+          Array.isArray(draft.screeningQuestions) &&
+          draft.screeningQuestions.length > 0 &&
+          screeningQuestions.length === 0
+        ) {
+          setScreeningQuestions(
+            draft.screeningQuestions.map((q: string) => String(q).trim()).filter(Boolean).slice(0, 3)
+          );
+        }
+      }
+      setIsAiModalOpen(false);
+      setCooldownSeconds(30);
+      showSuccessToast("Joed AI generated your job post specifications!");
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Joed AI could not generate the job post right now. Please try again.";
+      setAiError(msg);
+      showErrorToast(msg);
+    } finally {
+      setIsGeneratingAi(false);
+    }
   };
 
   const user = useGlobalState((state) => state.user);
@@ -1243,9 +1291,21 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
                         maxLength={1000}
                         placeholder="e.g., I have 30 minutes of raw phone footage from our high school play. Need a clean 3-minute recap video with music, chapter title cards, and audio cleanup..."
                         value={aiPrompt}
-                        onChange={(e) => setAiPrompt(e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 dark:border-zinc-700/80 bg-gray-50/50 dark:bg-zinc-800/40 p-3.5 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-zinc-800 focus:ring-4 focus:ring-blue-500/10 placeholder:text-gray-400 dark:placeholder:text-zinc-500 leading-relaxed resize-none font-medium transition-all"
+                        onChange={(e) => {
+                          setAiPrompt(e.target.value);
+                          if (aiError) setAiError(null);
+                        }}
+                        className={`w-full rounded-xl border bg-gray-50/50 dark:bg-zinc-800/40 p-3.5 text-xs text-gray-900 dark:text-white outline-none focus:bg-white dark:focus:bg-zinc-800 placeholder:text-gray-400 dark:placeholder:text-zinc-500 leading-relaxed resize-none font-medium transition-all ${
+                          aiError
+                            ? "border-red-400 dark:border-red-500/60 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
+                            : "border-gray-200 dark:border-zinc-700/80 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                        }`}
                       />
+                      {aiError && (
+                        <p className="text-[11px] font-medium text-red-500 dark:text-red-400 mt-1">
+                          {aiError}
+                        </p>
+                      )}
                     </div>
 
                     {/* Live 2-Row Infinite Marquee Carousel */}
@@ -1273,7 +1333,10 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
                               <button
                                 key={`r1-${item.label}-${idx}`}
                                 type="button"
-                                onClick={() => setAiPrompt(item.prompt)}
+                                onClick={() => {
+                                  setAiPrompt(item.prompt);
+                                  if (aiError) setAiError(null);
+                                }}
                                 className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-50 dark:bg-zinc-800/80 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-gray-700 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 border border-gray-200 dark:border-zinc-700/80 hover:border-blue-300 dark:hover:border-blue-500/30 transition-all shrink-0 cursor-pointer shadow-2xs active:scale-95"
                               >
                                 <IconComp className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-400 group-hover:text-blue-500 transition-colors shrink-0" />
@@ -1291,7 +1354,10 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
                               <button
                                 key={`r2-${item.label}-${idx}`}
                                 type="button"
-                                onClick={() => setAiPrompt(item.prompt)}
+                                onClick={() => {
+                                  setAiPrompt(item.prompt);
+                                  if (aiError) setAiError(null);
+                                }}
                                 className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-50 dark:bg-zinc-800/80 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-gray-700 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 border border-gray-200 dark:border-zinc-700/80 hover:border-blue-300 dark:hover:border-blue-500/30 transition-all shrink-0 cursor-pointer shadow-2xs active:scale-95"
                               >
                                 <IconComp className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-400 group-hover:text-blue-500 transition-colors shrink-0" />
@@ -1314,30 +1380,42 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
                   <div className="px-6 py-3.5 border-t border-gray-100 dark:border-zinc-800 bg-gray-50/40 dark:bg-zinc-900/40 flex items-center justify-between gap-3">
                     <button
                       type="button"
+                      disabled={isGeneratingAi}
                       onClick={() => setIsAiModalOpen(false)}
-                      className="px-4 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-zinc-300 text-xs font-bold hover:bg-gray-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                      className="px-4 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-zinc-300 text-xs font-bold hover:bg-gray-100 dark:hover:bg-zinc-800 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Cancel
                     </button>
                     <button
                       type="button"
                       disabled={isGenerateDisabled}
-                      onClick={handleSimulateAiGenerate}
+                      onClick={handleAiGenerate}
                       className={`px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
                         !isGenerateDisabled
                           ? "bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-500/25 active:scale-[0.98] cursor-pointer"
                           : "bg-gray-100 dark:bg-zinc-800/80 text-gray-400 dark:text-zinc-500 border border-gray-200 dark:border-zinc-700/60 cursor-not-allowed opacity-70"
                       }`}
                       title={
-                        cooldownSeconds > 0
+                        isGeneratingAi
+                          ? "Joed AI is generating your job post..."
+                          : cooldownSeconds > 0
                           ? `Cooldown active (${cooldownSeconds}s)`
                           : aiPromptWordCount < 2
                           ? "Please write at least 2 words to generate"
                           : "Generate Title & Description with Joed AI"
                       }
                     >
-                      <Sparkles className={`h-3.5 w-3.5 ${!isGenerateDisabled ? "text-white" : "text-gray-400 dark:text-zinc-500"}`} />
-                      <span>Generate Now</span>
+                      {isGeneratingAi ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                          <span>Generating with Joed AI...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className={`h-3.5 w-3.5 ${!isGenerateDisabled ? "text-white" : "text-gray-400 dark:text-zinc-500"}`} />
+                          <span>Generate Now</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </motion.div>

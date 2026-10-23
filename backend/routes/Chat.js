@@ -1,6 +1,8 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { createDocumentationChatResponse } = require('../controllers/ChatControllers');
+const { createDocumentationChatResponse, generateJobDraftResponse } = require('../controllers/ChatControllers');
+const checkSession = require('../middleware/CheckSession');
+const requireAuth = require('../middleware/RequireAuth');
 
 const router = express.Router();
 const chatLimiter = rateLimit({
@@ -15,5 +17,6 @@ const chatLimiter = rateLimit({
 });
 
 router.post('/', chatLimiter, createDocumentationChatResponse);
+router.post('/generate-job', [checkSession, requireAuth, chatLimiter], generateJobDraftResponse);
 
 module.exports = router;
