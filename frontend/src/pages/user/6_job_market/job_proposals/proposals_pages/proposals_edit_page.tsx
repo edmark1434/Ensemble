@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import ShapeGrid from "@/components/ui/ShapeGrid";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import useGlobalState from "@/lib/global_state";
 
 // Reused Creation Step Components & Header
@@ -205,10 +206,42 @@ export const ProposalsEditPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6">
-        <div className="text-center text-sm text-gray-500 dark:text-zinc-400 font-medium animate-pulse">
-          Loading proposal data...
+      <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6 font-['Plus_Jakarta_Sans'] overflow-hidden">
+        {/* Background Grid */}
+        <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
+          <ShapeGrid
+            shape="square"
+            squareSize={48}
+            direction="diagonal"
+            speed={0.4}
+            borderColor={theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.07)"}
+            hoverFillColor={theme === "dark" ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
+            hoverTrailAmount={3}
+          />
         </div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.25 }}
+          className="relative z-10 flex flex-col items-center gap-3 text-center"
+        >
+          <div className="w-40 h-40 flex items-center justify-center">
+            <DotLottieReact
+              src="/icons/lottie/loading-ensemble.lottie"
+              loop
+              autoplay
+            />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight">
+              Loading Proposal Draft
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-zinc-400">
+              Preparing your proposal terms and milestones for editing...
+            </p>
+          </div>
+        </motion.div>
       </div>
     );
   }

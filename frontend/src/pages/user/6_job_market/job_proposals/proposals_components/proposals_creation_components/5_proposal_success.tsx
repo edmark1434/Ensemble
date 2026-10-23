@@ -10,11 +10,12 @@ interface ProposalCreationSuccessProps {
 export const ProposalCreationSuccess: React.FC<ProposalCreationSuccessProps> = ({
   isOpen,
   onConfirm,
-  autoCloseMs = 2800,
+  autoCloseMs = 4500,
 }) => {
   useEffect(() => {
     if (!isOpen) return;
 
+    // Auto-close timer allowing user to celebrate and enjoy confetti
     const timer = setTimeout(() => {
       onConfirm();
     }, autoCloseMs);
@@ -25,14 +26,13 @@ export const ProposalCreationSuccess: React.FC<ProposalCreationSuccessProps> = (
   if (!isOpen) return null;
 
   return (
-    <div className="relative z-[300]">
-      <SuccessModal
-        isOpen={isOpen}
-        title="Proposal Sent!"
-        message="Your proposal application and milestone terms have been submitted to the client. You will be notified when they review it."
-        onConfirm={onConfirm}
-      />
-    </div>
+    <SuccessModal
+      isOpen={isOpen}
+      title="Proposal Sent!"
+      message="Your proposal application and milestone terms have been submitted to the client. You will be notified when they review it."
+      onConfirm={onConfirm}
+      standalone={true}
+    />
   );
 };
 

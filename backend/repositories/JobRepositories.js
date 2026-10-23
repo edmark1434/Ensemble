@@ -283,24 +283,29 @@ async function updateJobRepositories(jobId, accountIds, jobData) {
         
         const query = `
             UPDATE jobs
-            SET title = $1, description = $2, category = $3, experience_level = $4,
-                portfolio_use_allowed = $7, portfolio_use_duration_seconds = $8,
-                is_existing_project = $9, existing_project_id = $10,
-                initiator_role = $11,
-                require_nda = $12,
+            SET title = COALESCE($1, title), description = COALESCE($2, description), category = COALESCE($3, category), experience_level = COALESCE($4, experience_level),
+                portfolio_use_allowed = COALESCE($7, portfolio_use_allowed), portfolio_use_duration_seconds = COALESCE($8, portfolio_use_duration_seconds),
+                is_existing_project = COALESCE($9, is_existing_project), existing_project_id = COALESCE($10, existing_project_id),
+                initiator_role = COALESCE($11, initiator_role),
+                require_nda = COALESCE($12, require_nda),
+                status = COALESCE($13, status),
                 updated_at = NOW()
             WHERE job_id = $5 AND client_account_id = ANY($6::uuid[])
             RETURNING *;
         `;
         const values = [
-            jobData.title, jobData.description, jobData.category, jobData.experience_level,
+            jobData.title !== undefined ? jobData.title : null,
+            jobData.description !== undefined ? jobData.description : null,
+            jobData.category !== undefined ? jobData.category : null,
+            jobData.experience_level !== undefined ? jobData.experience_level : null,
             jobId, accountIds,
-            jobData.portfolio_use_allowed, 
-            jobData.portfolio_use_duration_seconds, 
-            jobData.is_existing_project, 
-            jobData.existing_project_id, 
-            jobData.initiator_role,
-            jobData.require_nda
+            jobData.portfolio_use_allowed !== undefined ? jobData.portfolio_use_allowed : null, 
+            jobData.portfolio_use_duration_seconds !== undefined ? jobData.portfolio_use_duration_seconds : null, 
+            jobData.is_existing_project !== undefined ? jobData.is_existing_project : null, 
+            jobData.existing_project_id !== undefined ? jobData.existing_project_id : null, 
+            jobData.initiator_role !== undefined ? jobData.initiator_role : null,
+            jobData.require_nda !== undefined ? jobData.require_nda : null,
+            jobData.status !== undefined ? jobData.status : null
         ];
         const res = await client.query(query, values);
         const updatedJob = res.rows[0];
@@ -650,6 +655,7 @@ async function getProposalsByJobIdRepositories(jobId, accountIds) {
                 p.*,
                 a.display_name as freelancer_name,
                 a.handle as freelancer_handle,
+                a.type as freelancer_type,
                 (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as freelancer_avatar_path,
                 COALESCE(j.team_id, (SELECT ct.team_id FROM teams ct WHERE ct.account_id = j.client_account_id AND ct.deleted_at IS NULL LIMIT 1)) as client_team_id,
                 (SELECT ct.visibility FROM teams ct WHERE (ct.team_id = j.team_id OR ct.account_id = j.client_account_id) AND ct.deleted_at IS NULL LIMIT 1) as client_team_visibility,
@@ -658,6 +664,16 @@ async function getProposalsByJobIdRepositories(jobId, accountIds) {
                 t.terms_title, t.terms_type,
                 j.title as job_title,
                 j.category as job_category,
+                j.rate_credits_min as job_min_budget,
+                j.rate_credits_max as job_max_budget,
+                j.payment_type as job_budget_type,
+                j.experience_level as job_experience_level,
+                CASE
+                    WHEN j.timeline_min IS NOT NULL AND j.timeline_max IS NOT NULL THEN CONCAT(j.timeline_min, ' - ', j.timeline_max, ' days')
+                    WHEN j.timeline_min IS NOT NULL THEN CONCAT(j.timeline_min, ' days')
+                    ELSE 'Flexible'
+                END as job_timeline,
+                COALESCE((SELECT ARRAY_AGG(t.name) FROM job_tags jt JOIN tags t ON jt.tag_id = t.tag_id WHERE jt.job_id = j.job_id), ARRAY[]::varchar[]) as job_skills,
                 (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max)) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id) as milestones,
                 jm.title as target_milestone_title,
                 jm.budget_credits as target_milestone_budget,
@@ -709,6 +725,20 @@ async function getProposalsByFreelancerRepositories(accountIds) {
                 p.*,
                 j.title as job_title,
                 j.category as job_category,
+                j.rate_credits_min as job_min_budget,
+                j.rate_credits_max as job_max_budget,
+                j.payment_type as job_budget_type,
+                j.experience_level as job_experience_level,
+                CASE
+                    WHEN j.timeline_min IS NOT NULL AND j.timeline_max IS NOT NULL THEN CONCAT(j.timeline_min, ' - ', j.timeline_max, ' days')
+                    WHEN j.timeline_min IS NOT NULL THEN CONCAT(j.timeline_min, ' days')
+                    ELSE 'Flexible'
+                END as job_timeline,
+                COALESCE((SELECT ARRAY_AGG(t.name) FROM job_tags jt JOIN tags t ON jt.tag_id = t.tag_id WHERE jt.job_id = j.job_id), ARRAY[]::varchar[]) as job_skills,
+                a.display_name as freelancer_name,
+                a.handle as freelancer_handle,
+                a.type as freelancer_type,
+                (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as freelancer_avatar_path,
                 COALESCE(j.team_id, (SELECT ct.team_id FROM teams ct WHERE ct.account_id = j.client_account_id AND ct.deleted_at IS NULL LIMIT 1)) as client_team_id,
                 (SELECT ct.visibility FROM teams ct WHERE (ct.team_id = j.team_id OR ct.account_id = j.client_account_id) AND ct.deleted_at IS NULL LIMIT 1) as client_team_visibility,
                 (SELECT ft.team_id FROM teams ft WHERE ft.account_id = p.freelancer_account_id AND ft.deleted_at IS NULL LIMIT 1) as freelancer_team_id,
@@ -748,6 +778,7 @@ async function getProposalsByFreelancerRepositories(accountIds) {
             FROM proposals p
             LEFT JOIN jobs j ON p.job_id = j.job_id
             LEFT JOIN accounts c ON j.client_account_id = c.account_id
+            LEFT JOIN accounts a ON p.freelancer_account_id = a.account_id
             LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
             LEFT JOIN job_milestones jm ON p.job_milestone_id = jm.job_milestone_id
             WHERE p.freelancer_account_id = ANY($1::uuid[]) AND p.deleted_at IS NULL AND p.status != 'Archived'
@@ -770,6 +801,16 @@ async function getProposalByIdRepositories(proposalId, accountIds) {
                 j.description as job_description,
                 j.hiring_type as job_hiring_type,
                 j.category as job_category,
+                j.rate_credits_min as job_min_budget,
+                j.rate_credits_max as job_max_budget,
+                j.payment_type as job_budget_type,
+                j.experience_level as job_experience_level,
+                CASE
+                    WHEN j.timeline_min IS NOT NULL AND j.timeline_max IS NOT NULL THEN CONCAT(j.timeline_min, ' - ', j.timeline_max, ' days')
+                    WHEN j.timeline_min IS NOT NULL THEN CONCAT(j.timeline_min, ' days')
+                    ELSE 'Flexible'
+                END as job_timeline,
+                COALESCE((SELECT ARRAY_AGG(t.name) FROM job_tags jt JOIN tags t ON jt.tag_id = t.tag_id WHERE jt.job_id = j.job_id), ARRAY[]::varchar[]) as job_skills,
                 j.client_account_id as client_account_id,
                 COALESCE(j.team_id, (SELECT ct.team_id FROM teams ct WHERE ct.account_id = j.client_account_id AND ct.deleted_at IS NULL LIMIT 1)) as client_team_id,
                 (SELECT ct.visibility FROM teams ct WHERE (ct.team_id = j.team_id OR ct.account_id = j.client_account_id) AND ct.deleted_at IS NULL LIMIT 1) as client_team_visibility,
@@ -784,6 +825,8 @@ async function getProposalByIdRepositories(proposalId, accountIds) {
                 (SELECT f.path FROM files f WHERE f.file_id = c.avatar_file_id LIMIT 1) as client_avatar_path,
                 f_acc.display_name as freelancer_name,
                 f_acc.handle as freelancer_handle,
+                f_acc.type as freelancer_type,
+                f_acc.description as freelancer_bio,
                 (SELECT f.path FROM files f WHERE f.file_id = f_acc.avatar_file_id LIMIT 1) as freelancer_avatar_path,
                 t.terms_title, t.terms_type, t.terms_description as terms_content,
                 (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max)) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id) as milestones,

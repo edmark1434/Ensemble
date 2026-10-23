@@ -1282,7 +1282,10 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
                   label="Swipe to Pay 10 Credits"
                   doneLabel="Paid 10 Credits"
                   errorLabel="Submission Failed"
-                  onConfirm={onSubmit}
+                  onConfirm={async () => {
+                    await onSubmit();
+                    setIsCheckoutModalOpen(false);
+                  }}
                   disabled={isSubmitting || !agreedToFee || (walletBalance !== null && walletBalance < 10)}
                   width={260}
                   height={46}

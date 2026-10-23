@@ -408,6 +408,20 @@ const ProposalsCreatePage: React.FC = () => {
         localStorage.removeItem(`ensemble_proposal_draft_${id}`);
       }
       setIsSuccessOpen(true);
+
+      // Decrement global wallet balance by proposal filing fee (10) to trigger animated deduction
+      const curUser = useGlobalState.getState().user;
+      if (curUser) {
+        const curBal = Number(curUser.wallet?.balance_credits ?? 0);
+        const nextBal = Math.max(0, curBal - 10);
+        useGlobalState.getState().setUser({
+          ...curUser,
+          wallet: {
+            ...(curUser.wallet || {}),
+            balance_credits: nextBal,
+          },
+        });
+      }
     } catch (err: any) {
       console.error(err);
       const message = err.response?.data?.message || err.message || "Failed to submit proposal.";

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -9,10 +9,15 @@ import {
   Calendar,
   Star,
   ChevronRight,
+  ChevronDown,
   Edit2,
   ExternalLink,
   MessageSquare,
   CheckCircle2,
+  User,
+  Users,
+  Briefcase,
+  Tag,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import type { ViewType } from "./proposals_list_viewtype";
@@ -21,17 +26,27 @@ import { JobRichText } from "../../job_components/JobRichText";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 import { getFallbackAvatarUrl } from "@/lib/accountAvatars";
 
-export type ProposalStatus = "Pending" | "Shortlisted" | "Accepted" | "Rejected" | "Hired" | "Withdrawn" | "Archived" | "Approved";
+export type ProposalStatus =
+  | "Pending"
+  | "Shortlisted"
+  | "Accepted"
+  | "Rejected"
+  | "Hired"
+  | "Withdrawn"
+  | "Archived"
+  | "Approved";
 
 export interface ProposalItemData {
   id: string;
   jobId: string;
   contractId?: string;
   jobTitle: string;
+  jobCategory?: string;
   jobBanner?: string;
   partyName: string;
   clientAccountId?: string;
   freelancerAccountId?: string;
+  freelancerType?: string;
   clientTeamId?: string;
   freelancerTeamId?: string;
   clientTeamVisibility?: string;
@@ -42,6 +57,7 @@ export interface ProposalItemData {
   freelancerName?: string;
   freelancerAvatar?: string;
   rating?: number;
+  freelancerRating?: number;
   bidAmount: number;
   additionalWorkRate: number;
   coverLetter: string;
@@ -94,9 +110,13 @@ export const ProposalCardSkeleton: React.FC<{ viewType?: ViewType; showFilters?:
   viewType = "list",
 }) => {
   return (
-    <div className={`rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 animate-pulse ${
-      viewType === "list" ? "flex flex-col lg:flex-row lg:items-center justify-between gap-5" : "space-y-4"
-    }`}>
+    <div
+      className={`rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 animate-pulse ${
+        viewType === "list"
+          ? "flex flex-col lg:flex-row lg:items-center justify-between gap-5"
+          : "space-y-4"
+      }`}
+    >
       <div className="space-y-3 flex-1">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-white/10 shrink-0" />
@@ -109,7 +129,13 @@ export const ProposalCardSkeleton: React.FC<{ viewType?: ViewType; showFilters?:
         <div className="h-3.5 w-3/4 rounded bg-gray-100 dark:bg-white/5" />
       </div>
 
-      <div className={viewType === "list" ? "w-64 space-y-2 shrink-0" : "h-12 w-full rounded-xl bg-gray-100 dark:bg-white/5"} />
+      <div
+        className={
+          viewType === "list"
+            ? "w-64 space-y-2 shrink-0"
+            : "h-12 w-full rounded-xl bg-gray-100 dark:bg-white/5"
+        }
+      />
     </div>
   );
 };
@@ -122,6 +148,12 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
   onUpdateStatus,
 }) => {
   const navigate = useNavigate();
+  const [expandedMilestones, setExpandedMilestones] = useState<Record<string, boolean>>({});
+
+  const toggleMilestones = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedMilestones((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const gridColsClass = showFilters
     ? "grid-cols-1 md:grid-cols-2"
@@ -146,48 +178,49 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
   if (proposals.length === 0) {
     return (
       <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-12 text-center">
-        <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">No proposals found matching your criteria.</p>
+        <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">
+          No proposals found matching your criteria.
+        </p>
       </div>
     );
   }
 
-  const renderStatusBadge = (status: ProposalStatus | string) => {
+  const getProposalStatusBadgeConfig = (status: ProposalStatus | string) => {
     switch (status) {
       case "Hired":
-        return "border-purple-400/70 text-purple-600 dark:text-purple-400 bg-purple-500/10";
+        return {
+          label: "HIRED",
+          className: "bg-purple-50 text-purple-900 border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-400/50",
+        };
       case "Accepted":
       case "Approved":
       case "approved":
-        return "border-emerald-400/70 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10";
+        return {
+          label: "ACCEPTED",
+          className: "bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-400/50",
+        };
       case "Shortlisted":
-        return "border-blue-400/70 text-blue-600 dark:text-blue-400 bg-blue-500/10";
+        return {
+          label: "SHORTLISTED",
+          className: "bg-blue-50 text-blue-900 border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-400/50",
+        };
       case "Rejected":
-        return "border-red-400/70 text-red-600 dark:text-red-400 bg-red-500/10";
+        return {
+          label: "DECLINED",
+          className: "bg-rose-50 text-rose-900 border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-400/50",
+        };
       case "Withdrawn":
       case "Archived":
-        return "border-gray-300 dark:border-white/20 text-gray-600 dark:text-zinc-400 bg-gray-100 dark:bg-white/5";
+        return {
+          label: "WITHDRAWN",
+          className: "bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-700/40 dark:text-zinc-200 dark:border-zinc-500/50",
+        };
+      case "Pending":
       default:
-        return "border-amber-400/70 text-amber-600 dark:text-amber-400 bg-amber-500/10";
-    }
-  };
-
-  const formatStatusText = (status: ProposalStatus | string) => {
-    switch (status) {
-      case "Hired":
-        return "HIRED";
-      case "Accepted":
-      case "Approved":
-      case "approved":
-        return "ACCEPTED";
-      case "Shortlisted":
-        return "SHORTLISTED";
-      case "Rejected":
-        return "REJECTED";
-      case "Withdrawn":
-      case "Archived":
-        return "WITHDRAWN";
-      default:
-        return "PENDING";
+        return {
+          label: "PENDING",
+          className: "bg-amber-50 text-amber-950 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-400/50",
+        };
     }
   };
 
@@ -204,18 +237,22 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
       <AnimatePresence mode="popLayout">
         {proposals.map((item) => {
           // Revisions summary calculation
-          const revisionsArr = item.milestones.map((m) => m.revisions);
+          const revisionsArr = (item.milestones || []).map((m) => m.revisions);
           const minRev = revisionsArr.length ? Math.min(...revisionsArr) : 0;
           const maxRev = revisionsArr.length ? Math.max(...revisionsArr) : 0;
           const revisionsSummary =
             minRev === maxRev ? `${minRev}` : `${minRev}-${maxRev}`;
 
           // Estimated total time calculation
-          const totalHours = item.milestones.reduce((acc, m) => acc + m.hours, 0);
+          const totalHours = (item.milestones || []).reduce((acc, m) => acc + (m.hours || 0), 0);
           const totalDays = Math.ceil(totalHours / 8) || 1;
 
           const isHired = item.status === "Hired" || item.status === "Accepted";
           const isShortlisted = item.status === "Shortlisted";
+          const isTeam =
+            item.freelancerType === "Team" ||
+            Boolean(item.freelancerTeamId || item.actingTeamId);
+          const isMilestonesExpanded = Boolean(expandedMilestones[item.id]);
 
           if (viewType === "list") {
             return (
@@ -235,67 +272,102 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                 }
                 className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 backdrop-blur-sm shadow-sm hover:border-blue-500/30 hover:shadow-md cursor-pointer transition-all duration-200 text-left flex flex-col lg:flex-row lg:items-center justify-between gap-5"
               >
-                {/* Left Column: Applicant + Role + Pitch */}
+                {/* Left Column: Proposer (Solo/Team & Rating) + Target listing + Pitch */}
                 <div className="space-y-3 min-w-0 flex-1">
                   <div className="flex items-center gap-3">
                     <div className="h-11 w-11 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 dark:text-blue-400 text-sm font-bold shrink-0 overflow-hidden">
                       {item.partyAvatar ? (
-                        <img src={item.partyAvatar} alt={item.partyName} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = getFallbackAvatarUrl(item.partyName); }} className="w-full h-full object-cover" />
+                        <img
+                          src={item.partyAvatar}
+                          alt={item.partyName}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = getFallbackAvatarUrl(item.partyName);
+                          }}
+                          className="w-full h-full object-cover"
+                        />
                       ) : (
                         item.partyName[0]
                       )}
                     </div>
-                    <div className="min-w-0">
+
+                    <div className="min-w-0 flex-1">
+                      {/* Line 1: Proposer Name + Solo/Team badge + Rating + Status tag */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors truncate">
                           {item.partyName}
                         </h3>
+
+                        {isTeam ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-900 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-500/30 shrink-0">
+                            <Users className="h-2.5 w-2.5" /> Team
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-800 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700 shrink-0">
+                            <User className="h-2.5 w-2.5" /> Solo
+                          </span>
+                        )}
+
                         <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400 shrink-0">
                           <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
                           <span className="font-bold text-gray-700 dark:text-zinc-200">
                             {item.rating != null ? Number(item.rating).toFixed(1) : "5.0"}
                           </span>
                         </div>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${renderStatusBadge(
-                            item.status
-                          )}`}
-                        >
-                          {formatStatusText(item.status)}
-                        </span>
+
+                        {(() => {
+                          const badge = getProposalStatusBadgeConfig(item.status);
+                          return (
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border shadow-xs shrink-0 ${badge.className}`}
+                            >
+                              <Tag className="h-2.5 w-2.5 shrink-0 opacity-90" />
+                              <span>{badge.label}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
 
-                      {item.target_milestone_title ? (
-                        <div className="pt-0.5">
-                          <span className="inline-flex items-center gap-1 text-[11px] text-purple-600 dark:text-purple-400 truncate max-w-[320px]" title={item.target_milestone_title}>
+                      {/* Line 2: Where it's sent to (Job Post Badge + Target Job Link) */}
+                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400 truncate pt-1 flex-wrap">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-500/30 shrink-0">
+                          <Briefcase className="h-2.5 w-2.5" /> Job Post
+                        </span>
+
+                        <span className="text-gray-400 dark:text-zinc-500 text-[11px]">For:</span>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/jobs/postings/${item.jobId}`);
+                          }}
+                          className="font-medium text-gray-700 dark:text-zinc-300 hover:text-blue-500 hover:underline transition-colors truncate inline-flex items-center gap-1"
+                          title="View Job Post Details"
+                        >
+                          <span className="truncate">{item.jobTitle}</span>
+                          <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
+                        </button>
+
+                        {item.target_milestone_title && (
+                          <span
+                            className="inline-flex items-center gap-1 text-[11px] text-purple-600 dark:text-purple-400 truncate ml-1"
+                            title={item.target_milestone_title}
+                          >
                             <span className="opacity-70 text-[10px]">Role:</span>
                             <span className="font-semibold truncate">{item.target_milestone_title}</span>
                           </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400 truncate pt-0.5">
-                          <span>For:</span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/jobs/postings/${item.jobId}`);
-                            }}
-                            className="font-medium text-gray-600 dark:text-zinc-300 hover:text-blue-400 hover:underline transition-colors truncate inline-flex items-center gap-1"
-                            title="View Job Post Details"
-                          >
-                            <span className="truncate">{item.jobTitle}</span>
-                            <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
-                          </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
 
+                  {/* Pitch description */}
                   <div className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed line-clamp-2 max-w-2xl">
                     <JobRichText content={item.coverLetter} truncate={2} />
                   </div>
 
+                  {/* Submission date */}
                   <div className="flex items-center gap-3 text-[11px] text-gray-400 dark:text-zinc-500">
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3 w-3 inline text-gray-400" />
@@ -303,32 +375,82 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                     </span>
                   </div>
 
-                  {item.type === "sent" && (
-                    <div className="pt-2 mt-1 border-t border-gray-100 dark:border-white/5">
-                      <div className="flex items-center text-[10px] sm:text-[11px] gap-1 sm:gap-1.5 flex-wrap">
-                        <span className={`flex items-center gap-1 font-semibold ${item.status ? "text-amber-600 dark:text-amber-400" : "text-gray-400 dark:text-zinc-500"}`}>
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" /> 01 PENDING
-                        </span>
-                        <div className={`h-0.5 w-3 sm:w-4 rounded-full ${item.shortlistedAt || item.status === "Shortlisted" || item.status === "Accepted" || item.status === "Approved" || item.status === "Hired" ? "bg-blue-500/40" : "bg-gray-200 dark:bg-white/10"}`} />
-                        <span className={`flex items-center gap-1 font-semibold ${item.shortlistedAt || item.status === "Shortlisted" || item.status === "Accepted" || item.status === "Approved" || item.status === "Hired" ? "text-blue-600 dark:text-blue-400" : "text-gray-400 dark:text-zinc-500"}`}>
-                          <Star className={`w-2.5 h-2.5 shrink-0 ${item.shortlistedAt || item.status === "Shortlisted" ? "fill-blue-500 text-blue-500" : ""}`} /> 02 SHORTLISTED
-                        </span>
-                        <div className={`h-0.5 w-3 sm:w-4 rounded-full ${item.status === "Accepted" || item.status === "Approved" || item.status === "Hired" ? "bg-emerald-500/40" : "bg-gray-200 dark:bg-white/10"}`} />
-                        <span className={`flex items-center gap-1 font-semibold ${item.status === "Accepted" || item.status === "Approved" || item.status === "Hired" ? "text-emerald-600 dark:text-emerald-400" : item.status === "Rejected" ? "text-red-500" : "text-gray-400 dark:text-zinc-500"}`}>
-                          <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> 03 ACCEPTED
-                        </span>
-                        <div className={`h-0.5 w-3 sm:w-4 rounded-full ${item.status === "Hired" ? "bg-purple-500/40" : "bg-gray-200 dark:bg-white/10"}`} />
-                        <span className={`flex items-center gap-1 font-semibold ${item.status === "Hired" ? "text-purple-600 dark:text-purple-400" : "text-gray-400 dark:text-zinc-500"}`}>
-                          <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> 04 HIRED
-                        </span>
-                      </div>
+                  {/* 4-Stage Lifecycle Stepper */}
+                  <div className="pt-2 mt-1 border-t border-gray-100 dark:border-white/5">
+                    <div className="flex items-center text-[10px] sm:text-[11px] gap-1 sm:gap-1.5 flex-wrap">
+                      <span
+                        className={`flex items-center gap-1 font-semibold ${
+                          item.status ? "text-amber-600 dark:text-amber-400" : "text-gray-400 dark:text-zinc-500"
+                        }`}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" /> 01 PENDING
+                      </span>
+                      <div
+                        className={`h-0.5 w-3 sm:w-4 rounded-full ${
+                          item.shortlistedAt ||
+                          item.status === "Shortlisted" ||
+                          item.status === "Accepted" ||
+                          item.status === "Approved" ||
+                          item.status === "Hired"
+                            ? "bg-blue-500/40"
+                            : "bg-gray-200 dark:bg-white/10"
+                        }`}
+                      />
+                      <span
+                        className={`flex items-center gap-1 font-semibold ${
+                          item.shortlistedAt ||
+                          item.status === "Shortlisted" ||
+                          item.status === "Accepted" ||
+                          item.status === "Approved" ||
+                          item.status === "Hired"
+                            ? "text-blue-600 dark:text-blue-400"
+                            : "text-gray-400 dark:text-zinc-500"
+                        }`}
+                      >
+                        <Star
+                          className={`w-2.5 h-2.5 shrink-0 ${
+                            item.shortlistedAt || item.status === "Shortlisted" ? "fill-blue-500 text-blue-500" : ""
+                          }`}
+                        />{" "}
+                        02 SHORTLISTED
+                      </span>
+                      <div
+                        className={`h-0.5 w-3 sm:w-4 rounded-full ${
+                          item.status === "Accepted" || item.status === "Approved" || item.status === "Hired"
+                            ? "bg-emerald-500/40"
+                            : "bg-gray-200 dark:bg-white/10"
+                        }`}
+                      />
+                      <span
+                        className={`flex items-center gap-1 font-semibold ${
+                          item.status === "Accepted" || item.status === "Approved" || item.status === "Hired"
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : item.status === "Rejected"
+                            ? "text-red-500"
+                            : "text-gray-400 dark:text-zinc-500"
+                        }`}
+                      >
+                        <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> 03 ACCEPTED
+                      </span>
+                      <div
+                        className={`h-0.5 w-3 sm:w-4 rounded-full ${
+                          item.status === "Hired" ? "bg-purple-500/40" : "bg-gray-200 dark:bg-white/10"
+                        }`}
+                      />
+                      <span
+                        className={`flex items-center gap-1 font-semibold ${
+                          item.status === "Hired" ? "text-purple-600 dark:text-purple-400" : "text-gray-400 dark:text-zinc-500"
+                        }`}
+                      >
+                        <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> 04 HIRED
+                      </span>
                     </div>
-                  )}
+                  </div>
                 </div>
 
-                {/* Right Column: Bid + Specs + Actions */}
-                <div className="flex flex-col sm:flex-row lg:flex-col items-start sm:items-center lg:items-end justify-between gap-4 shrink-0 lg:pl-6 lg:border-l border-gray-100 dark:border-white/5">
-                  <div className="text-left sm:text-right lg:text-right space-y-1">
+                {/* Right Column: Bid + Specs + Expandable Milestones + Actions */}
+                <div className="flex flex-col sm:flex-row lg:flex-col items-start sm:items-center lg:items-end justify-between gap-4 shrink-0 lg:pl-6 lg:border-l border-gray-100 dark:border-white/5 min-w-[260px]">
+                  <div className="text-left sm:text-right lg:text-right space-y-1 w-full">
                     <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider block">
                       {item.target_milestone_title ? "Fixed Budget" : "Proposed Bid"}
                     </span>
@@ -341,13 +463,74 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                         Credits
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-zinc-400">
+
+                    <div className="flex items-center sm:justify-end gap-2 text-[11px] text-gray-500 dark:text-zinc-400 flex-wrap">
                       <span>~{totalDays}d ({totalHours}h)</span>
                       <span className="text-gray-300 dark:text-zinc-700">•</span>
-                      <span>{item.milestones.length || 1} {item.milestones.length === 1 ? "Step" : "Steps"}</span>
+                      <span>{item.milestones?.length || 1} {item.milestones?.length === 1 ? "Milestone" : "Milestones"}</span>
                       <span className="text-gray-300 dark:text-zinc-700">•</span>
                       <span>{revisionsSummary} {revisionsSummary === "1" ? "Rev" : "Revs"}</span>
+
+                      {item.milestones && item.milestones.length > 0 && (
+                        <>
+                          <span className="text-gray-300 dark:text-zinc-700">•</span>
+                          <button
+                            type="button"
+                            onClick={(e) => toggleMilestones(item.id, e)}
+                            className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                          >
+                            <span>{isMilestonesExpanded ? "Hide milestones" : "View milestones"}</span>
+                            <ChevronDown
+                              className={`h-3 w-3 transition-transform duration-200 ${
+                                isMilestonesExpanded ? "rotate-180" : ""
+                              }`}
+                            />
+                          </button>
+                        </>
+                      )}
                     </div>
+
+                    {/* Expandable Milestones Accordion */}
+                    <AnimatePresence>
+                      {isMilestonesExpanded && item.milestones && item.milestones.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden pt-2 border-t border-gray-100 dark:border-white/5 space-y-1.5 w-full text-left"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider">
+                            Milestones Breakdown ({item.milestones.length})
+                          </div>
+                          <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                            {item.milestones.map((m, idx) => (
+                              <div
+                                key={m.id || idx}
+                                className="flex items-center justify-between text-xs p-2 rounded-lg bg-gray-50 dark:bg-white/[0.03] border border-gray-100 dark:border-white/5"
+                              >
+                                <div className="min-w-0 pr-2">
+                                  <span className="font-semibold text-gray-800 dark:text-zinc-200 block truncate">
+                                    {idx + 1}. {m.name || `Phase ${idx + 1}`}
+                                  </span>
+                                  {m.description && (
+                                    <span className="text-[11px] text-gray-500 dark:text-zinc-400 line-clamp-1">
+                                      {m.description}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-zinc-400 shrink-0 font-mono">
+                                  <span>{m.hours}h</span>
+                                  <span>•</span>
+                                  <span>{m.revisions} {m.revisions === 1 ? "rev" : "revs"}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
@@ -379,7 +562,9 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                           const nextStatus = isShortlisted ? "Pending" : "Shortlisted";
                           try {
                             await onUpdateStatus?.(item.id, nextStatus as ProposalStatus);
-                            toast.success(nextStatus === "Shortlisted" ? "Added to shortlist!" : "Removed from shortlist.");
+                            toast.success(
+                              nextStatus === "Shortlisted" ? "Added to shortlist!" : "Removed from shortlist."
+                            );
                           } catch {
                             toast.error("Failed to update status");
                           }
@@ -396,8 +581,8 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                     )}
 
                     {/* Primary Action Button */}
-                    {item.type === "incoming" && (
-                      isHired ? (
+                    {item.type === "incoming" &&
+                      (isHired ? (
                         <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           <span>Hired</span>
@@ -414,8 +599,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                           <span>{item.target_milestone_title ? "Slot & Hire" : "Hire Candidate"}</span>
                           <ChevronRight className="h-3.5 w-3.5" />
                         </button>
-                      )
-                    )}
+                      ))}
 
                     {/* Edit for sent proposals */}
                     {item.type === "sent" && item.status === "Pending" && (
@@ -473,63 +657,93 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
               className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 backdrop-blur-sm shadow-sm hover:border-blue-500/30 hover:shadow-md cursor-pointer transition-all duration-200 text-left flex flex-col justify-between gap-4"
             >
               <div className="space-y-3.5">
-                {/* 1. Header Row */}
-                <div className="flex items-start justify-between gap-3 border-b border-gray-100 dark:border-white/5 pb-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-10 w-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 dark:text-blue-400 text-sm font-bold shrink-0 overflow-hidden">
-                      {item.partyAvatar ? (
-                        <img src={item.partyAvatar} alt={item.partyName} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = getFallbackAvatarUrl(item.partyName); }} className="w-full h-full object-cover" />
-                      ) : (
-                        item.partyName[0]
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors truncate">
-                          {item.partyName}
-                        </h3>
-                        <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400 shrink-0">
-                          <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
-                          <span className="font-bold text-gray-700 dark:text-zinc-200">
-                            {item.rating != null ? Number(item.rating).toFixed(1) : "5.0"}
-                          </span>
-                        </div>
+                {/* 1. Header Row: Proposer (Solo/Team & Rating) + Target listing + Status tag */}
+                <div className="space-y-2 border-b border-gray-100 dark:border-white/5 pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-10 w-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 dark:text-blue-400 text-sm font-bold shrink-0 overflow-hidden">
+                        {item.partyAvatar ? (
+                          <img
+                            src={item.partyAvatar}
+                            alt={item.partyName}
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = getFallbackAvatarUrl(item.partyName);
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          item.partyName[0]
+                        )}
                       </div>
 
-                      {item.target_milestone_title ? (
-                        <div className="pt-0.5">
-                          <span className="inline-flex items-center gap-1 text-[11px] text-purple-600 dark:text-purple-400 truncate max-w-[200px]" title={item.target_milestone_title}>
-                            <span className="opacity-70 text-[10px]">Role:</span>
-                            <span className="font-semibold truncate">{item.target_milestone_title}</span>
-                          </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors truncate">
+                            {item.partyName}
+                          </h3>
+
+                          {isTeam ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-900 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-500/30 shrink-0">
+                              <Users className="h-2.5 w-2.5" /> Team
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-800 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700 shrink-0">
+                              <User className="h-2.5 w-2.5" /> Solo
+                            </span>
+                          )}
+
+                          <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400 shrink-0">
+                            <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
+                            <span className="font-bold text-gray-700 dark:text-zinc-200">
+                              {item.rating != null ? Number(item.rating).toFixed(1) : "5.0"}
+                            </span>
+                          </div>
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400 truncate pt-0.5">
-                          <span>For:</span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/jobs/postings/${item.jobId}`);
-                            }}
-                            className="font-medium text-gray-600 dark:text-zinc-300 hover:text-blue-400 hover:underline transition-colors truncate inline-flex items-center gap-1"
-                            title="View Job Post Details"
-                          >
-                            <span className="truncate">{item.jobTitle}</span>
-                            <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
-                          </button>
-                        </div>
-                      )}
+                      </div>
                     </div>
+
+                    {(() => {
+                      const badge = getProposalStatusBadgeConfig(item.status);
+                      return (
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border shadow-xs shrink-0 ${badge.className}`}
+                        >
+                          <Tag className="h-2.5 w-2.5 shrink-0 opacity-90" />
+                          <span>{badge.label}</span>
+                        </span>
+                      );
+                    })()}
                   </div>
 
-                  <span
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold border shrink-0 ${renderStatusBadge(
-                      item.status
-                    )}`}
-                  >
-                    {formatStatusText(item.status)}
-                  </span>
+                  {/* Target Listing Line */}
+                  <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-zinc-400 truncate pt-0.5 flex-wrap">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-500/30 shrink-0">
+                      <Briefcase className="h-2.5 w-2.5" /> Job Post
+                    </span>
+                    <span className="text-gray-400 dark:text-zinc-500 text-[11px]">For:</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/jobs/postings/${item.jobId}`);
+                      }}
+                      className="font-medium text-gray-700 dark:text-zinc-300 hover:text-blue-500 hover:underline transition-colors truncate inline-flex items-center gap-1"
+                      title="View Job Post Details"
+                    >
+                      <span className="truncate max-w-[200px]">{item.jobTitle}</span>
+                      <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
+                    </button>
+                    {item.target_milestone_title && (
+                      <span
+                        className="inline-flex items-center gap-1 text-[11px] text-purple-600 dark:text-purple-400 truncate"
+                        title={item.target_milestone_title}
+                      >
+                        <span className="opacity-70 text-[10px]">Role:</span>
+                        <span className="font-semibold truncate">{item.target_milestone_title}</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* 2. Proposed Bid & Key Specs Strip */}
@@ -563,7 +777,9 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                   <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pt-1.5 border-t border-gray-200/50 dark:border-white/5 text-[11px] text-gray-500 dark:text-zinc-400">
                     <span className="inline-flex items-center gap-1">
                       <Layers className="h-3 w-3 text-gray-400 dark:text-zinc-500" />
-                      <span>{item.milestones.length || 1} {item.milestones.length === 1 ? "Step" : "Steps"}</span>
+                      <span>
+                        {item.milestones?.length || 1} {item.milestones?.length === 1 ? "Milestone" : "Milestones"}
+                      </span>
                     </span>
                     <span className="text-gray-300 dark:text-zinc-700">•</span>
                     <span className="inline-flex items-center gap-1">
@@ -579,7 +795,67 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                         </span>
                       </>
                     )}
+
+                    {item.milestones && item.milestones.length > 0 && (
+                      <>
+                        <span className="text-gray-300 dark:text-zinc-700">•</span>
+                        <button
+                          type="button"
+                          onClick={(e) => toggleMilestones(item.id, e)}
+                          className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer ml-auto"
+                        >
+                          <span>{isMilestonesExpanded ? "Hide milestones" : "View milestones"}</span>
+                          <ChevronDown
+                            className={`h-3 w-3 transition-transform duration-200 ${
+                              isMilestonesExpanded ? "rotate-180" : ""
+                            }`}
+                          />
+                        </button>
+                      </>
+                    )}
                   </div>
+
+                  {/* Expandable Milestones Accordion in Grid */}
+                  <AnimatePresence>
+                    {isMilestonesExpanded && item.milestones && item.milestones.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden pt-2 border-t border-gray-100 dark:border-white/5 space-y-1.5 w-full text-left"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider">
+                          Milestones Breakdown ({item.milestones.length})
+                        </div>
+                        <div className="space-y-1 max-h-44 overflow-y-auto pr-1">
+                          {item.milestones.map((m, idx) => (
+                            <div
+                              key={m.id || idx}
+                              className="flex items-center justify-between text-xs p-2 rounded-lg bg-white dark:bg-white/[0.04] border border-gray-200/60 dark:border-white/5"
+                            >
+                              <div className="min-w-0 pr-2">
+                                <span className="font-semibold text-gray-800 dark:text-zinc-200 block truncate">
+                                  {idx + 1}. {m.name || `Phase ${idx + 1}`}
+                                </span>
+                                {m.description && (
+                                  <span className="text-[11px] text-gray-500 dark:text-zinc-400 line-clamp-1">
+                                    {m.description}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-zinc-400 shrink-0 font-mono">
+                                <span>{m.hours}h</span>
+                                <span>•</span>
+                                <span>{m.revisions} {m.revisions === 1 ? "rev" : "revs"}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* 3. Cover Letter Pitch Snippet */}
@@ -587,30 +863,80 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                   <JobRichText content={item.coverLetter} truncate={3} />
                 </div>
 
-                {item.type === "sent" && (
-                  <div className="pt-2 border-t border-gray-100 dark:border-white/5">
-                    <div className="flex items-center text-[10px] gap-1 sm:gap-1.5 justify-between">
-                      <span className="flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> Sent
-                      </span>
-                      <div className="h-0.5 flex-1 bg-emerald-500/40 rounded-full mx-1" />
-                      <span className={`flex items-center gap-1 font-semibold ${item.viewedAt ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400 dark:text-zinc-500"}`}>
-                        <CheckCircle2 className="w-3 h-3 shrink-0" /> {item.viewedAt ? "Viewed" : "Unread"}
-                      </span>
-                      <div className={`h-0.5 flex-1 rounded-full mx-1 ${item.shortlistedAt || item.status === "Shortlisted" || item.status === "Accepted" || item.status === "Hired" ? "bg-amber-500/40" : "bg-gray-200 dark:bg-white/10"}`} />
-                      <span className={`flex items-center gap-1 font-semibold ${item.shortlistedAt || item.status === "Shortlisted" || item.status === "Accepted" || item.status === "Hired" ? "text-amber-500" : "text-gray-400 dark:text-zinc-500"}`}>
-                        <Star className={`w-3 h-3 shrink-0 ${item.shortlistedAt || item.status === "Shortlisted" ? "fill-amber-500 text-amber-500" : ""}`} /> Shortlist
-                      </span>
-                      <div className={`h-0.5 flex-1 rounded-full mx-1 ${item.status === "Accepted" || item.status === "Hired" ? "bg-emerald-500/40" : "bg-gray-200 dark:bg-white/10"}`} />
-                      <span className={`flex items-center gap-1 font-semibold ${item.status === "Accepted" || item.status === "Hired" ? "text-emerald-500" : item.status === "Rejected" ? "text-red-500" : "text-gray-400 dark:text-zinc-500"}`}>
-                        {item.status === "Accepted" || item.status === "Hired" ? "Hired" : item.status === "Rejected" ? "Closed" : "Offer"}
-                      </span>
-                    </div>
+                {/* 4. 4-Stage Lifecycle Stepper */}
+                <div className="pt-2 border-t border-gray-100 dark:border-white/5">
+                  <div className="flex items-center text-[10px] gap-1 sm:gap-1.5 justify-between">
+                    <span
+                      className={`flex items-center gap-1 font-semibold ${
+                        item.status ? "text-amber-600 dark:text-amber-400" : "text-gray-400 dark:text-zinc-500"
+                      }`}
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" /> 01 PENDING
+                    </span>
+                    <div
+                      className={`h-0.5 flex-1 rounded-full mx-1 ${
+                        item.shortlistedAt ||
+                        item.status === "Shortlisted" ||
+                        item.status === "Accepted" ||
+                        item.status === "Approved" ||
+                        item.status === "Hired"
+                          ? "bg-blue-500/40"
+                          : "bg-gray-200 dark:bg-white/10"
+                      }`}
+                    />
+                    <span
+                      className={`flex items-center gap-1 font-semibold ${
+                        item.shortlistedAt ||
+                        item.status === "Shortlisted" ||
+                        item.status === "Accepted" ||
+                        item.status === "Approved" ||
+                        item.status === "Hired"
+                          ? "text-blue-600 dark:text-blue-400"
+                          : "text-gray-400 dark:text-zinc-500"
+                      }`}
+                    >
+                      <Star
+                        className={`w-2.5 h-2.5 shrink-0 ${
+                          item.shortlistedAt || item.status === "Shortlisted" ? "fill-blue-500 text-blue-500" : ""
+                        }`}
+                      />{" "}
+                      02 SHORTLISTED
+                    </span>
+                    <div
+                      className={`h-0.5 flex-1 rounded-full mx-1 ${
+                        item.status === "Accepted" || item.status === "Approved" || item.status === "Hired"
+                          ? "bg-emerald-500/40"
+                          : "bg-gray-200 dark:bg-white/10"
+                      }`}
+                    />
+                    <span
+                      className={`flex items-center gap-1 font-semibold ${
+                        item.status === "Accepted" || item.status === "Approved" || item.status === "Hired"
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : item.status === "Rejected"
+                          ? "text-red-500"
+                          : "text-gray-400 dark:text-zinc-500"
+                      }`}
+                    >
+                      <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> 03 ACCEPTED
+                    </span>
+                    <div
+                      className={`h-0.5 flex-1 rounded-full mx-1 ${
+                        item.status === "Hired" ? "bg-purple-500/40" : "bg-gray-200 dark:bg-white/10"
+                      }`}
+                    />
+                    <span
+                      className={`flex items-center gap-1 font-semibold ${
+                        item.status === "Hired" ? "text-purple-600 dark:text-purple-400" : "text-gray-400 dark:text-zinc-500"
+                      }`}
+                    >
+                      <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> 04 HIRED
+                    </span>
                   </div>
-                )}
+                </div>
               </div>
 
-              {/* 4. Action Area */}
+              {/* 5. Action Area */}
               <div className="pt-3 border-t border-gray-100 dark:border-white/5 space-y-2.5">
                 {/* Secondary tools & timestamp row */}
                 <div className="flex items-center justify-between text-xs">
@@ -648,7 +974,9 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                           const nextStatus = isShortlisted ? "Pending" : "Shortlisted";
                           try {
                             await onUpdateStatus?.(item.id, nextStatus as ProposalStatus);
-                            toast.success(nextStatus === "Shortlisted" ? "Added to shortlist!" : "Removed from shortlist.");
+                            toast.success(
+                              nextStatus === "Shortlisted" ? "Added to shortlist!" : "Removed from shortlist."
+                            );
                           } catch {
                             toast.error("Failed to update status");
                           }
@@ -683,8 +1011,8 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                 </div>
 
                 {/* Primary Action Button */}
-                {item.type === "incoming" && (
-                  isHired ? (
+                {item.type === "incoming" &&
+                  (isHired ? (
                     <div className="w-full py-2 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1.5">
                       <CheckCircle2 className="h-4 w-4" />
                       <span>Candidate Hired</span>
@@ -701,8 +1029,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                       <span>{item.target_milestone_title ? "Slot & Hire Candidate" : "Hire Candidate"}</span>
                       <ChevronRight className="h-4 w-4" />
                     </button>
-                  )
-                )}
+                  ))}
 
                 {item.type === "sent" && item.status === "Pending" && (
                   <button

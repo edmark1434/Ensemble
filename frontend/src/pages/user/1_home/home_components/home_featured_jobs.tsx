@@ -17,6 +17,7 @@ import useGlobalState from "@/lib/global_state";
 import { JobRichText } from "../../6_job_market/job_components/JobRichText";
 import { computeJobRankingBreakdown } from "../../6_job_market/job_ranking";
 import { getImageUrl } from "@/lib/utils";
+import { getDefaultJobBannerForJob } from "@/lib/defaultJobBanners";
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 
 function getTimeAgo(date: Date) {
@@ -127,7 +128,7 @@ export const HomeFeaturedJobs: React.FC = () => {
             hiredCount: parseInt(j.hired_count) || 0,
             savesCount: parseInt(j.saves_count) || 0,
             timeline: `${j.timeline_min}-${j.timeline_max} Days`,
-            thumbnail: getImageUrl(j.thumbnail_path),
+            thumbnail: getImageUrl(j.thumbnail_path) || getDefaultJobBannerForJob(j.job_id),
             clientAvatar: getImageUrl(j.client_avatar_path) || undefined,
             skills: j.tags || [],
             isSaved: j.is_saved || false,

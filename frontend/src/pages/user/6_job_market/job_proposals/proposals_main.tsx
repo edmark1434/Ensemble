@@ -1,164 +1,52 @@
 import useGlobalState from "@/lib/global_state";
 import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
-import React, { useState, useEffect, useMemo } from "react";
-import { Outlet, useLocation } from "react-router-dom";
-import { Filter, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Outlet } from "react-router-dom";
 import UserHeader from "@/components/nav/user_header";
 
 // Modular Proposal Components
 import ProposalsSearchbar from "./proposals_components/proposals_searchbar";
 import ProposalsTabs from "./proposals_components/proposals_tabs";
-import ProposalsStatuses, { type StatusFilterItem } from "./proposals_components/proposals_statuses";
-import ProposalsFilters from "./proposals_components/proposals_filters";
 import ProposalsListViewType, {
   type ViewType,
 } from "./proposals_components/proposals_list_viewtype";
 
-// Datasets & Types
-import { sampleIncomingProposals, sampleSentProposals } from "./proposals_datasets";
 import type { ProposalStatus } from "./proposals_components/proposals_list";
 
 export interface ProposalsMainContext {
   searchQuery: string;
-  activeStatus: "All" | ProposalStatus;
-  setActiveStatus: React.Dispatch<React.SetStateAction<"All" | ProposalStatus>>;
-  minPrice: string;
-  maxPrice: string;
-  priceSort: "inc" | "dec" | null;
-  milestonesValue: string;
-  milestonesSort: "inc" | "dec" | null;
-  revisionRateSort: "inc" | "dec" | null;
-  dateSort: "inc" | "dec" | null;
+  setSearchQuery?: React.Dispatch<React.SetStateAction<string>>;
+  activeStatus?: "All" | ProposalStatus;
+  setActiveStatus?: React.Dispatch<React.SetStateAction<"All" | ProposalStatus>>;
+  minPrice?: string;
+  maxPrice?: string;
+  priceSort?: "inc" | "dec" | null;
+  milestonesValue?: string;
+  milestonesSort?: "inc" | "dec" | null;
+  revisionRateSort?: "inc" | "dec" | null;
+  dateSort?: "inc" | "dec" | null;
   viewType: ViewType;
   loading: boolean;
   showFilters: boolean;
-  setShowFilters: React.Dispatch<React.SetStateAction<boolean>>;
-  setChildProposalsCounts: React.Dispatch<React.SetStateAction<Record<string, number> | null>>;
+  setShowFilters?: React.Dispatch<React.SetStateAction<boolean>>;
+  setChildProposalsCounts?: React.Dispatch<React.SetStateAction<Record<string, number> | null>>;
 }
-
-const ProposalSidebarSkeleton = () => (
-  <div className="space-y-6">
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-3">
-      <div className="h-3 w-28 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
-      <div className="space-y-2">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="h-8 w-full animate-pulse rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-        ))}
-      </div>
-    </div>
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-4">
-      <div className="h-3 w-24 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
-      <div className="space-y-3">
-        <div className="h-8 flex-1 animate-pulse rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-        <div className="h-8 flex-1 animate-pulse rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
-      </div>
-    </div>
-  </div>
-);
 
 export const ProposalsMain: React.FC = () => {
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isVerified = useGlobalState((state) => state.isVerified);
-  const location = useLocation();
-
-  // Route check
-  const isJobSelectionPage = location.pathname === "/jobs/proposals";
-  const isFlowPage = location.pathname.startsWith("/jobs/proposals/flow");
-  const isFullWidthPage = isJobSelectionPage || isFlowPage;
-  const isSentPage = location.pathname.startsWith("/jobs/proposals/sent") || location.pathname.startsWith("/jobs/proposals/team-sent");
 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeStatus, setActiveStatus] = useState<"All" | ProposalStatus>("All");
-  const [showFilters, setShowFilters] = useState(true);
-
-  // Filters & Sorting States
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
-  const [priceSort, setPriceSort] = useState<"inc" | "dec" | null>(null);
-
-  const [milestonesValue, setMilestonesValue] = useState("");
-  const [milestonesSort, setMilestonesSort] = useState<"inc" | "dec" | null>(null);
-
-  const [revisionRateSort, setRevisionRateSort] = useState<"inc" | "dec" | null>(null);
-  const [dateSort, setDateSort] = useState<"inc" | "dec" | null>(null);
-
   const [viewType, setViewType] = useState<ViewType>("grid");
-  
+  const [activeStatus, setActiveStatus] = useState<"All" | ProposalStatus>("All");
   const [childProposalsCounts, setChildProposalsCounts] = useState<Record<string, number> | null>(null);
 
   // Simulated initial loading timer
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 800);
+    const timer = setTimeout(() => setLoading(false), 300);
     return () => clearTimeout(timer);
   }, []);
-
-  // Dynamically calculate status counts depending on active route context
-  const statusCounts: StatusFilterItem[] = useMemo(() => {
-    if (childProposalsCounts) {
-      return [
-        { label: "All", count: childProposalsCounts.All || 0 },
-        { label: "Pending", count: childProposalsCounts.Pending || 0 },
-        { label: "Shortlisted", count: childProposalsCounts.Shortlisted || 0 },
-        { label: "Accepted", count: childProposalsCounts.Accepted || 0 },
-        { label: "Hired", count: childProposalsCounts.Hired || 0 },
-        { label: "Rejected", count: childProposalsCounts.Rejected || 0 },
-        { label: "Withdrawn", count: childProposalsCounts.Withdrawn || 0 },
-        { label: "Archived", count: childProposalsCounts.Archived || 0 },
-      ];
-    }
-
-    let activeDataset = isSentPage ? sampleSentProposals : sampleIncomingProposals;
-
-    // Filter by jobId if we're viewing a specific job's proposals
-    const pathParts = location.pathname.split("/");
-    const possibleJobId = pathParts[4]; // e.g. /jobs/proposals/incoming/jobId
-    if (possibleJobId && possibleJobId !== "") {
-      activeDataset = activeDataset.filter(p => p.jobId === possibleJobId);
-    }
-
-    const counts = {
-      All: activeDataset.length,
-      Pending: 0,
-      Shortlisted: 0,
-      Accepted: 0,
-      Rejected: 0,
-      Withdrawn: 0,
-      Archived: 0,
-      Hired: 0,
-    };
-
-    activeDataset.forEach((p) => {
-      if (p.status in counts) {
-        counts[p.status as keyof typeof counts]++;
-      } else if (p.status === "Approved") {
-        counts.Accepted++;
-      }
-    });
-
-    return [
-      { label: "All", count: counts.All },
-      { label: "Pending", count: counts.Pending },
-      { label: "Shortlisted", count: counts.Shortlisted },
-      { label: "Accepted", count: counts.Accepted },
-      { label: "Hired", count: counts.Hired },
-      { label: "Rejected", count: counts.Rejected },
-      { label: "Withdrawn", count: counts.Withdrawn },
-      { label: "Archived", count: counts.Archived },
-    ];
-  }, [isSentPage, location.pathname, childProposalsCounts]);
-
-  const handleClearFilters = () => {
-    setSearchQuery("");
-    setActiveStatus("All");
-    setMinPrice("");
-    setMaxPrice("");
-    setPriceSort(null);
-    setMilestonesValue("");
-    setMilestonesSort(null);
-    setRevisionRateSort(null);
-    setDateSort(null);
-  };
 
   return (
     <div className="w-full min-h-screen bg-gray-50 dark:bg-dark-base relative">
@@ -169,103 +57,35 @@ export const ProposalsMain: React.FC = () => {
 
       {!isGuestMode && !isVerified && <UnverifiedOverlay featureName="job proposals" />}
 
-      <div className={`mx-auto max-w-7xl p-6 md:p-8 w-full`}>
+      <div className="mx-auto max-w-7xl p-6 md:p-8 w-full space-y-6">
         {/* Search Bar */}
         <ProposalsSearchbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
 
         {/* Navigation Tabs & View Switcher */}
-        <div className="mb-8 flex flex-wrap items-center justify-between border-b border-gray-200 dark:border-white/10 gap-4 pb-2">
+        <div className="flex flex-wrap items-center justify-between border-b border-gray-200 dark:border-white/10 gap-4 pb-2">
           <ProposalsTabs />
-          {!isFullWidthPage && (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors border text-xs font-semibold cursor-pointer ${
-                  showFilters
-                    ? "bg-gray-100 dark:bg-white/10 border-gray-300 dark:border-white/20 text-gray-900 dark:text-white"
-                    : "bg-white dark:bg-white/5 shadow-sm dark:shadow-none border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10"
-                }`}
-                title={showFilters ? "Collapse Proposal Statuses and Filters" : "Expand Proposal Statuses and Filters"}
-              >
-                {showFilters ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
-                <span className="hidden sm:inline">{showFilters ? "Collapse Sidebar" : "Filters and Statuses"}</span>
-              </button>
-              <ProposalsListViewType viewType={viewType} onViewTypeChange={setViewType} />
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            <ProposalsListViewType viewType={viewType} onViewTypeChange={setViewType} />
+          </div>
         </div>
 
-        {/* Sidebar & Content Layout */}
-        <div className={isFullWidthPage ? "w-full" : "flex flex-col lg:flex-row gap-6 lg:gap-8 items-start"}>
-          {/* Sidebar */}
-          {!isFullWidthPage && (
-            <div className={`transition-all duration-300 origin-left ease-in-out shrink-0 ${
-              showFilters ? "opacity-100 w-full lg:w-72" : "opacity-0 w-0 h-0 overflow-hidden hidden"
-            }`}>
-              <div className="space-y-6 sticky top-24 w-full">
-                {loading ? (
-                  <ProposalSidebarSkeleton />
-                ) : (
-                  <>
-                    <ProposalsStatuses
-                      statuses={statusCounts}
-                      activeStatus={activeStatus}
-                      onStatusChange={setActiveStatus}
-                      onCollapse={() => setShowFilters(false)}
-                    />
-
-                    <ProposalsFilters
-                      filters={{
-                        minPrice,
-                        maxPrice,
-                        priceSort,
-                        milestonesValue,
-                        milestonesSort,
-                        revisionRateSort,
-                        dateSort,
-                      }}
-                      setters={{
-                        setMinPrice,
-                        setMaxPrice,
-                        setPriceSort,
-                        setMilestonesValue,
-                        setMilestonesSort,
-                        setRevisionRateSort,
-                        setDateSort,
-                      }}
-                      onClear={handleClearFilters}
-                      onCollapse={() => setShowFilters(false)}
-                    />
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Sub-Pages Container */}
-          <div className={`transition-all duration-300 ${isFullWidthPage ? "w-full" : "flex-1 min-w-0"}`}>
-            <Outlet
-              context={
-                {
-                  searchQuery,
-                  activeStatus,
-                  minPrice,
-                  maxPrice,
-                  priceSort,
-                  milestonesValue,
-                  milestonesSort,
-                  revisionRateSort,
-                  dateSort,
-                  viewType,
-                  loading,
-                  showFilters,
-                  setShowFilters,
-                  setActiveStatus,
-                  setChildProposalsCounts,
-                } satisfies ProposalsMainContext
-              }
-            />
-          </div>
+        {/* Full Width Outlet Content */}
+        <div className="w-full">
+          <Outlet
+            context={
+              {
+                searchQuery,
+                setSearchQuery,
+                activeStatus,
+                setActiveStatus,
+                viewType,
+                loading,
+                showFilters: false,
+                setShowFilters: () => {},
+                setChildProposalsCounts,
+              } satisfies ProposalsMainContext
+            }
+          />
         </div>
       </div>
     </div>

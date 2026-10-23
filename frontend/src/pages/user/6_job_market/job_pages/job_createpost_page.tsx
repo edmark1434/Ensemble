@@ -365,6 +365,21 @@ const JobCreatePostPage: React.FC = () => {
     }
   };
 
+  const handleStepClick = (stepId: number) => {
+    if (stepId === currentSlide) return;
+    if (stepId < currentSlide) {
+      setCurrentSlide(stepId);
+      return;
+    }
+    if (stepId === 2) {
+      if (validateSlide1()) setCurrentSlide(2);
+    } else if (stepId === 3) {
+      if (validateSlide1() && handleSlide2Advance(false)) setCurrentSlide(3);
+    } else if (stepId === 4) {
+      handleJumpToReview();
+    }
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
@@ -491,7 +506,7 @@ const JobCreatePostPage: React.FC = () => {
           </p>
         </motion.div>
 
-        {/* Header Stepper & Return Button */}
+        {/* Header Stepper & Return Button with Draft Indicator */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -500,26 +515,14 @@ const JobCreatePostPage: React.FC = () => {
           <JobCreateHeader 
             currentSlide={currentSlide} 
             onReturn={handleReturnTrigger} 
+            isDraftRestored={isDraftRestored}
+            onClearDraft={handleClearDraft}
             hasReachedReview={hasReachedReview}
             onJumpToReview={handleJumpToReview}
+            maxReachedStep={maxReachedStep}
+            onStepClick={handleStepClick}
           />
         </motion.div>
-
-        {isDraftRestored && (
-          <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-between text-xs text-blue-600 dark:text-blue-400 shadow-sm">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 shrink-0 text-blue-500" />
-              <span>Draft restored from your last session. Progress is saved automatically.</span>
-            </div>
-            <button
-              type="button"
-              onClick={handleClearDraft}
-              className="text-[11px] font-bold text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:underline px-2 py-0.5 rounded focus:outline-none"
-            >
-              Reset / Clear Draft
-            </button>
-          </div>
-        )}
 
         {/* Form Box Wrapper with Slide Transition */}
         <motion.div

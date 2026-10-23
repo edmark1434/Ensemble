@@ -48,6 +48,7 @@ Implement the approved architectural redesign:
 - [x] Phase 31: Redesigned milestone card headers for a crisp, clean look: replaced the full-width colored background tint with neutral gray (`bg-zinc-50/80 dark:bg-zinc-800/40 border-b border-zinc-200 dark:border-zinc-800`) and concentrated the phase theme color exclusively onto the left edge (`border-l-[5px]`) and the solid circle number badge `(1)`.
 - [x] Phase 32: Updated milestone title representation to display clean bold text by default accompanied by a hoverable pen icon (`Pencil`), which smoothly triggers inline editing on click. Enforced a hard minimum of 1 revision round across Phase Revisions steppers and cards (`revCount >= 1`, disabled `-` button when at 1).
 - [x] Phase 33: Added a smooth, non-stretchy height and opacity accordion animation on milestone collapse and expand using Framer Motion `<AnimatePresence>` and `<motion.div>` with cubic-bezier easing (`ease: [0.16, 1, 0.3, 1]`) and smooth 180-degree chevron rotation.
+- [x] Phase 34: Refined status tags across Received & Sent Proposals: preserved the square-like (`rounded-md`) geometry with the subtle `<Tag />` icon, fixed dark mode readability by replacing overly dark/near-black backgrounds with luminous 20% fills (`dark:bg-amber-500/20`, `dark:bg-blue-500/20`, etc.), vivid borders (`dark:border-amber-400/50`), and bright text (`dark:text-amber-300`), while maintaining clean, crisp light mode badges (`bg-amber-50 text-amber-950 border-amber-300`). Updated proposal cards (Grid/List views), Sent page, Incoming page, and Proposal Detail views (`proposals_view_details_as_applicant.tsx` & `proposals_view_details_as_author.tsx`). Verified frontend build clean (`tsc --noEmit && vite build`).
 - [x] Phase 34: Standardized milestone names across presets and defaults to use the user's clear, easy-to-understand titles for 1, 2, 3, and 4 milestones:
   - **1 Phase**: `In Progress & Completed`
   - **2 Phases**: `The Process (Combining Plan & Design)` and `The Final Cut (Final Touches & Result)`
@@ -162,8 +163,162 @@ Implement the approved architectural redesign:
   - Created dedicated [`job_applied_page.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_pages/job_applied_page.tsx) with quick status sub-filters (`All`, `Open`, `Closed`) and an empty state linking to browse postings.
   - Added `isAppliedTab` filter handling and `getParentRoute()` routing in [`job_main.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_main.tsx), filtering jobs by `hasProposed`.
   - Added an `Applied` badge in [`job_lists.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_lists.tsx) for both grid and list views.
-- [x] Verification: `npm --prefix frontend run build` completes with 0 errors.
-- [x] Verification: `npm --prefix frontend run build` completes with 0 errors.
-- [x] Phase 34: Polished milestone reorder drag physics with custom lift elevation (`whileDrag={{ scale: 1.015, zIndex: 50, boxShadow: ... }}`), critical pointer default suppression (`e.preventDefault()` on dragControls trigger), and physical spring easing for sibling rearrangement (`layout: { type: "spring", stiffness: 350, damping: 30 }`) for smooth, tactile dragging.
-- [x] Phase 35: Stripped redundant `"Phase 1:"`, `"Phase 2:"` prefixes from milestone titles across default proposals state, roadmap presets, new milestone creation, and existing localStorage draft restoration. Titles now render directly as clean deliverable names (e.g., `Ingest, Multitrack Sync & Selects Reel`) alongside the circular phase number `(1)`.
-- [x] Verification: `npm --prefix frontend run build` completes with 0 errors.
+- [x] Phase 58: Job Proposals Navigation Renaming & Proposal Card Upgrade:
+  - Renamed the Job Proposals tabs in [`proposals_tabs.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_components/proposals_tabs.tsx) from `Incoming Proposals | My Proposals | Proposal Flow` to **`Received Proposals | Sent Proposals | Info`**.
+  - Updated backend repository queries in [`JobRepositories.js`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/backend/repositories/JobRepositories.js) (`getProposalsByJobIdRepositories` and `getProposalsByFreelancerRepositories`) to include `freelancer_type`, `freelancer_name`, `freelancer_handle`, and `freelancer_avatar_path` via `accounts` join.
+  - Upgraded [`proposals_list.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_components/proposals_list.tsx) (both Grid and List views) with the primary client decision points (proposer name/avatar, `Solo` vs `Team` badge, rating, `Job Post` target listing link, proposed bid, pitch snippet, expandable milestone accordion, and status badge + 4-stage lifecycle tracker).
+- [x] Phase 59: High-Craft Proposal Loading Animation & Background Consistency:
+  - Fixed background color bug where proposal detail loading screens used semi-transparent `bg-gray-50/50`, which blended into `#root`'s `#080a12` dark background in light mode to produce a muddy, broken dark grey canvas. Replaced with solid `bg-gray-50 dark:bg-dark-base`.
+  - Replaced the broken, low-contrast 32px raw CSS spinner with Ensemble's official branded `<DotLottieReact src="/icons/lottie/loading-ensemble.lottie" loop autoplay />` animated loader and clear status messaging in:
+    - Sent Proposal Details ([`proposals_view_details_as_applicant.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_applicant.tsx))
+    - Received Proposal Details ([`proposals_view_details_as_author.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author.tsx))
+    - Proposal Edit ([`proposals_edit_page.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_edit_page.tsx))
+  - Embedded the subtle `ShapeGrid` background into the loading states to eliminate layout flicker when proposal details finish loading.
+  - Upgraded [`proposals_sent_page.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_sent_page.tsx) and [`proposals_incoming_page.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_incoming_page.tsx) to render the dedicated proposal skeleton grid (`loading={true}`) while fetching lists rather than generic spinners.
+- [x] Phase 60: 1:1 Review & Send Layout for Proposal Details (Applicant & Client Views):
+  - Upgraded [`proposals_view_details_as_applicant.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_applicant.tsx) and [`proposals_view_details_as_author.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author.tsx) to match the unified 7-section layout of Step 5 Review & Send (`4_proposal_review.tsx`):
+    - **Header Navigation Bar**: Return button, Proposal Ref # (`#PROP-...`), official Lifecycle Status tag, and a Master "Expand All / Collapse All" toggle button (`Maximize2` / `Minimize2`).
+    - **Lifecycle Tracker**: Standardized 4-stage progression bar (`ProposalLifecycleTracker`).
+    - **Section 1**: Representation & Target Listing (2-column layout: Left = Proposer with banner, avatar with ring, Name, handle, Solo/Team badge, bio, contract workspace; Right = Target Job, description snippet, 2-column Client Benchmark vs Proposed Bid with Credits, Additional Work Rate strip).
+    - **Section 2**: Cover Letter Pitch & Screening Questions (collapsible card with pitch box and screening Q&A).
+    - **Section 3**: Terms of Service & Client Specifications (collapsible card: Left = Terms of Service, Right = Required Skills pills, experience level, target timeline, headcount).
+    - **Section 4**: Attached Work Samples (collapsible card with multi-format media preview lightbox).
+    - **Section 5**: Milestone Roadmap & Production Schedule (collapsible card with `{count} Phases`, `{totalHours} hrs Total`, featuring high-craft milestone cards with `(1)`, `(2)` circular phase badges, Credits pill, duration/budget share/revisions tags, and expandable task checklist).
+    - **Section 6**: Applicant Portfolio & Case Studies (collapsible card; for client in `proposals_view_details_as_author.tsx`, adds a **Candidate Creative Track Record Summary Box** with verified project count, rating highlight, talent structure, and a direct "View Full Profile" CTA, followed by `Profile_Portfolio`).
+    - **Section 7**: Applicant Creative Gallery & Media Works (collapsible card with client summary subtitle, followed by `Profile_Gallery`).
+    - **Section 8**: Client Rejection Rationale (displayed cleanly if rejected).
+    - **Stationary Decision Bar**: Preserved at the bottom with all actionable states (Accept/Decline Offer, Withdraw Proposal, Chat with Client/Candidate, Hire Candidate with modal, Shortlist toggle, Reject with modal).
+- [x] Phase 61: Full-Width Layout & 5 Lifecycle Sub-Tabs for Sent and Received Proposals:
+  - Removed the clunky left sidebar (statuses list + marketplace sorting/range filters) and the "Collapse Sidebar" button from [`proposals_main.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_main.tsx), allowing both Sent and Received proposal views to occupy the full container width (`w-full` across `max-w-7xl`).
+  - Added clean 5 horizontal lifecycle sub-tabs with real-time count badges to both Sent Proposals ([`proposals_sent_page.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_sent_page.tsx)) and Received Proposals ([`proposals_incoming_page.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_incoming_page.tsx)):
+    1. **All** (`All (count)`)
+    2. **Pending** (`Pending (count)`) - Discover & initial proposal review
+    3. **Shortlisted** (`Shortlisted (count)`) - Starred candidate applications
+    4. **Offers & Hired** (`Offers & Hired (count)`) - Formal contract offers extended (`Accepted`/`Approved`) and active contracts (`Hired`)
+    5. **Inactive** (`Inactive (count)`) - Declined (`Rejected`), Withdrawn, and Archived proposals
+  - Synced sub-tabs with the global search bar, view switcher (Cards Grid vs Spacious List vs Comparison Matrix), and empty states with quick reset links.
+- [x] Phase 62: Tab Guidance & Expected Status Tag Strips on Sent and Received Proposals:
+  - Added a dynamic contextual guidance strip right beneath the 5 horizontal sub-tabs on both Sent Proposals ([`proposals_sent_page.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_sent_page.tsx)) and Received Proposals ([`proposals_incoming_page.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_incoming_page.tsx)).
+  - When switching tabs, it informs the user:
+    - **Pending**: Description explaining that proposals are awaiting client review, pitch evaluation, or screening checks; displays expected tag: `[ PENDING ]` (amber).
+    - **Shortlisted**: Explains that proposals are starred/bookmarked for prioritized interview; displays expected tag: `[ SHORTLISTED ]` (blue).
+    - **Offers & Hired**: Explains formal contract offers and active contracts; displays expected tags: `[ ACCEPTED (OFFER) ]` (emerald) and `[ HIRED (ACTIVE CONTRACT) ]` (purple).
+    - **Inactive**: Explains declined or withdrawn applications; displays expected tags: `[ DECLINED ]` (red) and `[ WITHDRAWN ]` (zinc).
+    - **All**: Summarizes the complete lifecycle portfolio; displays all lifecycle status pills.
+- [x] Phase 63: Job Creation Wizard UX Alignment with Proposal Flow:
+  - **Checkmark Step Navigation**: Connected `maxReachedStep` and `onStepClick` to `WizardProgressTrack` across `job_create_header.tsx` and `job_createpost_page.tsx`. Visited and completed steps display green `<Check />` badges, allowing users to jump back and forth across validated steps without losing inputs.
+  - **Draft UI Beside Return Button**: Replaced the full-width blue draft banner with a compact, elegant pill right beside the `<ArrowLeft /> Return` button in `job_create_header.tsx`, featuring a `RotateCcw` icon and inline "Clear" action.
+  - **Upfront 50 Credits Publication Notice on Core Info (Step 1)**: Integrated a live credit disclosure notice in `1_create_coreinfo.tsx` with live wallet balance checking, reassuring users that posting fee is 50 credits only upon review & confirm in Step 4.
+  - **Dedicated Checkout Modal with SlideCommit on Review (Step 4)**: Replaced direct publishing in `3_create_review.tsx` with a dedicated portaled modal (`createPortal` to `document.body`) featuring:
+    - Upper right floating credits pill (`FloatingCreditsPill`)
+    - Project summary strip (Title, Category, Difficulty, Budget, Capacity)
+    - Full transparent fee ledger (Available Balance, Publication Fee `-50 Credits`, Balance After Publication)
+    - Insufficient balance alert with direct top-up link (`/credits/shop`) when balance < 50
+    - Explicit agreement checkbox ("I agree to deduct 50 Credits from my wallet...")
+    - `SlideCommit` ("Swipe to Pay 50 Credits") swipe confirmation
+- [x] Phase 64: Job Creation Relocation & Structured 5-Section Review:
+  - **Core Info Publication Cost Relocation**: Moved the "Job Publication Cost" notice in [`1_create_coreinfo.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_creation_components/1_create_coreinfo.tsx) from the left column into the right-hand column directly beneath the "Posting Guidelines" card.
+  - **Structured 5-Section Job Review & Post ([`3_create_review.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_creation_components/3_create_review.tsx))**:
+    - **Top Header**: Added master "Expand All / Collapse All Sections" toggle control with `<Maximize2 />` and `<Minimize2 />`.
+    - **Section 1 (Anchor - Permanent)**: Card Preview & Post Quality Score (`Card Preview | Post Score` with 2-column live card visual and algorithm appeal dial).
+    - **Section 2 (Collapsible)**: Job Title, Category & Difficulty sub-cards, and formatted rich text Job Description with `<JobRichText />`.
+    - **Section 3 (Collapsible)**: Budget Range or Open Bid amount, Schedule & Timeline, Required Skills tags, and Pre-Scoped Milestones / Delivery Roadmap (with fallback notice when applicants will propose their own roadmap).
+    - **Section 4 (Collapsible)**: Workflow terms (Confidentiality / NDA, Portfolio Showcase, Existing Project Link, Initiator Role) & Cover Media Preview.
+    - **Section 5 (Collapsible)**: Job Screening Questions & Project Brief / Reference files attached.
+    - **Marketplace Publication & Fee**: Cleanly removed from the page body; fee deduction and confirmation are handled exclusively inside the Checkout Modal triggered by the bottom "Proceed to Checkout" button.
+- [x] Phase 65: Section 4 Workflow & Terms Preview Alignment & Card 1 Simplification:
+  - **Section 4 Workflow & Terms 2-Column Display ([`3_create_review.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_creation_components/3_create_review.tsx))**:
+    - Replaced the cover media preview in Section 4 with the exact **Workflow & Terms Preview** matching the live Job Details view and the user's reference mockup:
+      - Left column: Input parameters configured in Step 3 (Initiator Role, Linked Workspace, NDA requirement, Portfolio Showcase allowance).
+      - Right column: Clean candidate-facing preview card with `<Briefcase />` header and the 4 interactive status rows (Client initiates project?, Client linked existing project?, Require Confidentiality NDA?, Allow Portfolio Use?) with green `<CheckCircle2 />` or muted `<XCircle />` and descriptive subtitle copy.
+  - **Card 1 Simplification & Height Symmetry**:
+    - Made the icons beside **Marketplace Card Preview** (`<Eye />`) and **Algorithm Discovery Score** (`<Sparkles />`) neutral gray (`text-gray-400 dark:text-zinc-500`) instead of blue.
+    - Simplified the "Algorithm Discovery Score" widget to a compact feed appeal dial, listing strength bar, and concise 2-box metric strip (Brief Completeness % and Platform Trust rating), perfectly matching the height of the Marketplace Card on the left with `items-stretch` and `flex-1 flex flex-col justify-between`.
+- [x] Phase 66: Checkout-to-Success Flow & Confetti Confirmation Modal Fix:
+  - Identified the root cause of the missing success confirmation: when `onSubmit` resolved in the Checkout Modal, `isCheckoutModalOpen` was never dismissed, remaining active at `z-[9999]` and completely obscuring `SuccessModal` (which had `z-50` and an off-center `md:left-64` margin on standalone wizard pages).
+  - Updated `SlideCommit.onConfirm` in both [`3_create_review.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_creation_components/3_create_review.tsx) (Job Creation) and [`4_proposal_review.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_components/proposals_creation_components/4_proposal_review.tsx) (Proposal Application) to `await onSubmit()` and immediately dismiss `setIsCheckoutModalOpen(false)` upon success.
+  - Enhanced [`SuccessModal.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/components/ui/SuccessModal.tsx) to portal directly to `document.body` via `createPortal` at `z-[10000]` with a `standalone` property, ensuring it renders on top of all DOM overlays, perfectly centered without sidebar offset.
+  - Updated [`4_creation_success.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_creation_components/4_creation_success.tsx) and [`5_proposal_success.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_components/proposals_creation_components/5_proposal_success.tsx) with `standalone={true}` and a generous 4.5s auto-close window, giving users ample time to enjoy the 30-particle confetti blast and click "Okay, got it!".
+- [x] Phase 67: Fixed Missing Job Posts in Received Proposals Selector:
+  - In [`proposals_select_job_page.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_select_job_page.tsx):
+    - Resolved runtime crash caused by missing `getImageUrl` import (`ReferenceError: getImageUrl is not defined`) which was caught in the error handler and silently reset `myJobPosts` to `[]`.
+    - Upgraded post ownership check to `Boolean(j.is_own_post || j.is_manageable_post || (userInfo?.account_id && j.client_account_id === userInfo.account_id))` to support jobs posted both personally and via team representation.
+    - Added support for both Grid and List views matching `ProposalsMainContext`'s `viewType` toggle.
+    - Updated empty state "Post a Job" CTA to route to unified `/jobs/create` (was obsolete `/jobs/postings/choose`).
+    - Added `onError` fallback handling for thumbnails.
+- [x] Phase 68: Target Job Indicator, 5 Lifecycle Sub-Tabs & Job Closure Management in Received Proposals:
+  - In [`proposals_incoming_page.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_incoming_page.tsx):
+    - Removed early `proposals.length === 0` return which was bypassing the header and tabs on newly posted jobs with 0 submissions.
+    - Added a prominent **Target Job Header Indicator Bar**:
+      - Return button (`<ArrowLeft />`) to go back to Received Proposals list.
+      - Cover thumbnail preview with `onError` fallback.
+      - "Target Job Post" subtitle and clickable job title linking to full post.
+      - Dynamic Status Badge: `[ OPEN ]` (emerald with pulsing dot) or `[ CLOSED ]` (rose tag).
+      - Category, difficulty, budget pill, and time posted.
+      - Interactive "Close Post" / "Reopen Post" toggle action button with `isUpdatingJob` state.
+      - Direct links to "View Post" (`ExternalLink`) and "Edit" (`Pencil`).
+    - Ensured the 5 horizontal lifecycle sub-tabs (`All`, `Pending`, `Shortlisted`, `Offers & Hired`, `Inactive`) and the Contextual Guidance Strip always display beneath the job indicator.
+    - Redesigned the 0-proposals empty state to provide clear context and direct actions ("View Public Listing", "Edit Job Details") instead of a misleading "Create a Job Post" button.
+  - In [`JobRepositories.js`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/backend/repositories/JobRepositories.js):
+    - Added `status = COALESCE($13, status)` to `updateJobRepositories` so clients can manually close or reopen active job posts via `PUT /api/jobs/:id`.
+- [x] Phase 69: "Generate with AI" Button, Popup Modal & 30-Second Cooldown in Job Core Info:
+  - In [`1_create_coreinfo.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_creation_components/1_create_coreinfo.tsx):
+    - Added a sleek **"Generate with AI"** button (`Sparkles`) placed directly beside the "Job Post Title" label.
+    - Built the portaled popup modal (`createPortal` to `document.body` at `z-[9999]`) featuring:
+      - Clean, slop-free header with neutral subtitle and close icon.
+      - Prompt input textarea ("Project Description & Goals") with 1000-character counter.
+      - **Live 2-Row Infinite Marquee Carousel**: Smooth horizontal motion moving in opposite directions (`@keyframes aiMarqueeLeft`, `@keyframes aiMarqueeRight`) with pause-on-hover and edge fade gradients.
+      - Real-life everyday video editing inspirations:
+        - Row 1: School project video, Gaming montage, TikTok / Reels edit, Travel vlog recap, Anime music video (AMV), Birthday party highlight.
+        - Row 2: YouTube sit-down vlog, Gym workout montage, Wedding ceremony recap, Podcast viral clips, Product unboxing video, Short film rough cut.
+      - Clicking any carousel pill autofills the textarea with realistic creative prompts.
+      - Purged the clumsy "Desired Pacing & Style" grid and bright amber warning box, replacing with a discreet 30-second cooldown micro-hint above the footer.
+      - Implemented active 30-second countdown cooldown timer on the trigger button.
+- [x] Phase 70: Joed AI Branding, Shining Clickable Button, Pure Icons & 2-Word Validation:
+  - In [`1_create_coreinfo.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_creation_components/1_create_coreinfo.tsx):
+    - **Pure SVG Icons (No Emojis)**: Replaced all emojis in the 2-row inspiration marquee carousel with clean, dedicated Lucide icons (`GraduationCap`, `Gamepad2`, `Smartphone`, `Compass`, `Sparkles`, `PartyPopper`, `Video`, `Dumbbell`, `Heart`, `Mic`, `Package`, `Clapperboard`).
+    - **Shining Trigger Button**: Upgraded the button beside Job Post Title with a continuous animated shimmer sweep (`@keyframes shineGleam`), the official Ensemble logo (`/ensemble_lg.svg`), and branded label **"Generate with Joed AI!"**.
+    - **Modal Header**: Branded with `/ensemble_lg.svg` and titled **"Generate with Joed AI!"**.
+    - **Input Field Label**: Renamed textarea label to **"Describe what you want"** with a live word counter indicator (`min 2`).
+    - **Short Cooldown Notice**: Prominent yet clean neutral notice strip with a gray icon (`<Clock className="h-4 w-4 text-gray-400 dark:text-zinc-400" />`) and exact copy: `"30-second cooldown applies after generation."`.
+    - **"Generate Now" Action Button**: Renamed button to **"Generate Now"** and strictly disabled it unless text is present and has **at least 2 words** (`wordCount >= 2 && cooldownSeconds === 0`).
+- [x] Phase 71: Enhanced Posting Guidelines with "What to Avoid":
+  - In [`1_create_coreinfo.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_creation_components/1_create_coreinfo.tsx):
+    - Restructured the **Posting Guidelines** card into two distinct, high-clarity sub-sections:
+      - **What to include** (Green bullet accents):
+        - Source video format, resolution (e.g. 4K ProRes), and camera logs.
+        - Screening questions to filter automated proposals.
+        - Storyboards or reference links for accurate quotes.
+      - **What to avoid** (Red bullet accents):
+        - **Unpaid test edits or free sample work**: Custom trial tasks must be commissioned as paid milestones.
+        - **Off-platform contact info or external payments** (e.g. Telegram, PayPal): Preserves escrow protection and dispute rights.
+        - **Vague, one-line project descriptions**: Must specify estimated footage duration, turnaround expectations, or style references.
+- [x] Phase 72: Collapsible "What to Avoid" Guidelines & Standalone Unboxed Inverted Logo:
+  - In [`1_create_coreinfo.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_creation_components/1_create_coreinfo.tsx):
+    - Removed the enclosing box container (`p-2 rounded-xl bg-blue-50 ...`) in the AI modal header.
+    - Added `invert dark:invert-0` so `/ensemble_lg.svg` renders dark in light mode and white in dark mode.
+    - Made **"What to avoid"** collapsable using Framer Motion `<AnimatePresence>` with an interactive toggle button (`ChevronDown`), showing only "What to include" by default.
+- [x] Phase 73: Relocated & Slimmed "Generate with Joed AI!" Trigger Button:
+  - In [`1_create_coreinfo.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_creation_components/1_create_coreinfo.tsx):
+    - Moved the trigger button away from the `JOB POST TITLE *` label and over to the right side directly next to the character counter (`0/300`).
+    - Slimmed the button down to a compact, refined badge (`px-2.5 py-0.5`, `rounded-lg`, `text-[11px]`, `h-3.5 w-3.5` logo) while preserving the active shimmering beam sweep effect.
+- [x] Phase 74: Default Job Banners with Random Pre-Selection & Custom Upload:
+  - Created shared utility [`defaultJobBanners.ts`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/lib/defaultJobBanners.ts):
+    - Registers the 3 default banners (`/job_banners/jb1.png`, `/job_banners/jb2.png`, `/job_banners/jb3.png`).
+    - Provides `getRandomJobBanner()`, `getDefaultJobBannerForJob(jobId)`, and `convertPresetUrlToFile(url)`.
+  - In [`1_create_coreinfo.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_creation_components/1_create_coreinfo.tsx):
+    - **Preset Banner Selector**: Added a 3-column thumbnail card selector (`JB1`, `JB2`, `JB3`) with active blue ring and checkmark indicator.
+  - In [`utils.ts`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/lib/utils.ts), [`job_main.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_main.tsx), [`home_featured_jobs.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/1_home/home_components/home_featured_jobs.tsx), [`proposals_select_job_page.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_select_job_page.tsx), and [`proposals_incoming_page.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_proposals/proposals_pages/proposals_incoming_page.tsx):
+    - Ensured `/job_banners/` paths resolve locally without improper cloudfront prepending.
+    - Added deterministic default banner fallbacks for jobs missing a thumbnail path.
+- [x] Phase 75: Empty Default Thumbnail State & Dedicated Upload Popup Modal:
+  - In [`1_create_coreinfo.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_creation_components/1_create_coreinfo.tsx):
+    - **Empty by Default**: Removed automatic banner pre-selection; the thumbnail card starts completely empty on new job creations.
+    - **Gray Clickable "Upload" Button**: Renamed "Upload Custom" to "Upload" with a neutral gray clickable button (`bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800`).
+    - **Upload Popup Modal**: Clicking "Upload" or the empty preview box opens an upload modal (`isUploadModalOpen`) portaled to `document.body` with drag-and-drop zone, file browser trigger, format specs, and backdrop blur.
+    - **Preset Selection & Remove**: Clicking any of the 3 default banner cards (`jb1`, `jb2`, `jb3`) instantly sets that banner, while clicking "Remove" resets the thumbnail back to empty.
+- [x] Phase 76: Numbered Default Banners & Iconless "Preset Job Banner" Overlay Badge:
+  - In [`1_create_coreinfo.tsx`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/pages/user/6_job_market/job_components/job_creation_components/1_create_coreinfo.tsx) and [`defaultJobBanners.ts`](file:///c:/Users/Rexshimura/PycharmProjects/EnsembleProject/frontend/src/lib/defaultJobBanners.ts):
+    - Changed the bottom-right banner badge label from `JB1`, `JB2`, `JB3` to clean numbers **`01`**, **`02`**, and **`03`**.
+    - Updated the top-left preview indicator tag from `[icon] Default (JB2)` to iconless **`Preset Job Banner`**.
+- [x] Verification: `npm --prefix frontend run build` completed with 0 errors.

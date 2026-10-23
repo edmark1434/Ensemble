@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import api from "@/lib/axios";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -14,16 +15,12 @@ import {
   RefreshCcw,
   CheckCircle2,
   XCircle,
-  UserCheck,
-  UserMinus,
   MessageSquare,
   ExternalLink,
   ShieldAlert,
   User,
-  Send,
   Users,
   ShieldCheck,
-  Sparkles,
   Play,
   Volume2,
   Eye,
@@ -32,54 +29,63 @@ import {
   X,
   Paperclip,
   Check,
-  ChevronRight,
+  ChevronDown,
+  Maximize2,
+  Minimize2,
   FolderOpen,
+  Sparkles,
+  UserCheck,
+  UserMinus,
+  Tag,
 } from "lucide-react";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 import { getImageUrl } from "@/lib/utils";
+import useGlobalState from "@/lib/global_state";
 import { JobRichText } from "../../job_components/JobRichText";
 import { toast } from "react-hot-toast";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
-import type { ProposalItemData, ProposalStatus } from "../proposals_components/proposals_list";
 import { CreditIcon } from "@/components/ui/credit-icon";
-import useGlobalState from "@/lib/global_state";
-import api from "@/lib/axios";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 import ProposalLifecycleTracker from "../proposals_components/ProposalLifecycleTracker";
 import { Profile_Portfolio, type PortfolioItem } from "@/pages/user/7_profile/Displays/Body/Profile_Portfolio";
 import { Profile_Gallery } from "@/pages/user/7_profile/Displays/Body/Profile_Gallery";
+import { resolveBannerPreset, bannerPresetUrl } from "@/lib/profileBanners";
 
 interface ActingTeamInfo {
-  id: string;
+  team_id?: string;
+  id?: string;
   name?: string;
   team_name?: string;
   avatar_path?: string;
   avatar_url?: string;
+  banner_preset?: string;
+  banner_url?: string;
+  banner_path?: string;
+  bio?: string;
+  description?: string;
   members_count?: number;
   member_count?: number;
 }
 
 export const ProposalsViewDetailsAsAuthor: React.FC = () => {
-  const { user } = useGlobalState();
-  const theme = useGlobalState((state) => state.theme);
   const { proposalId } = useParams<{ proposalId: string }>();
   const navigate = useNavigate();
+  const theme = useGlobalState((state) => state.theme);
+  const user = useGlobalState((state) => state.user);
   const { pathname } = useLocation();
   const { fetchProposalById, sendJobOffer, updateProposalStatus, loading } = useJobs();
 
-  const [proposal, setProposal] = useState<ProposalItemData | null>(null);
+  const [proposal, setProposal] = useState<any | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
-  const [walletBalance, setWalletBalance] = useState<number>(0);
   const [actingTeamInfo, setActingTeamInfo] = useState<ActingTeamInfo | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
 
-  // Modals
+  // Author Action Modals
   const [isShortlistModalOpen, setIsShortlistModalOpen] = useState(false);
-  const [shortlistMessage, setShortlistMessage] = useState("");
   const [isShortlisting, setIsShortlisting] = useState(false);
-
   const [isUnshortlistModalOpen, setIsUnshortlistModalOpen] = useState(false);
   const [isUnshortlisting, setIsUnshortlisting] = useState(false);
 
@@ -89,16 +95,51 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   const [isAcceptConfirmOpen, setIsAcceptConfirmOpen] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [contractStartsAt, setContractStartsAt] = useState("");
-
   const [customMilestones, setCustomMilestones] = useState<any[]>([]);
   const [isCustomizingMilestones, setIsCustomizingMilestones] = useState(false);
   const [customBidAmount, setCustomBidAmount] = useState<number>(0);
 
-  // Portfolio items of applicant
+  // Portfolio items of candidate
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [loadingPortfolio, setLoadingPortfolio] = useState(false);
 
-  // Media Lightbox
+  // Collapsible section states (Sections 2-7 collapsible, Section 1 permanently visible)
+  const [isSection2Collapsed, setIsSection2Collapsed] = useState(false); // Cover Letter & Screening Q&A
+  const [isSection3Collapsed, setIsSection3Collapsed] = useState(false); // TOS & Job Specifications
+  const [isSection4Collapsed, setIsSection4Collapsed] = useState(false); // Work Samples
+  const [isSection5Collapsed, setIsSection5Collapsed] = useState(false); // Milestones
+  const [isSection6Collapsed, setIsSection6Collapsed] = useState(false); // Portfolio
+  const [isSection7Collapsed, setIsSection7Collapsed] = useState(false); // Gallery
+
+  const areAllSectionsCollapsed =
+    isSection2Collapsed &&
+    isSection3Collapsed &&
+    isSection4Collapsed &&
+    isSection5Collapsed &&
+    isSection6Collapsed &&
+    isSection7Collapsed;
+
+  const toggleAllSections = () => {
+    const next = !areAllSectionsCollapsed;
+    setIsSection2Collapsed(next);
+    setIsSection3Collapsed(next);
+    setIsSection4Collapsed(next);
+    setIsSection5Collapsed(next);
+    setIsSection6Collapsed(next);
+    setIsSection7Collapsed(next);
+  };
+
+  // Sub-accordions for milestone card tasks
+  const [expandedMilestoneTasks, setExpandedMilestoneTasks] = useState<Record<number, boolean>>({});
+
+  const toggleMilestoneTasks = (idx: number) => {
+    setExpandedMilestoneTasks((prev) => ({
+      ...prev,
+      [idx]: !prev[idx],
+    }));
+  };
+
+  // Lightbox Media Preview State
   const [previewItem, setPreviewItem] = useState<{
     url: string;
     name: string;
@@ -136,9 +177,11 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
       setIsInitializing(true);
       try {
         const p = await fetchProposalById(proposalId);
+
         if (p) {
           const clientName = p.client_name || p.client_handle || "Job Client";
           const freelancerName = p.freelancer_name || p.freelancer_handle || "Applicant";
+          const count = (p.milestones || []).length || 1;
 
           const initialMilestones = (p.milestones || [])
             .filter((m: any) => m && (m.id || m.proposal_milestone_id || m.name))
@@ -148,8 +191,16 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
               description: m.description || "",
               hours: parseFloat(m.hours) || 0,
               revisions: parseInt(m.revisions, 10) || 0,
+              percentage: Number(m.percentage) || Math.round(100 / count),
+              tasks: Array.isArray(m.tasks) ? m.tasks.filter(Boolean) : (m.description ? [m.description] : []),
             }));
 
+          // Initialize tasks expansion to open
+          const initialTasksState: Record<number, boolean> = {};
+          initialMilestones.forEach((_: any, idx: number) => {
+            initialTasksState[idx] = true;
+          });
+          setExpandedMilestoneTasks(initialTasksState);
           setCustomMilestones(initialMilestones);
           setCustomBidAmount(parseFloat(p.rate_credits) || 0);
 
@@ -168,6 +219,9 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
             clientName,
             clientAvatar: constructAvatarUrl(p.client_avatar_path, clientName),
             freelancerName,
+            freelancerHandle: p.freelancer_handle,
+            freelancerBio: p.freelancer_bio || p.description,
+            freelancerType: p.freelancer_type || (p.acting_team_id || p.freelancer_team_id ? "Team" : "User"),
             freelancerAvatar: constructAvatarUrl(p.freelancer_avatar_path, freelancerName),
             jobBanner: getImageUrl(p.job_thumbnail_path) || "",
             rating: p.freelancer_rating != null ? Number(p.freelancer_rating) : 5.0,
@@ -186,6 +240,13 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
             jobDeletedAt: p.job_deleted_at,
             jobDescription: p.job_description,
             jobHiringType: p.job_hiring_type || "single",
+            jobCategory: p.job_category || "Production",
+            jobSkills: Array.isArray(p.job_skills) ? p.job_skills : (typeof p.job_skills === "string" ? JSON.parse(p.job_skills || "[]") : []),
+            jobExperienceLevel: p.job_experience_level || "Intermediate",
+            jobTimeline: p.job_timeline || "Standard",
+            jobMinBudget: parseFloat(p.job_min_budget) || parseFloat(p.job_budget_credits) || 0,
+            jobMaxBudget: parseFloat(p.job_max_budget) || parseFloat(p.job_budget_credits) || 0,
+            jobBudgetType: p.job_budget_type || (p.job_max_budget ? "range" : "open"),
             status: p.status,
             type: "incoming",
             rejectionReason: p.reject_reason,
@@ -200,7 +261,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
             milestones: initialMilestones,
           });
 
-          // Fetch team info if proposal was submitted by a team
+          // Fetch team info if proposing as a team
           const teamId = p.acting_team_id || p.actingTeamId;
           const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
           if (teamId && UUID_REGEX.test(teamId)) {
@@ -213,19 +274,18 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
           } else {
             setActingTeamInfo(null);
           }
-        } else {
-          setDebugInfo({ error: "Not found", searchId: proposalId });
         }
       } catch (err) {
         console.error("Failed to load proposal details", err);
-        setDebugInfo({ error: "Fetch failed", message: String(err) });
       } finally {
         setIsInitializing(false);
       }
     };
+
     loadProposal();
   }, [proposalId, pathname]);
 
+  // Load candidate portfolio items
   useEffect(() => {
     const accountId = proposal?.freelancerAccountId;
     if (!accountId) return;
@@ -248,11 +308,11 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
         });
         setPortfolioItems(items);
       })
-      .catch((err) => console.error("Failed to load candidate portfolio items:", err))
+      .catch((err) => console.error("Failed to load portfolio items:", err))
       .finally(() => setLoadingPortfolio(false));
   }, [proposal?.freelancerAccountId]);
 
-  // Actions
+  // Author Actions
   const handleShortlist = async () => {
     if (!proposal) return;
     setIsShortlisting(true);
@@ -260,9 +320,10 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
       if (updateProposalStatus) {
         await updateProposalStatus(proposal.id, "Shortlisted");
       }
-      setProposal((prev) => (prev ? { ...prev, status: "Shortlisted", shortlistedAt: new Date().toISOString() } : null));
+      setProposal((prev: any) =>
+        prev ? { ...prev, status: "Shortlisted", shortlistedAt: new Date().toISOString() } : null
+      );
       setIsShortlistModalOpen(false);
-      setShortlistMessage("");
       showSuccessToast(`${proposal.partyName} shortlisted.`);
     } catch (err: any) {
       console.error("Failed to shortlist proposal", err);
@@ -279,7 +340,9 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
       if (updateProposalStatus) {
         await updateProposalStatus(proposal.id, "Pending");
       }
-      setProposal((prev) => (prev ? { ...prev, status: "Pending", shortlistedAt: null } : null));
+      setProposal((prev: any) =>
+        prev ? { ...prev, status: "Pending", shortlistedAt: null } : null
+      );
       setIsUnshortlistModalOpen(false);
       showSuccessToast(`${proposal.partyName} moved back to pending review.`);
     } catch (err: any) {
@@ -296,7 +359,9 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
       if (updateProposalStatus) {
         await updateProposalStatus(proposal.id, "Rejected", rejectionReason);
       }
-      setProposal((prev) => (prev ? { ...prev, status: "Rejected", rejectionReason } : null));
+      setProposal((prev: any) =>
+        prev ? { ...prev, status: "Rejected", rejectionReason } : null
+      );
       setIsRejectModalOpen(false);
       setRejectionReason("");
       showSuccessToast("Proposal declined.");
@@ -325,7 +390,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
         isCustomizingMilestones ? customMilestones : undefined
       );
 
-      setProposal((prev) =>
+      setProposal((prev: any) =>
         prev
           ? {
               ...prev,
@@ -360,13 +425,105 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
     navigate(`/jobs/my-job-post/${proposal.jobId}`);
   };
 
+  // Helper to resolve phase color accent
+  const getPhaseTheme = (index: number) => {
+    switch (index % 4) {
+      case 0:
+        return { circleBg: "bg-blue-600 text-white", name: "blue" };
+      case 1:
+        return { circleBg: "bg-purple-600 text-white", name: "purple" };
+      case 2:
+        return { circleBg: "bg-emerald-600 text-white", name: "emerald" };
+      case 3:
+      default:
+        return { circleBg: "bg-amber-600 text-white", name: "amber" };
+    }
+  };
+
+  // Helper to format file size
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  };
+
+  const getFileType = (mimeType?: string, fileName?: string): "video" | "audio" | "image" | "pdf" | "other" => {
+    if (mimeType?.startsWith("video/")) return "video";
+    if (mimeType?.startsWith("audio/")) return "audio";
+    if (mimeType?.startsWith("image/")) return "image";
+    if (mimeType?.includes("pdf") || fileName?.toLowerCase().endsWith(".pdf")) return "pdf";
+    return "other";
+  };
+
+  const isTeam = Boolean(
+    proposal?.actingTeamId ||
+    (proposal?.freelancerType && proposal?.freelancerType.toLowerCase() === "team") ||
+    actingTeamInfo
+  );
+
+  // Candidate banner
+  const candidateBannerUrl = useMemo(() => {
+    if (isTeam && actingTeamInfo) {
+      if (actingTeamInfo.banner_preset) {
+        return bannerPresetUrl(actingTeamInfo.banner_preset) || "/profile_banner_presets/Ensemble%20Purple.png";
+      }
+      if (actingTeamInfo.banner_url || actingTeamInfo.banner_path) {
+        return getImageUrl(actingTeamInfo.banner_url || actingTeamInfo.banner_path);
+      }
+      return "/profile_banner_presets/Ensemble%20Purple.png";
+    }
+    const preset = resolveBannerPreset(null, proposal?.freelancerHandle || proposal?.freelancerName || "candidate");
+    return bannerPresetUrl(preset) || "/profile_banner_presets/Ensemble%20Blue.png";
+  }, [isTeam, actingTeamInfo, proposal?.freelancerHandle, proposal?.freelancerName]);
+
+  // Clean, single-line sanitized job description for the preview snippet
+  const cleanJobDescription = useMemo(() => {
+    if (!proposal?.jobDescription) return "No project description provided.";
+    return proposal.jobDescription
+      .replace(/[#*_`~\[\]]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }, [proposal?.jobDescription]);
+
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6 font-['Plus_Jakarta_Sans']">
-        <div className="text-center space-y-3">
-          <div className="h-8 w-8 rounded-full border-2 border-zinc-300 dark:border-white/20 border-t-blue-500 animate-spin mx-auto" />
-          <p className="text-xs text-gray-500 dark:text-zinc-400 font-medium">Loading incoming proposal...</p>
+      <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6 font-['Plus_Jakarta_Sans'] overflow-hidden">
+        <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
+          <ShapeGrid
+            shape="square"
+            squareSize={48}
+            direction="diagonal"
+            speed={0.4}
+            borderColor={theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.07)"}
+            hoverFillColor={theme === "dark" ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
+            hoverTrailAmount={3}
+          />
         </div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.25 }}
+          className="relative z-10 flex flex-col items-center gap-3 text-center"
+        >
+          <div className="w-40 h-40 flex items-center justify-center">
+            <DotLottieReact
+              src="/icons/lottie/loading-ensemble.lottie"
+              loop
+              autoplay
+            />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight">
+              Loading Received Proposal
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-zinc-400">
+              Gathering candidate roadmap, terms, and pitch...
+            </p>
+          </div>
+        </motion.div>
       </div>
     );
   }
@@ -396,7 +553,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   // Calculations
   const totalBid = proposal.bidAmount || 0;
   const count = proposal.milestones.length || 1;
-  const totalHours = proposal.milestones.reduce((acc, m) => acc + (Number(m.hours) || 0), 0);
+  const totalHours = proposal.milestones.reduce((acc: number, m: any) => acc + (Number(m.hours) || 0), 0);
   const milestoneAveragePayout = Math.floor(totalBid / count);
   const overageRateBonus = Math.floor(milestoneAveragePayout * (proposal.additionalWorkRate / 100));
 
@@ -408,37 +565,38 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
         return {
           step: "03",
           label: "ACCEPTED",
-          className: "border-emerald-400/70 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10",
+          className: "bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-400/50",
         };
       case "Hired":
         return {
           step: "04",
           label: "HIRED",
-          className: "border-purple-400/70 text-purple-600 dark:text-purple-400 bg-purple-500/10",
+          className: "bg-purple-50 text-purple-900 border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-400/50",
         };
       case "Shortlisted":
         return {
           step: "02",
           label: "SHORTLISTED",
-          className: "border-blue-400/70 text-blue-600 dark:text-blue-400 bg-blue-500/10",
+          className: "bg-blue-50 text-blue-900 border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-400/50",
         };
       case "Rejected":
         return {
-          step: "",
-          label: "REJECTED",
-          className: "border-red-400/70 text-red-600 dark:text-red-400 bg-red-500/10",
+          step: "00",
+          label: "DECLINED",
+          className: "bg-rose-50 text-rose-900 border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-400/50",
         };
       case "Withdrawn":
         return {
-          step: "",
+          step: "00",
           label: "WITHDRAWN",
-          className: "border-gray-300 dark:border-white/20 text-gray-600 dark:text-zinc-400 bg-gray-100 dark:bg-white/5",
+          className: "bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-700/40 dark:text-zinc-200 dark:border-zinc-500/50",
         };
+      case "Pending":
       default:
         return {
           step: "01",
-          label: "PENDING",
-          className: "border-amber-400/70 text-amber-600 dark:text-amber-400 bg-amber-500/10",
+          label: "PENDING REVIEW",
+          className: "bg-amber-50 text-amber-950 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-400/50",
         };
     }
   };
@@ -446,7 +604,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   const statusBadge = getStatusBadge(proposal.status);
 
   return (
-    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white font-['Plus_Jakarta_Sans'] overflow-x-clip pt-6 pb-36">
+    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white font-['Plus_Jakarta_Sans'] pb-28">
       {/* Background Grid */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
         <ShapeGrid
@@ -461,707 +619,953 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
       </div>
 
       <motion.div
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
-        className="relative z-10 mx-auto max-w-6xl p-4 sm:p-6 md:p-8 w-full space-y-6 text-left"
+        className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 space-y-6"
       >
-        {/* Top Navigation & Status Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 dark:border-white/10 pb-4">
-          <button
-            onClick={() => navigate(proposal.jobId ? `/jobs/proposals/incoming/${proposal.jobId}` : "/jobs/proposals")}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-zinc-200 transition shrink-0 cursor-pointer shadow-xs"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            <span>Return to Incoming Proposals</span>
-          </button>
-
+        {/* =========================================================================
+            TOP ACTION BAR: Return Link, Status Tag, and Master Collapse/Expand
+           ========================================================================= */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-zinc-200 dark:border-zinc-800">
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-gray-500 dark:text-zinc-400">
-              Proposal Ref: <span className="font-semibold text-gray-700 dark:text-zinc-300">{proposal.id.slice(0, 8)}</span>
+            <button
+              onClick={() => navigate("/jobs/proposals")}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-200 transition cursor-pointer shadow-2xs"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Return to Received Proposals</span>
+            </button>
+
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">
+              #PROP-{proposal.id.slice(0, 8).toUpperCase()}
             </span>
-            <span className={`px-2.5 py-0.5 rounded text-xs font-bold uppercase tracking-wider border ${statusBadge.className}`}>
-              {statusBadge.label}
+
+            {/* Status Tag */}
+            <span
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider border shadow-xs ${statusBadge.className}`}
+            >
+              <Tag className="h-3 w-3 shrink-0 opacity-90" />
+              <span>{statusBadge.label}</span>
             </span>
+          </div>
+
+          {/* Master Expand All / Collapse All Toggle Button */}
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={toggleAllSections}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700/80 bg-white dark:bg-zinc-800/80 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-xs font-bold text-zinc-700 dark:text-zinc-200 shadow-2xs transition cursor-pointer"
+            >
+              {areAllSectionsCollapsed ? (
+                <>
+                  <Maximize2 className="h-3.5 w-3.5 text-blue-500" />
+                  <span>Expand All Sections</span>
+                </>
+              ) : (
+                <>
+                  <Minimize2 className="h-3.5 w-3.5 text-zinc-400" />
+                  <span>Collapse All Sections</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 
-        {/* ================= 4-STAGE PROPOSAL LIFECYCLE PROGRESSION ================= */}
-        <ProposalLifecycleTracker currentStatus={proposal.status} />
+        {/* =========================================================================
+            STANDARDIZED LIFECYCLE TRACKER
+           ========================================================================= */}
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 p-4 sm:p-5 shadow-2xs">
+          <ProposalLifecycleTracker currentStatus={proposal.status} />
+        </div>
 
-        {/* ================= 1. TARGET JOB & PROPOSER REPRESENTATION (HEADER CARD) ================= */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Left: Target Job Card */}
-          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 shadow-xs flex flex-col justify-between space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Briefcase className="h-3.5 w-3.5 text-blue-500" /> Your Job Posting
-                </span>
-                <button
-                  onClick={handleViewTargetJob}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                >
-                  <span>Manage Job Post</span>
-                  <ExternalLink className="h-3 w-3" />
-                </button>
-              </div>
-
-              {/* Job Cover & Title */}
-              <div className="flex items-start gap-3">
-                {proposal.jobBanner ? (
-                  <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5">
-                    <img
-                      src={proposal.jobBanner}
-                      alt={proposal.jobTitle}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = "/placeholder.svg";
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-500 flex items-center justify-center shrink-0">
-                    <Briefcase className="w-5 h-5" />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-base font-bold text-gray-900 dark:text-white leading-tight line-clamp-2">
-                    {proposal.jobTitle}
-                  </h2>
-                  <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1 flex items-center gap-1">
-                    <Calendar className="h-3 w-3" /> Posted on {proposal.jobPostedAt}
-                  </p>
-                </div>
-              </div>
+        {/* =========================================================================
+            SECTION 1: PROPOSAL REPRESENTATION & TARGET LISTING (PERMANENTLY VISIBLE)
+           ========================================================================= */}
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 overflow-hidden shadow-2xs">
+            {/* Header Strip */}
+            <div className="p-4 sm:p-4.5 bg-zinc-50/80 dark:bg-zinc-800/40 border-b border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between text-left">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                Candidate Representation & Target Listing
+              </span>
+              <span className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500">
+                Submitted {proposal.submittedAt}
+              </span>
             </div>
 
-            {/* Total Applicants Bar */}
-            <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400">
-              <span>{proposal.totalApplicants || 1} Applicant{(proposal.totalApplicants || 1) !== 1 ? "s" : ""} Competing</span>
-              {proposal.avgBid ? (
-                <span className="flex items-center gap-1">
-                  Average Bid: <CreditIcon className="h-3 w-3 text-amber-500" />
-                  <strong className="text-gray-700 dark:text-zinc-300 font-semibold">{proposal.avgBid.toLocaleString()}</strong>
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          {/* Right: Proposer Representation & Timeline Card */}
-          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 shadow-xs flex flex-col justify-between space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <User className="h-3.5 w-3.5 text-blue-500" /> Applicant Representation
-                </span>
-                {proposal.status === "Shortlisted" ? (
-                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
-                    ★ Shortlisted
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-gray-500 dark:text-zinc-400 bg-gray-100 dark:bg-white/5 px-2.5 py-0.5 rounded-full border border-gray-200 dark:border-white/10">
-                    Candidate Application
-                  </span>
-                )}
-              </div>
-
-              {/* Representation Party Details */}
-              {actingTeamInfo ? (
-                <div className="flex items-center gap-3">
+            {/* 2-Column Grid */}
+            <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* LEFT: Candidate Profile / Studio Card */}
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 overflow-hidden shadow-2xs flex flex-col justify-between text-left">
+                {/* Banner Preview */}
+                <div className="h-20 sm:h-24 w-full relative overflow-hidden bg-zinc-800">
                   <img
-                    src={constructAvatarUrl(actingTeamInfo.avatar_path, actingTeamInfo.name || actingTeamInfo.team_name)}
-                    alt={actingTeamInfo.name || "Team"}
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = getFallbackAvatarUrl(actingTeamInfo.name || "Team");
-                    }}
-                    className="h-12 w-12 rounded-xl border border-gray-200 dark:border-white/10 object-cover shrink-0"
+                    src={candidateBannerUrl}
+                    alt="Banner"
+                    className="w-full h-full object-cover opacity-90"
                   />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate">
-                        {actingTeamInfo.name || actingTeamInfo.team_name || "Studio / Team"}
-                      </h3>
-                      <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full shrink-0">
-                        Team
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                  <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/40 backdrop-blur-md text-white border border-white/20 flex items-center gap-1">
+                    {isTeam ? <Users className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                    <span>{isTeam ? "Creative Team" : "Solo Talent"}</span>
+                  </div>
+                </div>
+
+                {/* Card Content with Overlapping Avatar */}
+                <div className="p-5 pt-0 space-y-3.5 flex-1 flex flex-col justify-between">
+                  <div>
+                    {/* Overlapping Avatar */}
+                    <div className="relative z-10 -mt-7 mb-2.5 flex items-end justify-between">
+                      <div className="h-14 w-14 rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 ring-4 ring-white dark:ring-zinc-900 shadow-sm shrink-0">
+                        {isTeam && actingTeamInfo?.avatar_path ? (
+                          <img
+                            src={constructAvatarUrl(actingTeamInfo.avatar_path, actingTeamInfo.name || actingTeamInfo.team_name)}
+                            alt={actingTeamInfo.name || "Team"}
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = getFallbackAvatarUrl(actingTeamInfo.name || "Team");
+                            }}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : proposal.freelancerAvatar ? (
+                          <img
+                            src={proposal.freelancerAvatar}
+                            alt={proposal.freelancerName}
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = getFallbackAvatarUrl(proposal.freelancerName);
+                            }}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center font-bold text-zinc-500">
+                            {proposal.freelancerName[0]}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Rating pill */}
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/60 text-xs font-bold text-gray-700 dark:text-zinc-200">
+                        <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />
+                        <span>{Number(proposal.rating || 5.0).toFixed(1)}</span>
+                      </div>
+                    </div>
+
+                    {/* Name & Handle */}
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h3 className="font-bold text-sm text-zinc-900 dark:text-white truncate">
+                          {isTeam ? (actingTeamInfo?.name || actingTeamInfo?.team_name || proposal.freelancerName) : proposal.freelancerName}
+                        </h3>
+                        <span className="px-1.5 py-0.5 rounded text-[9.5px] font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
+                          {isTeam ? "Team / Studio" : "Candidate"}
+                        </span>
+                      </div>
+                      <span className="text-xs text-zinc-400 dark:text-zinc-500 block truncate font-mono">
+                        @{proposal.freelancerHandle || "candidate"}
                       </span>
                     </div>
-                    <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">
-                      Represented by <strong className="text-gray-700 dark:text-zinc-300">{proposal.partyName}</strong> ({actingTeamInfo.members_count || actingTeamInfo.member_count || 1} members)
+
+                    {/* Bio / Description */}
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 line-clamp-2 leading-relaxed">
+                      {isTeam
+                        ? actingTeamInfo?.description || actingTeamInfo?.bio || "Representing registered creative team on this project workspace."
+                        : proposal.freelancerBio || "Verified creative specialist on Ensemble."}
                     </p>
                   </div>
-                  <button
-                    onClick={() => handleViewProfile(proposal.freelancerAccountId, actingTeamInfo.id)}
-                    className="px-2.5 py-1 text-[11px] font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg border border-gray-200 dark:border-white/10 transition shrink-0 cursor-pointer"
-                  >
-                    Team Profile
-                  </button>
+
+                  <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-zinc-400">
+                    <span>Talent Structure:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleViewProfile(proposal.freelancerAccountId, proposal.actingTeamId)}
+                      className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      <span>{isTeam ? "Shared Team Organization" : "Solo Freelancer Workspace"}</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <img
-                    src={proposal.freelancerAvatar}
-                    alt={proposal.partyName}
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = getFallbackAvatarUrl(proposal.partyName);
-                    }}
-                    className="h-12 w-12 rounded-full border border-gray-200 dark:border-white/10 object-cover shrink-0"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate">
-                        {proposal.partyName}
-                      </h3>
-                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full shrink-0">
-                        Solo Freelancer
+              </div>
+
+              {/* RIGHT: Target Job Post, Description, Budget Benchmark vs Proposed Bid */}
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-5 flex flex-col justify-between space-y-4 shadow-2xs text-left">
+                <div className="space-y-3">
+                  {/* Target Job Title & Client */}
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 block">
+                        Target Job Posting
                       </span>
+                      <button
+                        type="button"
+                        onClick={handleViewTargetJob}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      >
+                        <span>View Job Post</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">
-                      <span className="flex items-center gap-1 font-bold text-amber-500">
-                        <Star className="h-3 w-3 fill-amber-500" />
-                        {Number(proposal.rating || 5.0).toFixed(1)}
+                    <h3 className="text-sm sm:text-base font-bold text-zinc-900 dark:text-white mt-0.5 line-clamp-1">
+                      {proposal.jobTitle}
+                    </h3>
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                      Posted by <strong className="text-zinc-700 dark:text-zinc-300">You</strong> • Timeline: <strong className="text-zinc-700 dark:text-zinc-300">{proposal.jobTimeline}</strong>
+                    </p>
+                  </div>
+
+                  {/* Clean Job Description Snippet */}
+                  <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 overflow-hidden">
+                    <p className="text-xs text-zinc-600 dark:text-zinc-300 line-clamp-2 leading-relaxed">
+                      {cleanJobDescription}
+                    </p>
+                  </div>
+
+                  {/* Benchmark Budget vs Proposed Bid Grid */}
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    {/* Client Budget Benchmark */}
+                    <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 space-y-0.5">
+                      <span className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500 block">
+                        Your Budget Benchmark
                       </span>
-                      <span>•</span>
-                      <span>Verified Talent</span>
+                      <span className="text-xs sm:text-sm font-bold text-zinc-800 dark:text-zinc-200 block truncate">
+                        {proposal.jobBudgetType === "open" || (!proposal.jobMaxBudget && proposal.jobMinBudget > 0)
+                          ? `From ${proposal.jobMinBudget.toLocaleString()} Cr (Open Bid)`
+                          : proposal.jobMaxBudget > 0
+                          ? `${proposal.jobMinBudget.toLocaleString()} ~ ${proposal.jobMaxBudget.toLocaleString()} Cr`
+                          : "Open Bid"}
+                      </span>
+                      <span className="text-[10px] text-zinc-400 block">Target Guideline</span>
+                    </div>
+
+                    {/* Candidate's Proposed Bid */}
+                    <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 space-y-0.5">
+                      <span className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500 block">
+                        Candidate Proposed Bid
+                      </span>
+                      <span className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-1 truncate">
+                        <CreditIcon className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                        <span>{totalBid.toLocaleString()} Credits</span>
+                      </span>
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium block truncate">
+                        Full Milestone Escrow
+                      </span>
                     </div>
                   </div>
-                  {proposal.freelancerAccountId && (
-                    <button
-                      onClick={() => handleViewProfile(proposal.freelancerAccountId)}
-                      className="px-2.5 py-1 text-[11px] font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg border border-gray-200 dark:border-white/10 transition shrink-0 cursor-pointer"
-                    >
-                      View Profile
-                    </button>
+                </div>
+
+                {/* Additional Work Rate Strip */}
+                <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 block">
+                      Additional Work Rate
+                    </span>
+                    <span className="font-bold text-zinc-900 dark:text-white">
+                      +{proposal.additionalWorkRate}% per additional pass
+                    </span>
+                  </div>
+                  <span className="text-xs font-bold text-zinc-600 dark:text-zinc-300 px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                    +{overageRateBonus} Cr / extra pass
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* =========================================================================
+            SECTION 2: COVER LETTER PITCH & CLIENT SCREENING QUESTIONS
+           ========================================================================= */}
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 overflow-hidden shadow-2xs">
+          <div
+            onClick={() => setIsSection2Collapsed(!isSection2Collapsed)}
+            className="w-full flex items-center justify-between p-4 sm:p-4.5 bg-zinc-50/80 dark:bg-zinc-800/40 hover:bg-zinc-100/80 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer text-left select-none"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                Cover Letter Pitch & Screening Questions
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-200/80 dark:bg-zinc-700/60 text-zinc-600 dark:text-zinc-300">
+                {proposal.screeningAnswers && proposal.screeningAnswers.length > 0 ? `${proposal.screeningAnswers.length} Q&A` : "Direct Pitch"}
+              </span>
+            </div>
+
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
+              <span>{isSection2Collapsed ? "Expand" : "Collapse"}</span>
+              <ChevronDown className={`h-3.5 w-3.5 text-zinc-500 transition-transform duration-200 ${!isSection2Collapsed ? "rotate-180" : ""}`} />
+            </span>
+          </div>
+
+          <AnimatePresence initial={false}>
+            {!isSection2Collapsed && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                className="overflow-hidden border-t border-zinc-200 dark:border-zinc-800/80 p-5 sm:p-6 space-y-5"
+              >
+                {/* Cover Pitch Box */}
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider block">
+                    Candidate's Proposal Pitch
+                  </span>
+                  <div className="p-4 sm:p-5 rounded-2xl bg-zinc-50/70 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 text-xs sm:text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed shadow-2xs">
+                    <JobRichText content={proposal.coverLetter} />
+                  </div>
+                </div>
+
+                {/* Screening Questionnaire Responses */}
+                <div className="space-y-3 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                  <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider block">
+                    Candidate's Screening Question Responses
+                  </span>
+                  {proposal.screeningAnswers && proposal.screeningAnswers.length > 0 ? (
+                    <div className="space-y-3">
+                      {proposal.screeningAnswers.map((item: any, idx: number) => (
+                        <div
+                          key={idx}
+                          className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/30 border border-zinc-200 dark:border-zinc-800 space-y-1.5 text-xs text-left"
+                        >
+                          <p className="font-bold text-zinc-900 dark:text-white">
+                            <span className="text-zinc-400 mr-1.5 font-semibold">Q{idx + 1}:</span>
+                            {item.question}
+                          </p>
+                          <p className="text-zinc-600 dark:text-zinc-300 pl-4 border-l-2 border-zinc-300 dark:border-zinc-700">
+                            {item.answer || <span className="text-zinc-400 italic">No answer provided.</span>}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500 italic p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/20 border border-zinc-100 dark:border-zinc-800">
+                      No screening questions were specified for this project.
+                    </p>
                   )}
                 </div>
-              )}
-            </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
-            {/* Submission Date */}
-            <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400">
-              <span className="flex items-center gap-1.5">
-                <Clock className="h-3 w-3 text-gray-400" />
-                Submitted on <strong className="text-gray-700 dark:text-zinc-300 font-semibold">{proposal.submittedAt}</strong>
+        {/* =========================================================================
+            SECTION 3: TERMS OF SERVICE & CLIENT SPECIFICATIONS
+           ========================================================================= */}
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 overflow-hidden shadow-2xs">
+          <div
+            onClick={() => setIsSection3Collapsed(!isSection3Collapsed)}
+            className="w-full flex items-center justify-between p-4 sm:p-4.5 bg-zinc-50/80 dark:bg-zinc-800/40 hover:bg-zinc-100/80 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer text-left select-none"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                Terms of Service & Job Specifications
               </span>
-              {proposal.updatedAt && (
-                <span className="text-gray-400">Updated {proposal.updatedAt}</span>
-              )}
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-200/80 dark:bg-zinc-700/60 text-zinc-600 dark:text-zinc-300">
+                {proposal.tosTitle || "Service Agreement"}
+              </span>
             </div>
-          </div>
-        </div>
 
-        {/* ================= 2. 3-METRIC SPECIFICATIONS STRIP ================= */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* Card 1: Proposed Bid */}
-          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 shadow-xs">
-            <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block">
-              Proposed Total Bid
-            </span>
-            <div className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center gap-1.5 mt-1">
-              <CreditIcon className="h-5 w-5 text-amber-500 shrink-0" />
-              <span>{totalBid.toLocaleString()} Credits</span>
-            </div>
-            <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1.5">
-              Escrow locked upon contract creation across {proposal.milestones.length} milestone{proposal.milestones.length !== 1 ? "s" : ""}
-            </p>
-          </div>
-
-          {/* Card 2: Additional Work Rate */}
-          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 shadow-xs">
-            <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block">
-              Additional Revision Rate
-            </span>
-            <div className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center gap-1 mt-1">
-              <span>+{proposal.additionalWorkRate}%</span>
-              <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400">/ extra pass</span>
-            </div>
-            <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1.5 flex items-center gap-1">
-              Extra pass cost: <CreditIcon className="h-3 w-3 text-amber-500 inline" />
-              <strong className="text-gray-700 dark:text-zinc-300 font-bold">+{overageRateBonus.toLocaleString()} Credits</strong> per requested revision pass
-            </p>
-          </div>
-
-          {/* Card 3: Scope & Schedule */}
-          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 shadow-xs">
-            <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block">
-              Milestone Breakdown Scope
-            </span>
-            <div className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center gap-2 mt-1">
-              <Layers className="h-5 w-5 text-blue-500 shrink-0" />
-              <span>{proposal.milestones.length} Milestone Phases</span>
-            </div>
-            <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1.5">
-              Estimated Total Duration: <strong className="text-gray-700 dark:text-zinc-300 font-bold">{totalHours} Hours</strong>
-            </p>
-          </div>
-        </div>
-
-        {/* ================= 3. COVER PITCH & SOLUTION RATIONALE ================= */}
-        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 sm:p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
-            <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-              <FileText className="h-4 w-4 text-blue-500" /> Cover Pitch & Solution Rationale
-            </h3>
-            <span className="text-[11px] text-gray-400">Candidate Submission</span>
-          </div>
-
-          <div className="text-sm leading-relaxed text-gray-700 dark:text-zinc-300">
-            <JobRichText content={proposal.coverLetter || "No pitch statement provided."} />
-          </div>
-
-          {/* Screening Questionnaire Responses */}
-          {proposal.screeningAnswers && proposal.screeningAnswers.length > 0 && (
-            <div className="pt-4 border-t border-gray-100 dark:border-white/5 space-y-3">
-              <h4 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
-                Screening Questionnaire Responses
-              </h4>
-              <div className="space-y-2">
-                {proposal.screeningAnswers.map((qa: any, idx: number) => (
-                  <div
-                    key={idx}
-                    className="p-3.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 text-xs space-y-1"
-                  >
-                    <p className="font-semibold text-gray-900 dark:text-white">
-                      Q: {qa.question || `Question ${idx + 1}`}
-                    </p>
-                    <p className="text-gray-600 dark:text-zinc-300">
-                      A: {qa.answer || "No response provided"}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ================= 4. MILESTONES SCHEDULE & DELIVERABLES TABLE ================= */}
-        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface overflow-hidden shadow-xs">
-          <div className="p-5 border-b border-gray-100 dark:border-white/5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Layers className="h-4 w-4 text-blue-500" />
-              <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
-                Milestones Schedule & Deliverables ({proposal.milestones.length})
-              </h3>
-            </div>
-            <span className="text-xs text-gray-500 dark:text-zinc-400 font-semibold">
-              {totalHours} hrs estimated
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
+              <span>{isSection3Collapsed ? "Expand" : "Collapse"}</span>
+              <ChevronDown className={`h-3.5 w-3.5 text-zinc-500 transition-transform duration-200 ${!isSection3Collapsed ? "rotate-180" : ""}`} />
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
-                  <th className="py-3 px-4 w-12 text-center">#</th>
-                  <th className="py-3 px-4 min-w-[240px]">Milestone Phase & Deliverable Scope</th>
-                  <th className="py-3 px-3 text-center">Duration</th>
-                  <th className="py-3 px-3 text-center">Revisions</th>
-                  <th className="py-3 px-3 text-center">Share</th>
-                  <th className="py-3 px-4 text-right">Phase Escrow</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                {proposal.milestones.length > 0 ? (
-                  proposal.milestones.map((m, idx) => {
-                    const share = totalHours > 0 ? Math.round(((Number(m.hours) || 0) / totalHours) * 100) : Math.round(100 / count);
-                    const phasePayout = Math.floor(totalBid * (share / 100)) || milestoneAveragePayout;
+          <AnimatePresence initial={false}>
+            {!isSection3Collapsed && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                className="overflow-hidden border-t border-zinc-200 dark:border-zinc-800/80 p-5 sm:p-6"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left">
+                  {/* LEFT: Candidate's Terms of Service */}
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider block">
+                        Candidate's Service Agreement
+                      </span>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        Binding terms proposed for project deliverables, rights, and workflow
+                      </p>
+                    </div>
 
-                    return (
-                      <tr key={m.id || idx} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors">
-                        <td className="py-3.5 px-4 text-center font-bold text-gray-400 dark:text-zinc-500">
-                          {String(idx + 1).padStart(2, "0")}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <p className="font-bold text-gray-900 dark:text-white text-xs">{m.name}</p>
-                          {m.description && (
-                            <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
-                              {m.description}
-                            </p>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-3 text-center text-gray-700 dark:text-zinc-300 font-semibold whitespace-nowrap">
-                          {m.hours} hrs
-                        </td>
-                        <td className="py-3.5 px-3 text-center text-gray-700 dark:text-zinc-300 whitespace-nowrap">
-                          {m.revisions} pass{m.revisions !== 1 ? "es" : ""}
-                        </td>
-                        <td className="py-3.5 px-3 text-center text-gray-500 dark:text-zinc-400 font-semibold whitespace-nowrap">
-                          {share}%
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-bold text-gray-900 dark:text-white whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1">
-                            <CreditIcon className="h-3.5 w-3.5 text-amber-500" />
-                            {phasePayout.toLocaleString()}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={6} className="py-6 text-center text-xs text-gray-400 dark:text-zinc-500 italic">
-                      Single project delivery milestone without incremental sub-phases.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-              <tfoot>
-                <tr className="border-t border-gray-200 dark:border-white/10 bg-gray-50/80 dark:bg-white/[0.03] text-xs font-bold text-gray-900 dark:text-white">
-                  <td colSpan={2} className="py-3 px-4 uppercase text-[10px] tracking-wider text-gray-500 dark:text-zinc-400">
-                    Total Contract Escrow Value
-                  </td>
-                  <td className="py-3 px-3 text-center">{totalHours} hrs</td>
-                  <td className="py-3 px-3 text-center text-gray-400">—</td>
-                  <td className="py-3 px-3 text-center">100%</td>
-                  <td className="py-3 px-4 text-right">
-                    <span className="inline-flex items-center gap-1 text-amber-500">
-                      <CreditIcon className="h-3.5 w-3.5" />
-                      {totalBid.toLocaleString()}
-                    </span>
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-
-        {/* ================= 5. ATTACHED WORK SAMPLES & REFERENCES ================= */}
-        {proposal.attachments && proposal.attachments.length > 0 && (
-          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
-              <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-                <Paperclip className="h-4 w-4 text-blue-500" />
-                Submitted Work Samples & References ({proposal.attachments.length})
-              </h3>
-              <span className="text-[11px] text-gray-400">Click to preview in lightbox</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {proposal.attachments.map((att: any, idx: number) => {
-                const downloadUrl = att.path?.startsWith("http")
-                  ? att.path
-                  : `${import.meta.env.VITE_CLOUDFRONT_URL || ""}/${att.path?.startsWith("/") ? att.path.slice(1) : att.path}`;
-                const mime = (att.mime_type || "").toLowerCase();
-                const name = att.name || `Sample_${idx + 1}`;
-                const ext = name.split(".").pop()?.toLowerCase() || "";
-
-                const isVideo = mime.startsWith("video/") || ["mp4", "webm", "mov"].includes(ext);
-                const isAudio = mime.startsWith("audio/") || ["mp3", "wav", "ogg", "m4a", "flac"].includes(ext);
-                const isImage = mime.startsWith("image/") || ["png", "jpg", "jpeg", "webp", "gif"].includes(ext);
-                const isPdf = mime === "application/pdf" || ext === "pdf";
-
-                const sizeStr = att.size_bytes ? `${(att.size_bytes / 1024 / 1024).toFixed(1)} MB` : "";
-
-                return (
-                  <div
-                    key={idx}
-                    className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-white/[0.02] overflow-hidden hover:border-blue-500/30 transition flex flex-col justify-between group shadow-2xs"
-                  >
-                    {/* Media Thumbnail */}
-                    {isVideo ? (
-                      <div
-                        onClick={() => setPreviewItem({ url: downloadUrl, name, type: "video" })}
-                        className="relative h-28 bg-black flex items-center justify-center cursor-pointer overflow-hidden group/video"
-                      >
-                        <video src={downloadUrl} preload="metadata" className="w-full h-full object-cover opacity-60 group-hover/video:opacity-80 transition-opacity" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-10 h-10 rounded-full bg-blue-600/90 text-white flex items-center justify-center shadow-md group-hover/video:scale-105 transition-transform">
-                            <Play className="w-4 h-4 fill-white ml-0.5" />
-                          </div>
-                        </div>
-                        <span className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-600 text-white">
-                          VIDEO DEMO
+                    <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/30 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-zinc-900 dark:text-white">
+                          {proposal.tosTitle || "Custom Service Terms"}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                          {proposal.tosDescription || "Engagement Terms"}
                         </span>
                       </div>
-                    ) : isAudio ? (
-                      <div
-                        onClick={() => setPreviewItem({ url: downloadUrl, name, type: "audio" })}
-                        className="h-28 bg-blue-500/5 dark:bg-blue-500/10 flex flex-col items-center justify-center gap-1.5 cursor-pointer border-b border-gray-200 dark:border-white/10 group/audio"
-                      >
-                        <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-500 flex items-center justify-center group-hover/audio:scale-105 transition-transform">
-                          <Volume2 className="w-5 h-5" />
-                        </div>
-                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">AUDIO TRACK</span>
-                      </div>
-                    ) : isImage ? (
-                      <div
-                        onClick={() => setPreviewItem({ url: downloadUrl, name, type: "image" })}
-                        className="relative h-28 bg-gray-100 dark:bg-white/5 flex items-center justify-center cursor-pointer overflow-hidden group/img"
-                      >
-                        <img src={downloadUrl} alt={name} className="w-full h-full object-cover group-hover/img:scale-105 transition-transform" />
-                        <span className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-600 text-white">
-                          IMAGE
-                        </span>
-                      </div>
-                    ) : isPdf ? (
-                      <div
-                        onClick={() => setPreviewItem({ url: downloadUrl, name, type: "pdf" })}
-                        className="h-28 bg-red-500/5 dark:bg-red-500/10 flex flex-col items-center justify-center gap-1.5 cursor-pointer border-b border-gray-200 dark:border-white/10 group/pdf"
-                      >
-                        <FileText className="w-8 h-8 text-red-500 group-hover/pdf:scale-105 transition-transform" />
-                        <span className="text-[10px] font-bold text-red-600 dark:text-red-400">PDF DOCUMENT</span>
-                      </div>
-                    ) : (
-                      <div
-                        onClick={() => window.open(downloadUrl, "_blank")}
-                        className="h-28 bg-gray-100 dark:bg-white/5 flex flex-col items-center justify-center gap-1.5 cursor-pointer border-b border-gray-200 dark:border-white/10"
-                      >
-                        <FileText className="w-8 h-8 text-gray-500" />
-                        <span className="text-[10px] font-bold text-gray-600 dark:text-zinc-400">ATTACHED FILE</span>
-                      </div>
-                    )}
-
-                    {/* Metadata & Actions */}
-                    <div className="p-3 space-y-1.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-xs font-bold text-gray-900 dark:text-white truncate block flex-1" title={name}>
-                          {name}
-                        </span>
-                        <a
-                          href={downloadUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          download
-                          className="text-gray-400 hover:text-blue-500 transition-colors p-0.5"
-                          title="Download"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                        </a>
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400">
-                        <span>{sizeStr || ext.toUpperCase()}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (isVideo) setPreviewItem({ url: downloadUrl, name, type: "video" });
-                            else if (isAudio) setPreviewItem({ url: downloadUrl, name, type: "audio" });
-                            else if (isImage) setPreviewItem({ url: downloadUrl, name, type: "image" });
-                            else if (isPdf) setPreviewItem({ url: downloadUrl, name, type: "pdf" });
-                            else window.open(downloadUrl, "_blank");
-                          }}
-                          className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline cursor-pointer"
-                        >
-                          <Eye className="w-3 h-3" /> Preview
-                        </button>
+                      <div className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed max-h-48 overflow-y-auto pr-1">
+                        <JobRichText content={proposal.tosContent} />
                       </div>
                     </div>
                   </div>
-                );
-              })}
+
+                  {/* RIGHT: Client Project Specifications */}
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider block">
+                        Target Job Specifications
+                      </span>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        Expected skill profile, experience level, and timeline requirements
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/30 border border-zinc-200 dark:border-zinc-800 space-y-3 text-xs">
+                      {/* Skills */}
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-bold uppercase text-zinc-400 dark:text-zinc-500 block">
+                          Required Skill Tags
+                        </span>
+                        {proposal.jobSkills && proposal.jobSkills.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {proposal.jobSkills.map((sk: string, sIdx: number) => (
+                              <span
+                                key={sIdx}
+                                className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
+                              >
+                                {sk}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-zinc-400 italic">No specific skills tagged</span>
+                        )}
+                      </div>
+
+                      {/* Experience & Timeline grid */}
+                      <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-zinc-200 dark:border-zinc-700/60">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-zinc-400 block">Experience Level</span>
+                          <span className="font-bold text-zinc-900 dark:text-white capitalize">
+                            {proposal.jobExperienceLevel}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-zinc-400 block">Target Timeline</span>
+                          <span className="font-bold text-zinc-900 dark:text-white">
+                            {proposal.jobTimeline}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Headcount */}
+                      <div className="pt-2 border-t border-zinc-200 dark:border-zinc-700/60 flex items-center justify-between">
+                        <span className="text-zinc-500">Target Role Headcount:</span>
+                        <span className="font-bold text-zinc-900 dark:text-white">
+                          {proposal.jobHiringType === "single" ? "Single Creative Talent (1)" : "Multiple Production Specialists"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* =========================================================================
+            SECTION 4: ATTACHED WORK SAMPLES
+           ========================================================================= */}
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 overflow-hidden shadow-2xs">
+          <div
+            onClick={() => setIsSection4Collapsed(!isSection4Collapsed)}
+            className="w-full flex items-center justify-between p-4 sm:p-4.5 bg-zinc-50/80 dark:bg-zinc-800/40 hover:bg-zinc-100/80 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer text-left select-none"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                Attached Work Samples
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-200/80 dark:bg-zinc-700/60 text-zinc-600 dark:text-zinc-300">
+                {proposal.attachments && proposal.attachments.length > 0 ? `${proposal.attachments.length} Files` : "0 Files"}
+              </span>
             </div>
-          </div>
-        )}
 
-        {/* ================= 6. APPLICANT PORTFOLIO & CASE STUDIES ================= */}
-        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 sm:p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
-            <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-              <FolderOpen className="h-4 w-4 text-blue-500" />
-              Applicant Portfolio &amp; Case Studies
-            </h3>
-            <span className="text-[11px] text-gray-400">Verified Profile Showcase</span>
-          </div>
-
-          <Profile_Portfolio
-            portfolioItems={portfolioItems}
-            isOwner={false}
-            isLoading={loadingPortfolio}
-          />
-        </div>
-
-        {/* ================= 7. APPLICANT CREATIVE GALLERY ================= */}
-        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 sm:p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
-            <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-              <ImageIcon className="h-4 w-4 text-purple-500" />
-              Applicant Creative Gallery &amp; Media Works
-            </h3>
-            <span className="text-[11px] text-gray-400">Profile Media Assets</span>
-          </div>
-
-          <Profile_Gallery
-            accountId={proposal.freelancerAccountId || ""}
-            isOwner={false}
-          />
-        </div>
-
-        {/* ================= 8. TERMS OF SERVICE ================= */}
-        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 sm:p-6 shadow-xs space-y-3">
-          <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-500" />
-              <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
-                {proposal.tosTitle || "Candidate Service Terms"}
-              </h3>
-            </div>
-            <span className="text-[11px] text-gray-400">{proposal.tosDescription || "Engagement Rules"}</span>
-          </div>
-          <div className="p-4 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.01] text-xs text-gray-600 dark:text-zinc-400 leading-relaxed whitespace-pre-line">
-            {proposal.tosContent}
-          </div>
-        </div>
-
-        {/* Rejection Notification (if declined) */}
-        {proposal.status === "Rejected" && (
-          <div className="p-4 rounded-2xl border border-red-500/20 bg-red-500/5 text-xs space-y-1">
-            <span className="font-bold text-red-600 dark:text-red-400 uppercase flex items-center gap-1.5 text-[10px] tracking-wider">
-              <ShieldAlert className="h-4 w-4" /> Proposal Declined
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
+              <span>{isSection4Collapsed ? "Expand" : "Collapse"}</span>
+              <ChevronDown className={`h-3.5 w-3.5 text-zinc-500 transition-transform duration-200 ${!isSection4Collapsed ? "rotate-180" : ""}`} />
             </span>
-            <p className="text-gray-700 dark:text-zinc-300 leading-relaxed pl-5">
-              {proposal.rejectionReason || "You have declined this candidate's proposal application."}
+          </div>
+
+          <AnimatePresence initial={false}>
+            {!isSection4Collapsed && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                className="overflow-hidden border-t border-zinc-200 dark:border-zinc-800/80 p-5 sm:p-6"
+              >
+                {proposal.attachments && proposal.attachments.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {proposal.attachments.map((file: any, idx: number) => {
+                      const cloudfront = import.meta.env.VITE_CLOUDFRONT_URL || "";
+                      const filePath = file.path || "";
+                      const url = filePath ? `${cloudfront}${filePath.startsWith("/") ? "" : "/"}${filePath}` : "";
+                      const fType = getFileType(file.mime_type, file.name);
+                      const ext = file.name ? file.name.split(".").pop()?.toUpperCase() : "FILE";
+                      const size = formatFileSize(file.size_bytes);
+
+                      return (
+                        <div
+                          key={idx}
+                          className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 flex items-center gap-3 shadow-2xs text-left"
+                        >
+                          <div
+                            onClick={() => url && setPreviewItem({ url, name: file.name, type: fType })}
+                            className="h-11 w-11 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0 cursor-pointer relative group border border-zinc-200 dark:border-zinc-700 flex items-center justify-center"
+                          >
+                            {fType === "image" && url ? (
+                              <img src={url} alt={file.name} className="h-full w-full object-cover" />
+                            ) : fType === "video" ? (
+                              <Play className="h-4 w-4 text-purple-500" />
+                            ) : fType === "audio" ? (
+                              <Volume2 className="h-4 w-4 text-emerald-500" />
+                            ) : (
+                              <FileText className="h-4 w-4 text-blue-500" />
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-xs text-zinc-900 dark:text-white truncate" title={file.name}>
+                              {file.name}
+                            </p>
+                            <div className="flex items-center gap-1.5 text-[9.5px] text-zinc-400 mt-0.5 font-medium">
+                              <span>{ext}</span>
+                              <span>•</span>
+                              <span>{size}</span>
+                            </div>
+                          </div>
+
+                          {url && (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewItem({ url, name: file.name, type: fType })}
+                              className="px-2 py-1 rounded-lg text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                              title="Preview"
+                            >
+                              View
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 italic p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/20 border border-zinc-100 dark:border-zinc-800 text-left">
+                    No work sample files attached to this proposal.
+                  </p>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* =========================================================================
+            SECTION 5: MILESTONES (HIGH-CRAFT ROADMAP CARDS)
+           ========================================================================= */}
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 overflow-hidden shadow-2xs">
+          <div
+            onClick={() => setIsSection5Collapsed(!isSection5Collapsed)}
+            className="w-full flex items-center justify-between p-4 sm:p-4.5 bg-zinc-50/80 dark:bg-zinc-800/40 hover:bg-zinc-100/80 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer text-left select-none"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                Milestone Roadmap & Production Schedule ({proposal.milestones.length} Phases)
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-200/80 dark:bg-zinc-700/60 text-zinc-600 dark:text-zinc-300">
+                {totalHours} hrs Total • 100% Balanced
+              </span>
+            </div>
+
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
+              <span>{isSection5Collapsed ? "Expand" : "Collapse"}</span>
+              <ChevronDown className={`h-3.5 w-3.5 text-zinc-500 transition-transform duration-200 ${!isSection5Collapsed ? "rotate-180" : ""}`} />
+            </span>
+          </div>
+
+          <AnimatePresence initial={false}>
+            {!isSection5Collapsed && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                className="overflow-hidden border-t border-zinc-200 dark:border-zinc-800/80 p-5 sm:p-6 space-y-4"
+              >
+                <div className="space-y-3.5">
+                  {proposal.milestones.map((m: any, idx: number) => {
+                    const pct = Number(m.percentage) || Math.round(100 / count);
+                    const milestonePayout = Math.floor(totalBid * (pct / 100));
+                    const theme = getPhaseTheme(idx);
+                    const isTasksExpanded = Boolean(expandedMilestoneTasks[idx]);
+                    const taskList = Array.isArray(m.tasks) ? m.tasks.filter(Boolean) : (m.description ? [m.description] : []);
+
+                    return (
+                      <div
+                        key={m.id || idx}
+                        className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-4 sm:p-5 shadow-2xs space-y-3 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700 text-left"
+                      >
+                        {/* Top Header Row of Milestone Card */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {/* Circular Phase Number Badge: (1), (2), (3), (4) */}
+                            <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${theme.circleBg}`}>
+                              {idx + 1}
+                            </div>
+                            <h4 className="text-sm sm:text-base font-bold text-zinc-900 dark:text-white truncate">
+                              {m.name || `Phase ${idx + 1}`}
+                            </h4>
+                          </div>
+
+                          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto">
+                            {/* Credits Pill */}
+                            <div className="px-3 py-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 text-xs font-bold text-zinc-900 dark:text-white flex items-center gap-1.5 shadow-2xs">
+                              <CreditIcon className="h-3.5 w-3.5 text-amber-500" />
+                              <span>{milestonePayout.toLocaleString()} Credits</span>
+                            </div>
+
+                            {/* Toggle Tasks Dropdown */}
+                            <button
+                              type="button"
+                              onClick={() => toggleMilestoneTasks(idx)}
+                              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                              title={isTasksExpanded ? "Collapse tasks" : "Expand tasks"}
+                            >
+                              <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isTasksExpanded ? "rotate-180" : ""}`} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Secondary Tags Row */}
+                        <div className="flex items-center gap-2 flex-wrap text-[11px] text-zinc-600 dark:text-zinc-300">
+                          <div className="px-2.5 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/70 flex items-center gap-1.5 font-medium">
+                            <Clock className="h-3 w-3 text-zinc-400" />
+                            <span>Duration: {m.hours} hrs ({Math.max(1, (m.hours / 24).toFixed(1))}d)</span>
+                          </div>
+
+                          <div className="px-2.5 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/70 flex items-center gap-1.5 font-medium">
+                            <Percent className="h-3 w-3 text-zinc-400" />
+                            <span>% Budget Share: {pct}%</span>
+                          </div>
+
+                          <div className="px-2.5 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/70 flex items-center gap-1.5 font-medium">
+                            <RefreshCcw className="h-3 w-3 text-zinc-400" />
+                            <span>{m.revisions} Revisions Included</span>
+                          </div>
+                        </div>
+
+                        {/* Expandable Task Checklist */}
+                        <AnimatePresence initial={false}>
+                          {isTasksExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.18, ease: "easeOut" }}
+                              className="overflow-hidden pt-2 border-t border-zinc-100 dark:border-zinc-800/80 space-y-2 text-xs"
+                            >
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 block">
+                                Phase Deliverables & Tasks
+                              </span>
+                              {taskList.length > 0 ? (
+                                <div className="space-y-1.5">
+                                  {taskList.map((task: string, tIdx: number) => (
+                                    <div key={tIdx} className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
+                                      <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                      <span>{task}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-zinc-400 italic">Core phase production & delivery tasks.</p>
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* =========================================================================
+            SECTION 6: CANDIDATE PORTFOLIO & CASE STUDIES (WITH CLIENT SUMMARY BANNER)
+           ========================================================================= */}
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 overflow-hidden shadow-2xs">
+          <div
+            onClick={() => setIsSection6Collapsed(!isSection6Collapsed)}
+            className="w-full flex items-center justify-between p-4 sm:p-4.5 bg-zinc-50/80 dark:bg-zinc-800/40 hover:bg-zinc-100/80 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer text-left select-none"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                Applicant Portfolio & Case Studies
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-200/80 dark:bg-zinc-700/60 text-zinc-600 dark:text-zinc-300">
+                {portfolioItems.length} Project{portfolioItems.length === 1 ? "" : "s"}
+              </span>
+            </div>
+
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
+              <span>{isSection6Collapsed ? "Expand" : "Collapse"}</span>
+              <ChevronDown className={`h-3.5 w-3.5 text-zinc-500 transition-transform duration-200 ${!isSection6Collapsed ? "rotate-180" : ""}`} />
+            </span>
+          </div>
+
+          <AnimatePresence initial={false}>
+            {!isSection6Collapsed && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                className="overflow-hidden border-t border-zinc-200 dark:border-zinc-800/80 p-5 sm:p-6"
+              >
+                {/* Candidate Creative Track Record Summary Banner */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/70 space-y-3.5 text-left mb-6 shadow-2xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                        <FolderOpen className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                          <span>Candidate Creative Track Record</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
+                            Verified Candidate
+                          </span>
+                        </h4>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          Portfolio case studies and professional credentials submitted by {proposal.partyName}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleViewProfile(proposal.freelancerAccountId, proposal.actingTeamId)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700/60 text-xs font-bold text-zinc-800 dark:text-zinc-200 shadow-2xs transition cursor-pointer self-start sm:self-auto shrink-0"
+                    >
+                      <span>View Full Public Profile</span>
+                      <ExternalLink className="h-3.5 w-3.5 text-blue-500" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
+                    <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 space-y-0.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 block">
+                        Case Studies
+                      </span>
+                      <span className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white block">
+                        {portfolioItems.length} Verified Project{portfolioItems.length === 1 ? "" : "s"}
+                      </span>
+                      <span className="text-[10px] text-zinc-400">Active portfolio assets</span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 space-y-0.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 block">
+                        Client Rating
+                      </span>
+                      <span className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-1">
+                        <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />
+                        <span>{Number(proposal.rating || 5.0).toFixed(1)} / 5.0</span>
+                      </span>
+                      <span className="text-[10px] text-zinc-400">Historical performance</span>
+                    </div>
+
+                    <div className="col-span-2 sm:col-span-1 p-3 rounded-xl bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 space-y-0.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 block">
+                        Talent Structure
+                      </span>
+                      <span className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-1 truncate">
+                        {proposal.actingTeamId || isTeam ? (
+                          <>
+                            <Users className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                            <span className="truncate">{actingTeamInfo?.name || "Creative Studio / Team"}</span>
+                          </>
+                        ) : (
+                          <>
+                            <User className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                            <span className="truncate">Solo Specialist</span>
+                          </>
+                        )}
+                      </span>
+                      <span className="text-[10px] text-zinc-400">Representation format</span>
+                    </div>
+                  </div>
+                </div>
+
+                <Profile_Portfolio
+                  portfolioItems={portfolioItems}
+                  isOwner={false}
+                  isLoading={loadingPortfolio}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* =========================================================================
+            SECTION 7: CANDIDATE CREATIVE GALLERY & MEDIA WORKS
+           ========================================================================= */}
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 overflow-hidden shadow-2xs">
+          <div
+            onClick={() => setIsSection7Collapsed(!isSection7Collapsed)}
+            className="w-full flex items-center justify-between p-4 sm:p-4.5 bg-zinc-50/80 dark:bg-zinc-800/40 hover:bg-zinc-100/80 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer text-left select-none"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                Applicant Creative Gallery & Media Works
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-200/80 dark:bg-zinc-700/60 text-zinc-600 dark:text-zinc-300">
+                Media Repository
+              </span>
+            </div>
+
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
+              <span>{isSection7Collapsed ? "Expand" : "Collapse"}</span>
+              <ChevronDown className={`h-3.5 w-3.5 text-zinc-500 transition-transform duration-200 ${!isSection7Collapsed ? "rotate-180" : ""}`} />
+            </span>
+          </div>
+
+          <AnimatePresence initial={false}>
+            {!isSection7Collapsed && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                className="overflow-hidden border-t border-zinc-200 dark:border-zinc-800/80 p-5 sm:p-6"
+              >
+                <div className="mb-4 text-left">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Visual and audio media assets published by <strong className="text-zinc-800 dark:text-zinc-200">{proposal.partyName}</strong>:
+                  </p>
+                </div>
+                <Profile_Gallery
+                  accountId={proposal.freelancerAccountId || ""}
+                  isOwner={false}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Rejection Rationale (if rejected) */}
+        {proposal.status === "Rejected" && proposal.rejectionReason && (
+          <div className="p-4 rounded-2xl border border-red-500/20 bg-red-500/5 text-xs space-y-1 text-left">
+            <span className="font-bold text-red-600 dark:text-red-400 uppercase flex items-center gap-1.5 text-[10px] tracking-wider">
+              <ShieldAlert className="h-4 w-4" /> Decline Rationale
+            </span>
+            <p className="text-gray-700 dark:text-zinc-300 leading-relaxed pl-5.5">
+              {proposal.rejectionReason}
             </p>
           </div>
         )}
       </motion.div>
 
-      {/* ================= 7. FIXED ACTION BAR (BOTTOM) ================= */}
-      <div className="fixed bottom-0 inset-x-0 z-40 border-t border-gray-200 dark:border-white/10 bg-white/90 dark:bg-dark-surface/90 backdrop-blur-xl shadow-lg p-3 sm:px-6">
-        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      {/* =========================================================================
+          STATIONARY DECISION BAR (STICKY BOTTOM BAR FOR CLIENT / AUTHOR)
+         ========================================================================= */}
+      <div className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-dark-surface/95 backdrop-blur-md border-t border-gray-200 dark:border-white/10 p-4 z-40 shadow-lg">
+        <div className="mx-auto max-w-5xl flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-500 dark:text-zinc-400 hidden sm:inline">
-              Candidate Status:
-            </span>
-            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${statusBadge.className}`}>
-              {statusBadge.label}
-            </span>
+            <button
+              onClick={() =>
+                openMarketplaceConversation({
+                  contextType: "job_proposal",
+                  contextId: proposal.id,
+                  navigate,
+                })
+              }
+              className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-xs font-semibold text-gray-700 dark:text-zinc-200 flex items-center gap-2 transition cursor-pointer"
+            >
+              <MessageSquare className="h-4 w-4 text-blue-500" />
+              <span>Chat with Candidate</span>
+            </button>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            {/* When Pending */}
-            {proposal.status === "Pending" && (
-              <>
-                <button
-                  onClick={() => setIsRejectModalOpen(true)}
-                  className="px-3.5 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:hover:bg-red-500/10 dark:hover:text-red-400 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <XCircle className="h-4 w-4" />
-                  <span>Decline</span>
-                </button>
-                <button
-                  onClick={() => setIsShortlistModalOpen(true)}
-                  className="px-4 py-2 rounded-xl border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Star className="h-4 w-4" />
-                  <span>Shortlist</span>
-                </button>
-                <button
-                  onClick={() => setIsAcceptConfirmOpen(true)}
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Send className="h-4 w-4" />
-                  <span>Extend Contract Offer</span>
-                </button>
-              </>
-            )}
-
-            {/* When Shortlisted */}
-            {proposal.status === "Shortlisted" && (
-              <>
-                <button
-                  onClick={() =>
-                    void openMarketplaceConversation({
-                      contextType: "job_proposal",
-                      contextId: proposal.id,
-                      navigate,
-                    })
-                  }
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <MessageSquare className="h-4 w-4" />
-                  <span>Discussion Chat</span>
-                </button>
-                <button
-                  onClick={() => setIsUnshortlistModalOpen(true)}
-                  className="px-3.5 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <UserMinus className="h-4 w-4" />
-                  <span>Remove Shortlist</span>
-                </button>
-                <button
-                  onClick={() => setIsRejectModalOpen(true)}
-                  className="px-3.5 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 hover:bg-red-50 hover:text-red-600 hover:border-red-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <XCircle className="h-4 w-4" />
-                  <span>Decline</span>
-                </button>
-                <button
-                  onClick={() => setIsAcceptConfirmOpen(true)}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Send className="h-4 w-4" />
-                  <span>Extend Contract Offer</span>
-                </button>
-              </>
-            )}
-
-            {/* When Offer Extended */}
-            {proposal.status === "Approved" && (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-600 dark:text-purple-400 text-xs font-bold">
-                <Clock className="h-4 w-4 animate-pulse" />
-                <span>Formal Offer Extended — Awaiting Freelancer Execution</span>
-              </div>
-            )}
-
-            {/* When Hired */}
-            {(proposal.status === "Hired" || proposal.status === "Accepted") && (
+          <div className="flex items-center gap-3">
+            {/* If proposal is currently Hired */}
+            {proposal.status === "Hired" && proposal.contractId && (
               <button
-                onClick={() => navigate(proposal.contractId ? `/contracts/${proposal.contractId}` : "/contracts")}
-                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md transition flex items-center gap-2 cursor-pointer"
+                onClick={() => navigate(`/contracts/${proposal.contractId}`)}
+                className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-md shadow-purple-500/20 transition flex items-center gap-2 cursor-pointer"
               >
-                <ExternalLink className="h-4 w-4" />
-                <span>Open Active Contract & Workspace</span>
+                <Briefcase className="h-4 w-4" />
+                <span>View Active Contract</span>
               </button>
+            )}
+
+            {/* If Offer was extended by client awaiting freelancer acceptance */}
+            {(proposal.status === "Accepted" || proposal.status === "Approved") && (
+              <span className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Formal Offer Extended (Awaiting Candidate)</span>
+              </span>
+            )}
+
+            {/* If pending review or shortlisted: author can shortlist, reject, or hire */}
+            {(proposal.status === "Pending" || proposal.status === "Shortlisted") && (
+              <>
+                {/* Shortlist Toggle */}
+                {proposal.status === "Shortlisted" ? (
+                  <button
+                    onClick={() => setIsUnshortlistModalOpen(true)}
+                    className="px-4 py-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Star className="h-3.5 w-3.5 fill-amber-500" />
+                    <span>Shortlisted</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleShortlist}
+                    disabled={isShortlisting}
+                    className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 hover:border-amber-500/40 hover:text-amber-500 text-xs font-semibold text-gray-700 dark:text-zinc-300 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Star className="h-3.5 w-3.5" />
+                    <span>{isShortlisting ? "Saving..." : "Shortlist"}</span>
+                  </button>
+                )}
+
+                {/* Decline Button */}
+                <button
+                  onClick={() => setIsRejectModalOpen(true)}
+                  className="px-4 py-2.5 rounded-xl border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 text-xs font-bold transition cursor-pointer"
+                >
+                  Decline Proposal
+                </button>
+
+                {/* Hire Candidate Button */}
+                <button
+                  onClick={() => setIsAcceptConfirmOpen(true)}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-500/20 transition flex items-center gap-2 cursor-pointer"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Hire Candidate</span>
+                </button>
+              </>
             )}
           </div>
         </div>
       </div>
 
-      {/* ================= MODALS ================= */}
+      {/* =========================================================================
+          MODALS & LIGHTBOX
+         ========================================================================= */}
 
-      {/* 1. Shortlist Confirmation Modal */}
-      <AnimatePresence>
-        {isShortlistModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-2xl space-y-4 text-left"
-            >
-              <div className="space-y-2">
-                <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Star className="h-4 w-4 text-amber-500 fill-amber-500" /> Shortlist Candidate
-                </h3>
-                <p className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed">
-                  Shortlist <strong className="text-gray-900 dark:text-white">{proposal.partyName}</strong> to easily keep track of top candidates and open dedicated interview discussions.
-                </p>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  onClick={() => setIsShortlistModalOpen(false)}
-                  disabled={isShortlisting}
-                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleShortlist}
-                  disabled={isShortlisting}
-                  className="px-5 py-2 rounded-xl bg-amber-500 text-xs font-bold text-black hover:bg-amber-400 transition shadow-sm disabled:opacity-50 cursor-pointer"
-                >
-                  {isShortlisting ? "Saving..." : "Confirm Shortlist"}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* 2. Remove Shortlist Modal */}
+      {/* 1. Unshortlist Confirmation Modal */}
       <AnimatePresence>
         {isUnshortlistModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -1201,7 +1605,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* 3. Reject Proposal Modal */}
+      {/* 2. Reject Proposal Modal */}
       <AnimatePresence>
         {isRejectModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -1246,7 +1650,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* 4. Accept / Extend Formal Offer Modal */}
+      {/* 3. Accept / Extend Formal Offer Modal */}
       <AnimatePresence>
         {isAcceptConfirmOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md overflow-y-auto">
@@ -1430,73 +1834,76 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* 5. Media Lightbox Modal (Portal to body) */}
+      {/* 4. Media Lightbox */}
       {previewItem &&
         createPortal(
-          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in font-['Plus_Jakarta_Sans']">
-            <div className="relative w-full max-w-4xl bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 dark:border-white/10 shrink-0">
-                <div className="flex items-center gap-2.5 min-w-0 pr-4">
-                  {previewItem.type === "video" ? (
-                    <Play className="w-4 h-4 text-blue-500 shrink-0" />
-                  ) : previewItem.type === "audio" ? (
-                    <Volume2 className="w-4 h-4 text-blue-500 shrink-0" />
-                  ) : previewItem.type === "image" ? (
-                    <ImageIcon className="w-4 h-4 text-emerald-500 shrink-0" />
-                  ) : (
-                    <FileText className="w-4 h-4 text-red-500 shrink-0" />
-                  )}
-                  <span className="font-bold text-xs text-gray-900 dark:text-white truncate">
-                    {previewItem.name}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-150"
+            onClick={() => setPreviewItem(null)}
+          >
+            <div
+              className="relative max-w-4xl max-h-[85vh] w-full bg-zinc-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-3.5 border-b border-white/10 bg-zinc-900/90 text-white text-xs font-semibold">
+                <span className="truncate pr-4">{previewItem.name}</span>
+                <div className="flex items-center gap-2">
                   <a
                     href={previewItem.url}
+                    download={previewItem.name}
                     target="_blank"
                     rel="noreferrer"
-                    download
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-xs font-bold text-gray-700 dark:text-zinc-200 transition"
+                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition flex items-center gap-1.5 text-xs px-2.5"
                   >
-                    <Download className="w-3.5 h-3.5" /> Download
+                    <Download className="h-3.5 w-3.5" />
+                    <span>Download</span>
                   </a>
                   <button
                     type="button"
                     onClick={() => setPreviewItem(null)}
-                    className="p-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500 hover:text-gray-900 dark:hover:text-white transition cursor-pointer"
+                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
               </div>
 
-              <div className="p-4 flex-1 flex items-center justify-center overflow-auto bg-gray-950/40">
-                {previewItem.type === "video" ? (
+              <div className="p-4 flex-1 flex items-center justify-center overflow-auto bg-black/40">
+                {previewItem.type === "image" && (
+                  <img
+                    src={previewItem.url}
+                    alt={previewItem.name}
+                    className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg"
+                  />
+                )}
+                {previewItem.type === "video" && (
                   <video
                     src={previewItem.url}
                     controls
                     autoPlay
-                    className="max-h-[72vh] w-auto max-w-full rounded-xl shadow-xl border border-white/10"
+                    className="max-h-[70vh] w-auto max-w-full rounded-lg"
                   />
-                ) : previewItem.type === "audio" ? (
-                  <div className="flex flex-col items-center justify-center p-8 bg-zinc-900 rounded-2xl border border-white/10 space-y-4 max-w-md w-full text-center">
-                    <div className="h-14 w-14 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
-                      <Volume2 className="h-7 w-7" />
-                    </div>
-                    <span className="text-xs font-bold text-white truncate max-w-xs">{previewItem.name}</span>
-                    <audio src={previewItem.url} controls autoPlay className="w-full mt-2" />
+                )}
+                {previewItem.type === "audio" && (
+                  <div className="p-8 text-center space-y-4">
+                    <Volume2 className="h-16 w-16 text-blue-400 mx-auto animate-pulse" />
+                    <p className="text-white text-sm font-semibold">{previewItem.name}</p>
+                    <audio src={previewItem.url} controls autoPlay className="w-80" />
                   </div>
-                ) : previewItem.type === "image" ? (
-                  <img
-                    src={previewItem.url}
-                    alt={previewItem.name}
-                    className="max-h-[72vh] w-auto max-w-full object-contain rounded-xl shadow-xl border border-white/10"
-                  />
-                ) : (
+                )}
+                {previewItem.type === "pdf" && (
                   <iframe
                     src={previewItem.url}
-                    className="w-full h-[72vh] rounded-xl border border-gray-200 dark:border-white/10 bg-white"
+                    title={previewItem.name}
+                    className="w-full h-[70vh] rounded-lg border border-white/10"
                   />
+                )}
+                {previewItem.type === "other" && (
+                  <div className="text-center p-8 space-y-3">
+                    <FileText className="h-16 w-16 text-zinc-400 mx-auto" />
+                    <p className="text-sm font-bold text-white">{previewItem.name}</p>
+                    <p className="text-xs text-zinc-400">Preview not supported for this file type.</p>
+                  </div>
                 )}
               </div>
             </div>

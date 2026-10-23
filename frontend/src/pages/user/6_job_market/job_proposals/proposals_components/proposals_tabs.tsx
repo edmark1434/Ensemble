@@ -23,7 +23,7 @@ export const ProposalsTabs: React.FC = () => {
         }`}
       >
         <span className="relative z-10 flex items-center gap-2">
-          <ClipboardList className="h-4 w-4" /> Incoming Proposals
+          <ClipboardList className="h-4 w-4" /> Received Proposals
         </span>
 
         {isIncoming && (
@@ -49,7 +49,7 @@ export const ProposalsTabs: React.FC = () => {
         }`}
       >
         <span className="relative z-10 flex items-center gap-2">
-          <Send className="h-4 w-4" /> My Proposals
+          <Send className="h-4 w-4" /> Sent Proposals
         </span>
 
         {isSent && (
@@ -75,7 +75,7 @@ export const ProposalsTabs: React.FC = () => {
         }`}
       >
         <span className="relative z-10 flex items-center gap-2">
-          <HelpCircle className="h-4 w-4" /> Proposal Flow
+          <HelpCircle className="h-4 w-4" /> Info
         </span>
         {isFlow && (
           <>

@@ -1,5 +1,6 @@
 import { getBudgetDisplayInfo, getJobBudgetType } from "@/lib/formatBudget";
 import { getImageUrl } from "@/lib/utils";
+import { getDefaultJobBannerForJob } from "@/lib/defaultJobBanners";
 import { resolveAvatarPath } from "@/lib/accountAvatars";
 import React, { useState, useEffect, useMemo } from "react";
 import { Filter } from "lucide-react";
@@ -165,7 +166,7 @@ const JobMain: React.FC = () => {
           applicantsCount: parseInt(j.applicant_count) || 0,
           savesCount: parseInt(j.saves_count) || 0,
           timeline: `${j.timeline_min}-${j.timeline_max} Days`,
-          thumbnail: getImageUrl(j.thumbnail_path) || "/placeholder.svg",
+          thumbnail: getImageUrl(j.thumbnail_path) || getDefaultJobBannerForJob(j.job_id),
           skills: j.tags || [],
           isSaved: j.is_saved || false,
           isOwnPost: Boolean(j.is_own_post),
