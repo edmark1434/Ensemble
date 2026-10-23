@@ -31,7 +31,7 @@ import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { motion, LayoutGroup } from "framer-motion";
 import useGlobalState from "@/lib/global_state";
-import { useTourStore, WALKTHROUGH_STEPS } from "@/lib/tour_state";
+import { useTourStore } from "@/lib/tour_state";
 import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { formatUnreadBadge, useInboxUnreadTotals } from "@/components/ui/chat_bubble/useInboxUnreadTotals";
 
@@ -110,12 +110,22 @@ const UserNav: React.FC<UserNavProps> = () => {
     const [isGigsOpen, setIsGigsOpen] = useState(false);
     const isTourActive = useTourStore((state) => state.isWalkthroughActive);
     const tourStepIndex = useTourStore((state) => state.currentStepIndex);
-    const currentTourStep = isTourActive ? WALKTHROUGH_STEPS[tourStepIndex] : null;
+    const activeSteps = useTourStore((state) => state.activeSteps);
+    const currentTourStep = isTourActive && activeSteps ? activeSteps[tourStepIndex] : null;
+
+    useEffect(() => {
+        if (location.pathname.startsWith('/jobs')) {
+            setIsJobsOpen(true);
+        }
+        if (location.pathname.startsWith('/gigs')) {
+            setIsGigsOpen(true);
+        }
+    }, [location.pathname]);
 
     useEffect(() => {
         if (!isTourActive || !currentTourStep) return;
-        const sId = currentTourStep.id;
-        const sel = currentTourStep.selector;
+        const sId = (currentTourStep.id || '').toLowerCase();
+        const sel = (currentTourStep.selector || '').toLowerCase();
         if (sId.includes('job') || sel.includes('jobs')) {
             setIsJobsOpen(true);
         }
