@@ -2,6 +2,8 @@ const r=require('express').Router(),c=require('../controllers/TeamsControllers')
 r.get('/invite/:code',optionalSession,c.invitePreview);
 r.use(check,auth);
 r.get('/marketplace-actors',c.marketplaceActors);
+r.get('/creation-eligibility',c.creationEligibility);
+r.get('/:teamId/member-limit',c.memberLimit);
 r.post('/:teamId/chat',c.chat);
 r.get('/:teamId/marketplace-posts',c.marketplacePosts);
 r.get('/:teamId/task-workspaces',tasks.list);
