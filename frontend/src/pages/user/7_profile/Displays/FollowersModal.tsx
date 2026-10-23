@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, Search } from "lucide-react";
 import api from "@/lib/axios";
 import { useNavigate } from "react-router-dom";
+import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 
 interface FollowersModalProps {
   isOpen: boolean;
@@ -14,8 +15,39 @@ interface UserConnection {
   account_id: string;
   display_name: string;
   handle: string;
-  avatar_preset_url: string;
+  avatar_preset_url?: string | null;
+  avatar_url?: string | null;
 }
+
+const FollowerAvatar: React.FC<{ user: UserConnection }> = ({ user }) => {
+  const [imageError, setImageError] = useState(false);
+  const name = user.display_name || user.handle || "User";
+  const avatarPath = user.avatar_preset_url || user.avatar_url;
+  const avatarUrl = constructAvatarUrl(avatarPath, name);
+
+  return (
+    <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-zinc-800 flex-shrink-0 overflow-hidden border border-gray-300 dark:border-white/10 flex items-center justify-center text-sm font-bold text-gray-700 dark:text-zinc-300 select-none">
+      {!imageError && avatarUrl ? (
+        <img
+          src={avatarUrl}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={(e) => {
+            const fallback = getFallbackAvatarUrl(name);
+            const target = e.currentTarget;
+            if (target.src !== fallback) {
+              target.src = fallback;
+            } else {
+              setImageError(true);
+            }
+          }}
+        />
+      ) : (
+        <span>{name.charAt(0).toUpperCase()}</span>
+      )}
+    </div>
+  );
+};
 
 export const FollowersModal: React.FC<FollowersModalProps> = ({
   isOpen,
@@ -44,15 +76,6 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
-
-  const constructAvatarUrl = (path: string | undefined): string | undefined => {
-    if (!path) return undefined;
-    if (path.startsWith("http")) return path;
-    const cloudfrontUrl = import.meta.env.VITE_CLOUDFRONT_URL;
-    if (!cloudfrontUrl) return path;
-    const cleanPath = path.startsWith("/") ? path.substring(1) : path;
-    return `${cloudfrontUrl}/${cleanPath}`;
   };
 
   const filteredUsers = users.filter((u) =>
@@ -113,7 +136,6 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({
           ) : (
             <div className="flex flex-col gap-1">
               {filteredUsers.map((u) => {
-                const avatar = constructAvatarUrl(u.avatar_preset_url);
                 return (
                   <button
                     key={u.account_id}
@@ -123,13 +145,7 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({
                     }}
                     className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition text-left group"
                   >
-                    <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-zinc-800 flex-shrink-0 overflow-hidden border border-gray-300 dark:border-white/10 flex items-center justify-center text-gray-500 dark:text-zinc-400 font-bold">
-                      {avatar ? (
-                        <img src={avatar} alt={u.display_name} className="h-full w-full object-cover" />
-                      ) : (
-                        u.display_name?.charAt(0) || u.handle?.charAt(0) || "?"
-                      )}
-                    </div>
+                    <FollowerAvatar user={u} />
                     <div className="flex-1 overflow-hidden">
                       <div className="text-sm font-bold text-gray-900 dark:text-zinc-200 group-hover:text-blue-600 dark:group-hover:text-white truncate">
                         {u.display_name}

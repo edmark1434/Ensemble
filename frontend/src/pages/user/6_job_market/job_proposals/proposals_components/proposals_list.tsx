@@ -19,6 +19,7 @@ import type { ViewType } from "./proposals_list_viewtype";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { JobRichText } from "../../job_components/JobRichText";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
+import { getFallbackAvatarUrl } from "@/lib/accountAvatars";
 
 export type ProposalStatus = "Pending" | "Shortlisted" | "Accepted" | "Rejected" | "Hired" | "Withdrawn" | "Archived" | "Approved";
 
@@ -69,6 +70,9 @@ export interface ProposalItemData {
   target_milestone_slots?: number;
   viewedAt?: string | null;
   shortlistedAt?: string | null;
+  actingTeamId?: string;
+  screeningAnswers?: any[];
+  attachments?: any[];
   milestones: {
     id: string;
     name: string;
@@ -149,36 +153,41 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
 
   const renderStatusBadge = (status: ProposalStatus | string) => {
     switch (status) {
-      case "Accepted":
       case "Hired":
+        return "border-purple-400/70 text-purple-600 dark:text-purple-400 bg-purple-500/10";
+      case "Accepted":
       case "Approved":
       case "approved":
-        return "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
+        return "border-emerald-400/70 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10";
       case "Shortlisted":
-        return "bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400";
+        return "border-blue-400/70 text-blue-600 dark:text-blue-400 bg-blue-500/10";
       case "Rejected":
-        return "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400";
+        return "border-red-400/70 text-red-600 dark:text-red-400 bg-red-500/10";
       case "Withdrawn":
       case "Archived":
-        return "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400";
+        return "border-gray-300 dark:border-white/20 text-gray-600 dark:text-zinc-400 bg-gray-100 dark:bg-white/5";
       default:
-        return "bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400";
+        return "border-amber-400/70 text-amber-600 dark:text-amber-400 bg-amber-500/10";
     }
   };
 
   const formatStatusText = (status: ProposalStatus | string) => {
     switch (status) {
-      case "Accepted":
       case "Hired":
-        return "Hired";
+        return "HIRED";
+      case "Accepted":
+      case "Approved":
+      case "approved":
+        return "ACCEPTED";
       case "Shortlisted":
-        return "Shortlisted";
+        return "SHORTLISTED";
       case "Rejected":
-        return "Declined";
-      case "Pending":
-        return "Pending Review";
+        return "REJECTED";
+      case "Withdrawn":
+      case "Archived":
+        return "WITHDRAWN";
       default:
-        return status;
+        return "PENDING";
     }
   };
 
@@ -231,7 +240,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                   <div className="flex items-center gap-3">
                     <div className="h-11 w-11 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 dark:text-blue-400 text-sm font-bold shrink-0 overflow-hidden">
                       {item.partyAvatar ? (
-                        <img src={item.partyAvatar} alt={item.partyName} className="w-full h-full object-cover" />
+                        <img src={item.partyAvatar} alt={item.partyName} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = getFallbackAvatarUrl(item.partyName); }} className="w-full h-full object-cover" />
                       ) : (
                         item.partyName[0]
                       )}
@@ -296,28 +305,21 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
 
                   {item.type === "sent" && (
                     <div className="pt-2 mt-1 border-t border-gray-100 dark:border-white/5">
-                      <div className="flex items-center text-[10px] sm:text-[11px] gap-1.5 sm:gap-2">
-                        <span className="flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> Submitted
+                      <div className="flex items-center text-[10px] sm:text-[11px] gap-1 sm:gap-1.5 flex-wrap">
+                        <span className={`flex items-center gap-1 font-semibold ${item.status ? "text-amber-600 dark:text-amber-400" : "text-gray-400 dark:text-zinc-500"}`}>
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" /> 01 PENDING
                         </span>
-                        <div className="h-0.5 w-4 sm:w-6 bg-emerald-500/40 rounded-full" />
-                        <span className={`flex items-center gap-1 font-semibold ${item.viewedAt ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400 dark:text-zinc-500"}`}>
-                          <CheckCircle2 className="w-3 h-3 shrink-0" /> {item.viewedAt ? "Viewed" : "Unread"}
+                        <div className={`h-0.5 w-3 sm:w-4 rounded-full ${item.shortlistedAt || item.status === "Shortlisted" || item.status === "Accepted" || item.status === "Approved" || item.status === "Hired" ? "bg-blue-500/40" : "bg-gray-200 dark:bg-white/10"}`} />
+                        <span className={`flex items-center gap-1 font-semibold ${item.shortlistedAt || item.status === "Shortlisted" || item.status === "Accepted" || item.status === "Approved" || item.status === "Hired" ? "text-blue-600 dark:text-blue-400" : "text-gray-400 dark:text-zinc-500"}`}>
+                          <Star className={`w-2.5 h-2.5 shrink-0 ${item.shortlistedAt || item.status === "Shortlisted" ? "fill-blue-500 text-blue-500" : ""}`} /> 02 SHORTLISTED
                         </span>
-                        <div className={`h-0.5 w-4 sm:w-6 rounded-full ${item.shortlistedAt || item.status === "Shortlisted" || item.status === "Accepted" || item.status === "Hired" ? "bg-amber-500/40" : "bg-gray-200 dark:bg-white/10"}`} />
-                        <span className={`flex items-center gap-1 font-semibold ${item.shortlistedAt || item.status === "Shortlisted" || item.status === "Accepted" || item.status === "Hired" ? "text-amber-500" : "text-gray-400 dark:text-zinc-500"}`}>
-                          <Star className={`w-3 h-3 shrink-0 ${item.shortlistedAt || item.status === "Shortlisted" ? "fill-amber-500 text-amber-500" : ""}`} /> Shortlisted
+                        <div className={`h-0.5 w-3 sm:w-4 rounded-full ${item.status === "Accepted" || item.status === "Approved" || item.status === "Hired" ? "bg-emerald-500/40" : "bg-gray-200 dark:bg-white/10"}`} />
+                        <span className={`flex items-center gap-1 font-semibold ${item.status === "Accepted" || item.status === "Approved" || item.status === "Hired" ? "text-emerald-600 dark:text-emerald-400" : item.status === "Rejected" ? "text-red-500" : "text-gray-400 dark:text-zinc-500"}`}>
+                          <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> 03 ACCEPTED
                         </span>
-                        <div className={`h-0.5 w-4 sm:w-6 rounded-full ${item.status === "Accepted" || item.status === "Hired" ? "bg-emerald-500/40" : "bg-gray-200 dark:bg-white/10"}`} />
-                        <span className={`flex items-center gap-1 font-semibold ${item.status === "Accepted" || item.status === "Hired" ? "text-emerald-500" : item.status === "Rejected" ? "text-red-500" : "text-gray-400 dark:text-zinc-500"}`}>
-                          {item.status === "Accepted" || item.status === "Hired" ? (
-                            <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                          ) : item.status === "Rejected" ? (
-                            <span className="w-3 h-3 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center text-[8px] font-bold">✕</span>
-                          ) : (
-                            <span className="w-3 h-3 rounded-full border border-gray-300 dark:border-zinc-600 flex items-center justify-center text-[8px]">4</span>
-                          )}
-                          {item.status === "Accepted" || item.status === "Hired" ? "Hired" : item.status === "Rejected" ? "Not Selected" : "Offer"}
+                        <div className={`h-0.5 w-3 sm:w-4 rounded-full ${item.status === "Hired" ? "bg-purple-500/40" : "bg-gray-200 dark:bg-white/10"}`} />
+                        <span className={`flex items-center gap-1 font-semibold ${item.status === "Hired" ? "text-purple-600 dark:text-purple-400" : "text-gray-400 dark:text-zinc-500"}`}>
+                          <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> 04 HIRED
                         </span>
                       </div>
                     </div>
@@ -476,7 +478,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="h-10 w-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 dark:text-blue-400 text-sm font-bold shrink-0 overflow-hidden">
                       {item.partyAvatar ? (
-                        <img src={item.partyAvatar} alt={item.partyName} className="w-full h-full object-cover" />
+                        <img src={item.partyAvatar} alt={item.partyName} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = getFallbackAvatarUrl(item.partyName); }} className="w-full h-full object-cover" />
                       ) : (
                         item.partyName[0]
                       )}

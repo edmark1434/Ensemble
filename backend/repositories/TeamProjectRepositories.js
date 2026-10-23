@@ -105,13 +105,22 @@ async function ensureContractualTeamProject(dbClient, {
     `, [teamId, contractId, clientAccountId]);
     const workspaceId = wsRes.rows[0]?.workspace_id;
 
-    // F. Pre-populate tasks from job_milestones
-    const milestonesRes = await dbClient.query(`
+    // F. Pre-populate tasks from job_milestones or contract_milestones
+    let milestonesRes = await dbClient.query(`
       SELECT job_milestone_id, title, description, tasks, order_index
         FROM job_milestones
        WHERE job_id = $1
        ORDER BY order_index ASC
     `, [jobId]);
+
+    if (workspaceId && milestonesRes.rows.length === 0) {
+      milestonesRes = await dbClient.query(`
+        SELECT contract_milestone_id as job_milestone_id, name as title, description, '[]'::jsonb as tasks, index as order_index
+          FROM contract_milestones
+         WHERE contract_id = $1
+         ORDER BY index ASC
+      `, [contractId]);
+    }
 
     if (workspaceId && milestonesRes.rows.length > 0) {
       for (const ms of milestonesRes.rows) {
@@ -208,6 +217,19 @@ async function ensureContractualTeamProject(dbClient, {
       `, [primaryWorkspaceId, targetMilestoneId]);
 
       for (const t of tasksToAssign.rows) {
+        await dbClient.query(`
+          INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (task_id, account_id) DO NOTHING
+        `, [t.task_id, freelancerAccountId, clientAccountId]);
+      }
+    } else {
+      // General/solo hire: assign all workspace tasks to the hired contributor
+      const allTasks = await dbClient.query(`
+        SELECT task_id FROM team_workspace_tasks 
+         WHERE workspace_id = $1
+      `, [primaryWorkspaceId]);
+      for (const t of allTasks.rows) {
         await dbClient.query(`
           INSERT INTO team_workspace_task_assignees (task_id, account_id, assigned_by_account_id)
           VALUES ($1, $2, $3)

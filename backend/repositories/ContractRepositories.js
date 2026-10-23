@@ -302,7 +302,7 @@ async function acceptJobOffer(freelancerIds, contractId) {
         `, [proposal_id]);
 
         // 4b. Ensure Contractual Team Project workspace and membership are synchronized
-        if (hiring_type === 'team' || Number(no_of_hires) > 1) {
+        if (job_id) {
             await TeamProjectRepositories.ensureContractualTeamProject(client, {
                 jobId: job_id,
                 clientAccountId: client_account_id,

@@ -20,6 +20,8 @@ import { sampleJobs } from "../../job_datasets";
 import type { Job } from "../../job_components/job_lists";
 import type { ProposalItemData } from "../proposals_components/proposals_list";
 import { useJobs } from "@/hooks/useJobs";
+import { constructAvatarUrl } from "@/lib/accountAvatars";
+import FloatingCreditsPill from "@/components/ui/FloatingCreditsPill";
 
 export const ProposalsEditPage: React.FC = () => {
   const theme = useGlobalState((state) => state.theme);
@@ -27,6 +29,7 @@ export const ProposalsEditPage: React.FC = () => {
   const { proposalId } = useParams<{ proposalId: string }>();
 
   const [currentSlide, setCurrentSlide] = useState<number>(1);
+  const [hasReachedReview, setHasReachedReview] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
   const [proposal, setProposal] = useState<ProposalItemData | null>(null);
 
@@ -47,6 +50,12 @@ export const ProposalsEditPage: React.FC = () => {
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
+  useEffect(() => {
+    if (currentSlide === 4 && !hasReachedReview) {
+      setHasReachedReview(true);
+    }
+  }, [currentSlide, hasReachedReview]);
+
   const { fetchProposalById, fetchJobs } = useJobs();
   const [isLoading, setIsLoading] = useState(true);
 
@@ -61,9 +70,7 @@ export const ProposalsEditPage: React.FC = () => {
           jobId: p.job_id,
           jobTitle: p.job_title || "Unknown Job",
           partyName: p.freelancer_name || p.freelancer_handle || "Unknown",
-          partyAvatar: p.freelancer_avatar_path
-            ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.freelancer_avatar_path.startsWith('/') ? '' : '/'}${p.freelancer_avatar_path}`
-            : undefined,
+          partyAvatar: constructAvatarUrl(p.freelancer_avatar_path, p.freelancer_name || p.freelancer_handle),
           bidAmount: parseFloat(p.rate_credits) || 0,
           additionalWorkRate: parseFloat(p.revision_price_credits) || 0,
           status: p.status,
@@ -244,7 +251,9 @@ export const ProposalsEditPage: React.FC = () => {
         className="relative z-10 mx-auto max-w-3xl p-6 md:p-8 w-full space-y-6"
       >
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Editing Proposal Application</h1>
+          <FloatingCreditsPill />
+
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Editing Proposal Application</h1>
           <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
             Updating proposal for:{" "}
             <strong className="text-gray-900 dark:text-white">{job?.title || proposal.jobTitle}</strong>
@@ -252,7 +261,18 @@ export const ProposalsEditPage: React.FC = () => {
         </div>
 
         {/* Wizard Header Progress */}
-        <ProposalEditHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
+        <ProposalEditHeader 
+          currentSlide={currentSlide} 
+          onReturn={handleReturnTrigger} 
+          hasReachedReview={hasReachedReview} 
+          onJumpToReview={() => setCurrentSlide(4)}
+          maxReachedStep={maxReachedStep}
+          onStepClick={(stepId) => {
+            if (stepId <= Math.max(currentSlide, maxReachedStep, hasReachedReview ? 4 : 1)) {
+              setCurrentSlide(stepId);
+            }
+          }}
+        />
 
         {/* Wizard Slide Container */}
         <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">

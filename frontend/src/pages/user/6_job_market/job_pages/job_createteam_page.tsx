@@ -17,6 +17,7 @@ import CreateTeamMilestones, { type MilestoneFormItem } from "../job_components/
 import CreateTeamReview from "../job_components/job_creation_components/5_create_teamreview";
 import CreationSuccess from "../job_components/job_creation_components/4_creation_success";
 import PopupConfirmReturn from "../job_components/job_popups/popup_confirm_return";
+import FloatingCreditsPill from "@/components/ui/FloatingCreditsPill";
 
 const JobCreateTeamPostPage: React.FC = () => {
   const navigate = useNavigate();
@@ -70,6 +71,17 @@ const JobCreateTeamPostPage: React.FC = () => {
   const theme = useGlobalState((state) => state.theme);
   const [currentSlide, setCurrentSlide] = useState<number>(1);
   const [hasReachedReview, setHasReachedReview] = useState(false);
+  const [maxReachedStep, setMaxReachedStep] = useState<number>(1);
+
+  useEffect(() => {
+    setMaxReachedStep((prev) => Math.max(prev, currentSlide));
+  }, [currentSlide]);
+
+  useEffect(() => {
+    if (hasReachedReview) {
+      setMaxReachedStep(4);
+    }
+  }, [hasReachedReview]);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
 
@@ -550,6 +562,20 @@ const JobCreateTeamPostPage: React.FC = () => {
       } catch (_) {}
       setIsDraftRestored(false);
       setIsSuccessOpen(true);
+
+      // Decrement global wallet balance by publication fee (50) to trigger animated deduction
+      const curUser = useGlobalState.getState().user;
+      if (curUser) {
+        const curBal = Number(curUser.wallet?.balance_credits ?? 0);
+        const nextBal = Math.max(0, curBal - 50);
+        useGlobalState.getState().setUser({
+          ...curUser,
+          wallet: {
+            ...(curUser.wallet || {}),
+            balance_credits: nextBal,
+          },
+        });
+      }
     } catch (err: any) {
       console.error(err);
       const message = err.response?.data?.message || err.message || "Failed to submit team job post.";
@@ -569,6 +595,9 @@ const JobCreateTeamPostPage: React.FC = () => {
 
   return (
     <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
+      {/* Floating Upper Right Credits Pill */}
+      <FloatingCreditsPill />
+
       {/* Background Grid Animation */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
         <ShapeGrid
@@ -587,7 +616,7 @@ const JobCreateTeamPostPage: React.FC = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.3 }}
-        className="relative z-10 mx-auto max-w-3xl p-6 md:p-8 w-full space-y-6"
+        className="relative z-10 mx-auto max-w-6xl 2xl:max-w-7xl px-4 sm:px-6 lg:px-8 py-6 w-full space-y-6"
       >
         {/* Title Heading Display */}
         <motion.div
@@ -598,10 +627,10 @@ const JobCreateTeamPostPage: React.FC = () => {
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 mb-2">
             Team & Multi-Role Wizard (5 Steps)
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
             Creating a Team Job Post
           </h1>
-          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-zinc-400 mt-1">
             Publish a collaborative team project with customizable milestones, deliverables, and role openings.
           </p>
         </motion.div>
@@ -641,7 +670,7 @@ const JobCreateTeamPostPage: React.FC = () => {
           initial={{ opacity: 0, y: 20, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.45, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-          className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-dark-surface/60 backdrop-blur-xl p-6 md:p-8 shadow-sm dark:shadow-2xl relative overflow-hidden"
+          className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 sm:p-8 lg:p-10 backdrop-blur-xl shadow-2xl space-y-6 relative overflow-hidden"
         >
           <AnimatePresence mode="wait">
             {currentSlide === 1 && (
@@ -736,6 +765,8 @@ const JobCreateTeamPostPage: React.FC = () => {
                   setErrors={setErrors}
                   onBack={() => setCurrentSlide(2)}
                   onAdvance={() => handleSlide3Advance(false)}
+                  isTeam={true}
+                  advanceButtonText="Continue to Milestones"
                 />
               </motion.div>
             )}
@@ -755,6 +786,7 @@ const JobCreateTeamPostPage: React.FC = () => {
                   maxBudget={maxBudget}
                   minTimeline={minTimeline}
                   maxTimeline={maxTimeline}
+                  category={category}
                   errors={errors}
                   setErrors={setErrors}
                   onBack={() => setCurrentSlide(3)}

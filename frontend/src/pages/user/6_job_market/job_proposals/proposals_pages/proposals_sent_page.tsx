@@ -8,6 +8,7 @@ import ProposalsList, {
 import { sampleSentProposals } from "../proposals_datasets";
 import type { ProposalsMainContext } from "../proposals_main";
 import { useJobs } from "@/hooks/useJobs";
+import { constructAvatarUrl } from "@/lib/accountAvatars";
 
 export const ProposalsSentPage: React.FC = () => {
   const {

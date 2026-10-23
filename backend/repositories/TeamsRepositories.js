@@ -50,7 +50,7 @@ async function getActiveTeamOwnerAccountIds(teamAccountId) {
     [teamAccountId])).rows.map((row) => row.account_id);
 }
 async function getTeam(teamId, accountId) {
-  return (await pool.query(`SELECT t.*,a.display_name,a.handle,a.tagline,a.description,a.status AS account_status,f.path AS avatar_path,
+  return (await pool.query(`SELECT t.*,a.display_name,a.handle,a.tagline,a.description,a.status AS account_status,f.path AS avatar_path, a.banner_preset,
     COALESCE(mc.member_count,0)::int member_count,tm.role current_user_role,tm.status current_user_status,
     COALESCE(v.is_verified,FALSE) is_business_verified,v.verified_at business_verified_at,
     COALESCE(cv.is_verified,FALSE)
@@ -73,7 +73,7 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
     COALESCE(t.team_type, 'standard') AS team_type,
     t.job_id,
     COALESCE(t.is_archived, FALSE) AS is_archived,
-    a.display_name,a.handle,a.description,f.path avatar_path,
+    a.display_name,a.handle,a.description,f.path avatar_path, a.banner_preset,
     COALESCE(v.is_verified,FALSE) AS is_business_verified,
     count(am.user_id) FILTER (WHERE am.status='Active')::int member_count, mine.role current_user_role,mine.status current_user_status
     FROM teams t JOIN accounts a ON a.account_id=t.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id
@@ -89,7 +89,7 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0) {
 }
 async function getMembership(teamId, accountId) { return (await pool.query(`SELECT tm.*,u.account_id,a.display_name,a.handle FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id WHERE tm.team_id=$1 AND u.account_id=$2`,[teamId,accountId])).rows[0]||null; }
 async function listMembers(teamId, statuses=null) { return (await pool.query(`SELECT tm.*,u.account_id,a.display_name,a.handle,f.path avatar_path FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id WHERE tm.team_id=$1 AND ($2::text[] IS NULL OR tm.status=ANY($2)) ORDER BY tm.joined_at`,[teamId,statuses])).rows; }
-async function listJoinRequests(teamId, search='') { return (await pool.query(`SELECT tm.team_id,u.account_id,a.display_name,a.handle,f.path AS avatar_path,tm.role,tm.status,COALESCE(tm.updated_at,tm.joined_at) AS requested_at FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id WHERE tm.team_id=$1 AND tm.status='Pending' AND ($2='' OR a.display_name ILIKE '%'||$2||'%' OR a.handle ILIKE '%'||$2||'%') ORDER BY COALESCE(tm.updated_at,tm.joined_at) DESC`,[teamId,search])).rows; }
+async function listJoinRequests(teamId, search='') { return (await pool.query(`SELECT tm.team_id,u.account_id,a.display_name,a.handle,f.path AS avatar_path, a.banner_preset,tm.role,tm.status,COALESCE(tm.updated_at,tm.joined_at) AS requested_at FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id WHERE tm.team_id=$1 AND tm.status='Pending' AND ($2='' OR a.display_name ILIKE '%'||$2||'%' OR a.handle ILIKE '%'||$2||'%') ORDER BY COALESCE(tm.updated_at,tm.joined_at) DESC`,[teamId,search])).rows; }
 async function upsertMembership(teamId,userId,role,status,invitedBy=null) { return (await pool.query(`INSERT INTO team_members(team_id,user_id,role,status,invited_by_account_id,invited_at,deleted_at) VALUES($1,$2,$3,$4::varchar,$5,CASE WHEN $4::varchar='Invited'::varchar THEN NOW() END,NULL) ON CONFLICT(team_id,user_id) DO UPDATE SET role=EXCLUDED.role,status=EXCLUDED.status,invited_by_account_id=EXCLUDED.invited_by_account_id,invited_at=EXCLUDED.invited_at,deleted_at=NULL,updated_at=NOW() RETURNING *`,[teamId,userId,role,status,invitedBy])).rows[0]; }
 async function updateMembership(teamId,userId,fields) { const allowed=['role','status']; const entries=Object.entries(fields).filter(([k])=>allowed.includes(k)); const vals=entries.map(([,v])=>v); vals.push(teamId,userId); return (await pool.query(`UPDATE team_members SET ${entries.map(([k],i)=>`${k}=$${i+1}`).join(',')},updated_at=NOW() WHERE team_id=$${vals.length-1} AND user_id=$${vals.length} RETURNING *`,vals)).rows[0]||null; }
 async function updateTeam(teamId, accountId, data) { const client=await pool.connect(); try { await client.query('BEGIN'); const a=(await client.query(`UPDATE accounts SET display_name=COALESCE($3,display_name),handle=COALESCE($4,handle),description=COALESCE($5,description),tagline=COALESCE($6,tagline),avatar_file_id=COALESCE($7,avatar_file_id) WHERE account_id=$1 AND EXISTS(SELECT 1 FROM teams WHERE team_id=$2 AND account_id=$1) RETURNING *`,[accountId,teamId,data.name,data.handle,data.description,data.tagline,data.avatarFileId])).rows[0]; const t=(await client.query(`UPDATE teams SET visibility=COALESCE($2,visibility),join_policy=COALESCE($3,join_policy),category=COALESCE($4,category),website=COALESCE($5,website),location=COALESCE($6,location),updated_at=NOW() WHERE team_id=$1 RETURNING *`,[teamId,data.visibility,data.joinPolicy,data.category,data.website,data.location])).rows[0]; await client.query('COMMIT'); return {...t,...a}; } catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();} }
@@ -98,7 +98,7 @@ async function findByCode(code){return (await pool.query(`SELECT * FROM teams WH
 async function getTeamInvitePreview(code, accountId = null) {
   return (await pool.query(`
     SELECT t.team_id, t.join_code, t.category, t.visibility, t.join_policy, t.website, t.location,
-      a.display_name, a.handle, a.tagline, a.description, f.path AS avatar_path,
+      a.display_name, a.handle, a.tagline, a.description, f.path AS avatar_path, a.banner_preset,
       COALESCE(mc.member_count, 0)::int AS member_count,
       tm.role AS current_user_role, tm.status AS current_user_status,
       COALESCE(v.is_verified, FALSE) AS is_business_verified,

@@ -20,7 +20,7 @@ const JobSearchbar: React.FC<JobSearchbarProps> = ({ searchQuery, setSearchQuery
       setIsGuestModalOpen(true);
     } else {
       continueIfAccountVerified(
-        () => navigate("/jobs/postings/choose"),
+        () => navigate("/jobs/create"),
         false,
         "Account Verification is required to access Job Creation. Please verify your identity to proceed."
       );

@@ -17,7 +17,7 @@ const JobPostButton: React.FC<JobPostButtonProps> = ({ className = "" }) => {
       navigate("/login");
     } else {
       continueIfAccountVerified(
-        () => navigate("/jobs/postings/choose"),
+        () => navigate("/jobs/create"),
         false,
         "Account Verification is required to access Job Creation. Please verify your identity to proceed."
       );

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Rocket, Sparkles } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
+import FloatingCreditsPill from "@/components/ui/FloatingCreditsPill";
 import PopupConfirmReturn from "@/pages/user/6_job_market/job_components/job_popups/popup_confirm_return";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -398,6 +399,8 @@ const GigCreatePage: React.FC = () => {
           hoverTrailAmount={3}
         />
       </div>
+
+      <FloatingCreditsPill />
 
       <div className="relative z-10 mx-auto max-w-4xl flex min-h-screen flex-col px-4 py-8 md:py-12 w-full">
         {/* Title Heading Display */}

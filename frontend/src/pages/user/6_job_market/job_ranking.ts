@@ -1,6 +1,6 @@
 import type { Job } from "./job_components/job_lists";
 
-export type JobRankingType = "individual_open" | "individual_ranged" | "team_pool";
+export type JobRankingType = "open_bid" | "budget_range";
 
 export interface JobRankingBreakdown {
   totalScore: number;         // 0 to 100
@@ -16,43 +16,39 @@ export interface JobRankingBreakdown {
 }
 
 const BAYESIAN_PRIOR_RATING = 4.2; // Fair baseline for first-time clients with 0 reviews
-const BAYESIAN_CONFIDENCE_WEIGHT = 3; // Number of virtual prior reviews
+const BAYESIAN_CONFIDENCE_WEIGHT = 3; // Virtual prior reviews weight
 const FRESHNESS_WINDOW_DAYS = 14;
 
 export function detectJobRankingType(job: Job): JobRankingType {
-  const isTeam = Boolean(
-    job.hiring_type === "team" ||
-    job.is_team ||
-    job.isTeam ||
-    job.posted_as === "Team"
-  );
-  if (isTeam) return "team_pool";
-
   const maxBudget = Number(job.maxBudget) || 0;
-  if (maxBudget > 0 && maxBudget >= (Number(job.minBudget) || 0)) {
-    return "individual_ranged";
+  const minBudget = Number(job.minBudget) || 0;
+  if (maxBudget > 0 && maxBudget >= minBudget) {
+    return "budget_range";
   }
-  return "individual_open";
+  return "open_bid";
 }
 
 export function getJobRankingTypeLabel(type: JobRankingType): string {
   switch (type) {
-    case "team_pool":
-      return "Team Milestone Pool";
-    case "individual_ranged":
-      return "Individual • Ranged Bid";
-    case "individual_open":
-      return "Individual • Open Bid";
+    case "budget_range":
+      return "Budget Range";
+    case "open_bid":
+      return "Open Bid";
   }
 }
 
 /**
- * Computes the 100-Point Type-Aware Job Discovery Ranking score so first-time clients
- * with well-structured job briefs can compete with established repeat clients, while
- * fairly grading each of the 3 job post types:
- *   1. Individual — Open Bid (minBudget > 0, no max cap)
- *   2. Individual — Ranged / Multi-Seat Budget (minBudget & maxBudget)
- *   3. Team Job — Milestone Pool (hiring_type === "team" with role milestones)
+ * Computes the 100-Point Job Discovery Ranking Score.
+ * 
+ * In Ensemble's unified model, all job listings establish a dedicated project workspace 
+ * contract (open to both Solo Freelancers and Teams). Milestone delivery roadmaps are 
+ * proposed by applicants during bidding rather than prescribed by clients.
+ * 
+ * The algorithm grades 4 core pillars:
+ *   1. Client Trust & Baseline (35%) — Bayesian smoothed client reputation; 0-review clients start at 4.2/5.0.
+ *   2. 14-Day Freshness Spotlight (25%) — Priority visibility for newly published jobs, smoothly tapering after 14 days.
+ *   3. Scope & Brief Quality (25%) — Detailed project scope, realistic budget benchmarks, 3+ skills, custom visual & terms.
+ *   4. Open Capacity & Capacity Availability (15%) — Prevents proposal pile-ons and boosts uncongested listings.
  */
 export function computeJobRankingBreakdown(job: Job): JobRankingBreakdown {
   const jobType = detectJobRankingType(job);
@@ -68,20 +64,13 @@ export function computeJobRankingBreakdown(job: Job): JobRankingBreakdown {
     (v + BAYESIAN_CONFIDENCE_WEIGHT);
   const bayesianScore = Math.min(1, Math.max(0, bayesianRating / 5));
 
-  // 2. Open Seats & Low Proposal Congestion (15% weight)
-  // Computed before freshness so we know proposalsPerSeat
-  const positionsNeeded = Math.max(1, Number(job.positionsNeeded) || 1);
-  const hiredCount = Math.max(0, Number(job.hiredCount) || 0);
-  const openSeats = Math.max(1, positionsNeeded - hiredCount);
+  // 2. Open Capacity & Proposal Availability (15% weight)
+  // Evaluates proposal volume to boost listings that still need applicants (< 10 proposals)
   const applicantsCount = Math.max(0, Number(job.applicantsCount) || 0);
-  const proposalsPerSeat = applicantsCount / openSeats;
-  const availabilityScore =
-    hiredCount >= positionsNeeded
-      ? 0
-      : Math.max(0, Math.min(1, 1 - proposalsPerSeat / 8));
+  const availabilityScore = Math.max(0, Math.min(1, 1 - applicantsCount / 12));
 
   // 3. New Job & First-Time Client Spotlight (25% weight)
-  // 14-day linear decay from createdAt / postedAt; full 1.0x multiplier if < 3 proposals per seat
+  // 14-day linear decay from publication; full 1.0x multiplier if < 3 proposals
   let ageInDays = 30;
   const rawDate = (job as any).createdAt || job.postedAt;
   if (rawDate) {
@@ -91,10 +80,12 @@ export function computeJobRankingBreakdown(job: Job): JobRankingBreakdown {
     }
   }
   const rawFreshness = Math.max(0, 1 - ageInDays / FRESHNESS_WINDOW_DAYS);
-  const spotlightMultiplier = proposalsPerSeat < 3 ? 1.0 : 0.6;
+  const spotlightMultiplier = applicantsCount < 3 ? 1.0 : 0.65;
   const freshnessScore = rawFreshness * spotlightMultiplier;
 
-  // 4. Type-Aware Brief & Bid Quality Score (25% weight)
+  // 4. Brief Quality Score (25% weight)
+  // Graded on scope clarity, realistic budget setting, tags, visuals, and workflow terms.
+  // Note: Clients no longer define milestones; applicants provide milestone roadmaps on proposals.
   let completeness = 0;
   const descLength = (job.description || "").trim().length;
   const skillsCount = Array.isArray(job.skills) ? job.skills.length : 0;
@@ -107,73 +98,38 @@ export function computeJobRankingBreakdown(job: Job): JobRankingBreakdown {
   const hasWorkflowTerms = Boolean(
     job.portfolioUseAllowed || job.requireNDA || job.isExistingProject
   );
-  const milestones = Array.isArray(job.milestones) ? job.milestones : [];
-  const screeningCount = Array.isArray(job.screeningQuestions)
-    ? job.screeningQuestions.length
-    : 0;
   const minBudget = Number(job.minBudget) || 0;
   const maxBudget = Number(job.maxBudget) || 0;
 
-  if (jobType === "individual_open") {
-    // Open Bid: Freelancers propose their own quote & milestones, so we grade brief clarity
-    if (descLength >= 150) completeness += 0.30;
-    else if (descLength >= 80) completeness += 0.18;
+  // Scope of Work description (30%)
+  if (descLength >= 150) completeness += 0.30;
+  else if (descLength >= 80) completeness += 0.18;
+  else if (descLength > 0) completeness += 0.10;
 
-    if (minBudget >= 300) completeness += 0.20;
-    else if (minBudget > 0) completeness += 0.10;
-
-    if (skillsCount >= 3) completeness += 0.20;
-    else if (skillsCount >= 1) completeness += 0.10;
-
-    if (hasCustomVisual) completeness += 0.15;
-
-    if (hasTimeline && hasWorkflowTerms) completeness += 0.15;
-    else if (hasTimeline || hasWorkflowTerms) completeness += 0.08;
-  } else if (jobType === "individual_ranged") {
-    // Ranged / Per-Seat Budget: Graded on realistic min-max spread + optional milestones/screening
-    if (descLength >= 140) completeness += 0.25;
-    else if (descLength >= 80) completeness += 0.15;
-
+  // Budget Quality & Realism (25%)
+  if (jobType === "budget_range") {
     const spreadRatio = minBudget > 0 ? maxBudget / minBudget : 1;
     if (minBudget >= 250 && maxBudget >= minBudget && spreadRatio <= 3.0) {
       completeness += 0.25;
     } else if (minBudget > 0 && maxBudget >= minBudget) {
-      completeness += 0.15;
+      completeness += 0.16;
     }
-
-    if (skillsCount >= 3) completeness += 0.15;
-    else if (skillsCount >= 1) completeness += 0.08;
-
-    if (hasCustomVisual) completeness += 0.15;
-
-    if (milestones.length >= 1 || screeningCount >= 1 || positionsNeeded >= 1) {
-      completeness += 0.10;
-    }
-
-    if (hasTimeline) completeness += 0.10;
   } else {
-    // Team Milestone Pool: Graded on multi-phase milestones, task checklists, and credit pool
-    if (milestones.length >= 2) completeness += 0.30;
-    else if (milestones.length === 1) completeness += 0.15;
-
-    const milestonesWithTasks = milestones.filter((m: any) => {
-      if (Array.isArray(m?.tasks)) return m.tasks.length > 0;
-      if (typeof m?.tasks === "string") return m.tasks.trim().length > 2;
-      return Boolean(m?.description && String(m.description).trim().length > 15);
-    }).length;
-
-    if (milestonesWithTasks >= 2) completeness += 0.20;
-    else if (milestonesWithTasks === 1) completeness += 0.10;
-
-    if (descLength >= 140) completeness += 0.20;
-    else if (descLength >= 80) completeness += 0.10;
-
-    if (skillsCount >= 3) completeness += 0.15;
-    else if (skillsCount >= 1) completeness += 0.08;
-
-    if (hasCustomVisual && hasTimeline) completeness += 0.15;
-    else if (hasCustomVisual || hasTimeline) completeness += 0.08;
+    // Open Bid format: realistic minimum floor
+    if (minBudget >= 300) completeness += 0.25;
+    else if (minBudget > 0) completeness += 0.16;
   }
+
+  // Multi-disciplinary Skills / Specificity (20%)
+  if (skillsCount >= 3) completeness += 0.20;
+  else if (skillsCount >= 1) completeness += 0.10;
+
+  // Visual Assets & Reference Material (15%)
+  if (hasCustomVisual) completeness += 0.15;
+
+  // Delivery Timeline & Workflow Terms (10%)
+  if (hasTimeline && hasWorkflowTerms) completeness += 0.10;
+  else if (hasTimeline || hasWorkflowTerms) completeness += 0.05;
 
   const completenessScore = Math.min(1, completeness);
 
@@ -185,8 +141,9 @@ export function computeJobRankingBreakdown(job: Job): JobRankingBreakdown {
 
   const totalScore = Math.round(composite * 1000) / 10; // 0.0 to 100.0
 
+  // Rising badge unlocks for high-effort new jobs from new or unreviewed clients
   const isRisingJob =
-    proposalsPerSeat < 3 &&
+    applicantsCount < 3 &&
     v === 0 &&
     completenessScore >= 0.85 &&
     ageInDays <= 7;

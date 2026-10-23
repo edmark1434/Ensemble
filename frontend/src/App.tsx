@@ -33,6 +33,7 @@ import DashboardMain from './pages/user/8_dashboard/dashboard_main'
 import { DashboardTaskDetail } from './pages/user/8_dashboard/dashboard_components/DashboardTaskDetail'
 import JobMain from '@/pages/user/6_job_market/job_main.tsx'
 import JobPostingPage from '@/pages/user/6_job_market/job_pages/job_posting_page.tsx'
+import JobAppliedPage from '@/pages/user/6_job_market/job_pages/job_applied_page.tsx'
 import JobSavesPage from '@/pages/user/6_job_market/job_pages/job_saves_page.tsx'
 import JobMyPostPage from '@/pages/user/6_job_market/job_pages/job_mypost_page.tsx'
 import JobPostsInfoGuide from '@/pages/user/6_job_market/job_components/JobPostsInfoGuide.tsx'
@@ -281,6 +282,8 @@ function App() {
             <Route path='postings' element={<JobPostingPage />} />
             <Route path='postings/choose' element={<JobPostingPage />} />
             <Route path='postings/:id' element={<JobPostingPage />} />
+            <Route path='applied' element={<JobAppliedPage />} />
+            <Route path='applied/:id' element={<JobAppliedPage />} />
             <Route path='saved-posts' element={<JobSavesPage />} />
             <Route path='saved-posts/:id' element={<JobSavesPage />} />
             <Route path='my-job-post' element={<JobMyPostPage />} />
@@ -299,7 +302,7 @@ function App() {
 
           {/* Standalone Creation, Edit & View Details Pages */}
           <Route path='/jobs/create' element={<JobCreatePostPage />} />
-          <Route path='/jobs/create/team' element={<JobCreateTeamPostPage />} />
+          <Route path='/jobs/create/team' element={<JobCreatePostPage />} />
           <Route path='/jobs/edit/:id' element={<JobEditPostPage />} />
           <Route path='/jobs/postings/:id/page' element={<JobFullPage />} />
           <Route path='/jobs/:id/page' element={<JobFullPage />} />

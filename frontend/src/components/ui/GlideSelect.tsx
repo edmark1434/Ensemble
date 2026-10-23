@@ -3,6 +3,7 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ArrowDown01Icon, Tick02Icon } from '@hugeicons/core-free-icons';
+import useGlobalState from '@/lib/global_state';
 
 export interface GlideSelectOption {
   value: string;
@@ -23,6 +24,7 @@ export interface GlideSelectProps {
   highlightColor?: string;
   textColor?: string;
   borderColor?: string;
+  theme?: 'light' | 'dark';
   size?: 'sm' | 'md' | 'lg';
   radius?: number;
   menuWidth?: number | string;
@@ -98,11 +100,12 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
   onChange,
   placeholder = 'Select an option...',
   showTags = true,
-  accentColor = '#f4f4f5',
-  surfaceColor = '#18181b',
-  highlightColor = '#27272a',
-  textColor = '#f4f4f5',
-  borderColor = '#27272a',
+  accentColor: customAccent,
+  surfaceColor: customSurface,
+  highlightColor: customHighlight,
+  textColor: customText,
+  borderColor: customBorder,
+  theme: explicitTheme,
   size = 'lg',
   radius = 12,
   menuWidth,
@@ -120,6 +123,15 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
   error = false,
   defaultOpen = false,
 }) => {
+  const globalTheme = useGlobalState((state) => state.theme);
+  const isDark = (explicitTheme || globalTheme) === 'dark';
+
+  const accentColor = customAccent ?? (isDark ? '#ffffff' : '#09090b');
+  const surfaceColor = customSurface ?? (isDark ? '#18181b' : '#ffffff');
+  const highlightColor = customHighlight ?? (isDark ? '#27272a' : '#f4f4f5');
+  const textColor = customText ?? (isDark ? '#f4f4f5' : '#09090b');
+  const borderColor = customBorder ?? (isDark ? '#27272a' : '#e4e4e7');
+
   const items = options.map(norm);
   const [inner, setInner] = useState(defaultValue ?? '');
   const current = value ?? inner;
@@ -355,8 +367,9 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
           '--gs-pop-out': `${popOut}ms`,
           '--gs-glide': `${glideDuration}ms`,
           '--gs-origin': origin,
-          '--gs-scrollbar-thumb': textColor === '#0f172a' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
-          '--gs-scrollbar-thumb-hover': textColor === '#0f172a' ? 'rgba(0, 0, 0, 0.35)' : 'rgba(255, 255, 255, 0.35)',
+          '--gs-shadow': isDark ? '0 16px 40px rgba(0, 0, 0, 0.55)' : '0 12px 30px -4px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.08)',
+          '--gs-scrollbar-thumb': isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.18)',
+          '--gs-scrollbar-thumb-hover': isDark ? 'rgba(255, 255, 255, 0.35)' : 'rgba(0, 0, 0, 0.3)',
         } as CSSProperties
       }
       onAnimationEnd={(e) => {
@@ -412,7 +425,7 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
           ref={menuRef}
           className={`absolute z-50 ${
             fullWidth ? 'w-full' : 'min-w-full [width:var(--gs-menu-w)]'
-          } scale-95 p-1 opacity-0 [border-radius:var(--gs-radius)] [background:var(--gs-surface)] [border:1px_solid_var(--gs-border)] [box-shadow:0_16px_40px_rgba(0,0,0,0.55)] [transform-origin:var(--gs-origin)] [transition:opacity_var(--gs-pop)_cubic-bezier(0.23,1,0.32,1),transform_var(--gs-pop)_cubic-bezier(0.23,1,0.32,1)] data-[state=open]:scale-100 data-[state=open]:opacity-100 data-[state=closed]:pointer-events-none data-[state=closed]:[transition-duration:var(--gs-pop-out)] data-[side=bottom]:top-[calc(100%+6px)] data-[side=top]:bottom-[calc(100%+6px)] left-0`}
+          } scale-95 p-1 opacity-0 [border-radius:var(--gs-radius)] [background:var(--gs-surface)] [border:1px_solid_var(--gs-border)] [box-shadow:var(--gs-shadow)] [transform-origin:var(--gs-origin)] [transition:opacity_var(--gs-pop)_cubic-bezier(0.23,1,0.32,1),transform_var(--gs-pop)_cubic-bezier(0.23,1,0.32,1)] data-[state=open]:scale-100 data-[state=open]:opacity-100 data-[state=closed]:pointer-events-none data-[state=closed]:[transition-duration:var(--gs-pop-out)] data-[side=bottom]:top-[calc(100%+6px)] data-[side=top]:bottom-[calc(100%+6px)] left-0`}
           data-state="open"
           data-side={side}
           data-align={align}

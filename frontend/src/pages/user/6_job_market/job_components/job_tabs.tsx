@@ -1,5 +1,5 @@
 import React from "react";
-import { Grid3x3, Bookmark, Briefcase, HelpCircle } from "lucide-react";
+import { Grid3x3, Send, Bookmark, Briefcase, HelpCircle } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import useGlobalState from "@/lib/global_state";
@@ -11,13 +11,14 @@ const JobTabs: React.FC = () => {
 
   const allTabs = [
     { path: "/jobs/postings", label: "Postings", icon: <Grid3x3 className="h-4 w-4" /> },
+    { path: "/jobs/applied", label: "Applied", icon: <Send className="h-4 w-4" /> },
     { path: "/jobs/saved-posts", label: "Saved", icon: <Bookmark className="h-4 w-4" /> },
-    { path: "/jobs/my-job-post", label: "My Job Posts", icon: <Briefcase className="h-4 w-4" /> },
-    { path: "/jobs/info", label: "How Ranking Works", icon: <HelpCircle className="h-4 w-4" /> }
+    { path: "/jobs/my-job-post", label: "My Posts", icon: <Briefcase className="h-4 w-4" /> },
+    { path: "/jobs/info", label: "Info", icon: <HelpCircle className="h-4 w-4" /> }
   ];
 
   const tabs = isGuestMode
-    ? allTabs.filter(tab => tab.label === "Postings" || tab.label === "How Ranking Works")
+    ? allTabs.filter(tab => tab.label === "Postings" || tab.label === "Info")
     : allTabs;
 
   return (

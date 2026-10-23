@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowUp, ArrowDown, User, Users } from "lucide-react";
+import { ArrowUp, ArrowDown } from "lucide-react";
 
 export interface FilterState {
   minPrice: string;
@@ -147,33 +147,6 @@ const JobFilters: React.FC<JobFiltersProps> = ({
         </div>
       </Section>
 
-      <Section>
-        <span className={`${labelClass} block`}>Project Type</span>
-        <div className="flex flex-wrap gap-1.5">
-          {[
-            { id: "individual", label: "Individual", icon: User },
-            { id: "team", label: "Team", icon: Users },
-          ].map(({ id, label, icon: Icon }) => {
-            const isSelected = filters.selectedHiringTypes.includes(id);
-            return (
-              <button
-                key={id}
-                type="button"
-                aria-pressed={isSelected}
-                onClick={() =>
-                  setters.setSelectedHiringTypes((prev) =>
-                    prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-                  )
-                }
-                className={`${chipBase} px-2.5 py-1.5 flex items-center gap-1.5 ${isSelected ? chipActive : chipIdle}`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                <span>{label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </Section>
 
       <Section>
         <div className="flex items-center justify-between">
@@ -190,60 +163,32 @@ const JobFilters: React.FC<JobFiltersProps> = ({
         </div>
         <div className="flex flex-wrap gap-1.5">
           {[
-            { id: "open", label: "Open Bid", context: "Individual" },
-            { id: "ranged", label: "Ranged", context: "Individual" },
-            { id: "pooled", label: "Pooled", context: "Team" },
-          ].map(({ id, label, context }) => {
+            { id: "open", label: "Open Bid" },
+            { id: "ranged", label: "Budget Range" },
+          ].map(({ id, label }) => {
             const isSelected = filters.selectedBudgetTypes.includes(id);
-            const isOnlyIndividual =
-              filters.selectedHiringTypes.length === 1 && filters.selectedHiringTypes[0] === "individual";
-            const isOnlyTeam =
-              filters.selectedHiringTypes.length === 1 && filters.selectedHiringTypes[0] === "team";
-
-            const isDimmed =
-              (context === "Team" && isOnlyIndividual) ||
-              (context === "Individual" && isOnlyTeam);
 
             return (
               <button
                 key={id}
                 type="button"
                 aria-pressed={isSelected}
-                disabled={isDimmed}
-                title={
-                  isDimmed
-                    ? `${label} is only applicable to ${context} projects`
-                    : `${label} (${context})`
-                }
                 onClick={() =>
                   setters.setSelectedBudgetTypes((prev) =>
                     prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
                   )
                 }
-                className={`${chipBase} px-2.5 py-1.5 flex items-center gap-1.5 ${
-                  isDimmed
-                    ? "opacity-35 cursor-not-allowed border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] text-gray-400 dark:text-zinc-600"
-                    : isSelected
-                    ? chipActive
-                    : chipIdle
+                className={`${chipBase} px-3 py-1.5 flex items-center gap-1.5 ${
+                  isSelected ? chipActive : chipIdle
                 }`}
               >
                 <span>{label}</span>
-                <span
-                  className={`text-[9px] px-1 py-0.5 rounded font-medium ${
-                    isSelected
-                      ? "bg-white/20 text-white"
-                      : "bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400"
-                  }`}
-                >
-                  {context}
-                </span>
               </button>
             );
           })}
         </div>
         <p className="text-[11px] leading-snug text-gray-500 dark:text-zinc-400">
-          Open Bid and Ranged apply to Individual projects, while Team projects use Pooled milestones.
+          Filter listings by Open Bid or Budget Range format.
         </p>
       </Section>
 
@@ -269,20 +214,6 @@ const JobFilters: React.FC<JobFiltersProps> = ({
             );
           })}
         </div>
-      </Section>
-
-      <Section>
-        <div className="flex items-center justify-between">
-          <span className={labelClass}>Positions Needed</span>
-          <SortToggle value={filters.posSort} onChange={setters.setPosSort} upTitle="Fewest positions first" downTitle="Most positions first" />
-        </div>
-        <input
-          type="number"
-          placeholder="Exact positions needed"
-          value={filters.posValue}
-          onChange={(e) => setters.setPosValue(e.target.value)}
-          className={inputClass}
-        />
       </Section>
 
       <Section>
