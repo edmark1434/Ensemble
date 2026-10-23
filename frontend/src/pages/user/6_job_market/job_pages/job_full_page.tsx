@@ -363,18 +363,6 @@ const JobFullPage: React.FC = () => {
                   {job.category}
                 </span>
 
-                {isTeamHiring ? (
-                  <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-purple-100 text-purple-700 border border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30 flex items-center gap-1.5 shadow-sm">
-                    <Users className="h-3 w-3" />
-                    Team Project
-                  </span>
-                ) : (
-                  <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-blue-100 text-blue-700 border border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30 flex items-center gap-1.5 shadow-sm">
-                    <User className="h-3 w-3" />
-                    Individual
-                  </span>
-                )}
-
                 <span className="px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-bold text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
                   {job.difficulty}
                 </span>
@@ -962,20 +950,36 @@ const JobFullPage: React.FC = () => {
                         )}
                       </div>
                     ) : (
-                      <button
-                        onClick={() => {
-                          if (isGuestMode) return setIsModalOpen(true);
-                          void continueIfAccountVerified(
-                            () => navigate(`/jobs/${job.id}/make-proposal`),
-                            false,
-                            "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
-                          );
-                        }}
-                        className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition shadow-lg cursor-pointer bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]"
-                      >
-                        <Send className="h-4 w-4" />
-                        {isGuestMode ? "Login to Apply" : "Send Proposal"}
-                      </button>
+                      <div className="flex flex-col gap-1.5">
+                        <button
+                          onClick={() => {
+                            if (isGuestMode) return setIsModalOpen(true);
+                            void continueIfAccountVerified(
+                              () => navigate(`/jobs/${job.id}/make-proposal`),
+                              false,
+                              "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
+                            );
+                          }}
+                          className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition shadow-lg cursor-pointer bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]"
+                        >
+                          <Send className="h-4 w-4" />
+                          <span>{isGuestMode ? "Login to Apply" : "Send Proposal"}</span>
+                          {!isGuestMode && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white tracking-wide">
+                              <CreditIcon className="h-3 w-3 text-amber-300" /> 10 Cr
+                            </span>
+                          )}
+                        </button>
+                        {!isGuestMode && (
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 text-center flex items-center justify-center gap-1">
+                            <span>Requires</span>
+                            <span className="font-semibold text-zinc-700 dark:text-zinc-300 inline-flex items-center gap-0.5">
+                              <CreditIcon className="h-3 w-3 text-amber-500" /> 10 Credits
+                            </span>
+                            <span>to submit proposal (charged at checkout)</span>
+                          </p>
+                        )}
+                      </div>
                     )
                   ) : (
                     <div className="flex gap-2">
