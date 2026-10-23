@@ -42,6 +42,7 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
       popular: false,
       current: isFreePlan,
       features: [
+        { label: "Maximum teams allowed", val: "1" },
         { label: "Maximum asset posts", val: "1" },
         { label: "Maximum export quality", val: "720p" },
         { label: "Rendering/export speed", val: "Standard" },
@@ -61,6 +62,7 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
       popular: true,
       current: subscription.plan_name?.toLowerCase().includes("premium"),
       features: [
+        { label: "Maximum teams allowed", val: "5" },
         { label: "Maximum asset posts", val: "20" },
         { label: "Maximum export quality", val: "1080p" },
         { label: "Rendering/export speed", val: "Accelerated" },
@@ -82,6 +84,7 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
       popular: false,
       current: subscription.plan_name?.toLowerCase().includes("business"),
       features: [
+        { label: "Maximum teams allowed", val: "Unlimited" },
         { label: "Maximum asset posts", val: "Unlimited" },
         { label: "Maximum export quality", val: "2K-4K" },
         { label: "Rendering/export speed", val: "Maximum" },

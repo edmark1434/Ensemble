@@ -1,5 +1,6 @@
 const TeamProjectRepositories = require('../repositories/TeamProjectRepositories');
 const TeamsServices = require('./TeamsServices');
+const { createNotificationServices } = require('./NotificationServices');
 
 const withAvatar = (row) => {
   if (!row) return row;
@@ -17,6 +18,9 @@ const withAvatar = (row) => {
     assignee_avatar_path: formatPath(row.assignee_avatar_path),
     actor_avatar_path: formatPath(row.actor_avatar_path),
     freelancer_avatar_path: formatPath(row.freelancer_avatar_path),
+    lead_avatar_path: formatPath(row.lead_avatar_path),
+    candidate_avatar_path: formatPath(row.candidate_avatar_path),
+    parent_contractor_avatar_path: formatPath(row.parent_contractor_avatar_path),
   };
 };
 
@@ -105,6 +109,96 @@ async function getProjectMilestones(teamId, viewerAccountId) {
   return milestones.map(withAvatar);
 }
 
+async function getSubcontractProposals(teamId, viewerAccountId) {
+  await getProjectDetails(teamId, viewerAccountId);
+  const proposals = await TeamProjectRepositories.getSubcontractProposals(teamId, viewerAccountId);
+  return proposals.map((p) => ({
+    ...withAvatar(p),
+    members: (p.members || []).map(withAvatar),
+  }));
+}
+
+async function createSubcontractProposal(teamId, viewerAccountId, data) {
+  if (!data?.contract_id) {
+    const error = new Error('Contract ID is required');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!Array.isArray(data?.members) || data.members.length === 0) {
+    const error = new Error('At least one candidate specialist must be selected');
+    error.statusCode = 422;
+    throw error;
+  }
+  if (!data?.terms_accepted) {
+    const error = new Error('You must review and accept the subcontracting terms and lead accountability');
+    error.statusCode = 422;
+    throw error;
+  }
+  const result = await TeamProjectRepositories.createSubcontractProposal(teamId, viewerAccountId, data);
+  try {
+    if (result.client_account_id) {
+      await createNotificationServices({
+        account_id: result.client_account_id,
+        message: `@${result.lead_handle || 'Freelancer'} submitted a subcontract proposal to add ${result.members?.length || 1} team specialist(s) to this project.`,
+        is_read: false,
+        reference_table: 'teams',
+        reference_prefix: 'SUBCONTRACT_PROPOSAL_SUBMITTED',
+        reference_path: `/team-project/${teamId}?tab=contract`,
+      });
+    }
+  } catch (e) {
+    console.warn('Failed to send subcontract proposal notification:', e);
+  }
+  return result;
+}
+
+async function decideSubcontractProposal(teamId, proposalId, viewerAccountId, data) {
+  if (!proposalId) {
+    const error = new Error('Proposal ID is required');
+    error.statusCode = 400;
+    throw error;
+  }
+  const result = await TeamProjectRepositories.decideSubcontractProposal(teamId, proposalId, viewerAccountId, data);
+  try {
+    if (result.lead_account_id) {
+      await createNotificationServices({
+        account_id: result.lead_account_id,
+        message: `Your subcontract team proposal was ${result.status === 'approved' ? 'approved' : result.status === 'partially_approved' ? 'partially approved' : 'declined'} by the client.`,
+        is_read: false,
+        reference_table: 'teams',
+        reference_prefix: 'SUBCONTRACT_PROPOSAL_DECIDED',
+        reference_path: `/team-project/${teamId}?tab=contract`,
+      });
+    }
+    if (Array.isArray(result.members)) {
+      for (const m of result.members) {
+        if (m.status === 'approved' && m.candidate_account_id) {
+          await createNotificationServices({
+            account_id: m.candidate_account_id,
+            message: `You were approved to join the project workspace under @${result.lead_handle}'s contract as ${m.role_title}.`,
+            is_read: false,
+            reference_table: 'teams',
+            reference_prefix: 'SUBCONTRACT_MEMBER_APPROVED',
+            reference_path: `/team-project/${teamId}?tab=taskboard`,
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to send subcontract decision notification:', e);
+  }
+  return result;
+}
+
+async function withdrawSubcontractProposal(teamId, proposalId, viewerAccountId) {
+  if (!proposalId) {
+    const error = new Error('Proposal ID is required');
+    error.statusCode = 400;
+    throw error;
+  }
+  return await TeamProjectRepositories.withdrawSubcontractProposal(teamId, proposalId, viewerAccountId);
+}
+
 module.exports = {
   getProjectDetails,
   getProjectTaskboard,
@@ -115,6 +209,10 @@ module.exports = {
   getProjectHistory,
   getProjectMembers,
   getProjectMilestones,
+  getSubcontractProposals,
+  createSubcontractProposal,
+  decideSubcontractProposal,
+  withdrawSubcontractProposal,
   updateProjectDetails,
   deleteProject,
   reportProject,

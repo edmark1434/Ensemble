@@ -207,6 +207,21 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     setLocalTasks(tasks);
   }, [tasks]);
 
+  // Check if current user is a subcontractor with scoped milestone permissions
+  const currentMember = useMemo(() => {
+    return (members || []).find(
+      (m: any) => String(m.account_id).trim() === String(currentUserAccountId).trim()
+    );
+  }, [members, currentUserAccountId]);
+
+  const isSubcontractor = Boolean(
+    currentMember?.is_subcontractor || currentMember?.team_role === 'Subcontractor'
+  );
+  const subcontractorMilestoneId = currentMember?.assigned_milestone_id;
+  const subcontractorMilestoneTitle =
+    currentMember?.assigned_milestone_title || currentMember?.milestone_role;
+  const subcontractorParentHandle = currentMember?.parent_contractor_handle;
+
   // 4 Display Modes (Default is 'board')
   const [displayMode, setDisplayMode] = useState<DisplayMode>('board');
   const [filterAssignee, setFilterAssignee] = useState<string>('all');
@@ -475,13 +490,35 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
   // The only person who can change status of their tasks is the one assigned to it
   const isTaskAssignee = (task: TaskItem) => {
     if (!task.assignee_account_id || !currentUserAccountId) return false;
-    return String(task.assignee_account_id).trim() === String(currentUserAccountId).trim();
+    const isMe = String(task.assignee_account_id).trim() === String(currentUserAccountId).trim();
+    if (!isMe) return false;
+    // Subcontractors are strictly scoped to tasks under their assigned milestone
+    if (isSubcontractor && subcontractorMilestoneId && task.job_milestone_id) {
+      return String(task.job_milestone_id) === String(subcontractorMilestoneId);
+    }
+    return true;
   };
 
   const handleUpdateStatus = async (task: TaskItem, newStatus: TaskItem['status']) => {
     if (task.is_locked && !isClient) {
       showErrorToast('This task is locked waiting for earlier milestones to finish.');
       return;
+    }
+    if (isSubcontractor) {
+      if (
+        subcontractorMilestoneId &&
+        task.job_milestone_id &&
+        String(task.job_milestone_id) !== String(subcontractorMilestoneId)
+      ) {
+        showErrorToast(
+          `Subcontractors are restricted to tasks under their assigned milestone (${subcontractorMilestoneTitle || 'Assigned Scope'}).`
+        );
+        return;
+      }
+      if (currentMember?.subcontractor_permissions?.can_update_task_status === false) {
+        showErrorToast('Your subcontractor permissions do not allow modifying task status.');
+        return;
+      }
     }
     if (!isTaskAssignee(task)) {
       showErrorToast('Only the assigned team member can change the status of this task.');
@@ -665,16 +702,20 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
     setNewTaskPriority('normal');
     setNewTaskDueDate('');
 
-    // Default to the current contributor's assigned milestone
-    const myMilestone = milestones?.find(
-      (m: any) => String(m.assignee_account_id) === String(currentUserAccountId)
-    );
-    if (myMilestone) {
-      setNewTaskMilestone(String(myMilestone.job_milestone_id));
-    } else if (milestones && milestones.length > 0) {
-      setNewTaskMilestone(String(milestones[0].job_milestone_id));
+    // Default to the current contributor's or subcontractor's assigned milestone
+    if (isSubcontractor && subcontractorMilestoneId) {
+      setNewTaskMilestone(String(subcontractorMilestoneId));
     } else {
-      setNewTaskMilestone('');
+      const myMilestone = milestones?.find(
+        (m: any) => String(m.assignee_account_id) === String(currentUserAccountId)
+      );
+      if (myMilestone) {
+        setNewTaskMilestone(String(myMilestone.job_milestone_id));
+      } else if (milestones && milestones.length > 0) {
+        setNewTaskMilestone(String(milestones[0].job_milestone_id));
+      } else {
+        setNewTaskMilestone('');
+      }
     }
 
     setNewTaskAssignee(currentUserAccountId || '');
@@ -998,6 +1039,17 @@ export const ProjectTaskboardTab: React.FC<ProjectTaskboardTabProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Scoped Subcontractor Access Banner */}
+      {isSubcontractor && (
+        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-900 dark:text-blue-200 shadow-2xs">
+          <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+          <span>
+            <strong>Scoped Subcontractor Access:</strong> You are collaborating under{' '}
+            {subcontractorParentHandle ? `@${subcontractorParentHandle}'s contract` : 'lead contract'}{' '}
+            for <strong>{subcontractorMilestoneTitle || 'your assigned milestone'}</strong>. Task operations are strictly scoped to this milestone.
+          </span>
+        </div>
+      )}
       {/* ======================================================== */}
       {/* 1. TOP TAB SWITCHER: Board | List | Table | Gantt        */}
       {/* ======================================================== */}

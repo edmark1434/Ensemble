@@ -3,6 +3,13 @@ const { pool } = require('../lib/Database');
 const { getIo } = require('../lib/WebSocket');
 const { createNotificationServices } = require('../services/NotificationServices');
 const { getAuthorizedActorAccountIds } = require('../services/MarketplaceActorServices');
+const {
+    ContractSubcontractError,
+    getContractTeamServices,
+    addContractSubcontractorServices,
+    removeContractSubcontractorServices,
+    distributeContractFundsServices,
+} = require('../services/ContractServices');
 
 async function sendJobOfferController(req, res) {
     try {
@@ -414,6 +421,50 @@ async function withdrawCancellationRequestController(req, res) {
     }
 }
 
+async function getContractTeamController(req, res) {
+    try {
+        const actorAccountId = req.session?.account_id || req.user?.account_id || req.user?.accountId;
+        const data = await getContractTeamServices(req.params.contractId, actorAccountId);
+        return res.status(200).json({ success: true, data });
+    } catch (err) {
+        console.error('getContractTeamController error:', err);
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message || 'Internal server error' });
+    }
+}
+
+async function addContractSubcontractorController(req, res) {
+    try {
+        const actorAccountId = req.session?.account_id || req.user?.account_id || req.user?.accountId;
+        const data = await addContractSubcontractorServices(req.params.contractId, actorAccountId, req.body);
+        return res.status(201).json({ success: true, message: 'Team member added successfully', data });
+    } catch (err) {
+        console.error('addContractSubcontractorController error:', err);
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message || 'Internal server error' });
+    }
+}
+
+async function removeContractSubcontractorController(req, res) {
+    try {
+        const actorAccountId = req.session?.account_id || req.user?.account_id || req.user?.accountId;
+        const data = await removeContractSubcontractorServices(req.params.contractId, actorAccountId, req.params.memberAccountId);
+        return res.status(200).json({ success: true, message: 'Team member removed successfully', data });
+    } catch (err) {
+        console.error('removeContractSubcontractorController error:', err);
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message || 'Internal server error' });
+    }
+}
+
+async function distributeContractFundsController(req, res) {
+    try {
+        const actorAccountId = req.session?.account_id || req.user?.account_id || req.user?.accountId;
+        const data = await distributeContractFundsServices(req.params.contractId, actorAccountId, req.body);
+        return res.status(200).json({ success: true, message: 'Contract funds distributed successfully', data });
+    } catch (err) {
+        console.error('distributeContractFundsController error:', err);
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message || 'Internal server error' });
+    }
+}
+
 module.exports = {
     sendJobOfferController,
     acceptJobOfferController,
@@ -426,4 +477,8 @@ module.exports = {
     getCancellationRequestController,
     respondCancellationRequestController,
     withdrawCancellationRequestController,
+    getContractTeamController,
+    addContractSubcontractorController,
+    removeContractSubcontractorController,
+    distributeContractFundsController,
 };

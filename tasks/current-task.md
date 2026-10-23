@@ -1,4 +1,5 @@
 # Current Task: Unify Job Posting, Port Milestone Studio to Proposals & Route All Contracts to Project Workspaces
+# Current Task: Remove Category and Location Display Under About Tab in Teams
 
 ## Objective
 Implement the approved architectural redesign:
@@ -9,6 +10,15 @@ Implement the approved architectural redesign:
 5. **Spacious & Clean Review Experience**: Expand proposal creation width to `max-w-6xl 2xl:max-w-7xl` and upgrade Step 4 (`4_proposal_review.tsx`) with a neutral, crisp Milestone Breakdown Data Table.
 6. **Backend & Workspace Routing**: Ensure all accepted contracts (both Solo and Team) automatically initialize a dedicated Project Workspace with taskboards generated from proposed milestones.
 7. **Ranking Engine & Seed Dataset Alignment**: Update `job_ranking.ts`, `/jobs/info` guide, and seed files (`SeedJobsDataset.js`, `SeedJobs.js`, `job_datasets.tsx`) to purge legacy team pool entries, client milestones, and headcount splits. Re-seeded live database to 100% unified jobs.
+Remove the category and location display under the "About" tab in Teams so that the About card focuses cleanly on the team description.
+
+## Changes Completed
+1. **Frontend Component ([`SelectedTeam.tsx`](file:///c:/Capstone/Ensemble/frontend/src/pages/user/3_teams/SelectedTeam.tsx))**:
+   - Removed the `<p>` element displaying `Category: {team.category || "—"} · Location: {team.location || "—"}` under the `active === "about"` tab.
+   - The About card now cleanly displays the title and team description.
+
+2. **Verification**:
+   - Verified clean compilation with `npm --prefix frontend run build` (`tsc --noEmit && vite build`) — succeeded with 0 errors.
 
 ## Acceptance Criteria
 - [x] Phase 1: Consolidate Job Posting entry points and remove the split between individual and team job creation wizards.
@@ -167,3 +177,6 @@ Implement the approved architectural redesign:
 - [x] Phase 34: Polished milestone reorder drag physics with custom lift elevation (`whileDrag={{ scale: 1.015, zIndex: 50, boxShadow: ... }}`), critical pointer default suppression (`e.preventDefault()` on dragControls trigger), and physical spring easing for sibling rearrangement (`layout: { type: "spring", stiffness: 350, damping: 30 }`) for smooth, tactile dragging.
 - [x] Phase 35: Stripped redundant `"Phase 1:"`, `"Phase 2:"` prefixes from milestone titles across default proposals state, roadmap presets, new milestone creation, and existing localStorage draft restoration. Titles now render directly as clean deliverable names (e.g., `Ingest, Multitrack Sync & Selects Reel`) alongside the circular phase number `(1)`.
 - [x] Verification: `npm --prefix frontend run build` completes with 0 errors.
+- [x] Category and location are removed from the About tab in Teams.
+- [x] About tab displays the team description cleanly.
+- [x] Frontend builds with zero errors (`npm run build`).

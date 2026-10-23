@@ -80,6 +80,23 @@ export default function TeamInvitePage() {
       return;
     }
 
+    if (team.current_user_status === "Invited") {
+      setJoining(true);
+      try {
+        await api.patch(`/api/teams/${team.team_id}/invitations/accept`);
+        showSuccessToast(`Welcome to ${team.display_name}!`);
+        navigate(`/teams/${team.team_id}`);
+      } catch (err: unknown) {
+        const msg =
+          typeof err === "object" && err !== null && "response" in err
+            ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+            : null;
+        showErrorToast(msg || "Unable to accept team invitation.");
+        setJoining(false);
+      }
+      return;
+    }
+
     if (team.current_user_status === "Active") {
       navigate(`/teams/${team.team_id}`);
       return;
@@ -301,6 +318,50 @@ export default function TeamInvitePage() {
                     Your request has been submitted and is awaiting admin approval.
                   </p>
                 </>
+              ) : team.current_user_status === "Invited" ? (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    disabled={joining}
+                    onClick={() => void handleJoin()}
+                    className="cursor-pointer w-full inline-flex items-center justify-center gap-2 rounded-full bg-emerald-500 hover:bg-emerald-400 px-6 py-3 text-sm font-semibold text-white transition active:scale-[0.98] shadow-md shadow-emerald-500/20 disabled:opacity-50"
+                  >
+                    {joining ? (
+                      <>
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                        Joining Team...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>Join Team</span>
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={joining}
+                    onClick={async () => {
+                      setJoining(true);
+                      try {
+                        await api.patch(`/api/teams/${team.team_id}/invitations/decline`);
+                        showSuccessToast("Invitation declined");
+                        navigate("/teams");
+                      } catch (err: unknown) {
+                        const msg =
+                          typeof err === "object" && err !== null && "response" in err
+                            ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+                            : null;
+                        showErrorToast(msg || "Failed to decline invitation.");
+                        setJoining(false);
+                      }
+                    }}
+                    className="cursor-pointer w-full inline-flex items-center justify-center gap-2 rounded-full border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 px-6 py-2.5 text-xs font-medium text-gray-700 dark:text-zinc-300 transition active:scale-[0.98] disabled:opacity-50"
+                  >
+                    Decline Invitation
+                  </button>
+                </div>
               ) : team.current_user_status === "Suspended" ? (
                 <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-xs text-red-400">
                   Your membership in this team has been suspended.
@@ -319,7 +380,8 @@ export default function TeamInvitePage() {
                     </>
                   ) : team.join_policy === "Open" ? (
                     <>
-                      Accept Invite & Join
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>Join Team</span>
                       <ArrowRight className="h-4 w-4" />
                     </>
                   ) : (

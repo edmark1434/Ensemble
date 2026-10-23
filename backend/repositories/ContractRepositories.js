@@ -791,6 +791,228 @@ async function getContractWithParties(contractId) {
     return res.rows[0] || null;
 }
 
+async function getContractSubcontractTeam(contractId) {
+    const contract = await getContractWithParties(contractId);
+    if (!contract) return null;
+
+    const membersRes = await pool.query(`
+        SELECT 
+            cs.contract_id,
+            cs.account_id,
+            cs.role_title,
+            cs.agreed_credits,
+            cs.notes,
+            cs.created_at,
+            a.display_name,
+            a.handle,
+            f.path as avatar_url,
+            COALESCE(dist.total_distributed, 0)::int AS total_received_credits
+        FROM contract_subcontractors cs
+        JOIN accounts a ON a.account_id = cs.account_id
+        LEFT JOIN files f ON a.avatar_file_id = f.file_id
+        LEFT JOIN (
+            SELECT recipient_account_id, contract_id, SUM(amount_credits) AS total_distributed
+            FROM contract_subcontract_distributions
+            WHERE contract_id = $1
+            GROUP BY recipient_account_id, contract_id
+        ) dist ON dist.recipient_account_id = cs.account_id AND dist.contract_id = cs.contract_id
+        WHERE cs.contract_id = $1
+        ORDER BY cs.created_at ASC
+    `, [contractId]);
+
+    const distRes = await pool.query(`
+        SELECT 
+            csd.distribution_id,
+            csd.contract_id,
+            csd.distributed_by_account_id,
+            csd.recipient_account_id,
+            csd.amount_credits,
+            csd.notes,
+            csd.created_at,
+            a.display_name AS recipient_name,
+            a.handle AS recipient_handle,
+            rf.path AS recipient_avatar,
+            d.display_name AS distributor_name,
+            d.handle AS distributor_handle
+        FROM contract_subcontract_distributions csd
+        JOIN accounts a ON a.account_id = csd.recipient_account_id
+        LEFT JOIN files rf ON a.avatar_file_id = rf.file_id
+        JOIN accounts d ON d.account_id = csd.distributed_by_account_id
+        WHERE csd.contract_id = $1
+        ORDER BY csd.created_at DESC
+    `, [contractId]);
+
+    const releasedRes = await pool.query(`
+        SELECT COALESCE(SUM(ct.amount_credits), 0)::int AS released_credits
+        FROM credit_transactions ct
+        WHERE ct.type = 'Escrow Release'
+          AND LOWER(ct.status) = 'completed'
+          AND (
+            (ct.reference_table = 'contracts' AND ct.reference_id = $1)
+            OR ct.reference_id IN (SELECT contract_milestone_id FROM contract_milestones WHERE contract_id = $1)
+            OR ct.source_wallet_id IN (SELECT wallet_id FROM escrow_wallets WHERE contract_id = $1)
+          )
+    `, [contractId]);
+
+    const releasedCredits = Number(releasedRes.rows[0]?.released_credits || 0);
+    const distributedCredits = distRes.rows.reduce((sum, d) => sum + Number(d.amount_credits || 0), 0);
+    const remainingDistributableCredits = Math.max(0, releasedCredits - distributedCredits);
+
+    return {
+        contract,
+        members: membersRes.rows,
+        distributions: distRes.rows,
+        budget: {
+            total_rate_credits: Number(contract.rate_credits || 0),
+            released_credits: releasedCredits,
+            distributed_credits: distributedCredits,
+            remaining_distributable_credits: remainingDistributableCredits,
+        },
+    };
+}
+
+async function addContractSubcontractor({ contractId, accountId, roleTitle = 'Video Editor', agreedCredits = null, notes = null }) {
+    const res = await pool.query(`
+        INSERT INTO contract_subcontractors (contract_id, account_id, role_title, agreed_credits, notes)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (contract_id, account_id)
+        DO UPDATE SET 
+            role_title = EXCLUDED.role_title,
+            agreed_credits = EXCLUDED.agreed_credits,
+            notes = EXCLUDED.notes
+        RETURNING *
+    `, [contractId, accountId, roleTitle.trim() || 'Video Editor', agreedCredits ? Number(agreedCredits) : null, notes ? String(notes).trim() : null]);
+    return res.rows[0];
+}
+
+async function removeContractSubcontractor(contractId, accountId) {
+    const res = await pool.query(`
+        DELETE FROM contract_subcontractors
+        WHERE contract_id = $1 AND account_id = $2
+        RETURNING *
+    `, [contractId, accountId]);
+    return res.rows[0] || null;
+}
+
+async function distributeContractSubcontractFunds({ contractId, distributorAccountId, recipients, notes = null }) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const senderWalletRes = await client.query(`
+            SELECT aw.account_id, w.wallet_id, w.balance_credits, w.status, a.display_name, a.handle
+            FROM account_wallets aw
+            JOIN wallets w ON w.wallet_id = aw.wallet_id
+            JOIN accounts a ON a.account_id = aw.account_id
+            WHERE aw.account_id = $1 AND w.type = 'account wallets'
+            FOR UPDATE OF w
+        `, [distributorAccountId]);
+        const senderWallet = senderWalletRes.rows[0];
+        if (!senderWallet) throw new Error('Distributor account wallet not found');
+        if (String(senderWallet.status).toLowerCase() !== 'active') throw new Error('Distributor wallet is not active');
+
+        const releasedRes = await client.query(`
+            SELECT COALESCE(SUM(ct.amount_credits), 0)::int AS released_credits
+            FROM credit_transactions ct
+            WHERE ct.type = 'Escrow Release'
+              AND LOWER(ct.status) = 'completed'
+              AND (
+                (ct.reference_table = 'contracts' AND ct.reference_id = $1)
+                OR ct.reference_id IN (SELECT contract_milestone_id FROM contract_milestones WHERE contract_id = $1)
+                OR ct.source_wallet_id IN (SELECT wallet_id FROM escrow_wallets WHERE contract_id = $1)
+              )
+        `, [contractId]);
+        const releasedCredits = Number(releasedRes.rows[0]?.released_credits || 0);
+
+        const distRes = await client.query(`
+            SELECT COALESCE(SUM(amount_credits), 0)::int AS distributed_credits
+            FROM contract_subcontract_distributions
+            WHERE contract_id = $1
+        `, [contractId]);
+        const distributedCredits = Number(distRes.rows[0]?.distributed_credits || 0);
+
+        const remainingCredits = Math.max(0, releasedCredits - distributedCredits);
+        const totalRequested = recipients.reduce((sum, r) => sum + Number(r.amount_credits || 0), 0);
+
+        if (releasedCredits <= 0) {
+            throw new Error('Contract funds have not been released from client escrow yet.');
+        }
+        if (totalRequested > remainingCredits) {
+            throw new Error(`Total distribution (${totalRequested} credits) exceeds remaining contract budget (${remainingCredits} credits).`);
+        }
+        if (Number(senderWallet.balance_credits) < totalRequested) {
+            throw new Error(`Insufficient available balance in your account wallet.`);
+        }
+
+        const recipientAccountIds = recipients.map((r) => r.account_id);
+        const recipientWalletsRes = await client.query(`
+            SELECT aw.account_id, w.wallet_id, w.balance_credits, w.status, a.display_name, a.handle
+            FROM account_wallets aw
+            JOIN wallets w ON w.wallet_id = aw.wallet_id
+            JOIN accounts a ON a.account_id = aw.account_id
+            WHERE aw.account_id = ANY($1::uuid[]) AND w.type = 'account wallets'
+            ORDER BY w.wallet_id
+            FOR UPDATE OF w
+        `, [recipientAccountIds]);
+
+        const recipientMap = new Map(recipientWalletsRes.rows.map((r) => [String(r.account_id), r]));
+        for (const r of recipients) {
+            const row = recipientMap.get(String(r.account_id));
+            if (!row) throw new Error(`Recipient ${r.account_id} does not have an active account wallet.`);
+            if (String(row.status).toLowerCase() !== 'active') throw new Error(`Recipient @${row.handle} account wallet is not active.`);
+        }
+
+        await client.query(`
+            UPDATE wallets SET balance_credits = balance_credits - $1 WHERE wallet_id = $2
+        `, [totalRequested, senderWallet.wallet_id]);
+
+        const createdDistributions = [];
+        for (const item of recipients) {
+            const target = recipientMap.get(String(item.account_id));
+            const amount = Number(item.amount_credits);
+            const itemNotes = item.notes ? String(item.notes).trim() : notes;
+
+            await client.query(`
+                UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2
+            `, [amount, target.wallet_id]);
+
+            const txRes = await client.query(`
+                INSERT INTO credit_transactions (
+                    type, amount_credits, status, source_wallet_id, destination_wallet_id,
+                    reference_table, reference_id
+                ) VALUES ('Fund Transfer', $1, 'completed', $2, $3, 'contracts', $4)
+                RETURNING credit_transaction_id
+            `, [amount, senderWallet.wallet_id, target.wallet_id, contractId]);
+
+            const distInsert = await client.query(`
+                INSERT INTO contract_subcontract_distributions (
+                    contract_id, distributed_by_account_id, recipient_account_id,
+                    amount_credits, notes, credit_transaction_id
+                ) VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING *
+            `, [contractId, distributorAccountId, item.account_id, amount, itemNotes, txRes.rows[0].credit_transaction_id]);
+
+            createdDistributions.push({
+                ...distInsert.rows[0],
+                recipient_handle: target.handle,
+                recipient_name: target.display_name,
+            });
+        }
+
+        await client.query('COMMIT');
+        return {
+            distributions: createdDistributions,
+            total_distributed: totalRequested,
+            distributor: senderWallet,
+        };
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
+}
+
 module.exports = {
     sendJobOffer,
     acceptJobOffer,
@@ -798,4 +1020,8 @@ module.exports = {
     getContractsByUserId,
     createContractDispute,
     getContractWithParties,
+    getContractSubcontractTeam,
+    addContractSubcontractor,
+    removeContractSubcontractor,
+    distributeContractSubcontractFunds,
 };

@@ -30,4 +30,10 @@ router.post('/:contractId/cancellation-request', requireAuth, ContractController
 router.post('/:contractId/cancellation-request/:requestId/respond', requireAuth, ContractControllers.respondCancellationRequestController);
 router.post('/:contractId/cancellation-request/:requestId/withdraw', requireAuth, ContractControllers.withdrawCancellationRequestController);
 
+// Subcontracts & Team Fund Distribution
+router.get('/:contractId/team', requireAuth, ContractControllers.getContractTeamController);
+router.post('/:contractId/team', requireAuth, ContractControllers.addContractSubcontractorController);
+router.delete('/:contractId/team/:memberAccountId', requireAuth, ContractControllers.removeContractSubcontractorController);
+router.post('/:contractId/distribute-funds', requireAuth, ContractControllers.distributeContractFundsController);
+
 module.exports = router;

@@ -798,6 +798,7 @@ export default function SelectedTeam() {
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
         team={team}
+        onInvited={() => void loadTeam(false)}
       />
 
       <LeaveTeamModal
@@ -1196,9 +1197,6 @@ function TeamTabContent({
       <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-6">
         <h3 className="mb-2 text-lg font-semibold">About this Team</h3>
         <p className="text-gray-500 dark:text-zinc-400">{team.description}</p>
-        <p className="mt-4 text-sm text-gray-500 dark:text-zinc-500">
-          Category: {team.category || "—"} · Location: {team.location || "—"}
-        </p>
       </div>
     );
   if (active === "tasks") return <TeamTaskDashboard teamId={team.team_id} />;

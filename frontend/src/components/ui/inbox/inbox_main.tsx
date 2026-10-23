@@ -50,6 +50,7 @@ import {
   shouldDisplayTimestamp,
 } from "./inbox_functions/inbox_timeof_message";
 import { ChatImagePreview } from "./inbox_functions/chat_image_preview";
+import { TeamInviteCard, parseTeamInviteMessage } from "./inbox_components/TeamInviteCard";
 
 const EMPTY_MESSAGES: Message[] = [];
 const EMPTY_TYPING_ACCOUNTS: string[] = [];
@@ -833,6 +834,7 @@ const InboxMain = () => {
     const projectInviteId = projectInviteMatch?.[1] || "";
     const projectInviteName = decodeURIComponent(projectInviteMatch?.[2] || "Project");
     const projectInviteText = projectInviteMatch?.[3] || `You're invited to collaborate on "${projectInviteName}".`;
+    const teamInviteData = parseTeamInviteMessage(message.message_content || "");
 
     const previousMessage = index > 0 ? visibleMessages[index - 1] : undefined;
     const showTime = shouldDisplayTimestamp(
@@ -1048,7 +1050,15 @@ const InboxMain = () => {
                   </div>
                 )}
 
-                {isProjectInvite ? (
+                {teamInviteData ? (
+                  <TeamInviteCard
+                    teamId={teamInviteData.teamId}
+                    teamName={teamInviteData.teamName}
+                    joinCode={teamInviteData.joinCode}
+                    description={teamInviteData.description}
+                    isSender={isSender}
+                  />
+                ) : isProjectInvite ? (
                   <div className="min-w-60 max-w-sm py-1">
                     <div className="flex items-center gap-2 mb-2 font-semibold">
                       <FolderGit2 className="h-4 w-4 text-indigo-400 shrink-0" />

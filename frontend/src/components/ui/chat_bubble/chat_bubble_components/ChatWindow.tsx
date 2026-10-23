@@ -33,6 +33,7 @@ import { InboxUnsentMessage } from "@/components/ui/inbox/inbox_functions/inbox_
 import { ChatImagePreview } from "@/components/ui/inbox/inbox_functions/chat_image_preview";
 import LiveGoogleMeetingBanner from "./LiveGoogleMeetingBanner";
 import { MarketplaceContextCard } from "@/components/ui/inbox/inbox_components/marketplace_context_card";
+import { TeamInviteCard, parseTeamInviteMessage } from "@/components/ui/inbox/inbox_components/TeamInviteCard";
 
 interface ChatWindowProps {
   onMinimize: () => void;
@@ -589,6 +590,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       ) : (
                         <>
                           {(() => {
+                            const teamInviteData = parseTeamInviteMessage(message.message_content || "");
+                            if (teamInviteData) {
+                              return (
+                                <TeamInviteCard
+                                  teamId={teamInviteData.teamId}
+                                  teamName={teamInviteData.teamName}
+                                  joinCode={teamInviteData.joinCode}
+                                  description={teamInviteData.description}
+                                  isSender={isMe}
+                                  compact
+                                />
+                              );
+                            }
                             const projectInviteMatch = (message.message_content || "").match(
                               /^\[project-invite:([^:\]]+)(?::([^\]]*))?\]\s*(.*)$/
                             );
