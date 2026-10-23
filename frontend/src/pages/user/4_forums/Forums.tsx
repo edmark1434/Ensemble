@@ -1281,7 +1281,7 @@ const Forums = () => {
   useEffect(() => {
     if (!isForumAuthenticated) {
       setSelectedGroupIds([]);
-      setSortBy("popular");
+      setSortBy("hot");
       return;
     }
     if (joinedGroups.length > 0 && selectedGroupIds.length === 0) {
@@ -1352,7 +1352,7 @@ const Forums = () => {
           : "/api/forum/discussions/saved";
       const response = await api.get<FeedResponse>(url, {
         params: {
-          type: isForumAuthenticated ? sortBy : "popular",
+          type: isForumAuthenticated ? sortBy : "hot",
           limit: 10,
           cursor: cursor || undefined,
           groupIds: activeTab === "feed" && selectedGroupIds.length > 0 ? selectedGroupIds.join(",") : undefined,
@@ -2101,7 +2101,7 @@ const Forums = () => {
                   onClick={() => { if (isForumAuthenticated) setSortBy(option.value); }}
                   disabled={!isForumAuthenticated}
                   className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs transition-all duration-200 disabled:cursor-default ${
-                    (isForumAuthenticated ? sortBy : "popular") === option.value
+                    (isForumAuthenticated ? sortBy : "hot") === option.value
                       ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
                       : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:border-white/30 hover:text-gray-900 dark:hover:text-white"
                   }`}
@@ -2622,7 +2622,7 @@ const Forums = () => {
                             ? `Found ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
                             : isForumAuthenticated
                               ? `Showing ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} from your joined groups`
-                              : `Showing ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} from all forums by popularity`}
+                              : `Showing ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} from all forums, hottest first`}
                         </p>
                       )}
                       {displayPosts.map((post) => renderPostCard(post, true))}
