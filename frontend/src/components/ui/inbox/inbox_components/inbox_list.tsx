@@ -115,7 +115,8 @@ export const InboxList: React.FC<InboxListProps> = ({
         const avatar = getAvatar(inbox);
         const readableLastMessage = inbox.last_message
           ?.replace(/^(?:\[video-call:(?:missed|ended)\]|\[meeting:(?:requested|ended):[^\]]+\]|\[zoom-call:(?:started|ended):[^\]]+\])\s*/, "")
-          ?.replace(/^\[project-invite:[^\]]+\]\s*/, "Project invitation: ");
+          ?.replace(/^\[project-invite:[^\]]+\]\s*/, "Project invitation: ")
+          ?.replace(/^\[team-invite:[^\]]+\]\s*/, "Team invitation: ");
 
         const isSystemMessage = readableLastMessage && (
           readableLastMessage.includes("created the group chat.") ||

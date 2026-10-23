@@ -642,6 +642,7 @@ export const TeamProjectWorkspace: React.FC = () => {
               members={members}
               currentUserAccountId={currentUserAccountId}
               isClient={isClient}
+              milestones={milestones}
               defaultSubTab={searchParams.get('tab') === 'members' ? 'members' : 'contracts'}
               onContractsUpdated={loadProjectData}
               onOpenRateModal={(contractId, targetName) => {

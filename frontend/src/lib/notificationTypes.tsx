@@ -103,6 +103,8 @@ export const NOTIFICATION_ICONS: Record<string, NotificationIconDef> = {
   TEAM_TASK_DUE:              tone("orange", i(Clock)),
   // Social
   PROJECT_INVITATION:         tone("pink", i(UserPlus)),
+  TEAM_INVITATION:            tone("indigo", i(UserPlus)),
+  TEAM_JOIN_APPROVED:         tone("green", i(CheckCircle2)),
   meeting_request:            tone("indigo", i(Calendar)),
   // Forums
   FORUM_COMMENT:              tone("purple", i(MessageSquare)),
