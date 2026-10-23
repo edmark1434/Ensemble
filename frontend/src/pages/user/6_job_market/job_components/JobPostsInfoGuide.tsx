@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   TrendingUp,
@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ArrowRight,
   Plus,
+  Loader2,
   HelpCircle,
   User,
   Users,
@@ -19,6 +20,7 @@ import useGlobalState from "@/lib/global_state";
 export const JobPostsInfoGuide: React.FC = () => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const [isCheckingAccess, setIsCheckingAccess] = useState(false);
 
   const rankingPillars = [
     {
@@ -136,16 +138,22 @@ export const JobPostsInfoGuide: React.FC = () => {
     },
   ];
 
-  const handleCreateJob = () => {
+  const handleCreateJob = async () => {
+    if (isCheckingAccess) return;
     if (isGuestMode) {
       navigate("/login");
       return;
     }
-    continueIfAccountVerified(
-      () => navigate("/jobs/create"),
-      false,
-      "Account Verification is required to post a job. Please verify your identity to proceed."
-    );
+    setIsCheckingAccess(true);
+    try {
+      await continueIfAccountVerified(
+        () => navigate("/jobs/create"),
+        false,
+        "Account Verification is required to post a job. Please verify your identity to proceed."
+      );
+    } finally {
+      setIsCheckingAccess(false);
+    }
   };
 
   return (
@@ -360,10 +368,22 @@ export const JobPostsInfoGuide: React.FC = () => {
           <button
             type="button"
             onClick={handleCreateJob}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 transition-colors shadow-xs active:scale-98 cursor-pointer"
+            disabled={isCheckingAccess}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 transition-colors shadow-xs ${
+              isCheckingAccess ? "opacity-80 cursor-wait" : "active:scale-98 cursor-pointer"
+            }`}
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Post a Job</span>
+            {isCheckingAccess ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Opening...</span>
+              </>
+            ) : (
+              <>
+                <Plus className="w-3.5 h-3.5" />
+                <span>Post a Job</span>
+              </>
+            )}
           </button>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ClipboardList, ChevronRight, Clock, Briefcase, Plus } from "lucide-react";
+import { ClipboardList, ChevronRight, Clock, Briefcase, Plus, Loader2 } from "lucide-react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import type { ProposalsMainContext } from "../proposals_main";
 import { useJobs } from "@/hooks/useJobs";
@@ -58,6 +58,17 @@ export const ProposalsSelectJobPage: React.FC = () => {
   const { fetchJobs } = useJobs();
   const [myJobPosts, setMyJobPosts] = React.useState<any[]>([]);
   const [isFetching, setIsFetching] = React.useState(true);
+  const [isCheckingAccess, setIsCheckingAccess] = React.useState(false);
+
+  const handlePostClick = async () => {
+    if (isCheckingAccess) return;
+    setIsCheckingAccess(true);
+    try {
+      await continueIfAccountVerified(() => navigate("/jobs/create"));
+    } finally {
+      setIsCheckingAccess(false);
+    }
+  };
 
   React.useEffect(() => {
     let isMounted = true;
@@ -143,10 +154,23 @@ export const ProposalsSelectJobPage: React.FC = () => {
               You haven't posted any jobs yet. Post a job to start receiving proposals from talented freelancers!
             </p>
             <button
-              onClick={() => continueIfAccountVerified(() => navigate("/jobs/create"))}
-              className="mt-4 px-6 py-2.5 rounded-xl bg-blue-600 text-xs font-bold text-white hover:bg-blue-700 transition shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer"
+              onClick={handlePostClick}
+              disabled={isCheckingAccess}
+              className={`mt-4 px-6 py-2.5 rounded-xl bg-blue-600 text-xs font-bold text-white hover:bg-blue-700 transition shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 ${
+                isCheckingAccess ? "opacity-80 cursor-wait" : "cursor-pointer"
+              }`}
             >
-              <Plus className="h-4 w-4" /> Post a Job
+              {isCheckingAccess ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Opening...</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4" />
+                  <span>Post a Job</span>
+                </>
+              )}
             </button>
           </div>
         ) : (

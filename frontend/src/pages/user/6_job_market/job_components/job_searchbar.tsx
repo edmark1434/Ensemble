@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import useGlobalState from "@/lib/global_state";
@@ -14,16 +14,23 @@ const JobSearchbar: React.FC<JobSearchbarProps> = ({ searchQuery, setSearchQuery
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
+  const [isCheckingAccess, setIsCheckingAccess] = useState(false);
 
-  const handlePostClick = () => {
+  const handlePostClick = async () => {
+    if (isCheckingAccess) return;
     if (isGuestMode) {
       setIsGuestModalOpen(true);
     } else {
-      continueIfAccountVerified(
-        () => navigate("/jobs/create"),
-        false,
-        "Account Verification is required to access Job Creation. Please verify your identity to proceed."
-      );
+      setIsCheckingAccess(true);
+      try {
+        await continueIfAccountVerified(
+          () => navigate("/jobs/create"),
+          false,
+          "Account Verification is required to access Job Creation. Please verify your identity to proceed."
+        );
+      } finally {
+        setIsCheckingAccess(false);
+      }
     }
   };
 
@@ -32,9 +39,22 @@ const JobSearchbar: React.FC<JobSearchbarProps> = ({ searchQuery, setSearchQuery
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
         <button data-tour="jobs-create-button"
           onClick={handlePostClick}
-          className="shrink-0 flex items-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition-all duration-200 hover:scale-105 active:scale-95 shadow-sm hover:shadow-md cursor-pointer select-none"
+          disabled={isCheckingAccess}
+          className={`shrink-0 flex items-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition-all duration-200 shadow-sm hover:shadow-md select-none ${
+            isCheckingAccess ? "opacity-80 cursor-wait" : "hover:scale-105 active:scale-95 cursor-pointer"
+          }`}
         >
-          <Plus className="h-4 w-4" /> <span>Post a Job</span>
+          {isCheckingAccess ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Opening...</span>
+            </>
+          ) : (
+            <>
+              <Plus className="h-4 w-4" />
+              <span>Post a Job</span>
+            </>
+          )}
         </button>
         <div data-tour="jobs-search-bar" className="relative flex-1">
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-zinc-500" />

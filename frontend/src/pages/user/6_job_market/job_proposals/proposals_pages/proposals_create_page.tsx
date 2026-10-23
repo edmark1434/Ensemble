@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, Sparkles } from "lucide-react";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import api from "@/lib/axios";
 import { useJobs } from "@/hooks/useJobs";
@@ -42,6 +43,16 @@ const ProposalsCreatePage: React.FC = () => {
   const user = useGlobalState((state) => state.user);
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [isCheckingVerification, setIsCheckingVerification] = useState(!isVerified);
+  const [isLoadingJob, setIsLoadingJob] = useState(Boolean(id));
+  const [isInitializingStudio, setIsInitializingStudio] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitializingStudio(false);
+    }, 850);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,17 +65,24 @@ const ProposalsCreatePage: React.FC = () => {
       if (!isVerified && user?.is_verified) {
         useGlobalState.getState().setIsVerified(true);
       }
+      setIsCheckingVerification(false);
       return;
     }
-    requireVerifiedAccount().catch(() => {
-      if (!cancelled) {
-        useGlobalState.getState().setIsVerificationModalOpen(
-          true,
-          "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
-        );
-        navigate(id ? `/jobs/postings/${id}` : "/jobs/postings");
-      }
-    });
+    requireVerifiedAccount()
+      .then(() => {
+        if (!cancelled) {
+          setIsCheckingVerification(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          useGlobalState.getState().setIsVerificationModalOpen(
+            true,
+            "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
+          );
+          navigate(id ? `/jobs/postings/${id}` : "/jobs/postings");
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -195,6 +213,7 @@ const ProposalsCreatePage: React.FC = () => {
 
   useEffect(() => {
     const loadJob = async () => {
+      setIsLoadingJob(true);
       try {
         let found: any = null;
         try {
@@ -258,10 +277,14 @@ const ProposalsCreatePage: React.FC = () => {
         }
       } catch (err) {
         console.error("Failed to load job for proposal", err);
+      } finally {
+        setIsLoadingJob(false);
       }
     };
     if (id) {
       loadJob();
+    } else {
+      setIsLoadingJob(false);
     }
   }, [id, fetchJobs]);
 
@@ -430,6 +453,48 @@ const ProposalsCreatePage: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
+  if (isCheckingVerification || isGlobalLoading || isLoadingJob || isInitializingStudio) {
+    return (
+      <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6 font-['Plus_Jakarta_Sans'] overflow-hidden">
+        {/* Background Grid */}
+        <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
+          <ShapeGrid
+            shape="square"
+            squareSize={48}
+            direction="diagonal"
+            speed={0.4}
+            borderColor={theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.07)"}
+            hoverFillColor={theme === "dark" ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
+            hoverTrailAmount={3}
+          />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.25 }}
+          className="relative z-10 flex flex-col items-center gap-3 text-center"
+        >
+          <div className="w-40 h-40 flex items-center justify-center">
+            <DotLottieReact
+              src="/icons/lottie/loading-ensemble.lottie"
+              loop
+              autoplay
+            />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight">
+              Preparing Proposal Studio
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-zinc-400">
+              Loading target job specifications and restoring your proposal draft...
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   if (job?.isOwnPost) {
     return (

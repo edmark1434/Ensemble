@@ -1,6 +1,6 @@
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useState } from "react";
-import { Calendar, Clock, Briefcase, Users, Star, Send, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText, Bookmark, CheckCircle2, XCircle, HelpCircle, Maximize2, TrendingUp, ChevronDown } from "lucide-react";
+import { Calendar, Clock, Briefcase, Users, Star, Send, Loader2, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText, Bookmark, CheckCircle2, XCircle, HelpCircle, Maximize2, TrendingUp, ChevronDown } from "lucide-react";
 import { JobRichText } from "./JobRichText";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
@@ -21,6 +21,7 @@ interface JobViewDetailsProps {
 const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, onReportJob, onToggleSave }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isScoreOpen, setIsScoreOpen] = useState(false);
+  const [isCheckingAccess, setIsCheckingAccess] = useState(false);
   const rankInfo = selectedJob ? computeJobRankingBreakdown(selectedJob) : null;
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
@@ -648,22 +649,40 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                       </button>
                       <button
                         data-tour="job-detail-send-proposal"
-                        onClick={() => {
+                        disabled={isCheckingAccess}
+                        onClick={async () => {
+                          if (isCheckingAccess) return;
                           if (isGuestMode) return setIsModalOpen(true);
-                          void continueIfAccountVerified(
-                            () => navigate(`/jobs/${selectedJob.id}/make-proposal`),
-                            false,
-                            "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
-                          );
+                          setIsCheckingAccess(true);
+                          try {
+                            await continueIfAccountVerified(
+                              () => navigate(`/jobs/${selectedJob.id}/make-proposal`),
+                              false,
+                              "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
+                            );
+                          } finally {
+                            setIsCheckingAccess(false);
+                          }
                         }}
-                        className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]"
+                        className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 ${
+                          isCheckingAccess ? "opacity-80 cursor-wait" : "active:scale-[0.98] cursor-pointer"
+                        }`}
                       >
-                        <Send className="h-3.5 w-3.5" /> 
-                        <span>{isGuestMode ? "Login to Apply" : "Send Proposal"}</span>
-                        {!isGuestMode && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white tracking-wide">
-                            <CreditIcon className="h-2.5 w-2.5 text-amber-300" /> 10 Cr
-                          </span>
+                        {isCheckingAccess ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Opening...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-3.5 w-3.5" /> 
+                            <span>{isGuestMode ? "Login to Apply" : "Send Proposal"}</span>
+                            {!isGuestMode && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white tracking-wide">
+                                <CreditIcon className="h-2.5 w-2.5 text-amber-300" /> 10 Cr
+                              </span>
+                            )}
+                          </>
                         )}
                       </button>
                     </div>

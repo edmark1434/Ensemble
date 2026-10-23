@@ -28,9 +28,12 @@ import {
   Paperclip,
   ExternalLink,
   Sparkles,
-  TrendingUp
+  TrendingUp,
+  Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import ShapeGrid from "@/components/ui/ShapeGrid";
 import UserHeader from "@/components/nav/user_header";
 import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
@@ -49,6 +52,7 @@ const JobFullPage: React.FC = () => {
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isVerified = useGlobalState((state) => state.isVerified);
+  const theme = useGlobalState((state) => state.theme);
 
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,6 +62,7 @@ const JobFullPage: React.FC = () => {
   const [isWorkflowOpen, setIsWorkflowOpen] = useState(true);
   const [isMilestonesOpen, setIsMilestonesOpen] = useState(true);
   const [isScoreOpen, setIsScoreOpen] = useState(false);
+  const [isCheckingAccess, setIsCheckingAccess] = useState(false);
 
   const getTimeAgo = (date: Date) => {
     try {
@@ -254,7 +259,49 @@ const JobFullPage: React.FC = () => {
     }
   };
 
-  if (!loading && !job) {
+  if (loading) {
+    return (
+      <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6 font-['Plus_Jakarta_Sans'] overflow-hidden">
+        {/* Background Grid */}
+        <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
+          <ShapeGrid
+            shape="square"
+            squareSize={48}
+            direction="diagonal"
+            speed={0.4}
+            borderColor={theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.07)"}
+            hoverFillColor={theme === "dark" ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
+            hoverTrailAmount={3}
+          />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.25 }}
+          className="relative z-10 flex flex-col items-center gap-3 text-center"
+        >
+          <div className="w-40 h-40 flex items-center justify-center">
+            <DotLottieReact
+              src="/icons/lottie/loading-ensemble.lottie"
+              loop
+              autoplay
+            />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight">
+              Loading Job Post Details
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-zinc-400">
+              Retrieving project brief, budget specifications, and workflow terms...
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (!job) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col items-center justify-center">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Job Post Not Found</h2>
@@ -952,22 +999,40 @@ const JobFullPage: React.FC = () => {
                     ) : (
                       <div className="flex flex-col gap-1.5">
                         <button
-                          onClick={() => {
+                          disabled={isCheckingAccess}
+                          onClick={async () => {
+                            if (isCheckingAccess) return;
                             if (isGuestMode) return setIsModalOpen(true);
-                            void continueIfAccountVerified(
-                              () => navigate(`/jobs/${job.id}/make-proposal`),
-                              false,
-                              "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
-                            );
+                            setIsCheckingAccess(true);
+                            try {
+                              await continueIfAccountVerified(
+                                () => navigate(`/jobs/${job.id}/make-proposal`),
+                                false,
+                                "Account Verification is required to submit a Job Proposal. Please verify your identity to proceed."
+                              );
+                            } finally {
+                              setIsCheckingAccess(false);
+                            }
                           }}
-                          className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition shadow-lg cursor-pointer bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]"
+                          className={`w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition shadow-lg bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 ${
+                            isCheckingAccess ? "opacity-80 cursor-wait" : "active:scale-[0.98] cursor-pointer"
+                          }`}
                         >
-                          <Send className="h-4 w-4" />
-                          <span>{isGuestMode ? "Login to Apply" : "Send Proposal"}</span>
-                          {!isGuestMode && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white tracking-wide">
-                              <CreditIcon className="h-3 w-3 text-amber-300" /> 10 Cr
-                            </span>
+                          {isCheckingAccess ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span>Opening...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Send className="h-4 w-4" />
+                              <span>{isGuestMode ? "Login to Apply" : "Send Proposal"}</span>
+                              {!isGuestMode && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white tracking-wide">
+                                  <CreditIcon className="h-3 w-3 text-amber-300" /> 10 Cr
+                                </span>
+                              )}
+                            </>
                           )}
                         </button>
                         {!isGuestMode && (
