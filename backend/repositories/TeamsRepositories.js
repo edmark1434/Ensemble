@@ -15,6 +15,20 @@ async function createTeam(data, ownerUserId) {
 }
 
 async function getUserId(accountId) { return (await pool.query('SELECT user_id FROM users WHERE account_id=$1', [accountId])).rows[0]?.user_id || null; }
+async function isAccountVerified(accountId) {
+  if (!accountId) return false;
+  const res = await pool.query(
+    `SELECT COALESCE(v.is_verified, FALSE)
+        AND (avs.expires_at IS NULL OR avs.expires_at > NOW()) AS is_verified
+     FROM accounts a
+     LEFT JOIN verifications v ON v.account_id = a.account_id
+     LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
+     WHERE a.account_id = $1 AND a.deleted_at IS NULL
+     LIMIT 1`,
+    [accountId]
+  );
+  return Boolean(res.rows[0]?.is_verified);
+}
 async function isActiveTeamOwner(teamAccountId, requesterAccountId) {
   return Boolean((await pool.query(`SELECT 1 FROM teams t
     JOIN users u ON u.account_id=$2
@@ -503,5 +517,5 @@ async function getTeamMemberLimitEligibility(teamId) {
   };
 }
 
-module.exports={createTeam,getUserId,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility};
+module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility};
 

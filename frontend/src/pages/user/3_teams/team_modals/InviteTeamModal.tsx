@@ -342,6 +342,7 @@ export const InviteTeamModal: React.FC<InviteTeamModalProps> = ({
                   const isInvited = status === "Invited";
                   const isPending = status === "Pending";
                   const isInviting = invitingAccountId === usr.account_id;
+                  const isUnverifiedUser = !usr.verification_status;
                   const isTeamFull = Boolean(limitData && !limitData.allowed && !isMember && !isInvited);
 
                   return (
@@ -365,8 +366,12 @@ export const InviteTeamModal: React.FC<InviteTeamModalProps> = ({
                             <p className="truncate text-xs font-semibold text-gray-900 dark:text-white">
                               {usr.display_name || usr.full_name || usr.handle}
                             </p>
-                            {usr.verification_status && (
-                              <Check className="h-3 w-3 text-blue-500 shrink-0" />
+                            {usr.verification_status ? (
+                              <Check className="h-3 w-3 text-blue-500 shrink-0" title="Verified User" />
+                            ) : (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-zinc-200/80 dark:bg-white/10 text-zinc-500 dark:text-zinc-400 shrink-0">
+                                Unverified
+                              </span>
                             )}
                           </div>
                           <p className="truncate text-[11px] text-gray-500 dark:text-zinc-400">
@@ -389,6 +394,13 @@ export const InviteTeamModal: React.FC<InviteTeamModalProps> = ({
                         ) : isPending ? (
                           <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-600 dark:text-amber-400 border border-amber-500/20">
                             Pending
+                          </span>
+                        ) : isUnverifiedUser ? (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-gray-400 dark:text-zinc-500 cursor-not-allowed select-none"
+                            title="Only verified accounts can be invited to join a team"
+                          >
+                            Not Verified
                           </span>
                         ) : (
                           <button

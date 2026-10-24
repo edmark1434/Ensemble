@@ -8,6 +8,7 @@ import UserHeader from "@/components/nav/user_header";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import EditTeamModal, { type TeamFormValues } from "./team_modals/EditTeamModal";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { continueIfAccountVerified } from "@/lib/accountVerification";
 
 interface TeamCreationEligibility {
   allowed: boolean;
@@ -86,11 +87,25 @@ export default function Teams() {
   }, []);
 
   const handleCreateTeamClick = () => {
-    if (eligibility && !eligibility.allowed) {
-      setIsLimitModalOpen(true);
-      return;
-    }
-    setIsCreateModalOpen(true);
+    void continueIfAccountVerified(
+      () => {
+        if (eligibility && !eligibility.allowed) {
+          setIsLimitModalOpen(true);
+          return;
+        }
+        setIsCreateModalOpen(true);
+      },
+      false,
+      "Account Verification is required before creating a Team. Please verify your identity first."
+    );
+  };
+
+  const handleJoinWithCodeClick = () => {
+    void continueIfAccountVerified(
+      () => setIsJoinModalOpen(true),
+      false,
+      "Account Verification is required before joining a Team with an invite code. Please verify your identity first."
+    );
   };
 
   const getImageUrl = (path?: string) => {
@@ -317,10 +332,16 @@ export default function Teams() {
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
                         team.current_user_role === "Owner"
                           ? "bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800"
+                          : team.current_user_role === "Representative" || team.current_user_role === "Admin"
+                          ? "bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800"
                           : "bg-gray-100 text-gray-700 border-gray-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"
                       }`}
                     >
-                      {team.current_user_role}
+                      {team.current_user_role === "Owner"
+                        ? "Team Leader"
+                        : team.current_user_role === "Representative" || team.current_user_role === "Admin"
+                        ? "Representative"
+                        : "Member"}
                     </span>
                   )}
 
@@ -437,10 +458,16 @@ export default function Teams() {
                     className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${
                       team.current_user_role === "Owner"
                         ? "bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800"
+                        : team.current_user_role === "Representative" || team.current_user_role === "Admin"
+                        ? "bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800"
                         : "bg-gray-100 text-gray-700 border-gray-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"
                     }`}
                   >
-                    {team.current_user_role}
+                    {team.current_user_role === "Owner"
+                      ? "Team Leader"
+                      : team.current_user_role === "Representative" || team.current_user_role === "Admin"
+                      ? "Representative"
+                      : "Member"}
                   </span>
                 )}
 
@@ -489,7 +516,7 @@ export default function Teams() {
           </button>
 
           <button
-            onClick={() => setIsJoinModalOpen(true)}
+            onClick={handleJoinWithCodeClick}
             className="shrink-0 flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 px-5 py-3 text-sm font-medium text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/10 transition hover:scale-105 cursor-pointer shadow-xs"
           >
             <UserPlus className="h-4 w-4 text-gray-500 dark:text-zinc-400" />

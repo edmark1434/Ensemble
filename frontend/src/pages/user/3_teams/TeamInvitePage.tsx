@@ -5,6 +5,7 @@ import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
 import { getImageUrl } from "@/lib/utils";
+import { continueIfAccountVerified } from "@/lib/accountVerification";
 
 interface TeamInviteData {
   team_id: string;
@@ -80,6 +81,18 @@ export default function TeamInvitePage() {
       return;
     }
 
+    if (team.current_user_status === "Active") {
+      navigate(`/teams/${team.team_id}`);
+      return;
+    }
+
+    const verified = await continueIfAccountVerified(
+      () => {},
+      false,
+      "Account Verification is required before joining a Team. Please verify your identity first."
+    );
+    if (!verified) return;
+
     if (team.current_user_status === "Invited") {
       setJoining(true);
       try {
@@ -94,11 +107,6 @@ export default function TeamInvitePage() {
         showErrorToast(msg || "Unable to accept team invitation.");
         setJoining(false);
       }
-      return;
-    }
-
-    if (team.current_user_status === "Active") {
-      navigate(`/teams/${team.team_id}`);
       return;
     }
 
