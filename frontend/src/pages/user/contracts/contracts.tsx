@@ -74,6 +74,16 @@ export interface DetailedContract {
   freelancerName: string;
   clientAccountId?: string;
   freelancerAccountId?: string;
+  freelancerType?: string;
+  includedTeamMembers?: {
+    account_id: string;
+    display_name: string;
+    handle?: string;
+    role?: string;
+    avatar_path?: string;
+    is_leader?: boolean;
+    is_proposer?: boolean;
+  }[];
   clientAvatar?: string;
   freelancerAvatar?: string;
   status: ContractStatus;
@@ -249,6 +259,8 @@ export const Contracts: React.FC = () => {
         freelancerName: c.freelancer_name || c.freelancer_handle,
         clientAccountId: c.client_account_id,
         freelancerAccountId: c.freelancer_account_id,
+        freelancerType: c.freelancer_type || undefined,
+        includedTeamMembers: Array.isArray(c.included_team_members) ? c.included_team_members : [],
         clientAvatar: c.client_avatar 
           ? `${import.meta.env.VITE_CLOUDFRONT_URL}${c.client_avatar.startsWith('/') ? '' : '/'}${c.client_avatar}` 
           : undefined,

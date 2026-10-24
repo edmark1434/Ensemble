@@ -1,6 +1,6 @@
 const { answerDocumentationQuestion, RagError } = require('../services/RagServices');
 const { EmbeddingError } = require('../services/EmbeddingServices');
-const { ClaudeSupportError, generateJobPostDraft } = require('../services/ClaudeSupportServices');
+const { ClaudeSupportError, generateJobPostDraft, generateProposalPitchDraft } = require('../services/ClaudeSupportServices');
 
 async function createDocumentationChatResponse(req, res) {
   try {
@@ -28,4 +28,17 @@ async function generateJobDraftResponse(req, res) {
   }
 }
 
-module.exports = { createDocumentationChatResponse, generateJobDraftResponse };
+async function generateProposalPitchResponse(req, res) {
+  try {
+    const draft = await generateProposalPitchDraft(req.body);
+    return res.status(200).json({ success: true, data: draft });
+  } catch (error) {
+    if (error instanceof ClaudeSupportError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    console.error('Joed AI proposal pitch generation failed:', error);
+    return res.status(500).json({ success: false, message: 'Joed AI could not generate the cover pitch right now. Please try again.' });
+  }
+}
+
+module.exports = { createDocumentationChatResponse, generateJobDraftResponse, generateProposalPitchResponse };
