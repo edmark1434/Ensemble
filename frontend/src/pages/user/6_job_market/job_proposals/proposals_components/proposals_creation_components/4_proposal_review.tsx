@@ -99,6 +99,7 @@ interface ProposalReviewProps {
   tosContent: string;
   milestones: Milestone[];
   actingTeamId?: string;
+  includedMemberIds?: string[];
   workSampleFiles?: File[];
   screeningAnswers?: { question: string; answer: string }[];
   onEditStep: (step: number) => void;
@@ -115,6 +116,7 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
   tosContent,
   milestones,
   actingTeamId,
+  includedMemberIds = [],
   workSampleFiles = [],
   screeningAnswers = [],
   onEditStep,
@@ -133,6 +135,7 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
     return constructAvatarUrl(raw, user?.display_name || user?.username);
   });
   const [teamInfo, setTeamInfo] = useState<TeamInfo | null>(null);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
 
   // Collapsible section states (Sections 2-5 collapsible, Section 1 permanently open)
   const [isSection2Collapsed, setIsSection2Collapsed] = useState(false); // Cover Letter & Screening Q&A
@@ -278,13 +281,48 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
           }
         })
         .catch((err) => console.error("Failed to load acting team for review:", err));
+
+      api.get(`/api/teams/${actingTeamId}/members`)
+        .then((res) => {
+          if (!isSubscribed) return;
+          const raw = Array.isArray(res.data)
+            ? res.data
+            : Array.isArray(res.data?.data)
+            ? res.data.data
+            : [];
+          const active = raw.filter(
+            (m: any) => !m.status || String(m.status).toLowerCase() === "active"
+          );
+          setTeamMembers(active);
+        })
+        .catch(() => {});
     } else {
       setTeamInfo(null);
+      setTeamMembers([]);
     }
     return () => {
       isSubscribed = false;
     };
   }, [actingTeamId]);
+
+  const currentUserAccountId = String(user?.account_id || user?.accountId || user?.id || "");
+  const includedTeamRoster = useMemo(() => {
+    if (!actingTeamId || teamMembers.length === 0) return [];
+    const filtered =
+      includedMemberIds.length > 0
+        ? teamMembers.filter(
+            (m: any) =>
+              m.role === "Owner" ||
+              String(m.account_id) === currentUserAccountId ||
+              includedMemberIds.includes(String(m.account_id))
+          )
+        : teamMembers;
+    return [...filtered].sort((a: any, b: any) => {
+      const aRank = a.role === "Owner" ? 0 : String(a.account_id) === currentUserAccountId ? 1 : 2;
+      const bRank = b.role === "Owner" ? 0 : String(b.account_id) === currentUserAccountId ? 1 : 2;
+      return aRank - bRank;
+    });
+  }, [actingTeamId, teamMembers, includedMemberIds, currentUserAccountId]);
 
   const totalBid = parseInt(bidAmount || "0", 10);
   const count = milestones.length || 1;
@@ -479,6 +517,60 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
                           ? teamInfo?.description || teamInfo?.bio || "Representing registered creative team on this project workspace."
                           : (user as any)?.bio || "Proposing under your individual profile, verified track record, and creative portfolio."}
                       </p>
+
+                      {/* Included Team Members Roster */}
+                      {actingTeamId && includedTeamRoster.length > 0 && (
+                        <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800/80 space-y-1.5">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                              Included Team Members ({includedTeamRoster.length}/{teamMembers.length || includedTeamRoster.length} Total)
+                            </span>
+                            <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                              Proposed by <strong className="text-zinc-800 dark:text-zinc-200">{userName}</strong>
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {includedTeamRoster.map((m: any, idx: number) => {
+                              const isOwnerLeader = m.role === "Owner";
+                              const isProposer = String(m.account_id) === currentUserAccountId;
+                              const mName = m.display_name || m.name || m.username || "Member";
+                              const mAvatar = constructAvatarUrl(
+                                m.avatar_path || m.avatar_url || m.avatar,
+                                mName
+                              );
+                              return (
+                                <div
+                                  key={m.account_id || idx}
+                                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/70 text-[11px]"
+                                >
+                                  <img
+                                    src={mAvatar}
+                                    alt={mName}
+                                    onError={(e) => {
+                                      e.currentTarget.onerror = null;
+                                      e.currentTarget.src = getFallbackAvatarUrl(mName);
+                                    }}
+                                    className="h-4 w-4 rounded-full object-cover shrink-0"
+                                  />
+                                  <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[110px]">
+                                    {mName}
+                                  </span>
+                                  {isOwnerLeader && (
+                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500 text-white shrink-0">
+                                      Team Leader
+                                    </span>
+                                  )}
+                                  {isProposer && (
+                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-600 text-white shrink-0">
+                                      Proposer
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-zinc-400">

@@ -24,7 +24,7 @@ import type { ViewType } from "./proposals_list_viewtype";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { JobRichText } from "../../job_components/JobRichText";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
-import { getFallbackAvatarUrl } from "@/lib/accountAvatars";
+import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 
 export type ProposalStatus =
   | "Pending"
@@ -87,6 +87,16 @@ export interface ProposalItemData {
   viewedAt?: string | null;
   shortlistedAt?: string | null;
   actingTeamId?: string;
+  proposedByName?: string;
+  includedTeamMembers?: {
+    account_id: string;
+    display_name: string;
+    handle?: string;
+    role?: string;
+    avatar_path?: string;
+    is_leader?: boolean;
+    is_proposer?: boolean;
+  }[];
   screeningAnswers?: any[];
   attachments?: any[];
   milestones: {
@@ -359,6 +369,50 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                           </span>
                         )}
                       </div>
+
+                      {/* Included Team Members Line (List View) */}
+                      {isTeam && Array.isArray(item.includedTeamMembers) && item.includedTeamMembers.length > 0 && (
+                        <div className="flex items-center gap-2 pt-1.5 flex-wrap">
+                          <div className="flex -space-x-1.5 items-center shrink-0">
+                            {item.includedTeamMembers.slice(0, 4).map((m, idx) => {
+                              const mName = m.display_name || m.handle || "Member";
+                              const mAvatar = constructAvatarUrl(m.avatar_path, mName);
+                              return (
+                                <img
+                                  key={m.account_id || idx}
+                                  src={mAvatar}
+                                  alt={mName}
+                                  title={`${mName}${m.is_leader ? " (Team Leader)" : ""}`}
+                                  onError={(e) => {
+                                    e.currentTarget.onerror = null;
+                                    e.currentTarget.src = getFallbackAvatarUrl(mName);
+                                  }}
+                                  className="h-5 w-5 rounded-full object-cover border border-white dark:border-zinc-900 bg-zinc-200 dark:bg-zinc-700"
+                                />
+                              );
+                            })}
+                          </div>
+                          <span className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                            {item.includedTeamMembers.map((m) => (
+                              <span key={m.account_id} className="mr-1.5 inline-flex items-center gap-1">
+                                <strong className="font-semibold text-zinc-700 dark:text-zinc-200">
+                                  {m.display_name || m.handle}
+                                </strong>
+                                {m.is_leader && (
+                                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-amber-500 text-white">
+                                    Team Leader
+                                  </span>
+                                )}
+                                {m.is_proposer && (
+                                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-blue-600 text-white">
+                                    Proposer
+                                  </span>
+                                )}
+                              </span>
+                            ))}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -744,6 +798,45 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                       </span>
                     )}
                   </div>
+
+                  {/* Included Team Members Line (Grid View) */}
+                  {isTeam && Array.isArray(item.includedTeamMembers) && item.includedTeamMembers.length > 0 && (
+                    <div className="flex items-center gap-2 pt-1 flex-wrap">
+                      <div className="flex -space-x-1.5 items-center shrink-0">
+                        {item.includedTeamMembers.slice(0, 4).map((m, idx) => {
+                          const mName = m.display_name || m.handle || "Member";
+                          const mAvatar = constructAvatarUrl(m.avatar_path, mName);
+                          return (
+                            <img
+                              key={m.account_id || idx}
+                              src={mAvatar}
+                              alt={mName}
+                              title={`${mName}${m.is_leader ? " (Team Leader)" : ""}`}
+                              onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = getFallbackAvatarUrl(mName);
+                              }}
+                              className="h-5 w-5 rounded-full object-cover border border-white dark:border-zinc-900 bg-zinc-200 dark:bg-zinc-700"
+                            />
+                          );
+                        })}
+                      </div>
+                      <span className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                        {item.includedTeamMembers.map((m) => (
+                          <span key={m.account_id} className="mr-1.5">
+                            <strong className="font-semibold text-zinc-700 dark:text-zinc-200">
+                              {m.display_name || m.handle}
+                            </strong>
+                            {m.is_leader ? (
+                              <span className="ml-1 px-1 py-0.2 rounded text-[9px] font-bold bg-blue-600 text-white">
+                                Leader
+                              </span>
+                            ) : null}
+                          </span>
+                        ))}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* 2. Proposed Bid & Key Specs Strip */}

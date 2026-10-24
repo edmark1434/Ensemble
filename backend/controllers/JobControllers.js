@@ -33,6 +33,7 @@ async function createJobController(req, res) {
         const jobData = {
             ...req.body,
             client_account_id: actor.accountId,
+            payer_account_id: accountId,
             team_id: actor.teamId,
             posted_as: actor.type === 'Team' ? 'Team' : 'Self',
         };
@@ -122,6 +123,8 @@ async function createProposalController(req, res) {
         const proposalData = {
             ...req.body,
             freelancer_account_id: actor.accountId,
+            payer_account_id: accountId,
+            proposed_by_account_id: accountId,
             prohibited_client_account_ids: affiliatedAccountIds,
             job_id: jobId,
         };
@@ -224,8 +227,12 @@ async function updateProposalStatusController(req, res) {
     try {
         const accountId = req.user?.account_id;
         const { proposalId } = req.params;
-        const { status, rejectReason, rejection_reason } = req.body;
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const status = typeof req.body === 'string' ? req.body : body.status;
+        const rejectReason = body.rejectReason;
+        const rejection_reason = body.rejection_reason;
         if (!accountId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+        if (!status) return res.status(400).json({ success: false, message: 'Proposal status is required' });
 
         const actorIds = await getAuthorizedActorAccountIds(accountId);
 
@@ -238,7 +245,7 @@ async function updateProposalStatusController(req, res) {
         const prevStatus = propBefore.rows[0]?.status;
 
         const effectiveReason = rejectReason || rejection_reason || null;
-        const initialMessage = (req.body.message || req.body.shortlistMessage || (status === 'Shortlisted' ? effectiveReason : null) || '').trim();
+        const initialMessage = (body.message || body.shortlistMessage || (status === 'Shortlisted' ? effectiveReason : null) || '').trim();
         const updated = await JobServices.updateProposalStatusServices(
             proposalId, 
             actorIds, 

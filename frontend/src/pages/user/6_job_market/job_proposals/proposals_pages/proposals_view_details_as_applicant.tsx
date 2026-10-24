@@ -235,14 +235,20 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             target_milestone_description: p.target_milestone_description,
             viewedAt: p.viewed_at,
             shortlistedAt: p.shortlisted_at,
-            actingTeamId: p.acting_team_id || undefined,
+            actingTeamId: p.acting_team_id || p.freelancer_team_id || undefined,
+            teamLeaderAccountId: p.team_leader_account_id || undefined,
+            teamLeaderName: p.team_leader_name || undefined,
+            totalTeamMemberCount: parseInt(p.total_team_member_count, 10) || 0,
+            proposedByName: p.proposed_by_name || p.proposed_by_handle || undefined,
+            proposedByHandle: p.proposed_by_handle || undefined,
+            includedTeamMembers: Array.isArray(p.included_team_members) ? p.included_team_members : [],
             screeningAnswers: Array.isArray(p.screening_answers) ? p.screening_answers : [],
             attachments: Array.isArray(p.attachments) ? p.attachments : [],
             milestones: initialMilestones,
           });
 
           // Fetch team info if proposing as a team
-          const teamId = p.acting_team_id || p.actingTeamId;
+          const teamId = p.acting_team_id || p.actingTeamId || p.freelancer_team_id;
           const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
           if (teamId && UUID_REGEX.test(teamId)) {
             api.get(`/api/teams/${teamId}`)
@@ -264,31 +270,92 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
     loadProposal();
   }, [proposalId, pathname]);
 
+  const [selectedPortfolioMemberId, setSelectedPortfolioMemberId] = useState<string>("all");
+  const [memberPortfolioGroups, setMemberPortfolioGroups] = useState<
+    {
+      account_id: string;
+      display_name: string;
+      handle?: string;
+      avatar_url?: string;
+      is_leader?: boolean;
+      is_proposer?: boolean;
+      items: PortfolioItem[];
+    }[]
+  >([]);
+
   useEffect(() => {
     const accountId = proposal?.freelancerAccountId;
+    const includedMembers = Array.isArray(proposal?.includedTeamMembers) ? proposal.includedTeamMembers : [];
+    const cloudfront = import.meta.env.VITE_CLOUDFRONT_URL || "";
+
+    const mapAttachment = (att: any, memberMeta?: { name: string; avatar?: string }): PortfolioItem => {
+      const path = att.file_path || "";
+      const fileUrl = path ? `${cloudfront}${path.startsWith("/") ? "" : "/"}${path}` : undefined;
+      return {
+        id: String(att.account_attachment_id || att.file_id || Math.random()),
+        type: (att.attachment_kind === "link" ? "link" : "document") as "link" | "document",
+        title: att.name || "Attachment",
+        description: att.description || (att.attachment_kind === "link" ? att.external_url : att.file_name || "Document"),
+        fileUrl,
+        externalUrl: att.external_url || undefined,
+        createdAt: att.created_at,
+        ...(memberMeta ? { memberName: memberMeta.name, memberAvatar: memberMeta.avatar } : {}),
+      };
+    };
+
+    if (includedMembers.length > 0) {
+      let mounted = true;
+      setLoadingPortfolio(true);
+      Promise.allSettled(
+        includedMembers.map(async (m: any) => {
+          const mName = m.display_name || m.name || m.handle || "Member";
+          const mAvatar = constructAvatarUrl(m.avatar_path, mName);
+          const res = await api.get(`/api/accounts/profile/${m.account_id}/attachments`);
+          const raw = Array.isArray(res.data?.attachments) ? res.data.attachments : [];
+          return {
+            account_id: String(m.account_id),
+            display_name: mName,
+            handle: m.handle,
+            avatar_url: mAvatar,
+            is_leader: Boolean(m.is_leader),
+            is_proposer: Boolean(m.is_proposer),
+            items: raw.map((att: any) => mapAttachment(att, { name: mName, avatar: mAvatar })),
+          };
+        })
+      )
+        .then((results) => {
+          if (!mounted) return;
+          const groups: typeof memberPortfolioGroups = [];
+          const allCombined: PortfolioItem[] = [];
+          for (const r of results) {
+            if (r.status === "fulfilled" && r.value) {
+              groups.push(r.value);
+              allCombined.push(...r.value.items);
+            }
+          }
+          setMemberPortfolioGroups(groups);
+          setPortfolioItems(allCombined);
+        })
+        .catch((err) => console.error("Failed to load team member portfolios:", err))
+        .finally(() => {
+          if (mounted) setLoadingPortfolio(false);
+        });
+      return () => {
+        mounted = false;
+      };
+    }
+
     if (!accountId) return;
     setLoadingPortfolio(true);
+    setMemberPortfolioGroups([]);
     api.get(`/api/accounts/profile/${accountId}/attachments`)
       .then((attachmentsResponse) => {
-        const items = (attachmentsResponse.data?.attachments || []).map((att: any) => {
-          const cloudfront = import.meta.env.VITE_CLOUDFRONT_URL || "";
-          const path = att.file_path || "";
-          const fileUrl = path ? `${cloudfront}${path.startsWith("/") ? "" : "/"}${path}` : undefined;
-          return {
-            id: String(att.account_attachment_id || att.file_id || Math.random()),
-            type: (att.attachment_kind === "link" ? "link" : "document") as "link" | "document",
-            title: att.name || "Attachment",
-            description: att.description || (att.attachment_kind === "link" ? att.external_url : att.file_name || "Document"),
-            fileUrl: fileUrl,
-            externalUrl: att.external_url || undefined,
-            createdAt: att.created_at,
-          };
-        });
+        const items = (attachmentsResponse.data?.attachments || []).map((att: any) => mapAttachment(att));
         setPortfolioItems(items);
       })
       .catch((err) => console.error("Failed to load portfolio items:", err))
       .finally(() => setLoadingPortfolio(false));
-  }, [proposal?.freelancerAccountId]);
+  }, [proposal?.freelancerAccountId, proposal?.includedTeamMembers]);
 
   const handleConfirmAccept = async () => {
     if (!proposal || !proposal.contractId || isProcessing) return;
@@ -766,6 +833,67 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                         ? actingTeamInfo?.description || actingTeamInfo?.bio || "Representing registered creative team on this project workspace."
                         : proposal.freelancerBio || "Proposing under your individual verified profile, track record, and portfolio."}
                     </p>
+
+                    {/* Included Team Members Roster */}
+                    {isTeam && Array.isArray(proposal.includedTeamMembers) && proposal.includedTeamMembers.length > 0 && (
+                      <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800/80 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                            Included Team Members ({proposal.includedTeamMembers.length}/
+                            {Math.max(
+                              proposal.totalTeamMemberCount || 0,
+                              actingTeamInfo?.member_count || 0,
+                              proposal.includedTeamMembers.length
+                            )}{" "}
+                            Total)
+                          </span>
+                          {(proposal.proposedByName || proposal.includedTeamMembers.find((m: any) => m.is_proposer)?.display_name) && (
+                            <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                              Proposed by{" "}
+                              <strong className="text-zinc-800 dark:text-zinc-200">
+                                {proposal.proposedByName ||
+                                  proposal.includedTeamMembers.find((m: any) => m.is_proposer)?.display_name}
+                              </strong>
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {proposal.includedTeamMembers.map((m: any, idx: number) => {
+                            const mName = m.display_name || m.name || m.handle || "Member";
+                            const mAvatar = constructAvatarUrl(m.avatar_path, mName);
+                            return (
+                              <div
+                                key={m.account_id || idx}
+                                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/70 text-[11px]"
+                              >
+                                <img
+                                  src={mAvatar}
+                                  alt={mName}
+                                  onError={(e) => {
+                                    e.currentTarget.onerror = null;
+                                    e.currentTarget.src = getFallbackAvatarUrl(mName);
+                                  }}
+                                  className="h-4 w-4 rounded-full object-cover shrink-0"
+                                />
+                                <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[110px]">
+                                  {mName}
+                                </span>
+                                {m.is_leader && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500 text-white shrink-0">
+                                    Team Leader
+                                  </span>
+                                )}
+                                {m.is_proposer && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-600 text-white shrink-0">
+                                    Proposer
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-zinc-400">
@@ -1312,13 +1440,105 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                className="overflow-hidden border-t border-zinc-200 dark:border-zinc-800/80 p-5 sm:p-6"
+                className="overflow-hidden border-t border-zinc-200 dark:border-zinc-800/80 p-5 sm:p-6 space-y-5"
               >
-                <Profile_Portfolio
-                  portfolioItems={portfolioItems}
-                  isOwner={false}
-                  isLoading={loadingPortfolio}
-                />
+                {isTeam && memberPortfolioGroups.length > 0 ? (
+                  <div className="space-y-5">
+                    {/* Member Selector Pills to Choose Whose Portfolio to View */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200/80 dark:border-zinc-800">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mr-1">
+                          View Portfolio:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPortfolioMemberId("all")}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition cursor-pointer ${
+                            selectedPortfolioMemberId === "all"
+                              ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                              : "bg-zinc-50 dark:bg-zinc-800/70 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                          }`}
+                        >
+                          <Users className="h-3.5 w-3.5" />
+                          <span>All Included ({portfolioItems.length})</span>
+                        </button>
+
+                        {memberPortfolioGroups.map((group) => {
+                          const isSelected = selectedPortfolioMemberId === group.account_id;
+                          return (
+                            <button
+                              key={group.account_id}
+                              type="button"
+                              onClick={() => setSelectedPortfolioMemberId(group.account_id)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition cursor-pointer ${
+                                isSelected
+                                  ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                                  : "bg-zinc-50 dark:bg-zinc-800/70 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                              }`}
+                            >
+                              <img
+                                src={group.avatar_url || getFallbackAvatarUrl(group.display_name)}
+                                alt={group.display_name}
+                                onError={(e) => {
+                                  e.currentTarget.onerror = null;
+                                  e.currentTarget.src = getFallbackAvatarUrl(group.display_name);
+                                }}
+                                className="h-4 w-4 rounded-full object-cover shrink-0"
+                              />
+                              <span className="truncate max-w-[120px]">{group.display_name}</span>
+                              {group.is_leader && (
+                                <span
+                                  className={`px-1.5 py-0.1 rounded text-[9px] font-bold ${
+                                    isSelected
+                                      ? "bg-white/25 text-white"
+                                      : "bg-amber-500 text-white"
+                                  }`}
+                                >
+                                  Team Leader
+                                </span>
+                              )}
+                              <span
+                                className={`text-[10px] font-semibold ${
+                                  isSelected ? "text-blue-100" : "text-zinc-400 dark:text-zinc-500"
+                                }`}
+                              >
+                                ({group.items.length})
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {selectedPortfolioMemberId !== "all" && (
+                        <button
+                          type="button"
+                          onClick={() => handleViewProfile(selectedPortfolioMemberId)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer self-start sm:self-auto shrink-0"
+                        >
+                          <span>View Member Profile</span>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filtered Portfolio Display */}
+                    <Profile_Portfolio
+                      portfolioItems={
+                        selectedPortfolioMemberId === "all"
+                          ? portfolioItems
+                          : memberPortfolioGroups.find((g) => g.account_id === selectedPortfolioMemberId)?.items || []
+                      }
+                      isOwner={false}
+                      isLoading={loadingPortfolio}
+                    />
+                  </div>
+                ) : (
+                  <Profile_Portfolio
+                    portfolioItems={portfolioItems}
+                    isOwner={false}
+                    isLoading={loadingPortfolio}
+                  />
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -1337,7 +1557,9 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 Applicant Creative Gallery & Media Works
               </span>
               <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-200/80 dark:bg-zinc-700/60 text-zinc-600 dark:text-zinc-300">
-                Media Repository
+                {isTeam && Array.isArray(proposal.includedTeamMembers) && proposal.includedTeamMembers.length > 0
+                  ? `Combined Team Gallery (${proposal.includedTeamMembers.length} Members)`
+                  : "Media Repository"}
               </span>
             </div>
 
@@ -1358,6 +1580,12 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               >
                 <Profile_Gallery
                   accountId={proposal.freelancerAccountId || ""}
+                  memberAccounts={
+                    isTeam && Array.isArray(proposal.includedTeamMembers) && proposal.includedTeamMembers.length > 0
+                      ? proposal.includedTeamMembers
+                      : undefined
+                  }
+                  unlimited={true}
                   isOwner={false}
                 />
               </motion.div>
@@ -1402,21 +1630,32 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
           <div className="flex items-center gap-3">
             {/* If Offer was extended by client */}
             {(proposal.status === "Accepted" || proposal.status === "Approved") && proposal.contractId && (
-              <>
-                <button
-                  onClick={() => setIsRejectOfferModalOpen(true)}
-                  className="px-4 py-2.5 rounded-xl border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 text-xs font-bold transition cursor-pointer"
-                >
-                  Decline Offer
-                </button>
-                <button
-                  onClick={() => setIsAcceptConfirmOpen(true)}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-500/20 transition flex items-center gap-2 cursor-pointer"
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>Accept Job Offer</span>
-                </button>
-              </>
+              isTeam &&
+              proposal.teamLeaderAccountId &&
+              String(user?.account_id) !== String(proposal.teamLeaderAccountId) ? (
+                <span className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
+                  <Clock className="h-4 w-4 shrink-0" />
+                  <span>
+                    Contract Offer Sent to Team Leader ({proposal.teamLeaderName || "Team Leader"}) — Awaiting Acceptance
+                  </span>
+                </span>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setIsRejectOfferModalOpen(true)}
+                    className="px-4 py-2.5 rounded-xl border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 text-xs font-bold transition cursor-pointer"
+                  >
+                    Decline Offer
+                  </button>
+                  <button
+                    onClick={() => setIsAcceptConfirmOpen(true)}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-500/20 transition flex items-center gap-2 cursor-pointer"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Accept Job Offer</span>
+                  </button>
+                </>
+              )
             )}
 
             {/* If proposal is currently Hired */}

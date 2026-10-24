@@ -111,10 +111,14 @@ export const useJobs = () => {
         }
     };
 
-    const updateProposalStatus = async (proposalId: string, statusData: any) => {
+    const updateProposalStatus = async (proposalId: string, statusData: any, rejectReason?: string) => {
         setLoading(true);
         try {
-            const res = await api.put(`/api/jobs/proposals/${proposalId}/status`, statusData);
+            const payload =
+                typeof statusData === 'string'
+                    ? { status: statusData, ...(rejectReason ? { rejectReason, rejection_reason: rejectReason } : {}) }
+                    : statusData;
+            const res = await api.put(`/api/jobs/proposals/${proposalId}/status`, payload);
             return res.data;
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to update status');

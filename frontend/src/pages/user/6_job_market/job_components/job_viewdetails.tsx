@@ -687,13 +687,13 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                       </button>
                     </div>
                     {!isGuestMode && (
-                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 text-center flex items-center justify-center gap-1">
+                      <div className="text-[11px] text-zinc-500 dark:text-zinc-400 text-center flex items-center justify-center gap-1">
                         <span>Requires</span>
                         <span className="font-semibold text-zinc-700 dark:text-zinc-300 inline-flex items-center gap-0.5">
                           <CreditIcon className="h-3 w-3 text-amber-500" /> 10 Credits
                         </span>
                         <span>to send proposal (charged at checkout)</span>
-                      </p>
+                      </div>
                     )}
                   </div>
                 )

@@ -19,6 +19,8 @@ interface ProposalIdentityProps {
   job: Job | null;
   actingTeamId?: string;
   setActingTeamId?: (id: string) => void;
+  includedMemberIds?: string[];
+  setIncludedMemberIds?: React.Dispatch<React.SetStateAction<string[]>>;
   onNext: () => void;
   onDiscard: () => void;
 }
@@ -27,6 +29,8 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
   job,
   actingTeamId,
   setActingTeamId,
+  includedMemberIds = [],
+  setIncludedMemberIds,
   onNext,
   onDiscard,
 }) => {
@@ -149,7 +153,13 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
           : Array.isArray(res.data?.data)
           ? res.data.data
           : (res.data?.teams || []);
-        const eligible = list.filter((t: any) => t.team_type !== "contractual" && !t.is_archived);
+        const eligible = list.filter(
+          (t: any) =>
+            t.team_type !== "contractual" &&
+            !t.is_archived &&
+            t.current_user_status === "Active" &&
+            ["Owner", "Representative", "Admin"].includes(String(t.current_user_role || ""))
+        );
         setUserTeams(eligible);
         if (eligible.length === 0) {
           setProposingAs("self");
@@ -173,18 +183,47 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
 
   // Fetch team members when team is selected
   const activeTeamId = actingTeamId || userTeams[0]?.team_id;
+  const currentUserAccountId = String(user?.account_id || user?.accountId || user?.id || "");
+
   useEffect(() => {
     let mounted = true;
     if (activeTeamId) {
       api.get(`/api/teams/${activeTeamId}/members`)
         .then((res) => {
           if (!mounted) return;
-          const members = Array.isArray(res.data)
+          const rawMembers = Array.isArray(res.data)
             ? res.data
             : Array.isArray(res.data?.data)
             ? res.data.data
             : [];
-          setTeamMembers(members);
+          const activeMembers = rawMembers.filter(
+            (m: any) => !m.status || String(m.status).toLowerCase() === "active"
+          );
+          // Sort so Team Leader (Owner) is first, then Proposer (if Representative), then other members
+          activeMembers.sort((a: any, b: any) => {
+            const aRank = a.role === "Owner" ? 0 : String(a.account_id) === currentUserAccountId ? 1 : 2;
+            const bRank = b.role === "Owner" ? 0 : String(b.account_id) === currentUserAccountId ? 1 : 2;
+            return aRank - bRank;
+          });
+          setTeamMembers(activeMembers);
+
+          if (setIncludedMemberIds) {
+            const allIds = activeMembers
+              .map((m: any) => String(m.account_id || ""))
+              .filter(Boolean);
+            const requiredIds = activeMembers
+              .filter((m: any) => m.role === "Owner" || String(m.account_id) === currentUserAccountId)
+              .map((m: any) => String(m.account_id || ""))
+              .filter(Boolean);
+
+            setIncludedMemberIds((prev) => {
+              const validExisting = prev.filter((id) => allIds.includes(id));
+              if (validExisting.length > 0) {
+                return Array.from(new Set([...requiredIds, ...validExisting]));
+              }
+              return allIds;
+            });
+          }
         })
         .catch((err) => console.error("Failed to load team members", err));
     } else {
@@ -193,7 +232,24 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
     return () => {
       mounted = false;
     };
-  }, [activeTeamId, userTeams]);
+  }, [activeTeamId, userTeams, currentUserAccountId]);
+
+  const handleToggleTeamMember = (memberAccountId: string, memberRole?: string) => {
+    if (!setIncludedMemberIds || !memberAccountId) return;
+    // Both the Team Leader (Owner) and the Proposer are required and cannot be deselected
+    if (memberRole === "Owner" || String(memberAccountId) === currentUserAccountId) return;
+    setIncludedMemberIds((prev) => {
+      const exists = prev.includes(memberAccountId);
+      const next = exists
+        ? prev.filter((id) => id !== memberAccountId)
+        : [...prev, memberAccountId];
+      const requiredIds = teamMembers
+        .filter((m: any) => m.role === "Owner" || String(m.account_id) === currentUserAccountId)
+        .map((m: any) => String(m.account_id || ""))
+        .filter(Boolean);
+      return Array.from(new Set([...requiredIds, ...next]));
+    });
+  };
 
   const selectedTeamData = userTeams.find((t) => t.team_id === activeTeamId);
   const selectedTeamName = selectedTeamData?.display_name || selectedTeamData?.name || "Team";
@@ -569,70 +625,160 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
                   </span>
                 </div>
 
-                {/* Team Selector using GlideSelect if user has multiple teams */}
-                {userTeams.length > 1 && (
-                  <div onClick={(e) => e.stopPropagation()} className="pt-1 pb-2">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block mb-1">
-                      Choose Active Team:
-                    </label>
-                    <GlideSelect
-                      options={teamSelectOptions}
-                      value={activeTeamId}
-                      onChange={(val) => {
-                        if (setActingTeamId) setActingTeamId(val);
-                      }}
-                      size="sm"
-                      placeholder="Select a team..."
-                      fullWidth={true}
-                      theme={theme}
-                    />
-                  </div>
-                )}
-
-                {/* Team Roster with Member Avatars */}
+                {/* Team Selector & Interactive Member Roster */}
                 {selectedTeamData ? (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                      Submit proposal with shared team portfolio, members, and dedicated team workspace.
+                      Submit proposal with shared team portfolio, selected members, and dedicated team workspace.
                     </p>
-                    <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
-                      <div className="flex -space-x-1.5 items-center shrink-0">
-                        {teamMembers.slice(0, 3).map((m: any, i: number) => {
-                          const mName = m.display_name || m.name || m.username || "Member";
-                          const mAvatar = constructAvatarUrl(m.avatar_path || m.avatar_url || m.avatar, mName);
-                          return (
-                            <div
-                              key={i}
-                              className="h-5 w-5 rounded-full overflow-hidden border border-white dark:border-zinc-900 bg-zinc-200 dark:bg-zinc-700 shrink-0"
-                              title={`${mName} (${m.role || "Member"})`}
-                            >
-                              <img
-                                src={mAvatar}
-                                alt={mName}
-                                onError={(e) => {
-                                  e.currentTarget.onerror = null;
-                                  e.currentTarget.src = getFallbackAvatarUrl(mName);
-                                }}
-                                className="h-full w-full object-cover"
-                              />
-                            </div>
-                          );
-                        })}
+
+                    {/* Team Selector Dropdown (Always visible when user has teams so they can see/switch which team is proposing) */}
+                    {userTeams.length >= 1 && (
+                      <div onClick={(e) => e.stopPropagation()} className="pt-0.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block mb-1">
+                          {userTeams.length > 1 ? "Select Proposing Team:" : "Proposing Team:"}
+                        </label>
+                        <GlideSelect
+                          options={teamSelectOptions}
+                          value={activeTeamId}
+                          onChange={(val) => {
+                            if (proposingAs !== "team") {
+                              setProposingAs("team");
+                            }
+                            if (setActingTeamId) setActingTeamId(val);
+                            if (setIncludedMemberIds) setIncludedMemberIds([]);
+                          }}
+                          size="sm"
+                          placeholder="Select a team..."
+                          fullWidth={true}
+                          theme={theme}
+                        />
                       </div>
-                      <span className="font-medium truncate">
-                        {teamMembers.length > 0 ? (
-                          <span>
-                            {teamMembers.length} members ({teamMembers.map((m) => (m.account_id === user?.account_id ? "You" : m.display_name?.split(" ")[0])).join(", ")})
+                    )}
+
+                    {/* Included Team Members Selector (Proposer is Team Leader by default) */}
+                    {teamMembers.length > 0 && (
+                      <div
+                        onClick={(e) => {
+                          if (proposingAs === "team") {
+                            e.stopPropagation();
+                          }
+                        }}
+                        className="space-y-1.5 pt-1"
+                      >
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                            Included Team Members ({includedMemberIds.length || teamMembers.length}/{teamMembers.length})
                           </span>
-                        ) : (
-                          <span>{selectedTeamData.member_count || 2} members</span>
-                        )}
-                      </span>
-                    </div>
+                          <span className="text-zinc-400 dark:text-zinc-500">
+                            {proposingAs === "team" ? "Click to include / exclude" : "Select card to customize"}
+                          </span>
+                        </div>
+
+                        <div className="space-y-1.5 max-h-40 overflow-y-auto pr-0.5">
+                          {teamMembers.map((m: any, i: number) => {
+                            const mId = String(m.account_id || "");
+                            const isOwnerLeader = m.role === "Owner";
+                            const isProposer = mId === currentUserAccountId;
+                            const isLocked = isOwnerLeader || isProposer;
+                            const isIncluded =
+                              isLocked ||
+                              includedMemberIds.length === 0 ||
+                              includedMemberIds.includes(mId);
+                            const mName = m.display_name || m.name || m.username || "Member";
+                            const mHandle = m.handle || m.username || "member";
+                            const mAvatar = constructAvatarUrl(
+                              m.avatar_path || m.avatar_url || m.avatar,
+                              mName
+                            );
+
+                            return (
+                              <div
+                                key={mId || i}
+                                onClick={() => {
+                                  if (proposingAs !== "team") {
+                                    handleIdentityChange("team");
+                                    return;
+                                  }
+                                  if (!isLocked) {
+                                    handleToggleTeamMember(mId, m.role);
+                                  }
+                                }}
+                                className={`flex items-center justify-between gap-2.5 p-2 rounded-xl border text-xs transition-all ${
+                                  isIncluded
+                                    ? "bg-white dark:bg-zinc-900/90 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-2xs"
+                                    : "bg-zinc-100/50 dark:bg-zinc-900/30 border-zinc-200/70 dark:border-zinc-800/70 text-zinc-400 dark:text-zinc-500 opacity-65"
+                                } ${isLocked ? "cursor-default" : "cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600"}`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="h-6 w-6 rounded-full overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-200 dark:bg-zinc-700 shrink-0">
+                                    <img
+                                      src={mAvatar}
+                                      alt={mName}
+                                      onError={(e) => {
+                                        e.currentTarget.onerror = null;
+                                        e.currentTarget.src = getFallbackAvatarUrl(mName);
+                                      }}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-bold text-xs truncate">
+                                        {isProposer ? `${mName} (You)` : mName}
+                                      </span>
+                                      {isOwnerLeader && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500 text-white shrink-0">
+                                          Team Leader
+                                        </span>
+                                      )}
+                                      {isProposer && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-600 text-white shrink-0">
+                                          Proposing
+                                        </span>
+                                      )}
+                                      {!isOwnerLeader && !isProposer && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 shrink-0">
+                                          {m.role === "Representative" || m.role === "Admin" ? "Representative" : "Member"}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500 block truncate">
+                                      @{mHandle}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div
+                                  className={`h-4.5 w-4.5 rounded-md flex items-center justify-center shrink-0 transition-colors ${
+                                    isLocked
+                                      ? "bg-blue-600 text-white"
+                                      : isIncluded
+                                      ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
+                                      : "border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-transparent"
+                                  }`}
+                                  title={
+                                    isOwnerLeader
+                                      ? "Team Leader (Owner) is always included by default"
+                                      : isProposer
+                                      ? "You are submitting this proposal and are included by default"
+                                      : isIncluded
+                                      ? "Included in proposal (click to exclude)"
+                                      : "Excluded from proposal (click to include)"
+                                  }
+                                >
+                                  {isIncluded && <Check className="h-3 w-3 stroke-[3]" />}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <p className="text-xs text-zinc-400 leading-relaxed">
-                    No active teams registered. You can submit as yourself or create a team under Teams.
+                    No active teams where you are a Team Leader or Representative. Only Team Leaders and trusted Representatives can submit team proposals.
                   </p>
                 )}
               </div>

@@ -39,7 +39,7 @@ export const ProposalsEditPage: React.FC = () => {
 
   // Step 1: Pitch & Pricing States
   const [bidAmount, setBidAmount] = useState("");
-  const [additionalWorkRate, setAdditionalWorkRate] = useState<number>(20);
+  const [additionalWorkRate, setAdditionalWorkRate] = useState<number>(25);
   const [coverLetter, setCoverLetter] = useState("");
 
   // Step 2: TOS States

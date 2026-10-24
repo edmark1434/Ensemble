@@ -221,6 +221,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
             freelancerName,
             freelancerHandle: p.freelancer_handle,
             freelancerBio: p.freelancer_bio || p.description,
+            freelancerBannerPreset: p.freelancer_banner_preset || undefined,
             freelancerType: p.freelancer_type || (p.acting_team_id || p.freelancer_team_id ? "Team" : "User"),
             freelancerAvatar: constructAvatarUrl(p.freelancer_avatar_path, freelancerName),
             jobBanner: getImageUrl(p.job_thumbnail_path) || "",
@@ -255,22 +256,27 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
             target_milestone_description: p.target_milestone_description,
             viewedAt: p.viewed_at,
             shortlistedAt: p.shortlisted_at,
-            actingTeamId: p.acting_team_id || undefined,
+            actingTeamId: p.acting_team_id || p.freelancer_team_id || undefined,
+            totalTeamMemberCount: parseInt(p.total_team_member_count, 10) || 0,
+            proposedByName: p.proposed_by_name || p.proposed_by_handle || undefined,
+            proposedByHandle: p.proposed_by_handle || undefined,
+            includedTeamMembers: Array.isArray(p.included_team_members) ? p.included_team_members : [],
             screeningAnswers: Array.isArray(p.screening_answers) ? p.screening_answers : [],
             attachments: Array.isArray(p.attachments) ? p.attachments : [],
             milestones: initialMilestones,
           });
 
-          // Fetch team info if proposing as a team
-          const teamId = p.acting_team_id || p.actingTeamId;
+          // Only fetch /api/teams/:id directly if the team is Public (private teams return 404 for non-members)
+          const teamId = p.acting_team_id || p.actingTeamId || p.freelancer_team_id;
+          const isPublicTeam = String(p.freelancer_team_visibility || "").toLowerCase() === "public";
           const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-          if (teamId && UUID_REGEX.test(teamId)) {
+          if (teamId && UUID_REGEX.test(teamId) && isPublicTeam) {
             api.get(`/api/teams/${teamId}`)
               .then((res) => {
                 const t = res.data?.data || res.data?.team || res.data;
                 if (t) setActingTeamInfo(t);
               })
-              .catch((err) => console.error("Failed to load acting team:", err));
+              .catch(() => {});
           } else {
             setActingTeamInfo(null);
           }
@@ -285,32 +291,93 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
     loadProposal();
   }, [proposalId, pathname]);
 
-  // Load candidate portfolio items
+  // Load candidate portfolio items (solo or combined across included team members)
+  const [selectedPortfolioMemberId, setSelectedPortfolioMemberId] = useState<string>("all");
+  const [memberPortfolioGroups, setMemberPortfolioGroups] = useState<
+    {
+      account_id: string;
+      display_name: string;
+      handle?: string;
+      avatar_url?: string;
+      is_leader?: boolean;
+      is_proposer?: boolean;
+      items: PortfolioItem[];
+    }[]
+  >([]);
+
   useEffect(() => {
     const accountId = proposal?.freelancerAccountId;
+    const includedMembers = Array.isArray(proposal?.includedTeamMembers) ? proposal.includedTeamMembers : [];
+    const cloudfront = import.meta.env.VITE_CLOUDFRONT_URL || "";
+
+    const mapAttachment = (att: any, memberMeta?: { name: string; avatar?: string }): PortfolioItem => {
+      const path = att.file_path || "";
+      const fileUrl = path ? `${cloudfront}${path.startsWith("/") ? "" : "/"}${path}` : undefined;
+      return {
+        id: String(att.account_attachment_id || att.file_id || Math.random()),
+        type: (att.attachment_kind === "link" ? "link" : "document") as "link" | "document",
+        title: att.name || "Attachment",
+        description: att.description || (att.attachment_kind === "link" ? att.external_url : att.file_name || "Document"),
+        fileUrl,
+        externalUrl: att.external_url || undefined,
+        createdAt: att.created_at,
+        ...(memberMeta ? { memberName: memberMeta.name, memberAvatar: memberMeta.avatar } : {}),
+      };
+    };
+
+    if (includedMembers.length > 0) {
+      let mounted = true;
+      setLoadingPortfolio(true);
+      Promise.allSettled(
+        includedMembers.map(async (m: any) => {
+          const mName = m.display_name || m.name || m.handle || "Member";
+          const mAvatar = constructAvatarUrl(m.avatar_path, mName);
+          const res = await api.get(`/api/accounts/profile/${m.account_id}/attachments`);
+          const raw = Array.isArray(res.data?.attachments) ? res.data.attachments : [];
+          return {
+            account_id: String(m.account_id),
+            display_name: mName,
+            handle: m.handle,
+            avatar_url: mAvatar,
+            is_leader: Boolean(m.is_leader),
+            is_proposer: Boolean(m.is_proposer),
+            items: raw.map((att: any) => mapAttachment(att, { name: mName, avatar: mAvatar })),
+          };
+        })
+      )
+        .then((results) => {
+          if (!mounted) return;
+          const groups: typeof memberPortfolioGroups = [];
+          const allCombined: PortfolioItem[] = [];
+          for (const r of results) {
+            if (r.status === "fulfilled" && r.value) {
+              groups.push(r.value);
+              allCombined.push(...r.value.items);
+            }
+          }
+          setMemberPortfolioGroups(groups);
+          setPortfolioItems(allCombined);
+        })
+        .catch((err) => console.error("Failed to load team member portfolios:", err))
+        .finally(() => {
+          if (mounted) setLoadingPortfolio(false);
+        });
+      return () => {
+        mounted = false;
+      };
+    }
+
     if (!accountId) return;
     setLoadingPortfolio(true);
+    setMemberPortfolioGroups([]);
     api.get(`/api/accounts/profile/${accountId}/attachments`)
       .then((attachmentsResponse) => {
-        const items = (attachmentsResponse.data?.attachments || []).map((att: any) => {
-          const cloudfront = import.meta.env.VITE_CLOUDFRONT_URL || "";
-          const path = att.file_path || "";
-          const fileUrl = path ? `${cloudfront}${path.startsWith("/") ? "" : "/"}${path}` : undefined;
-          return {
-            id: String(att.account_attachment_id || att.file_id || Math.random()),
-            type: (att.attachment_kind === "link" ? "link" : "document") as "link" | "document",
-            title: att.name || "Attachment",
-            description: att.description || (att.attachment_kind === "link" ? att.external_url : att.file_name || "Document"),
-            fileUrl: fileUrl,
-            externalUrl: att.external_url || undefined,
-            createdAt: att.created_at,
-          };
-        });
+        const items = (attachmentsResponse.data?.attachments || []).map((att: any) => mapAttachment(att));
         setPortfolioItems(items);
       })
       .catch((err) => console.error("Failed to load portfolio items:", err))
       .finally(() => setLoadingPortfolio(false));
-  }, [proposal?.freelancerAccountId]);
+  }, [proposal?.freelancerAccountId, proposal?.includedTeamMembers]);
 
   // Author Actions
   const handleShortlist = async () => {
@@ -318,7 +385,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
     setIsShortlisting(true);
     try {
       if (updateProposalStatus) {
-        await updateProposalStatus(proposal.id, "Shortlisted");
+        await updateProposalStatus(proposal.id, { status: "Shortlisted" });
       }
       setProposal((prev: any) =>
         prev ? { ...prev, status: "Shortlisted", shortlistedAt: new Date().toISOString() } : null
@@ -338,7 +405,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
     setIsUnshortlisting(true);
     try {
       if (updateProposalStatus) {
-        await updateProposalStatus(proposal.id, "Pending");
+        await updateProposalStatus(proposal.id, { status: "Pending" });
       }
       setProposal((prev: any) =>
         prev ? { ...prev, status: "Pending", shortlistedAt: null } : null
@@ -357,7 +424,11 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
     if (!proposal) return;
     try {
       if (updateProposalStatus) {
-        await updateProposalStatus(proposal.id, "Rejected", rejectionReason);
+        await updateProposalStatus(proposal.id, {
+          status: "Rejected",
+          rejectReason: rejectionReason,
+          rejection_reason: rejectionReason,
+        });
       }
       setProposal((prev: any) =>
         prev ? { ...prev, status: "Rejected", rejectionReason } : null
@@ -459,24 +530,32 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
 
   const isTeam = Boolean(
     proposal?.actingTeamId ||
+    proposal?.freelancerTeamId ||
     (proposal?.freelancerType && proposal?.freelancerType.toLowerCase() === "team") ||
     actingTeamInfo
   );
+  const isPrivateTeam =
+    isTeam && String(proposal?.freelancerTeamVisibility || "Private").toLowerCase() !== "public";
 
   // Candidate banner
   const candidateBannerUrl = useMemo(() => {
-    if (isTeam && actingTeamInfo) {
-      if (actingTeamInfo.banner_preset) {
-        return bannerPresetUrl(actingTeamInfo.banner_preset) || "/profile_banner_presets/Ensemble%20Purple.png";
+    if (isTeam) {
+      const preset = actingTeamInfo?.banner_preset || proposal?.freelancerBannerPreset;
+      if (preset) {
+        return bannerPresetUrl(preset) || "/profile_banner_presets/Ensemble%20Purple.png";
       }
-      if (actingTeamInfo.banner_url || actingTeamInfo.banner_path) {
+      if (actingTeamInfo?.banner_url || actingTeamInfo?.banner_path) {
         return getImageUrl(actingTeamInfo.banner_url || actingTeamInfo.banner_path);
       }
-      return "/profile_banner_presets/Ensemble%20Purple.png";
+      const fallbackPreset = resolveBannerPreset(null, proposal?.freelancerHandle || proposal?.freelancerName || "team");
+      return bannerPresetUrl(fallbackPreset) || "/profile_banner_presets/Ensemble%20Purple.png";
     }
-    const preset = resolveBannerPreset(null, proposal?.freelancerHandle || proposal?.freelancerName || "candidate");
+    const preset = resolveBannerPreset(
+      proposal?.freelancerBannerPreset || null,
+      proposal?.freelancerHandle || proposal?.freelancerName || "candidate"
+    );
     return bannerPresetUrl(preset) || "/profile_banner_presets/Ensemble%20Blue.png";
-  }, [isTeam, actingTeamInfo, proposal?.freelancerHandle, proposal?.freelancerName]);
+  }, [isTeam, actingTeamInfo, proposal?.freelancerBannerPreset, proposal?.freelancerHandle, proposal?.freelancerName]);
 
   // Clean, single-line sanitized job description for the preview snippet
   const cleanJobDescription = useMemo(() => {
@@ -773,18 +852,96 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                         ? actingTeamInfo?.description || actingTeamInfo?.bio || "Representing registered creative team on this project workspace."
                         : proposal.freelancerBio || "Verified creative specialist on Ensemble."}
                     </p>
+
+                    {/* Included Team Members Roster */}
+                    {isTeam && Array.isArray(proposal.includedTeamMembers) && proposal.includedTeamMembers.length > 0 && (
+                      <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800/80 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                            Included Team Members ({proposal.includedTeamMembers.length}/
+                            {Math.max(
+                              proposal.totalTeamMemberCount || 0,
+                              actingTeamInfo?.member_count || 0,
+                              proposal.includedTeamMembers.length
+                            )}{" "}
+                            Total)
+                          </span>
+                          {(proposal.proposedByName || proposal.includedTeamMembers.find((m: any) => m.is_proposer)?.display_name) && (
+                            <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                              Proposed by{" "}
+                              <strong className="text-zinc-800 dark:text-zinc-200">
+                                {proposal.proposedByName ||
+                                  proposal.includedTeamMembers.find((m: any) => m.is_proposer)?.display_name}
+                              </strong>
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {proposal.includedTeamMembers.map((m: any, idx: number) => {
+                            const mName = m.display_name || m.name || m.handle || "Member";
+                            const mAvatar = constructAvatarUrl(m.avatar_path, mName);
+                            return (
+                              <div
+                                key={m.account_id || idx}
+                                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/70 text-[11px]"
+                              >
+                                <img
+                                  src={mAvatar}
+                                  alt={mName}
+                                  onError={(e) => {
+                                    e.currentTarget.onerror = null;
+                                    e.currentTarget.src = getFallbackAvatarUrl(mName);
+                                  }}
+                                  className="h-4 w-4 rounded-full object-cover shrink-0"
+                                />
+                                <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[110px]">
+                                  {mName}
+                                </span>
+                                {m.is_leader && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500 text-white shrink-0">
+                                    Team Leader
+                                  </span>
+                                )}
+                                {m.is_proposer && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-600 text-white shrink-0">
+                                    Proposer
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-xs text-zinc-400">
                     <span>Talent Structure:</span>
-                    <button
-                      type="button"
-                      onClick={() => handleViewProfile(proposal.freelancerAccountId, proposal.actingTeamId)}
-                      className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                    >
-                      <span>{isTeam ? "Shared Team Organization" : "Solo Freelancer Workspace"}</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </button>
+                    {isTeam ? (
+                      !isPrivateTeam && proposal.actingTeamId ? (
+                        <button
+                          type="button"
+                          onClick={() => handleViewProfile(proposal.freelancerAccountId, proposal.actingTeamId)}
+                          className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                        >
+                          <span>Shared Team Organization</span>
+                          <ExternalLink className="h-3 w-3" />
+                        </button>
+                      ) : (
+                        <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                          Shared Team Organization
+                        </span>
+                      )
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleViewProfile(proposal.freelancerAccountId)}
+                        className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      >
+                        <span>Solo Freelancer Workspace</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1330,87 +1487,105 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                className="overflow-hidden border-t border-zinc-200 dark:border-zinc-800/80 p-5 sm:p-6"
+                className="overflow-hidden border-t border-zinc-200 dark:border-zinc-800/80 p-5 sm:p-6 space-y-5"
               >
-                {/* Candidate Creative Track Record Summary Banner */}
-                <div className="p-4 sm:p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/70 space-y-3.5 text-left mb-6 shadow-2xs">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                        <FolderOpen className="h-5 w-5" />
+                {isTeam && memberPortfolioGroups.length > 0 ? (
+                  <div className="space-y-5">
+                    {/* Member Selector Pills to Choose Whose Portfolio to View */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200/80 dark:border-zinc-800">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mr-1">
+                          View Portfolio:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPortfolioMemberId("all")}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition cursor-pointer ${
+                            selectedPortfolioMemberId === "all"
+                              ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                              : "bg-zinc-50 dark:bg-zinc-800/70 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                          }`}
+                        >
+                          <Users className="h-3.5 w-3.5" />
+                          <span>All Included ({portfolioItems.length})</span>
+                        </button>
+
+                        {memberPortfolioGroups.map((group) => {
+                          const isSelected = selectedPortfolioMemberId === group.account_id;
+                          return (
+                            <button
+                              key={group.account_id}
+                              type="button"
+                              onClick={() => setSelectedPortfolioMemberId(group.account_id)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition cursor-pointer ${
+                                isSelected
+                                  ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                                  : "bg-zinc-50 dark:bg-zinc-800/70 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                              }`}
+                            >
+                              <img
+                                src={group.avatar_url || getFallbackAvatarUrl(group.display_name)}
+                                alt={group.display_name}
+                                onError={(e) => {
+                                  e.currentTarget.onerror = null;
+                                  e.currentTarget.src = getFallbackAvatarUrl(group.display_name);
+                                }}
+                                className="h-4 w-4 rounded-full object-cover shrink-0"
+                              />
+                              <span className="truncate max-w-[120px]">{group.display_name}</span>
+                              {group.is_leader && (
+                                <span
+                                  className={`px-1.5 py-0.1 rounded text-[9px] font-bold ${
+                                    isSelected
+                                      ? "bg-white/25 text-white"
+                                      : "bg-amber-500 text-white"
+                                  }`}
+                                >
+                                  Team Leader
+                                </span>
+                              )}
+                              <span
+                                className={`text-[10px] font-semibold ${
+                                  isSelected ? "text-blue-100" : "text-zinc-400 dark:text-zinc-500"
+                                }`}
+                              >
+                                ({group.items.length})
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                          <span>Candidate Creative Track Record</span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
-                            Verified Candidate
-                          </span>
-                        </h4>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          Portfolio case studies and professional credentials submitted by {proposal.partyName}
-                        </p>
-                      </div>
+
+                      {selectedPortfolioMemberId !== "all" && (
+                        <button
+                          type="button"
+                          onClick={() => handleViewProfile(selectedPortfolioMemberId)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer self-start sm:self-auto shrink-0"
+                        >
+                          <span>View Member Profile</span>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleViewProfile(proposal.freelancerAccountId, proposal.actingTeamId)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700/60 text-xs font-bold text-zinc-800 dark:text-zinc-200 shadow-2xs transition cursor-pointer self-start sm:self-auto shrink-0"
-                    >
-                      <span>View Full Public Profile</span>
-                      <ExternalLink className="h-3.5 w-3.5 text-blue-500" />
-                    </button>
+                    {/* Filtered Portfolio Display */}
+                    <Profile_Portfolio
+                      portfolioItems={
+                        selectedPortfolioMemberId === "all"
+                          ? portfolioItems
+                          : memberPortfolioGroups.find((g) => g.account_id === selectedPortfolioMemberId)?.items || []
+                      }
+                      isOwner={false}
+                      isLoading={loadingPortfolio}
+                    />
                   </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
-                    <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 space-y-0.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 block">
-                        Case Studies
-                      </span>
-                      <span className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white block">
-                        {portfolioItems.length} Verified Project{portfolioItems.length === 1 ? "" : "s"}
-                      </span>
-                      <span className="text-[10px] text-zinc-400">Active portfolio assets</span>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 space-y-0.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 block">
-                        Client Rating
-                      </span>
-                      <span className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-1">
-                        <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />
-                        <span>{Number(proposal.rating || 5.0).toFixed(1)} / 5.0</span>
-                      </span>
-                      <span className="text-[10px] text-zinc-400">Historical performance</span>
-                    </div>
-
-                    <div className="col-span-2 sm:col-span-1 p-3 rounded-xl bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 space-y-0.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 block">
-                        Talent Structure
-                      </span>
-                      <span className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-1 truncate">
-                        {proposal.actingTeamId || isTeam ? (
-                          <>
-                            <Users className="h-3.5 w-3.5 text-purple-500 shrink-0" />
-                            <span className="truncate">{actingTeamInfo?.name || "Creative Studio / Team"}</span>
-                          </>
-                        ) : (
-                          <>
-                            <User className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                            <span className="truncate">Solo Specialist</span>
-                          </>
-                        )}
-                      </span>
-                      <span className="text-[10px] text-zinc-400">Representation format</span>
-                    </div>
-                  </div>
-                </div>
-
-                <Profile_Portfolio
-                  portfolioItems={portfolioItems}
-                  isOwner={false}
-                  isLoading={loadingPortfolio}
-                />
+                ) : (
+                  <Profile_Portfolio
+                    portfolioItems={portfolioItems}
+                    isOwner={false}
+                    isLoading={loadingPortfolio}
+                  />
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -1429,7 +1604,9 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                 Applicant Creative Gallery & Media Works
               </span>
               <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-200/80 dark:bg-zinc-700/60 text-zinc-600 dark:text-zinc-300">
-                Media Repository
+                {isTeam && Array.isArray(proposal.includedTeamMembers) && proposal.includedTeamMembers.length > 0
+                  ? `Combined Team Gallery (${proposal.includedTeamMembers.length} Members)`
+                  : "Media Repository"}
               </span>
             </div>
 
@@ -1450,11 +1627,30 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
               >
                 <div className="mb-4 text-left">
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Visual and audio media assets published by <strong className="text-zinc-800 dark:text-zinc-200">{proposal.partyName}</strong>:
+                    {isTeam && Array.isArray(proposal.includedTeamMembers) && proposal.includedTeamMembers.length > 0 ? (
+                      <>
+                        Combined visual and audio gallery works from all{" "}
+                        <strong className="text-zinc-800 dark:text-zinc-200">
+                          {proposal.includedTeamMembers.length} included team members
+                        </strong>{" "}
+                        representing <strong className="text-zinc-800 dark:text-zinc-200">{proposal.partyName}</strong> (no item limit):
+                      </>
+                    ) : (
+                      <>
+                        Visual and audio media assets published by{" "}
+                        <strong className="text-zinc-800 dark:text-zinc-200">{proposal.partyName}</strong>:
+                      </>
+                    )}
                   </p>
                 </div>
                 <Profile_Gallery
                   accountId={proposal.freelancerAccountId || ""}
+                  memberAccounts={
+                    isTeam && Array.isArray(proposal.includedTeamMembers) && proposal.includedTeamMembers.length > 0
+                      ? proposal.includedTeamMembers
+                      : undefined
+                  }
+                  unlimited={true}
                   isOwner={false}
                 />
               </motion.div>

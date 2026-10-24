@@ -308,12 +308,18 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
     }
   };
 
-  // AI Generation Modal & 30s Cooldown State
+  // AI Generation Modal & 60s (1-minute) Cooldown State
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiError, setAiError] = useState<string | null>(null);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+
+  const formatCooldown = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const rem = secs % 60;
+    return mins > 0 ? `${mins}:${String(rem).padStart(2, "0")}` : `${secs}s`;
+  };
 
   const aiPromptWordCount = aiPrompt.trim().split(/\s+/).filter(Boolean).length;
   const isGenerateDisabled = aiPromptWordCount < 2 || cooldownSeconds > 0 || isGeneratingAi;
@@ -364,7 +370,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
         }
       }
       setIsAiModalOpen(false);
-      setCooldownSeconds(30);
+      setCooldownSeconds(60);
       showSuccessToast("Joed AI generated your job post specifications!");
     } catch (err: any) {
       const msg =
@@ -546,7 +552,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
                       ? "bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-zinc-500 border border-gray-200 dark:border-zinc-700 cursor-not-allowed"
                       : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border border-blue-400/40 shadow-blue-500/20 ring-1 ring-white/20 hover:shadow-md hover:shadow-blue-500/30"
                   }`}
-                  title={cooldownSeconds > 0 ? `Joed AI on cooldown (${cooldownSeconds}s)` : "Generate Job Title & Description with Joed AI"}
+                  title={cooldownSeconds > 0 ? `Joed AI on cooldown (${formatCooldown(cooldownSeconds)})` : "Generate Job Title & Description with Joed AI"}
                 >
                   {cooldownSeconds === 0 && (
                     <span className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none animate-shine-gleam" />
@@ -554,7 +560,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
                   {cooldownSeconds > 0 ? (
                     <>
                       <Clock className="h-3 w-3 animate-spin text-gray-400 dark:text-zinc-500 shrink-0" />
-                      <span>Cooldown ({cooldownSeconds}s)</span>
+                      <span>Cooldown ({formatCooldown(cooldownSeconds)})</span>
                     </>
                   ) : (
                     <>
@@ -712,7 +718,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
                 <div className="group relative flex items-center">
                   <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-help" />
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden w-64 rounded-xl bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 p-3 text-center text-xs text-gray-700 dark:text-gray-300 shadow-xl group-hover:block z-10 pointer-events-none">
-                    Require applicants to answer these questions with their proposal, helping you evaluate experience and weed out copy-pasted pitches.
+                    Ask short text-answerable questions about workflow, tools, or turnaround. Applicants attach work samples separately in their proposal.
                   </div>
                 </div>
               </div>
@@ -721,7 +727,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
                 <button
                   type="button"
                   onClick={() => setScreeningQuestions([...screeningQuestions, ""])}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add Question
                 </button>
@@ -730,7 +736,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
 
             {screeningQuestions.length === 0 ? (
               <p className="text-xs text-gray-500 dark:text-zinc-500 italic">
-                No screening questions added yet. Click &ldquo;Add Question&rdquo; to prompt applicants for portfolio reels, software mastery, or estimated delivery turnaround.
+                No screening questions added yet. Click &ldquo;Add Question&rdquo; to ask text-answerable questions about editing tools, workflow, or turnaround time (applicants attach work samples separately).
               </p>
             ) : (
               <div className="space-y-2.5">
@@ -745,10 +751,10 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
                       value={q}
                       placeholder={
                         idx === 0
-                          ? "e.g., Link to your most relevant DaVinci Resolve or After Effects portfolio reel"
+                          ? "e.g., What editing software do you use for speed ramping and beat syncing?"
                           : idx === 1
-                          ? "e.g., What is your turnaround time for the first rough cut?"
-                          : "e.g., Have you worked with multicam synchronizations before?"
+                          ? "e.g., What is your typical turnaround time for the first rough cut?"
+                          : "e.g., How do you approach audio leveling and color matching across clips?"
                       }
                       onChange={(e) => {
                         if (!setScreeningQuestions) return;
@@ -1372,7 +1378,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
                     {/* Highly visible short cooldown notice with clean gray icon */}
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 dark:bg-zinc-800/60 border border-gray-200 dark:border-zinc-700/70 text-xs text-gray-600 dark:text-zinc-300">
                       <Clock className="h-4 w-4 shrink-0 text-gray-400 dark:text-zinc-400" />
-                      <span className="font-medium">30-second cooldown applies after generation.</span>
+                      <span className="font-medium">1-minute cooldown applies after generation.</span>
                     </div>
                   </div>
 
