@@ -95,13 +95,14 @@ const ProposalsCreatePage: React.FC = () => {
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actingTeamId, setActingTeamId] = useState("");
+  const [includedMemberIds, setIncludedMemberIds] = useState<string[]>([]);
   
   const { createProposal, fetchJobs, uploadAttachment } = useJobs();
 
   // Step 1: Pitch & Pricing States
   const [selectedMilestoneId, setSelectedMilestoneId] = useState<string>("");
   const [bidAmount, setBidAmount] = useState("");
-  const [additionalWorkRate, setAdditionalWorkRate] = useState<number>(20);
+  const [additionalWorkRate, setAdditionalWorkRate] = useState<number>(25);
   const [coverLetter, setCoverLetter] = useState("");
   const [screeningAnswers, setScreeningAnswers] = useState<{ question: string; answer: string }[]>([]);
   const [workSampleFiles, setWorkSampleFiles] = useState<File[]>([]);
@@ -139,8 +140,11 @@ const ProposalsCreatePage: React.FC = () => {
         const data = JSON.parse(saved);
         if (data.bidAmount) setBidAmount(data.bidAmount);
         if (data.actingTeamId !== undefined) setActingTeamId(data.actingTeamId);
+        if (Array.isArray(data.includedMemberIds)) setIncludedMemberIds(data.includedMemberIds);
         if (data.coverLetter) setCoverLetter(data.coverLetter);
-        if (data.additionalWorkRate !== undefined) setAdditionalWorkRate(data.additionalWorkRate);
+        if (data.additionalWorkRate !== undefined) {
+          setAdditionalWorkRate(Math.max(25, Number(data.additionalWorkRate) || 25));
+        }
         if (data.selectedTosId) setSelectedTosId(data.selectedTosId);
         if (data.tosContent) setTosContent(data.tosContent);
         if (data.hasReachedReview) {
@@ -174,6 +178,7 @@ const ProposalsCreatePage: React.FC = () => {
         const draftData = {
           bidAmount,
           actingTeamId,
+          includedMemberIds,
           coverLetter,
           additionalWorkRate,
           selectedTosId,
@@ -191,7 +196,7 @@ const ProposalsCreatePage: React.FC = () => {
       }
     }, 600);
     return () => clearTimeout(timer);
-  }, [id, bidAmount, actingTeamId, coverLetter, additionalWorkRate, selectedTosId, tosContent, milestones, selectedMilestoneId, screeningAnswers, hasReachedReview]);
+  }, [id, bidAmount, actingTeamId, includedMemberIds, coverLetter, additionalWorkRate, selectedTosId, tosContent, milestones, selectedMilestoneId, screeningAnswers, hasReachedReview]);
 
   const handleClearDraft = () => {
     if (id) {
@@ -199,8 +204,9 @@ const ProposalsCreatePage: React.FC = () => {
     }
     setBidAmount("");
     setActingTeamId("");
+    setIncludedMemberIds([]);
     setCoverLetter("");
-    setAdditionalWorkRate(20);
+    setAdditionalWorkRate(25);
     setSelectedTosId("");
     setTosContent("");
     setMilestones(getTwoPhasePreset(48));
@@ -415,6 +421,7 @@ const ProposalsCreatePage: React.FC = () => {
         terms_id: (selectedTosId && UUID_REGEX.test(selectedTosId)) ? selectedTosId : null,  
         acting_team_id: actingTeamId || null,
         actingTeamId: actingTeamId || null,
+        included_member_account_ids: actingTeamId ? includedMemberIds : [],
         job_milestone_id: (selectedMilestoneId && UUID_REGEX.test(selectedMilestoneId)) ? selectedMilestoneId : null,
         screening_answers: screeningAnswers,
         attachment_file_ids: attachmentFileIds,
@@ -422,7 +429,8 @@ const ProposalsCreatePage: React.FC = () => {
           title: m.name,
           description: m.description,
           est_hrs: m.hours,
-          max_rev: m.revisions
+          max_rev: m.revisions,
+          tasks: Array.isArray(m.tasks) ? m.tasks : []
         })),
       };
 
@@ -576,6 +584,8 @@ const ProposalsCreatePage: React.FC = () => {
                   job={job}
                   actingTeamId={actingTeamId}
                   setActingTeamId={setActingTeamId}
+                  includedMemberIds={includedMemberIds}
+                  setIncludedMemberIds={setIncludedMemberIds}
                   onNext={() => setCurrentSlide(2)}
                   onDiscard={handleReturnTrigger}
                 />
@@ -652,6 +662,7 @@ const ProposalsCreatePage: React.FC = () => {
                   tosContent={tosContent}
                   milestones={milestones}
                   actingTeamId={actingTeamId}
+                  includedMemberIds={includedMemberIds}
                   workSampleFiles={workSampleFiles}
                   screeningAnswers={screeningAnswers}
                   onEditStep={setCurrentSlide}

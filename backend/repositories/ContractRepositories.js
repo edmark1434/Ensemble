@@ -280,16 +280,18 @@ async function acceptJobOffer(freelancerIds, contractId) {
                 if (isFirstActive && durationHrs > 0) {
                     deadlineAt = new Date(startedAt.getTime() + durationHrs * 3600 * 1000);
                 }
+                const mTasks = Array.isArray(m.tasks) ? m.tasks : (typeof m.tasks === 'string' ? JSON.parse(m.tasks || '[]') : []);
                 await client.query(`
                     INSERT INTO contract_milestones (
-                        contract_id, index, name, description, deadline, no_of_revisions_max, status, credits, started_at, deadline_at
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                        contract_id, index, name, description, deadline, no_of_revisions_max, status, credits, started_at, deadline_at, tasks
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                 `, [
                     contractId, m.index, m.name, m.description, durationHrs, m.no_of_revisions_max || 0,
                     isFirstActive ? 'active' : 'pending',
                     mCredits,
                     startedAt,
                     deadlineAt,
+                    JSON.stringify(mTasks),
                 ]);
             }
         }
@@ -548,8 +550,45 @@ async function getContractsByUserId(accountIds) {
             j.client_account_id,
             free_acc.display_name as freelancer_name,
             free_acc.handle as freelancer_handle,
+            free_acc.type as freelancer_type,
             free_f.path as freelancer_avatar,
             p.freelancer_account_id,
+            (
+                SELECT COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'account_id', u_tm.account_id,
+                            'display_name', a_tm.display_name,
+                            'handle', a_tm.handle,
+                            'role', tm.role,
+                            'avatar_path', f_tm.path,
+                            'is_leader', (tm.role = 'Owner'),
+                            'is_proposer', (p.proposed_by_account_id IS NOT NULL AND u_tm.account_id = p.proposed_by_account_id)
+                        )
+                        ORDER BY (
+                            CASE
+                                WHEN tm.role = 'Owner' THEN 0
+                                WHEN p.proposed_by_account_id IS NOT NULL AND u_tm.account_id = p.proposed_by_account_id THEN 1
+                                ELSE 2
+                            END
+                        ), tm.joined_at ASC
+                    ),
+                    '[]'::json
+                )
+                FROM teams ft_m
+                JOIN team_members tm ON tm.team_id = ft_m.team_id AND tm.status = 'Active'
+                JOIN users u_tm ON u_tm.user_id = tm.user_id
+                JOIN accounts a_tm ON a_tm.account_id = u_tm.account_id
+                LEFT JOIN files f_tm ON f_tm.file_id = a_tm.avatar_file_id
+                WHERE ft_m.account_id = p.freelancer_account_id
+                  AND ft_m.deleted_at IS NULL
+                  AND (
+                      tm.role = 'Owner'
+                      OR (p.proposed_by_account_id IS NOT NULL AND u_tm.account_id = p.proposed_by_account_id)
+                      OR jsonb_array_length(COALESCE(p.included_member_account_ids, '[]'::jsonb)) = 0
+                      OR COALESCE(p.included_member_account_ids, '[]'::jsonb) ? (u_tm.account_id::text)
+                  )
+            ) as included_team_members,
             COALESCE(t.terms_title, global_t.terms_title, 'Ensemble Standard Job Terms') as terms_title,
             COALESCE(t.terms_description, global_t.terms_description, 'Standard terms from job') as terms_content,
             COALESCE(j.initiator_role, 'freelancer') as initiator_role,
@@ -575,7 +614,16 @@ async function getContractsByUserId(accountIds) {
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
         LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
         LEFT JOIN LATERAL (SELECT terms_title, terms_description FROM terms_of_service WHERE account_id IS NULL AND terms_type = 'jobs' LIMIT 1) global_t ON true
-        WHERE j.client_account_id = ANY($1::uuid[]) OR p.freelancer_account_id = ANY($1::uuid[])
+        WHERE j.client_account_id = ANY($1::uuid[])
+           OR p.freelancer_account_id = ANY($1::uuid[])
+           OR (
+               c.status != 'Pending Signature'
+               AND EXISTS (
+                   SELECT 1
+                   FROM jsonb_array_elements_text(COALESCE(p.included_member_account_ids, '[]'::jsonb)) AS inc_id(val)
+                   WHERE inc_id.val = ANY(SELECT unnest($1::uuid[])::text)
+               )
+           )
 
         UNION ALL
 
@@ -606,8 +654,10 @@ async function getContractsByUserId(accountIds) {
             gr.client_account_id as client_account_id,
             free_acc.display_name as freelancer_name,
             free_acc.handle as freelancer_handle,
+            free_acc.type as freelancer_type,
             free_f.path as freelancer_avatar,
             g.freelancer_account_id as freelancer_account_id,
+            '[]'::json as included_team_members,
             COALESCE(t.terms_title, global_t.terms_title, 'Ensemble Standard Gig Terms') as terms_title,
             COALESCE(t.terms_description, global_t.terms_description, 'Standard terms from gig') as terms_content,
             COALESCE(gr.initiator_role, 'client') as initiator_role,
