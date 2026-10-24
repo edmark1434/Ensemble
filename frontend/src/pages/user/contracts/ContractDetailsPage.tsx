@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+﻿import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -209,19 +209,48 @@ const PaperContractDocument: React.FC<{ contract: DetailedContract }> = ({ contr
               </p>
             </div>
 
-            {/* Freelancer Box */}
+            {/* Freelancer / Team Box */}
             <div className="p-4 rounded-xl border border-zinc-200 bg-zinc-50/80 space-y-1.5 print-exact">
               <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800 block">
-                Party B: The Specialist (Contractor)
+                {contract.freelancerType === "Team" || (contract.includedTeamMembers && contract.includedTeamMembers.length > 0)
+                  ? "Party B: The Specialist Team (Contractor)"
+                  : "Party B: The Specialist (Contractor)"}
               </span>
-              <div className="font-extrabold text-sm text-zinc-900">
-                {contract.freelancerName}
+              <div className="font-extrabold text-sm text-zinc-900 flex items-center gap-2 flex-wrap">
+                <span>{contract.freelancerName}</span>
+                {(contract.freelancerType === "Team" || (contract.includedTeamMembers && contract.includedTeamMembers.length > 0)) && (
+                  <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-blue-100 text-blue-900 border border-blue-200">
+                    Team / Studio
+                  </span>
+                )}
               </div>
               <div className="text-[11px] font-mono text-zinc-500">
                 Platform Account ID: {contract.freelancerAccountId || "Registered Platform Specialist"}
               </div>
+              {contract.includedTeamMembers && contract.includedTeamMembers.length > 0 && (
+                <div className="pt-1.5 mt-1 border-t border-zinc-200/80 space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 block">
+                    Included Team Members ({contract.includedTeamMembers.length}):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {contract.includedTeamMembers.map((m, idx) => (
+                      <span
+                        key={m.account_id || idx}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-zinc-200 text-[10.5px] font-semibold text-zinc-800"
+                      >
+                        <span>{m.display_name || m.handle}</span>
+                        {m.is_leader && (
+                          <span className="px-1 py-0.1 rounded text-[8.5px] font-bold bg-amber-500 text-white">
+                            Team Leader
+                          </span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               <p className="text-[11px] text-zinc-600 leading-normal pt-1">
-                Capacity: Independent specialist responsible for executing and delivering the agreed deliverables according to project specifications.
+                Capacity: Independent specialist {contract.includedTeamMembers && contract.includedTeamMembers.length > 0 ? "team " : ""}responsible for executing and delivering the agreed deliverables according to project specifications.
               </p>
             </div>
           </div>
@@ -831,14 +860,13 @@ export const ContractDetailsPage: React.FC = () => {
 
       setContract(mapped);
       await fetchCancellationRequest(mapped.id);
-      await fetchTeamData();
     } catch (err: any) {
       console.error("Failed to load contract details:", err);
       setError("An unexpected error occurred while loading this contract.");
     } finally {
       setLoading(false);
     }
-  }, [id, fetchCancellationRequest, fetchTeamData]);
+  }, [id, fetchCancellationRequest]);
 
   const fetchTeamData = useCallback(async () => {
     if (!id) return;
@@ -936,7 +964,6 @@ export const ContractDetailsPage: React.FC = () => {
       setEditorRole("Video Editor");
       setEditorAgreedCredits("");
       setEditorNotes("");
-      await fetchTeamData();
     } catch (err: any) {
       showErrorToast(err.response?.data?.message || "Failed to add team member.");
     } finally {
@@ -949,7 +976,6 @@ export const ContractDetailsPage: React.FC = () => {
     try {
       await api.delete(`/api/contracts/${id}/team/${memberAccountId}`);
       showSuccessToast(`Removed @${handle} from project team.`);
-      await fetchTeamData();
     } catch (err: any) {
       showErrorToast(err.response?.data?.message || "Failed to remove member.");
     }
@@ -981,7 +1007,6 @@ export const ContractDetailsPage: React.FC = () => {
       setDistributeModalOpen(false);
       setAllocations({});
       setDistributionNote("");
-      await fetchTeamData();
     } catch (err: any) {
       showErrorToast(err.response?.data?.message || "Failed to distribute funds.");
     } finally {
