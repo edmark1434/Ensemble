@@ -1,4 +1,4 @@
-/**
+﻿/**
  * MilestoneServices.js
  *
  * Business logic layer for milestone lifecycle events.
@@ -561,15 +561,16 @@ async function requestContractCancellationService({ contractId, callerAccountId,
     return request;
 }
 
-async function getActiveCancellationRequestService(contractId, callerAccountId) {
+async function getActiveCancellationRequestService(contractId, affiliatedIds) {
     const { getContractWithParties } = require('../repositories/ContractRepositories');
     const contract = await getContractWithParties(contractId);
     if (!contract) {
         throw Object.assign(new Error('Contract not found'), { statusCode: 404 });
     }
 
-    const isClient = String(contract.client_account_id) === String(callerAccountId);
-    const isFreelancer = String(contract.freelancer_account_id) === String(callerAccountId);
+    const ids = Array.isArray(affiliatedIds) ? affiliatedIds.map(String) : [String(affiliatedIds)];
+    const isClient = ids.includes(String(contract.client_account_id));
+    const isFreelancer = ids.includes(String(contract.freelancer_account_id));
     if (!isClient && !isFreelancer) {
         throw Object.assign(new Error('Unauthorized'), { statusCode: 403 });
     }

@@ -1,4 +1,4 @@
-const ContractRepositories = require('../repositories/ContractRepositories');
+﻿const ContractRepositories = require('../repositories/ContractRepositories');
 const { createNotificationServices } = require('./NotificationServices');
 const { getIo } = require('../lib/WebSocket');
 
@@ -11,16 +11,18 @@ class ContractSubcontractError extends Error {
   }
 }
 
-async function getContractTeamServices(contractId, actorAccountId) {
+async function getContractTeamServices(contractId, affiliatedIds) {
   if (!contractId) throw new ContractSubcontractError('Contract ID is required', 400, 'MISSING_CONTRACT_ID');
+
+  const ids = Array.isArray(affiliatedIds) ? affiliatedIds.map(String) : [String(affiliatedIds)];
 
   const teamData = await ContractRepositories.getContractSubcontractTeam(contractId);
   if (!teamData) throw new ContractSubcontractError('Contract not found', 404, 'CONTRACT_NOT_FOUND');
 
   const contract = teamData.contract;
-  const isClient = String(contract.client_account_id) === String(actorAccountId);
-  const isFreelancer = String(contract.freelancer_account_id) === String(actorAccountId);
-  const isMember = teamData.members.some((m) => String(m.account_id) === String(actorAccountId));
+  const isClient = ids.includes(String(contract.client_account_id));
+  const isFreelancer = ids.includes(String(contract.freelancer_account_id));
+  const isMember = teamData.members.some((m) => ids.includes(String(m.account_id)));
 
   if (!isClient && !isFreelancer && !isMember) {
     throw new ContractSubcontractError('You are not authorized to view this contract team', 403, 'FORBIDDEN');
