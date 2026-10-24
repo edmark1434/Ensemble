@@ -28,6 +28,19 @@ function safeIp(req) {
 }
 
 async function apiRateLimiter(req, res, next) {
+  const ip = safeIp(req);
+  const isLocalhost =
+    ip === '::1' ||
+    ip === '127.0.0.1' ||
+    ip === '_1' ||
+    ip === '::ffff:127.0.0.1' ||
+    ip.startsWith('127_') ||
+    ip.startsWith('127.');
+
+  if (isLocalhost && process.env.ENABLE_LOCAL_RATE_LIMIT !== 'true') {
+    return next();
+  }
+
   const [name, policy] = selectPolicy(req);
   const key = `rate-limit:v1:${name}:${safeIp(req)}`;
   try {

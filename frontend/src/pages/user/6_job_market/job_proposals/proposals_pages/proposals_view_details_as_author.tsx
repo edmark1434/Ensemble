@@ -37,6 +37,7 @@ import {
   UserCheck,
   UserMinus,
   Tag,
+  Crown,
 } from "lucide-react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
@@ -58,7 +59,9 @@ interface ActingTeamInfo {
   team_id?: string;
   id?: string;
   name?: string;
+  display_name?: string;
   team_name?: string;
+  handle?: string;
   avatar_path?: string;
   avatar_url?: string;
   banner_preset?: string;
@@ -540,6 +543,9 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   // Candidate banner
   const candidateBannerUrl = useMemo(() => {
     if (isTeam) {
+      if (actingTeamInfo?.avatar_path || (actingTeamInfo as any)?.avatar_url) {
+        return getImageUrl(actingTeamInfo.avatar_path || (actingTeamInfo as any).avatar_url);
+      }
       const preset = actingTeamInfo?.banner_preset || proposal?.freelancerBannerPreset;
       if (preset) {
         return bannerPresetUrl(preset) || "/profile_banner_presets/Ensemble%20Purple.png";
@@ -797,17 +803,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                     {/* Overlapping Avatar */}
                     <div className="relative z-10 -mt-7 mb-2.5 flex items-end justify-between">
                       <div className="h-14 w-14 rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 ring-4 ring-white dark:ring-zinc-900 shadow-sm shrink-0">
-                        {isTeam && actingTeamInfo?.avatar_path ? (
-                          <img
-                            src={constructAvatarUrl(actingTeamInfo.avatar_path, actingTeamInfo.name || actingTeamInfo.team_name)}
-                            alt={actingTeamInfo.name || "Team"}
-                            onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              e.currentTarget.src = getFallbackAvatarUrl(actingTeamInfo.name || "Team");
-                            }}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : proposal.freelancerAvatar ? (
+                        {proposal.freelancerAvatar ? (
                           <img
                             src={proposal.freelancerAvatar}
                             alt={proposal.freelancerName}
@@ -837,12 +833,12 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                         <h3 className="font-bold text-sm text-zinc-900 dark:text-white truncate">
                           {isTeam ? (actingTeamInfo?.name || actingTeamInfo?.team_name || proposal.freelancerName) : proposal.freelancerName}
                         </h3>
-                        <span className="px-1.5 py-0.5 rounded text-[9.5px] font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
-                          {isTeam ? "Team / Studio" : "Candidate"}
+                        <span className="px-1.5 py-0.5 rounded text-[9.5px] font-semibold bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 shrink-0">
+                          {isTeam ? "Team" : "Candidate"}
                         </span>
                       </div>
                       <span className="text-xs text-zinc-400 dark:text-zinc-500 block truncate font-mono">
-                        @{proposal.freelancerHandle || "candidate"}
+                        @{isTeam ? (actingTeamInfo?.handle || "team") : (proposal.freelancerHandle || "candidate")}
                       </span>
                     </div>
 
@@ -876,36 +872,42 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                           {proposal.includedTeamMembers.map((m: any, idx: number) => {
+                            const isOwnerLeader = Boolean(m.is_leader || m.role === "Owner");
+                            const isProposer = Boolean(m.is_proposer);
                             const mName = m.display_name || m.name || m.handle || "Member";
-                            const mAvatar = constructAvatarUrl(m.avatar_path, mName);
+                            const mAvatar = constructAvatarUrl(m.avatar_path || m.avatar_url || m.avatar, mName);
                             return (
                               <div
                                 key={m.account_id || idx}
-                                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/70 text-[11px]"
+                                className="inline-flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/80 text-xs text-zinc-800 dark:text-zinc-200 shadow-2xs select-none"
                               >
-                                <img
-                                  src={mAvatar}
-                                  alt={mName}
-                                  onError={(e) => {
-                                    e.currentTarget.onerror = null;
-                                    e.currentTarget.src = getFallbackAvatarUrl(mName);
-                                  }}
-                                  className="h-4 w-4 rounded-full object-cover shrink-0"
-                                />
-                                <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[110px]">
-                                  {mName}
+                                <div className="h-5 w-5 rounded-full overflow-hidden bg-zinc-200 dark:bg-zinc-700 shrink-0 border border-white dark:border-zinc-700 shadow-2xs">
+                                  <img
+                                    src={mAvatar}
+                                    alt={mName}
+                                    onError={(e) => {
+                                      e.currentTarget.onerror = null;
+                                      e.currentTarget.src = getFallbackAvatarUrl(mName);
+                                    }}
+                                    className="h-full w-full object-cover"
+                                  />
+                                </div>
+                                <span className="font-medium text-xs truncate max-w-[120px]" title={mName}>
+                                  {isProposer ? `${mName} (Proposer)` : mName}
                                 </span>
-                                {m.is_leader && (
-                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500 text-white shrink-0">
-                                    Team Leader
-                                  </span>
-                                )}
-                                {m.is_proposer && (
-                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-600 text-white shrink-0">
-                                    Proposer
-                                  </span>
+                                {isOwnerLeader && (
+                                  <div className="relative group/leader inline-flex items-center shrink-0">
+                                    <Crown className="w-3.5 h-3.5 text-amber-500 fill-amber-500 cursor-help" />
+                                    <div
+                                      role="tooltip"
+                                      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap shadow-lg pointer-events-none opacity-0 group-hover/leader:opacity-100 transition-opacity duration-150 z-50 bg-white text-zinc-900 border border-zinc-200 dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-700"
+                                    >
+                                      Team Leader
+                                      <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] border-4 border-transparent border-t-white dark:border-t-zinc-900" />
+                                    </div>
+                                  </div>
                                 )}
                               </div>
                             );

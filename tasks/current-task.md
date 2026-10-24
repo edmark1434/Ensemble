@@ -1,14 +1,15 @@
-# Current Task: Full-Image Card Front & Single Animated Grid Background on /landing/AboutUs
+# Task: Proposal Identity Team Representation Avatar & Switch Team Icon
 
-## Objective
-Refine `/landing/AboutUs` based on user feedback:
-1. **Front of Card as Pure Image Only**: The front face of each flip card should be 100% the portrait photo (`img`), filling the entire card with clean rounded borders, no bottom text/pills crowding it.
-2. **Eliminate Duplicate Grid Background**: Remove the duplicate CSS `linear-gradient` grid background so only the single animated `ShapeGrid` is displayed with crisp, visible grid lines.
-3. **Back Face Completeness**: When flipped, the back face displays the member's Name, Role (`Dev Ops | Project Manager`, `UI/UX | Jobs & Marketplace`, `Collaborative Video Editing`, `Deployment, Admin and Mods`), Focus, Biography, Skills, Universal Socials, Deliverables, and a clean return action.
-4. **Verification**: Run `cd frontend && npm run build` and ensure clean compilation.
+## Objectives
+- Update the **Switch Team** button icon to `<Repeat />` from `lucide-react`.
+- Fix the Team card avatar representation:
+  - The card banner already displays the team's visual identity banner.
+  - The overlapping avatar badge should be the proposing user's profile picture (`userAvatarUrl`) rather than a repeated team thumbnail with a nested sub-avatar badge.
+- Strictly adhere to rule: Do not commit unless the user explicitly asks.
 
 ## Acceptance Criteria
-- [x] Front face of all 4 cards displays only the full-bleed member image with smooth hover effects.
-- [x] Remove duplicate CSS grid lines; ensure only 1 clean animated `ShapeGrid` background is rendered.
-- [x] Back face displays full member details, roles, bios, and links with stop-propagation.
-- [x] Pass `cd frontend && npm run build` with 0 errors.
+- [x] Switch Team button icon changed to `<Repeat className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />`.
+- [x] Removed overlapping dual avatar (team thumbnail + tiny proposer dot) from Team card.
+- [x] Overlapping avatar on Team card now renders the proposing user's avatar (`userAvatarUrl`, fallback `getFallbackAvatarUrl(userName)`, alt `userName`) cleanly over the team banner.
+- [x] `cd frontend && npm run build` compiles cleanly with zero errors.
+- [x] No `git commit` performed (per user rule).
