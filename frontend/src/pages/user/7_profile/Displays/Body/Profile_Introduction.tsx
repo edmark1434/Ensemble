@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Edit2, Check, Bold, Italic, List, Eye, EyeOff, Play, AlertTriangle, User, Clock, Sparkles, Loader2, X } from "lucide-react";
+import { Edit2, Check, Bold, Italic, Underline, List, Eye, EyeOff, Play, AlertTriangle, User, Clock, Sparkles, Loader2, X, Heading, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
+import { WarmTooltip, WarmTooltipGroup } from "@/components/ui/WarmTooltip";
 import api from "@/lib/axios.ts";
 import { toast } from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,6 +21,62 @@ interface ProfileIntroductionProps {
   onViewMoreGallery?: () => void;
   userName?: string;
 }
+
+const isGibberishText = (text: string): boolean => {
+  if (!text || typeof text !== "string") return false;
+  const clean = text.trim();
+  if (clean.length < 5) return false;
+
+  // Repeated identical characters (e.g. "aaaaa", ".....")
+  if (/(.)\1{4,}/i.test(clean)) return true;
+  // Repeated short patterns (e.g. "asdfasdfasdf", "test test test")
+  if (/(\b\w{2,4}\b)(?:\s*\1){2,}/i.test(clean)) return true;
+  if (/(\w{2,5})\1{2,}/i.test(clean)) return true;
+
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length < 3) return false;
+
+  let gibberishWords = 0;
+  for (const rawWord of words) {
+    const word = rawWord.toLowerCase().replace(/[^a-z]/g, "");
+    if (!word) continue;
+
+    // 4+ letter word with no vowels (a, e, i, o, u, y)
+    if (word.length >= 4 && !/[aeiouy]/.test(word)) {
+      gibberishWords++;
+      continue;
+    }
+
+    // 5+ consecutive consonants (e.g. "sdfghj")
+    if (/[bcdfghjklmnpqrstvwxz]{5,}/.test(word)) {
+      gibberishWords++;
+      continue;
+    }
+
+    // Letter repetition in a word (e.g. "aaabbbaaa")
+    const counts: Record<string, number> = {};
+    for (const c of word) counts[c] = (counts[c] || 0) + 1;
+    const maxFreq = Math.max(...Object.values(counts));
+    if (word.length >= 5 && maxFreq / word.length > 0.6) {
+      gibberishWords++;
+      continue;
+    }
+  }
+
+  if (gibberishWords / words.length > 0.3) {
+    return true;
+  }
+
+  // Character variety in full text
+  const letters = clean.toLowerCase().replace(/[^a-z]/g, "");
+  if (letters.length >= 10) {
+    const unique = new Set(letters).size;
+    if (unique <= 4 && letters.length >= 12) return true;
+    if (unique / letters.length < 0.2) return true;
+  }
+
+  return false;
+};
 
 const constructAssetUrl = (path: string | undefined): string | undefined => {
   if (!path) return undefined;
@@ -48,6 +106,22 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
   const [itemToEdit, setItemToEdit] = useState<GalleryItem | null>(null);
   const [itemToDelete, setItemToDelete] = useState<GalleryItem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isHeadingsOpen, setIsHeadingsOpen] = useState(false);
+  const headingsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (headingsRef.current && !headingsRef.current.contains(event.target as Node)) {
+        setIsHeadingsOpen(false);
+      }
+    };
+    if (isHeadingsOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isHeadingsOpen]);
   // Joed AI Profile Introduction Generation & 180s (3-minute) Cooldown State
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
@@ -55,6 +129,11 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
   const [aiAbout, setAiAbout] = useState("");
   const [aiTone, setAiTone] = useState<"casual" | "direct" | "professional" | "narrative">("casual");
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+
+  const hasChanges = content.trim() !== (introduction || "").trim();
+  const isGibberish = isGibberishText(aiAbout);
+  const aiAboutWords = aiAbout.trim().split(/\s+/).filter(Boolean).length;
+  const isConfirmDisabled = isGeneratingAi || cooldownSeconds > 0 || aiAboutWords < 3 || isGibberish;
 
   useEffect(() => {
     if (userName && !aiName) {
@@ -105,8 +184,13 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
 
   const handleGenerateIntroduction = async () => {
     if (cooldownSeconds > 0 || isGeneratingAi) return;
-    if (!aiAbout.trim() && !aiName.trim()) {
-      toast.error("Please explain a bit about yourself so Joed AI can draft your introduction.");
+    const words = aiAbout.trim().split(/\s+/).filter(Boolean).length;
+    if (words < 3) {
+      toast.error("Please explain a bit about yourself using at least 3 words.");
+      return;
+    }
+    if (isGibberishText(aiAbout)) {
+      toast.error("Please provide meaningful details about yourself instead of random text.");
       return;
     }
 
@@ -204,7 +288,28 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
     }, 0);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === 'b' || e.key === 'B') {
+        e.preventDefault();
+        insertMarkdown('**', '**');
+      } else if (e.key === 'i' || e.key === 'I') {
+        e.preventDefault();
+        insertMarkdown('*', '*');
+      } else if (e.key === 'u' || e.key === 'U') {
+        e.preventDefault();
+        insertMarkdown('<u>', '</u>');
+      }
+    }
+  };
+
   const handleSave = async () => {
+    if (!hasChanges) {
+      toast("No changes to save.", { icon: "ℹ️" });
+      setIsEditing(false);
+      setIsPreview(false);
+      return;
+    }
     try {
       setIsSaving(true);
       const original = { introduction: introduction || "" };
@@ -248,7 +353,7 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
         {isOwner && !isEditing && !isLoading && (
           <button
             onClick={() => setIsEditing(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-[11px] font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all cursor-pointer shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.03] text-[11px] font-bold text-gray-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-500/30 dark:hover:border-blue-500/30 hover:bg-blue-50/50 dark:hover:bg-blue-500/10 transition-all cursor-pointer shadow-xs active:scale-95"
           >
             <Edit2 className="h-3 w-3" />
             <span>Edit Introduction</span>
@@ -280,29 +385,134 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
         ) : isEditing ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between bg-gray-100 dark:bg-white/5 p-2 rounded-t-xl border border-b-0 border-gray-200 dark:border-white/10">
-              <div className="flex gap-1">
-                <button type="button" onClick={() => insertMarkdown('**', '**')} className="p-1.5 rounded hover:bg-white dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors" title="Bold" disabled={isPreview}>
-                  <Bold className="w-4 h-4" />
-                </button>
-                <button type="button" onClick={() => insertMarkdown('*', '*')} className="p-1.5 rounded hover:bg-white dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors" title="Italic" disabled={isPreview}>
-                  <Italic className="w-4 h-4" />
-                </button>
-                <button type="button" onClick={() => insertMarkdown('# ')} className="p-1.5 rounded hover:bg-white dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors font-bold text-xs" title="Heading 1" disabled={isPreview}>
-                  H1
-                </button>
-                <button type="button" onClick={() => insertMarkdown('## ')} className="p-1.5 rounded hover:bg-white dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors font-bold text-xs" title="Heading 2" disabled={isPreview}>
-                  H2
-                </button>
-                <button type="button" onClick={() => insertMarkdown('### ')} className="p-1.5 rounded hover:bg-white dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors font-bold text-xs" title="Heading 3" disabled={isPreview}>
-                  H3
-                </button>
-                <button type="button" onClick={() => insertMarkdown('#### ')} className="p-1.5 rounded hover:bg-white dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors font-bold text-xs" title="Heading 4" disabled={isPreview}>
-                  H4
-                </button>
-                <button type="button" onClick={() => insertMarkdown('- ')} className="p-1.5 rounded hover:bg-white dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors" title="Bullet List" disabled={isPreview}>
-                  <List className="w-4 h-4" />
-                </button>
-              </div>
+              <WarmTooltipGroup delay={200} warmWindow={250}>
+                <div className="flex items-center gap-1">
+                  <WarmTooltip content="Bold" shortcut="Ctrl+B">
+                    <button
+                      type="button"
+                      onClick={() => insertMarkdown('**', '**')}
+                      className="p-1.5 rounded-lg hover:bg-white dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors disabled:opacity-40"
+                      disabled={isPreview}
+                      aria-label="Bold"
+                    >
+                      <Bold className="w-4 h-4" />
+                    </button>
+                  </WarmTooltip>
+                  <WarmTooltip content="Italic" shortcut="Ctrl+I">
+                    <button
+                      type="button"
+                      onClick={() => insertMarkdown('*', '*')}
+                      className="p-1.5 rounded-lg hover:bg-white dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors disabled:opacity-40"
+                      disabled={isPreview}
+                      aria-label="Italic"
+                    >
+                      <Italic className="w-4 h-4" />
+                    </button>
+                  </WarmTooltip>
+                  <WarmTooltip content="Underline" shortcut="Ctrl+U">
+                    <button
+                      type="button"
+                      onClick={() => insertMarkdown('<u>', '</u>')}
+                      className="p-1.5 rounded-lg hover:bg-white dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors disabled:opacity-40"
+                      disabled={isPreview}
+                      aria-label="Underline"
+                    >
+                      <Underline className="w-4 h-4" />
+                    </button>
+                  </WarmTooltip>
+                  <WarmTooltip content="Bullet List">
+                    <button
+                      type="button"
+                      onClick={() => insertMarkdown('- ')}
+                      className="p-1.5 rounded-lg hover:bg-white dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors disabled:opacity-40"
+                      disabled={isPreview}
+                      aria-label="Bullet List"
+                    >
+                      <List className="w-4 h-4" />
+                    </button>
+                  </WarmTooltip>
+
+                  {/* More Option (H1 H2 H3 H4) */}
+                  <div className="relative" ref={headingsRef}>
+                    <WarmTooltip content="Headings & More">
+                      <button
+                        type="button"
+                        onClick={() => setIsHeadingsOpen((prev) => !prev)}
+                        disabled={isPreview}
+                        className={`p-1.5 rounded-lg flex items-center gap-1 text-gray-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-white/10 transition-colors disabled:opacity-40 ${
+                          isHeadingsOpen ? 'bg-white dark:bg-white/10 shadow-xs' : ''
+                        }`}
+                        aria-label="Headings"
+                      >
+                        <Heading className="w-4 h-4" />
+                        <ChevronDown className={`w-3 h-3 text-gray-400 dark:text-zinc-500 transition-transform duration-150 ${isHeadingsOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                    </WarmTooltip>
+
+                    <AnimatePresence>
+                      {isHeadingsOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -4, scale: 0.96 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -4, scale: 0.96 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute left-0 top-full mt-1.5 w-44 rounded-xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10 shadow-xl py-1.5 z-40 divide-y divide-gray-100 dark:divide-white/5"
+                        >
+                          <div className="px-3 py-1 text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider">
+                            Headings
+                          </div>
+                          <div className="p-1 space-y-0.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                insertMarkdown('# ');
+                                setIsHeadingsOpen(false);
+                              }}
+                              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs font-semibold text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/5 transition"
+                            >
+                              <span className="text-sm font-bold">Heading 1</span>
+                              <span className="text-[10px] text-gray-400 font-mono">#</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                insertMarkdown('## ');
+                                setIsHeadingsOpen(false);
+                              }}
+                              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs font-semibold text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/5 transition"
+                            >
+                              <span className="text-sm font-semibold">Heading 2</span>
+                              <span className="text-[10px] text-gray-400 font-mono">##</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                insertMarkdown('### ');
+                                setIsHeadingsOpen(false);
+                              }}
+                              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs font-semibold text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/5 transition"
+                            >
+                              <span className="text-xs font-semibold">Heading 3</span>
+                              <span className="text-[10px] text-gray-400 font-mono">###</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                insertMarkdown('#### ');
+                                setIsHeadingsOpen(false);
+                              }}
+                              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs font-semibold text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/5 transition"
+                            >
+                              <span className="text-xs font-normal">Heading 4</span>
+                              <span className="text-[10px] text-gray-400 font-mono">####</span>
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </WarmTooltipGroup>
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
@@ -335,10 +545,34 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
                   )}
                 </button>
                 <span className="text-[10px] font-mono text-gray-500 dark:text-zinc-500">{content.length}/3000</span>
-                <button type="button" onClick={() => setIsPreview(!isPreview)} className={`p-1.5 rounded transition-colors flex items-center gap-1.5 px-3 ${isPreview ? 'bg-blue-500/20 text-blue-500' : 'hover:bg-white dark:hover:bg-white/10 text-gray-600 dark:text-zinc-300'}`} title="Toggle Preview">
-                  {isPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  <span className="text-[10px] font-bold uppercase">{isPreview ? 'Edit' : 'Preview'}</span>
-                </button>
+                <div className="inline-flex items-center bg-gray-200/70 dark:bg-zinc-800/80 p-0.5 rounded-lg border border-gray-300/50 dark:border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => setIsPreview(false)}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase transition-all ${
+                      !isPreview
+                        ? "bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-xs"
+                        : "text-gray-500 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-zinc-200"
+                    }`}
+                    title="Write Mode"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                    <span>Write</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPreview(true)}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase transition-all ${
+                      isPreview
+                        ? "bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-xs"
+                        : "text-gray-500 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-zinc-200"
+                    }`}
+                    title="Preview Mode"
+                  >
+                    <Eye className="w-3 h-3" />
+                    <span>Preview</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -347,8 +581,11 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
                 {content ? (
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
                     components={{
                       strong: ({ node, ...props }) => <strong className="font-extrabold text-gray-900 dark:text-white" {...props} />,
+                      em: ({ node, ...props }) => <em className="italic text-gray-800 dark:text-zinc-200" {...props} />,
+                      u: ({ node, ...props }) => <u className="underline underline-offset-3 decoration-blue-500/50 dark:decoration-blue-400/50 font-medium" {...props} />,
                       ul: ({ node, ...props }) => <ul className="list-disc list-outside ml-4 my-2 marker:text-gray-400 dark:marker:text-zinc-500" {...props} />,
                       ol: ({ node, ...props }) => <ol className="list-decimal list-outside ml-4 my-2 marker:text-gray-400 dark:marker:text-zinc-500" {...props} />,
                       li: ({ node, ...props }) => <li className="pl-1 mb-1 last:mb-0" {...props} />,
@@ -357,6 +594,7 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
                       h1: ({ node, ...props }) => <h1 className="text-xl font-bold text-gray-900 dark:text-white mt-4 mb-2" {...props} />,
                       h2: ({ node, ...props }) => <h2 className="text-lg font-bold text-gray-900 dark:text-white mt-3 mb-2" {...props} />,
                       h3: ({ node, ...props }) => <h3 className="text-base font-bold text-gray-900 dark:text-white mt-2 mb-1" {...props} />,
+                      h4: ({ node, ...props }) => <h4 className="text-sm font-bold text-gray-900 dark:text-white mt-2 mb-1" {...props} />,
                     }}
                   >
                     {getSanitizedContent(content)}
@@ -372,16 +610,33 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
                 maxLength={3000}
                 value={content}
                 onChange={e => setContent(e.target.value)}
+                onKeyDown={handleKeyDown}
                 className="w-full min-h-[300px] rounded-b-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/50 p-5 text-sm text-gray-900 dark:text-zinc-200 outline-none focus:border-blue-500/50 transition-all resize-y break-words custom-scrollbar leading-relaxed"
                 placeholder="Write an introduction about yourself..."
               />
             )}
 
             <div className="flex justify-end gap-3 pt-2">
-              <button onClick={() => { setIsEditing(false); setContent(introduction || ""); setIsPreview(false); }} className="px-4 py-2 rounded-xl text-xs font-bold text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 transition">
+              <button
+                onClick={() => {
+                  setIsEditing(false);
+                  setContent(introduction || "");
+                  setIsPreview(false);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 transition"
+              >
                 Cancel
               </button>
-              <button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-500 text-white text-xs font-bold hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 disabled:opacity-50">
+              <button
+                onClick={handleSave}
+                disabled={isSaving || !hasChanges}
+                title={hasChanges ? "Save your introduction" : "No changes made to save"}
+                className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                  hasChanges && !isSaving
+                    ? "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20 active:scale-95 cursor-pointer"
+                    : "bg-gray-200 dark:bg-zinc-800 text-gray-400 dark:text-zinc-500 border border-gray-300/40 dark:border-white/5 cursor-not-allowed opacity-60"
+                }`}
+              >
                 <Check className="h-4 w-4" /> Save Introduction
               </button>
             </div>
@@ -392,8 +647,11 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
               <div className="w-full max-w-none break-words pb-6">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeRaw]}
                   components={{
                     strong: ({ node, ...props }) => <strong className="font-extrabold text-gray-900 dark:text-white" {...props} />,
+                    em: ({ node, ...props }) => <em className="italic text-gray-800 dark:text-zinc-200" {...props} />,
+                    u: ({ node, ...props }) => <u className="underline underline-offset-3 decoration-blue-500/50 dark:decoration-blue-400/50 font-medium" {...props} />,
                     ul: ({ node, ...props }) => <ul className="list-disc list-outside ml-4 my-2 marker:text-gray-400 dark:marker:text-zinc-500" {...props} />,
                     ol: ({ node, ...props }) => <ol className="list-decimal list-outside ml-4 my-2 marker:text-gray-400 dark:marker:text-zinc-500" {...props} />,
                     li: ({ node, ...props }) => <li className="pl-1 mb-1 last:mb-0" {...props} />,
@@ -630,9 +888,26 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
                         <label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
                           Explain a bit about yourself <span className="text-red-500">*</span>
                         </label>
-                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
-                          {aiAbout.length}/600
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {isGibberish && aiAbout.trim().length >= 4 ? (
+                            <span className="text-[10px] font-medium text-amber-500 dark:text-amber-400">
+                              Meaningful words required
+                            </span>
+                          ) : (
+                            <span
+                              className={`text-[10px] font-medium transition-colors ${
+                                aiAboutWords >= 3
+                                  ? "text-emerald-500 dark:text-emerald-400"
+                                  : "text-zinc-400 dark:text-zinc-500"
+                              }`}
+                            >
+                              {aiAboutWords}/3 words min
+                            </span>
+                          )}
+                          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
+                            {aiAbout.length}/600
+                          </span>
+                        </div>
                       </div>
                       <textarea
                         rows={3}
@@ -712,12 +987,23 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
                     </button>
                     <button
                       type="button"
-                      disabled={isGeneratingAi || cooldownSeconds > 0}
+                      disabled={isConfirmDisabled}
                       onClick={handleGenerateIntroduction}
+                      title={
+                        isConfirmDisabled
+                          ? isGibberish
+                            ? "Please provide meaningful background details instead of random text"
+                            : aiAboutWords < 3
+                            ? "Please write at least 3 words explaining about yourself"
+                            : cooldownSeconds > 0
+                            ? `Cooldown active (${formatCooldown(cooldownSeconds)})`
+                            : ""
+                          : "Confirm & Generate with Joed AI"
+                      }
                       className={`px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                        !isGeneratingAi && cooldownSeconds === 0
+                        !isConfirmDisabled
                           ? "bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-500/25 active:scale-[0.98] cursor-pointer"
-                          : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700 cursor-not-allowed"
+                          : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700 cursor-not-allowed opacity-60"
                       }`}
                     >
                       {isGeneratingAi ? (
