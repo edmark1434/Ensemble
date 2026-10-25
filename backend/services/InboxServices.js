@@ -329,6 +329,7 @@ async function persistChatNotifications({
     prefix,
     onNotification,
     referencePath,
+    data,
 }) {
     const activeRecipientIds = new Set(
         (inbox.members || [])
@@ -361,7 +362,7 @@ async function persistChatNotifications({
                     reference_id: randomUUID(),
                 });
             }
-            if (onNotification) await onNotification(accountId, notification);
+            if (onNotification) await onNotification(accountId, notification, data);
             return notification;
         } catch (error) {
             console.error('Error creating chat notification:', error);
@@ -870,6 +871,7 @@ async function createMessageServices(payload, accountId, options = {}) {
             message: 'sent you a message.',
             prefix: 'CHAT_MESSAGE',
             onNotification: options.onNotification,
+            data: message,
         });
     }
     return message;
@@ -898,6 +900,7 @@ async function replyMessageServices(parentMessageId, payload, accountId, options
         message: 'replied to your message.',
         prefix: 'CHAT_REPLY',
         onNotification: options.onNotification,
+        data: reply,
     });
     return reply;
 }
@@ -919,6 +922,7 @@ async function reactMessageServices(messageId, reactType, accountId, options = {
         message: `reacted ${reaction} to your message.`,
         prefix: 'CHAT_REACTION',
         onNotification: options.onNotification,
+        data: updated,
     });
     return updated;
 }

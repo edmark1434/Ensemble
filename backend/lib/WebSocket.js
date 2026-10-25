@@ -263,12 +263,14 @@ async function initSocket(httpServer) {
     const handleSendMessage = async (messagePayload = {}, callback) => {
       try {
         const message = await createMessageServices(messagePayload, accountId, {
-          onNotification: (recipientId, notification) => {
+          onNotification: (recipientId, notification, item) => {
             if (notification) {
               io.to(String(recipientId)).emit('notification', notification);
             }
-            io.to(String(recipientId)).emit('newMessage', message);
-            io.to(String(recipientId)).emit('conversationMessageNotification', message);
+            if (item) {
+              io.to(String(recipientId)).emit('newMessage', item);
+              io.to(String(recipientId)).emit('conversationMessageNotification', item);
+            }
           },
         });
         io.to(message.conversation_id).emit('newMessage', message);
@@ -284,12 +286,14 @@ async function initSocket(httpServer) {
       try {
         const parentMessageId = payload.parent_message_id || payload.message_id_reply;
         const reply = await replyMessageServices(parentMessageId, payload, accountId, {
-          onNotification: (recipientId, notification) => {
+          onNotification: (recipientId, notification, item) => {
             if (notification) {
               io.to(String(recipientId)).emit('notification', notification);
             }
-            io.to(String(recipientId)).emit('messageReplied', reply);
-            io.to(String(recipientId)).emit('conversationMessageNotification', reply);
+            if (item) {
+              io.to(String(recipientId)).emit('messageReplied', item);
+              io.to(String(recipientId)).emit('conversationMessageNotification', item);
+            }
           },
         });
         io.to(reply.conversation_id).emit('messageReplied', reply);

@@ -104,11 +104,13 @@ async function createMessageController(req, res) {
         }
         const io = getIo();
         const result = await createMessageServices(req.body, accountId(req), {
-            onNotification: (recipientId, notification) => {
+            onNotification: (recipientId, notification, item) => {
                 if (io) {
                     if (notification) io.to(String(recipientId)).emit('notification', notification);
-                    io.to(String(recipientId)).emit('newMessage', result);
-                    io.to(String(recipientId)).emit('conversationMessageNotification', result);
+                    if (item) {
+                        io.to(String(recipientId)).emit('newMessage', item);
+                        io.to(String(recipientId)).emit('conversationMessageNotification', item);
+                    }
                 }
             },
         });
@@ -132,11 +134,13 @@ async function replyMessageController(req, res) {
             req.body,
             accountId(req),
             {
-                onNotification: (recipientId, notification) => {
+                onNotification: (recipientId, notification, item) => {
                     if (io) {
                         if (notification) io.to(String(recipientId)).emit('notification', notification);
-                        io.to(String(recipientId)).emit('messageReplied', result);
-                        io.to(String(recipientId)).emit('conversationMessageNotification', result);
+                        if (item) {
+                            io.to(String(recipientId)).emit('messageReplied', item);
+                            io.to(String(recipientId)).emit('conversationMessageNotification', item);
+                        }
                     }
                 },
             }
