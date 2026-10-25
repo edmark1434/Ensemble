@@ -16,6 +16,7 @@ import {
   Video,
   X,
   FolderGit2,
+  BriefcaseBusiness,
   ExternalLink,
 } from "lucide-react";
 import useGlobalState from "@/lib/global_state";
@@ -64,6 +65,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const currentActorId = String(
     conversation?.viewer_account_id || currentUserId
   );
+  const isConnecting = !conversation && isLoading;
   const typingCount = useChatState(
     (state) => state.typingByConversation[conversationId]?.length || 0
   );
@@ -397,7 +399,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <p className="truncate text-sm font-bold text-zinc-900 dark:text-zinc-100">{displayName}</p>
             )}
             <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-              {typingCount ? "Typing..." : isOnline ? "Active now" : "Offline"}
+              {isConnecting
+                ? "Connecting..."
+                : typingCount
+                ? "Typing..."
+                : isGroupOrTeamChat
+                ? `${(conversation?.members || []).length || "Team"} members • Team Group Chat`
+                : isOnline
+                ? "Active now"
+                : "Offline"}
             </p>
           </div>
         </div>
@@ -431,13 +441,33 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {liveGoogleMeeting && <LiveGoogleMeetingBanner call={liveGoogleMeeting} compact />}
 
-      {conversation && (
+      {conversation ? (
         <MarketplaceContextCard
           conversation={conversation}
           currentUserId={currentActorId}
           variant="compact"
         />
-      )}
+      ) : activeUser?.listingTitle ? (
+        <section
+          className="flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03] animate-pulse"
+          aria-label="Job proposal discussion"
+        >
+          <div className="rounded-md border border-blue-500/20 bg-blue-500/10 p-1.5 text-blue-500 dark:text-blue-400">
+            <BriefcaseBusiness className="h-3.5 w-3.5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-[9px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                Job proposal discussion
+              </span>
+            </div>
+            <p className="truncate text-xs font-medium text-gray-900 dark:text-zinc-100">
+              {activeUser.listingTitle}
+            </p>
+          </div>
+          <div className="h-6 w-20 rounded-md bg-gray-200 dark:bg-white/10" />
+        </section>
+      ) : null}
 
       {conversation?.conversation_type === "group" && groupCall && (
         <div className="flex items-center justify-between gap-2 border-b border-green-500/20 bg-green-500/10 px-3 py-2">
@@ -490,13 +520,41 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         className="flex-1 space-y-2 overflow-y-auto custom-scrollbar bg-white dark:bg-zinc-950 p-3 text-[13px]"
       >
         {isLoading ? (
-          <div className="flex h-full items-center justify-center text-zinc-500 gap-2 flex-col">
-            <div className="flex gap-1 items-center">
-              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+          <div className="flex flex-col space-y-3.5 py-2 animate-pulse">
+            <div className="flex items-center justify-center my-1">
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-400 bg-zinc-100 dark:bg-white/5 px-2.5 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
+                Connecting to chat...
+              </span>
             </div>
-            <span className="text-sm font-medium opacity-80 mt-1">Loading...</span>
+
+            {/* Left incoming bubble skeleton */}
+            <div className="flex items-start gap-2 max-w-[85%]">
+              <div className="w-7 h-7 rounded-full bg-gray-200 dark:bg-zinc-800 shrink-0 mt-0.5" />
+              <div className="space-y-1.5 flex-1">
+                <div className="h-3 bg-gray-200 dark:bg-zinc-800 rounded w-20" />
+                <div className="h-10 bg-gray-200/90 dark:bg-zinc-800/80 rounded-2xl rounded-tl-sm w-44" />
+              </div>
+            </div>
+
+            {/* Right outgoing bubble skeleton */}
+            <div className="flex items-end justify-end flex-col gap-1.5 ml-auto max-w-[80%]">
+              <div className="h-9 bg-blue-100 dark:bg-blue-950/40 border border-blue-200/50 dark:border-blue-900/30 rounded-2xl rounded-tr-sm w-36" />
+            </div>
+
+            {/* Left incoming bubble skeleton 2 */}
+            <div className="flex items-start gap-2 max-w-[85%]">
+              <div className="w-7 h-7 rounded-full bg-gray-200 dark:bg-zinc-800 shrink-0 mt-0.5" />
+              <div className="space-y-1.5 flex-1">
+                <div className="h-3 bg-gray-200 dark:bg-zinc-800 rounded w-16" />
+                <div className="h-14 bg-gray-200/90 dark:bg-zinc-800/80 rounded-2xl rounded-tl-sm w-52" />
+              </div>
+            </div>
+
+            {/* Right outgoing bubble skeleton 2 */}
+            <div className="flex items-end justify-end flex-col gap-1.5 ml-auto max-w-[80%]">
+              <div className="h-8 bg-blue-100 dark:bg-blue-950/40 border border-blue-200/50 dark:border-blue-900/30 rounded-2xl rounded-tr-sm w-28" />
+            </div>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-zinc-500">
@@ -953,24 +1011,26 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           onChange={handleFileChange}
           className="hidden"
         />
-        <button onClick={openFilePicker} disabled={mediaList.length >= 3} className="text-zinc-500 hover:text-zinc-800 dark:hover:text-white disabled:opacity-40">
+        <button onClick={openFilePicker} disabled={isConnecting || mediaList.length >= 3} className="text-zinc-500 hover:text-zinc-800 dark:hover:text-white disabled:opacity-40">
           <Paperclip size={16} />
         </button>
         <div className="relative flex flex-1 items-center gap-2 rounded-full border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/[0.05] px-3.5 py-1.5">
           <input
             ref={messageInputRef}
+            disabled={isConnecting}
             value={messageText}
             onChange={(event) => handleInput(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter") void handleSend();
             }}
-            placeholder={editing ? "Edit message" : replyTo ? "Write a reply" : "Aa"}
-            className="w-full bg-transparent text-xs text-zinc-900 dark:text-zinc-100 outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
+            placeholder={isConnecting ? "Connecting..." : editing ? "Edit message" : replyTo ? "Write a reply" : "Aa"}
+            className="w-full bg-transparent text-xs text-zinc-900 dark:text-zinc-100 outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-500 disabled:opacity-60"
           />
           <button
             type="button"
+            disabled={isConnecting}
             onClick={() => setShowComposerEmojiPicker((open) => !open)}
-            className="text-zinc-500 transition hover:text-zinc-800 dark:hover:text-white"
+            className="text-zinc-500 transition hover:text-zinc-800 dark:hover:text-white disabled:opacity-40"
             aria-label="Choose emoji"
           >
             <Smile size={15} />
@@ -985,7 +1045,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
         <button
           onClick={() => void handleSend()}
-          disabled={isSending || (!messageText.trim() && mediaList.length === 0)}
+          disabled={isConnecting || isSending || (!messageText.trim() && mediaList.length === 0)}
           className="rounded-full bg-blue-600 p-2 text-white disabled:opacity-40"
         >
           <Send size={14} />

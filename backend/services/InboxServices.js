@@ -518,17 +518,44 @@ async function resolveMarketplaceContext(contextType, contextId, accountIds) {
             throw new ChatServiceError('Proposal not found', 404);
         }
         const proposalStatus = String(proposal.status || '').toLowerCase();
-        if (!['shortlisted', 'accepted'].includes(proposalStatus)) {
+        if (!['shortlisted', 'accepted', 'approved', 'hired'].includes(proposalStatus)) {
             throw new ChatServiceError(
                 'A proposal discussion is available after the proposal is shortlisted or accepted',
                 409
             );
         }
 
-        const members = marketplaceMembers(
-            proposal.client_account_id,
-            proposal.freelancer_account_id
-        );
+        const isTeamProposal =
+            proposal.freelancer_type === 'Team' ||
+            Boolean(proposal.acting_team_id) ||
+            Boolean(proposal.freelancer_team_id) ||
+            (Array.isArray(proposal.included_team_members) && proposal.included_team_members.length > 0);
+
+        const applicantName = proposal.freelancer_name || proposal.proposed_by_name || 'Applicant';
+        const now = new Date();
+        const memberAccountIds = new Set();
+        if (proposal.client_account_id) memberAccountIds.add(String(proposal.client_account_id));
+        if (proposal.freelancer_account_id) memberAccountIds.add(String(proposal.freelancer_account_id));
+
+        if (isTeamProposal) {
+            if (proposal.proposed_by_account_id) {
+                memberAccountIds.add(String(proposal.proposed_by_account_id));
+            }
+            if (Array.isArray(proposal.included_team_members)) {
+                for (const tm of proposal.included_team_members) {
+                    if (tm.account_id) {
+                        memberAccountIds.add(String(tm.account_id));
+                    }
+                }
+            }
+        }
+
+        const members = Array.from(memberAccountIds).filter(Boolean).map((memberAccountId) => ({
+            account_id: memberAccountId,
+            role: memberAccountId === String(proposal.client_account_id) ? 'owner' : 'member',
+            status: 'active',
+            joined_at: now,
+        }));
         await validateMemberAccounts(members);
         const actorAccountId = members
             .map((member) => String(member.account_id))
@@ -540,10 +567,11 @@ async function resolveMarketplaceContext(contextType, contextId, accountIds) {
             conversationType: 'marketplace_job',
             actorAccountId,
             context: { proposal_id: String(proposal.proposal_id) },
-            notificationMessage: `opened a discussion for "${proposal.job_title || 'Job proposal'}".`,
+            notificationMessage: `opened a discussion with ${applicantName} for "${proposal.job_title || 'Job proposal'}".`,
             inboxPayload: {
-                conversation_name: proposal.job_title || 'Job proposal',
+                conversation_name: applicantName,
                 conversation_type: 'marketplace_job',
+                is_group: isTeamProposal,
                 proposal_id: String(proposal.proposal_id),
                 job_id: String(proposal.job_id),
                 client_account_id: String(proposal.client_account_id),
@@ -639,6 +667,29 @@ async function createMarketplaceChatServices(payload, accountId, callbacks = {})
 
     if (!inbox) {
         throw new ChatServiceError('Unable to create marketplace conversation', 500);
+    }
+
+    if (!created) {
+        const updates = {};
+        if (resolved.inboxPayload.conversation_name && inbox.conversation_name !== resolved.inboxPayload.conversation_name) {
+            updates.conversation_name = resolved.inboxPayload.conversation_name;
+        }
+        if (resolved.inboxPayload.is_group !== undefined && inbox.is_group !== resolved.inboxPayload.is_group) {
+            updates.is_group = resolved.inboxPayload.is_group;
+        }
+        if (Array.isArray(resolved.inboxPayload.members)) {
+            const existingMemberIds = new Set((inbox.members || []).map((m) => String(m.account_id)));
+            const newMembers = resolved.inboxPayload.members.filter(
+                (m) => !existingMemberIds.has(String(m.account_id))
+            );
+            if (newMembers.length > 0) {
+                updates.members = [...(inbox.members || []), ...newMembers];
+            }
+        }
+        if (Object.keys(updates).length > 0) {
+            await updateInboxRepositories(String(inbox._id), { $set: updates });
+            Object.assign(inbox, updates);
+        }
     }
     if (!activeMember(inbox, marketplaceActorId)) {
         throw new ChatServiceError(
@@ -1785,7 +1836,7 @@ async function enrichInboxesWithMemberProfiles(inboxes, actorIds = []) {
                 (m) => !actorIdSet.has(String(m.account_id))
             );
             if (other) {
-                if (!conversationName) {
+                if (!conversationName || (inbox.listing_title && conversationName === inbox.listing_title)) {
                     conversationName = other.name || other.username || 'User';
                 }
                 if (!profileImage) {

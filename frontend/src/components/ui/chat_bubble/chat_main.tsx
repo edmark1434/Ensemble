@@ -10,6 +10,7 @@ interface ChatMainProps {
   recentChats: ChatTarget[];
   onSelectChat: (target: ChatTarget) => void;
   onRemoveChat?: (chatId: string) => void;
+  bottomOffset?: number;
 }
 
 export const ChatMain: React.FC<ChatMainProps> = ({
@@ -17,6 +18,7 @@ export const ChatMain: React.FC<ChatMainProps> = ({
   recentChats,
   onSelectChat,
   onRemoveChat,
+  bottomOffset = 12,
 }) => {
   const [isStackExpanded, setIsStackExpanded] = useState(false);
   const [openIds, setOpenIds] = useState<Set<string>>(() => {
@@ -45,10 +47,13 @@ export const ChatMain: React.FC<ChatMainProps> = ({
       const detail = (event as CustomEvent<any>).detail;
       const convId = typeof detail === "string" ? detail : detail?.conversationId;
       const targetId = typeof detail === "object" ? detail?.targetId : null;
-      if (!convId) return;
+      const windowId = typeof detail === "object" ? detail?.windowId : null;
+      if (!convId && !windowId) return;
 
-      const keys = [String(convId)];
+      const keys: string[] = [];
+      if (convId) keys.push(String(convId));
       if (targetId) keys.push(String(targetId));
+      if (windowId) keys.push(String(windowId));
 
       setDismissedIds((prev) => {
         const next = new Set(prev);
@@ -75,6 +80,7 @@ export const ChatMain: React.FC<ChatMainProps> = ({
       const next = new Set(current);
       next.delete(targetKey);
       next.delete(altKey);
+      if (activeUser.windowId) next.delete(String(activeUser.windowId));
       return next;
     });
     setOpenIds((current) => {
@@ -82,22 +88,30 @@ export const ChatMain: React.FC<ChatMainProps> = ({
       next.add(targetKey);
       if (activeUser.inbox_id) next.add(String(activeUser.inbox_id));
       if (activeUser.id) next.add(String(activeUser.id));
+      if (activeUser.windowId) next.add(String(activeUser.windowId));
       return next;
     });
-  }, [activeUser?.id, activeUser?.inbox_id]);
+  }, [activeUser?.id, activeUser?.inbox_id, activeUser?.windowId]);
 
   const openWindows = useMemo(() => {
     const list = recentChats.filter(
       (chat) =>
         openIds.has(String(chat.id)) ||
-        (chat.inbox_id && openIds.has(String(chat.inbox_id)))
+        (chat.inbox_id && openIds.has(String(chat.inbox_id))) ||
+        (chat.windowId && openIds.has(String(chat.windowId)))
     );
     if (
       activeUser &&
-      (openIds.has(String(activeUser.id)) || (activeUser.inbox_id && openIds.has(String(activeUser.inbox_id))))
+      (openIds.has(String(activeUser.id)) ||
+        (activeUser.inbox_id && openIds.has(String(activeUser.inbox_id))) ||
+        (activeUser.windowId && openIds.has(String(activeUser.windowId))))
     ) {
       const activeKey = String(activeUser.inbox_id || activeUser.id);
-      const exists = list.some((c) => String(c.inbox_id || c.id) === activeKey);
+      const exists = list.some(
+        (c) =>
+          String(c.inbox_id || c.id) === activeKey ||
+          (activeUser.windowId && c.windowId === activeUser.windowId)
+      );
       if (!exists) {
         list.push(activeUser);
       }
@@ -158,18 +172,25 @@ export const ChatMain: React.FC<ChatMainProps> = ({
 
   const closeWindow = (chat: ChatTarget) => {
     const key = String(chat.inbox_id || chat.id);
-    setDismissedIds((current) => new Set(current).add(key));
+    setDismissedIds((current) => {
+      const next = new Set(current).add(key);
+      if (chat.windowId) next.add(String(chat.windowId));
+      return next;
+    });
     setOpenIds((current) => {
       const next = new Set(current);
+      next.delete(key);
       next.delete(String(chat.id));
       if (chat.inbox_id) next.delete(String(chat.inbox_id));
+      if (chat.windowId) next.delete(String(chat.windowId));
       return next;
     });
     onRemoveChat?.(chat.id);
   };
 
   return (
-    <div className="fixed bottom-3 right-3 z-50 flex max-w-[calc(100vw-3rem)] items-end gap-4 overflow-x-auto pt-4 pr-4 pb-2 font-['Plus_Jakarta_Sans',sans-serif] hide-scrollbar">
+    <div className="fixed right-3 z-50 flex max-w-[calc(100vw-3rem)] items-end gap-4 overflow-x-auto pt-4 pr-4 pb-2 font-['Plus_Jakarta_Sans',sans-serif] hide-scrollbar transition-all duration-200"
+      style={{ bottom: `${bottomOffset}px` }}>
       <style>{`
         .hide-scrollbar {
           -ms-overflow-style: none;
@@ -182,9 +203,10 @@ export const ChatMain: React.FC<ChatMainProps> = ({
       <AnimatePresence>
         {openWindows.map((chat) => {
           const conversationId = String(chat.inbox_id || chat.id);
+          const windowKey = String(chat.windowId || conversationId);
           return (
             <motion.div
-              key={conversationId}
+              key={windowKey}
               initial={{ opacity: 0, scale: 0.9, x: 20 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
               exit={{ opacity: 0, scale: 0.9, x: 20 }}
@@ -196,7 +218,10 @@ export const ChatMain: React.FC<ChatMainProps> = ({
                 onClose={() => closeWindow(chat)}
                 activeUser={chat}
                 messages={messagesByConversation[conversationId] || []}
-                isLoading={Boolean(loadingMessages[conversationId])}
+                isLoading={Boolean(
+                  loadingMessages[conversationId] ||
+                    (chat.windowId && loadingMessages[chat.windowId])
+                )}
               />
             </motion.div>
           );
