@@ -52,7 +52,9 @@ export async function POST(request: NextRequest) {
 
       const contentType = getContentType(uniqueFileName);
       const fileId = nanoid();
-      const filePath = buildS3Key(userId, fileId, uniqueFileName); // just the S3 folder prefix, unrelated to the db file_id
+      const filePath = contentType.startsWith("video/")
+        ? `uploads/${userId}/incoming/${fileId}/${uniqueFileName.replace(/[^a-zA-Z0-9.\-_]/g, "_")}`
+        : buildS3Key(userId, fileId, uniqueFileName);
       const presignedUrl = await createPresignedPutUrl(filePath, contentType);
 
       uploads.push({

@@ -8,8 +8,9 @@ import {
   getContentType,
   uploadBufferToS3
 } from "@/lib/s3";
-import { db } from "@/lib/db";
-import { probeAudioVideoDuration, probeImageDimensions, probeVideoMetadata } from "@/utils/media-probe";
+import { createMediaUpload } from "@/lib/db/media-uploads";
+import { prepareVideoUpload, discardVideoUpload } from "@/lib/video-upload";
+import { probeAudioVideoDuration, probeImageDimensions } from "@/utils/media-probe";
 import { resolveUniqueFileName } from "@/utils/resolve-unique-filename";
 import { MAX_FILE_SIZE_BYTES } from "@/constants/upload-limits";
 
@@ -62,8 +63,8 @@ const GENERIC_CONTENT_TYPES = new Set([
 
 function resolveContentType(headerType: string | null, url: string): string {
   const normalized = headerType?.split(";")[0].trim().toLowerCase() ?? "";
-  if (headerType && !GENERIC_CONTENT_TYPES.has(normalized)) return headerType;
-  return getContentType(url);
+  if (headerType && !GENERIC_CONTENT_TYPES.has(normalized)) return normalized;
+  return getContentType(new URL(url).pathname);
 }
 
 export async function POST(request: NextRequest) {
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
 
     // Backwards compatible: plain strings still work, but callers that
     // already know width/height/duration (e.g. the Pexels search results)
-    // can pass them through and skip probing entirely.
+    // can pass them through for images/audio. Videos are always probed after normalization.
     const entries: UrlEntry[] = urls.map((entry) =>
       typeof entry === "string" ? { url: entry } : entry
     );
@@ -121,13 +122,13 @@ export async function POST(request: NextRequest) {
           throw new Error(`Failed to fetch ${sourceUrl}: ${response.status}`);
         }
 
-        const contentType = resolveContentType(response.headers.get("content-type"), sourceUrl);
+        let contentType = resolveContentType(response.headers.get("content-type"), sourceUrl);
         const buffer = await readBufferWithLimit(response, MAX_FILE_SIZE_BYTES);
 
         const fileId = nanoid();
-        const filePath = buildS3Key(userId, fileId, fileName);
-
-        await uploadBufferToS3(filePath, buffer, contentType);
+        let filePath = buildS3Key(userId, fileId, fileName);
+        let fileSize = buffer.byteLength;
+        let preparedVideo;
 
         let resolvedWidth = width ?? null;
         let resolvedHeight = height ?? null;
@@ -141,50 +142,38 @@ export async function POST(request: NextRequest) {
           }
 
         } else if (contentType.startsWith("video/")) {
-          if (resolvedWidth == null || resolvedHeight == null || resolvedDuration == null) {
-            const probed = await probeVideoMetadata(buffer, contentType);
-            resolvedWidth = resolvedWidth ?? probed.width;
-            resolvedHeight = resolvedHeight ?? probed.height;
-            resolvedDuration = resolvedDuration ?? probed.durationSeconds;
-          }
+          preparedVideo = await prepareVideoUpload({ userId, fileName, contentType, buffer });
+          filePath = preparedVideo.filePath;
+          fileName = preparedVideo.fileName;
+          contentType = preparedVideo.contentType;
+          fileSize = preparedVideo.fileSize;
+          resolvedWidth = preparedVideo.width;
+          resolvedHeight = preparedVideo.height;
+          resolvedDuration = preparedVideo.durationSeconds;
 
         } else if (contentType.startsWith("audio/") && resolvedDuration == null) {
           const probedDuration = await probeAudioVideoDuration(buffer, contentType);
           resolvedDuration = probedDuration != null ? Math.round(probedDuration) : null;
         }
 
-        const file = await db
-          .insertInto("files")
-          .values({
-            name: fileName,
-            path: filePath,
-            mime_type: contentType,
-            size_bytes: buffer.byteLength
-          })
-          .returning("file_id")
-          .executeTakeFirstOrThrow();
-
-        const mediaAsset = await db
-          .insertInto("media_assets")
-          .values({
-            owner_user_id: ownerUserId,
-            project_id: resolvedProjectId,
-            name: fileName,
-            original_file_id: file.file_id,
-            proxy_file_id: file.file_id,
-            thumbnail_file_id: file.file_id,
-            type: contentType.split("/")[0],
-            width: resolvedWidth,
-            height: resolvedHeight,
-            duration_seconds: resolvedDuration
-          })
-          .returning("media_asset_id")
-          .executeTakeFirstOrThrow();
+        if (!preparedVideo) await uploadBufferToS3(filePath, buffer, contentType);
+        let mediaAsset;
+        try {
+          mediaAsset = await createMediaUpload({
+            userId: ownerUserId, projectId: resolvedProjectId,
+            fileName, filePath, contentType, fileSize,
+            width: resolvedWidth, height: resolvedHeight, durationSeconds: resolvedDuration
+          });
+        } catch (error) {
+          if (preparedVideo) await discardVideoUpload(preparedVideo.filePath).catch(() => undefined);
+          throw error;
+        }
 
         return {
           fileName,
           filePath,
           contentType,
+          fileSize,
           originalUrl: sourceUrl,
           folder: "uploads",
           url: buildPublicUrl(filePath),

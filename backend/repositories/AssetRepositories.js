@@ -4,14 +4,6 @@ const {
   calculateAssetTransactionFee,
 } = require('../lib/AssetMarketplaceConstants');
 
-const ORIGINAL_FILE_SIZE_LIMITS = {
-  image: 25 * 1024 * 1024,
-  video: 100 * 1024 * 1024,
-  audio: 50 * 1024 * 1024,
-  document: 25 * 1024 * 1024,
-  archive: 100 * 1024 * 1024,
-};
-
 function mediaTypeFromMime(mimeType) {
   if (mimeType?.startsWith('image/')) return 'image';
   if (mimeType?.startsWith('video/')) return 'video';
@@ -21,48 +13,288 @@ function mediaTypeFromMime(mimeType) {
   return null;
 }
 
-async function createSecondaryMediaAssets(
-  client,
-  { marketAssetId, primaryMediaAssetId, originalFileIds, previewFileIds }
-) {
-  if (originalFileIds.length <= 1) return;
+const MAX_SHOWCASE_IMAGES = 6;
+const MAX_CONTENT_FILES = 20;
+const MAX_MARKET_MEDIA_NAME_LENGTH = 50;
+const LINK_TABLES = new Set(['market_media_assets', 'market_asset_thumbnails']);
 
+function formatMarketMediaName(name, suffix = '') {
+  const nameCharacters = Array.from(name || '');
+  const suffixLength = Array.from(suffix).length;
+  const availableNameLength = Math.max(0, MAX_MARKET_MEDIA_NAME_LENGTH - suffixLength);
+  const clippedName = nameCharacters.length > availableNameLength
+    ? nameCharacters.slice(0, availableNameLength).join('').trimEnd()
+    : name;
+  return `${clippedName}${suffix}`;
+}
+
+function repoError(code, extra = {}) {
+  const error = new Error(code);
+  error.code = code;
+  return Object.assign(error, extra);
+}
+
+async function insertFileRow(client, file) {
+  const { rows: [row] } = await client.query(
+    `INSERT INTO files (name, path, mime_type, size_bytes)
+     VALUES ($1, $2, $3, $4)
+     RETURNING file_id`,
+    [file.name, file.path, file.mimeType, file.sizeBytes]
+  );
+  return row.file_id;
+}
+
+// Loads the uploaded files of a create/update request under row locks and validates them.
+// Proxies and thumbnails of the content files are always made by the server, never uploaded.
+async function loadValidatedUploads(client, accountId, content) {
+  const { originalFileIds, thumbnailFileIds } = content;
+  const fileIds = [...originalFileIds, ...thumbnailFileIds];
+  if (fileIds.length === 0) return { originals: [], thumbnails: [] };
+
+  const ownedFiles = await client.query(
+    `SELECT f.file_id, f.name, f.path, f.mime_type, f.size_bytes
+     FROM files f
+     JOIN upload_intents ui ON ui.file_id = f.file_id
+     WHERE f.file_id = ANY($1::uuid[]) AND ui.account_id = $2
+       AND ui.status = 'consumed' AND ui.consumed_at IS NOT NULL
+       AND f.deleted_at IS NULL
+     FOR UPDATE OF f`,
+    [fileIds, accountId]
+  );
+  const filesById = new Map(ownedFiles.rows.map((file) => [String(file.file_id), file]));
+  const originals = originalFileIds.map((fileId) => filesById.get(String(fileId)));
+  const thumbnails = thumbnailFileIds.map((fileId) => filesById.get(String(fileId)));
+  if (originals.some((file) => !file) || thumbnails.some((file) => !file)) {
+    throw repoError('ASSET_FILE_NOT_OWNED');
+  }
+
+  const originalTypes = originals.map((file) => mediaTypeFromMime(file.mime_type));
+  if (originalTypes.some((type) => type !== content.type)
+    || thumbnails.some((file) => !file.mime_type?.startsWith('image/'))) {
+    throw repoError('ASSET_FILE_TYPE_MISMATCH');
+  }
+
+  for (let index = 0; index < originals.length; index += 1) {
+    const sizeBytes = Number(originals[index].size_bytes);
+    if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > content.maxUploadFileBytes) {
+      throw repoError('ASSET_ORIGINAL_FILE_TOO_LARGE');
+    }
+  }
+  const totalShowcaseBytes = thumbnails.reduce((total, file) => total + Number(file.size_bytes), 0);
+  if (thumbnails.some((file) => !Number.isSafeInteger(Number(file.size_bytes))
+    || Number(file.size_bytes) <= 0) || totalShowcaseBytes > content.maxShowcaseTotalBytes) {
+    throw repoError('ASSET_THUMBNAIL_INVALID');
+  }
+  if (originals.some((file) => !file.path.startsWith('asset-originals/'))
+    || thumbnails.some((file) => !file.path.startsWith('assets/'))) {
+    throw repoError('ASSET_FILE_PLACEMENT_INVALID');
+  }
+
+  const alreadyUsed = await client.query(
+    `SELECT 1
+     FROM media_assets m
+     WHERE m.deleted_at IS NULL
+       AND (m.original_file_id = ANY($1::uuid[])
+         OR m.proxy_file_id = ANY($1::uuid[])
+         OR m.thumbnail_file_id = ANY($1::uuid[]))
+     LIMIT 1`,
+    [fileIds]
+  );
+  if (alreadyUsed.rowCount) throw repoError('ASSET_FILE_ALREADY_USED');
+  return { originals, thumbnails };
+}
+
+async function assertYdocSnapshot(client, snapshotId) {
+  const { rowCount } = await client.query(
+    `SELECT 1
+     FROM yjs_snapshots snapshot
+     WHERE snapshot.yjs_snapshot_id = $1::bigint
+       AND NOT EXISTS (
+         SELECT 1 FROM market_ydoc_assets used
+         WHERE used.yjs_snapshot_id = snapshot.yjs_snapshot_id
+       )`,
+    [snapshotId]
+  );
+  if (!rowCount) throw repoError('ASSET_YDOC_INVALID');
+}
+
+async function setMarketYdoc(client, marketAssetId, snapshotId) {
+  await assertYdocSnapshot(client, snapshotId);
   await client.query(
-    `WITH input AS MATERIALIZED (
-       SELECT gen_random_uuid() AS media_asset_id,
-              original.file_id AS original_file_id,
-              preview.file_id AS preview_file_id,
-              original.ordinality::integer AS position
-       FROM unnest($2::uuid[]) WITH ORDINALITY AS original(file_id, ordinality)
-       JOIN unnest($3::uuid[]) WITH ORDINALITY AS preview(file_id, ordinality)
-         ON preview.ordinality = original.ordinality
-     ), inserted_media AS (
-       INSERT INTO media_assets
-         (media_asset_id, name, type, width, height, duration_seconds, is_marketed,
-          owner_user_id, original_file_id, proxy_file_id, thumbnail_file_id, project_id)
-       SELECT input.media_asset_id, primary_media.name, primary_media.type,
-              primary_media.width, primary_media.height, primary_media.duration_seconds,
-              TRUE, primary_media.owner_user_id, input.original_file_id,
-              input.preview_file_id, primary_media.thumbnail_file_id,
-              primary_media.project_id
-       FROM media_assets primary_media
-       CROSS JOIN input
-       WHERE primary_media.media_asset_id = $1
-       RETURNING media_asset_id
-     ), inserted_bundle AS (
-       INSERT INTO media_asset_bundle_files
-         (media_asset_id, file_id, preview_file_id, position)
-       SELECT input.media_asset_id, input.original_file_id,
-              input.preview_file_id, input.position
-       FROM input
-       JOIN inserted_media USING (media_asset_id)
-       RETURNING media_asset_id
-     )
-     INSERT INTO market_media_assets (market_asset_id, media_asset_id)
-     SELECT $4, media_asset_id FROM inserted_bundle`,
-    [primaryMediaAssetId, originalFileIds.slice(1), previewFileIds.slice(1), marketAssetId]
+    `INSERT INTO market_ydoc_assets (market_asset_id, yjs_snapshot_id)
+     VALUES ($1, $2::bigint)
+     ON CONFLICT (market_asset_id)
+     DO UPDATE SET yjs_snapshot_id = EXCLUDED.yjs_snapshot_id`,
+    [marketAssetId, snapshotId]
   );
 }
+
+// Uploaded showcase images get their own media rows; selected content media rows are linked directly.
+async function createThumbnailMediaAssets(client, { marketAssetId, name, ownerUserId, startPosition, thumbnails }) {
+  for (let index = 0; index < thumbnails.length; index += 1) {
+    const file = thumbnails[index];
+    const position = startPosition + index;
+    const { rows: [media] } = await client.query(
+      `INSERT INTO media_assets
+         (name, type, is_marketed, owner_user_id, original_file_id, proxy_file_id, thumbnail_file_id)
+       VALUES ($1, 'image', TRUE, $2, $3, $3, $3)
+       RETURNING media_asset_id`,
+      [formatMarketMediaName(name, ` - Thumbnail ${position + 1}`), ownerUserId, file.file_id]
+    );
+    await client.query(
+      `INSERT INTO market_asset_thumbnails (market_asset_id, media_asset_id, position)
+       VALUES ($1, $2, $3)`,
+      [marketAssetId, media.media_asset_id, position]
+    );
+  }
+}
+
+async function linkShowcaseMediaAssets(client, marketAssetId, mediaAssetIds, startPosition = 0) {
+  for (let index = 0; index < mediaAssetIds.length; index += 1) {
+    await client.query(
+      `INSERT INTO market_asset_thumbnails (market_asset_id, media_asset_id, position)
+       VALUES ($1, $2, $3) ON CONFLICT (market_asset_id, media_asset_id)
+       DO UPDATE SET position = EXCLUDED.position`,
+      [marketAssetId, mediaAssetIds[index], startPosition + index]
+    );
+  }
+}
+
+// One media asset per content file; only bundled files get a numbered suffix.
+// All previews are generated by the durable worker after the listing is saved.
+async function createContentMediaAssets(client, {
+  marketAssetId, name, ownerUserId, type, startPosition,
+  originals, derivatives, coverFileId, publishStatus = null,
+}) {
+  for (let index = 0; index < originals.length; index += 1) {
+    const original = originals[index];
+    let proxyFileId = null;
+    let thumbnailFileId = type === 'audio' ? null : coverFileId;
+    let width = null;
+    let height = null;
+    const derivative = type === 'image' && derivatives.get(String(original.file_id));
+    if (derivative) {
+      thumbnailFileId = await insertFileRow(client, derivative.thumbnail);
+      proxyFileId = await insertFileRow(client, derivative.proxy);
+      width = derivative.width;
+      height = derivative.height;
+    }
+    const position = startPosition + index;
+    const suffix = startPosition + originals.length > 1 ? ` - ${position + 1}` : '';
+    const mediaName = formatMarketMediaName(name, suffix);
+    const { rows: [media] } = await client.query(
+      `INSERT INTO media_assets
+         (name, type, width, height, is_marketed, owner_user_id,
+          original_file_id, proxy_file_id, thumbnail_file_id)
+       VALUES ($1, $2, $3, $4, TRUE, $5, $6, $7, $8)
+       RETURNING media_asset_id`,
+      [mediaName, type, width, height,
+        ownerUserId, original.file_id, proxyFileId, thumbnailFileId]
+    );
+    await client.query(
+      `INSERT INTO market_media_assets (market_asset_id, media_asset_id, position)
+       VALUES ($1, $2, $3)`,
+      [marketAssetId, media.media_asset_id, position]
+    );
+    if (!derivative) {
+      await client.query(
+        `INSERT INTO media_asset_jobs (media_asset_id, market_asset_id, kind, publish_status)
+         VALUES ($1, $2, $3, $4)`,
+        [media.media_asset_id, marketAssetId, type, publishStatus]
+      );
+    }
+  }
+}
+
+async function readCoverFileId(client, marketAssetId) {
+  const { rows: [row] } = await client.query(
+    `SELECT m.thumbnail_file_id
+     FROM market_asset_thumbnails link
+     JOIN media_assets m ON m.media_asset_id = link.media_asset_id
+     WHERE link.market_asset_id = $1 AND m.deleted_at IS NULL
+     ORDER BY link.position, m.media_asset_id
+     LIMIT 1`,
+    [marketAssetId]
+  );
+  return row?.thumbnail_file_id || null;
+}
+
+async function retireMediaAssets(client, mediaAssetIds) {
+  if (mediaAssetIds.length === 0) return;
+  await client.query(
+    `UPDATE media_assets
+     SET is_marketed = FALSE, deleted_at = CURRENT_TIMESTAMP
+     WHERE media_asset_id = ANY($1::uuid[])`,
+    [mediaAssetIds]
+  );
+}
+
+async function retireUnlinkedMediaAssets(client, mediaAssetIds) {
+  if (mediaAssetIds.length === 0) return;
+  await client.query(
+    `UPDATE media_assets media
+     SET is_marketed = FALSE, deleted_at = CURRENT_TIMESTAMP
+     WHERE media.media_asset_id = ANY($1::uuid[])
+       AND NOT EXISTS (
+         SELECT 1 FROM market_media_assets content_link
+         WHERE content_link.media_asset_id = media.media_asset_id
+       )`,
+    [mediaAssetIds]
+  );
+}
+
+async function repositionLinks(client, table, marketAssetId, orderedMediaAssetIds) {
+  if (!LINK_TABLES.has(table)) throw new Error('Unsupported link table');
+  if (orderedMediaAssetIds.length === 0) return;
+  await client.query(
+    `UPDATE ${table} link
+     SET position = ordered.ordinality::integer - 1
+     FROM unnest($2::uuid[]) WITH ORDINALITY AS ordered(media_asset_id, ordinality)
+     WHERE link.market_asset_id = $1 AND link.media_asset_id = ordered.media_asset_id`,
+    [marketAssetId, orderedMediaAssetIds]
+  );
+}
+
+async function resolveShowcaseOrder(client, marketAssetId, showcaseOrder) {
+  if (showcaseOrder.length === 0) return [];
+  const { rows } = await client.query(
+    `SELECT link.media_asset_id, media.original_file_id, 'content' AS source
+     FROM market_media_assets link
+     JOIN media_assets media ON media.media_asset_id = link.media_asset_id
+     WHERE link.market_asset_id = $1 AND media.deleted_at IS NULL
+     UNION ALL
+     SELECT link.media_asset_id, media.original_file_id, 'showcase' AS source
+     FROM market_asset_thumbnails link
+     JOIN media_assets media ON media.media_asset_id = link.media_asset_id
+     WHERE link.market_asset_id = $1 AND media.deleted_at IS NULL`,
+    [marketAssetId]
+  );
+  const contentByFileId = new Map();
+  const showcaseByFileId = new Map();
+  const showcaseByMediaId = new Map();
+  for (const row of rows) {
+    const mediaId = String(row.media_asset_id);
+    if (row.source === 'content') contentByFileId.set(String(row.original_file_id), mediaId);
+    else {
+      showcaseByFileId.set(String(row.original_file_id), mediaId);
+      showcaseByMediaId.set(mediaId, mediaId);
+    }
+  }
+  const resolved = showcaseOrder.map((entry) => {
+    const separator = entry.indexOf(':');
+    const kind = entry.slice(0, separator);
+    const id = entry.slice(separator + 1);
+    if (kind === 'assetFile') return contentByFileId.get(id);
+    if (kind === 'upload') return showcaseByFileId.get(id);
+    if (kind === 'retained' || kind === 'media') return showcaseByMediaId.get(id);
+    return undefined;
+  });
+  if (resolved.some((mediaId) => !mediaId) || new Set(resolved).size !== resolved.length) {
+    throw repoError('ASSET_THUMBNAIL_INVALID');
+  }
+  return resolved;
+}
+
 function normalizeAssetPostingEligibility(row) {
   const used = Number(row?.posted_count || 0);
   const rawValue = typeof row?.feature_value === 'string' ? row.feature_value.trim() : '';
@@ -120,14 +352,23 @@ async function readAssetPostingEligibility(db, accountId, { lock = false, exclud
      ), usage AS (
        SELECT COUNT(DISTINCT ma.market_asset_id)::int AS posted_count
        FROM market_assets ma
-       JOIN market_media_assets mma ON mma.market_asset_id = ma.market_asset_id
-       JOIN media_assets media ON media.media_asset_id = mma.media_asset_id
-       JOIN users owner_user ON owner_user.user_id = media.owner_user_id
+       JOIN LATERAL (
+         SELECT media.owner_user_id
+         FROM market_media_assets link
+         JOIN media_assets media ON media.media_asset_id = link.media_asset_id
+         WHERE link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
+         UNION ALL
+         SELECT media.owner_user_id
+         FROM market_asset_thumbnails link
+         JOIN media_assets media ON media.media_asset_id = link.media_asset_id
+         WHERE link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
+         LIMIT 1
+       ) listing_owner ON TRUE
+       JOIN users owner_user ON owner_user.user_id = listing_owner.owner_user_id
        WHERE owner_user.account_id = $1
          AND ma.status = 'published'
          AND ($2::uuid IS NULL OR ma.market_asset_id <> $2::uuid)
          AND ma.deleted_at IS NULL
-         AND media.deleted_at IS NULL
      )
      SELECT identity.user_id, identity.is_verified,
             entitlement.value AS feature_value, usage.posted_count
@@ -152,8 +393,8 @@ const ASSET_SELECT = `
          media.duration_seconds, media.proxy_path,
          media.thumbnail_path, media.mime_type, media.size_bytes,
          media.thumbnails, media.thumbnail_count,
-         media.bundle_files, media.bundle_file_count,
-         media.project_links, media.project_link_count,
+         media.media_assets, media.media_asset_count,
+         media.has_ydoc, media.processing_status,
          owner.display_name AS creator_name, owner.handle AS creator_handle, owner_avatar.path AS creator_avatar_path,
          owner.account_id AS owner_account_id,
          (owner.account_id = $1) AS is_owner,
@@ -225,113 +466,119 @@ const ASSET_SELECT = `
             AND uma.deleted_at IS NULL) AS purchase_count
   FROM market_assets ma
   JOIN LATERAL (
-    SELECT m.media_asset_id, m.type, m.width, m.height, m.duration_seconds,
-           COALESCE(primary_content.preview_path, thumbnail.path) AS proxy_path,
-           thumbnail.path AS thumbnail_path,
-           primary_content.mime_type, primary_content.size_bytes,
+    SELECT content.media_asset_id,
+           COALESCE(content.type, 'template') AS type,
+           content.width, content.height, content.duration_seconds,
+           COALESCE(content.proxy_path, cover.thumbnail_path) AS proxy_path,
+           COALESCE(cover.thumbnail_path, content.thumbnail_path) AS thumbnail_path,
+           content.mime_type, content.size_bytes,
            COALESCE((
              SELECT json_agg(json_build_object(
-               'media_asset_thumbnail_id', asset_thumbnail.media_asset_thumbnail_id,
+               'media_asset_id', thumbnail_media.media_asset_id,
                'path', thumbnail_file.path,
-               'position', asset_thumbnail.position
-             ) ORDER BY asset_thumbnail.position, asset_thumbnail.media_asset_thumbnail_id)
-             FROM market_media_assets thumbnail_media
-             JOIN media_asset_thumbnails asset_thumbnail
-               ON asset_thumbnail.media_asset_id = thumbnail_media.media_asset_id
-             JOIN files thumbnail_file ON thumbnail_file.file_id = asset_thumbnail.file_id
-             WHERE thumbnail_media.market_asset_id = ma.market_asset_id
-               AND asset_thumbnail.deleted_at IS NULL
+               'position', thumbnail_link.position
+             ) ORDER BY thumbnail_link.position, thumbnail_media.media_asset_id)
+             FROM market_asset_thumbnails thumbnail_link
+             JOIN media_assets thumbnail_media
+               ON thumbnail_media.media_asset_id = thumbnail_link.media_asset_id
+             JOIN files thumbnail_file ON thumbnail_file.file_id = thumbnail_media.thumbnail_file_id
+             WHERE thumbnail_link.market_asset_id = ma.market_asset_id
+               AND thumbnail_media.deleted_at IS NULL
                AND thumbnail_file.deleted_at IS NULL
+               AND (NOT EXISTS (
+                 SELECT 1 FROM market_media_assets any_content
+                 WHERE any_content.market_asset_id = ma.market_asset_id
+               ) OR (SELECT COUNT(*) FROM market_media_assets bundle_content
+                     WHERE bundle_content.market_asset_id = ma.market_asset_id) > 1)
            ), '[]'::json) AS thumbnails,
            (SELECT COUNT(*)::int
-            FROM market_media_assets thumbnail_count_media
-            JOIN media_asset_thumbnails thumbnail_count
-              ON thumbnail_count.media_asset_id = thumbnail_count_media.media_asset_id
-            JOIN files counted_thumbnail ON counted_thumbnail.file_id = thumbnail_count.file_id
-            WHERE thumbnail_count_media.market_asset_id = ma.market_asset_id
-              AND thumbnail_count.deleted_at IS NULL
-              AND counted_thumbnail.deleted_at IS NULL) AS thumbnail_count,
+            FROM market_asset_thumbnails thumbnail_count_link
+            JOIN media_assets thumbnail_count_media
+              ON thumbnail_count_media.media_asset_id = thumbnail_count_link.media_asset_id
+            WHERE thumbnail_count_link.market_asset_id = ma.market_asset_id
+              AND thumbnail_count_media.deleted_at IS NULL
+              AND (NOT EXISTS (
+                SELECT 1 FROM market_media_assets any_content
+                WHERE any_content.market_asset_id = ma.market_asset_id
+              ) OR (SELECT COUNT(*) FROM market_media_assets bundle_content
+                    WHERE bundle_content.market_asset_id = ma.market_asset_id) > 1)) AS thumbnail_count,
            COALESCE((
              SELECT json_agg(json_build_object(
-               'media_asset_bundle_file_id', bundle.media_asset_bundle_file_id,
-               'name', bundle_file.name,
-               'mime_type', bundle_file.mime_type,
-               'size_bytes', bundle_file.size_bytes,
-               'preview_path', bundle_preview.path,
-               'preview_mime_type', bundle_preview.mime_type,
-               'position', bundle.position
-             ) ORDER BY bundle.position, bundle.media_asset_bundle_file_id)
-             FROM market_media_assets bundle_media
-             JOIN media_asset_bundle_files bundle
-               ON bundle.media_asset_id = bundle_media.media_asset_id
-             JOIN files bundle_file ON bundle_file.file_id = bundle.file_id
-             JOIN files bundle_preview ON bundle_preview.file_id = bundle.preview_file_id
-             WHERE bundle_media.market_asset_id = ma.market_asset_id
-               AND bundle.deleted_at IS NULL
-               AND bundle_file.deleted_at IS NULL
-               AND bundle_preview.deleted_at IS NULL
-           ), '[]'::json) AS bundle_files,
+               'media_asset_id', item.media_asset_id,
+               'name', item.name,
+               'type', item.type,
+               'mime_type', item_original.mime_type,
+               'size_bytes', item_original.size_bytes,
+               'width', item.width,
+               'height', item.height,
+               'duration_seconds', item.duration_seconds,
+               'proxy_path', item_proxy.path,
+               'thumbnail_path', item_thumbnail.path,
+               'processing_status', CASE WHEN item_job.status = 'failed' THEN 'failed'
+                                         WHEN item_job.status IN ('pending', 'running') THEN 'processing'
+                                         ELSE 'ready' END,
+               'position', item_link.position
+             ) ORDER BY item_link.position, item.media_asset_id)
+             FROM market_media_assets item_link
+             JOIN media_assets item ON item.media_asset_id = item_link.media_asset_id
+             JOIN files item_original ON item_original.file_id = item.original_file_id
+             LEFT JOIN files item_proxy ON item_proxy.file_id = item.proxy_file_id
+               AND item_proxy.deleted_at IS NULL
+             LEFT JOIN files item_thumbnail ON item_thumbnail.file_id = item.thumbnail_file_id
+               AND item_thumbnail.deleted_at IS NULL
+             LEFT JOIN media_asset_jobs item_job ON item_job.media_asset_id = item.media_asset_id
+             WHERE item_link.market_asset_id = ma.market_asset_id
+               AND item.deleted_at IS NULL
+               AND item_original.deleted_at IS NULL
+           ), '[]'::json) AS media_assets,
            (SELECT COUNT(*)::int
-            FROM market_media_assets bundle_count_media
-            JOIN media_asset_bundle_files bundle_count
-              ON bundle_count.media_asset_id = bundle_count_media.media_asset_id
-            JOIN files counted_file ON counted_file.file_id = bundle_count.file_id
-            JOIN files counted_preview ON counted_preview.file_id = bundle_count.preview_file_id
-            WHERE bundle_count_media.market_asset_id = ma.market_asset_id
-              AND bundle_count.deleted_at IS NULL
-              AND counted_file.deleted_at IS NULL
-              AND counted_preview.deleted_at IS NULL) AS bundle_file_count,
-           COALESCE((
-             SELECT json_agg(json_build_object(
-               'media_asset_project_link_id', project_link.media_asset_project_link_id,
-               'label', project_link.label,
-               'provider', project_link.provider,
-               'position', project_link.position
-             ) ORDER BY project_link.position, project_link.media_asset_project_link_id)
-             FROM market_media_assets project_link_media
-             JOIN media_asset_project_links project_link
-               ON project_link.media_asset_id = project_link_media.media_asset_id
-             WHERE project_link_media.market_asset_id = ma.market_asset_id
-               AND project_link.deleted_at IS NULL
-           ), '[]'::json) AS project_links,
-           (SELECT COUNT(*)::int
-            FROM market_media_assets project_link_count_media
-            JOIN media_asset_project_links project_link_count
-              ON project_link_count.media_asset_id = project_link_count_media.media_asset_id
-            WHERE project_link_count_media.market_asset_id = ma.market_asset_id
-              AND project_link_count.deleted_at IS NULL) AS project_link_count,
-           m.owner_user_id
-    FROM market_media_assets mma
-    JOIN media_assets m ON m.media_asset_id = mma.media_asset_id
-    JOIN files thumbnail ON thumbnail.file_id = m.thumbnail_file_id
+            FROM market_media_assets item_count_link
+            JOIN media_assets item_count ON item_count.media_asset_id = item_count_link.media_asset_id
+            WHERE item_count_link.market_asset_id = ma.market_asset_id
+              AND item_count.deleted_at IS NULL) AS media_asset_count,
+           EXISTS (
+             SELECT 1 FROM market_ydoc_assets ydoc
+             WHERE ydoc.market_asset_id = ma.market_asset_id
+           ) AS has_ydoc,
+           (SELECT CASE WHEN bool_or(job.status = 'failed') THEN 'failed'
+                        WHEN bool_or(job.status IN ('pending', 'running')) THEN 'processing'
+                        ELSE 'ready' END
+            FROM market_media_assets job_link
+            JOIN media_asset_jobs job ON job.media_asset_id = job_link.media_asset_id
+            WHERE job_link.market_asset_id = ma.market_asset_id) AS processing_status,
+           COALESCE(content.owner_user_id, cover.owner_user_id) AS owner_user_id
+    FROM (SELECT 1) anchor
     LEFT JOIN LATERAL (
-      SELECT original.mime_type, original.size_bytes, preview.path AS preview_path
-      FROM media_asset_bundle_files primary_bundle
-      JOIN files original ON original.file_id = primary_bundle.file_id
-      JOIN files preview ON preview.file_id = primary_bundle.preview_file_id
-      WHERE primary_bundle.media_asset_id = m.media_asset_id
-        AND primary_bundle.deleted_at IS NULL
-        AND original.deleted_at IS NULL
-        AND preview.deleted_at IS NULL
-      ORDER BY primary_bundle.position, primary_bundle.media_asset_bundle_file_id
+      SELECT cover_media.owner_user_id, cover_file.path AS thumbnail_path
+      FROM market_asset_thumbnails cover_link
+      JOIN media_assets cover_media ON cover_media.media_asset_id = cover_link.media_asset_id
+      JOIN files cover_file ON cover_file.file_id = cover_media.thumbnail_file_id
+      WHERE cover_link.market_asset_id = ma.market_asset_id
+        AND cover_media.deleted_at IS NULL
+        AND cover_file.deleted_at IS NULL
+        AND (NOT EXISTS (
+          SELECT 1 FROM market_media_assets any_content
+          WHERE any_content.market_asset_id = ma.market_asset_id
+        ) OR (SELECT COUNT(*) FROM market_media_assets bundle_content
+              WHERE bundle_content.market_asset_id = ma.market_asset_id) > 1)
+      ORDER BY cover_link.position, cover_media.media_asset_id
       LIMIT 1
-    ) primary_content ON TRUE
-    WHERE mma.market_asset_id = ma.market_asset_id
-      AND m.deleted_at IS NULL
-      AND thumbnail.deleted_at IS NULL
-    ORDER BY
-      CASE WHEN EXISTS (
-        SELECT 1 FROM media_asset_bundle_files primary_bundle_marker
-        WHERE primary_bundle_marker.media_asset_id = m.media_asset_id
-          AND primary_bundle_marker.deleted_at IS NULL
-      ) THEN 0 ELSE 1 END,
-      CASE WHEN EXISTS (
-        SELECT 1 FROM media_asset_thumbnails primary_thumbnail_marker
-        WHERE primary_thumbnail_marker.media_asset_id = m.media_asset_id
-          AND primary_thumbnail_marker.deleted_at IS NULL
-      ) THEN 0 ELSE 1 END,
-      m.created_at, m.media_asset_id
-    LIMIT 1
+    ) cover ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT m.media_asset_id, m.type, m.width, m.height, m.duration_seconds,
+             proxy.path AS proxy_path, poster.path AS thumbnail_path,
+             original.mime_type, original.size_bytes, m.owner_user_id
+      FROM market_media_assets content_link
+      JOIN media_assets m ON m.media_asset_id = content_link.media_asset_id
+      JOIN files original ON original.file_id = m.original_file_id
+      LEFT JOIN files proxy ON proxy.file_id = m.proxy_file_id AND proxy.deleted_at IS NULL
+      LEFT JOIN files poster ON poster.file_id = m.thumbnail_file_id AND poster.deleted_at IS NULL
+      WHERE content_link.market_asset_id = ma.market_asset_id
+        AND m.deleted_at IS NULL
+        AND original.deleted_at IS NULL
+      ORDER BY content_link.position, m.media_asset_id
+      LIMIT 1
+    ) content ON TRUE
   ) media ON TRUE
   JOIN users owner_user ON owner_user.user_id = media.owner_user_id
   JOIN accounts owner ON owner.account_id = owner_user.account_id
@@ -467,188 +714,89 @@ async function getAssetRepository(assetId, accountId) {
   return rows[0] || null;
 }
 
-async function createAssetRepository(accountId, data) {
+async function createAssetRepository(accountId, data, derivatives = new Map()) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const eligibility = await readAssetPostingEligibility(client, accountId, { lock: true });
     if (!eligibility.allowed) {
-      const error = new Error(eligibility.code);
-      error.code = eligibility.code;
-      error.eligibility = eligibility;
-      throw error;
+      throw repoError(eligibility.code, { eligibility });
     }
-
-    const fileIds = [...data.originalFileIds, ...data.previewFileIds, ...data.thumbnailFileIds];
-    const ownedFiles = await client.query(
-      `SELECT f.file_id, f.name, f.path, f.mime_type, f.size_bytes, u.user_id
-       FROM files f
-       JOIN upload_intents ui ON ui.file_id = f.file_id
-       JOIN users u ON u.account_id = $2
-       WHERE f.file_id = ANY($1::uuid[]) AND ui.account_id = $2
-         AND ui.status = 'consumed' AND ui.consumed_at IS NOT NULL
-         AND f.deleted_at IS NULL
-       FOR UPDATE OF f`,
-      [fileIds, accountId]
+    const { rows: [ownerUser] } = await client.query(
+      'SELECT user_id FROM users WHERE account_id = $1 LIMIT 1',
+      [accountId]
     );
-    const filesById = new Map(ownedFiles.rows.map((file) => [String(file.file_id), file]));
-    const originals = data.originalFileIds.map((fileId) => filesById.get(fileId));
-    const previews = data.previewFileIds.map((fileId) => filesById.get(fileId));
-    const thumbnails = data.thumbnailFileIds.map((fileId) => filesById.get(fileId));
-    if (originals.some((file) => !file) || previews.some((file) => !file)
-      || thumbnails.some((file) => !file)) {
-      const error = new Error('ASSET_FILE_NOT_OWNED');
-      error.code = 'ASSET_FILE_NOT_OWNED';
-      throw error;
-    }
+    if (!ownerUser) throw repoError('ASSET_POSTING_UNAVAILABLE');
 
-    const originalTypes = originals.map((file) => mediaTypeFromMime(file.mime_type));
-    const hasInvalidOriginalType = originalTypes.some((type) => !type);
-    const primaryTypeMismatch = data.type !== 'template'
-      && originalTypes[0] !== data.type;
-    if (hasInvalidOriginalType || primaryTypeMismatch
-      || previews.some((file) => !file.mime_type?.startsWith('image/'))
-      || thumbnails.some((file) => !file.mime_type?.startsWith('image/'))) {
-      const error = new Error('ASSET_FILE_TYPE_MISMATCH');
-      error.code = 'ASSET_FILE_TYPE_MISMATCH';
-      throw error;
-    }
+    const { originals, thumbnails } = await loadValidatedUploads(client, accountId, data);
 
-    let aggregateOriginalBytes = 0;
-    for (let index = 0; index < originals.length; index += 1) {
-      const sizeBytes = Number(originals[index].size_bytes);
-      const limit = ORIGINAL_FILE_SIZE_LIMITS[originalTypes[index]];
-      if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > limit) {
-        const error = new Error('ASSET_ORIGINAL_FILE_TOO_LARGE');
-        error.code = 'ASSET_ORIGINAL_FILE_TOO_LARGE';
-        throw error;
-      }
-      aggregateOriginalBytes += sizeBytes;
-    }
-    if (previews.some((file) => !Number.isSafeInteger(Number(file.size_bytes))
-      || Number(file.size_bytes) <= 0
-      || Number(file.size_bytes) > 5 * 1024 * 1024)) {
-      const error = new Error('ASSET_PREVIEW_INVALID');
-      error.code = 'ASSET_PREVIEW_INVALID';
-      throw error;
-    }
-    if (!Number.isSafeInteger(aggregateOriginalBytes)
-      || aggregateOriginalBytes > data.maxBundleBytes) {
-      const error = new Error('ASSET_BUNDLE_TOO_LARGE');
-      error.code = 'ASSET_BUNDLE_TOO_LARGE';
-      throw error;
-    }
-    if (thumbnails.some((file) => !Number.isSafeInteger(Number(file.size_bytes))
-      || Number(file.size_bytes) <= 0
-      || Number(file.size_bytes) > 5 * 1024 * 1024)) {
-      const error = new Error('ASSET_THUMBNAIL_INVALID');
-      error.code = 'ASSET_THUMBNAIL_INVALID';
-      throw error;
-    }
-    if (originals.some((file) => !file.path.startsWith('asset-originals/'))
-      || previews.some((file) => !file.path.startsWith('assets/'))
-      || thumbnails.some((file) => !file.path.startsWith('assets/'))) {
-      const error = new Error('ASSET_FILE_PLACEMENT_INVALID');
-      error.code = 'ASSET_FILE_PLACEMENT_INVALID';
-      throw error;
-    }
-
-    const alreadyUsed = await client.query(
-      `SELECT 1
-       FROM (
-         SELECT m.media_asset_id
-         FROM media_assets m
-         WHERE m.deleted_at IS NULL
-           AND m.thumbnail_file_id = ANY($1::uuid[])
-         UNION ALL
-         SELECT asset_thumbnail.media_asset_id
-         FROM media_asset_thumbnails asset_thumbnail
-         JOIN media_assets m ON m.media_asset_id = asset_thumbnail.media_asset_id
-         WHERE m.deleted_at IS NULL
-           AND asset_thumbnail.deleted_at IS NULL
-           AND asset_thumbnail.file_id = ANY($1::uuid[])
-         UNION ALL
-         SELECT bundle.media_asset_id
-         FROM media_asset_bundle_files bundle
-         JOIN media_assets m ON m.media_asset_id = bundle.media_asset_id
-         WHERE m.deleted_at IS NULL
-           AND bundle.deleted_at IS NULL
-           AND (bundle.file_id = ANY($1::uuid[])
-             OR bundle.preview_file_id = ANY($1::uuid[]))
-       ) used_files
-       LIMIT 1`,
-      [fileIds]
-    );
-    if (alreadyUsed.rowCount) {
-      const error = new Error('ASSET_FILE_ALREADY_USED');
-      error.code = 'ASSET_FILE_ALREADY_USED';
-      throw error;
-    }
-
-    const primaryThumbnail = thumbnails[0];
-    const primaryOriginalFileId = data.originalFileIds[0] || data.thumbnailFileId;
-    const media = await client.query(
-      `INSERT INTO media_assets
-         (name, type, width, height, duration_seconds, is_marketed, owner_user_id,
-          proxy_file_id, thumbnail_file_id, original_file_id)
-       VALUES ($1, $2, $3, $4, $5, TRUE, $6, $7, $8, $9)
-       RETURNING media_asset_id`,
-      [data.name, data.type, data.width, data.height, data.durationSeconds,
-        primaryThumbnail.user_id, data.previewFileIds[0] || data.thumbnailFileId,
-        data.thumbnailFileId, primaryOriginalFileId]
-    );
-
-    if (data.originalFileIds.length > 0) {
-      await client.query(
-        `INSERT INTO media_asset_bundle_files
-           (media_asset_id, file_id, preview_file_id, position)
-         VALUES ($1, $2, $3, 0)`,
-        [media.rows[0].media_asset_id, data.originalFileIds[0], data.previewFileIds[0]]
-      );
-    }
-
-    await client.query(
-      `INSERT INTO media_asset_thumbnails (media_asset_id, file_id, position)
-       SELECT $1, thumbnail.file_id, thumbnail.ordinality - 1
-       FROM unnest($2::uuid[]) WITH ORDINALITY AS thumbnail(file_id, ordinality)`,
-      [media.rows[0].media_asset_id, data.thumbnailFileIds]
-    );
-
-    if (data.projectLinks.length > 0) {
-      await client.query(
-        `INSERT INTO media_asset_project_links
-           (media_asset_id, label, provider, url, position)
-         SELECT $1, link.label, link.provider, link.url, link.ordinality - 1
-         FROM unnest($2::text[], $3::text[], $4::text[])
-           WITH ORDINALITY AS link(label, provider, url, ordinality)`,
-        [
-          media.rows[0].media_asset_id,
-          data.projectLinks.map((link) => link.label),
-          data.projectLinks.map((link) => link.provider),
-          data.projectLinks.map((link) => link.url),
-        ]
-      );
-    }
-
+    const needsProcessing = data.type !== 'template'
+      && originals.some((original) => !derivatives.has(String(original.file_id)));
     const market = await client.query(
       `INSERT INTO market_assets
          (name, description, price_credits, status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING market_asset_id`,
-      [data.name, data.description, data.priceCredits, data.status]
+      [data.name, data.description, data.priceCredits, needsProcessing ? 'draft' : data.status]
     );
-    await client.query(
-      `INSERT INTO market_media_assets (market_asset_id, media_asset_id)
-       VALUES ($1, $2)`,
-      [market.rows[0].market_asset_id, media.rows[0].media_asset_id]
-    );
-    await createSecondaryMediaAssets(client, {
-      marketAssetId: market.rows[0].market_asset_id,
-      primaryMediaAssetId: media.rows[0].media_asset_id,
-      originalFileIds: data.originalFileIds,
-      previewFileIds: data.previewFileIds,
-    });
-    await syncAssetTags(client, market.rows[0].market_asset_id, data.tags);
+    const marketAssetId = market.rows[0].market_asset_id;
+
+    if (data.type === 'template') {
+      if (thumbnails.length < 1 || thumbnails.length > MAX_SHOWCASE_IMAGES) {
+        throw repoError('ASSET_THUMBNAIL_INVALID');
+      }
+      await createThumbnailMediaAssets(client, {
+        marketAssetId, name: data.name, ownerUserId: ownerUser.user_id,
+        startPosition: 0, thumbnails,
+      });
+      const orderedShowcaseIds = await resolveShowcaseOrder(client, marketAssetId, data.showcaseOrder);
+      await repositionLinks(client, 'market_asset_thumbnails', marketAssetId, orderedShowcaseIds);
+      await setMarketYdoc(client, marketAssetId, data.ydocSnapshotId);
+    } else {
+      if (originals.length < 1 || originals.length > MAX_CONTENT_FILES) {
+        throw repoError('ASSET_CONTENT_REQUIRED');
+      }
+      const showcaseCount = thumbnails.length + data.showcaseOriginalFileIds.length;
+      const showcaseLimit = data.type === 'audio' ? 3 : MAX_SHOWCASE_IMAGES;
+      const totalShowcaseBytes = thumbnails.reduce((total, file) => total + Number(file.size_bytes), 0);
+      if ((originals.length === 1 && showcaseCount > 0) || showcaseCount > showcaseLimit
+        || totalShowcaseBytes > data.maxShowcaseTotalBytes) {
+        throw repoError('ASSET_THUMBNAIL_INVALID');
+      }
+      await createThumbnailMediaAssets(client, {
+        marketAssetId, name: data.name, ownerUserId: ownerUser.user_id,
+        startPosition: 0, thumbnails,
+      });
+      await createContentMediaAssets(client, {
+        marketAssetId,
+        name: data.name,
+        ownerUserId: ownerUser.user_id,
+        type: data.type,
+        startPosition: 0,
+        originals,
+        derivatives,
+        coverFileId: thumbnails[0]?.file_id || null,
+        publishStatus: needsProcessing ? data.status : null,
+      });
+      const selectedContentMedia = await client.query(
+        `SELECT link.media_asset_id, media.original_file_id
+         FROM market_media_assets link
+         JOIN media_assets media ON media.media_asset_id = link.media_asset_id
+         WHERE link.market_asset_id = $1
+           AND media.original_file_id = ANY($2::uuid[])
+           AND media.type = $3
+         ORDER BY link.position, media.media_asset_id`,
+        [marketAssetId, data.showcaseOriginalFileIds, data.type]
+      );
+      if (selectedContentMedia.rowCount !== data.showcaseOriginalFileIds.length) {
+        throw repoError('ASSET_THUMBNAIL_INVALID');
+      }
+      await linkShowcaseMediaAssets(client, marketAssetId,
+        selectedContentMedia.rows.map((row) => row.media_asset_id), thumbnails.length);
+      const orderedShowcaseIds = await resolveShowcaseOrder(client, marketAssetId, data.showcaseOrder);
+      await repositionLinks(client, 'market_asset_thumbnails', marketAssetId, orderedShowcaseIds);
+    }
+    await syncAssetTags(client, marketAssetId, data.tags);
 
     const { getMarketplaceListingFeeCredits } = require('../lib/PlatformFeeSettings');
     const listingFeeCredits = await getMarketplaceListingFeeCredits();
@@ -688,9 +836,9 @@ async function createAssetRepository(accountId, data) {
         );
         await client.query(
           `INSERT INTO credit_transactions (
-             amount, type, source_wallet_id, destination_wallet_id,
-             reference_table, reference_id, description, status, created_at, updated_at
-           ) VALUES ($1, 'Fee', $2, $3, 'market_assets', $4, 'Marketplace asset listing fee', 'completed', NOW(), NOW())`,
+             type, amount_credits, status, source_wallet_id, destination_wallet_id,
+             reference_table, reference_id
+           ) VALUES ('Fee', $1, 'completed', $2, $3, 'market_assets', $4)`,
           [listingFeeCredits, creatorWallet.wallet_id, platformWallet.wallet_id, market.rows[0].market_asset_id]
         );
       }
@@ -706,9 +854,9 @@ async function createAssetRepository(accountId, data) {
   }
 }
 
-async function getAssetDownloadRepository(assetId, accountId, bundleFileId = null) {
+async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = null) {
   const { rows } = await pool.query(
-    `SELECT bundle.media_asset_bundle_file_id, bundle.position,
+    `SELECT media.media_asset_id, link.position,
             original.path, original.name, original.mime_type, original.size_bytes,
             (owner.account_id = $2) AS is_owner,
             EXISTS (
@@ -721,52 +869,18 @@ async function getAssetDownloadRepository(assetId, accountId, bundleFileId = nul
                 AND owned_asset.deleted_at IS NULL
             ) AS is_purchased
      FROM market_assets ma
-     JOIN market_media_assets mma ON mma.market_asset_id = ma.market_asset_id
-     JOIN media_assets media ON media.media_asset_id = mma.media_asset_id
-     JOIN media_asset_bundle_files bundle ON bundle.media_asset_id = media.media_asset_id
-     JOIN files original ON original.file_id = bundle.file_id
+     JOIN market_media_assets link ON link.market_asset_id = ma.market_asset_id
+     JOIN media_assets media ON media.media_asset_id = link.media_asset_id
+     JOIN files original ON original.file_id = media.original_file_id
      JOIN users owner_user ON owner_user.user_id = media.owner_user_id
      JOIN accounts owner ON owner.account_id = owner_user.account_id
      WHERE ma.market_asset_id = $1
        AND ma.deleted_at IS NULL AND media.deleted_at IS NULL
-       AND bundle.deleted_at IS NULL AND original.deleted_at IS NULL
-       AND ($3::uuid IS NULL OR bundle.media_asset_bundle_file_id = $3)
-     ORDER BY media.created_at, media.media_asset_id, bundle.position,
-              bundle.media_asset_bundle_file_id
+       AND original.deleted_at IS NULL
+       AND ($3::uuid IS NULL OR media.media_asset_id = $3)
+     ORDER BY link.position, media.media_asset_id
      LIMIT 1`,
-    [assetId, accountId, bundleFileId]
-  );
-  return rows[0] || null;
-}
-
-async function getAssetProjectLinkAccessRepository(assetId, projectLinkId, accountId) {
-  const { rows } = await pool.query(
-    `SELECT project_link.url, project_link.label, project_link.provider,
-            (owner.account_id = $3) AS is_owner,
-            EXISTS (
-              SELECT 1
-              FROM user_market_assets owned_asset
-              JOIN users purchasing_user ON purchasing_user.user_id = owned_asset.user_id
-              WHERE owned_asset.market_asset_id = ma.market_asset_id
-                AND purchasing_user.account_id = $3
-                AND owned_asset.status = 'active'
-                AND owned_asset.deleted_at IS NULL
-            ) AS is_purchased
-     FROM market_assets ma
-     JOIN market_media_assets mma ON mma.market_asset_id = ma.market_asset_id
-     JOIN media_assets media ON media.media_asset_id = mma.media_asset_id
-     JOIN media_asset_project_links project_link
-       ON project_link.media_asset_id = media.media_asset_id
-     JOIN users owner_user ON owner_user.user_id = media.owner_user_id
-     JOIN accounts owner ON owner.account_id = owner_user.account_id
-     WHERE ma.market_asset_id = $1
-       AND project_link.media_asset_project_link_id = $2
-       AND ma.deleted_at IS NULL
-       AND media.deleted_at IS NULL
-       AND project_link.deleted_at IS NULL
-       AND owner.deleted_at IS NULL
-     LIMIT 1`,
-    [assetId, projectLinkId, accountId]
+    [assetId, accountId, mediaAssetId]
   );
   return rows[0] || null;
 }
@@ -787,18 +901,30 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
               buyer.display_name AS buyer_name,
               buyer_user.user_id AS buyer_user_id
        FROM market_assets ma
-       JOIN market_media_assets mma ON mma.market_asset_id = ma.market_asset_id
-       JOIN media_assets media ON media.media_asset_id = mma.media_asset_id
-       JOIN users owner_user ON owner_user.user_id = media.owner_user_id
+       JOIN LATERAL (
+         SELECT candidate.owner_user_id
+         FROM (
+           SELECT media.owner_user_id, 0 AS source_order
+           FROM market_media_assets link
+           JOIN media_assets media ON media.media_asset_id = link.media_asset_id
+           WHERE link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
+           UNION ALL
+           SELECT media.owner_user_id, 1 AS source_order
+           FROM market_asset_thumbnails link
+           JOIN media_assets media ON media.media_asset_id = link.media_asset_id
+           WHERE link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
+         ) candidate
+         ORDER BY candidate.source_order
+         LIMIT 1
+       ) asset_owner ON TRUE
+       JOIN users owner_user ON owner_user.user_id = asset_owner.owner_user_id
        JOIN accounts owner ON owner.account_id = owner_user.account_id
        JOIN accounts buyer ON buyer.account_id = $2
        JOIN users buyer_user ON buyer_user.account_id = buyer.account_id
        WHERE ma.market_asset_id = $1
          AND ma.deleted_at IS NULL
-         AND media.deleted_at IS NULL
          AND owner.deleted_at IS NULL
          AND buyer.deleted_at IS NULL
-       ORDER BY media.created_at, media.media_asset_id
        LIMIT 1
        FOR UPDATE OF ma`,
       [assetId, buyerAccountId]
@@ -995,406 +1121,233 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
   }
 }
 
-async function validateAssetReplacementUploads(client, accountId, content) {
-  const fileIds = [
-    ...content.originalFileIds,
-    ...content.previewFileIds,
-    ...content.thumbnailFileIds,
-  ];
-  if (fileIds.length === 0) return;
-
-  const ownedFiles = await client.query(
-    `SELECT f.file_id, f.path, f.mime_type, f.size_bytes
-     FROM files f
-     JOIN upload_intents ui ON ui.file_id = f.file_id
-     WHERE f.file_id = ANY($1::uuid[]) AND ui.account_id = $2
-       AND ui.status = 'consumed' AND ui.consumed_at IS NOT NULL
-       AND f.deleted_at IS NULL
-     FOR UPDATE OF f`,
-    [fileIds, accountId]
-  );
-  const filesById = new Map(ownedFiles.rows.map((file) => [String(file.file_id), file]));
-  const originals = content.originalFileIds.map((fileId) => filesById.get(fileId));
-  const previews = content.previewFileIds.map((fileId) => filesById.get(fileId));
-  const thumbnails = content.thumbnailFileIds.map((fileId) => filesById.get(fileId));
-  if (originals.some((file) => !file) || previews.some((file) => !file)
-    || thumbnails.some((file) => !file)) {
-    const error = new Error('ASSET_FILE_NOT_OWNED');
-    error.code = 'ASSET_FILE_NOT_OWNED';
-    throw error;
-  }
-
-  const originalTypes = originals.map((file) => mediaTypeFromMime(file.mime_type));
-  if (originalTypes.some((type) => !type)
-    || (content.type !== 'template' && originalTypes.length > 0 && originalTypes[0] !== content.type)
-    || previews.some((file) => !file.mime_type?.startsWith('image/'))
-    || thumbnails.some((file) => !file.mime_type?.startsWith('image/'))) {
-    const error = new Error('ASSET_FILE_TYPE_MISMATCH');
-    error.code = 'ASSET_FILE_TYPE_MISMATCH';
-    throw error;
-  }
-
-  let aggregateOriginalBytes = 0;
-  for (let index = 0; index < originals.length; index += 1) {
-    const sizeBytes = Number(originals[index].size_bytes);
-    const limit = ORIGINAL_FILE_SIZE_LIMITS[originalTypes[index]];
-    if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > limit) {
-      const error = new Error('ASSET_ORIGINAL_FILE_TOO_LARGE');
-      error.code = 'ASSET_ORIGINAL_FILE_TOO_LARGE';
-      throw error;
-    }
-    aggregateOriginalBytes += sizeBytes;
-  }
-  if (!Number.isSafeInteger(aggregateOriginalBytes) || aggregateOriginalBytes > content.maxBundleBytes) {
-    const error = new Error('ASSET_BUNDLE_TOO_LARGE');
-    error.code = 'ASSET_BUNDLE_TOO_LARGE';
-    throw error;
-  }
-  if (previews.some((file) => !Number.isSafeInteger(Number(file.size_bytes))
-    || Number(file.size_bytes) <= 0 || Number(file.size_bytes) > 5 * 1024 * 1024)) {
-    const error = new Error('ASSET_PREVIEW_INVALID');
-    error.code = 'ASSET_PREVIEW_INVALID';
-    throw error;
-  }
-  if (thumbnails.some((file) => !Number.isSafeInteger(Number(file.size_bytes))
-    || Number(file.size_bytes) <= 0 || Number(file.size_bytes) > 5 * 1024 * 1024)) {
-    const error = new Error('ASSET_THUMBNAIL_INVALID');
-    error.code = 'ASSET_THUMBNAIL_INVALID';
-    throw error;
-  }
-  if (originals.some((file) => !file.path.startsWith('asset-originals/'))
-    || previews.some((file) => !file.path.startsWith('assets/'))
-    || thumbnails.some((file) => !file.path.startsWith('assets/'))) {
-    const error = new Error('ASSET_FILE_PLACEMENT_INVALID');
-    error.code = 'ASSET_FILE_PLACEMENT_INVALID';
-    throw error;
-  }
-
-  const alreadyUsed = await client.query(
-    `SELECT 1
-     FROM (
-       SELECT m.media_asset_id
-       FROM media_assets m
-       WHERE m.deleted_at IS NULL AND m.thumbnail_file_id = ANY($1::uuid[])
-       UNION ALL
-       SELECT asset_thumbnail.media_asset_id
-       FROM media_asset_thumbnails asset_thumbnail
-       JOIN media_assets m ON m.media_asset_id = asset_thumbnail.media_asset_id
-       WHERE m.deleted_at IS NULL AND asset_thumbnail.deleted_at IS NULL
-         AND asset_thumbnail.file_id = ANY($1::uuid[])
-       UNION ALL
-       SELECT bundle.media_asset_id
-       FROM media_asset_bundle_files bundle
-       JOIN media_assets m ON m.media_asset_id = bundle.media_asset_id
-       WHERE m.deleted_at IS NULL AND bundle.deleted_at IS NULL
-         AND (bundle.file_id = ANY($1::uuid[]) OR bundle.preview_file_id = ANY($1::uuid[]))
-     ) used_files
-     LIMIT 1`,
-    [fileIds]
-  );
-  if (alreadyUsed.rowCount) {
-    const error = new Error('ASSET_FILE_ALREADY_USED');
-    error.code = 'ASSET_FILE_ALREADY_USED';
-    throw error;
-  }
-}
-
-async function replaceAssetContent(client, assetId, accountId, ownedAsset, content) {
-  if (ownedAsset.type !== content.type) {
-    const error = new Error('ASSET_TYPE_IMMUTABLE');
-    error.code = 'ASSET_TYPE_IMMUTABLE';
-    throw error;
-  }
+async function replaceAssetContent(client, assetId, accountId, ownedAsset, content, derivatives, name) {
+  if (ownedAsset.type !== content.type) throw repoError('ASSET_TYPE_IMMUTABLE');
   const purchases = await client.query(
     `SELECT 1 FROM user_market_assets
      WHERE market_asset_id = $1 AND status = 'active' AND deleted_at IS NULL
      LIMIT 1`,
     [assetId]
   );
-  if (purchases.rowCount) {
-    const error = new Error('ASSET_CONTENT_LOCKED_AFTER_PURCHASE');
-    error.code = 'ASSET_CONTENT_LOCKED_AFTER_PURCHASE';
-    throw error;
-  }
+  if (purchases.rowCount) throw repoError('ASSET_CONTENT_LOCKED_AFTER_PURCHASE');
 
-  let retainedBundles = [];
-  if (content.replaceBundleFiles && content.retainedBundleFileIds.length > 0) {
+  if (content.replaceMedia && content.retainedMediaAssetIds.length > 0) {
     const retained = await client.query(
-      `SELECT bundle.media_asset_bundle_file_id, bundle.file_id, bundle.preview_file_id
-       FROM media_asset_bundle_files bundle
-       JOIN market_media_assets bundle_media
-         ON bundle_media.media_asset_id = bundle.media_asset_id
-       WHERE bundle_media.market_asset_id = $1
-         AND bundle.deleted_at IS NULL
-         AND bundle.media_asset_bundle_file_id = ANY($2::uuid[])
-       FOR UPDATE OF bundle`,
-      [assetId, content.retainedBundleFileIds]
+      `SELECT link.media_asset_id
+       FROM market_media_assets link
+       JOIN media_assets m ON m.media_asset_id = link.media_asset_id
+       WHERE link.market_asset_id = $1
+         AND m.deleted_at IS NULL
+         AND link.media_asset_id = ANY($2::uuid[])
+       FOR UPDATE OF link`,
+      [assetId, content.retainedMediaAssetIds]
     );
-    const byId = new Map(retained.rows.map((item) => [String(item.media_asset_bundle_file_id), item]));
-    retainedBundles = content.retainedBundleFileIds.map((itemId) => byId.get(itemId));
-    if (retainedBundles.some((item) => !item)) {
-      const error = new Error('ASSET_RETAINED_CONTENT_INVALID');
-      error.code = 'ASSET_RETAINED_CONTENT_INVALID';
-      throw error;
+    if (retained.rowCount !== content.retainedMediaAssetIds.length) {
+      throw repoError('ASSET_RETAINED_CONTENT_INVALID');
     }
   }
-  let retainedThumbnails = [];
   if (content.replaceThumbnails && content.retainedThumbnailIds.length > 0) {
     const retained = await client.query(
-      `SELECT thumbnail.media_asset_thumbnail_id, thumbnail.file_id
-       FROM media_asset_thumbnails thumbnail
-       JOIN market_media_assets thumbnail_media
-         ON thumbnail_media.media_asset_id = thumbnail.media_asset_id
-       WHERE thumbnail_media.market_asset_id = $1
-         AND thumbnail.deleted_at IS NULL
-         AND thumbnail.media_asset_thumbnail_id = ANY($2::uuid[])
-       FOR UPDATE OF thumbnail`,
+      `SELECT link.media_asset_id
+       FROM market_asset_thumbnails link
+       JOIN media_assets m ON m.media_asset_id = link.media_asset_id
+       WHERE link.market_asset_id = $1
+         AND m.deleted_at IS NULL
+         AND link.media_asset_id = ANY($2::uuid[])
+       FOR UPDATE OF link`,
       [assetId, content.retainedThumbnailIds]
     );
-    const byId = new Map(retained.rows.map((item) => [String(item.media_asset_thumbnail_id), item]));
-    retainedThumbnails = content.retainedThumbnailIds.map((itemId) => byId.get(itemId));
-    if (retainedThumbnails.some((item) => !item)) {
-      const error = new Error('ASSET_RETAINED_CONTENT_INVALID');
-      error.code = 'ASSET_RETAINED_CONTENT_INVALID';
-      throw error;
+    if (retained.rowCount !== content.retainedThumbnailIds.length) {
+      throw repoError('ASSET_RETAINED_CONTENT_INVALID');
     }
   }
-  const finalOriginalFileIds = [
-    ...retainedBundles.map((item) => item.file_id),
-    ...content.originalFileIds,
-  ];
-  const finalPreviewFileIds = [
-    ...retainedBundles.map((item) => item.preview_file_id),
-    ...content.previewFileIds,
-  ];
-  const finalThumbnailFileIds = [
-    ...retainedThumbnails.map((item) => item.file_id),
-    ...content.thumbnailFileIds,
-  ];
 
-  await validateAssetReplacementUploads(client, accountId, content);
-  if (content.replaceBundleFiles && finalOriginalFileIds.length > 0) {
-    const finalFiles = await client.query(
-      `SELECT file_id, mime_type, size_bytes
-       FROM files
-       WHERE file_id = ANY($1::uuid[]) AND deleted_at IS NULL`,
-      [finalOriginalFileIds]
-    );
-    const byId = new Map(finalFiles.rows.map((file) => [String(file.file_id), file]));
-    const orderedFiles = finalOriginalFileIds.map((fileId) => byId.get(String(fileId)));
-    if (orderedFiles.some((file) => !file)) {
-      const error = new Error('ASSET_RETAINED_CONTENT_INVALID');
-      error.code = 'ASSET_RETAINED_CONTENT_INVALID';
-      throw error;
-    }
-    const orderedTypes = orderedFiles.map((file) => mediaTypeFromMime(file.mime_type));
-    if (orderedTypes.some((type) => !type)
-      || (content.type !== 'template' && orderedTypes[0] !== content.type)) {
-      const error = new Error('ASSET_FILE_TYPE_MISMATCH');
-      error.code = 'ASSET_FILE_TYPE_MISMATCH';
-      throw error;
-    }
-    let finalAggregateBytes = 0;
-    for (let index = 0; index < orderedFiles.length; index += 1) {
-      const sizeBytes = Number(orderedFiles[index].size_bytes);
-      const fileLimit = ORIGINAL_FILE_SIZE_LIMITS[orderedTypes[index]];
-      if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > fileLimit) {
-        const error = new Error('ASSET_ORIGINAL_FILE_TOO_LARGE');
-        error.code = 'ASSET_ORIGINAL_FILE_TOO_LARGE';
-        throw error;
-      }
-      finalAggregateBytes += sizeBytes;
-    }
-    if (!Number.isSafeInteger(finalAggregateBytes) || finalAggregateBytes > content.maxBundleBytes) {
-      const error = new Error('ASSET_BUNDLE_TOO_LARGE');
-      error.code = 'ASSET_BUNDLE_TOO_LARGE';
-      throw error;
-    }
-  }
+  const { originals, thumbnails } = await loadValidatedUploads(client, accountId, content);
+
   const counts = await client.query(
     `SELECT
        (SELECT COUNT(*)::int
-        FROM market_media_assets bundle_media
-        JOIN media_asset_bundle_files bundle
-          ON bundle.media_asset_id = bundle_media.media_asset_id
-        WHERE bundle_media.market_asset_id = $1 AND bundle.deleted_at IS NULL) AS bundle_count,
+        FROM market_media_assets link
+        JOIN media_assets m ON m.media_asset_id = link.media_asset_id
+        WHERE link.market_asset_id = $1 AND m.deleted_at IS NULL) AS media_count,
        (SELECT COUNT(*)::int
-        FROM market_media_assets thumbnail_media
-        JOIN media_asset_thumbnails thumbnail
-          ON thumbnail.media_asset_id = thumbnail_media.media_asset_id
-        WHERE thumbnail_media.market_asset_id = $1 AND thumbnail.deleted_at IS NULL) AS thumbnail_count,
-       (SELECT COUNT(*)::int
-        FROM market_media_assets project_link_media
-        JOIN media_asset_project_links project_link
-          ON project_link.media_asset_id = project_link_media.media_asset_id
-        WHERE project_link_media.market_asset_id = $1 AND project_link.deleted_at IS NULL) AS project_link_count`,
+        FROM market_asset_thumbnails link
+        JOIN media_assets m ON m.media_asset_id = link.media_asset_id
+        WHERE link.market_asset_id = $1 AND m.deleted_at IS NULL) AS thumbnail_count`,
     [assetId]
   );
-  const finalBundleCount = content.replaceBundleFiles
-    ? finalOriginalFileIds.length
-    : Number(counts.rows[0].bundle_count);
+  const finalMediaCount = content.replaceMedia
+    ? content.retainedMediaAssetIds.length + originals.length
+    : Number(counts.rows[0].media_count);
   const finalThumbnailCount = content.replaceThumbnails
-    ? finalThumbnailFileIds.length
+    ? content.retainedThumbnailIds.length + thumbnails.length
+      + content.showcaseMediaAssetIds.length + content.showcaseOriginalFileIds.length
     : Number(counts.rows[0].thumbnail_count);
-
-  if (finalThumbnailCount < 1 || finalThumbnailCount > 8) {
-    const error = new Error('ASSET_THUMBNAIL_INVALID');
-    error.code = 'ASSET_THUMBNAIL_INVALID';
-    throw error;
-  }
-  if (content.type !== 'template' && finalBundleCount < 1) {
-    const error = new Error('ASSET_CONTENT_REQUIRED');
-    error.code = 'ASSET_CONTENT_REQUIRED';
-    throw error;
-  }
-
-  if (content.replaceBundleFiles) {
-    await client.query(
-      `DELETE FROM media_asset_bundle_files
-       WHERE media_asset_id IN (
-         SELECT media_asset_id FROM market_media_assets WHERE market_asset_id = $1
-       )`,
-      [assetId]
-    );
-    if (finalOriginalFileIds.length > 0) {
-      await client.query(
-        `INSERT INTO media_asset_bundle_files
-           (media_asset_id, file_id, preview_file_id, position)
-         VALUES ($1, $2, $3, 0)`,
-        [ownedAsset.media_asset_id, finalOriginalFileIds[0], finalPreviewFileIds[0]]
-      );
-    }
+  const showcaseLimit = content.type === 'audio' ? 3 : MAX_SHOWCASE_IMAGES;
+  if ((content.type === 'template' && (finalThumbnailCount < 1 || finalThumbnailCount > showcaseLimit))
+    || (content.type !== 'template' && finalMediaCount === 1 && finalThumbnailCount !== 0)
+    || (content.type !== 'template' && finalMediaCount > 1 && finalThumbnailCount > showcaseLimit)) {
+    throw repoError('ASSET_THUMBNAIL_INVALID');
   }
   if (content.replaceThumbnails) {
-    await client.query(
-      `DELETE FROM media_asset_thumbnails
-       WHERE media_asset_id IN (
-         SELECT media_asset_id FROM market_media_assets WHERE market_asset_id = $1
-       )`,
-      [assetId]
+    const retainedBytes = await client.query(
+      `SELECT COALESCE(SUM(original.size_bytes), 0)::bigint AS total_bytes
+       FROM market_asset_thumbnails link
+       JOIN media_assets media ON media.media_asset_id = link.media_asset_id
+       JOIN files original ON original.file_id = media.original_file_id
+       WHERE link.market_asset_id = $1
+         AND media.media_asset_id = ANY($2::uuid[])
+         AND media.deleted_at IS NULL AND original.deleted_at IS NULL`,
+      [assetId, content.retainedThumbnailIds]
     );
-    await client.query(
-      `INSERT INTO media_asset_thumbnails (media_asset_id, file_id, position)
-       SELECT $1, thumbnail.file_id, thumbnail.ordinality - 1
-       FROM unnest($2::uuid[]) WITH ORDINALITY AS thumbnail(file_id, ordinality)`,
-      [ownedAsset.media_asset_id, finalThumbnailFileIds]
-    );
+    const newThumbnailBytes = thumbnails.reduce((total, file) => total + Number(file.size_bytes), 0);
+    if (Number(retainedBytes.rows[0]?.total_bytes || 0) + newThumbnailBytes > content.maxShowcaseTotalBytes) {
+      throw repoError('ASSET_THUMBNAIL_INVALID');
+    }
   }
-  if (content.replaceProjectLinks) {
-    await client.query(
-      `DELETE FROM media_asset_project_links
-       WHERE media_asset_id IN (
-         SELECT media_asset_id FROM market_media_assets WHERE market_asset_id = $1
-       )`,
-      [assetId]
+  if (content.type !== 'template' && finalMediaCount < 1) {
+    throw repoError('ASSET_CONTENT_REQUIRED');
+  }
+
+  if (content.replaceThumbnails && content.showcaseMediaAssetIds.length > 0) {
+    const selected = await client.query(
+      `SELECT media.media_asset_id
+       FROM market_media_assets link
+       JOIN media_assets media ON media.media_asset_id = link.media_asset_id
+       WHERE link.market_asset_id = $1
+         AND media.deleted_at IS NULL
+         AND media.type = $5
+         AND media.media_asset_id = ANY($2::uuid[])
+         AND ($3::boolean = FALSE OR link.media_asset_id = ANY($4::uuid[]))
+       FOR UPDATE OF link`,
+      [assetId, content.showcaseMediaAssetIds, content.replaceMedia, content.retainedMediaAssetIds, content.type]
     );
-    if (content.projectLinks.length > 0) {
-      await client.query(
-        `INSERT INTO media_asset_project_links
-           (media_asset_id, label, provider, url, position)
-         SELECT $1, link.label, link.provider, link.url, link.ordinality - 1
-         FROM unnest($2::text[], $3::text[], $4::text[])
-           WITH ORDINALITY AS link(label, provider, url, ordinality)`,
-        [ownedAsset.media_asset_id,
-          content.projectLinks.map((link) => link.label),
-          content.projectLinks.map((link) => link.provider),
-          content.projectLinks.map((link) => link.url)]
-      );
+    if (selected.rowCount !== content.showcaseMediaAssetIds.length) {
+      throw repoError('ASSET_THUMBNAIL_INVALID');
     }
   }
 
-  const primaryFiles = await client.query(
-    `SELECT
-       (SELECT file_id FROM media_asset_thumbnails
-        WHERE media_asset_id = $1 AND deleted_at IS NULL
-        ORDER BY position, media_asset_thumbnail_id LIMIT 1) AS thumbnail_file_id,
-       (SELECT file_id FROM media_asset_bundle_files
-        WHERE media_asset_id = $1 AND deleted_at IS NULL
-        ORDER BY position, media_asset_bundle_file_id LIMIT 1) AS original_file_id,
-       (SELECT preview_file_id FROM media_asset_bundle_files
-        WHERE media_asset_id = $1 AND deleted_at IS NULL
-        ORDER BY position, media_asset_bundle_file_id LIMIT 1) AS preview_file_id`,
-    [ownedAsset.media_asset_id]
-  );
-  await client.query(
-    `UPDATE media_assets
-     SET thumbnail_file_id = $2::uuid,
-         proxy_file_id = COALESCE($3::uuid, $2::uuid),
-         original_file_id = COALESCE($4::uuid, $2::uuid),
-         width = CASE WHEN $5::boolean THEN $6::integer ELSE width END,
-         height = CASE WHEN $5::boolean THEN $7::integer ELSE height END,
-         duration_seconds = CASE WHEN $5::boolean THEN $8::integer ELSE duration_seconds END
-     WHERE media_asset_id = $1::uuid`,
-    [ownedAsset.media_asset_id,
-      primaryFiles.rows[0].thumbnail_file_id,
-      primaryFiles.rows[0].preview_file_id,
-      primaryFiles.rows[0].original_file_id,
-      content.replaceBundleFiles,
-      content.width,
-      content.height,
-      content.durationSeconds]
-  );
-
-  if (content.replaceBundleFiles) {
-    const removedSecondary = await client.query(
-      `DELETE FROM market_media_assets
-       WHERE market_asset_id = $1::uuid AND media_asset_id <> $2::uuid
+  let nextShowcasePosition = 0;
+  if (content.replaceThumbnails) {
+    const removed = await client.query(
+      `DELETE FROM market_asset_thumbnails
+       WHERE market_asset_id = $1 AND NOT (media_asset_id = ANY($2::uuid[]))
        RETURNING media_asset_id`,
-      [assetId, ownedAsset.media_asset_id]
+      [assetId, content.retainedThumbnailIds]
     );
-    const removedIds = removedSecondary.rows.map((row) => row.media_asset_id);
-    if (removedIds.length > 0) {
-      await client.query(
-        `UPDATE media_assets
-         SET is_marketed = FALSE, deleted_at = CURRENT_TIMESTAMP
-         WHERE media_asset_id = ANY($1::uuid[])`,
-        [removedIds]
-      );
-    }
-    await createSecondaryMediaAssets(client, {
+    await retireUnlinkedMediaAssets(client, removed.rows.map((row) => row.media_asset_id));
+    await repositionLinks(client, 'market_asset_thumbnails', assetId, content.retainedThumbnailIds);
+    await linkShowcaseMediaAssets(client, assetId, content.showcaseMediaAssetIds, content.retainedThumbnailIds.length);
+    nextShowcasePosition = content.retainedThumbnailIds.length
+      + content.showcaseMediaAssetIds.length + content.showcaseOriginalFileIds.length;
+    await createThumbnailMediaAssets(client, {
       marketAssetId: assetId,
-      primaryMediaAssetId: ownedAsset.media_asset_id,
-      originalFileIds: finalOriginalFileIds,
-      previewFileIds: finalPreviewFileIds,
+      name,
+      ownerUserId: ownedAsset.owner_user_id,
+      startPosition: nextShowcasePosition,
+      thumbnails,
     });
   }
 
+  const coverFileId = await readCoverFileId(client, assetId);
+
+  if (content.replaceMedia) {
+    const removed = await client.query(
+      `DELETE FROM market_media_assets
+       WHERE market_asset_id = $1 AND NOT (media_asset_id = ANY($2::uuid[]))
+       RETURNING media_asset_id`,
+      [assetId, content.retainedMediaAssetIds]
+    );
+    await retireMediaAssets(client, removed.rows.map((row) => row.media_asset_id));
+    await repositionLinks(client, 'market_media_assets', assetId, content.retainedMediaAssetIds);
+    await createContentMediaAssets(client, {
+      marketAssetId: assetId,
+      name,
+      ownerUserId: ownedAsset.owner_user_id,
+      type: content.type,
+      startPosition: content.retainedMediaAssetIds.length,
+      originals,
+      derivatives,
+      coverFileId,
+    });
+    if (content.replaceThumbnails && content.showcaseOriginalFileIds.length) {
+      const selectedNew = await client.query(
+        `SELECT media_asset_id, original_file_id
+         FROM market_media_assets link
+         JOIN media_assets media ON media.media_asset_id = link.media_asset_id
+         WHERE link.market_asset_id = $1
+           AND media.original_file_id = ANY($2::uuid[])
+           AND media.deleted_at IS NULL
+           AND media.type = $3`,
+        [assetId, content.showcaseOriginalFileIds, content.type]
+      );
+      const mediaByOriginal = new Map(selectedNew.rows.map((row) => [String(row.original_file_id), row.media_asset_id]));
+      const orderedMediaIds = content.showcaseOriginalFileIds.map((fileId) => mediaByOriginal.get(String(fileId)));
+      if (orderedMediaIds.some((mediaId) => !mediaId)) throw repoError('ASSET_THUMBNAIL_INVALID');
+      await linkShowcaseMediaAssets(client, assetId, orderedMediaIds,
+        content.retainedThumbnailIds.length + content.showcaseMediaAssetIds.length);
+    }
+  }
+
+  if (content.replaceThumbnails) {
+    const orderedShowcaseIds = await resolveShowcaseOrder(client, assetId, content.showcaseOrder);
+    await repositionLinks(client, 'market_asset_thumbnails', assetId, orderedShowcaseIds);
+  }
+
+  if (content.replaceYdoc) {
+    await setMarketYdoc(client, assetId, content.ydocSnapshotId);
+  }
+
+  // Audio has no poster or image proxy; video can use the selected showcase as a temporary poster.
   await client.query(
-    `UPDATE media_assets
-     SET thumbnail_file_id = $2::uuid
-     WHERE media_asset_id IN (
-       SELECT media_asset_id FROM market_media_assets WHERE market_asset_id = $3::uuid
-     )
-       AND media_asset_id <> $1::uuid
-       AND deleted_at IS NULL`,
-    [ownedAsset.media_asset_id, primaryFiles.rows[0].thumbnail_file_id, assetId]
+    `UPDATE media_assets m
+     SET thumbnail_file_id = CASE WHEN m.type = 'audio' THEN NULL ELSE $2::uuid END
+     FROM market_media_assets link
+     LEFT JOIN media_asset_jobs job ON job.media_asset_id = link.media_asset_id
+     WHERE link.market_asset_id = $1::uuid
+       AND link.media_asset_id = m.media_asset_id
+       AND m.deleted_at IS NULL
+       AND (m.type = 'audio' OR job.status IN ('pending', 'running', 'failed'))`,
+    [assetId, coverFileId]
   );
 }
-async function updateAssetRepository(assetId, accountId, data) {
+
+async function updateAssetRepository(assetId, accountId, data, derivatives = new Map()) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const owned = await client.query(
-      `SELECT ma.market_asset_id, ma.status AS current_status, m.media_asset_id, m.type
+      `SELECT ma.market_asset_id, ma.status AS current_status, listing_owner.owner_user_id,
+              COALESCE(content.type, 'template') AS type
        FROM market_assets ma
-       JOIN market_media_assets mma ON mma.market_asset_id = ma.market_asset_id
-       JOIN media_assets m ON m.media_asset_id = mma.media_asset_id
-       JOIN users u ON u.user_id = m.owner_user_id
+       JOIN LATERAL (
+         SELECT candidate.owner_user_id
+         FROM (
+           SELECT media.owner_user_id, 0 AS source_order
+           FROM market_media_assets link
+           JOIN media_assets media ON media.media_asset_id = link.media_asset_id
+           WHERE link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
+           UNION ALL
+           SELECT media.owner_user_id, 1 AS source_order
+           FROM market_asset_thumbnails link
+           JOIN media_assets media ON media.media_asset_id = link.media_asset_id
+           WHERE link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
+         ) candidate
+         ORDER BY candidate.source_order
+         LIMIT 1
+       ) listing_owner ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT m.type
+         FROM market_media_assets content_link
+         JOIN media_assets m ON m.media_asset_id = content_link.media_asset_id
+         WHERE content_link.market_asset_id = ma.market_asset_id
+           AND m.deleted_at IS NULL
+         ORDER BY content_link.position, m.media_asset_id
+         LIMIT 1
+       ) content ON TRUE
+       JOIN users u ON u.user_id = listing_owner.owner_user_id
        WHERE ma.market_asset_id = $1 AND u.account_id = $2
-         AND ma.deleted_at IS NULL AND m.deleted_at IS NULL
-       ORDER BY
-         CASE WHEN EXISTS (
-           SELECT 1 FROM media_asset_bundle_files primary_bundle_marker
-           WHERE primary_bundle_marker.media_asset_id = m.media_asset_id
-             AND primary_bundle_marker.deleted_at IS NULL
-         ) THEN 0 ELSE 1 END,
-         CASE WHEN EXISTS (
-           SELECT 1 FROM media_asset_thumbnails primary_thumbnail_marker
-           WHERE primary_thumbnail_marker.media_asset_id = m.media_asset_id
-             AND primary_thumbnail_marker.deleted_at IS NULL
-         ) THEN 0 ELSE 1 END,
-         m.created_at, m.media_asset_id
-       LIMIT 1
+         AND ma.deleted_at IS NULL
        FOR UPDATE OF ma`,
       [assetId, accountId]
     );
@@ -1408,27 +1361,52 @@ async function updateAssetRepository(assetId, accountId, data) {
         excludeAssetId: assetId,
       });
       if (!eligibility.allowed) {
-        const error = new Error(eligibility.code);
-        error.code = eligibility.code;
-        error.eligibility = eligibility;
-        throw error;
+        throw repoError(eligibility.code, { eligibility });
       }
     }
     if (data.contentUpdate) {
-      await replaceAssetContent(client, assetId, accountId, owned.rows[0], data.contentUpdate);
+      await replaceAssetContent(
+        client, assetId, accountId, owned.rows[0], data.contentUpdate, derivatives, data.name
+      );
     }
+    const pending = await client.query(
+      `UPDATE media_asset_jobs job SET publish_status = $2, updated_at = CURRENT_TIMESTAMP
+       FROM market_media_assets link, media_assets media
+       WHERE link.market_asset_id = $1 AND job.media_asset_id = link.media_asset_id
+         AND media.media_asset_id = link.media_asset_id AND media.deleted_at IS NULL
+         AND job.status <> 'done'
+       RETURNING job.media_asset_job_id`,
+      [assetId, data.status]
+    );
     await client.query(
       `UPDATE market_assets
        SET name = $2, description = $3, price_credits = $4,
            status = $5, updated_at = CURRENT_TIMESTAMP
        WHERE market_asset_id = $1 AND deleted_at IS NULL`,
-      [assetId, data.name, data.description, data.priceCredits, data.status]
+      [assetId, data.name, data.description, data.priceCredits, pending.rowCount ? 'draft' : data.status]
+    );
+    // Keep media names within the editor's 50-character limit, reserving space for bundle numbering.
+    await client.query(
+      `UPDATE media_assets m
+       SET name = rtrim(left($2::text, greatest(0, 50 - char_length(name_suffix.suffix)))) || name_suffix.suffix
+       FROM market_media_assets link
+       CROSS JOIN LATERAL (SELECT CASE WHEN (
+             SELECT COUNT(*) FROM market_media_assets count_link
+             JOIN media_assets count_media ON count_media.media_asset_id = count_link.media_asset_id
+             WHERE count_link.market_asset_id = $1 AND count_media.deleted_at IS NULL
+           ) > 1
+           THEN ' - ' || (link.position + 1)::text ELSE '' END AS suffix) name_suffix
+       WHERE link.market_asset_id = $1 AND link.media_asset_id = m.media_asset_id
+         AND m.deleted_at IS NULL`,
+      [assetId, data.name]
     );
     await client.query(
-      `UPDATE media_assets SET name = $2
-       WHERE media_asset_id IN (
-         SELECT media_asset_id FROM market_media_assets WHERE market_asset_id = $1
-       ) AND deleted_at IS NULL`,
+      `UPDATE media_assets m
+       SET name = rtrim(left($2::text, greatest(0, 50 - char_length(name_suffix.suffix)))) || name_suffix.suffix
+       FROM market_asset_thumbnails link
+       CROSS JOIN LATERAL (SELECT ' - Thumbnail ' || (link.position + 1)::text AS suffix) name_suffix
+       WHERE link.market_asset_id = $1 AND link.media_asset_id = m.media_asset_id
+         AND m.deleted_at IS NULL`,
       [assetId, data.name]
     );
     if (Array.isArray(data.tags)) {
@@ -1451,11 +1429,26 @@ async function deleteAssetRepository(assetId, accountId) {
     const owned = await client.query(
       `SELECT ma.market_asset_id
        FROM market_assets ma
-       JOIN market_media_assets mma ON mma.market_asset_id = ma.market_asset_id
-       JOIN media_assets m ON m.media_asset_id = mma.media_asset_id
-       JOIN users u ON u.user_id = m.owner_user_id
+       JOIN LATERAL (
+         SELECT candidate.owner_user_id
+         FROM (
+           SELECT media.owner_user_id, 0 AS source_order
+           FROM market_media_assets content_link
+           JOIN media_assets media ON media.media_asset_id = content_link.media_asset_id
+           WHERE content_link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
+           UNION ALL
+           SELECT media.owner_user_id, 1 AS source_order
+           FROM market_asset_thumbnails showcase_link
+           JOIN media_assets media ON media.media_asset_id = showcase_link.media_asset_id
+           WHERE showcase_link.market_asset_id = ma.market_asset_id AND media.deleted_at IS NULL
+         ) candidate
+         ORDER BY candidate.source_order
+         LIMIT 1
+       ) asset_owner ON TRUE
+       JOIN users u ON u.user_id = asset_owner.owner_user_id
        WHERE ma.market_asset_id = $1 AND u.account_id = $2
-         AND ma.deleted_at IS NULL AND m.deleted_at IS NULL
+         AND ma.deleted_at IS NULL
+       LIMIT 1
        FOR UPDATE OF ma`,
       [assetId, accountId]
     );
@@ -1472,11 +1465,7 @@ async function deleteAssetRepository(assetId, accountId) {
        LIMIT 1`,
       [assetId]
     );
-    if (purchases.rowCount) {
-      const error = new Error('ASSET_HAS_PURCHASES');
-      error.code = 'ASSET_HAS_PURCHASES';
-      throw error;
-    }
+    if (purchases.rowCount) throw repoError('ASSET_HAS_PURCHASES');
     await client.query(
       `UPDATE market_assets SET deleted_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP WHERE market_asset_id = $1`,
@@ -1486,6 +1475,8 @@ async function deleteAssetRepository(assetId, accountId) {
       `UPDATE media_assets SET deleted_at = CURRENT_TIMESTAMP, is_marketed = FALSE
        WHERE media_asset_id IN (
          SELECT media_asset_id FROM market_media_assets WHERE market_asset_id = $1
+         UNION
+         SELECT media_asset_id FROM market_asset_thumbnails WHERE market_asset_id = $1
        )`,
       [assetId]
     );
@@ -1861,7 +1852,6 @@ module.exports = {
   updateAssetRepository,
   deleteAssetRepository,
   getAssetDownloadRepository,
-  getAssetProjectLinkAccessRepository,
   purchaseAssetRepository,
   listCommentsRepository,
   createCommentRepository,

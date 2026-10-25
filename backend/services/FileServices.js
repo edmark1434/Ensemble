@@ -8,6 +8,10 @@ const {
     consumeUploadIntentRepository
 } = require('../repositories/FileRepositories');
 const crypto = require("crypto");
+const fs = require('fs');
+const path = require('path');
+const { pipeline } = require('stream/promises');
+const { normalizeVideoOriginal, makeWorkDir, removeWorkDir } = require('../lib/MediaProcessing');
 const { PutObjectCommand, HeadObjectCommand, CopyObjectCommand, DeleteObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const s3 = require('../lib/AmazonS3');
@@ -49,6 +53,9 @@ const ABSOLUTE_MAX_FILE_SIZE = process.env.UPLOAD_ABSOLUTE_MAX_FILE_SIZE
     : 250 * 1024 * 1024;
 
 const MB = 1024 * 1024;
+const ASSET_UPLOAD_MAX_FILE_SIZE = process.env.UPLOAD_ASSET_MAX_FILE_SIZE
+    ? parseInt(process.env.UPLOAD_ASSET_MAX_FILE_SIZE)
+    : 1024 * MB;
 const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/avif'];
 const VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
 const AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/ogg'];
@@ -64,8 +71,8 @@ const UPLOAD_POLICIES = {
     documents: { types: [...IMAGE_TYPES, 'application/pdf', ...VIDEO_TYPES, ...AUDIO_TYPES, ...ARCHIVE_TYPES], imageLimit: 25 * MB, pdfLimit: 25 * MB, videoLimit: 250 * MB, audioLimit: 50 * MB, archiveLimit: 100 * MB },
     jobs: { types: [...IMAGE_TYPES, 'application/pdf', ...VIDEO_TYPES, ...ARCHIVE_TYPES], imageLimit: 25 * MB, pdfLimit: 25 * MB, videoLimit: 100 * MB, archiveLimit: 100 * MB },
     proposals: { types: [...IMAGE_TYPES, 'application/pdf', ...VIDEO_TYPES, ...AUDIO_TYPES, ...ARCHIVE_TYPES], imageLimit: 25 * MB, pdfLimit: 25 * MB, videoLimit: 100 * MB, audioLimit: 50 * MB, archiveLimit: 100 * MB },
-    assets: { types: [...IMAGE_TYPES, ...VIDEO_TYPES, ...AUDIO_TYPES], imageLimit: 25 * MB, videoLimit: 100 * MB, audioLimit: 50 * MB },
-    'asset-originals': { types: [...IMAGE_TYPES, ...VIDEO_TYPES, ...AUDIO_TYPES, 'application/pdf', ...ARCHIVE_TYPES], imageLimit: 25 * MB, videoLimit: 100 * MB, audioLimit: 50 * MB, pdfLimit: 25 * MB, archiveLimit: 100 * MB },
+    assets: { types: [...IMAGE_TYPES, ...VIDEO_TYPES, ...AUDIO_TYPES], imageLimit: 1024 * MB, videoLimit: 1024 * MB, audioLimit: 1024 * MB },
+    'asset-originals': { types: [...IMAGE_TYPES, ...VIDEO_TYPES, ...AUDIO_TYPES], imageLimit: 1024 * MB, videoLimit: 1024 * MB, audioLimit: 1024 * MB },
     gig_thumbnails: { types: IMAGE_TYPES, imageLimit: 5 * MB },
     gig_galleries: { types: [...IMAGE_TYPES, ...VIDEO_TYPES], imageLimit: 20 * MB, videoLimit: 50 * MB },
     gig_orders: { types: [...IMAGE_TYPES, ...VIDEO_TYPES, ...AUDIO_TYPES, 'application/pdf', ...ARCHIVE_TYPES], imageLimit: 20 * MB, videoLimit: 100 * MB, audioLimit: 25 * MB, pdfLimit: 20 * MB, archiveLimit: 100 * MB },
@@ -88,7 +95,8 @@ function getUploadPolicy(folder, contentType) {
                     : policy.imageLimit;
     return {
         allowedTypes: policy.types.filter(type => ALLOWED_CONTENT_TYPES.includes(type)),
-        maxFileSize: Math.min(categoryLimit || ABSOLUTE_MAX_FILE_SIZE, ABSOLUTE_MAX_FILE_SIZE),
+        maxFileSize: Math.min(categoryLimit || ASSET_UPLOAD_MAX_FILE_SIZE,
+            ['assets', 'asset-originals'].includes(folder) ? ASSET_UPLOAD_MAX_FILE_SIZE : ABSOLUTE_MAX_FILE_SIZE),
     };
 }
 
@@ -337,6 +345,8 @@ async function finalizeUploadService(accountId, uploadIntentId) {
     if (!intent) { const error = new Error('Upload intent is already being finalized'); error.statusCode = 409; throw error; }
 
     let copied = false;
+    let workDir;
+    let finalKey = intent.final_key;
     try {
         const head = await s3.send(new HeadObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: intent.staging_key }));
         const size = Number(head.ContentLength);
@@ -349,19 +359,42 @@ async function finalizeUploadService(accountId, uploadIntentId) {
         }
         const copySource = encodeURIComponent(`${process.env.AWS_BUCKET_NAME}/${intent.staging_key}`).replace(/%2F/g, '/');
         const isProtectedAssetOriginal = intent.final_key.startsWith('asset-originals/');
-        await s3.send(new CopyObjectCommand({
+        let finalType = actualType;
+        let finalSize = size;
+        let finalName = intent.original_name;
+        let normalized;
+        if (isProtectedAssetOriginal && actualType.startsWith('video/')) {
+            workDir = await makeWorkDir();
+            const inputPath = path.join(workDir, 'uploaded-video');
+            const source = await s3.send(new GetObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: intent.staging_key, IfMatch: head.ETag }));
+            await pipeline(source.Body, fs.createWriteStream(inputPath));
+            normalized = await normalizeVideoOriginal({ inputPath, workDir });
+        }
+        if (normalized?.changed) {
+            finalKey = `asset-originals/${accountId}/${crypto.randomUUID()}.mp4`;
+            finalType = 'video/mp4';
+            finalName = `${path.parse(intent.original_name).name}.mp4`;
+            finalSize = (await fs.promises.stat(normalized.originalPath)).size;
+            await s3.send(new PutObjectCommand({
+                Bucket: process.env.AWS_BUCKET_NAME, Key: finalKey,
+                Body: fs.createReadStream(normalized.originalPath), ContentLength: finalSize,
+                ContentType: finalType, CacheControl: 'private, no-store',
+            }));
+        } else await s3.send(new CopyObjectCommand({
             Bucket: process.env.AWS_BUCKET_NAME,
             Key: intent.final_key,
             CopySource: copySource,
+            CopySourceIfMatch: head.ETag,
             ContentType: actualType,
             CacheControl: isProtectedAssetOriginal ? 'private, no-store' : 'public, max-age=86400',
             MetadataDirective: 'REPLACE',
         }));
         copied = true;
         const result = await consumeUploadIntentRepository(uploadIntentId, accountId, {
-            name: intent.original_name,
-            mimeType: actualType,
-            sizeBytes: size,
+            name: finalName,
+            key: finalKey,
+            mimeType: finalType,
+            sizeBytes: finalSize,
         });
         // Cleanup is not part of the user-visible critical path. The verified final
         // object and database record already exist, so deletion can finish in the background.
@@ -369,10 +402,12 @@ async function finalizeUploadService(accountId, uploadIntentId) {
             .catch(() => undefined);
         return result;
     } catch (error) {
-        if (copied) await s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: intent.final_key })).catch(() => undefined);
+        if (copied) await s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: finalKey })).catch(() => undefined);
         await releaseUploadIntentRepository(uploadIntentId, accountId).catch(() => undefined);
         if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) error.statusCode = 422;
         throw error;
+    } finally {
+        if (workDir) await removeWorkDir(workDir);
     }
 }
 

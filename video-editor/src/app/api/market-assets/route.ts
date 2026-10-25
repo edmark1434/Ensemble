@@ -1,6 +1,7 @@
 import { connection, NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { buildPublicUrl } from "@/lib/s3";
+import { isGeneratedMarketProxy } from "@/lib/market-proxy";
 
 const VALID_TYPES = ["image", "video", "audio"] as const;
 type MarketType = (typeof VALID_TYPES)[number];
@@ -31,28 +32,26 @@ export async function GET(request: NextRequest) {
   try {
     let query = db
       .selectFrom("market_assets as ma")
-      .innerJoin("market_media_assets as mma", "mma.market_asset_id", "ma.market_asset_id")
-      .innerJoin("media_assets as m", "m.media_asset_id", "mma.media_asset_id")
-      .innerJoin("files as orig", "orig.file_id", "m.original_file_id")
-      .innerJoin("files as thumb", "thumb.file_id", "m.thumbnail_file_id")
-      .innerJoin("users as u", "u.user_id", "m.owner_user_id")
       .where("ma.status", "=", "published")
       .where("ma.deleted_at", "is", null)
-      .where("m.deleted_at", "is", null)
-      .where("m.type", "=", type)
       .select([
         "ma.market_asset_id",
         "ma.name as market_name",
+        "ma.description",
         "ma.price_credits",
-        "m.media_asset_id",
-        "m.width",
-        "m.height",
-        "m.duration_seconds",
-        "orig.path as original_path",
-        "thumb.path as thumbnail_path",
-        "u.first_name",
-        "u.last_name"
-      ]);
+        "ma.created_at"
+      ])
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom("market_media_assets as filter_link")
+            .innerJoin("media_assets as filter_media", "filter_media.media_asset_id", "filter_link.media_asset_id")
+            .select("filter_link.market_asset_id")
+            .whereRef("filter_link.market_asset_id", "=", "ma.market_asset_id")
+            .where("filter_media.type", "=", type)
+            .where("filter_media.deleted_at", "is", null)
+        )
+      );
 
     if (search) {
       const pattern = `%${escapeLike(search)}%`;
@@ -74,51 +73,169 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // limit + 1 so we know whether another page exists without a count query
+    // Paginate listings rather than their linked media files.
     const rows = await query
       .orderBy("ma.created_at", "desc")
-      .orderBy("m.media_asset_id")
+      .orderBy("ma.market_asset_id")
       .limit(limit + 1)
       .offset((page - 1) * limit)
       .execute();
 
     const hasMore = rows.length > limit;
+    const listings = rows.slice(0, limit);
+    const marketAssetIds = listings.map((row) => row.market_asset_id);
 
-    const items = rows.slice(0, limit).map((row) => {
-      const author = [row.first_name, row.last_name].filter(Boolean).join(" ");
-      const src = buildPublicUrl(row.original_path);
-      const preview = buildPublicUrl(row.thumbnail_path);
+    if (marketAssetIds.length === 0) {
+      return NextResponse.json({ items: [], page, hasMore });
+    }
 
-      const base = {
-        id: `market_${row.market_asset_id}_${row.media_asset_id}`,
-        name: row.market_name,
-        type,
+    const [contentRows, showcaseRows] = await Promise.all([
+      db
+        .selectFrom("market_media_assets as mma")
+        .innerJoin("media_assets as m", "m.media_asset_id", "mma.media_asset_id")
+        .innerJoin("files as orig", "orig.file_id", "m.original_file_id")
+        .leftJoin("files as proxy", (join) => join
+          .onRef("proxy.file_id", "=", "m.proxy_file_id")
+          .on("proxy.deleted_at", "is", null))
+        .leftJoin("files as thumb", (join) => join
+          .onRef("thumb.file_id", "=", "m.thumbnail_file_id")
+          .onRef("thumb.file_id", "!=", "m.original_file_id")
+          .on("thumb.deleted_at", "is", null)
+          .on("thumb.mime_type", "like", "image/%")
+          .on("thumb.path", "not like", "asset-originals/%"))
+        .innerJoin("users as u", "u.user_id", "m.owner_user_id")
+        .where("mma.market_asset_id", "in", marketAssetIds)
+        .where("m.deleted_at", "is", null)
+        .where("orig.deleted_at", "is", null)
+        .select([
+          "mma.market_asset_id",
+          "mma.position",
+          "m.media_asset_id",
+          "m.name as content_name",
+          "m.type",
+          "m.width",
+          "m.height",
+          "m.duration_seconds",
+          "m.original_file_id",
+          "proxy.file_id as proxy_file_id",
+          "proxy.path as proxy_path",
+          "proxy.mime_type as proxy_mime_type",
+          "thumb.path as thumbnail_path",
+          "u.first_name",
+          "u.last_name"
+        ])
+        .orderBy("mma.position")
+        .execute(),
+      db
+        .selectFrom("market_asset_thumbnails as mat")
+        .innerJoin("media_assets as m", "m.media_asset_id", "mat.media_asset_id")
+        .innerJoin("files as thumb", "thumb.file_id", "m.thumbnail_file_id")
+        .where("mat.market_asset_id", "in", marketAssetIds)
+        .where("m.deleted_at", "is", null)
+        .where("thumb.deleted_at", "is", null)
+        .where("thumb.path", "not like", "asset-originals/%")
+        .select([
+          "mat.market_asset_id",
+          "mat.position",
+          "m.media_asset_id",
+          "m.name as content_name",
+          "m.width",
+          "m.height",
+          "thumb.path as thumbnail_path"
+        ])
+        .orderBy("mat.position")
+        .execute()
+    ]);
+
+    const contentByListing = new Map<string, typeof contentRows>();
+    for (const row of contentRows) {
+      const group = contentByListing.get(row.market_asset_id) ?? [];
+      group.push(row);
+      contentByListing.set(row.market_asset_id, group);
+    }
+
+    const showcaseByListing = new Map<string, typeof showcaseRows>();
+    for (const row of showcaseRows) {
+      const group = showcaseByListing.get(row.market_asset_id) ?? [];
+      group.push(row);
+      showcaseByListing.set(row.market_asset_id, group);
+    }
+
+    const items = listings.map((listing) => {
+      const content = contentByListing.get(listing.market_asset_id) ?? [];
+      const showcases = (showcaseByListing.get(listing.market_asset_id) ?? []).map((row) => ({
+        id: row.media_asset_id,
+        name: row.content_name,
+        type: "image" as const,
+        preview: buildPublicUrl(row.thumbnail_path),
+        details: {
+          src: buildPublicUrl(row.thumbnail_path),
+          width: row.width ?? undefined,
+          height: row.height ?? undefined
+        },
         metadata: {
           market: true,
-          market_asset_id: row.market_asset_id,
+          market_asset_id: listing.market_asset_id,
           media_asset_id: row.media_asset_id,
-          price_credits: row.price_credits,
-          author
+          price_credits: listing.price_credits
         }
-      };
-
-      if (type === "audio") {
+      }));
+      const author = content[0]
+        ? [content[0].first_name, content[0].last_name].filter(Boolean).join(" ")
+        : "";
+      const assets = content.map((row) => {
+        const ready = isGeneratedMarketProxy(
+          row.type, row.original_file_id, row.proxy_file_id,
+          row.proxy_path, row.proxy_mime_type
+        );
+        const proxyUrl = ready ? buildPublicUrl(row.proxy_path!) : "";
         return {
-          ...base,
-          details: { src, duration: row.duration_seconds ?? undefined }
+          id: `market_${listing.market_asset_id}_${row.media_asset_id}`,
+          name: row.content_name || listing.market_name,
+          type: row.type as MarketType,
+          proxyStatus: ready ? "ready" : "unavailable",
+          preview: row.thumbnail_path
+            ? buildPublicUrl(row.thumbnail_path)
+            : row.type === "image"
+              ? proxyUrl || undefined
+              : undefined,
+          details: {
+            src: proxyUrl,
+            width: row.width ?? undefined,
+            height: row.height ?? undefined,
+            duration: row.duration_seconds ?? undefined
+          },
+          metadata: {
+            market: true,
+            market_asset_id: listing.market_asset_id,
+            media_asset_id: row.media_asset_id,
+            price_credits: listing.price_credits,
+            author
+          }
         };
-      }
+      });
+      const contentCover = assets.find((asset) => asset.preview) ?? assets[0];
+      const coverPreview = showcases[0]?.preview ?? contentCover?.preview;
+      const coverDetails = showcases[0]
+        ? showcases[0].details
+        : contentCover?.details;
 
       return {
-        ...base,
-        preview,
-        details: {
-          src,
-          width: row.width ?? undefined,
-          height: row.height ?? undefined,
-          ...(type === "video"
-            ? { duration: row.duration_seconds ?? undefined }
-            : {})
+        id: `market_${listing.market_asset_id}`,
+        marketAssetId: listing.market_asset_id,
+        name: listing.market_name,
+        description: listing.description,
+        type,
+        price_credits: listing.price_credits,
+        preview: coverPreview,
+        details: coverDetails,
+        showcases,
+        assets,
+        metadata: {
+          market: true,
+          market_asset_id: listing.market_asset_id,
+          price_credits: listing.price_credits,
+          author
         }
       };
     });

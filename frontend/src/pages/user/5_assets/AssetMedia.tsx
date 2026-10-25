@@ -1,4 +1,4 @@
-import { Image as ImageIcon, Music2, Video } from "lucide-react";
+import { Image, Clapperboard, AudioLines } from "lucide-react";
 import type { AssetRecord } from "./assetTypes";
 import { mediaUrl } from "./assetTypes";
 
@@ -13,6 +13,18 @@ export default function AssetMedia({ asset, compact = false, thumbnailOnly = fal
     ? asset.thumbnail_path || asset.proxy_path
     : asset.proxy_path || asset.thumbnail_path);
   const common = compact ? "h-48 w-full" : "max-h-[68vh] min-h-64 w-full";
+
+  if (asset.processing_status === "processing" || asset.processing_status === "failed") {
+    return <MediaFallback
+      icon={asset.type === "video" ? Clapperboard : asset.type === "audio" ? AudioLines : Image}
+      label={asset.processing_status === "failed" ? "Preview processing failed" : "Preparing preview…"}
+      className={common}
+    />;
+  }
+
+  if ((compact || thumbnailOnly) && asset.type === "audio" && !asset.thumbnail_path) {
+    return <MediaFallback icon={AudioLines} label="Audio asset" className={common} />;
+  }
 
   if ((compact || thumbnailOnly) && src) {
     return (
@@ -39,7 +51,17 @@ export default function AssetMedia({ asset, compact = false, thumbnailOnly = fal
         <div className="absolute inset-0" aria-hidden="true" />
       </div>
     ) : (
-      <MediaFallback icon={ImageIcon} label="Image preview unavailable" className={common} />
+      <MediaFallback icon={Image} label="Image preview unavailable" className={common} />
+    );
+  }
+
+  if ((asset.type === "video" || asset.type === "audio") && asset.processing_status !== "ready") {
+    return (
+      <MediaFallback
+        icon={asset.type === "video" ? Clapperboard : AudioLines}
+        label={asset.processing_status === "failed" ? "Preview processing failed" : "Preview is being processed"}
+        className={common}
+      />
     );
   }
 
@@ -54,14 +76,14 @@ export default function AssetMedia({ asset, compact = false, thumbnailOnly = fal
         aria-label={`${asset.name} video`}
       />
     ) : (
-      <MediaFallback icon={Video} label="Video preview unavailable" className={common} />
+      <MediaFallback icon={Clapperboard} label="Video preview unavailable" className={common} />
     );
   }
 
   return (
     <div className={`${common} flex flex-col items-center justify-center gap-5 bg-gray-100 p-6 dark:bg-[#111522]`}>
       <span className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600/10 text-blue-500 dark:text-blue-300">
-        <Music2 className="h-8 w-8" aria-hidden="true" />
+        <AudioLines className="h-8 w-8" aria-hidden="true" />
       </span>
       {!compact && src ? (
         <audio src={src} controls preload="metadata" className="w-full max-w-xl" aria-label={`${asset.name} audio`} />
@@ -77,7 +99,7 @@ function MediaFallback({
   label,
   className,
 }: {
-  icon: typeof ImageIcon;
+  icon: typeof Image;
   label: string;
   className: string;
 }) {

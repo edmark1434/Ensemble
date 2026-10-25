@@ -16,6 +16,7 @@ import {
   HelpCircle,
   Home,
   Image,
+  Clapperboard,
   Laptop,
   LayoutPanelLeft,
   LineChart,
@@ -25,7 +26,6 @@ import {
   MessagesSquare,
   Moon,
   MoreVertical,
-  MusicIcon,
   Package,
   Plus,
   Puzzle,
@@ -40,7 +40,6 @@ import {
   Type,
   UploadIcon,
   User,
-  VideoIcon,
   WandSparkles,
   X,
   ZapIcon,
@@ -61,7 +60,7 @@ export type Icon = LucideIcon;
 
 export const Icons = {
   add: Plus,
-  audio: MusicIcon,
+  audio: AudioLinesIcon,
   arrowRight: ArrowRight,
   arrowUpRight: ArrowUpRight,
   billing: CreditCard,
@@ -314,7 +313,7 @@ export const Icons = {
   warning: AlertTriangle,
 
   upload: UploadIcon,
-  video: VideoIcon,
+  video: Clapperboard,
   voiceOver: AudioLinesIcon,
 
   radix: (props: LucideProps) => (

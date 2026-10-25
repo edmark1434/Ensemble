@@ -1,102 +1,96 @@
 const { pool } = require('../lib/Database');
 
-const LOW_QUALITY_PREVIEW_PATTERN = '%-low-quality-preview.webp';
-
-async function listAssetPreviewBackfillCandidatesRepository(limit = 1000) {
+// Read-only lookup used before the create/update transaction opens.
+// The transaction re-validates ownership with row locks.
+async function findOwnedUploadedFilesRepository(accountId, fileIds) {
   const { rows } = await pool.query(
-    `SELECT bundle.media_asset_bundle_file_id,
-            bundle.media_asset_id,
-            bundle.position,
-            bundle.preview_file_id,
-            original.name AS original_name,
-            original.path AS original_path,
-            original.mime_type AS original_mime_type,
-            original.size_bytes AS original_size_bytes
-     FROM media_asset_bundle_files bundle
-     JOIN media_assets media ON media.media_asset_id = bundle.media_asset_id
-     JOIN files original ON original.file_id = bundle.file_id
-     JOIN files preview ON preview.file_id = bundle.preview_file_id
-     WHERE bundle.deleted_at IS NULL
-       AND media.deleted_at IS NULL
-       AND original.deleted_at IS NULL
-       AND preview.deleted_at IS NULL
-       AND original.mime_type LIKE 'image/%'
-       AND (original.path LIKE 'asset-originals/%' OR original.path LIKE 'assets/%')
-       AND NOT (
-         preview.mime_type = 'image/webp'
-         AND LOWER(preview.name) LIKE $1
-       )
-     ORDER BY bundle.media_asset_id, bundle.position,
-              bundle.media_asset_bundle_file_id
-     LIMIT $2`,
-    [LOW_QUALITY_PREVIEW_PATTERN, limit]
+    `SELECT f.file_id, f.name, f.path, f.mime_type, f.size_bytes
+     FROM files f
+     JOIN upload_intents ui ON ui.file_id = f.file_id
+     WHERE f.file_id = ANY($1::uuid[])
+       AND ui.account_id = $2
+       AND ui.status = 'consumed' AND ui.consumed_at IS NOT NULL
+       AND f.deleted_at IS NULL`,
+    [fileIds, accountId]
   );
   return rows;
 }
 
-async function replaceAssetBundlePreviewRepository({
-  bundleFileId,
-  expectedPreviewFileId,
-  previewName,
-  previewPath,
-  previewSizeBytes,
+// Image content media assets whose thumbnail/proxy are not yet the generated
+// 200p thumbnail + high-quality Full HD Ensemble-watermarked proxy.
+async function listAssetDerivativeBackfillCandidatesRepository(limit = 1000) {
+  const { rows } = await pool.query(
+    `SELECT m.media_asset_id, m.proxy_file_id, m.thumbnail_file_id,
+            original.file_id AS original_file_id,
+            original.name AS original_name,
+            original.path AS original_path,
+            original.size_bytes AS original_size_bytes
+     FROM media_assets m
+     JOIN files original ON original.file_id = m.original_file_id
+     LEFT JOIN files proxy ON proxy.file_id = m.proxy_file_id AND proxy.deleted_at IS NULL
+     LEFT JOIN files thumbnail ON thumbnail.file_id = m.thumbnail_file_id AND thumbnail.deleted_at IS NULL
+     WHERE m.deleted_at IS NULL
+       AND m.type = 'image'
+       AND EXISTS (
+         SELECT 1 FROM market_media_assets link
+         WHERE link.media_asset_id = m.media_asset_id
+       )
+       AND original.deleted_at IS NULL
+       AND original.mime_type LIKE 'image/%'
+       AND (original.path LIKE 'asset-originals/%' OR original.path LIKE 'assets/%')
+       AND NOT COALESCE((
+         proxy.path LIKE 'assets/proxies/v2/%'
+         AND thumbnail.path LIKE 'assets/thumbnails/%'
+       ), FALSE)
+     ORDER BY m.created_at, m.media_asset_id
+     LIMIT $1`,
+    [limit]
+  );
+  return rows;
+}
+
+async function replaceMediaAssetDerivativesRepository({
+  mediaAssetId,
+  expectedProxyFileId,
+  expectedThumbnailFileId,
+  width,
+  height,
+  thumbnail,
+  proxy,
 }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows: [bundle] } = await client.query(
-      `SELECT media_asset_id, file_id, position, preview_file_id
-       FROM media_asset_bundle_files
-       WHERE media_asset_bundle_file_id = $1
-         AND deleted_at IS NULL
+    const { rows: [current] } = await client.query(
+      `SELECT proxy_file_id, thumbnail_file_id
+       FROM media_assets
+       WHERE media_asset_id = $1 AND deleted_at IS NULL
        FOR UPDATE`,
-      [bundleFileId]
+      [mediaAssetId]
     );
-    if (!bundle || String(bundle.preview_file_id) !== String(expectedPreviewFileId)) {
+    if (!current
+      || String(current.proxy_file_id) !== String(expectedProxyFileId)
+      || String(current.thumbnail_file_id) !== String(expectedThumbnailFileId)) {
       await client.query('ROLLBACK');
-      return null;
+      return false;
     }
-
-    const { rows: [preview] } = await client.query(
+    const insertFile = async (file) => (await client.query(
       `INSERT INTO files (name, path, mime_type, size_bytes)
-       VALUES ($1, $2, 'image/webp', $3)
+       VALUES ($1, $2, $3, $4)
        RETURNING file_id`,
-      [previewName, previewPath, previewSizeBytes]
-    );
-    const updated = await client.query(
-      `UPDATE media_asset_bundle_files
-       SET preview_file_id = $2
-       WHERE media_asset_bundle_file_id = $1
-         AND preview_file_id = $3
-         AND deleted_at IS NULL`,
-      [bundleFileId, preview.file_id, expectedPreviewFileId]
-    );
-    if (updated.rowCount !== 1) {
-      await client.query('ROLLBACK');
-      return null;
-    }
-
+      [file.name, file.path, file.mimeType, file.sizeBytes]
+    )).rows[0].file_id;
+    const thumbnailFileId = await insertFile(thumbnail);
+    const proxyFileId = await insertFile(proxy);
     await client.query(
       `UPDATE media_assets
-       SET proxy_file_id = $2
-       WHERE deleted_at IS NULL
-         AND (
-           media_asset_id = $1
-           OR (
-             original_file_id = $3
-             AND media_asset_id IN (
-               SELECT sibling.media_asset_id
-               FROM market_media_assets source
-               JOIN market_media_assets sibling
-                 ON sibling.market_asset_id = source.market_asset_id
-               WHERE source.media_asset_id = $1
-             )
-           )
-         )`,
-      [bundle.media_asset_id, preview.file_id, bundle.file_id]
+       SET thumbnail_file_id = $2, proxy_file_id = $3,
+           width = COALESCE($4::integer, width), height = COALESCE($5::integer, height)
+       WHERE media_asset_id = $1`,
+      [mediaAssetId, thumbnailFileId, proxyFileId, width, height]
     );
     await client.query('COMMIT');
-    return { previewFileId: preview.file_id };
+    return true;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -106,6 +100,7 @@ async function replaceAssetBundlePreviewRepository({
 }
 
 module.exports = {
-  listAssetPreviewBackfillCandidatesRepository,
-  replaceAssetBundlePreviewRepository,
+  findOwnedUploadedFilesRepository,
+  listAssetDerivativeBackfillCandidatesRepository,
+  replaceMediaAssetDerivativesRepository,
 };

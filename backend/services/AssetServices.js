@@ -6,7 +6,6 @@ const {
   updateAssetRepository,
   deleteAssetRepository,
   getAssetDownloadRepository,
-  getAssetProjectLinkAccessRepository,
   purchaseAssetRepository,
   listCommentsRepository,
   createCommentRepository,
@@ -37,10 +36,20 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const ASSET_TYPES = new Set(['image', 'video', 'audio', 'template']);
 const ASSET_STATUSES = new Set(['draft', 'published']);
 const ASSET_VIEWS = new Set(['discover', 'mine', 'purchased', 'saved', 'liked']);
-const MAX_BUNDLE_FILES = 20;
-const MAX_BUNDLE_BYTES = 500 * 1024 * 1024;
-const MAX_THUMBNAILS = 8;
+const MAX_CONTENT_FILES = 20;
+const MAX_UPLOAD_FILE_BYTES = 1024 * 1024 * 1024;
+const MAX_SHOWCASE_TOTAL_BYTES = 200 * 1024 * 1024;
+const MAX_AUDIO_SHOWCASE_TOTAL_BYTES = 100 * 1024 * 1024;
+const MAX_SHOWCASE_IMAGES = 6;
+const MAX_AUDIO_SHOWCASE_IMAGES = 3;
 
+function maxShowcaseImages(type) {
+  return type === 'audio' ? MAX_AUDIO_SHOWCASE_IMAGES : MAX_SHOWCASE_IMAGES;
+}
+
+function maxShowcaseTotalBytes(type) {
+  return type === 'audio' ? MAX_AUDIO_SHOWCASE_TOTAL_BYTES : MAX_SHOWCASE_TOTAL_BYTES;
+}
 
 class AssetError extends Error {
   constructor(message, statusCode = 400, code = 'ASSET_ERROR') {
@@ -107,15 +116,41 @@ function normalizeTags(value, { creating = false } = {}) {
   return normalized;
 }
 
-function normalizeProjectLinks(value) {
-  if (value == null) return [];
-  if (!Array.isArray(value)) {
-    throw new AssetError('Project links must be provided as a list.', 400, 'VALIDATION_ERROR');
+function uuidList(value, label, max) {
+  const input = value == null ? [] : value;
+  if (!Array.isArray(input) || input.length > max) {
+    throw new AssetError(`${label} list is invalid.`, 400, 'VALIDATION_ERROR');
   }
-  if (value.length > 0) {
-    throw new AssetError('Project links are no longer supported.', 400, 'VALIDATION_ERROR');
+  return input.map((itemId, index) => requireUuid(itemId, `${label} ID ${index + 1}`));
+}
+
+function requireSnapshotId(value) {
+  const text = String(value ?? '');
+  if (!/^[1-9]\d{0,17}$/.test(text)) {
+    throw new AssetError('A template needs a valid project snapshot.', 400, 'VALIDATION_ERROR');
   }
-  return [];
+  return text;
+}
+
+function assertDistinct(ids, message) {
+  const present = ids.filter((id) => id != null);
+  if (new Set(present).size !== present.length) {
+    throw new AssetError(message, 400, 'VALIDATION_ERROR');
+  }
+}
+
+function normalizeShowcaseOrder(value, expectedKeys) {
+  if (value == null) return expectedKeys;
+  if (!Array.isArray(value) || value.length !== expectedKeys.length
+    || value.some((key) => typeof key !== 'string')
+    || new Set(value).size !== value.length) {
+    throw new AssetError('Showcase image order is invalid.', 400, 'VALIDATION_ERROR');
+  }
+  const expected = new Set(expectedKeys);
+  if (value.some((key) => !expected.has(key))) {
+    throw new AssetError('Showcase image order is invalid.', 400, 'VALIDATION_ERROR');
+  }
+  return value;
 }
 
 function validateAssetPayload(payload, { creating = false } = {}) {
@@ -138,6 +173,7 @@ function validateAssetPayload(payload, { creating = false } = {}) {
     tags: normalizeTags(payload?.tags, { creating }),
   };
   if (!creating && payload?.contentUpdate == null) return result;
+
   if (!creating) {
     const content = payload.contentUpdate;
     if (!content || typeof content !== 'object' || Array.isArray(content)) {
@@ -146,94 +182,82 @@ function validateAssetPayload(payload, { creating = false } = {}) {
     if (!ASSET_TYPES.has(content.type)) {
       throw new AssetError('Asset type must be image, video, audio, or template.', 400, 'VALIDATION_ERROR');
     }
-    const replaceBundleFiles = content.replaceBundleFiles === true;
+    const isTemplate = content.type === 'template';
+    const replaceMedia = content.replaceMedia === true;
     const replaceThumbnails = content.replaceThumbnails === true;
-    const replaceProjectLinks = content.replaceProjectLinks === true;
-    if (!replaceBundleFiles && !replaceThumbnails && !replaceProjectLinks) {
+    const replaceYdoc = content.replaceYdoc === true;
+    if (!replaceMedia && !replaceThumbnails && !replaceYdoc) {
       throw new AssetError('Choose asset content to update.', 400, 'VALIDATION_ERROR');
     }
-
-    const retainedBundleInput = replaceBundleFiles
-      ? (content.retainedBundleFileIds == null ? [] : content.retainedBundleFileIds)
-      : [];
-    const retainedThumbnailInput = replaceThumbnails
-      ? (content.retainedThumbnailIds == null ? [] : content.retainedThumbnailIds)
-      : [];
-    if (!Array.isArray(retainedBundleInput) || retainedBundleInput.length > MAX_BUNDLE_FILES
-      || !Array.isArray(retainedThumbnailInput) || retainedThumbnailInput.length > MAX_THUMBNAILS) {
-      throw new AssetError('Retained asset content is invalid.', 400, 'VALIDATION_ERROR');
+    if (isTemplate && replaceMedia) {
+      throw new AssetError('Templates do not have media files.', 400, 'VALIDATION_ERROR');
     }
-    const retainedBundleFileIds = retainedBundleInput.map((itemId, index) =>
-      requireUuid(itemId, `Retained bundle file ID ${index + 1}`));
-    const retainedThumbnailIds = retainedThumbnailInput.map((itemId, index) =>
-      requireUuid(itemId, `Retained thumbnail ID ${index + 1}`));
-    if (new Set(retainedBundleFileIds).size !== retainedBundleFileIds.length
-      || new Set(retainedThumbnailIds).size !== retainedThumbnailIds.length) {
-      throw new AssetError('Retained asset content cannot contain duplicates.', 400, 'VALIDATION_ERROR');
+    if (!isTemplate && replaceYdoc) {
+      throw new AssetError('Only templates have a project snapshot.', 400, 'VALIDATION_ERROR');
     }
 
-    const originalInput = replaceBundleFiles
-      ? (content.originalFileIds == null ? [] : content.originalFileIds)
-      : [];
-    if (!Array.isArray(originalInput) || originalInput.length > MAX_BUNDLE_FILES
-      || retainedBundleFileIds.length + originalInput.length > MAX_BUNDLE_FILES) {
-      throw new AssetError(
-        content.type === 'template'
-          ? `Choose no more than ${MAX_BUNDLE_FILES} replacement original files.`
-          : `Choose between 1 and ${MAX_BUNDLE_FILES} replacement original files.`,
-        400,
-        'VALIDATION_ERROR'
-      );
+    const retainedMediaAssetIds = replaceMedia
+      ? uuidList(content.retainedMediaAssetIds, 'Retained media asset', MAX_CONTENT_FILES) : [];
+    const originalFileIds = replaceMedia
+      ? uuidList(content.originalFileIds, 'Replacement asset file', MAX_CONTENT_FILES) : [];
+    if (retainedMediaAssetIds.length + originalFileIds.length > MAX_CONTENT_FILES) {
+      throw new AssetError(`Choose no more than ${MAX_CONTENT_FILES} files.`, 400, 'VALIDATION_ERROR');
     }
-    const originalFileIds = originalInput.map((fileId, index) =>
-      requireUuid(fileId, `Replacement original file ID ${index + 1}`));
-    const previewInput = replaceBundleFiles
-      ? (content.previewFileIds == null ? [] : content.previewFileIds)
-      : [];
-    if (!Array.isArray(previewInput) || previewInput.length !== originalFileIds.length) {
-      throw new AssetError('Each replacement original file must have one derivative preview.', 400, 'VALIDATION_ERROR');
+    const retainedThumbnailIds = replaceThumbnails
+      ? uuidList(content.retainedThumbnailIds, 'Retained showcase image', MAX_SHOWCASE_IMAGES) : [];
+    const thumbnailFileIds = replaceThumbnails
+      ? uuidList(content.thumbnailFileIds, 'Replacement showcase image', MAX_SHOWCASE_IMAGES) : [];
+    const showcaseMediaAssetIds = replaceThumbnails
+      ? uuidList(content.showcaseMediaAssetIds, 'Showcase asset file', MAX_CONTENT_FILES) : [];
+    const showcaseOriginalFileIds = replaceThumbnails
+      ? uuidList(content.showcaseOriginalFileIds, 'Showcase asset file', MAX_CONTENT_FILES) : [];
+    assertDistinct([...retainedThumbnailIds, ...showcaseMediaAssetIds, ...showcaseOriginalFileIds],
+      'Showcase images cannot contain duplicate media assets.');
+    const expectedShowcaseOrder = [
+      ...retainedThumbnailIds.map((id) => `retained:${id}`),
+      ...showcaseMediaAssetIds.map((id) => `media:${id}`),
+      ...showcaseOriginalFileIds.map((id) => `assetFile:${id}`),
+      ...thumbnailFileIds.map((id) => `upload:${id}`),
+    ];
+    const showcaseOrder = replaceThumbnails
+      ? normalizeShowcaseOrder(content.showcaseOrder, expectedShowcaseOrder) : [];
+    if (retainedThumbnailIds.length + thumbnailFileIds.length + showcaseMediaAssetIds.length
+      + showcaseOriginalFileIds.length > maxShowcaseImages(content.type)) {
+      throw new AssetError(`Choose no more than ${maxShowcaseImages(content.type)} showcase images.`, 400, 'VALIDATION_ERROR');
     }
-    const previewFileIds = previewInput.map((fileId, index) =>
-      requireUuid(fileId, `Replacement preview file ID ${index + 1}`));
-    const thumbnailInput = replaceThumbnails
-      ? (Array.isArray(content.thumbnailFileIds) ? content.thumbnailFileIds : [])
-      : [];
-    if (replaceThumbnails && (retainedThumbnailIds.length + thumbnailInput.length < 1
-      || retainedThumbnailIds.length + thumbnailInput.length > MAX_THUMBNAILS)) {
-      throw new AssetError(`Choose between 1 and ${MAX_THUMBNAILS} replacement thumbnail images.`, 400, 'VALIDATION_ERROR');
+    assertDistinct(retainedMediaAssetIds, 'Retained content cannot contain duplicates.');
+    assertDistinct(retainedThumbnailIds, 'Retained content cannot contain duplicates.');
+    assertDistinct([...thumbnailFileIds], 'Showcase image uploads cannot contain duplicates.');
+    assertDistinct([...originalFileIds, ...thumbnailFileIds],
+      'An uploaded asset file cannot also be uploaded as a separate showcase image.');
+    assertDistinct([...showcaseMediaAssetIds, ...showcaseOriginalFileIds],
+      'Showcase asset files cannot contain duplicates.');
+    if (showcaseOriginalFileIds.some((fileId) => !originalFileIds.includes(fileId))
+      || (showcaseOriginalFileIds.length > 0 && !replaceMedia)) {
+      throw new AssetError('New showcase asset files must be part of the replacement files.', 400, 'VALIDATION_ERROR');
     }
-    const thumbnailFileIds = thumbnailInput.map((fileId, index) =>
-      requireUuid(fileId, `Replacement thumbnail file ID ${index + 1}`));
-    const projectLinks = replaceProjectLinks
-      ? normalizeProjectLinks(content.projectLinks)
-      : [];
-    const allFileIds = [...originalFileIds, ...previewFileIds, ...thumbnailFileIds];
-    if (new Set(allFileIds).size !== allFileIds.length) {
-      throw new AssetError('Every replacement original, preview, and thumbnail must be a separate upload.', 400, 'VALIDATION_ERROR');
+    if (content.type === 'audio' && (showcaseMediaAssetIds.length || showcaseOriginalFileIds.length)) {
+      throw new AssetError('Audio files cannot be used as showcase images.', 400, 'VALIDATION_ERROR');
     }
+
     return {
       ...result,
       contentUpdate: {
         type: content.type,
-        replaceBundleFiles,
+        replaceMedia,
         replaceThumbnails,
-        replaceProjectLinks,
-        retainedBundleFileIds,
+        replaceYdoc,
+        retainedMediaAssetIds,
         retainedThumbnailIds,
         originalFileIds,
-        previewFileIds,
         thumbnailFileIds,
-        projectLinks,
-        width: ['audio', 'template'].includes(content.type)
-          ? null
-          : optionalPositiveInteger(content.width, 'Width', 100000),
-        height: ['audio', 'template'].includes(content.type)
-          ? null
-          : optionalPositiveInteger(content.height, 'Height', 100000),
-        durationSeconds: ['image', 'template'].includes(content.type)
-          ? null
-          : optionalPositiveInteger(content.durationSeconds, 'Duration', 86400),
-        maxBundleBytes: MAX_BUNDLE_BYTES,
+        showcaseMediaAssetIds,
+        showcaseOriginalFileIds,
+        showcaseOrder,
+        ydocSnapshotId: replaceYdoc ? requireSnapshotId(content.ydocSnapshotId) : null,
+        maxUploadFileBytes: MAX_UPLOAD_FILE_BYTES,
+        maxShowcaseImages: maxShowcaseImages(content.type),
+        maxShowcaseTotalBytes: maxShowcaseTotalBytes(content.type),
       },
     };
   }
@@ -242,56 +266,64 @@ function validateAssetPayload(payload, { creating = false } = {}) {
     throw new AssetError('Asset type must be image, video, audio, or template.', 400, 'VALIDATION_ERROR');
   }
   const type = payload.type;
-  const originalInput = payload?.originalFileIds == null ? [] : payload.originalFileIds;
-  if (!Array.isArray(originalInput)
-    || (type !== 'template' && originalInput.length < 1)
-    || originalInput.length > MAX_BUNDLE_FILES) {
+  const isTemplate = type === 'template';
+  const originalFileIds = uuidList(payload.originalFileIds, 'Asset file', MAX_CONTENT_FILES);
+  if (isTemplate ? originalFileIds.length > 0 : originalFileIds.length < 1) {
     throw new AssetError(
-      type === 'template'
-        ? `Choose no more than ${MAX_BUNDLE_FILES} optional original files.`
-        : `Choose between 1 and ${MAX_BUNDLE_FILES} original files.`,
+      isTemplate
+        ? 'Templates use a project snapshot and do not have asset files.'
+        : `Choose between 1 and ${MAX_CONTENT_FILES} asset files.`,
       400,
       'VALIDATION_ERROR'
     );
   }
-  const originalFileIds = originalInput.map((fileId, index) =>
-    requireUuid(fileId, `Original file ID ${index + 1}`));
-  const previewInput = payload?.previewFileIds == null ? [] : payload.previewFileIds;
-  if (!Array.isArray(previewInput) || previewInput.length !== originalFileIds.length) {
-    throw new AssetError('Each original file must have one derivative preview.', 400, 'VALIDATION_ERROR');
-  }
-  const previewFileIds = previewInput.map((fileId, index) =>
-    requireUuid(fileId, `Preview file ID ${index + 1}`));
-  const thumbnailInput = Array.isArray(payload?.thumbnailFileIds)
+  const thumbnailInput = Array.isArray(payload.thumbnailFileIds)
     ? payload.thumbnailFileIds
-    : payload?.thumbnailFileId
+    : payload.thumbnailFileId
       ? [payload.thumbnailFileId]
       : [];
-  if (thumbnailInput.length < 1 || thumbnailInput.length > MAX_THUMBNAILS) {
-    throw new AssetError(`Choose between 1 and ${MAX_THUMBNAILS} thumbnail images.`, 400, 'VALIDATION_ERROR');
+  const maxShowcase = maxShowcaseImages(type);
+  if (thumbnailInput.length > maxShowcase || (isTemplate && thumbnailInput.length < 1)) {
+    throw new AssetError(isTemplate
+      ? `Choose between 1 and ${maxShowcase} showcase images.`
+      : `Choose no more than ${maxShowcase} showcase images.`, 400, 'VALIDATION_ERROR');
   }
-  const thumbnailFileIds = thumbnailInput.map((fileId, index) =>
-    requireUuid(fileId, `Thumbnail file ID ${index + 1}`));
-  const projectLinks = normalizeProjectLinks(payload?.projectLinks);
+  const thumbnailFileIds = uuidList(thumbnailInput, 'Showcase image', maxShowcase);
+  const showcaseOriginalFileIds = uuidList(payload.showcaseOriginalFileIds, 'Showcase asset file', MAX_CONTENT_FILES);
+  if (thumbnailFileIds.length + showcaseOriginalFileIds.length > maxShowcase) {
+    throw new AssetError(`Choose no more than ${maxShowcase} showcase images.`, 400, 'VALIDATION_ERROR');
+  }
+  const showcaseOrder = normalizeShowcaseOrder(payload.showcaseOrder, [
+    ...showcaseOriginalFileIds.map((id) => `assetFile:${id}`),
+    ...thumbnailFileIds.map((id) => `upload:${id}`),
+  ]);
+  assertDistinct([...originalFileIds, ...thumbnailFileIds],
+    'An uploaded asset file cannot also be uploaded as a separate showcase image.');
+  if (!isTemplate && originalFileIds.length <= 1 && (thumbnailFileIds.length || showcaseOriginalFileIds.length)) {
+    throw new AssetError('A single asset file does not use showcase images.', 400, 'VALIDATION_ERROR');
+  }
+  if (isTemplate && showcaseOriginalFileIds.length) {
+    throw new AssetError('Template showcase images must be uploaded separately.', 400, 'VALIDATION_ERROR');
+  }
+  if (showcaseOriginalFileIds.some((fileId) => !originalFileIds.includes(fileId))) {
+    throw new AssetError('Showcase asset files must be part of this asset.', 400, 'VALIDATION_ERROR');
+  }
+  assertDistinct(showcaseOriginalFileIds, 'Showcase asset files cannot contain duplicates.');
+  if (type === 'audio' && showcaseOriginalFileIds.length) {
+    throw new AssetError('Audio files cannot be used as showcase images.', 400, 'VALIDATION_ERROR');
+  }
 
-  const allFileIds = [...originalFileIds, ...previewFileIds, ...thumbnailFileIds];
-  if (new Set(allFileIds).size !== allFileIds.length) {
-    throw new AssetError('Every original, preview, and thumbnail must be a separate upload.', 400, 'VALIDATION_ERROR');
-  }
   return {
     ...result,
-    originalFileIds,
-    previewFileIds,
-    thumbnailFileId: thumbnailFileIds[0],
-    thumbnailFileIds,
-    projectLinks,
     type,
-    width: ['audio', 'template'].includes(type) ? null : optionalPositiveInteger(payload.width, 'Width', 100000),
-    height: ['audio', 'template'].includes(type) ? null : optionalPositiveInteger(payload.height, 'Height', 100000),
-    durationSeconds: ['image', 'template'].includes(type)
-      ? null
-      : optionalPositiveInteger(payload.durationSeconds, 'Duration', 86400),
-    maxBundleBytes: MAX_BUNDLE_BYTES,
+    originalFileIds,
+    thumbnailFileIds,
+    showcaseOriginalFileIds,
+    showcaseOrder,
+    ydocSnapshotId: isTemplate ? requireSnapshotId(payload.ydocSnapshotId) : null,
+    maxUploadFileBytes: MAX_UPLOAD_FILE_BYTES,
+    maxShowcaseImages: maxShowcase,
+    maxShowcaseTotalBytes: maxShowcaseTotalBytes(type),
   };
 }
 
@@ -353,6 +385,38 @@ function assetPostingError(code, eligibility = {}) {
     403,
     'ASSET_POSTING_UNAVAILABLE'
   );
+}
+
+function mapAssetContentError(error, { replacing = false } = {}) {
+  const what = replacing ? 'The replacement' : 'The uploaded';
+  if (error.code === 'ASSET_FILE_NOT_OWNED') {
+    return new AssetError(`${what} file is unavailable or is not owned by this account.`, 400, error.code);
+  }
+  if (error.code === 'ASSET_FILE_ALREADY_USED') {
+    return new AssetError('An upload is already attached to an asset.', 409, error.code);
+  }
+  if (error.code === 'ASSET_FILE_TYPE_MISMATCH') {
+    return new AssetError('Every file must match the selected asset type.', 400, error.code);
+  }
+  if (error.code === 'ASSET_FILE_PLACEMENT_INVALID') {
+    return new AssetError('Files were uploaded to invalid storage locations.', 400, error.code);
+  }
+  if (error.code === 'ASSET_THUMBNAIL_INVALID') {
+    return new AssetError('Showcase images do not meet the requirements for this asset type.', 400, error.code);
+  }
+  if (error.code === 'ASSET_PREVIEW_INVALID') {
+    return new AssetError('The preview for an image could not be generated.', 400, error.code);
+  }
+  if (error.code === 'ASSET_IMAGE_UNPROCESSABLE') {
+    return new AssetError('One of the images could not be processed. Check the file and try again.', 400, error.code);
+  }
+  if (error.code === 'ASSET_ORIGINAL_FILE_TOO_LARGE') {
+    return new AssetError('Each asset file must be no larger than 1GB.', 400, error.code);
+  }
+  if (error.code === 'ASSET_YDOC_INVALID') {
+    return new AssetError('The template project snapshot is unavailable or already used by another listing.', 400, error.code);
+  }
+  return null;
 }
 
 async function getAssetPostingEligibilityServices(accountId) {
@@ -422,6 +486,7 @@ async function createAssetServices(accountId, payload) {
     const requestedStatus = data.status;
     data.status = reviewRequired ? 'draft' : requestedStatus;
 
+    // Save the listing and its processing jobs atomically; storage work runs afterwards.
     const assetId = await createAssetRepository(accountId, data);
     const asset = await getAssetServices(assetId, accountId);
 
@@ -451,49 +516,14 @@ async function createAssetServices(accountId, payload) {
     if (error.code === 'INSUFFICIENT_CREDITS') {
       throw new AssetError(`Insufficient credits for marketplace listing fee. Required: ${error.required}, Available: ${error.available}.`, 400, error.code);
     }
-    if (error.code === 'ASSET_FILE_NOT_OWNED') {
-      throw new AssetError('The uploaded file is unavailable or is not owned by this account.', 400, error.code);
-    }
-    if (error.code === 'ASSET_FILE_ALREADY_USED') {
-      throw new AssetError('This upload is already attached to an asset.', 409, error.code);
-    }
-    if (error.code === 'ASSET_FILE_TYPE_MISMATCH') {
-      throw new AssetError('The selected asset type does not match the uploaded file.', 400, error.code);
-    }
-    if (error.code === 'ASSET_FILE_PLACEMENT_INVALID') {
-      throw new AssetError('The original and preview files were uploaded to invalid storage locations.', 400, error.code);
-    }
-    if (error.code === 'ASSET_THUMBNAIL_INVALID') {
-      throw new AssetError('The thumbnail must be a valid image no larger than 5MB.', 400, error.code);
-    }
-    if (error.code === 'ASSET_PREVIEW_INVALID') {
-      throw new AssetError('Every asset preview must be a valid image no larger than 5MB.', 400, error.code);
-    }
-    if (error.code === 'ASSET_ORIGINAL_FILE_TOO_LARGE') {
-      throw new AssetError('One or more original files exceeds its permitted size.', 400, error.code);
-    }
-    if (error.code === 'ASSET_BUNDLE_TOO_LARGE') {
-      throw new AssetError('The combined original files must not exceed 500MB.', 400, error.code);
-    }
-    throw error;
+    throw mapAssetContentError(error) || error;
   }
 }
 
-async function getAssetProjectLinkAccessServices(assetId, projectLinkId, accountId) {
+async function getAssetDownloadServices(assetId, accountId, mediaAssetId = null) {
   requireUuid(assetId);
-  requireUuid(projectLinkId, 'Project link ID');
-  const link = await getAssetProjectLinkAccessRepository(assetId, projectLinkId, accountId);
-  if (!link) throw new AssetError('Project link not found.', 404, 'ASSET_PROJECT_LINK_NOT_FOUND');
-  if (!link.is_owner && !link.is_purchased) {
-    throw new AssetError('Purchase this asset before opening its project links.', 403, 'ASSET_PURCHASE_REQUIRED');
-  }
-  return { url: link.url, label: link.label, provider: link.provider };
-}
-
-async function getAssetDownloadServices(assetId, accountId, bundleFileId = null) {
-  requireUuid(assetId);
-  if (bundleFileId) requireUuid(bundleFileId, 'Bundle file ID');
-  const download = await getAssetDownloadRepository(assetId, accountId, bundleFileId);
+  if (mediaAssetId) requireUuid(mediaAssetId, 'Media asset ID');
+  const download = await getAssetDownloadRepository(assetId, accountId, mediaAssetId);
   if (!download) throw new AssetError('Asset file not found.', 404, 'ASSET_FILE_NOT_FOUND');
   if (!download.is_owner && !download.is_purchased) {
     throw new AssetError('Purchase this asset before downloading the original file.', 403, 'ASSET_PURCHASE_REQUIRED');
@@ -504,10 +534,10 @@ async function getAssetDownloadServices(assetId, accountId, bundleFileId = null)
   };
 }
 
-async function getAssetOriginalPreviewServices(assetId, accountId, bundleFileId = null) {
+async function getAssetOriginalPreviewServices(assetId, accountId, mediaAssetId = null) {
   requireUuid(assetId);
-  if (bundleFileId) requireUuid(bundleFileId, 'Bundle file ID');
-  const preview = await getAssetDownloadRepository(assetId, accountId, bundleFileId);
+  if (mediaAssetId) requireUuid(mediaAssetId, 'Media asset ID');
+  const preview = await getAssetDownloadRepository(assetId, accountId, mediaAssetId);
   if (!preview) throw new AssetError('Asset file not found.', 404, 'ASSET_FILE_NOT_FOUND');
   if (!preview.is_owner && !preview.is_purchased) {
     throw new AssetError('Purchase this asset before viewing the original file.', 403, 'ASSET_PURCHASE_REQUIRED');
@@ -613,7 +643,7 @@ async function updateAssetServices(assetId, accountId, payload) {
       throw assetPostingError(error.code, error.eligibility);
     }
     if (error.code === 'ASSET_CONTENT_LOCKED_AFTER_PURCHASE') {
-      throw new AssetError('Asset files, thumbnails, and project links cannot be changed after a purchase.', 409, error.code);
+      throw new AssetError('Asset files, thumbnails, and the template snapshot cannot be changed after a purchase.', 409, error.code);
     }
     if (error.code === 'ASSET_TYPE_IMMUTABLE') {
       throw new AssetError('An existing asset type cannot be changed.', 409, error.code);
@@ -622,33 +652,9 @@ async function updateAssetServices(assetId, accountId, payload) {
       throw new AssetError('One or more selected existing files no longer belongs to this asset.', 409, error.code);
     }
     if (error.code === 'ASSET_CONTENT_REQUIRED') {
-      throw new AssetError('Keep at least one thumbnail and the required package files.', 400, error.code);
+      throw new AssetError('Keep at least one asset file.', 400, error.code);
     }
-    if (error.code === 'ASSET_FILE_NOT_OWNED') {
-      throw new AssetError('The replacement upload is unavailable or is not owned by this account.', 400, error.code);
-    }
-    if (error.code === 'ASSET_FILE_ALREADY_USED') {
-      throw new AssetError('A replacement upload is already attached to an asset.', 409, error.code);
-    }
-    if (error.code === 'ASSET_FILE_TYPE_MISMATCH') {
-      throw new AssetError('The replacement content does not match this asset type.', 400, error.code);
-    }
-    if (error.code === 'ASSET_FILE_PLACEMENT_INVALID') {
-      throw new AssetError('Replacement files were uploaded to invalid storage locations.', 400, error.code);
-    }
-    if (error.code === 'ASSET_THUMBNAIL_INVALID') {
-      throw new AssetError('Keep 1–8 valid thumbnail images, each no larger than 5MB.', 400, error.code);
-    }
-    if (error.code === 'ASSET_PREVIEW_INVALID') {
-      throw new AssetError('Every replacement preview must be a valid image no larger than 5MB.', 400, error.code);
-    }
-    if (error.code === 'ASSET_ORIGINAL_FILE_TOO_LARGE') {
-      throw new AssetError('One or more replacement original files exceeds its permitted size.', 400, error.code);
-    }
-    if (error.code === 'ASSET_BUNDLE_TOO_LARGE') {
-      throw new AssetError('The combined replacement original files must not exceed 500MB.', 400, error.code);
-    }
-    throw error;
+    throw mapAssetContentError(error, { replacing: true }) || error;
   }
 }
 
@@ -796,7 +802,6 @@ module.exports = {
   updateAssetServices,
   deleteAssetServices,
   getAssetDownloadServices,
-  getAssetProjectLinkAccessServices,
   getAssetOriginalPreviewServices,
   purchaseAssetServices,
   listCommentsServices,

@@ -5,7 +5,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "../../../components/ui/dialog";
-import { FileIcon, Link2, Music, Plus, UploadIcon, X } from "lucide-react";
+import { AudioLines, Clapperboard, FileIcon, Link2, Plus, UploadIcon, X } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 import { AnimatePresence } from "framer-motion";
@@ -472,11 +472,13 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
         alt={f.file.name}
         className={thumbClass}
       />
-    ) : f.file?.type.startsWith("video/") && videoThumbnails[f.file.name] ? (
-      <img src={videoThumbnails[f.file.name]} alt="" className={thumbClass} />
+    ) : f.file?.type.startsWith("video/") ? (
+      videoThumbnails[f.file.name] ? <img src={videoThumbnails[f.file.name]} alt="" className={thumbClass} /> : (
+        <div className={iconWrapClass}><Clapperboard className={iconClass} /></div>
+      )
     ) : f.file?.type.startsWith("audio/") ? (
       <div className={iconWrapClass}>
-        <Music className={iconClass} />
+        <AudioLines className={iconClass} />
       </div>
     ) : (
       <div className={iconWrapClass}>
@@ -503,8 +505,12 @@ const UploadModal: React.FC<ModalUploadProps> = ({ type = "all" }) => {
       thumbnailNode:
         entry.kind === "audio" ? (
           <div className={iconWrapClass}>
-            <Music className={iconClass} />
+            <AudioLines className={iconClass} />
           </div>
+        ) : entry.kind === "video" ? (
+          entry.thumbnail ? <img src={entry.thumbnail} alt="" className={thumbClass} /> : (
+            <div className={iconWrapClass}><Clapperboard className={iconClass} /></div>
+          )
         ) : entry.thumbnail ? (
           <img
             src={entry.thumbnail}

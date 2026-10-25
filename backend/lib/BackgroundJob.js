@@ -314,6 +314,24 @@ let isMilestoneReminderJobRunning = false;
 
 function startPaymentReconciliationJob() {
 
+    // Normal backend startup also drains the durable preview queue. Deployments
+    // using a separate `media:worker` process can disable this lane explicitly.
+    if (process.env.MEDIA_WORKER_EMBEDDED !== 'false') {
+        let mediaJobRunning = false;
+        cron.schedule("*/3 * * * * *", async () => {
+            if (mediaJobRunning) return;
+            mediaJobRunning = true;
+            try {
+                const { processNextMediaJob } = require('../services/MediaJobServices');
+                await processNextMediaJob();
+            } catch (error) {
+                console.error('Media preview worker failed:', error.message);
+            } finally {
+                mediaJobRunning = false;
+            }
+        });
+    }
+
     // Delete only expired onboarding uploads that were never committed to the files table.
     cron.schedule("17 3 * * *", async () => {
         try {

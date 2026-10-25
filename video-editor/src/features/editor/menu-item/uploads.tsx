@@ -11,7 +11,7 @@ import { useIsDraggingOverTimeline } from "../hooks/is-dragging-over-timeline";
 import useUploadStore from "../store/use-upload-store";
 import UploadModal from "@/features/editor/modals/upload-modal";
 import {
-  Music,
+  AudioLines,
   Image as ImageIcon,
   Loader2,
   Upload,
@@ -730,7 +730,7 @@ const UploadAudioItem = ({
       renderCustomPreview={
         <div
           className="w-[120px] h-[120px] rounded-md flex items-center justify-center bg-zinc-800 border border-primary">
-          <Music className="text-muted-foreground" size={40} />
+          <AudioLines className="text-muted-foreground" size={40} />
         </div>
       }
       shouldDisplayPreview={shouldDisplayPreview}
@@ -1243,7 +1243,7 @@ export const Uploads = () => {
           <TabsContent value="audio" className="flex-1 min-h-0 flex flex-col">
             {audios.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
-                <Music size={32} className="opacity-50" />
+                <AudioLines size={32} className="opacity-50" />
                 <span className="text-sm">No audio uploaded yet</span>
               </div>
             ) : (

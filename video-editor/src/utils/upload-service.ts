@@ -126,11 +126,10 @@ export async function processFileUpload(
           (progressEvent.loaded * 100) / (progressEvent.total || 1)
         );
         callbacks.onProgress(uploadId, percent);
-      },
-      validateStatus: () => true
+      }
     });
 
-    await axios.post("/api/uploads/complete", {
+    const { data: completed } = await axios.post("/api/uploads/complete", {
       filePath: uploadInfo.filePath,
       fileName: uploadInfo.fileName,
       contentType: uploadInfo.contentType,
@@ -142,23 +141,25 @@ export async function processFileUpload(
       durationSeconds: probed.durationSeconds
     });
 
-    // Construct upload data from uploadInfo
+    const finalized = completed.upload;
+    callbacks.onFileNameResolved?.(uploadId, finalized.fileName);
+    // Use the finalized original's URL and server-probed dimensions.
     const uploadData = {
-      fileName: uploadInfo.fileName,
-      filePath: uploadInfo.filePath,
-      fileSize: file.size,
-      contentType: uploadInfo.contentType,
-      metadata: { uploadedUrl: uploadInfo.url },
+      fileName: finalized.fileName,
+      filePath: finalized.filePath,
+      fileSize: finalized.fileSize,
+      contentType: finalized.contentType,
+      metadata: { uploadedUrl: finalized.url },
       folder: uploadInfo.folder || null,
-      type: uploadInfo.contentType.split("/")[0],
+      type: finalized.contentType.split("/")[0],
       method: "direct",
       origin: "user",
       status: "uploaded",
       isPreview: false,
       details: {
-        width: probed.width,
-        height: probed.height,
-        duration: probed.durationSeconds
+        width: finalized.width,
+        height: finalized.height,
+        duration: finalized.durationSeconds
       }
     };
 
@@ -217,9 +218,9 @@ export async function processUrlUpload(
     return uploads.map((uploadInfo: any) => ({
       fileName: uploadInfo.fileName,
       filePath: uploadInfo.filePath,
-      fileSize: 0,
+      fileSize: uploadInfo.fileSize,
       contentType: uploadInfo.contentType,
-      metadata: { originalUrl: uploadInfo.originalUrl },
+      metadata: { originalUrl: uploadInfo.originalUrl, uploadedUrl: uploadInfo.url },
       folder: uploadInfo.folder || null,
       type: uploadInfo.contentType.split("/")[0],
       method: "url",

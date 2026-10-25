@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Compass, Folder, Heart, Image, LayoutTemplate, Loader2, Pencil, Plus, Search, ShoppingBag, Star, Trash2, Video, Zap } from "lucide-react";
+import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Clapperboard, Compass, Folder, Heart, Image, LayoutTemplate, Loader2, Pencil, Plus, Search, ShoppingBag, Star, Trash2, Zap } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -11,6 +11,8 @@ import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import AssetEditorModal from "./AssetEditorModal";
 import AssetMedia from "./AssetMedia";
 import { AssetCard } from "./AssetCard";
+import PendingAssetCard from "./PendingAssetCard";
+import { useAssetUploadStore } from "./assetUploadStore";
 import type { AssetPagination, AssetRecord, AssetType } from "./assetTypes";
 import { mediaUrl } from "./assetTypes";
 import { getAssetPostingEligibility, type AssetPostingEligibility } from "./assetPostingEligibility";
@@ -34,7 +36,7 @@ const MINE_STATUS_OPTIONS: { id: MineStatus; label: string }[] = [
 const FILTERS: { value: FilterType; label: string; icon: typeof Image }[] = [
   { value: "all", label: "All", icon: Image },
   { value: "image", label: "Images", icon: Image },
-  { value: "video", label: "Videos", icon: Video },
+  { value: "video", label: "Videos", icon: Clapperboard },
   { value: "audio", label: "Audio", icon: AudioLines },
   { value: "template", label: "Templates", icon: LayoutTemplate },
 ];
@@ -71,6 +73,10 @@ export default function AssetsLibrary() {
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const isGuestView = isGuestMode || !user?.account_id;
   const [assets, setAssets] = useState<AssetRecord[]>([]);
+  const uploads = useAssetUploadStore((state) => state.uploads);
+  const removeUpload = useAssetUploadStore((state) => state.remove);
+  const ownUploads = uploads.filter((item) => item.accountId === user?.account_id);
+  const savedUploadIds = ownUploads.map((item) => item.asset?.market_asset_id).filter(Boolean).join(",");
   const [pagination, setPagination] = useState<AssetPagination>({ page: 1, pageSize: 12, total: 0, totalPages: 1 });
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<FilterType>("all");
@@ -188,6 +194,46 @@ export default function AssetsLibrary() {
   }, [loadAssets]);
 
   useEffect(() => {
+    if (!savedUploadIds || view !== "mine") return;
+    const controller = new AbortController();
+    void loadAssets(controller.signal);
+    return () => controller.abort();
+  }, [savedUploadIds, view, loadAssets]);
+
+  useEffect(() => {
+    for (const upload of uploads) {
+      if (assets.some((item) => item.market_asset_id === upload.asset?.market_asset_id && item.processing_status === "ready")) {
+        removeUpload(upload.id);
+      }
+    }
+  }, [assets, uploads, removeUpload]);
+
+  const processingAssetIds = [...new Set([...assets,
+    ...ownUploads.flatMap((upload) => upload.asset ? [assets.find((item) => item.market_asset_id === upload.asset!.market_asset_id) || upload.asset] : []),
+  ].filter((item) => item.processing_status === "processing").map((item) => item.market_asset_id))].join(",");
+  useEffect(() => {
+    if (!processingAssetIds) return;
+    const controller = new AbortController();
+    let running = false;
+    const timer = window.setInterval(async () => {
+      if (running) return;
+      running = true;
+      try {
+        const results = await Promise.allSettled(processingAssetIds.split(",").map((id) =>
+          api.get<{ asset: AssetRecord }>(`/api/assets/${id}`, { signal: controller.signal })));
+        if (controller.signal.aborted) return;
+        const updated = new Map(results.flatMap((result) => result.status === "fulfilled"
+          ? [[result.value.data.asset.market_asset_id, result.value.data.asset] as const] : []));
+        setAssets((current) => [
+          ...current.map((item) => updated.get(item.market_asset_id) || item),
+          ...(view === "mine" ? [...updated.values()].filter((item) => !current.some((existing) => existing.market_asset_id === item.market_asset_id)) : []),
+        ]);
+      } finally { running = false; }
+    }, 5000);
+    return () => { controller.abort(); window.clearInterval(timer); };
+  }, [processingAssetIds, view]);
+
+  useEffect(() => {
     const handleStatusUpdate = () => {
       void loadAssets();
     };
@@ -244,17 +290,34 @@ export default function AssetsLibrary() {
       setPage(1);
       navigate('/assets/owned');
       setMineStatus(asset.review_status === "pending" || asset.status === "draft" ? "all" : "uploaded");
+      if (view === "mine" && mineStatus === "all" && page === 1) void loadAssets();
       return;
     }
     if (page !== 1) setPage(1);
     else void loadAssets();
   };
 
+  const onUploadQueued = () => {
+    setEditorOpen(false);
+    setEditingAsset(null);
+    setPage(1);
+    setMineStatus("all");
+    setFilter("all");
+    setSearch("");
+    setDebouncedSearch("");
+    navigate("/assets/owned");
+  };
+  const pendingUploads = view === "mine" ? ownUploads : [];
+  const queuedAssetIds = new Set(pendingUploads.map((upload) => upload.asset?.market_asset_id));
+  const visibleAssets = assets.filter((item) => !queuedAssetIds.has(item.market_asset_id));
+
   const confirmDelete = async () => {
     if (!deletingAsset || deleting) return;
     setDeleting(true);
     try {
       await api.delete(`/api/assets/${deletingAsset.market_asset_id}`);
+      ownUploads.filter((upload) => upload.asset?.market_asset_id === deletingAsset.market_asset_id)
+        .forEach((upload) => removeUpload(upload.id));
       setAssets((current) => current.filter((item) => item.market_asset_id !== deletingAsset.market_asset_id));
       setPagination((current) => ({ ...current, total: Math.max(0, current.total - 1) }));
       showSuccessToast("Asset deleted.");
@@ -469,14 +532,14 @@ export default function AssetsLibrary() {
           {!loading && <p className="text-xs text-gray-500 dark:text-zinc-500">{pagination.total.toLocaleString()} {pagination.total === 1 ? "asset" : "assets"}</p>}
         </div>
 
-        {loading ? (
+        {loading && pendingUploads.length === 0 ? (
           <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{Array.from({ length: 8 }, (_, index) => <AssetSkeleton key={index} />)}</div>
-        ) : loadError ? (
+        ) : loadError && pendingUploads.length === 0 ? (
           <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/5 p-10 text-center">
             <p className="text-sm text-red-600 dark:text-red-300">{loadError}</p>
             <button type="button" onClick={() => void loadAssets()} className="mt-4 rounded-lg border border-red-500/30 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-500/10 dark:text-red-300">Try again</button>
           </div>
-        ) : assets.length === 0 ? (
+        ) : assets.length === 0 && pendingUploads.length === 0 ? (
           <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-16 text-center dark:border-white/10 dark:bg-dark-surface">
             <AudioLines className="mx-auto h-10 w-10 text-gray-400 dark:text-zinc-600" />
             <h2 className="mt-4 font-semibold">
@@ -519,7 +582,14 @@ export default function AssetsLibrary() {
           </div>
         ) : (
           <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {assets.map((asset) => (
+            {pendingUploads.map((upload) => {
+              const saved = assets.find((item) => item.market_asset_id === upload.asset?.market_asset_id) || upload.asset;
+              return saved?.processing_status === "ready"
+                ? <AssetCard key={upload.id} asset={saved} view="mine" onEdit={openEdit} onDelete={setDeletingAsset} />
+                : <PendingAssetCard key={upload.id} upload={upload} asset={saved}
+                    onDismiss={() => saved ? setDeletingAsset(saved) : removeUpload(upload.id)} />;
+            })}
+            {visibleAssets.map((asset) => (
               <AssetCard
                 key={asset.market_asset_id}
                 asset={asset}
@@ -542,7 +612,7 @@ export default function AssetsLibrary() {
         )}
       </main>
 
-      <AssetEditorModal open={editorOpen} asset={editingAsset} onClose={() => !deleting && setEditorOpen(false)} onSaved={onSaved} />
+      <AssetEditorModal open={editorOpen} asset={editingAsset} onClose={() => !deleting && setEditorOpen(false)} onSaved={onSaved} onQueued={onUploadQueued} />
       <GuestLoginModal
         isOpen={isGuestLoginOpen}
         onClose={() => setIsGuestLoginOpen(false)}

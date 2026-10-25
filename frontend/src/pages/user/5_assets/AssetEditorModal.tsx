@@ -1,34 +1,40 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { ArrowLeft, ArrowRight, FileArchive, FileAudio, FileImage, FileText, FileVideo, Loader2, Plus, Upload, X } from "lucide-react";
+import { ArrowDown, ArrowUp, AudioLines, Clapperboard, Image, Loader2, Upload, X } from "lucide-react";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import { mediaUrl, type AssetRecord, type AssetType } from "./assetTypes";
-import { createAssetDocumentPreview, createAssetProxy, prepareAssetThumbnail, prepareTemplateThumbnail } from "./assetDerivatives";
-import { getAssetPostingEligibility } from "./assetPostingEligibility";
+import { prepareAssetThumbnail, prepareTemplateThumbnail } from "./assetDerivatives";
+import { enqueueAssetUpload } from "./assetUploadStore";
+import useGlobalState from "@/lib/global_state";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 
-type SourceKind = Exclude<AssetType, "template"> | "document" | "archive";
+type SourceKind = Exclude<AssetType, "template">;
 
 
 const MIME_TO_KIND: Record<string, SourceKind> = {
   "image/jpeg": "image", "image/jpg": "image", "image/png": "image", "image/gif": "image",
   "image/webp": "image", "image/avif": "image", "video/mp4": "video", "audio/mpeg": "audio",
   "audio/wav": "audio", "audio/x-wav": "audio", "audio/ogg": "audio",
-  "application/pdf": "document", "application/zip": "archive", "application/x-zip-compressed": "archive",
 };
 const LIMITS: Record<SourceKind, number> = {
-  image: 25 * 1024 * 1024, video: 100 * 1024 * 1024, audio: 50 * 1024 * 1024,
-  document: 25 * 1024 * 1024, archive: 100 * 1024 * 1024,
+  image: 1024 * 1024 * 1024, video: 1024 * 1024 * 1024, audio: 1024 * 1024 * 1024,
 };
-const MAX_BUNDLE_FILES = 20;
-const MAX_BUNDLE_BYTES = 500 * 1024 * 1024;
-const MAX_THUMBNAILS = 8;
+const MAX_CONTENT_FILES = 20;
+const MAX_SHOWCASE_IMAGES = 6;
+const MAX_AUDIO_SHOWCASE_IMAGES = 3;
+const MAX_SHOWCASE_TOTAL_BYTES = 200 * 1024 * 1024;
+const MAX_AUDIO_SHOWCASE_TOTAL_BYTES = 100 * 1024 * 1024;
+function maxShowcaseImages(type: AssetType) { return type === "audio" ? MAX_AUDIO_SHOWCASE_IMAGES : MAX_SHOWCASE_IMAGES; }
+function maxShowcaseTotalBytes(type: AssetType) { return type === "audio" ? MAX_AUDIO_SHOWCASE_TOTAL_BYTES : MAX_SHOWCASE_TOTAL_BYTES; }
+const FileImage = Image;
+const FileVideo = Clapperboard;
+const FileAudio = AudioLines;
 
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/gif,image/webp,image/avif";
-const ORIGINAL_ACCEPT = IMAGE_ACCEPT + ",video/mp4,audio/mpeg,audio/wav,audio/x-wav,audio/ogg,application/pdf,application/zip,application/x-zip-compressed,.zip";
+const ORIGINAL_ACCEPT = IMAGE_ACCEPT + ",video/mp4,audio/mpeg,audio/wav,audio/x-wav,audio/ogg";
 
 function sourceKind(file: File): SourceKind | undefined {
-  return MIME_TO_KIND[file.type] || (file.name.toLowerCase().endsWith(".zip") ? "archive" : undefined);
+  return MIME_TO_KIND[file.type];
 }
 function cleanTag(value: string) { return value.trim().replace(/^#+/, "").trim().replace(/\s+/g, " "); }
 function fileIdentity(file: File) { return `${file.name}:${file.size}:${file.lastModified}`; }
@@ -50,41 +56,9 @@ interface AssetEditorModalProps {
   asset?: AssetRecord | null;
   onClose: () => void;
   onSaved: (asset: AssetRecord) => void;
+  onQueued?: () => void;
 }
-type MediaMetadata = { width: number | null; height: number | null; durationSeconds: number | null };
-
-async function inspectMedia(file: File, type: Exclude<AssetType, "template">): Promise<MediaMetadata> {
-  if (type === "image") {
-    return new Promise((resolve, reject) => {
-      const url = URL.createObjectURL(file);
-      const image = new Image();
-      image.onload = () => {
-        resolve({ width: image.naturalWidth || null, height: image.naturalHeight || null, durationSeconds: null });
-        URL.revokeObjectURL(url);
-      };
-      image.onerror = () => { reject(new Error("The image could not be read.")); URL.revokeObjectURL(url); };
-      image.src = url;
-    });
-  }
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const media = document.createElement(type === "video" ? "video" : "audio");
-    media.preload = "metadata";
-    media.onloadedmetadata = () => {
-      const video = type === "video" ? media as HTMLVideoElement : null;
-      resolve({
-        width: video?.videoWidth || null,
-        height: video?.videoHeight || null,
-        durationSeconds: Number.isFinite(media.duration) ? Math.max(1, Math.ceil(media.duration)) : null,
-      });
-      URL.revokeObjectURL(url);
-    };
-    media.onerror = () => { reject(new Error(`The ${type} file could not be read.`)); URL.revokeObjectURL(url); };
-    media.src = url;
-  });
-}
-
-export default function AssetEditorModal({ open, asset, onClose, onSaved }: AssetEditorModalProps) {
+export default function AssetEditorModal({ open, asset, onClose, onSaved, onQueued }: AssetEditorModalProps) {
   const originalInputRef = useRef<HTMLInputElement>(null);
   const thumbnailInputRef = useRef<HTMLInputElement>(null);
   const [listingType, setListingType] = useState<AssetType>("image");
@@ -93,15 +67,16 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
   const [priceCredits, setPriceCredits] = useState("0");
   const [files, setFiles] = useState<File[]>([]);
   const [thumbnailFiles, setThumbnailFiles] = useState<File[]>([]);
-  const [retainedBundleFileIds, setRetainedBundleFileIds] = useState<string[]>([]);
-  const [retainedThumbnailIds, setRetainedThumbnailIds] = useState<string[]>([]);
-  const [bundleSelectionDirty, setBundleSelectionDirty] = useState(false);
+  const [retainedMediaAssetIds, setRetainedMediaAssetIds] = useState<string[]>([]);
+  const [showcaseOrder, setShowcaseOrder] = useState<string[]>([]);
+  const [mediaSelectionDirty, setMediaSelectionDirty] = useState(false);
   const [thumbnailSelectionDirty, setThumbnailSelectionDirty] = useState(false);
   const [originalPreviewUrls, setOriginalPreviewUrls] = useState<string[]>([]);
   const [thumbnailPreviewUrls, setThumbnailPreviewUrls] = useState<string[]>([]);
 
 
 
+  const [ydocSnapshotId, setYdocSnapshotId] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
@@ -109,15 +84,22 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
 
   useEffect(() => {
     if (!open) return;
+    setSaving(false);
     setListingType(asset?.type || "image");
     setName(asset?.name || "");
     setDescription(asset?.description || "");
     setPriceCredits(String(asset?.price_credits ?? 0));
     setFiles([]); setThumbnailFiles([]);
-    setRetainedBundleFileIds((asset?.bundle_files || []).map((item) => item.media_asset_bundle_file_id));
-    setRetainedThumbnailIds((asset?.thumbnails || []).map((item) => item.media_asset_thumbnail_id));
-    setBundleSelectionDirty(false); setThumbnailSelectionDirty(false);
+    setRetainedMediaAssetIds((asset?.media_assets || []).map((item) => item.media_asset_id));
+    const contentIds = new Set((asset?.media_assets || []).map((item) => item.media_asset_id));
+    const imageContentIds = new Set((asset?.media_assets || [])
+      .filter((item) => item.type === "image" || item.type === "video")
+      .map((item) => item.media_asset_id));
+    setShowcaseOrder((asset?.thumbnails || []).map((item) =>
+      `${contentIds.has(item.media_asset_id) && imageContentIds.has(item.media_asset_id) ? "media" : "retained"}:${item.media_asset_id}`));
+    setMediaSelectionDirty(false); setThumbnailSelectionDirty(false);
 
+    setYdocSnapshotId("");
     setTags(asset?.tags || []); setTagInput(""); setError("");
   }, [asset, open]);
 
@@ -148,59 +130,109 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
   if (!open) return null;
   const primaryFile = files[0];
   const primaryKind = primaryFile ? sourceKind(primaryFile) : undefined;
-  const PrimaryIcon = primaryKind === "image" ? FileImage : primaryKind === "video" ? FileVideo
-    : primaryKind === "audio" ? FileAudio : primaryKind === "document" ? FileText : FileArchive;
+  const PrimaryIcon = primaryKind === "image" ? Image : primaryKind === "video" ? Clapperboard : AudioLines;
+  const isTemplate = listingType === "template";
+  const currentContentCount = asset ? retainedMediaAssetIds.length + files.length : files.length;
+  const showShowcaseControls = isTemplate || currentContentCount > 1;
+  const retainedThumbnailIds = showcaseOrder.filter((key) => key.startsWith("retained:")).map((key) => key.slice("retained:".length));
+  const selectedShowcaseMediaIds = showcaseOrder.filter((key) => key.startsWith("media:")).map((key) => key.slice("media:".length));
+  const selectedShowcaseFileKeys = showcaseOrder.filter((key) => key.startsWith("asset:")).map((key) => key.slice("asset:".length));
+  const hasAvailableExistingShowcaseImages = Boolean(asset && asset.thumbnails.some((item) =>
+    !asset.media_assets.some((mediaFile) => mediaFile.media_asset_id === item.media_asset_id)
+    && !showcaseOrder.includes(`retained:${item.media_asset_id}`)));
 
   const changeListingType = (nextType: AssetType) => {
     setListingType(nextType);
-
+    setFiles([]);
+    setThumbnailFiles([]);
+    setShowcaseOrder([]);
     setError("");
   };
   const addFiles = (selected: File[]) => {
     setError("");
-    const normalizedSelected = selected.map((file) => !file.type && file.name.toLowerCase().endsWith(".zip")
-      ? new File([file], file.name, { type: "application/zip", lastModified: file.lastModified })
-      : file);
-    const combined = [...files, ...normalizedSelected];
-    if (combined.length > MAX_BUNDLE_FILES) return setError(`Choose no more than ${MAX_BUNDLE_FILES} original files.`);
+    if (selected.length === 0) return;
+    if (listingType === "template") return setError("Templates are made from a project snapshot, not files.");
+    const combined = [...files, ...selected];
+    if (combined.length + (asset ? retainedMediaAssetIds.length : 0) > MAX_CONTENT_FILES) {
+      return setError(`Choose no more than ${MAX_CONTENT_FILES} asset files.`);
+    }
+    const effectiveType = !asset && files.length === 0 ? sourceKind(selected[0]) : listingType;
     const seen = new Set<string>();
-    let totalBytes = 0;
     for (const file of combined) {
       const kind = sourceKind(file);
-      if (!kind || (listingType !== "template" && ["document", "archive"].includes(kind))) {
-        return setError(listingType === "template" ? "Choose supported media, PDF, or ZIP template files." : "Choose supported image, video, or audio files.");
-      }
-      if (seen.has(fileIdentity(file))) return setError("The same original file cannot be selected more than once.");
+      if (!kind) return setError("Choose supported image, video, or audio files.");
+      if (kind !== effectiveType) return setError("Every file in a listing must be the same type (image, video, or audio).");
+      if (seen.has(fileIdentity(file))) return setError("The same asset file cannot be selected more than once.");
       if (file.size > LIMITS[kind]) return setError(`${file.name} exceeds the ${LIMITS[kind] / 1024 / 1024}MB limit.`);
-      seen.add(fileIdentity(file)); totalBytes += file.size;
+      seen.add(fileIdentity(file));
     }
-    if (totalBytes > MAX_BUNDLE_BYTES) return setError("The combined original files must be 500MB or smaller.");
-    if (files.length === 0 && listingType !== "template" && ["image", "video", "audio"].includes(sourceKind(normalizedSelected[0]) || "")) {
-      setListingType(sourceKind(normalizedSelected[0]) as Exclude<AssetType, "template">);
+    const finalContentCount = combined.length + (asset ? retainedMediaAssetIds.length : 0);
+    if (finalContentCount === 1) {
+      setThumbnailFiles([]);
+      setShowcaseOrder([]);
     }
+    if (!asset && files.length === 0 && effectiveType) setListingType(effectiveType);
     setFiles(combined);
   };
   const addThumbnails = (selected: File[]) => {
     setError("");
     const combined = [...thumbnailFiles, ...selected];
-    if (combined.length > MAX_THUMBNAILS) return setError(`Choose no more than ${MAX_THUMBNAILS} thumbnail images.`);
+    const limit = maxShowcaseImages(listingType);
+    if (showcaseOrder.length + selected.length > limit) return setError(`Choose no more than ${limit} showcase images.`);
+    const combinedSize = combined.reduce((total, file) => total + file.size, 0);
+    if (combinedSize > maxShowcaseTotalBytes(listingType)) {
+      return setError(`Showcase images must total no more than ${maxShowcaseTotalBytes(listingType) / 1024 / 1024}MB.`);
+    }
     const seen = new Set<string>();
     for (const file of combined) {
-      if (sourceKind(file) !== "image") return setError("Choose JPEG, PNG, GIF, WebP, or AVIF thumbnail images.");
-      if (file.size > 5 * 1024 * 1024) return setError("Each thumbnail image must be 5MB or smaller.");
-      if (seen.has(fileIdentity(file))) return setError("The same thumbnail cannot be selected more than once.");
+      if (sourceKind(file) !== "image") return setError("Choose JPEG, PNG, GIF, WebP, or AVIF showcase images.");
+      if (seen.has(fileIdentity(file))) return setError("The same showcase image cannot be selected more than once.");
       seen.add(fileIdentity(file));
     }
     setThumbnailFiles(combined);
+    setShowcaseOrder((current) => [...current, ...selected.map((file) => `upload:${fileIdentity(file)}`)]);
   };
-  const moveThumbnail = (index: number, direction: -1 | 1) => {
+  const toggleShowcaseEntry = (key: string) => {
+    if (showcaseOrder.includes(key)) {
+      setShowcaseOrder(showcaseOrder.filter((item) => item !== key));
+      setThumbnailSelectionDirty(true);
+      setError("");
+      return;
+    }
+    if (showcaseOrder.length >= maxShowcaseImages(listingType)) {
+      setError(`Choose no more than ${maxShowcaseImages(listingType)} showcase images.`);
+      return;
+    }
+    setShowcaseOrder([...showcaseOrder, key]);
+    setThumbnailSelectionDirty(true);
+    setError("");
+  };
+  const removeShowcaseEntry = (key: string) => {
+    setShowcaseOrder((current) => current.filter((item) => item !== key));
+    if (key.startsWith("upload:")) {
+      const fileKey = key.slice("upload:".length);
+      setThumbnailFiles((current) => current.filter((file) => fileIdentity(file) !== fileKey));
+    }
+    setThumbnailSelectionDirty(true);
+  };
+  const moveShowcaseEntry = (index: number, direction: -1 | 1) => {
     const target = index + direction;
-    if (target < 0 || target >= thumbnailFiles.length) return;
-    setThumbnailFiles((current) => {
+    if (target < 0 || target >= showcaseOrder.length) return;
+    setShowcaseOrder((current) => {
       const next = [...current];
       [next[index], next[target]] = [next[target], next[index]];
       return next;
     });
+    setThumbnailSelectionDirty(true);
+  };
+  const removeAssetFile = (index: number, key: string) => {
+    setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    setShowcaseOrder((current) => current.filter((item) => item !== `asset:${key}`));
+    const remainingContentCount = files.length - 1 + (asset ? retainedMediaAssetIds.length : 0);
+    if (remainingContentCount === 1) {
+      setThumbnailFiles([]);
+      setShowcaseOrder([]);
+    }
   };
   const addTag = (value: string) => {
     const tag = cleanTag(value);
@@ -217,6 +249,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (saving) return;
     setError("");
     const cleanName = name.trim();
     const cleanDescription = description.trim();
@@ -229,55 +262,52 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
     if (!cleanDescription || cleanDescription.length > 5000) return setError("Enter an asset description up to 5,000 characters.");
     if (!Number.isInteger(price) || price < 0 || price > 100000000) return setError("Enter a valid whole-number price.");
     if (submittedTags.length > 10) return setError("You can add up to 10 tags.");
+    const snapshotId = ydocSnapshotId.trim();
+    if (snapshotId && !/^[1-9]\d{0,17}$/.test(snapshotId)) return setError("Enter a valid project snapshot ID.");
 
+    // Proxies and preview thumbnails are made by the server (a worker for video/audio),
+    // so only asset files and uploaded showcase images are uploaded.
     if (asset) {
-      const replaceBundleFiles = files.length > 0 || bundleSelectionDirty;
-      const replaceThumbnails = thumbnailFiles.length > 0 || thumbnailSelectionDirty;
-
-      const finalBundleCount = retainedBundleFileIds.length + files.length;
-      const finalThumbnailCount = retainedThumbnailIds.length + thumbnailFiles.length;
-      if (replaceThumbnails && (finalThumbnailCount < 1 || finalThumbnailCount > MAX_THUMBNAILS)) {
-        return setError(`Keep between 1 and ${MAX_THUMBNAILS} thumbnails.`);
+      const replaceMedia = !isTemplate && (files.length > 0 || mediaSelectionDirty);
+      const replaceYdoc = isTemplate && snapshotId !== "";
+      const finalMediaCount = retainedMediaAssetIds.length + files.length;
+      const hasShowcase = isTemplate || finalMediaCount > 1;
+      const finalShowcaseOrder = hasShowcase ? showcaseOrder : [];
+      const finalRetainedThumbnailIds = hasShowcase ? retainedThumbnailIds : [];
+      const finalShowcaseMediaIds = hasShowcase ? selectedShowcaseMediaIds : [];
+      const finalShowcaseFileKeys = hasShowcase ? selectedShowcaseFileKeys : [];
+      const finalThumbnailFiles = hasShowcase ? thumbnailFiles : [];
+      const finalThumbnailCount = finalShowcaseOrder.length;
+      const showcaseLimit = maxShowcaseImages(listingType);
+      if (isTemplate && (finalThumbnailCount < 1 || finalThumbnailCount > showcaseLimit)) {
+        return setError(`Templates need 1–${showcaseLimit} showcase images.`);
       }
-      if (replaceBundleFiles && listingType !== "template" && finalBundleCount < 1) {
-        return setError(`Keep or add at least one ${listingType} package file.`);
+      if (!isTemplate && finalThumbnailCount > showcaseLimit) {
+        return setError(`Choose no more than ${showcaseLimit} showcase images.`);
       }
-      if (files.length > 0 && listingType !== "template" && retainedBundleFileIds.length === 0 && primaryKind !== listingType) {
-        return setError(`The primary replacement original must be a ${listingType} file.`);
+      if (replaceMedia && finalMediaCount < 1) {
+        return setError(`Keep or add at least one ${listingType} file.`);
       }
-      if (files.length > 0 && files.some((file) => ["document", "archive"].includes(sourceKind(file) || ""))
-        && !replaceThumbnails) {
-        return setError("Choose replacement thumbnails when replacing a PDF or ZIP package.");
-      }
-
-
+      const replaceThumbnails = thumbnailFiles.length > 0 || thumbnailSelectionDirty || replaceMedia
+        || (!hasShowcase && showcaseOrder.length > 0);
 
       setSaving(true);
       try {
-        const metadata = listingType === "template"
-          ? { width: null, height: null, durationSeconds: null }
-          : retainedBundleFileIds.length > 0
-            ? { width: asset.width, height: asset.height, durationSeconds: asset.duration_seconds }
-            : files.length > 0
-              ? await inspectMedia(primaryFile!, listingType)
-              : { width: asset.width, height: asset.height, durationSeconds: asset.duration_seconds };
-        const previewFiles = replaceBundleFiles
-          ? await Promise.all(files.map((file, index) => {
-            const kind = sourceKind(file);
-            return kind && ["image", "video", "audio"].includes(kind)
-              ? createAssetProxy(file, kind as Exclude<AssetType, "template">)
-              : createAssetDocumentPreview(thumbnailFiles[Math.min(index, thumbnailFiles.length - 1)]);
-          }))
-          : [];
         const preparedThumbnails = replaceThumbnails
-          ? await Promise.all(thumbnailFiles.map(listingType === "template" ? prepareTemplateThumbnail : prepareAssetThumbnail))
+          ? await Promise.all(finalThumbnailFiles.map(isTemplate ? prepareTemplateThumbnail : prepareAssetThumbnail))
           : [];
-        const [originalUploads, previewUploads, thumbnailUploads] = await Promise.all([
+        const [originalUploads, thumbnailUploads] = await Promise.all([
           Promise.all(files.map((file) => uploadFileWithIntent(file, "asset-originals"))),
-          Promise.all(previewFiles.map((file) => uploadFileWithIntent(file, "assets"))),
           Promise.all(preparedThumbnails.map((file) => uploadFileWithIntent(file, "assets"))),
         ]);
-        const hasContentUpdate = replaceBundleFiles || replaceThumbnails;
+        const uploadedOriginalByKey = new Map(files.map((file, index) => [fileIdentity(file), originalUploads[index]?.fileId]));
+        const uploadedShowcaseByKey = new Map(finalThumbnailFiles.map((file, index) => [fileIdentity(file), thumbnailUploads[index]?.fileId]));
+        const submittedShowcaseOrder = finalShowcaseOrder.map((key) => {
+          if (key.startsWith("asset:")) return `assetFile:${uploadedOriginalByKey.get(key.slice("asset:".length))}`;
+          if (key.startsWith("upload:")) return `upload:${uploadedShowcaseByKey.get(key.slice("upload:".length))}`;
+          return key;
+        });
+        const hasContentUpdate = replaceMedia || replaceThumbnails || replaceYdoc;
         const response = await api.patch<{ asset: AssetRecord }>(`/api/assets/${asset.market_asset_id}`, {
           name: cleanName,
           description: cleanDescription,
@@ -287,21 +317,26 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
           ...(hasContentUpdate ? {
             contentUpdate: {
               type: listingType,
-              replaceBundleFiles,
+              replaceMedia,
               replaceThumbnails,
-
-              retainedBundleFileIds,
-              retainedThumbnailIds,
+              replaceYdoc,
+              retainedMediaAssetIds,
+              retainedThumbnailIds: finalRetainedThumbnailIds,
+              showcaseMediaAssetIds: finalShowcaseMediaIds,
+              showcaseOrder: submittedShowcaseOrder,
               originalFileIds: originalUploads.map((upload) => upload.fileId),
-              previewFileIds: previewUploads.map((upload) => upload.fileId),
               thumbnailFileIds: thumbnailUploads.map((upload) => upload.fileId),
-
-              ...metadata,
+              showcaseOriginalFileIds: finalShowcaseFileKeys
+                .map((key) => uploadedOriginalByKey.get(key))
+                .filter((fileId): fileId is string => Boolean(fileId)),
+              ...(replaceYdoc ? { ydocSnapshotId: snapshotId } : {}),
             },
           } : {}),
         });
         if (response.data.asset.reviewQueued && response.data.asset.reviewMessage) {
           showSuccessToast(response.data.asset.reviewMessage);
+        } else if (response.data.asset.processing_status === "processing") {
+          showSuccessToast("Your new files are being processed.");
         }
         onSaved(response.data.asset);
       } catch (requestError) {
@@ -312,69 +347,99 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
       return;
     }
 
-    if (thumbnailFiles.length < 1) return setError("Choose at least one thumbnail image.");
-    if (listingType !== "template" && (!primaryFile || primaryKind !== listingType)) return setError(`The primary original must be a ${listingType} file.`);
-
-
-
+    const showcaseCount = showcaseOrder.length;
+    const showcaseLimit = maxShowcaseImages(listingType);
+    if (isTemplate && (showcaseCount < 1 || showcaseCount > showcaseLimit)) return setError(`Templates need 1–${showcaseLimit} showcase images.`);
+    if (!isTemplate && files.length === 1 && showcaseCount > 0) return setError("A single asset file does not use showcase images.");
+    if (!isTemplate && showcaseCount > showcaseLimit) return setError(`Choose no more than ${showcaseLimit} showcase images.`);
+    if (isTemplate && !snapshotId) return setError("Enter the project snapshot ID for this template.");
+    if (!isTemplate && (!primaryFile || primaryKind !== listingType)) return setError(`The primary asset file must be a ${listingType} file.`);
+    const accountId = useGlobalState.getState().user?.account_id;
+    if (!accountId) return setError("Please sign in before uploading an asset.");
     setSaving(true);
-    try {
-      const eligibility = await getAssetPostingEligibility();
-      if (!eligibility.allowed) {
-        const message = eligibility.message || "Asset posting is unavailable for this account.";
-        if (eligibility.code === "ASSET_POST_LIMIT_REACHED") showErrorToast(message);
-        throw new Error(message);
-      }
-      const metadata = listingType === "template" ? { width: null, height: null, durationSeconds: null } : await inspectMedia(primaryFile!, listingType);
-      const preparedThumbnails = await Promise.all(thumbnailFiles.map(listingType === "template" ? prepareTemplateThumbnail : prepareAssetThumbnail));
-      const previewFiles = await Promise.all(files.map((file, index) => {
-        const kind = sourceKind(file);
-        return kind && ["image", "video", "audio"].includes(kind)
-          ? createAssetProxy(file, kind as Exclude<AssetType, "template">)
-          : createAssetDocumentPreview(thumbnailFiles[Math.min(index, thumbnailFiles.length - 1)]);
-      }));
-      const [originalUploads, previewUploads, thumbnailUploads] = await Promise.all([
-        Promise.all(files.map((file) => uploadFileWithIntent(file, "asset-originals"))),
-        Promise.all(previewFiles.map((file) => uploadFileWithIntent(file, "assets"))),
-        Promise.all(preparedThumbnails.map((file) => uploadFileWithIntent(file, "assets"))),
-      ]);
-      const response = await api.post<{ asset: AssetRecord }>("/api/assets", {
-        name: cleanName, description: cleanDescription, priceCredits: price, status: "published", tags: submittedTags,
-        originalFileIds: originalUploads.map((upload) => upload.fileId),
-        previewFileIds: previewUploads.map((upload) => upload.fileId),
-        thumbnailFileIds: thumbnailUploads.map((upload) => upload.fileId),
-        type: listingType, ...metadata,
-      });
-      if (response.data.asset.reviewQueued && response.data.asset.reviewMessage) {
-        showSuccessToast(response.data.asset.reviewMessage);
-      }
-      onSaved(response.data.asset);
-    } catch (requestError) {
-      const message = errorMessage(requestError);
-      setError(message);
-      if (errorCode(requestError) === "ASSET_POST_LIMIT_REACHED") showErrorToast(message);
-    }
-    finally { setSaving(false); }
+    enqueueAssetUpload({
+      accountId, name: cleanName, description: cleanDescription, priceCredits: price,
+      type: listingType, tags: submittedTags, files: [...files], thumbnailFiles: [...thumbnailFiles],
+      showcaseOrder: [...showcaseOrder], showcaseFileKeys: selectedShowcaseFileKeys, snapshotId,
+    });
+    if (onQueued) onQueued();
+    else onClose();
   };
 
   const inputClass = "w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-[#0b0e17] dark:text-white";
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="asset-editor-title">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#10131e]">
+      <div className="scroll-thin max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#10131e]">
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-200 bg-white px-5 py-4 dark:border-white/10 dark:bg-[#10131e]">
-          <div><h2 id="asset-editor-title" className="text-lg font-bold">{asset ? "Edit asset" : "Upload asset"}</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset ? "Update listing details, thumbnails, and package files." : "Create a protected asset package."}</p></div>
+          <div><h2 id="asset-editor-title" className="text-lg font-bold">{asset ? "Edit asset" : "Upload asset"}</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset ? "Update listing details, showcase images, and asset files." : "Create a protected asset package."}</p></div>
           <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 dark:hover:bg-white/5" aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
         <form onSubmit={submit} className="space-y-5 p-5">
           <div className="space-y-5">
-            {!asset && <div><p className="mb-2 text-sm font-semibold">Asset type</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{(["image", "video", "audio", "template"] as AssetType[]).map((type) => <button key={type} type="button" onClick={() => changeListingType(type)} aria-pressed={listingType === type} className={`rounded-xl border px-3 py-2.5 text-sm font-semibold capitalize transition ${listingType === type ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-300 hover:border-blue-400 dark:border-white/10"}`}>{type}</button>)}</div></div>}
-            {asset && <div className="rounded-xl border border-gray-200 p-4 dark:border-white/10"><div className="flex items-start justify-between gap-4"><div><h3 className="text-sm font-bold">Current asset content</h3><p className="mt-1 text-xs text-gray-500">Selected items are kept. Click an item to unselect it, then add new files below.</p></div><span className="rounded-lg bg-blue-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-blue-600">{asset.type}</span></div><div className="mt-4 grid gap-4 sm:grid-cols-2"><div><p className="mb-2 text-xs font-semibold">Current thumbnails</p><div className="flex flex-wrap gap-2">{asset.thumbnails.map((thumbnail) => { const selected = retainedThumbnailIds.includes(thumbnail.media_asset_thumbnail_id); return <button key={thumbnail.media_asset_thumbnail_id} type="button" aria-pressed={selected} aria-label={selected ? "Remove current thumbnail" : "Restore current thumbnail"} onClick={() => { setRetainedThumbnailIds((current) => selected ? current.filter((id) => id !== thumbnail.media_asset_thumbnail_id) : [...current, thumbnail.media_asset_thumbnail_id]); setThumbnailSelectionDirty(true); }} className={`relative overflow-hidden rounded-lg border-2 transition ${selected ? "border-blue-500" : "border-gray-300 opacity-40 grayscale dark:border-white/15"}`}><img src={mediaUrl(thumbnail.path)} alt="Current asset thumbnail" className="h-16 w-24 object-cover" /><span className={`absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full text-white ${selected ? "bg-red-600" : "bg-blue-600"}`}>{selected ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}</span></button>; })}</div></div><div><p className="mb-2 text-xs font-semibold">Current package files</p>{asset.bundle_files?.length ? <div className="max-h-40 space-y-2 overflow-y-auto">{asset.bundle_files.map((bundleFile) => { const selected = retainedBundleFileIds.includes(bundleFile.media_asset_bundle_file_id); return <button key={bundleFile.media_asset_bundle_file_id} type="button" aria-pressed={selected} aria-label={selected ? `Remove ${bundleFile.name}` : `Restore ${bundleFile.name}`} onClick={() => { setRetainedBundleFileIds((current) => selected ? current.filter((id) => id !== bundleFile.media_asset_bundle_file_id) : [...current, bundleFile.media_asset_bundle_file_id]); setBundleSelectionDirty(true); }} className={`flex w-full items-center gap-2 rounded-lg border p-2 text-left transition ${selected ? "border-blue-500/50 bg-blue-500/5" : "border-gray-200 bg-gray-50 opacity-40 dark:border-white/10 dark:bg-white/[0.025]"}`}><img src={mediaUrl(bundleFile.preview_path)} alt="" className="h-10 w-10 rounded object-cover" /><span className="min-w-0 flex-1 truncate text-xs">{bundleFile.name}</span><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white ${selected ? "bg-red-600" : "bg-blue-600"}`}>{selected ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}</span></button>; })}</div> : <p className="text-xs text-gray-500">No uploaded package files.</p>}</div></div></div>}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div><label className="mb-2 block text-sm font-semibold">{asset ? "Add original files" : "Original files"} {!asset && listingType !== "template" && <span className="text-red-500">*</span>}</label><input ref={originalInputRef} type="file" multiple className="hidden" accept={ORIGINAL_ACCEPT} onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} /><button type="button" onClick={() => originalInputRef.current?.click()} className="flex min-h-28 w-full items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-left transition hover:border-blue-400 dark:border-white/15 dark:bg-white/[0.025]"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-500">{primaryFile ? <PrimaryIcon className="h-5 w-5" /> : <Upload className="h-5 w-5" />}</span><span><span className="block text-sm font-semibold">{files.length ? `${files.length} original file${files.length === 1 ? "" : "s"} selected` : asset ? "Add files to the selected package" : listingType === "template" ? "Add optional template files" : "Choose original files"}</span><span className="mt-1 block text-xs text-gray-500">{listingType === "template" ? "Optional: media, PDF, or ZIP package files" : "Up to 20 files and 500MB combined"}</span></span></button></div>
-              <div><label className="mb-2 block text-sm font-semibold">{asset ? "Add carousel thumbnails" : "Carousel thumbnails"} {!asset && <span className="text-red-500">*</span>}</label><input ref={thumbnailInputRef} type="file" multiple className="hidden" accept={IMAGE_ACCEPT} onChange={(event) => { addThumbnails(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} /><button type="button" onClick={() => thumbnailInputRef.current?.click()} className="flex min-h-28 w-full items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-left transition hover:border-blue-400 dark:border-white/15 dark:bg-white/[0.025]">{thumbnailPreviewUrls[0] ? <img src={thumbnailPreviewUrls[0]} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" /> : <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-500"><Upload className="h-5 w-5" /></span>}<span><span className="block text-sm font-semibold">{thumbnailFiles.length ? `${thumbnailFiles.length} of ${MAX_THUMBNAILS} selected` : asset ? "Add thumbnails to the selected set" : "Choose thumbnails"}</span><span className="mt-1 block text-xs text-gray-500">The first image is the library cover</span></span></button></div>
+            {!asset && <div><p className="mb-2 text-sm font-semibold">Asset type</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{(["image", "video", "audio"] as AssetType[]).map((type) => { const Icon = type === "image" ? Image : type === "video" ? Clapperboard : AudioLines; return <button key={type} type="button" onClick={() => changeListingType(type)} aria-pressed={listingType === type} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold capitalize transition ${listingType === type ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-300 hover:border-blue-400 dark:border-white/10"}`}><Icon className="h-4 w-4" />{type}</button>; })}</div></div>}
+            {asset && <div className="rounded-xl border border-gray-200 p-4 dark:border-white/10">
+              <div className="flex items-start justify-between gap-4"><div><h3 className="text-sm font-bold">Current asset content</h3><p className="mt-1 text-xs text-gray-500">Keep selected files in the package. Add image or video files to the showcase, then order them below.</p></div><span className="rounded-lg bg-blue-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-blue-600">{asset.type}</span></div>
+              <div className={`mt-4 grid gap-4 ${showShowcaseControls && hasAvailableExistingShowcaseImages ? "sm:grid-cols-2" : "grid-cols-1"}`}>
+                <div>
+                  <p className="mb-2 text-xs font-semibold">Current asset files</p>
+                  {asset.media_assets?.length ? <div className="scroll-thin max-h-48 space-y-2 overflow-y-auto pr-1">{asset.media_assets.map((mediaFile) => {
+                    const retained = retainedMediaAssetIds.includes(mediaFile.media_asset_id);
+                    const canShowcase = showShowcaseControls && listingType !== "audio"
+                      && (mediaFile.type === "image" || mediaFile.type === "video");
+                    const showcaseKey = `media:${mediaFile.media_asset_id}`;
+                    const isShowcased = showcaseOrder.includes(showcaseKey);
+                    const Icon = mediaFile.type === "image" ? Image : mediaFile.type === "video" ? Clapperboard : AudioLines;
+                    return <div key={mediaFile.media_asset_id} className={`flex items-center gap-2 rounded-lg border p-2 transition ${retained ? "border-blue-500/50 bg-blue-500/5" : "border-gray-200 bg-gray-50 opacity-50 dark:border-white/10 dark:bg-white/[0.025]"}`}>
+                      {mediaFile.thumbnail_path ? <img src={mediaUrl(mediaFile.thumbnail_path)} alt="" className="h-10 w-10 rounded object-cover" /> : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-blue-500/10 text-blue-500"><Icon className="h-4 w-4" /></span>}
+                      <span className="min-w-0 flex-1 truncate text-xs">{mediaFile.name}</span>
+                      <button type="button" aria-pressed={retained} aria-label={retained ? `Remove ${mediaFile.name}` : `Restore ${mediaFile.name}`} onClick={() => {
+                        setRetainedMediaAssetIds((current) => retained ? current.filter((id) => id !== mediaFile.media_asset_id) : [...current, mediaFile.media_asset_id]);
+                        if (retained) setShowcaseOrder((current) => current.filter((key) => key !== showcaseKey));
+                        setMediaSelectionDirty(true);
+                      }} className={`rounded-md px-2 py-1.5 text-[10px] font-semibold ${retained ? "bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300" : "bg-blue-600 text-white"}`}>{retained ? "Remove" : "Restore"}</button>
+                      {canShowcase && <button type="button" aria-pressed={isShowcased} disabled={!retained || (!isShowcased && showcaseOrder.length >= maxShowcaseImages(listingType))} onClick={() => toggleShowcaseEntry(showcaseKey)} className={`rounded-md px-2 py-1.5 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${isShowcased ? "bg-blue-600/10 text-blue-600 dark:text-blue-300" : "bg-blue-600 text-white"}`}>{isShowcased ? "Added to showcase" : "Add to showcase"}</button>}
+                    </div>;
+                  })}</div> : <p className="text-xs text-gray-500">No uploaded files.</p>}
+                </div>
+                {showShowcaseControls && hasAvailableExistingShowcaseImages && <div>
+                  <p className="mb-2 text-xs font-semibold">Available showcase images</p>
+                  <div className="scroll-thin max-h-48 space-y-2 overflow-y-auto pr-1">{asset.thumbnails.filter((item) => !asset.media_assets.some((mediaFile) => mediaFile.media_asset_id === item.media_asset_id)
+                    && !showcaseOrder.includes(`retained:${item.media_asset_id}`)).map((item) => <div key={item.media_asset_id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-white/10 dark:bg-white/[0.025]">
+                    <img src={mediaUrl(item.path)} alt="" className="h-10 w-10 rounded object-cover" />
+                    <span className="min-w-0 flex-1 truncate text-xs">Showcase image</span>
+                    <button type="button" disabled={showcaseOrder.length >= maxShowcaseImages(listingType)} onClick={() => toggleShowcaseEntry(`retained:${item.media_asset_id}`)} className="rounded-md bg-blue-600 px-2 py-1.5 text-[10px] font-semibold text-white disabled:opacity-40">Add to showcase</button>
+                  </div>)}</div>
+                </div>}
+              </div>
+            </div>}
+            <div className={`grid gap-4 ${showShowcaseControls ? "sm:grid-cols-2" : "grid-cols-1"}`}>
+              {isTemplate ? (
+                <div><label htmlFor="asset-ydoc-snapshot" className="mb-2 block text-sm font-semibold">{asset ? "Replace project snapshot ID" : "Project snapshot ID"} {!asset && <span className="text-red-500">*</span>}</label><input id="asset-ydoc-snapshot" inputMode="numeric" value={ydocSnapshotId} onChange={(event) => setYdocSnapshotId(event.target.value)} className={inputClass} placeholder={asset ? (asset.has_ydoc ? "Leave empty to keep the current snapshot" : "Snapshot ID") : "Snapshot ID"} /><p className="mt-1 text-xs text-gray-500">A template links to one snapshot of a project.</p></div>
+              ) : (<div><label className="mb-2 block text-sm font-semibold">{asset ? "Add asset files" : "Asset files"} {!asset && <span className="text-red-500">*</span>}</label><input ref={originalInputRef} type="file" multiple className="hidden" accept={ORIGINAL_ACCEPT} onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} /><button type="button" onClick={() => originalInputRef.current?.click()} className="flex min-h-28 w-full items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-left transition hover:border-blue-400 dark:border-white/15 dark:bg-white/[0.025]"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-500">{primaryFile ? <PrimaryIcon className="h-5 w-5" /> : <Upload className="h-5 w-5" />}</span><span><span className="block text-sm font-semibold">{files.length ? `${files.length} asset file${files.length === 1 ? "" : "s"} selected` : asset ? "Add files to the selected set" : "Choose asset files"}</span><span className="mt-1 block text-xs text-gray-500">Up to 20 files, 1GB each.</span></span></button></div>)}
+              {showShowcaseControls && <div><label className="mb-2 block text-sm font-semibold">Showcase images <span className="font-normal text-gray-400">({isTemplate ? "required" : "optional"})</span></label><input ref={thumbnailInputRef} type="file" multiple className="hidden" accept={IMAGE_ACCEPT} onChange={(event) => { addThumbnails(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} /><button type="button" onClick={() => thumbnailInputRef.current?.click()} className="flex min-h-28 w-full items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-left transition hover:border-blue-400 dark:border-white/15 dark:bg-white/[0.025]">{thumbnailPreviewUrls[0] ? <img src={thumbnailPreviewUrls[0]} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" /> : <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-500"><Upload className="h-5 w-5" /></span>}<span><span className="block text-sm font-semibold">Choose showcase images</span><span className="mt-1 block text-xs text-gray-500">{showcaseOrder.length} of {maxShowcaseImages(listingType)} selected · {maxShowcaseTotalBytes(listingType) / 1024 / 1024}MB total</span></span></button></div>}
             </div>
-            {files.length > 0 && <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-[#080a12]"><p className="mb-3 text-xs font-semibold">Package originals ({files.length})</p><div className="max-h-56 space-y-2 overflow-y-auto">{files.map((file, index) => { const kind = sourceKind(file); const Icon = kind === "image" ? FileImage : kind === "video" ? FileVideo : kind === "audio" ? FileAudio : kind === "document" ? FileText : FileArchive; return <div key={fileIdentity(file)} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-2 dark:border-white/10 dark:bg-white/[0.025]">{kind === "image" ? <img src={originalPreviewUrls[index]} alt="" className="h-12 w-12 rounded-md object-cover" /> : <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue-500/10 text-blue-500"><Icon className="h-5 w-5" /></span>}<div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{file.name}</p><p className="text-[10px] uppercase text-gray-500">{kind} · {(file.size / 1024 / 1024).toFixed(1)}MB</p></div><button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="rounded p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>; })}</div></div>}
-            {thumbnailFiles.length > 0 && <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-[#080a12]"><div className="mb-3 flex justify-between"><p className="text-xs font-semibold">Thumbnail carousel order</p><p className="text-[10px] text-gray-500">First is the cover</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{thumbnailFiles.map((file, index) => <div key={fileIdentity(file)} className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-white/10 dark:bg-white/[0.025]"><div className="relative aspect-video"><img src={thumbnailPreviewUrls[index]} alt={`Thumbnail ${index + 1}`} className="h-full w-full object-cover" />{index === 0 && <span className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-1 text-[9px] font-bold uppercase text-white">Cover</span>}</div><div className="flex items-center justify-between p-2"><span className="text-[10px] font-semibold">Slide {index + 1}</span><div className="flex"><button type="button" onClick={() => moveThumbnail(index, -1)} disabled={index === 0}><ArrowLeft className="h-3.5 w-3.5" /></button><button type="button" onClick={() => moveThumbnail(index, 1)} disabled={index === thumbnailFiles.length - 1}><ArrowRight className="h-3.5 w-3.5" /></button><button type="button" onClick={() => setThumbnailFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}><X className="h-3.5 w-3.5" /></button></div></div></div>)}</div></div>}
+            {files.length > 0 && <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-[#080a12]"><p className="mb-3 text-xs font-semibold">Asset files ({files.length})</p><div className="scroll-thin max-h-56 space-y-2 overflow-y-auto pr-1">{files.map((file, index) => { const kind = sourceKind(file); const Icon = kind === "image" ? FileImage : kind === "video" ? FileVideo : FileAudio; const fileKey = fileIdentity(file); const showcaseKey = `asset:${fileKey}`; const isShowcased = showcaseOrder.includes(showcaseKey); return <div key={fileKey} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-2 dark:border-white/10 dark:bg-white/[0.025]">{kind === "image" ? <img src={originalPreviewUrls[index]} alt="" className="h-12 w-12 rounded-md object-cover" /> : <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue-500/10 text-blue-500"><Icon className="h-5 w-5" /></span>}<div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{file.name}</p><p className="text-[10px] uppercase text-gray-500">{kind} · {(file.size / 1024 / 1024).toFixed(1)}MB</p></div>{showShowcaseControls && (kind === "image" || kind === "video") && <button type="button" aria-pressed={isShowcased} disabled={!isShowcased && showcaseOrder.length >= maxShowcaseImages(listingType)} onClick={() => toggleShowcaseEntry(showcaseKey)} className={`rounded-md px-2 py-1.5 text-[10px] font-semibold disabled:opacity-40 ${isShowcased ? "bg-blue-600/10 text-blue-600 dark:text-blue-300" : "bg-blue-600 text-white"}`}>{isShowcased ? "Added to showcase" : "Add to showcase"}</button>}<button type="button" onClick={() => removeAssetFile(index, fileKey)} className="rounded p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>; })}</div></div>}
+            {showShowcaseControls && showcaseOrder.length > 0 && <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-[#080a12]"><div className="mb-3 flex justify-between"><p className="text-xs font-semibold">Showcase image order</p><p className="text-[10px] text-gray-500">First is the cover · use arrows to reorder</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{showcaseOrder.map((key, index) => {
+              const separator = key.indexOf(":");
+              const kind = key.slice(0, separator);
+              const value = key.slice(separator + 1);
+              const retained = kind === "retained" || kind === "media" ? asset?.thumbnails.find((item) => item.media_asset_id === value) : undefined;
+              const mediaFile = kind === "media" ? asset?.media_assets.find((item) => item.media_asset_id === value) : undefined;
+              const assetIndex = kind === "asset" ? files.findIndex((file) => fileIdentity(file) === value) : -1;
+              const uploadIndex = kind === "upload" ? thumbnailFiles.findIndex((file) => fileIdentity(file) === value) : -1;
+              const localFile = assetIndex >= 0 ? files[assetIndex] : uploadIndex >= 0 ? thumbnailFiles[uploadIndex] : undefined;
+              const preview = kind === "upload" && uploadIndex >= 0 ? thumbnailPreviewUrls[uploadIndex]
+                : kind === "asset" && assetIndex >= 0 ? originalPreviewUrls[assetIndex]
+                  : retained ? mediaUrl(retained.path) : mediaUrl(mediaFile?.thumbnail_path);
+              const imageLike = kind === "upload" || (kind === "asset" && sourceKind(localFile!) === "image")
+                || Boolean(preview && (mediaFile?.type === "image" || mediaFile?.type === "video" || retained));
+              const Icon = kind === "asset" && sourceKind(localFile!) === "video" || mediaFile?.type === "video" ? Clapperboard : Image;
+              const label = localFile?.name || mediaFile?.name || "Showcase image";
+              return <div key={key} className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-white/10 dark:bg-white/[0.025]">
+                <div className="relative aspect-video bg-gray-100 dark:bg-white/5">{preview && imageLike ? <img src={preview} alt={label} className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center text-blue-500"><Icon className="h-8 w-8" /></span>}{index === 0 && <span className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-1 text-[9px] font-bold uppercase text-white">Cover</span>}</div>
+                <div className="flex items-center gap-2 p-2"><span className="min-w-0 flex-1 truncate text-[10px] font-semibold">{label}</span><button type="button" aria-label={`Move ${label} up`} onClick={() => moveShowcaseEntry(index, -1)} disabled={index === 0} className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-white/10"><ArrowUp className="h-3.5 w-3.5" /></button><button type="button" aria-label={`Move ${label} down`} onClick={() => moveShowcaseEntry(index, 1)} disabled={index === showcaseOrder.length - 1} className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-white/10"><ArrowDown className="h-3.5 w-3.5" /></button><button type="button" aria-label={`Remove ${label} from showcase`} onClick={() => removeShowcaseEntry(key)} className="rounded p-1 text-gray-500 hover:bg-red-500/10 hover:text-red-500"><X className="h-3.5 w-3.5" /></button></div>
+              </div>;
+            })}</div></div>}
           </div>
           <label className="block"><span className="mb-2 block text-sm font-semibold">Title</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={50} className={inputClass} placeholder="Name your asset" /></label>
           <label className="block"><span className="mb-2 block text-sm font-semibold">Description</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={5000} rows={5} className={inputClass} placeholder="Describe what this asset contains" /></label>

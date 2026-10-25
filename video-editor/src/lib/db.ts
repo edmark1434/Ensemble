@@ -224,6 +224,13 @@ interface MarketAssetsTable {
 interface MarketMediaAssetsTable {
   market_asset_id: string;
   media_asset_id: string;
+  position: number;
+}
+
+interface MarketAssetThumbnailsTable {
+  market_asset_id: string;
+  media_asset_id: string;
+  position: number;
 }
 
 interface TagsTable {
@@ -273,6 +280,7 @@ interface Database {
 
   market_assets: MarketAssetsTable;
   market_media_assets: MarketMediaAssetsTable;
+  market_asset_thumbnails: MarketAssetThumbnailsTable;
   tags: TagsTable;
   market_asset_tags: MarketAssetTagsTable;
 }

@@ -8,6 +8,15 @@
 - The local frontend normally runs on port `5173`; production origins come from environment configuration.
 - PostgreSQL stores relational/business data. MongoDB is used by features that need document-oriented storage. Redis supports transient/shared state.
 - `backend/lib/BackgroundJob.js` starts reconciliation work after database connections initialize.
+- Asset previews (images, videos, audio) run through `media_asset_jobs` after listing creation. Pending proxy/thumbnail references are nullable. The backend drains one job at a time every three seconds; set `MEDIA_WORKER_EMBEDDED=false` when running the separate `npm run media:worker` process. Listings remain drafts until previews finish, and the asset UI polls processing records for completion or failure.
+
+## Video upload normalization
+
+- New market video originals are normalized during upload finalization in `backend/services/FileServices.js`, before a file record is returned. Editor file and URL uploads use `video-editor/src/lib/video-upload.ts` before creating their media record.
+- Originals fit within 1920×1080 landscape or 1080×1920 portrait without enlarging smaller videos. Rotation and non-square pixels are baked into the finalized video; its probed dimensions and URL are authoritative. Image originals are unchanged.
+- Market video proxies only add the watermark at the finalized original's exact dimensions. Resolution policy must stay out of proxy creation, including when higher-resolution plans are added later.
+- The editor server needs FFmpeg on `PATH` or `FFMPEG_PATH` set to its executable. FFprobe is bundled by `ffprobe-static` (override with `FFPROBE_PATH`). The backend bundles both binaries and supports the same overrides.
+- Normalization happens before upload completion, so large videos can take longer after transfer reaches 100%. Upload-intent expiry is checked when finalization is claimed, not again after encoding. Existing uploads are not retroactively converted.
 
 ## Backend dependency direction
 

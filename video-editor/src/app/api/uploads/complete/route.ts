@@ -1,7 +1,9 @@
 // app/api/uploads/complete/route.ts
 
 import { connection, NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { buildPublicUrl } from "@/lib/s3";
+import { createMediaUpload } from "@/lib/db/media-uploads";
+import { prepareVideoUpload, discardVideoUpload, readUploadedFile } from "@/lib/video-upload";
 
 export async function POST(request: NextRequest) {
   await connection();
@@ -10,8 +12,6 @@ export async function POST(request: NextRequest) {
     const {
       filePath,
       fileName,
-      contentType,
-      fileSize,
       userId,
       projectId,
       width,
@@ -19,49 +19,35 @@ export async function POST(request: NextRequest) {
       durationSeconds
     } = await request.json();
 
-    // userId/projectId are already the real user_id / project_id UUIDs —
-    // no more public_id -> internal id resolution.
-    const ownerUserId = userId;
-    const resolvedProjectId = projectId;
-
-    const file = await db
-      .insertInto("files")
-      .values({
-        name: fileName,
-        path: filePath,
-        mime_type: contentType,
-        size_bytes: fileSize
-      })
-      .returning("file_id")
-      .executeTakeFirstOrThrow();
-
-    const mediaAsset = await db
-      .insertInto("media_assets")
-      .values({
-        owner_user_id: ownerUserId,
-        project_id: resolvedProjectId,
-        name: fileName,
-        original_file_id: file.file_id,
-        proxy_file_id: file.file_id,
-        thumbnail_file_id: file.file_id,
-        type: contentType.split("/")[0],
-        width: width ?? null,
-        height: height ?? null,
-        duration_seconds: durationSeconds ?? null
-      })
-      .returning("media_asset_id")
-      .executeTakeFirstOrThrow();
+    // Route by stored metadata, not a client-supplied type that could skip normalization.
+    const { contentType, fileSize } = await readUploadedFile(userId, filePath);
+    const isVideo = contentType.startsWith("video/");
+    const upload = isVideo
+      ? await prepareVideoUpload({ userId, filePath, fileName, contentType })
+      : { filePath, fileName, contentType, fileSize, width, height, durationSeconds, url: buildPublicUrl(filePath) };
+    let mediaAsset;
+    try {
+      mediaAsset = await createMediaUpload({ ...upload, userId, projectId });
+    } catch (error) {
+      if (isVideo) await discardVideoUpload(upload.filePath).catch(() => undefined);
+      throw error;
+    }
+    // Only delete new staging objects; older clients may have uploaded to a
+    // filename-based path that other saved items still reference.
+    if (isVideo && filePath.startsWith(`uploads/${userId}/incoming/`)) {
+      void discardVideoUpload(filePath).catch(() => undefined);
+    }
 
     return NextResponse.json({
       success: true,
-      mediaAsset: { id: mediaAsset.media_asset_id }
+      mediaAsset: { id: mediaAsset.media_asset_id },
+      upload: { ...upload, mediaAssetId: mediaAsset.media_asset_id }
     });
   } catch (error) {
     console.error("Error completing upload:", error);
     return NextResponse.json(
       {
-        error: "Failed to complete upload",
-        details: error instanceof Error ? error.message : String(error)
+        error: "Failed to complete upload"
       },
       { status: 500 }
     );

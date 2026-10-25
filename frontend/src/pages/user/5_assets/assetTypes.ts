@@ -1,33 +1,32 @@
 export type AssetType = "image" | "video" | "audio" | "template";
 export type AssetStatus = "draft" | "published";
+export type AssetProcessingStatus = "processing" | "ready" | "failed";
 export type AssetReviewStatus = "pending" | "approved" | "rejected" | "delisted";
 
 export interface AssetThumbnail {
-  media_asset_thumbnail_id: string;
+  media_asset_id: string;
   path: string;
   position: number;
 }
 
-export interface AssetProjectLink {
-  media_asset_project_link_id: string;
-  label: string;
-  provider: string;
-  position: number;
-}
-
-export interface AssetBundleFile {
-  media_asset_bundle_file_id: string;
+export interface AssetMediaFile {
+  media_asset_id: string;
   name: string;
+  type: Exclude<AssetType, "template">;
   mime_type: string;
   size_bytes: number;
-  preview_path: string;
-  preview_mime_type: string;
+  width: number | null;
+  height: number | null;
+  duration_seconds: number | null;
+  proxy_path: string;
+  thumbnail_path: string | null;
+  processing_status: AssetProcessingStatus;
   position: number;
 }
 
 export interface AssetRecord {
   market_asset_id: string;
-  media_asset_id: string;
+  media_asset_id: string | null;
   name: string;
   description: string;
   price_credits: number;
@@ -44,15 +43,15 @@ export interface AssetRecord {
   height: number | null;
   duration_seconds: number | null;
   proxy_path: string;
-  thumbnail_path: string;
+  thumbnail_path: string | null;
   thumbnails: AssetThumbnail[];
   thumbnail_count: number;
-  project_links: AssetProjectLink[];
-  project_link_count: number;
   mime_type: string | null;
   size_bytes: number | null;
-  bundle_files: AssetBundleFile[];
-  bundle_file_count: number;
+  media_assets: AssetMediaFile[];
+  media_asset_count: number;
+  has_ydoc: boolean;
+  processing_status: AssetProcessingStatus;
   creator_name: string;
   creator_handle: string | null;
   creator_avatar_path: string | null;

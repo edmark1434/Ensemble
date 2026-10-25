@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { FileAudio, Loader2, X } from "lucide-react";
+import { AudioLines, Loader2, X } from "lucide-react";
 import api from "@/lib/axios";
-import type { AssetBundleFile, AssetRecord } from "./assetTypes";
+import type { AssetMediaFile, AssetRecord } from "./assetTypes";
 
 interface AssetOriginalModalProps {
   open: boolean;
   asset: AssetRecord;
-  bundleFile: AssetBundleFile;
+  mediaAsset: AssetMediaFile;
   onClose: () => void;
 }
 
@@ -24,19 +24,19 @@ function requestError(error: unknown) {
   return "Unable to load the original file.";
 }
 
-export default function AssetOriginalModal({ open, asset, bundleFile, onClose }: AssetOriginalModalProps) {
+export default function AssetOriginalModal({ open, asset, mediaAsset, onClose }: AssetOriginalModalProps) {
   if (!open) return null;
-  return <OpenAssetOriginalModal key={bundleFile.media_asset_bundle_file_id} asset={asset} bundleFile={bundleFile} onClose={onClose} />;
+  return <OpenAssetOriginalModal key={mediaAsset.media_asset_id} asset={asset} mediaAsset={mediaAsset} onClose={onClose} />;
 }
 
-function OpenAssetOriginalModal({ asset, bundleFile, onClose }: Omit<AssetOriginalModalProps, "open">) {
+function OpenAssetOriginalModal({ asset, mediaAsset, onClose }: Omit<AssetOriginalModalProps, "open">) {
   const [preview, setPreview] = useState<OriginalPreviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
-    api.get<OriginalPreviewResponse>(`/api/assets/${asset.market_asset_id}/files/${bundleFile.media_asset_bundle_file_id}/original-preview`, {
+    api.get<OriginalPreviewResponse>(`/api/assets/${asset.market_asset_id}/media/${mediaAsset.media_asset_id}/original-preview`, {
       signal: controller.signal,
     }).then((response) => setPreview(response.data))
       .catch((requestErrorValue) => {
@@ -46,7 +46,7 @@ function OpenAssetOriginalModal({ asset, bundleFile, onClose }: Omit<AssetOrigin
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [asset.market_asset_id, bundleFile.media_asset_bundle_file_id]);
+  }, [asset.market_asset_id, mediaAsset.media_asset_id]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -56,13 +56,13 @@ function OpenAssetOriginalModal({ asset, bundleFile, onClose }: Omit<AssetOrigin
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
 
-  const mediaType = preview?.mimeType || bundleFile.mime_type;
+  const mediaType = preview?.mimeType || mediaAsset.mime_type;
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" aria-labelledby="original-file-title">
       <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-dark-surface shadow-2xl">
         <div className="flex shrink-0 items-start justify-between border-b border-white/10 px-5 py-4">
           <div className="min-w-0">
-            <h2 id="original-file-title" className="truncate text-lg font-bold text-white">{bundleFile.name}</h2>
+            <h2 id="original-file-title" className="truncate text-lg font-bold text-white">{mediaAsset.name}</h2>
             <p className="mt-1 text-xs text-zinc-400">Protected full-quality media · link expires after 60 seconds</p>
           </div>
           <button type="button" onClick={onClose} className="ml-4 rounded-lg p-2 text-zinc-400 transition hover:bg-white/5 hover:text-white" aria-label="Close original file viewer"><X className="h-5 w-5" /></button>
@@ -75,7 +75,7 @@ function OpenAssetOriginalModal({ asset, bundleFile, onClose }: Omit<AssetOrigin
             <div className="max-w-md rounded-xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-center text-sm text-red-300">{error}</div>
           ) : preview?.previewUrl && mediaType.startsWith("image/") ? (
             <div className="relative max-h-[75vh] max-w-full overflow-hidden">
-              <img src={preview.previewUrl} alt={`Original ${bundleFile.name}`} draggable={false} onContextMenu={(event) => event.preventDefault()} className="max-h-[75vh] max-w-full object-contain" />
+              <img src={preview.previewUrl} alt={`Original ${mediaAsset.name}`} draggable={false} onContextMenu={(event) => event.preventDefault()} className="max-h-[75vh] max-w-full object-contain" />
               <span className="pointer-events-none absolute bottom-3 right-3 rounded-sm bg-black/65 px-3 py-1.5 text-sm font-bold text-white shadow-md" aria-hidden="true">Ensemble Preview</span>
             </div>
           ) : preview?.previewUrl && mediaType.startsWith("video/") ? (
@@ -85,7 +85,7 @@ function OpenAssetOriginalModal({ asset, bundleFile, onClose }: Omit<AssetOrigin
             </div>
           ) : preview?.previewUrl && mediaType.startsWith("audio/") ? (
             <div className="relative flex w-full max-w-xl flex-col items-center gap-6 rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-blue-300">
-              <FileAudio className="h-16 w-16" />
+              <AudioLines className="h-16 w-16" />
               <audio src={preview.previewUrl} controls autoPlay onContextMenu={(event) => event.preventDefault()} className="w-full" />
               <span className="pointer-events-none absolute bottom-3 right-3 rounded-sm bg-black/65 px-3 py-1.5 text-sm font-bold text-white shadow-md" aria-hidden="true">Ensemble Preview</span>
             </div>

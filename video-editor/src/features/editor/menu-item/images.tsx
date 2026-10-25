@@ -17,6 +17,8 @@ import { normalizeDimensionsToCanvas } from "@/features/editor/utils/dimensions"
 import useStore from "../store/use-store";
 import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
 import { MarketPriceBadge } from "@/components/market-price-badge";
+import { getWidestBundleShowcase, isMarketAssetBundle, MarketAssetCard, MarketAssetDetails, type MarketAssetBundle, useWidestBundleShowcaseDimensions } from "@/components/market-asset-browser";
+import { addMarketAssetToTimeline } from "@/features/editor/utils/add-market-asset-to-timeline";
 
 const buildNormalizedImagePayload = (image: Partial<IImage>): Partial<IImage> => {
   const details = image.details;
@@ -55,6 +57,7 @@ const GAP = 8;
 export const Images = () => {
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedMarketAsset, setSelectedMarketAsset] = useState<MarketAssetBundle | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -87,7 +90,9 @@ export const Images = () => {
     hasMore: marketHasMore,
     load: loadMarket,
     loadMore: loadMoreMarket
-  } = useMarketAssets<Partial<IImage>>("image");
+  } = useMarketAssets<MarketAssetBundle>("image");
+  const marketBundles = useMemo(() => marketImages.filter(isMarketAssetBundle), [marketImages]);
+  const showcaseDimensions = useWidestBundleShowcaseDimensions(marketBundles);
 
   // Load market + curated images on component mount
   useEffect(() => {
@@ -165,13 +170,17 @@ export const Images = () => {
   const isLoading = pexelsLoading || marketLoading;
 
   // Market assets always come first, then Pexels stock
-  const displayImages = [...marketImages, ...pexelsImages].map((image) => ({
-    ...image,
-    metadata: {
-      ...image.metadata,
-      name: image.name
-    }
-  }));
+  const displayImages = [...marketImages, ...pexelsImages].map((image) => {
+    const widestShowcase = isMarketAssetBundle(image) ? getWidestBundleShowcase(image) : undefined;
+    const dimensions = isMarketAssetBundle(image) ? showcaseDimensions[image.marketAssetId] : undefined;
+    const width = widestShowcase?.details.width ?? dimensions?.width;
+    const height = widestShowcase?.details.height ?? dimensions?.height;
+    return {
+      ...image,
+      ...(width && height ? { details: { ...image.details, width, height } } : {}),
+      metadata: { ...image.metadata, name: image.name }
+    };
+  });
 
   const rows = useMasonryRows(displayImages, containerWidth, {
     gap: GAP,
@@ -181,7 +190,8 @@ export const Images = () => {
   });
 
   return (
-    <div className="flex h-full w-full flex-col min-h-0 overflow-hidden">
+    <div className="relative h-full min-h-0 w-full overflow-hidden">
+    <div className={`flex h-full w-full flex-col min-h-0 overflow-hidden ${selectedMarketAsset ? "hidden" : ""}`}>
       <div className="flex items-center gap-2 p-4">
         <div className="relative flex-1">
           <Button
@@ -235,11 +245,16 @@ export const Images = () => {
                   className="h-full"
                   style={{ width, height: row.height }}
                 >
-                  <ImageItem
-                    image={image}
-                    shouldDisplayPreview={!isDraggingOverTimeline}
-                    handleAddImage={handleAddImage}
-                  />
+                  {isMarketAssetBundle(image) ? (
+                    <MarketAssetCard bundle={image} onOpen={setSelectedMarketAsset} />
+                  ) : (
+                    <ImageItem
+                      image={((Array.isArray((image as any).assets) && (image as any).assets.length === 1)
+                        ? (image as any).assets[0] : image) as Partial<IImage>}
+                      shouldDisplayPreview={!isDraggingOverTimeline}
+                      handleAddImage={handleAddImage}
+                    />
+                  )}
                 </div>
               ))}
             </div>
@@ -254,6 +269,14 @@ export const Images = () => {
           </div>
         )}
       </ScrollArea>
+    </div>
+    {selectedMarketAsset && (
+      <MarketAssetDetails
+        bundle={selectedMarketAsset}
+        onBack={() => setSelectedMarketAsset(null)}
+        onAddAsset={addMarketAssetToTimeline}
+      />
+    )}
     </div>
   );
 };

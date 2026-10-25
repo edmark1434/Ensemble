@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, Bookmark, Calendar, CheckCircle2, Clock3, CornerDownRight, Download, Edit3, Eye, FileAudio, FileImage, FileVideo, Heart, Loader2, MessageSquare, PackageOpen, Pencil, Ruler, Send, ShoppingCart, Star, Trash2, Video, Image as ImageIcon, AudioLines, LayoutTemplate, User, AlertTriangle, Clock } from "lucide-react";
+import { ArrowLeft, Bookmark, Calendar, CheckCircle2, Clock3, CornerDownRight, Download, Edit3, Eye, AudioLines, Image, Clapperboard, Heart, Loader2, MessageSquare, PackageOpen, Pencil, Ruler, Send, ShoppingCart, Star, Trash2, LayoutTemplate, User, AlertTriangle, Clock } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/axios";
@@ -14,7 +14,7 @@ import AssetThumbnailCarousel from "./AssetThumbnailCarousel";
 
 import AssetOriginalModal from "./AssetOriginalModal";
 import AssetPurchaseModal from "./AssetPurchaseModal";
-import { mediaUrl, readableDuration, readableSize, type AssetBundleFile, type AssetComment, type AssetPurchaseResponse, type AssetRecord, type AssetReply, type AssetReview } from "./assetTypes";
+import { mediaUrl, readableDuration, readableSize, type AssetComment, type AssetMediaFile, type AssetPurchaseResponse, type AssetRecord, type AssetReply, type AssetReview } from "./assetTypes";
 
 function errorMessage(error: unknown, fallback: string) {
   if (typeof error === "object" && error && "response" in error) {
@@ -32,8 +32,8 @@ function formatDate(value: string, includeTime = false) {
 
 function getTypeIcon(type: string) {
   switch (type.toLowerCase()) {
-    case "video": return <Video className="h-3 w-3" />;
-    case "image": return <ImageIcon className="h-3 w-3" />;
+    case "video": return <Clapperboard className="h-3 w-3" />;
+    case "image": return <Image className="h-3 w-3" />;
     case "audio": return <AudioLines className="h-3 w-3" />;
     case "template": return <LayoutTemplate className="h-3 w-3" />;
     default: return null;
@@ -82,7 +82,7 @@ export default function AssetDetails() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
-  const [selectedOriginalFile, setSelectedOriginalFile] = useState<AssetBundleFile | null>(null);
+  const [selectedOriginalFile, setSelectedOriginalFile] = useState<AssetMediaFile | null>(null);
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
   const [engagementPending, setEngagementPending] = useState<"like" | "save" | null>(null);
   const [reviewRating, setReviewRating] = useState(5);
@@ -118,6 +118,22 @@ export default function AssetDetails() {
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
+
+  useEffect(() => {
+    if (asset?.processing_status !== "processing") return;
+    const controller = new AbortController();
+    let running = false;
+    const timer = window.setInterval(async () => {
+      if (running) return;
+      running = true;
+      try {
+        const response = await api.get<{ asset: AssetRecord }>(`/api/assets/${assetId}`, { signal: controller.signal });
+        if (!controller.signal.aborted) setAsset(response.data.asset);
+      } catch { /* Keep the existing preview status through temporary connection failures. */ }
+      finally { running = false; }
+    }, 5000);
+    return () => { controller.abort(); window.clearInterval(timer); };
+  }, [assetId, asset?.processing_status]);
 
   useEffect(() => {
     const handleStatusUpdate = (payload?: { marketAssetId?: string }) => {
@@ -329,11 +345,11 @@ export default function AssetDetails() {
     }
   };
 
-  const downloadOriginal = async (bundleFile: AssetBundleFile) => {
+  const downloadOriginal = async (mediaAsset: AssetMediaFile) => {
     if (!asset || downloadingFileId) return;
-    setDownloadingFileId(bundleFile.media_asset_bundle_file_id);
+    setDownloadingFileId(mediaAsset.media_asset_id);
     try {
-      const response = await api.get<{ downloadUrl: string }>(`/api/assets/${asset.market_asset_id}/files/${bundleFile.media_asset_bundle_file_id}/download`);
+      const response = await api.get<{ downloadUrl: string }>(`/api/assets/${asset.market_asset_id}/media/${mediaAsset.media_asset_id}/download`);
       if (!response.data.downloadUrl) throw new Error("The download URL was not returned.");
       window.location.assign(response.data.downloadUrl);
     } catch (error) {
@@ -392,6 +408,20 @@ export default function AssetDetails() {
         </main>
       </div>
     );
+  }
+
+  if (asset.processing_status === "processing" || asset.processing_status === "failed") {
+    return <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-dark-base dark:text-white">
+      <UserHeader pageTitle="Asset upload" />
+      <main className="mx-auto flex min-h-[65vh] max-w-xl flex-col items-center justify-center gap-4 p-6 text-center">
+        <h1 className="text-xl font-bold">{asset.name}</h1>
+        <p className="text-sm text-gray-500">{asset.processing_status === "failed"
+          ? "Preview processing failed. You can manage this upload from your assets."
+          : "Your preview is being prepared. Details will be available when it’s ready."}</p>
+        <button type="button" onClick={() => navigate(asset.is_owner ? "/assets/owned" : "/assets")}
+          className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-500">Back to Assets</button>
+      </main>
+    </div>;
   }
 
   return (
@@ -566,22 +596,22 @@ export default function AssetDetails() {
 
         <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 md:p-7 shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
           <div id="asset-deliverables" className="scroll-mt-24">
-            {asset.bundle_file_count > 0 && (asset.type !== "template" || asset.can_download) && (
+            {asset.media_asset_count > 0 && (asset.type !== "template" || asset.can_download) && (
               <section className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.025]">
                   <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-                    <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Package contents</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset.bundle_file_count} protected original {asset.bundle_file_count === 1 ? "file" : "files"}</p></div>
+                    <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Package contents</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset.media_asset_count} protected original {asset.media_asset_count === 1 ? "file" : "files"}</p></div>
                     <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400">Low-quality previews · originals require ownership</span>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {asset.bundle_files.map((bundleFile) => (
-                      <BundleFilePreview
-                        key={`${bundleFile.media_asset_bundle_file_id}:${asset.can_download}`}
-                        bundleFile={bundleFile}
+                    {asset.media_assets.map((mediaAsset) => (
+                      <MediaAssetPreview
+                        key={`${mediaAsset.media_asset_id}:${asset.can_download}`}
+                        mediaAsset={mediaAsset}
                         canAccessOriginal={Boolean(asset.can_download)}
-                        downloading={downloadingFileId === bundleFile.media_asset_bundle_file_id}
+                        downloading={downloadingFileId === mediaAsset.media_asset_id}
                         downloadDisabled={Boolean(downloadingFileId)}
-                        onOpen={() => asset.can_download ? setSelectedOriginalFile(bundleFile) : requestPurchase()}
-                        onDownload={() => void downloadOriginal(bundleFile)}
+                        onOpen={() => asset.can_download ? setSelectedOriginalFile(mediaAsset) : requestPurchase()}
+                        onDownload={() => void downloadOriginal(mediaAsset)}
                       />
                     ))}
                   </div>
@@ -594,7 +624,7 @@ export default function AssetDetails() {
               <Metadata icon={Calendar} label="Published" value={formatDate(asset.created_at)} />
               <Metadata icon={Ruler} label="Dimensions" value={asset.width && asset.height ? `${asset.width} × ${asset.height}` : "—"} />
               <Metadata icon={Clock3} label="Duration" value={readableDuration(asset.duration_seconds)} />
-              <Metadata icon={MessageSquare} label="Package size" value={readableSize(asset.bundle_files.reduce((total, file) => total + Number(file.size_bytes || 0), 0))} />
+              <Metadata icon={MessageSquare} label="Package size" value={readableSize(asset.media_assets.reduce((total, file) => total + Number(file.size_bytes || 0), 0))} />
             </dl>
         </section>
 
@@ -740,9 +770,9 @@ export default function AssetDetails() {
         isOpen={isGuestLoginOpen}
         onClose={() => setIsGuestLoginOpen(false)}
         title="Log in to continue"
-        message="Please log in or create an account to purchase, open project links, like, save, comment on, or reply about this asset."
+        message="Please log in or create an account to purchase, like, save, comment on, or reply about this asset."
       />
-      {selectedOriginalFile && <AssetOriginalModal open asset={asset} bundleFile={selectedOriginalFile} onClose={() => setSelectedOriginalFile(null)} />}
+      {selectedOriginalFile && <AssetOriginalModal open asset={asset} mediaAsset={selectedOriginalFile} onClose={() => setSelectedOriginalFile(null)} />}
       <ConfirmationModal isOpen={deleteDialogOpen} title={deleteDialogTitle} message={deleteDialogMessage} confirmText={deleting ? "Deleting..." : "Delete"} cancelText="Cancel" onConfirm={() => void deleteSelected()} onCancel={() => { if (!deleting) { setAssetToDelete(false); setCommentToDelete(null); setReplyToDelete(null); setReviewToDelete(null); } }} />
     </div>
   );
@@ -752,20 +782,20 @@ function Metadata({ icon: Icon, label, value }: { icon: typeof Calendar; label: 
   return <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-3 dark:bg-white/[0.025]"><Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-zinc-500" /><div className="min-w-0"><dt className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500">{label}</dt><dd className="mt-0.5 truncate font-medium text-gray-800 dark:text-zinc-200">{value}</dd></div></div>;
 }
 
-function BundleFileIcon({ mimeType }: { mimeType: string }) {
-  const Icon = mimeType.startsWith("image/") ? FileImage : mimeType.startsWith("video/") ? FileVideo : FileAudio;
+function MediaFileIcon({ mimeType }: { mimeType: string }) {
+  const Icon = mimeType.startsWith("image/") ? Image : mimeType.startsWith("video/") ? Clapperboard : AudioLines;
   return <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300"><Icon className="h-7 w-7" /></span>;
 }
 
-function BundleFilePreview({
-  bundleFile,
+function MediaAssetPreview({
+  mediaAsset,
   canAccessOriginal,
   downloading,
   downloadDisabled,
   onOpen,
   onDownload,
 }: {
-  bundleFile: AssetBundleFile;
+  mediaAsset: AssetMediaFile;
   canAccessOriginal: boolean;
   downloading: boolean;
   downloadDisabled: boolean;
@@ -773,27 +803,27 @@ function BundleFilePreview({
   onDownload: () => void;
 }) {
   const [failed, setFailed] = useState(false);
-  const previewUrl = mediaUrl(bundleFile.preview_path);
-  const format = bundleFile.mime_type.split("/")[1] || "file";
+  const previewUrl = mediaUrl(mediaAsset.thumbnail_path || mediaAsset.proxy_path);
+  const format = mediaAsset.mime_type.split("/")[1] || "file";
   return (
     <article className="group min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/10 dark:bg-dark-base">
       <button
         type="button"
         onClick={onOpen}
         className="relative block aspect-video w-full cursor-pointer overflow-hidden bg-gray-100 text-left dark:bg-black/30"
-        aria-label={canAccessOriginal ? `View original ${bundleFile.name}` : `View low-quality preview of ${bundleFile.name}`}
+        aria-label={canAccessOriginal ? `View original ${mediaAsset.name}` : `View low-quality preview of ${mediaAsset.name}`}
       >
         {previewUrl && !failed ? (
           <img
             src={previewUrl}
-            alt={`Preview of ${bundleFile.name}`}
+            alt={`Preview of ${mediaAsset.name}`}
             draggable={false}
             onContextMenu={(event) => event.preventDefault()}
             onError={() => setFailed(true)}
             className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
           />
         ) : (
-          <span className="absolute inset-0 flex items-center justify-center"><BundleFileIcon mimeType={bundleFile.mime_type} /></span>
+          <span className="absolute inset-0 flex items-center justify-center"><MediaFileIcon mimeType={mediaAsset.mime_type} /></span>
         )}
         {!canAccessOriginal && <>
           <span className="absolute inset-0 bg-black/5" aria-hidden="true" />
@@ -802,11 +832,11 @@ function BundleFilePreview({
         <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100"><Eye className="h-7 w-7 text-white" /></span>
       </button>
       <div className="flex items-center justify-between gap-2 p-3">
-        <p className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-400">{format} · {readableSize(bundleFile.size_bytes)}</p>
+        <p className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-400">{format} · {readableSize(mediaAsset.size_bytes)}</p>
         {canAccessOriginal ? (
           <div className="flex shrink-0 gap-1">
-            <button type="button" onClick={onOpen} className="rounded-lg p-2 text-gray-500 transition hover:bg-blue-500/10 hover:text-blue-600 dark:text-zinc-400 dark:hover:text-blue-300" aria-label={`View ${bundleFile.name}`}><Eye className="h-4 w-4" /></button>
-            <button type="button" onClick={onDownload} disabled={downloadDisabled} className="rounded-lg p-2 text-gray-500 transition hover:bg-blue-500/10 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:text-blue-300" aria-label={`Download ${bundleFile.name}`}>{downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}</button>
+            <button type="button" onClick={onOpen} className="rounded-lg p-2 text-gray-500 transition hover:bg-blue-500/10 hover:text-blue-600 dark:text-zinc-400 dark:hover:text-blue-300" aria-label={`View ${mediaAsset.name}`}><Eye className="h-4 w-4" /></button>
+            <button type="button" onClick={onDownload} disabled={downloadDisabled} className="rounded-lg p-2 text-gray-500 transition hover:bg-blue-500/10 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:text-blue-300" aria-label={`Download ${mediaAsset.name}`}>{downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}</button>
           </div>
         ) : <button type="button" onClick={onOpen} className="rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-blue-600 transition hover:bg-blue-500/10 dark:text-blue-300">View preview</button>}
       </div>

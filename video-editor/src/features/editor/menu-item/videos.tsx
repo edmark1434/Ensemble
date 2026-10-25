@@ -17,6 +17,8 @@ import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
 import { millisecondsToHHMMSS } from "../utils/format";
 import { useMarketAssets } from "@/hooks/use-market-assets";
 import { MarketPriceBadge } from "@/components/market-price-badge";
+import { getWidestBundleShowcase, isMarketAssetBundle, MarketAssetCard, MarketAssetDetails, type MarketAssetBundle, useWidestBundleShowcaseDimensions } from "@/components/market-asset-browser";
+import { addMarketAssetToTimeline } from "@/features/editor/utils/add-market-asset-to-timeline";
 
 // Shared by both click-to-add and drag-to-add: scales the raw video
 // dimensions to fit the canvas and centers left/top accordingly.
@@ -50,6 +52,7 @@ const GAP = 8;
 export const Videos = () => {
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedMarketAsset, setSelectedMarketAsset] = useState<MarketAssetBundle | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -82,7 +85,9 @@ export const Videos = () => {
     hasMore: marketHasMore,
     load: loadMarket,
     loadMore: loadMoreMarket
-  } = useMarketAssets<Partial<IVideo>>("video");
+  } = useMarketAssets<MarketAssetBundle>("video");
+  const marketBundles = useMemo(() => marketImages.filter(isMarketAssetBundle), [marketImages]);
+  const showcaseDimensions = useWidestBundleShowcaseDimensions(marketBundles);
 
   // Load market + popular videos on component mount
   useEffect(() => {
@@ -162,13 +167,17 @@ export const Videos = () => {
   const isLoading = pexelsLoading || marketLoading;
 
   // Market assets always come first, then Pexels stock
-  const displayVideos = [...marketImages, ...pexelsVideos].map((video) => ({
-    ...video,
-    metadata: {
-      ...video.metadata,
-      name: video.name
-    }
-  }));
+  const displayVideos = [...marketImages, ...pexelsVideos].map((video) => {
+    const widestShowcase = isMarketAssetBundle(video) ? getWidestBundleShowcase(video) : undefined;
+    const dimensions = isMarketAssetBundle(video) ? showcaseDimensions[video.marketAssetId] : undefined;
+    const width = widestShowcase?.details.width ?? dimensions?.width;
+    const height = widestShowcase?.details.height ?? dimensions?.height;
+    return {
+      ...video,
+      ...(width && height ? { details: { ...video.details, width, height } } : {}),
+      metadata: { ...video.metadata, name: video.name }
+    };
+  });
 
   const rows = useMasonryRows(displayVideos, containerWidth, {
     gap: GAP,
@@ -178,7 +187,8 @@ export const Videos = () => {
   });
 
   return (
-    <div className="flex h-full w-full flex-col min-h-0 overflow-hidden">
+    <div className="relative h-full min-h-0 w-full overflow-hidden">
+    <div className={`flex h-full w-full flex-col min-h-0 overflow-hidden ${selectedMarketAsset ? "hidden" : ""}`}>
       <div className="flex items-center gap-2 p-4">
         <div className="relative flex-1">
           <Button
@@ -232,11 +242,16 @@ export const Videos = () => {
                   className="h-full"
                   style={{ width, height: row.height }}
                 >
-                  <VideoItem
-                    video={video}
-                    shouldDisplayPreview={!isDraggingOverTimeline}
-                    handleAddVideo={handleAddVideo}
-                  />
+                  {isMarketAssetBundle(video) ? (
+                    <MarketAssetCard bundle={video} onOpen={setSelectedMarketAsset} />
+                  ) : (
+                    <VideoItem
+                      video={((Array.isArray((video as any).assets) && (video as any).assets.length === 1)
+                        ? (video as any).assets[0] : video) as Partial<IVideo>}
+                      shouldDisplayPreview={!isDraggingOverTimeline}
+                      handleAddVideo={handleAddVideo}
+                    />
+                  )}
                 </div>
               ))}
             </div>
@@ -264,6 +279,14 @@ export const Videos = () => {
           </div>
         )}
       </ScrollArea>
+    </div>
+    {selectedMarketAsset && (
+      <MarketAssetDetails
+        bundle={selectedMarketAsset}
+        onBack={() => setSelectedMarketAsset(null)}
+        onAddAsset={addMarketAssetToTimeline}
+      />
+    )}
     </div>
   );
 };

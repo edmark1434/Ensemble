@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
   Image,
-  Music,
+  AudioLines,
   Type,
   ClosedCaption,
   Clapperboard,
@@ -22,7 +22,7 @@ import {
 const MENU_ITEMS = [
   { id: "videos", icon: Clapperboard, label: "Videos", ariaLabel: "Add and manage video content" },
   { id: "images", icon: Image, label: "Images", ariaLabel: "Add and manage images" },
-  { id: "audios", icon: Music, label: "Audios", ariaLabel: "Add and manage audio content" },
+  { id: "audios", icon: AudioLines, label: "Audios", ariaLabel: "Add and manage audio content" },
   { id: "uploads", icon: CloudUpload, label: "Uploads", ariaLabel: "Add and manage uploads" },
   { id: "texts", icon: Type, label: "Texts", ariaLabel: "Add and edit text elements" },
   { id: "captions", icon: ClosedCaption, label: "Captions", ariaLabel: "Add and edit captions" },

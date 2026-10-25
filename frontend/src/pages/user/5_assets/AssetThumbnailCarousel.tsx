@@ -6,12 +6,12 @@ export default function AssetThumbnailCarousel({ asset }: { asset: AssetRecord }
   const slides = useMemo(() => {
     const ordered = [...(asset.thumbnails || [])].sort((left, right) => left.position - right.position);
     return ordered.length > 0
-      ? ordered.map((thumbnail) => ({ id: thumbnail.media_asset_thumbnail_id, path: thumbnail.path }))
+      ? ordered.map((thumbnail) => ({ id: thumbnail.media_asset_id, path: thumbnail.path }))
       : [{ id: "primary", path: asset.thumbnail_path }];
   }, [asset.thumbnail_path, asset.thumbnails]);
   const [active, setActive] = useState(0);
 
-  useEffect(() => { setActive(0); }, [asset.media_asset_id]);
+  useEffect(() => { setActive(0); }, [asset.market_asset_id]);
   if (slides.length === 0 || !slides[0].path) return null;
 
   const select = (index: number) => setActive((index + slides.length) % slides.length);

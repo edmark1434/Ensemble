@@ -1,5 +1,5 @@
 import React from "react";
-import { Heart, Star, Pencil, Trash2, CheckCircle2, Bookmark, Clock, Image as ImageIcon, Video, AudioLines, LayoutTemplate, ShoppingCart, AlertTriangle } from "lucide-react";
+import { Heart, Star, Pencil, Trash2, CheckCircle2, Bookmark, Clock, Image, Clapperboard, AudioLines, LayoutTemplate, ShoppingCart, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -13,8 +13,8 @@ function formatDate(value: string) {
 
 function getTypeIcon(type: string) {
   switch (type.toLowerCase()) {
-    case "video": return <Video className="h-3 w-3" />;
-    case "image": return <ImageIcon className="h-3 w-3" />;
+    case "video": return <Clapperboard className="h-3 w-3" />;
+    case "image": return <Image className="h-3 w-3" />;
     case "audio": return <AudioLines className="h-3 w-3" />;
     case "template": return <LayoutTemplate className="h-3 w-3" />;
     default: return null;
@@ -41,10 +41,13 @@ export const AssetCard: React.FC<AssetCardProps> = ({
   hideActions = false,
 }) => {
   const navigate = useNavigate();
+  const unavailable = asset.processing_status === "processing" || asset.processing_status === "failed";
 
   return (
     <article
-      onClick={() => navigate(`/assets/${asset.market_asset_id}`)}
+      onClick={() => { if (!unavailable) navigate(`/assets/${asset.market_asset_id}`); }}
+      aria-disabled={unavailable}
+      style={unavailable ? { cursor: "default" } : undefined}
       className="group cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md dark:border-white/10 dark:bg-dark-surface dark:shadow-none dark:hover:border-blue-500/50"
     >
       <div className="relative overflow-hidden">
@@ -92,7 +95,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({
             </>
           )}
         </div>
-        {!hideActions && onUpdateEngagement && (
+        {!hideActions && !unavailable && onUpdateEngagement && (
           <div className="absolute right-2 top-2 flex items-center gap-1.5 z-10" onClick={(event) => event.stopPropagation()}>
             <motion.button
               whileTap={{ scale: 0.85 }}
@@ -155,6 +158,13 @@ export const AssetCard: React.FC<AssetCardProps> = ({
         <h2 className="line-clamp-1 font-bold text-gray-900 group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-300">
           {asset.name}
         </h2>
+        {asset.processing_status === "processing" && <div className="space-y-2">
+          <p className="text-xs text-blue-500">Preparing preview… <span className="float-right">99%</span></p>
+          <div role="progressbar" aria-label="Preparing asset preview" aria-valuemin={0} aria-valuemax={100} aria-valuenow={99}
+            className="h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-white/10">
+            <div className="h-full w-[99%] rounded-full bg-blue-500" />
+          </div>
+        </div>}
 
         {/* Description */}
         <p className="line-clamp-2 text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
@@ -228,6 +238,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({
             <button
               type="button"
               onClick={() => onEdit(asset)}
+              disabled={asset.processing_status === "processing"}
               className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5 dark:text-zinc-300"
             >
               <Pencil className="h-3.5 w-3.5" /> Edit

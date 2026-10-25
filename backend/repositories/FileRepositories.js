@@ -83,19 +83,21 @@ async function consumeUploadIntentRepository(intentId, accountId, fileData) {
         if (!intent) { const error = new Error('UPLOAD_INTENT_NOT_FOUND'); error.code = 'UPLOAD_INTENT_NOT_FOUND'; throw error; }
         if (intent.consumed_at) { const error = new Error('UPLOAD_INTENT_CONSUMED'); error.code = 'UPLOAD_INTENT_CONSUMED'; throw error; }
         if (intent.status !== 'finalizing') { const error = new Error('UPLOAD_INTENT_NOT_CLAIMED'); error.code = 'UPLOAD_INTENT_NOT_CLAIMED'; throw error; }
-        if (new Date(intent.expires_at).getTime() <= Date.now()) { const error = new Error('UPLOAD_INTENT_EXPIRED'); error.code = 'UPLOAD_INTENT_EXPIRED'; throw error; }
+        // Claiming already checks expiry. A video conversion that started in time
+        // may finish after the presigned upload URL expires.
+        const finalKey = fileData.key || intent.final_key;
         const inserted = await client.query(
             `INSERT INTO files (name, path, mime_type, size_bytes) VALUES ($1, $2, $3, $4) RETURNING file_id`,
-            [fileData.name, intent.final_key, fileData.mimeType, fileData.sizeBytes]
+            [fileData.name, finalKey, fileData.mimeType, fileData.sizeBytes]
         );
         const fileId = inserted.rows[0].file_id;
         await client.query(
-            `UPDATE upload_intents SET status = 'consumed', consumed_at = CURRENT_TIMESTAMP, file_id = $3
+            `UPDATE upload_intents SET status = 'consumed', consumed_at = CURRENT_TIMESTAMP, file_id = $3, final_key = $4
              WHERE upload_intent_id = $1 AND account_id = $2`,
-            [intentId, accountId, fileId]
+            [intentId, accountId, fileId, finalKey]
         );
         await client.query('COMMIT');
-        return { fileId, key: intent.final_key };
+        return { fileId, key: finalKey };
     } catch (error) {
         await client.query('ROLLBACK');
         throw error;

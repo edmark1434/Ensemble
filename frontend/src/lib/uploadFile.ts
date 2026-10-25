@@ -31,7 +31,7 @@ export function resolveContentType(file: File): string {
 }
 
 /** Uploads the bytes to the server-issued private staging key without consuming the intent. */
-export async function uploadFileToIntent(file: File, folder: string): Promise<PreparedUpload> {
+export async function uploadFileToIntent(file: File, folder: string, onProgress?: (loaded: number) => void): Promise<PreparedUpload> {
   const contentType = resolveContentType(file);
   const prepared = await api.post("/api/files/upload-url", {
     folder,
@@ -44,18 +44,35 @@ export async function uploadFileToIntent(file: File, folder: string): Promise<Pr
     throw new Error(`File exceeds the ${Math.round(maxFileSize / 1024 / 1024)}MB limit`);
   }
 
-  const uploaded = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: file,
-  });
-  if (!uploaded.ok) throw new Error(`Upload failed with status ${uploaded.status}`);
+  if (onProgress) {
+    // XHR exposes real transferred bytes without adding API/CSRF headers to the storage URL.
+    await new Promise<void>((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open("PUT", uploadUrl);
+      request.setRequestHeader("Content-Type", contentType);
+      request.upload.onprogress = (event) => onProgress(Math.min(file.size, event.loaded));
+      request.onload = () => {
+        if (request.status >= 200 && request.status < 300) { onProgress(file.size); resolve(); }
+        else reject(new Error(`Upload failed with status ${request.status}`));
+      };
+      request.onerror = () => reject(new Error("Upload failed. Check your connection and try again."));
+      request.onabort = () => reject(new Error("Upload cancelled."));
+      request.send(file);
+    });
+  } else {
+    const uploaded = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body: file,
+    });
+    if (!uploaded.ok) throw new Error(`Upload failed with status ${uploaded.status}`);
+  }
   return { uploadIntentId };
 }
 
 /** Uploads to a private staging key, then asks the server to verify and own the file. */
-export async function uploadFileWithIntent(file: File, folder: string): Promise<FinalizedUpload> {
-  const { uploadIntentId } = await uploadFileToIntent(file, folder);
+export async function uploadFileWithIntent(file: File, folder: string, onProgress?: (loaded: number) => void): Promise<FinalizedUpload> {
+  const { uploadIntentId } = await uploadFileToIntent(file, folder, onProgress);
   const finalized = await api.post("/api/files/finalize", { uploadIntentId });
   const { key, fileId } = finalized.data || {};
   if (!key || !fileId) throw new Error("Unable to finalize file upload");

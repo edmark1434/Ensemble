@@ -778,7 +778,7 @@ async function seedGigsDomain(ctx) {
   return { gigs: gigsToReturn, requests: [] };
 }
 
-async function seedMarketplaceCatalog(ctx, projects) {
+async function seedMarketplaceCatalog(ctx) {
   const { users, files, tags } = ctx;
   if (!users.length || files.length < 3) {
     console.log('ℹ️ Skipping market catalog seed (need users + files)');
@@ -787,11 +787,11 @@ async function seedMarketplaceCatalog(ctx, projects) {
 
   await pool.query(`DELETE FROM asset_replies`);
   await pool.query(`DELETE FROM asset_comments`);
-  await pool.query(`DELETE FROM market_project_assets`);
+  await pool.query(`DELETE FROM media_asset_jobs`);
+  await pool.query(`DELETE FROM market_asset_thumbnails`);
   await pool.query(`DELETE FROM market_media_assets`);
   await pool.query(`DELETE FROM market_asset_tags`);
   await pool.query(`DELETE FROM market_assets`);
-  await pool.query(`DELETE FROM media_asset_bundle_files`);
   await pool.query(`DELETE FROM media_assets`);
 
   const mediaIds = [];
@@ -814,12 +814,6 @@ async function seedMarketplaceCatalog(ctx, projects) {
         fileB.file_id,
         fileC.file_id,
       ]
-    );
-    await pool.query(
-      `INSERT INTO media_asset_bundle_files
-         (media_asset_id, file_id, preview_file_id, position)
-       VALUES ($1, $2, $3, 0)`,
-      [res.rows[0].media_asset_id, fileA.file_id, fileB.file_id]
     );
     mediaIds.push(res.rows[0].media_asset_id);
   }
@@ -849,17 +843,11 @@ async function seedMarketplaceCatalog(ctx, projects) {
       );
     }
     await pool.query(
-      `INSERT INTO market_media_assets (market_asset_id, media_asset_id)
-       VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+      `INSERT INTO market_media_assets (market_asset_id, media_asset_id, position)
+       VALUES ($1,$2,0) ON CONFLICT DO NOTHING`,
       [res.rows[0].market_asset_id, mediaIds[i]]
     );
-    if (projects?.[i]) {
-      await pool.query(
-        `INSERT INTO market_project_assets (market_asset_id, project_id)
-         VALUES ($1,$2) ON CONFLICT DO NOTHING`,
-        [res.rows[0].market_asset_id, projects[i].project_id]
-      );
-    }
+
   }
 
   const commentRes = await pool.query(
@@ -1097,10 +1085,10 @@ async function seedDomainExamples(userAccountIds, staffByRole) {
   await seedBadges(userAccountIds);
   await seedProfileExtras(ctx);
   await seedBillingAndMoney(ctx);
-  const projects = await seedProjectsAndEditor(ctx);
+  await seedProjectsAndEditor(ctx);
   await seedJobsDomain(ctx);
   await seedGigsDomain(ctx);
-  await seedMarketplaceCatalog(ctx, projects);
+  await seedMarketplaceCatalog(ctx);
   await seedModerationExtras(userAccountIds, staffByRole);
   await seedVerificationDemos(userAccountIds, staffByRole);
   await seedConfigurationSamples();

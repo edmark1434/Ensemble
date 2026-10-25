@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Coins, Loader2, ShoppingCart, X } from "lucide-react";
+import { AudioLines, Coins, Loader2, ShoppingCart, X } from "lucide-react";
 import api from "@/lib/axios";
 import { mediaUrl, type AssetPurchaseResponse, type AssetRecord } from "./assetTypes";
 
@@ -83,7 +83,7 @@ function OpenAssetPurchaseModal({ asset, onClose, onPurchased }: Omit<AssetPurch
 
         <div className="p-5">
           <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-dark-base">
-            <img src={mediaUrl(asset.thumbnail_path)} alt="" draggable={false} onContextMenu={(event) => event.preventDefault()} className="h-44 w-full object-contain" />
+            {asset.thumbnail_path ? <img src={mediaUrl(asset.thumbnail_path)} alt="" draggable={false} onContextMenu={(event) => event.preventDefault()} className="h-44 w-full object-contain" /> : asset.type === "audio" ? <div className="flex h-44 items-center justify-center text-blue-500"><AudioLines className="h-12 w-12" /></div> : <div className="h-44" />}
           </div>
           <h3 className="mt-4 truncate font-bold text-gray-900 dark:text-white">{asset.name}</h3>
           <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">by {asset.creator_name}</p>
