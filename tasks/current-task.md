@@ -83,3 +83,17 @@
 ### Previous Asset Creation Findings
 
 Video/audio creation inserted NULL proxy/thumbnail IDs while both columns were NOT NULL in the local database. The latest 433 KB image spent 150 seconds between upload finalization and listing creation. A read-only storage download did not finish within 25 seconds.
+9. **Phase 9: WarmTooltip, Rich Introduction Editor & AI Quality Guardrails (COMPLETED)**
+    - [x] Added WarmTooltip and WarmTooltipGroup component with spring physics and keyboard shortcuts chips.
+    - [x] Streamlined introduction editor toolbar strictly to Bold, Italic, Underline, Bullet List, and Headings (H1-H4) dropdown with WarmTooltips.
+    - [x] Supported <u> HTML rendering in ReactMarkdown using 
+ehype-raw in both edit preview and view mode.
+    - [x] Replaced the single preview toggle with a modern segmented pill control ([ Write | Preview ]).
+    - [x] Added deterministic and AI quality guardrails for gibberish/random text detection.
+    - [x] Disabled introduction saving when no edits have occurred.
+    - [x] Enforced a minimum 3-word requirement for Joed AI background notes with live counter.
+
+10. **Phase 10: Proposal Close Post Visibility & Wallet Response Normalization (COMPLETED)**
+    - [x] In proposals_incoming_page.tsx, restricted Close Post button visibility strictly to open posts with 0 proposals.
+    - [x] Connected the Close Post button to the Force Close & Expire modal with immediate intake window termination and 50 Credits refund.
+    - [x] Normalized /api/accounts/wallet response in AccountControllers.js to provide both wallet and data properties, and updated 1_create_coreinfo.tsx to safely inspect both.

@@ -101,6 +101,7 @@ async function getAccountWalletController(req, res) {
             success: true,
             message: 'Wallet fetched successfully',
             wallet: resolvedWallet,
+            data: resolvedWallet,
         });
 
     } catch (err) {

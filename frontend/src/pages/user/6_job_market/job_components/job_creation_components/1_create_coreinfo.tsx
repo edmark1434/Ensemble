@@ -536,7 +536,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
     let mounted = true;
     api.get("/api/accounts/wallet", { params: { type: "account_wallets" } })
       .then((res) => {
-        const bal = res.data?.data?.balance_credits ?? res.data?.balance_credits ?? res.data?.balance;
+        const bal = res.data?.wallet?.balance_credits ?? res.data?.data?.balance_credits ?? res.data?.balance_credits ?? res.data?.balance;
         if (mounted && bal !== undefined && bal !== null) {
           setWalletBalance(Number(bal));
         }

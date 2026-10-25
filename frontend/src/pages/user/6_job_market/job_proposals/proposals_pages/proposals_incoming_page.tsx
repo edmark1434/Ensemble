@@ -247,6 +247,8 @@ export const ProposalsIncomingPage: React.FC = () => {
             timeAgo: found.created_at ? getTimeAgo(new Date(found.created_at)) : null,
             hiring_type: found.hiring_type || "single",
             budget_credits: found.budget_credits,
+            postingFeeCredits: found.posting_fee_credits || 50,
+            applicantsCount: found.applicants_count || 0,
             milestones: Array.isArray(found.milestones) ? found.milestones : [],
             thumbnail: getImageUrl(found.thumbnail_path) || getDefaultJobBannerForJob(found.job_id),
           });
@@ -260,20 +262,37 @@ export const ProposalsIncomingPage: React.FC = () => {
     loadData();
   }, [jobPostId]);
 
-  const handleToggleJobStatus = async () => {
-    if (!targetJob?.id || isUpdatingJob) return;
-    const newStatus = targetJob.status?.toLowerCase() === "closed" ? "Open" : "Closed";
+  const [isExpireModalOpen, setIsExpireModalOpen] = useState(false);
+  const [isExpiring, setIsExpiring] = useState(false);
+
+  const handleExecuteExpireNow = async () => {
+    if (!targetJob?.id || isExpiring) return;
+    setIsExpiring(true);
     try {
-      setIsUpdatingJob(true);
-      if (updateJob) {
-        await updateJob(targetJob.id, { status: newStatus });
+      const res = await api.post(`/api/jobs/${targetJob.id}/expire-now`);
+      if (res.data?.success) {
+        const refund = targetJob.postingFeeCredits || 50;
+        toast.success(res.data.message || `Job closed and ${refund} credits refunded to your wallet.`);
+        setTargetJob((prev: any) => ({ ...prev, status: "Closed" }));
+        setIsExpireModalOpen(false);
+
+        // Sync user wallet balance in global state
+        const curUser = useGlobalState.getState().user;
+        if (curUser) {
+          const currentBal = Number(curUser.wallet?.balance_credits || 0);
+          useGlobalState.getState().setUser({
+            ...curUser,
+            wallet: {
+              ...(curUser.wallet || {}),
+              balance_credits: currentBal + Number(refund),
+            },
+          });
+        }
       }
-      setTargetJob((prev: any) => ({ ...prev, status: newStatus }));
-      toast.success(`Job post marked as ${newStatus}`);
     } catch (err: any) {
-      toast.error(err?.message || "Failed to update job status");
+      toast.error(err.response?.data?.error || err.response?.data?.message || "Failed to expire job");
     } finally {
-      setIsUpdatingJob(false);
+      setIsExpiring(false);
     }
   };
 
@@ -495,7 +514,8 @@ export const ProposalsIncomingPage: React.FC = () => {
     { key: "inactive", label: "Inactive", count: counts.inactive },
   ] as const;
 
-  const isClosed = targetJob?.status?.toLowerCase() === "closed";
+  const isClosed = targetJob?.status?.toLowerCase() === "closed" || targetJob?.status?.toLowerCase() === "expired";
+  const hasZeroProposals = proposals.length === 0 && (targetJob?.applicantsCount || 0) === 0;
 
   return (
     <div className="space-y-4 text-left w-full">
@@ -580,30 +600,19 @@ export const ProposalsIncomingPage: React.FC = () => {
               </div>
             )}
 
-            {/* Toggle Status (Close / Reopen) */}
-            <button
-              type="button"
-              disabled={isUpdatingJob}
-              onClick={handleToggleJobStatus}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
-                isClosed
-                  ? "border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20"
-                  : "border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-gray-700 dark:text-zinc-300 hover:text-rose-600 dark:hover:text-rose-400"
-              }`}
-              title={isClosed ? "Reopen job to receive proposals" : "Close job to stop receiving proposals"}
-            >
-              {isClosed ? (
-                <>
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>Reopen Post</span>
-                </>
-              ) : (
-                <>
-                  <Power className="h-3.5 w-3.5 text-rose-500" />
-                  <span>Close Post</span>
-                </>
-              )}
-            </button>
+            {/* Force Close & Expire Post (ONLY visible if job is Open and has 0 proposals) */}
+            {!isClosed && hasZeroProposals && (
+              <button
+                type="button"
+                disabled={isExpiring}
+                onClick={() => setIsExpireModalOpen(true)}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-gray-700 dark:text-zinc-300 hover:text-rose-600 dark:hover:text-rose-400 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 disabled:opacity-50"
+                title="Force close job post and refund posting fee"
+              >
+                <Power className="h-3.5 w-3.5 text-rose-500" />
+                <span>Close Post</span>
+              </button>
+            )}
 
             {/* View Public Listing */}
             <button
@@ -1411,6 +1420,89 @@ export const ProposalsIncomingPage: React.FC = () => {
                   className="px-5 py-2 rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-500 transition shadow-sm disabled:opacity-50 cursor-pointer"
                 >
                   {isSendingOffer ? "Extending Offer..." : "Send Contract Offer"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Expire & Refund Confirmation Modal */}
+        {isExpireModalOpen && (
+          <div className="fixed inset-0 z-[300000] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isExpiring && setIsExpireModalOpen(false)}
+              className="absolute inset-0 bg-black/60 dark:bg-black/75 backdrop-blur-xs cursor-pointer"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 8 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 8 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="relative z-10 w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 p-5 shadow-2xl"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between pb-3 border-b border-gray-100 dark:border-white/10 mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white tracking-tight">
+                    Force Close Job Post
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                    Expire intake window immediately and refund posting fee
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isExpiring}
+                  onClick={() => setIsExpireModalOpen(false)}
+                  className="p-1 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Body Description */}
+              <div className="space-y-3 mb-5">
+                <p className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed">
+                  {`Are you sure you want to force close and expire this job post immediately? Since 0 proposals have been submitted, the intake window will be terminated immediately and your full posting fee (${targetJob?.postingFeeCredits || 50} Credits) will be refunded to your wallet.`}
+                </p>
+
+                <div className="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.03] flex items-center justify-between text-xs font-semibold">
+                  <span className="text-gray-500 dark:text-zinc-400">
+                    Refund to Wallet:
+                  </span>
+                  <span className="text-blue-600 dark:text-blue-400 font-bold">
+                    {`${targetJob?.postingFeeCredits || 50} Credits`}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Controls */}
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  disabled={isExpiring}
+                  onClick={() => setIsExpireModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isExpiring}
+                  onClick={handleExecuteExpireNow}
+                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isExpiring ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Closing...</span>
+                    </>
+                  ) : (
+                    <span>Force Close &amp; Refund</span>
+                  )}
                 </button>
               </div>
             </motion.div>
