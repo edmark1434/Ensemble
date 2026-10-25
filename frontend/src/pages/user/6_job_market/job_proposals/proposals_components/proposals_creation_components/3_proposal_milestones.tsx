@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Plus,
   Trash2,
@@ -8,6 +9,7 @@ import {
   GripVertical,
   CheckCircle2,
   Users,
+  User,
   Copy,
   ChevronDown,
   ChevronUp,
@@ -19,8 +21,15 @@ import {
   ArrowRight,
   Percent,
   Pencil,
+  Check,
+  Loader2,
+  FileText,
+  X,
 } from "lucide-react";
 import { Reorder, useDragControls, AnimatePresence, motion } from "framer-motion";
+import api from "@/lib/axios";
+import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
+import { stripMarkdown } from "@/lib/markdownPaste";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import type { Job } from "../../../job_components/job_lists";
 import { MilestoneAllocationSlider } from "../MilestoneAllocationSlider";
@@ -457,6 +466,64 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
   const [isPresetsCollapsed, setIsPresetsCollapsed] = useState(false);
   const [isBalanceCollapsed, setIsBalanceCollapsed] = useState(false);
 
+  // Joed AI Milestone Generation & 300s (5-minute) Cooldown State
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [selectedPhaseCount, setSelectedPhaseCount] = useState<1 | 2 | 3 | 4>(2);
+
+  const formatCooldown = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const rem = secs % 60;
+    return mins > 0 ? `${mins}:${String(rem).padStart(2, "0")}` : `${secs}s`;
+  };
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setCooldownSeconds((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldownSeconds]);
+
+  const handleConfirmGenerateMilestones = async () => {
+    if (cooldownSeconds > 0 || isGeneratingAi) return;
+    setIsGeneratingAi(true);
+    try {
+      const res = await api.post("/api/chat/generate-proposal-milestones", {
+        title: job?.title || "",
+        description: job?.description || "",
+        isTeam: Boolean(actingTeamId),
+        phases: selectedPhaseCount,
+        totalTimelineHours,
+      });
+
+      const generated = res.data?.data?.milestones;
+      if (Array.isArray(generated) && generated.length > 0) {
+        setMilestones(generated);
+        setErrors((prev) => {
+          const { milestones: _, ...rest } = prev;
+          return rest;
+        });
+        setIsAiModalOpen(false);
+        setCooldownSeconds(300); // 5 minutes cooldown
+        showSuccessToast(
+          `Joed AI created ${generated.length} milestone phase${generated.length > 1 ? "s" : ""} roadmap!`
+        );
+      } else {
+        throw new Error("Invalid milestone data received.");
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Joed AI could not generate milestones right now. Please try again.";
+      showErrorToast(msg);
+    } finally {
+      setIsGeneratingAi(false);
+    }
+  };
+
   const totalBid = parseInt(bidAmount || "0");
   const timelineText = job?.timeline || jobTimeline || "";
   const maxDaysMatch = timelineText.match(/-?\s*(\d+)\s*Days?/i);
@@ -756,6 +823,17 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
 
   return (
     <div className="w-full space-y-6 text-left">
+      <style>{`
+        @keyframes shineGleam {
+          0% { transform: translateX(-150%) skewX(-20deg); }
+          35% { transform: translateX(250%) skewX(-20deg); }
+          100% { transform: translateX(250%) skewX(-20deg); }
+        }
+        .animate-shine-gleam {
+          animation: shineGleam 3.5s ease-in-out infinite;
+        }
+      `}</style>
+
       {/* Top Banner: Client Post Budget vs Your Proposed Bid */}
       <div className="p-4 sm:p-5 rounded-2xl bg-zinc-100/70 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-0.5">
@@ -770,8 +848,40 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
           </p>
         </div>
 
-        {/* Dual Badges: Client Budget & Your Proposal Bid */}
+        {/* Action Button & Badges */}
         <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+          {/* Generate with Joed AI Button (5-Minute Cooldown) */}
+          <button
+            type="button"
+            disabled={cooldownSeconds > 0 || isGeneratingAi}
+            onClick={() => setIsAiModalOpen(true)}
+            className={`relative overflow-hidden px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs ${
+              cooldownSeconds > 0
+                ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white border border-blue-500 shadow-sm shadow-blue-500/20"
+            }`}
+            title={
+              cooldownSeconds > 0
+                ? `Joed AI on cooldown (${formatCooldown(cooldownSeconds)})`
+                : "Generate Milestones Roadmap with Joed AI"
+            }
+          >
+            {cooldownSeconds === 0 && (
+              <span className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none animate-shine-gleam" />
+            )}
+            {cooldownSeconds > 0 ? (
+              <>
+                <Clock className="h-3 w-3 animate-spin text-zinc-400 dark:text-zinc-500 shrink-0" />
+                <span>Cooldown ({formatCooldown(cooldownSeconds)})</span>
+              </>
+            ) : (
+              <>
+                <img src="/ensemble_lg.svg" alt="Ensemble" className="h-3.5 w-3.5 shrink-0 rounded-xs" />
+                <span>Generate with Joed AI!</span>
+              </>
+            )}
+          </button>
+
           <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/90 border border-zinc-200 dark:border-zinc-700/80 text-xs flex items-center gap-2 shadow-2xs">
             <span className="text-[10px] uppercase font-bold text-zinc-400">Client Budget:</span>
             <span className="font-bold text-zinc-700 dark:text-zinc-300">
@@ -1132,6 +1242,182 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
           <ArrowRight className="h-4 w-4" />
         </button>
       </div>
+
+      {/* Joed AI Milestones Roadmap Generation Modal */}
+      {createPortal(
+        <AnimatePresence>
+          {isAiModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => {
+                  if (!isGeneratingAi) setIsAiModalOpen(false);
+                }}
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              />
+
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0, y: 16 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 16 }}
+                className="relative w-full max-w-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl z-10 overflow-hidden"
+              >
+                {/* Modal Header */}
+                <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
+                        Generate Milestones with Joed AI
+                      </h3>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                        AI-assisted post-production roadmap aligned with your job requirements
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isGeneratingAi}
+                    onClick={() => setIsAiModalOpen(false)}
+                    className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer disabled:opacity-50"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <div className="p-6 space-y-4 text-left max-h-[75vh] overflow-y-auto">
+                  <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                    Joed AI generates professional video editing milestone deliverables, task breakdowns, hours, and balanced budget percentages based on your representation and job context.
+                  </p>
+
+                  {/* Target Job Preview Box with Representation Tag */}
+                  <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/70 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                        <FileText className="h-3 w-3 shrink-0" />
+                        <span>Source Job Post</span>
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+                          actingTeamId
+                            ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800"
+                            : "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800"
+                        }`}
+                      >
+                        {actingTeamId ? <Users className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                        <span>{actingTeamId ? "Team" : "Solo"}</span>
+                      </span>
+                    </div>
+                    <h4 className="text-xs font-bold text-zinc-900 dark:text-white line-clamp-1">
+                      {job?.title || "Target Job Listing"}
+                    </h4>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
+                      {job?.description
+                        ? stripMarkdown(job.description)
+                        : "Video editing and post-production deliverables."}
+                    </p>
+                  </div>
+
+                  {/* Number of Milestones Selector Buttons (1, 2, 3, 4) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+                        Number of Milestone Phases
+                      </label>
+                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                        Select 1, 2, 3, or 4 phases
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {([1, 2, 3, 4] as const).map((count) => {
+                        const isSelected = selectedPhaseCount === count;
+                        const labelMap: Record<number, { title: string; badge: string }> = {
+                          1: { title: "1 Phase", badge: "100%" },
+                          2: { title: "2 Phases", badge: "50 / 50" },
+                          3: { title: "3 Phases", badge: "30 / 40 / 30" },
+                          4: { title: "4 Phases", badge: "25% each" },
+                        };
+                        return (
+                          <button
+                            key={count}
+                            type="button"
+                            disabled={isGeneratingAi}
+                            onClick={() => setSelectedPhaseCount(count)}
+                            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                              isSelected
+                                ? "border-blue-600 bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100 ring-1 ring-blue-600"
+                                : "border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-100/70 dark:hover:bg-zinc-800"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-base font-extrabold">{count}</span>
+                              {isSelected ? (
+                                <div className="h-4 w-4 rounded-full bg-blue-600 text-white flex items-center justify-center">
+                                  <Check className="h-2.5 w-2.5 stroke-[3]" />
+                                </div>
+                              ) : (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-zinc-200/70 dark:bg-zinc-700/60 text-zinc-500 dark:text-zinc-400">
+                                  {labelMap[count].badge}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] font-bold mt-1 block">
+                              {labelMap[count].title}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 5-Minute Cooldown Notice */}
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/70 text-xs text-zinc-600 dark:text-zinc-300">
+                    <Clock className="h-4 w-4 shrink-0 text-zinc-400 dark:text-zinc-400" />
+                    <span className="font-medium">5-minute cooldown applies after milestone generation.</span>
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="px-6 py-3.5 border-t border-zinc-100 dark:border-zinc-800 rounded-b-2xl bg-zinc-50/40 dark:bg-zinc-900/40 flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    disabled={isGeneratingAi}
+                    onClick={() => setIsAiModalOpen(false)}
+                    className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-bold hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isGeneratingAi || cooldownSeconds > 0}
+                    onClick={handleConfirmGenerateMilestones}
+                    className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-blue-500/20"
+                  >
+                    {isGeneratingAi ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Generating Milestones...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3.5 w-3.5" />
+                        <span>Generate Roadmap ({selectedPhaseCount} Phases)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 };

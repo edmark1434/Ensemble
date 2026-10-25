@@ -10,7 +10,6 @@ import {
   List,
   Eye,
   EyeOff,
-  Wand2,
   X,
   AlertCircle,
   Link2,
@@ -22,13 +21,15 @@ import {
   Sparkles,
   Loader2,
   FileText,
+  User,
+  Users,
 } from "lucide-react";
 import api from "@/lib/axios";
 import type { Job } from "../../../job_components/job_lists";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { JobRichText } from "../../../job_components/JobRichText";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
-import { handleRichTextPaste, autoFormatDescription, stripMarkdown } from "@/lib/markdownPaste";
+import { handleRichTextPaste, stripMarkdown } from "@/lib/markdownPaste";
 
 interface ProposalPitchProps {
   job: Job | null;
@@ -186,17 +187,6 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
       textarea.focus();
       textarea.setSelectionRange(start + replacement.length, start + replacement.length);
     }, 0);
-  };
-
-  const handleAutoFormat = () => {
-    if (!coverLetter.trim()) return;
-    const formatted = autoFormatDescription(coverLetter);
-    setCoverLetter(formatted);
-    setErrors((prev) => {
-      const { coverLetter: _, ...rest } = prev;
-      return rest;
-    });
-    showSuccessToast("Formatted pitch with Markdown!");
   };
 
   const handleAttachLink = () => {
@@ -580,15 +570,6 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
 
                 <button
                   type="button"
-                  onClick={handleAutoFormat}
-                  className="px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-[10px] font-bold text-zinc-600 dark:text-zinc-400 transition flex items-center gap-1 cursor-pointer"
-                  title="Auto-format letter"
-                >
-                  <Wand2 className="h-3 w-3" />
-                  <span>Auto-Format</span>
-                </button>
-                <button
-                  type="button"
                   onClick={() => setIsPreviewMode(!isPreviewMode)}
                   className="px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-[10px] font-bold text-zinc-600 dark:text-zinc-400 transition flex items-center gap-1 cursor-pointer"
                 >
@@ -796,11 +777,23 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
                       Joed AI will read the client&apos;s <strong className="text-zinc-900 dark:text-white">Job Title</strong> and <strong className="text-zinc-900 dark:text-white">Job Description</strong> below to draft a professional cover letter pitch for your proposal.
                     </p>
 
-                    {/* Target Job Preview Box */}
+                    {/* Target Job Preview Box with Representation Tag */}
                     <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/70 space-y-1.5">
-                      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                        <FileText className="h-3 w-3 shrink-0" />
-                        <span>Source Job Post</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                          <FileText className="h-3 w-3 shrink-0" />
+                          <span>Source Job Post</span>
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+                            actingTeamId
+                              ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800"
+                              : "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800"
+                          }`}
+                        >
+                          {actingTeamId ? <Users className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                          <span>{actingTeamId ? "Team" : "Solo"}</span>
+                        </span>
                       </div>
                       <h4 className="text-xs font-bold text-zinc-900 dark:text-white line-clamp-1">
                         {job?.title || "Target Job Listing"}
