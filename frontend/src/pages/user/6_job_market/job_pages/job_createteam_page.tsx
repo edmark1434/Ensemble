@@ -113,10 +113,14 @@ const JobCreateTeamPostPage: React.FC = () => {
   const [skillInput, setSkillInput] = useState("");
   const [minBudget, setMinBudget] = useState("");
   const [maxBudget, setMaxBudget] = useState("");
-  const [minTimeline, setMinTimeline] = useState("");
-  const [maxTimeline, setMaxTimeline] = useState("");
+  const [minTimeline, setMinTimeline] = useState("3");
+  const [maxTimeline, setMaxTimeline] = useState("5");
   const [deadline, setDeadline] = useState("");
   const [positions, setPositions] = useState(2);
+  const [applicationWindowHours, setApplicationWindowHours] = useState<number>(72);
+  const [isUrgent, setIsUrgent] = useState(false);
+  const [hasHardDeadline, setHasHardDeadline] = useState(false);
+  const [hardDeadline, setHardDeadline] = useState("");
 
   // --- STEP 3: TERMS ---
   const [portfolioUseAllowed, setPortfolioUseAllowed] = useState(false);
@@ -169,6 +173,14 @@ const JobCreateTeamPostPage: React.FC = () => {
         if (data.maxTimeline) setMaxTimeline(data.maxTimeline);
         if (data.deadline) setDeadline(data.deadline);
         if (data.positions) setPositions(data.positions);
+        if (data.previewUrl) {
+          setPreviewUrl(data.previewUrl);
+          if (data.thumbnail) setThumbnail(data.thumbnail);
+        }
+        if (data.applicationWindowHours) setApplicationWindowHours(data.applicationWindowHours);
+        if (data.isUrgent !== undefined) setIsUrgent(data.isUrgent);
+        if (data.hasHardDeadline !== undefined) setHasHardDeadline(data.hasHardDeadline);
+        if (data.hardDeadline) setHardDeadline(data.hardDeadline);
         if (Array.isArray(data.milestones) && data.milestones.length > 0) setMilestones(data.milestones);
         if (data.portfolioUseAllowed !== undefined) setPortfolioUseAllowed(data.portfolioUseAllowed);
         if (data.portfolioDuration) setPortfolioDuration(data.portfolioDuration);
@@ -195,6 +207,12 @@ const JobCreateTeamPostPage: React.FC = () => {
           maxTimeline,
           deadline,
           positions,
+          thumbnail: thumbnail || previewUrl || "",
+          previewUrl: previewUrl || "",
+          applicationWindowHours,
+          isUrgent,
+          hasHardDeadline,
+          hardDeadline,
           milestones,
           portfolioUseAllowed,
           portfolioDuration,
@@ -225,9 +243,10 @@ const JobCreateTeamPostPage: React.FC = () => {
       setSkills([]);
       setMinBudget("");
       setMaxBudget("");
-      setMinTimeline("");
-      setMaxTimeline("");
+      setMinTimeline("3");
+      setMaxTimeline("5");
       setDeadline("");
+      setApplicationWindowHours(72);
       setPositions(2);
       setPortfolioUseAllowed(false);
       setPortfolioDuration("");
@@ -335,12 +354,19 @@ const JobCreateTeamPostPage: React.FC = () => {
     if (minTimeline && maxTimeline && parseInt(maxTimeline) < parseInt(minTimeline)) {
       stepErrors.maxTimeline = "Max timeline cannot be lower than min timeline.";
     }
-    if (!deadline) {
-      stepErrors.deadline = "Deadline is required.";
-    } else {
+    const targetCutoff = (hasHardDeadline && hardDeadline) ? hardDeadline : (deadline || "");
+    const intakeHours = applicationWindowHours || 168;
+    const minDays = parseInt(minTimeline) || 1;
+    const minAllowedCutoff = new Date(Date.now() + (intakeHours + minDays * 24) * 60 * 60 * 1000).toISOString().split("T")[0];
+
+    if (hasHardDeadline && !hardDeadline) {
+      stepErrors.hardDeadline = "Please specify the calendar cutoff date or uncheck the option.";
+    } else if (hasHardDeadline && hardDeadline && hardDeadline < minAllowedCutoff) {
+      stepErrors.hardDeadline = `Calendar cutoff (${hardDeadline}) cannot be earlier than intake closing plus turnaround (${minAllowedCutoff}).`;
+    } else if (targetCutoff) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const parts = deadline.split('-');
+      const parts = targetCutoff.split('-');
       const selected = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
       const diffTime = selected.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -349,10 +375,10 @@ const JobCreateTeamPostPage: React.FC = () => {
         stepErrors.deadline = "Deadline cannot be in the past.";
       } else {
         if (maxTimeline && parseInt(maxTimeline) > diffDays) {
-          stepErrors.maxTimeline = `Project timeline (${maxTimeline} days) cannot exceed the days until deadline (${diffDays} days).`;
+          stepErrors.maxTimeline = `Project turnaround (${maxTimeline} days) cannot exceed calendar cutoff (${diffDays} days).`;
         }
         if (minTimeline && parseInt(minTimeline) > diffDays) {
-          stepErrors.minTimeline = `Min timeline (${minTimeline} days) cannot exceed the days until deadline (${diffDays} days).`;
+          stepErrors.minTimeline = `Min turnaround (${minTimeline} days) cannot exceed calendar cutoff (${diffDays} days).`;
         }
       }
     }
@@ -554,6 +580,9 @@ const JobCreateTeamPostPage: React.FC = () => {
         timeline_min: parseInt(minTimeline) || 0,
         timeline_max: parseInt(maxTimeline) || 0,
         deadline,
+        application_window_hours: applicationWindowHours,
+        is_urgent: isUrgent || applicationWindowHours <= 24,
+        hard_deadline: hasHardDeadline && hardDeadline ? hardDeadline : null,
         no_of_hires: calculatedTotalHires,
         file_id: fileId,
         portfolio_use_allowed: portfolioUseAllowed,
@@ -756,6 +785,9 @@ const JobCreateTeamPostPage: React.FC = () => {
                 transition={{ duration: 0.3 }}
               >
                 <CreateBudgetSkills
+                  title={title}
+                  description={description}
+                  category={category}
                   skills={skills}
                   setSkills={setSkills}
                   skillInput={skillInput}
@@ -777,6 +809,14 @@ const JobCreateTeamPostPage: React.FC = () => {
                   errors={errors}
                   setErrors={setErrors}
                   formatCommaString={formatCommaString}
+                  applicationWindowHours={applicationWindowHours}
+                  setApplicationWindowHours={setApplicationWindowHours}
+                  isUrgent={isUrgent}
+                  setIsUrgent={setIsUrgent}
+                  hasHardDeadline={hasHardDeadline}
+                  setHasHardDeadline={setHasHardDeadline}
+                  hardDeadline={hardDeadline}
+                  setHardDeadline={setHardDeadline}
                   onBack={() => setCurrentSlide(1)}
                   onAdvance={() => handleSlide2Advance(false)}
                 />
@@ -857,6 +897,10 @@ const JobCreateTeamPostPage: React.FC = () => {
                   minTimeline={minTimeline}
                   maxTimeline={maxTimeline}
                   deadline={deadline}
+                  applicationWindowHours={applicationWindowHours}
+                  isUrgent={isUrgent || applicationWindowHours <= 24}
+                  hasHardDeadline={hasHardDeadline}
+                  hardDeadline={hardDeadline}
                   milestones={milestones}
                   postingAs={postingAs}
                   setPostingAs={setPostingAs}

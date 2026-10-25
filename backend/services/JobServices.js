@@ -256,6 +256,18 @@ async function createJobInvitationServices(jobId, clientAccountId, freelancerAcc
     return invite;
 }
 
+async function extendApplicationWindowServices(jobId, accountIds, durationHours) {
+    return await JobRepositories.extendApplicationWindowRepositories(jobId, accountIds, durationHours);
+}
+
+async function expireJobImmediatelyServices(jobId, accountIds) {
+    return await JobRepositories.expireJobImmediatelyRepositories(jobId, accountIds);
+}
+
+async function reconcileExpiredJobsServices() {
+    return await JobRepositories.autoExpireJobsRepositories();
+}
+
 module.exports = {
     getActiveJobsByClientServices,
     createJobInvitationServices,
@@ -271,5 +283,8 @@ module.exports = {
     updateProposalStatusServices,
     getTermsOfServiceServices,
     toggleJobSaveServices,
-    deleteJobServices
+    deleteJobServices,
+    extendApplicationWindowServices,
+    expireJobImmediatelyServices,
+    reconcileExpiredJobsServices
 };

@@ -673,6 +673,93 @@ async function generateProposalMilestonesDraft(context = {}) {
   }
 }
 
+async function generateJobSkillsDraft({ title, description, category }) {
+  const { getAllTagsRepositories } = require('../repositories/TagRepositories');
+  const allTags = await getAllTagsRepositories();
+  const validTagNames = allTags.map((t) => t.name).filter(Boolean);
+
+  const fallbackMatch = () => {
+    const textToMatch = `${title || ''} ${description || ''} ${category || ''}`.toLowerCase();
+    const scored = validTagNames.map((tag) => {
+      const lowerTag = tag.toLowerCase();
+      let score = 0;
+      if (textToMatch.includes(lowerTag)) score += 10;
+      const words = lowerTag.split(/\s+/).filter((w) => w.length > 2);
+      for (const w of words) {
+        if (textToMatch.includes(w)) score += 3;
+      }
+      if (['video editing', 'color grading', 'sound design'].includes(lowerTag)) score += 1;
+      return { tag, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    const topSkills = scored.filter((s) => s.score > 0).slice(0, 5).map((s) => s.tag);
+    return {
+      skills: topSkills.length >= 2 ? topSkills : validTagNames.slice(0, 3),
+      reasoning: 'Selected by Joed AI strictly from verified platform skills matching your project title and description.',
+    };
+  };
+
+  if (!title && !description) {
+    return fallbackMatch();
+  }
+
+  try {
+    const prompt = `You are Joed AI, Ensemble's expert video post-production supervisor.
+Given this project context:
+Title: ${title || 'N/A'}
+Category: ${category || 'N/A'}
+Description: ${description || 'N/A'}
+
+Select the 3 to 5 most relevant required skills.
+CRITICAL CONSTRAINT: You MUST select skills ONLY from this exact whitelist of existing database skills:
+${validTagNames.join(', ')}
+
+Never invent or rephrase any skill name. Return ONLY valid JSON:
+{
+  "skills": ["Exact Tag Name 1", "Exact Tag Name 2", "Exact Tag Name 3"],
+  "reasoning": "1-2 sentence explanation of why these skills fit the project"
+}`;
+
+    const rawAnswer = await requestClaude(prompt, [
+      {
+        role: 'user',
+        content: `Recommend 3 to 5 skills for: "${title || ''}"`,
+      },
+    ]);
+
+    let jsonStr = String(rawAnswer || '').trim();
+    const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenceMatch) {
+      jsonStr = fenceMatch[1].trim();
+    } else {
+      const firstBrace = jsonStr.indexOf('{');
+      const lastBrace = jsonStr.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
+      }
+    }
+
+    const parsed = JSON.parse(jsonStr);
+    const proposed = Array.isArray(parsed?.skills) ? parsed.skills : [];
+    const filtered = proposed
+      .map((s) => String(s || '').trim())
+      .filter((s) => validTagNames.some((vt) => vt.toLowerCase() === s.toLowerCase()))
+      .map((s) => validTagNames.find((vt) => vt.toLowerCase() === s.toLowerCase()));
+
+    if (filtered.length >= 2) {
+      return {
+        skills: filtered.slice(0, 6),
+        reasoning: parsed.reasoning || 'Selected by Joed AI based on project scope and media requirements.',
+      };
+    }
+    return fallbackMatch();
+  } catch (err) {
+    console.warn('Joed AI skills generation fallback used:', err.message);
+    return fallbackMatch();
+  }
+}
+
 module.exports = {
   ClaudeSupportError,
   generateSupportAnswer,
@@ -680,5 +767,6 @@ module.exports = {
   generateJobPostDraft,
   generateProposalPitchDraft,
   generateProposalMilestonesDraft,
+  generateJobSkillsDraft,
   buildContextPrompt,
 };

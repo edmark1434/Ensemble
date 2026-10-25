@@ -62,6 +62,12 @@ export interface Job {
   shortlistedCount?: number;
   clientHireRate?: number;
   clientLastActive?: string;
+  applicationDeadline?: string;
+  isUrgent?: boolean;
+  hardDeadline?: string;
+  freeExtensionCount?: number;
+  applicationExtendedAt?: string;
+  postingFeeCredits?: number;
 }
 
 interface JobListProps {

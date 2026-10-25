@@ -66,6 +66,31 @@ async function createJobRepositories(jobData) {
         `, [fee, userWalletId, platformWalletId]);
 
         // 1. Insert Job
+        let applicationDeadline = jobData.application_deadline || jobData.applicationDeadline;
+        if (!applicationDeadline && jobData.application_window_hours) {
+            const hrs = parseInt(jobData.application_window_hours, 10);
+            if (!isNaN(hrs) && hrs > 0) {
+                applicationDeadline = new Date(Date.now() + hrs * 60 * 60 * 1000);
+            }
+        }
+        if (!applicationDeadline) {
+            applicationDeadline = jobData.deadline || jobData.rough_deadline;
+        }
+        if (!applicationDeadline) {
+            // Default 7 days
+            applicationDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        }
+
+        const isUrgent = Boolean(
+            jobData.is_urgent || 
+            jobData.isUrgent || 
+            (jobData.application_window_hours && parseInt(jobData.application_window_hours, 10) <= 24)
+        );
+        const hardDeadline = jobData.hard_deadline || jobData.hardDeadline || null;
+        const postingFeeCredits = fee; // 50
+
+        let deadline = hardDeadline || applicationDeadline;
+
         const jobQuery = `
             INSERT INTO jobs (
                 client_account_id, title, description, category, payment_type, 
@@ -74,20 +99,16 @@ async function createJobRepositories(jobData) {
                 rough_deadline, rough_no_of_revisions,
                 portfolio_use_allowed, portfolio_use_duration_seconds,
                 is_existing_project, existing_project_id, initiator_role, require_nda,
-                hiring_type, screening_questions
+                hiring_type, screening_questions,
+                application_deadline, is_urgent, hard_deadline, posting_fee_credits
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                 $15, 0,
                 $16, $17, $18, $19, $20, $21,
-                $22, $23
+                $22, $23,
+                $24, $25, $26, $27
             ) RETURNING job_id;
         `;
-        
-        let deadline = jobData.deadline || jobData.rough_deadline;
-        if (!deadline) {
-            deadline = new Date();
-            deadline.setDate(deadline.getDate() + (parseInt(jobData.timeline_max) || 30));
-        }
 
         const jobValues = [
             jobData.client_account_id, jobData.title, jobData.description, 
@@ -103,7 +124,11 @@ async function createJobRepositories(jobData) {
             jobData.initiator_role || null,
             jobData.require_nda || false,
             jobData.hiring_type || 'single',
-            JSON.stringify(Array.isArray(jobData.screening_questions) ? jobData.screening_questions : [])
+            JSON.stringify(Array.isArray(jobData.screening_questions) ? jobData.screening_questions : []),
+            applicationDeadline,
+            isUrgent,
+            hardDeadline,
+            postingFeeCredits
         ];
         
         const res = await client.query(jobQuery, jobValues);
@@ -401,11 +426,45 @@ async function deleteJobRepositories(jobId, accountIds) {
         `);
         const platformWalletId = platformWalletRes.rows[0]?.wallet_id;
 
+        const deletedJob = jobUpdate.rows[0];
+
         const applicantsToRefund = await client.query(`
-            SELECT p.proposal_id, p.freelancer_account_id
+            SELECT p.proposal_id, p.freelancer_account_id, p.submission_fee_credits
             FROM proposals p
             WHERE p.job_id = $1 AND p.deleted_at IS NULL AND p.status IN ('Pending', 'Shortlisted', 'Interviewing')
         `, [jobId]);
+
+        // If 0 proposals, refund 50-credit posting fee to client
+        if (applicantsToRefund.rows.length === 0 && platformWalletId) {
+            const clientWalletRes = await client.query(`
+                SELECT w.wallet_id 
+                FROM wallets w
+                JOIN account_wallets aw ON w.wallet_id = aw.wallet_id
+                WHERE aw.account_id = $1 AND w.type = 'account wallets'
+                FOR UPDATE
+            `, [deletedJob.client_account_id]);
+
+            if (clientWalletRes.rows.length > 0) {
+                const clientWalletId = clientWalletRes.rows[0].wallet_id;
+                const refundAmount = deletedJob.posting_fee_credits || 50;
+
+                await client.query(`
+                    UPDATE wallets SET balance_credits = balance_credits + $1, updated_at = NOW() WHERE wallet_id = $2
+                `, [refundAmount, clientWalletId]);
+
+                await client.query(`
+                    UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - $1), updated_at = NOW() WHERE wallet_id = $2
+                `, [refundAmount, platformWalletId]);
+
+                await client.query(`
+                    INSERT INTO credit_transactions (
+                        type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
+                    ) VALUES (
+                        'Job Posting Fee Refund', $1, 'Completed', $2, $3, 'jobs', $4
+                    )
+                `, [refundAmount, platformWalletId, clientWalletId, jobId]);
+            }
+        }
 
         for (const applicant of applicantsToRefund.rows) {
             const userWalletRes = await client.query(`
@@ -523,12 +582,18 @@ async function createProposalRepositories(proposalData) {
 
         const jobResult = await client.query(
             `SELECT client_account_id,
+                    application_deadline,
                     client_account_id = ANY($2::uuid[]) AS is_affiliated_listing
              FROM jobs
              WHERE job_id = $1 AND deleted_at IS NULL AND status = 'Open'
              FOR UPDATE`,
             [proposalData.job_id, proposalData.prohibited_client_account_ids || []]
         );
+        if (jobResult.rows[0]?.application_deadline && new Date(jobResult.rows[0].application_deadline).getTime() <= Date.now()) {
+            const error = new Error('This job post has closed for new proposals.');
+            error.statusCode = 400;
+            throw error;
+        }
         if (!jobResult.rows[0]) {
             const error = new Error('Job not found or is not accepting proposals');
             error.statusCode = 404;
@@ -643,9 +708,9 @@ async function createProposalRepositories(proposalData) {
             INSERT INTO proposals (
                 job_id, freelancer_account_id, letter, rate_credits, 
                 revision_price_credits, terms_id, status, job_milestone_id, screening_answers,
-                proposed_by_account_id, included_member_account_ids
+                proposed_by_account_id, included_member_account_ids, submission_fee_credits
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
             ) RETURNING proposal_id;
         `;
         const values = [
@@ -654,7 +719,8 @@ async function createProposalRepositories(proposalData) {
             termsId, 'Pending', targetJobMilestoneId,
             JSON.stringify(Array.isArray(proposalData.screening_answers) ? proposalData.screening_answers : []),
             proposalData.proposed_by_account_id || proposalData.payer_account_id || null,
-            JSON.stringify(validIncludedIds)
+            JSON.stringify(validIncludedIds),
+            fee
         ];
         const res = await client.query(query, values);
         const proposalId = res.rows[0].proposal_id;
@@ -1228,6 +1294,269 @@ async function getJobByIdRepositories(jobId, accountId = null, actorIds = [], af
     return jobs[0] || null;
 }
 
+
+async function extendApplicationWindowRepositories(jobId, accountIds, durationHours) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const jobRes = await client.query(`
+            SELECT job_id, client_account_id, status, application_deadline, free_extension_count,
+                   (SELECT COUNT(*) FROM proposals p WHERE p.job_id = $1 AND p.deleted_at IS NULL) as applicant_count
+            FROM jobs
+            WHERE job_id = $1 AND client_account_id = ANY($2::uuid[]) AND deleted_at IS NULL
+            FOR UPDATE
+        `, [jobId, accountIds]);
+
+        if (jobRes.rows.length === 0) {
+            throw new Error('Job not found or unauthorized.');
+        }
+
+        const job = jobRes.rows[0];
+        if (job.status !== 'Open') {
+            throw new Error(`Cannot extend a job with status "${job.status}". Only open jobs can be extended.`);
+        }
+
+        const hoursToAdd = Math.max(12, parseInt(durationHours, 10) || 72);
+        
+        const currentDeadline = job.application_deadline ? new Date(job.application_deadline) : new Date();
+        const baseTime = currentDeadline.getTime() > Date.now() ? currentDeadline.getTime() : Date.now();
+        const newDeadline = new Date(baseTime + hoursToAdd * 60 * 60 * 1000);
+
+        const updateRes = await client.query(`
+            UPDATE jobs
+            SET application_deadline = $1,
+                application_extended_at = NOW(),
+                free_extension_count = free_extension_count + 1,
+                updated_at = NOW()
+            WHERE job_id = $2
+            RETURNING *;
+        `, [newDeadline, jobId]);
+
+        await client.query('COMMIT');
+        return updateRes.rows[0];
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error in extendApplicationWindowRepositories:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+async function expireJobImmediatelyRepositories(jobId, accountIds) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const jobRes = await client.query(`
+            SELECT j.*,
+                   (SELECT COUNT(*) FROM proposals p WHERE p.job_id = j.job_id AND p.deleted_at IS NULL) as applicant_count
+            FROM jobs j
+            WHERE j.job_id = $1 AND j.client_account_id = ANY($2::uuid[]) AND j.deleted_at IS NULL
+            FOR UPDATE
+        `, [jobId, accountIds]);
+
+        if (jobRes.rows.length === 0) {
+            throw new Error('Job not found or unauthorized.');
+        }
+
+        const job = jobRes.rows[0];
+        if (job.status !== 'Open') {
+            throw new Error(`Cannot expire a job with status "${job.status}". Only open jobs can be expired.`);
+        }
+
+        let refundedAmount = 0;
+        if (parseInt(job.applicant_count, 10) === 0) {
+            const platformWalletRes = await client.query(`
+                SELECT wallet_id FROM wallets WHERE type = 'platform wallets' LIMIT 1 FOR UPDATE
+            `);
+            const platformWalletId = platformWalletRes.rows[0]?.wallet_id;
+
+            const clientWalletRes = await client.query(`
+                SELECT w.wallet_id 
+                FROM wallets w
+                JOIN account_wallets aw ON w.wallet_id = aw.wallet_id
+                WHERE aw.account_id = $1 AND w.type = 'account wallets'
+                FOR UPDATE
+            `, [job.client_account_id]);
+
+            if (clientWalletRes.rows.length > 0 && platformWalletId) {
+                const clientWalletId = clientWalletRes.rows[0].wallet_id;
+                refundedAmount = job.posting_fee_credits || 50;
+
+                await client.query(`
+                    UPDATE wallets SET balance_credits = balance_credits + $1, updated_at = NOW() WHERE wallet_id = $2
+                `, [refundAmount, clientWalletId]);
+
+                await client.query(`
+                    UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - $1), updated_at = NOW() WHERE wallet_id = $2
+                `, [refundAmount, platformWalletId]);
+
+                await client.query(`
+                    INSERT INTO credit_transactions (
+                        type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
+                    ) VALUES (
+                        'Job Posting Fee Refund', $1, 'Completed', $2, $3, 'jobs', $4
+                    )
+                `, [refundAmount, platformWalletId, clientWalletId, jobId]);
+            }
+        }
+
+        const updateRes = await client.query(`
+            UPDATE jobs
+            SET status = 'Expired',
+                updated_at = NOW()
+            WHERE job_id = $1
+            RETURNING *;
+        `, [jobId]);
+
+        await client.query('COMMIT');
+        return { job: updateRes.rows[0], refundedAmount };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error in expireJobImmediatelyRepositories:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+async function autoExpireJobsRepositories() {
+    const client = await pool.connect();
+    const expiredJobs = [];
+    try {
+        await client.query('BEGIN');
+
+        const candidates = await client.query(`
+            SELECT j.job_id, j.client_account_id, j.title, j.posting_fee_credits
+            FROM jobs j
+            WHERE j.status = 'Open'
+              AND j.application_deadline IS NOT NULL
+              AND j.application_deadline <= NOW()
+              AND j.deleted_at IS NULL
+            FOR UPDATE SKIP LOCKED
+        `);
+
+        if (candidates.rows.length === 0) {
+            await client.query('COMMIT');
+            return { count: 0, expiredJobs: [] };
+        }
+
+        const platformWalletRes = await client.query(`
+            SELECT wallet_id FROM wallets WHERE type = 'platform wallets' LIMIT 1 FOR UPDATE
+        `);
+        const platformWalletId = platformWalletRes.rows[0]?.wallet_id;
+
+        for (const job of candidates.rows) {
+            const jobId = job.job_id;
+
+            const proposalsRes = await client.query(`
+                SELECT p.proposal_id, p.freelancer_account_id, p.submission_fee_credits, p.status
+                FROM proposals p
+                WHERE p.job_id = $1 AND p.deleted_at IS NULL AND p.status IN ('Pending', 'Shortlisted')
+                FOR UPDATE
+            `, [jobId]);
+
+            if (proposalsRes.rows.length === 0) {
+                if (platformWalletId) {
+                    const clientWalletRes = await client.query(`
+                        SELECT w.wallet_id 
+                        FROM wallets w
+                        JOIN account_wallets aw ON w.wallet_id = aw.wallet_id
+                        WHERE aw.account_id = $1 AND w.type = 'account wallets'
+                        FOR UPDATE
+                    `, [job.client_account_id]);
+
+                    if (clientWalletRes.rows.length > 0) {
+                        const clientWalletId = clientWalletRes.rows[0].wallet_id;
+                        const refundAmount = job.posting_fee_credits || 50;
+
+                        await client.query(`
+                            UPDATE wallets SET balance_credits = balance_credits + $1, updated_at = NOW() WHERE wallet_id = $2
+                        `, [refundAmount, clientWalletId]);
+
+                        await client.query(`
+                            UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - $1), updated_at = NOW() WHERE wallet_id = $2
+                        `, [refundAmount, platformWalletId]);
+
+                        await client.query(`
+                            INSERT INTO credit_transactions (
+                                type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
+                            ) VALUES (
+                                'Job Posting Fee Refund', $1, 'Completed', $2, $3, 'jobs', $4
+                            )
+                        `, [refundAmount, platformWalletId, clientWalletId, jobId]);
+                    }
+                }
+
+                await client.query(`
+                    INSERT INTO notifications (recipient_account_id, actor_account_id, type, title, message, reference_table, reference_id)
+                    VALUES ($1, $1, 'system', 'Job Posting Expired', $2, 'jobs', $3)
+                `, [job.client_account_id, `Your job "${job.title}" has expired with no applicants. Your 50-credit posting fee has been fully refunded to your wallet.`, jobId]);
+
+            } else {
+                for (const prop of proposalsRes.rows) {
+                    const refundAmount = prop.submission_fee_credits || 10;
+                    if (platformWalletId) {
+                        const userWalletRes = await client.query(`
+                            SELECT w.wallet_id 
+                            FROM wallets w
+                            JOIN account_wallets aw ON w.wallet_id = aw.wallet_id
+                            WHERE aw.account_id = $1 AND w.type = 'account wallets'
+                            FOR UPDATE
+                        `, [prop.freelancer_account_id]);
+
+                        if (userWalletRes.rows.length > 0) {
+                            const userWalletId = userWalletRes.rows[0].wallet_id;
+
+                            await client.query(`
+                                UPDATE wallets SET balance_credits = balance_credits + $1, updated_at = NOW() WHERE wallet_id = $2
+                            `, [refundAmount, userWalletId]);
+
+                            await client.query(`
+                                UPDATE wallets SET balance_credits = GREATEST(0, balance_credits - $1), updated_at = NOW() WHERE wallet_id = $2
+                            `, [refundAmount, platformWalletId]);
+
+                            await client.query(`
+                                INSERT INTO credit_transactions (
+                                    type, amount_credits, status, source_wallet_id, destination_wallet_id, reference_table, reference_id
+                                ) VALUES (
+                                    'Proposal Fee Refund', $1, 'Completed', $2, $3, 'jobs', $4
+                                )
+                            `, [refundAmount, platformWalletId, userWalletId, jobId]);
+                        }
+                    }
+
+                    await client.query(`
+                        UPDATE proposals SET status = 'Closed', updated_at = NOW() WHERE proposal_id = $1
+                    `, [prop.proposal_id]);
+
+                    await client.query(`
+                        INSERT INTO notifications (recipient_account_id, actor_account_id, type, title, message, reference_table, reference_id)
+                        VALUES ($1, $1, 'system', 'Proposal Fee Refunded', $2, 'jobs', $3)
+                    `, [prop.freelancer_account_id, `The application window for "${job.title}" has closed without a hire. Your proposal submission fee of ${refundAmount} credits has been refunded.`, jobId]);
+                }
+            }
+
+            await client.query(`
+                UPDATE jobs SET status = 'Expired', updated_at = NOW() WHERE job_id = $1
+            `, [jobId]);
+
+            expiredJobs.push(jobId);
+        }
+
+        await client.query('COMMIT');
+        return { count: expiredJobs.length, expiredJobs };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error in autoExpireJobsRepositories:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
 module.exports = {
     getActiveJobsByClientRepositories,
     createJobInvitationRepositories,
@@ -1242,6 +1571,9 @@ module.exports = {
     getProposalByIdRepositories,
     withdrawProposalRepositories,
     updateProposalStatusRepositories,
+    extendApplicationWindowRepositories,
+    expireJobImmediatelyRepositories,
+    autoExpireJobsRepositories,
     getTermsOfServiceRepositories,
     toggleJobSaveRepositories,
     deleteJobRepositories

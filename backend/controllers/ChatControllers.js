@@ -5,6 +5,7 @@ const {
   generateJobPostDraft,
   generateProposalPitchDraft,
   generateProposalMilestonesDraft,
+  generateJobSkillsDraft,
 } = require('../services/ClaudeSupportServices');
 
 async function createDocumentationChatResponse(req, res) {
@@ -59,9 +60,23 @@ async function generateProposalMilestonesResponse(req, res) {
   }
 }
 
+async function generateJobSkillsResponse(req, res) {
+  try {
+    const result = await generateJobSkillsDraft(req.body || {});
+    return res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    if (error instanceof ClaudeSupportError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    console.error('Joed AI job skills generation failed:', error);
+    return res.status(500).json({ success: false, message: 'Joed AI could not analyze skills right now. Please try again.' });
+  }
+}
+
 module.exports = {
   createDocumentationChatResponse,
   generateJobDraftResponse,
   generateProposalPitchResponse,
   generateProposalMilestonesResponse,
+  generateJobSkillsResponse,
 };

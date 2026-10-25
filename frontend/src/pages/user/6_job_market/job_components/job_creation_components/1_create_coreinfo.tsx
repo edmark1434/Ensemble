@@ -37,7 +37,10 @@ import {
   Mic,
   Package,
   Clapperboard,
-  Loader2
+  Loader2,
+  Play,
+  Download,
+  Maximize2
 } from "lucide-react";
 import { JobRichText } from "../JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
@@ -249,6 +252,135 @@ const CustomDropdown: React.FC<{
   );
 };
 
+
+interface Step1FilePreviewCardProps {
+  file: File;
+  onRemove?: () => void;
+  onPreview: (file: File, url: string, type: "image" | "video" | "pdf" | "other") => void;
+}
+
+const Step1FilePreviewCard: React.FC<Step1FilePreviewCardProps> = ({ file, onRemove, onPreview }) => {
+  const [objectUrl, setObjectUrl] = useState<string>("");
+
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setObjectUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [file]);
+
+  const ext = file.name.split(".").pop()?.toLowerCase() || "";
+  const isImage = file.type.startsWith("image/") || ["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(ext);
+  const isVideo = file.type.startsWith("video/") || ["mp4", "webm", "mov", "mkv", "avi"].includes(ext);
+  const isPdf = file.type === "application/pdf" || ext === "pdf";
+
+  const fileType: "image" | "video" | "pdf" | "other" = isImage ? "image" : isVideo ? "video" : isPdf ? "pdf" : "other";
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  return (
+    <div className="group relative rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/40 overflow-hidden shadow-2xs hover:shadow-md hover:border-gray-300 dark:hover:border-white/20 transition-all flex flex-col justify-between">
+      {/* Visual Preview Container */}
+      <div className="relative w-full h-36 bg-gray-100 dark:bg-black/30 overflow-hidden flex items-center justify-center">
+        {isImage && objectUrl ? (
+          <img
+            src={objectUrl}
+            alt={file.name}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : isVideo && objectUrl ? (
+          <div className="relative w-full h-full bg-black/80 flex items-center justify-center">
+            <video
+              src={objectUrl}
+              className="w-full h-full object-contain"
+              preload="metadata"
+            />
+            <div className="absolute inset-0 bg-black/30 flex items-center justify-center pointer-events-none group-hover:bg-black/40 transition-colors">
+              <span className="w-10 h-10 rounded-full bg-white/90 text-gray-900 flex items-center justify-center shadow-md">
+                <Play className="h-5 w-5 fill-current ml-0.5" />
+              </span>
+            </div>
+          </div>
+        ) : isPdf ? (
+          <div className="relative w-full h-full bg-red-50/50 dark:bg-red-950/20 flex flex-col items-center justify-center p-3 text-center">
+            <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center mb-1.5 shadow-xs">
+              <FileText className="h-5 w-5" />
+            </div>
+            <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-red-500 text-white uppercase tracking-wider">
+              PDF Document
+            </span>
+          </div>
+        ) : (
+          <div className="relative w-full h-full bg-gray-50 dark:bg-zinc-800/50 flex flex-col items-center justify-center p-3 text-center">
+            <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-zinc-300 flex items-center justify-center mb-1.5 shadow-xs">
+              <Paperclip className="h-5 w-5" />
+            </div>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-zinc-300 uppercase tracking-wider">
+              {ext.toUpperCase() || "File"}
+            </span>
+          </div>
+        )}
+
+        {/* Remove Button (Always Visible in Top Right) */}
+        {onRemove && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/60 hover:bg-red-600 text-white flex items-center justify-center transition-colors cursor-pointer shadow-md backdrop-blur-xs"
+            title="Remove attachment"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+
+        {/* Action Overlay: Click to Preview */}
+        {objectUrl && (
+          <button
+            type="button"
+            onClick={() => onPreview(file, objectUrl, fileType)}
+            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-xs font-bold cursor-pointer"
+          >
+            <Eye className="h-4 w-4" />
+            <span>Preview</span>
+          </button>
+        )}
+      </div>
+
+      {/* Info Bar */}
+      <div className="p-2.5 border-t border-gray-100 dark:border-white/5 flex items-center justify-between gap-2 bg-white dark:bg-zinc-900/60">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold text-gray-900 dark:text-white truncate" title={file.name}>
+            {file.name}
+          </p>
+          <p className="text-[10px] text-gray-400 dark:text-zinc-500 mt-0.5">
+            {formatSize(file.size)}
+          </p>
+        </div>
+
+        {objectUrl && (
+          <button
+            type="button"
+            onClick={() => onPreview(file, objectUrl, fileType)}
+            className="p-1 rounded-md text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
+            title="Preview full size"
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
   title,
   setTitle,
@@ -281,12 +413,23 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
 
   // Upload Popup Modal & Default Banners State
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [filePreviewModal, setFilePreviewModal] = useState<{
+    isOpen: boolean;
+    file: File | null;
+    url: string;
+    type: "image" | "video" | "pdf" | "other";
+  }>({ isOpen: false, file: null, url: "", type: "image" });
   const [selectedDefaultBannerId, setSelectedDefaultBannerId] = useState<string | null>(null);
 
   useEffect(() => {
     if (previewUrl) {
       const matching = DEFAULT_JOB_BANNERS.find((b) => b.url === previewUrl);
       setSelectedDefaultBannerId(matching ? matching.id : null);
+      if (matching && setThumbnailFile) {
+        convertPresetUrlToFile(matching.url, `${matching.id}.png`)
+          .then((file) => setThumbnailFile(file))
+          .catch((err) => console.error("Error setting restored default banner file:", err));
+      }
     } else {
       setSelectedDefaultBannerId(null);
     }
@@ -804,7 +947,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
                   <input
                     type="file"
                     multiple
-                    accept=".pdf,.zip,.doc,.docx,.png,.jpg,.jpeg"
+                    accept=".pdf,.zip,.doc,.docx,.png,.jpg,.jpeg,.webp,.gif,.mp4,.webm,.mov"
                     className="hidden"
                     onChange={(e) => {
                       if (e.target.files) {
@@ -819,37 +962,17 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
 
             {briefFiles.length === 0 ? (
               <p className="text-xs text-gray-500 dark:text-zinc-500 italic">
-                No reference documents attached. You can attach PDFs, scripts, moodboards, or zip files.
+                No reference documents attached. You can attach PDFs, scripts, moodboards, videos, or images.
               </p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {briefFiles.map((file, idx) => (
-                  <div
+                  <Step1FilePreviewCard
                     key={idx}
-                    className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-xs"
-                  >
-                    <div className="flex items-center gap-2.5 truncate pr-2">
-                      <FileText className="h-4 w-4 text-blue-500 shrink-0" />
-                      <div className="truncate">
-                        <p className="font-semibold text-gray-900 dark:text-white truncate text-xs">
-                          {file.name}
-                        </p>
-                        <p className="text-[10px] text-gray-400 dark:text-zinc-500">
-                          {(file.size / 1024 / 1024).toFixed(1)} MB
-                        </p>
-                      </div>
-                    </div>
-                    {setBriefFiles && (
-                      <button
-                        type="button"
-                        onClick={() => setBriefFiles(briefFiles.filter((_, i) => i !== idx))}
-                        className="p-1 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"
-                        title="Remove file"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
+                    file={file}
+                    onRemove={setBriefFiles ? () => setBriefFiles(briefFiles.filter((_, i) => i !== idx)) : undefined}
+                    onPreview={(f, u, t) => setFilePreviewModal({ isOpen: true, file: f, url: u, type: t })}
+                  />
                 ))}
               </div>
             )}
@@ -1541,6 +1664,100 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
           </AnimatePresence>,
           document.body
         )}
+
+
+      {/* FULL-SCREEN / LIGHTBOX ATTACHMENT PREVIEW MODAL */}
+      {filePreviewModal.isOpen && filePreviewModal.url && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="relative w-full max-w-4xl max-h-[90vh] rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10 shadow-2xl flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 dark:border-white/10 bg-gray-50/80 dark:bg-zinc-800/50">
+              <div className="flex items-center gap-2 min-w-0 pr-4">
+                <FileText className="h-4 w-4 text-blue-500 shrink-0" />
+                <span className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white truncate">
+                  {filePreviewModal.file?.name}
+                </span>
+                <span className="text-[11px] text-gray-400 dark:text-zinc-500 shrink-0">
+                  ({filePreviewModal.file ? (filePreviewModal.file.size < 1024 * 1024 ? (filePreviewModal.file.size / 1024).toFixed(1) + " KB" : (filePreviewModal.file.size / (1024 * 1024)).toFixed(1) + " MB") : ""})
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={filePreviewModal.url}
+                  download={filePreviewModal.file?.name}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-xs font-semibold text-gray-700 dark:text-zinc-200 transition"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setFilePreviewModal({ isOpen: false, file: null, url: "", type: "image" })}
+                  className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-lg transition"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body: Render Image, Video, or PDF */}
+            <div className="flex-1 overflow-auto p-4 sm:p-6 flex items-center justify-center bg-gray-100/50 dark:bg-black/40">
+              {filePreviewModal.type === "image" && (
+                <img
+                  src={filePreviewModal.url}
+                  alt={filePreviewModal.file?.name}
+                  className="max-h-[75vh] max-w-full rounded-xl object-contain shadow-lg"
+                />
+              )}
+
+              {filePreviewModal.type === "video" && (
+                <video
+                  src={filePreviewModal.url}
+                  controls
+                  autoPlay
+                  className="max-h-[75vh] max-w-full rounded-xl object-contain bg-black shadow-lg"
+                />
+              )}
+
+              {filePreviewModal.type === "pdf" && (
+                <iframe
+                  src={filePreviewModal.url}
+                  title={filePreviewModal.file?.name}
+                  className="w-full h-[75vh] rounded-xl border border-gray-200 dark:border-white/10 bg-white shadow-lg"
+                />
+              )}
+
+              {filePreviewModal.type === "other" && (
+                <div className="p-8 text-center space-y-3">
+                  <div className="w-16 h-16 rounded-2xl bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-zinc-300 flex items-center justify-center mx-auto shadow-sm">
+                    <FileText className="h-8 w-8" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                      {filePreviewModal.file?.name}
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+                      Direct in-browser preview is not available for this file format.
+                    </p>
+                  </div>
+                  <a
+                    href={filePreviewModal.url}
+                    download={filePreviewModal.file?.name}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-sm"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>Download File</span>
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
     </div>
   );

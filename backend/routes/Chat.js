@@ -5,6 +5,7 @@ const {
   generateJobDraftResponse,
   generateProposalPitchResponse,
   generateProposalMilestonesResponse,
+  generateJobSkillsResponse,
 } = require('../controllers/ChatControllers');
 const checkSession = require('../middleware/CheckSession');
 const requireAuth = require('../middleware/RequireAuth');
@@ -25,5 +26,6 @@ router.post('/', chatLimiter, createDocumentationChatResponse);
 router.post('/generate-job', [checkSession, requireAuth, chatLimiter], generateJobDraftResponse);
 router.post('/generate-proposal-pitch', [checkSession, requireAuth, chatLimiter], generateProposalPitchResponse);
 router.post('/generate-proposal-milestones', [checkSession, requireAuth, chatLimiter], generateProposalMilestonesResponse);
+router.post('/generate-job-skills', [checkSession, requireAuth, chatLimiter], generateJobSkillsResponse);
 
 module.exports = router;

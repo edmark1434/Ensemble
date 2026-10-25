@@ -40,6 +40,10 @@ interface CreateTeamReviewProps {
   minTimeline: string;
   maxTimeline: string;
   deadline: string;
+  applicationWindowHours?: number;
+  isUrgent?: boolean;
+  hasHardDeadline?: boolean;
+  hardDeadline?: string;
   milestones: MilestoneFormItem[];
   postingAs: "self" | "team";
   setPostingAs: (val: "self" | "team") => void;
@@ -72,6 +76,10 @@ export const CreateTeamReview: React.FC<CreateTeamReviewProps> = ({
   minTimeline,
   maxTimeline,
   deadline,
+  applicationWindowHours = 168,
+  isUrgent = false,
+  hasHardDeadline = false,
+  hardDeadline = "",
   milestones,
   postingAs,
   setPostingAs,

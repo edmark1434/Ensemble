@@ -549,6 +549,24 @@ function startPaymentReconciliationJob() {
         }
     });
 
+    // Job 7: Expired job application window auto-close & credit refunds — runs every 10 minutes
+    let isJobAutoExpireRunning = false;
+    cron.schedule("*/10 * * * *", async () => {
+        if (isJobAutoExpireRunning) return;
+        isJobAutoExpireRunning = true;
+        try {
+            const { reconcileExpiredJobsServices } = require('../services/JobServices');
+            const result = await reconcileExpiredJobsServices();
+            if (result && result.count > 0) {
+                console.log(`Job application window auto-expire: processed ${result.count} expired job(s)`);
+            }
+        } catch (err) {
+            console.error("Job application window auto-expire failed:", err.message);
+        } finally {
+            isJobAutoExpireRunning = false;
+        }
+    });
+
 }
 
 async function purgeExpiredAuditLogsServices() {

@@ -15,7 +15,9 @@ import {
   Clock,
   Coins,
   CheckCircle2,
-  Users
+  Users,
+  RefreshCw,
+  InfinityIcon
 } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { SkillsAutocomplete } from "./SkillsAutocomplete";
@@ -48,6 +50,17 @@ interface CreateBudgetSkillsProps {
   setBudgetType?: (val: "range" | "open") => void;
   preScopedMilestones?: any[];
   setPreScopedMilestones?: React.Dispatch<React.SetStateAction<any[]>>;
+  applicationWindowHours?: number;
+  setApplicationWindowHours?: (val: number) => void;
+  isUrgent?: boolean;
+  setIsUrgent?: (val: boolean) => void;
+  hasHardDeadline?: boolean;
+  setHasHardDeadline?: (val: boolean) => void;
+  hardDeadline?: string;
+  setHardDeadline?: (val: string) => void;
+  title?: string;
+  description?: string;
+  category?: string;
   onBack: () => void;
   onAdvance: () => void;
 }
@@ -80,6 +93,17 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
   setBudgetType,
   preScopedMilestones = [],
   setPreScopedMilestones,
+  applicationWindowHours = 72,
+  setApplicationWindowHours,
+  isUrgent = false,
+  setIsUrgent,
+  hasHardDeadline = false,
+  setHasHardDeadline,
+  hardDeadline = "",
+  setHardDeadline,
+  title = "",
+  description = "",
+  category = "",
   onBack,
   onAdvance,
 }) => {
@@ -146,12 +170,153 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
     }
   }, [budgetType, isFixedBudget, rawMinBudget, rawMaxBudget, minBudget, errors.maxBudget, setErrors, formatCommaString]);
 
+  const minCutoffDateString = React.useMemo(() => {
+    const intakeHours = applicationWindowHours || 72;
+    const minDays = !isNaN(minTimelineNum) && minTimelineNum > 0 ? minTimelineNum : 1;
+    const minMs = Date.now() + (intakeHours + minDays * 24) * 60 * 60 * 1000;
+    return new Date(minMs).toISOString().split("T")[0];
+  }, [applicationWindowHours, minTimelineNum]);
+
+  const handleAutoAdjustCutoff = () => {
+    const intakeHours = applicationWindowHours || 72;
+    const turnDays = !isNaN(maxTimelineNum) && maxTimelineNum > 0 
+      ? maxTimelineNum 
+      : (!isNaN(minTimelineNum) && minTimelineNum > 0 ? minTimelineNum : 3);
+    const safeMs = Date.now() + (intakeHours + turnDays * 24) * 60 * 60 * 1000;
+    const safeDate = new Date(safeMs).toISOString().split("T")[0];
+    setHardDeadline?.(safeDate);
+    setErrors((prev) => {
+      const { hardDeadline: _, ...r } = prev;
+      return r;
+    });
+  };
+
+  const handleAutoFitTurnaround = () => {
+    let targetDateStr = hardDeadline;
+    if (!hasHardDeadline || !targetDateStr) {
+      const defaultCutoffMs = Date.now() + 14 * 24 * 60 * 60 * 1000;
+      targetDateStr = new Date(defaultCutoffMs).toISOString().split("T")[0];
+      setHasHardDeadline?.(true);
+      setHardDeadline?.(targetDateStr);
+    }
+
+    const parts = targetDateStr.split("-");
+    if (parts.length !== 3) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    const totalDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (totalDays <= 0) return;
+
+    const intakeDays = Math.max(1, Math.ceil((applicationWindowHours || 24) / 24));
+    const availableDays = totalDays - intakeDays;
+
+    if (availableDays <= 1) {
+      setMinTimeline("1");
+      setMaxTimeline("1");
+    } else if (availableDays <= 3) {
+      setMinTimeline("1");
+      setMaxTimeline(String(Math.max(1, availableDays - 1)));
+    } else if (availableDays <= 6) {
+      const buffer = 1;
+      const maxDays = availableDays - buffer;
+      const minDays = Math.max(1, Math.round(maxDays * 0.6));
+      setMinTimeline(String(minDays));
+      setMaxTimeline(String(maxDays));
+    } else {
+      const buffer = Math.max(2, Math.round(availableDays * 0.2));
+      const maxDays = Math.max(2, availableDays - buffer);
+      const minDays = Math.max(1, Math.round(maxDays * 0.6));
+      setMinTimeline(String(minDays));
+      setMaxTimeline(String(maxDays));
+    }
+
+    setErrors((prev) => {
+      const { minTimeline: _, maxTimeline: __, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const timelineProgressInfo = React.useMemo(() => {
+    const intakeHours = applicationWindowHours || 72;
+    const turnDays = !isNaN(maxTimelineNum) && maxTimelineNum > 0 
+      ? maxTimelineNum 
+      : (!isNaN(minTimelineNum) && minTimelineNum > 0 ? minTimelineNum : 3);
+    const turnHours = turnDays * 24;
+    const plannedHours = intakeHours + turnHours;
+
+    let deadlineHours = plannedHours;
+    let bufferHours = 0;
+    let bufferDays = 0;
+
+    if (hasHardDeadline && hardDeadline) {
+      const parts = hardDeadline.split("-");
+      if (parts.length === 3) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const target = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        const diffMs = target.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays > 0) {
+          const totalCutoffHours = diffDays * 24;
+          if (totalCutoffHours > plannedHours) {
+            deadlineHours = totalCutoffHours;
+            bufferHours = totalCutoffHours - plannedHours;
+            bufferDays = Math.round(bufferHours / 24);
+          }
+        }
+      }
+    }
+
+    let appPercent = Math.round((intakeHours / deadlineHours) * 100);
+    let turnPercent = Math.round((turnHours / deadlineHours) * 100);
+    let bufferPercent = bufferHours > 0 ? 100 - appPercent - turnPercent : 0;
+
+    if (bufferHours > 0) {
+      appPercent = Math.max(15, Math.min(45, appPercent));
+      turnPercent = Math.max(20, Math.min(50, turnPercent));
+      bufferPercent = Math.max(10, 100 - appPercent - turnPercent);
+    } else {
+      appPercent = Math.max(25, Math.min(65, appPercent));
+      turnPercent = 100 - appPercent;
+      bufferPercent = 0;
+    }
+
+    const appLabel = intakeHours <= 24 ? `${intakeHours}h Intake` : `${Math.round(intakeHours / 24)}d Intake`;
+    const turnLabel = minTimelineNum && maxTimelineNum && minTimelineNum !== maxTimelineNum 
+      ? `${minTimelineNum}–${maxTimelineNum}d Work`
+      : `${turnDays}d Work`;
+    const bufferLabel = bufferDays > 0 ? `${bufferDays}d Buffer` : null;
+
+    return {
+      appPercent,
+      turnPercent,
+      bufferPercent,
+      bufferDays,
+      appLabel,
+      turnLabel,
+      bufferLabel,
+    };
+  }, [applicationWindowHours, maxTimelineNum, minTimelineNum, hasHardDeadline, hardDeadline]);
+
+  const isCutoffBeforeIntake = React.useMemo(() => {
+    if (!hasHardDeadline || !hardDeadline) return false;
+    return hardDeadline < minCutoffDateString;
+  }, [hasHardDeadline, hardDeadline, minCutoffDateString]);
+
   const isTimelineExceedingDeadline = React.useMemo(() => {
-    if (daysUntilDeadline === null) return false;
-    if (!isNaN(maxTimelineNum) && maxTimelineNum > daysUntilDeadline) return true;
-    if (!isNaN(minTimelineNum) && minTimelineNum > daysUntilDeadline) return true;
+    if (!hasHardDeadline || !hardDeadline) return false;
+    if (hardDeadline < minCutoffDateString) return true;
+    const parts = hardDeadline.split("-");
+    if (parts.length !== 3) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (!isNaN(maxTimelineNum) && maxTimelineNum > diffDays) return true;
+    if (!isNaN(minTimelineNum) && minTimelineNum > diffDays) return true;
     return false;
-  }, [daysUntilDeadline, maxTimelineNum, minTimelineNum]);
+  }, [hasHardDeadline, hardDeadline, maxTimelineNum, minTimelineNum, minCutoffDateString]);
 
   return (
     <div className="text-left space-y-8">
@@ -175,9 +340,12 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
           <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 md:p-6 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <label className="text-[11px] font-bold text-gray-800 dark:text-zinc-200 uppercase tracking-wider block">
-                  {isFixedBudget ? "Total Project Budget" : budgetType === "open" ? "Starting Minimum Bid" : "Budget Estimate Range"} <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">1</div>
+                  <label className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider block">
+                    Set Budget ({isFixedBudget ? "Total Project Budget" : budgetType === "open" ? "Starting Minimum Bid" : "Budget Estimate Range"}) <span className="text-red-500">*</span>
+                  </label>
+                </div>
                 <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
                   {budgetType === "open"
                     ? "Set your floor expectation. Freelancers will submit proposals at or above this amount."
@@ -220,7 +388,7 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
                         : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                     }`}
                   >
-                    <Sparkles className="h-3 w-3 text-amber-500" />
+                    <InfinityIcon className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
                     <span>Open Bid</span>
                   </button>
                 </div>
@@ -287,8 +455,8 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
                 </div>
 
                 <div className="flex items-center gap-3 px-4 h-12 rounded-xl border border-dashed border-gray-300 dark:border-white/15 bg-gray-50/70 dark:bg-white/[0.02] text-gray-700 dark:text-zinc-300">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
-                    <Sparkles className="h-3.5 w-3.5" />
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400">
+                    <InfinityIcon className="h-4 w-4" />
                   </div>
                   <div className="text-xs leading-tight min-w-0">
                     <span className="font-bold text-gray-900 dark:text-white block truncate">No Upper Limit</span>
@@ -416,324 +584,362 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
             )}
           </div>
 
-          {/* Section 2: Project Schedule & Timeline (Side-by-Side Sub-Grid) */}
+          {/* Step 2: Set Application Window */}
           <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 md:p-6 space-y-4">
-            <div>
-              <h3 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
-                Schedule & Turnaround Time
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                Timeline is the working duration, while Deadline is the final delivery cutoff date.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-              
-              {/* Project Deadline */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold text-gray-800 dark:text-zinc-200 uppercase tracking-wider block">
-                    Project Deadline <span className="text-red-500">*</span>
-                  </label>
-                  {daysUntilDeadline !== null && daysUntilDeadline >= 1 && (
-                    <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
-                      {daysUntilDeadline} {daysUntilDeadline === 1 ? "day" : "days"} away
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">2</div>
+                  <h3 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                    Set Application Window
+                  </h3>
+                  {(applicationWindowHours <= 24 || isUrgent) && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10 tracking-wide select-none">
+                      Rush
                     </span>
                   )}
                 </div>
-
-                <div className={`relative flex items-center rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm transition-all overflow-hidden ${
-                  errors.deadline 
-                    ? "border-red-500 ring-2 ring-red-500/20" 
-                    : "border-gray-300 dark:border-white/10 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20"
-                }`}>
-                  <input
-                    id="project-deadline-input"
-                    type="date"
-                    min={new Date().toISOString().split("T")[0]}
-                    value={deadline}
-                    onClick={(e) => {
-                      try {
-                        if ("showPicker" in HTMLInputElement.prototype) {
-                          e.currentTarget.showPicker();
-                        }
-                      } catch (_) {}
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key !== "Tab") e.preventDefault();
-                    }}
-                    onChange={(e) => {
-                      const newDate = e.target.value;
-                      setDeadline(newDate);
-                      setErrors((prev) => {
-                        const { deadline: _, maxTimeline: __, minTimeline: ___, ...r } = prev;
-                        return r;
-                      });
-
-                      if (newDate) {
-                        const parts = newDate.split("-");
-                        if (parts.length === 3 && parts[0].length === 4) {
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          const selected = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-
-                          if (!isNaN(selected.getTime())) {
-                            const diffTime = selected.getTime() - today.getTime();
-                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-                            if (!maxTimeline && !minTimeline) {
-                              if (diffDays >= 1) {
-                                const maxAllowed = Math.max(1, diffDays - 1);
-                                setMaxTimeline(String(maxAllowed));
-                                setMinTimeline(String(Math.max(1, maxAllowed - 1)));
-                              } else if (diffDays === 0) {
-                                setMaxTimeline("1");
-                                setMinTimeline("1");
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }}
-                    className="flex-1 cursor-pointer bg-transparent px-4 py-3 text-xs sm:text-sm font-semibold text-gray-900 dark:text-white outline-none [&::-webkit-calendar-picker-indicator]:hidden [color-scheme:light] dark:[color-scheme:dark]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try {
-                        const el = document.getElementById("project-deadline-input") as HTMLInputElement;
-                        if (el && "showPicker" in HTMLInputElement.prototype) el.showPicker();
-                      } catch (_) {}
-                    }}
-                    className="flex items-center justify-center border-l border-gray-200 dark:border-white/10 px-3.5 py-3 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5 transition-colors focus:outline-none"
-                  >
-                    <Calendar className="h-4 w-4" />
-                  </button>
-                </div>
-                {errors.deadline && <p className="text-[11px] font-medium text-red-500 mt-1">{errors.deadline}</p>}
-
-                {deadline && daysUntilDeadline !== null && daysUntilDeadline >= 1 && (
-                  <div className="pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const maxAllowed = Math.max(1, daysUntilDeadline - 1);
-                        setMaxTimeline(String(maxAllowed));
-                        setMinTimeline(isFixedBudget ? String(maxAllowed) : String(Math.max(1, maxAllowed - 1)));
-                        setErrors((prev) => {
-                          const { maxTimeline: _, minTimeline: __, ...r } = prev;
-                          return r;
-                        });
-                      }}
-                      className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-semibold"
-                    >
-                      &rarr; Apply suggested timeline ({Math.max(1, daysUntilDeadline - 1)} {Math.max(1, daysUntilDeadline - 1) === 1 ? "day" : "days"})
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Project Timeline Range */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-gray-800 dark:text-zinc-200 uppercase tracking-wider block">
-                  {isFixedBudget ? "Timeline (Days)" : "Timeline Range (Days)"} <span className="text-red-500">*</span>
-                </label>
-
-                {isFixedBudget ? (
-                  <div className="relative">
-                    <input
-                      type="number"
-                      placeholder="e.g. 5 Days"
-                      min="1"
-                      value={maxTimeline}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setMaxTimeline(val);
-                        setMinTimeline(val);
-                        setErrors((prev) => {
-                          const { maxTimeline: _, minTimeline: __, ...r } = prev;
-                          return r;
-                        });
-                      }}
-                      className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
-                        isTimelineExceedingDeadline
-                          ? "border-amber-500 ring-2 ring-amber-500/20"
-                          : errors.maxTimeline || errors.minTimeline
-                          ? "border-red-500 ring-2 ring-red-500/20"
-                          : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                      }`}
-                    />
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <input
-                      type="number"
-                      placeholder="Min Days"
-                      min="1"
-                      value={minTimeline}
-                      onChange={(e) => {
-                        setMinTimeline(e.target.value);
-                        setErrors((prev) => {
-                          const { minTimeline: _, ...r } = prev;
-                          return r;
-                        });
-                      }}
-                      className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm px-3.5 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
-                        daysUntilDeadline !== null && !isNaN(minTimelineNum) && minTimelineNum > daysUntilDeadline
-                          ? "border-amber-500 ring-2 ring-amber-500/20"
-                          : errors.minTimeline
-                          ? "border-red-500 ring-2 ring-red-500/20"
-                          : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                      }`}
-                    />
-                    <input
-                      type="number"
-                      placeholder="Max Days"
-                      min="1"
-                      value={maxTimeline}
-                      onChange={(e) => {
-                        setMaxTimeline(e.target.value);
-                        setErrors((prev) => {
-                          const { maxTimeline: _, ...r } = prev;
-                          return r;
-                        });
-                      }}
-                      className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm px-3.5 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
-                        daysUntilDeadline !== null && !isNaN(maxTimelineNum) && maxTimelineNum > daysUntilDeadline
-                          ? "border-amber-500 ring-2 ring-amber-500/20"
-                          : errors.maxTimeline
-                          ? "border-red-500 ring-2 ring-red-500/20"
-                          : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                      }`}
-                    />
-                  </div>
-                )}
-
-                {(errors.minTimeline || errors.maxTimeline) && !isTimelineExceedingDeadline && (
-                  <p className="text-[11px] font-medium text-red-500 mt-1">{errors.minTimeline || errors.maxTimeline}</p>
-                )}
-              </div>
-
-            </div>
-
-            {/* Exceeding Warning */}
-            {isTimelineExceedingDeadline && daysUntilDeadline !== null && (
-              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-xs">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
-                <div className="space-y-0.5">
-                  <p className="font-bold">Timeline exceeds final deadline</p>
-                  <p className="text-[11px] opacity-90 leading-relaxed">
-                    The requested timeline ({maxTimelineNum || minTimelineNum} days) cannot exceed the days until deadline ({daysUntilDeadline} days away). Please adjust your timeline or extend the cutoff date.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Section 3: Pre-Scoped Milestones / Delivery Roadmap (Optional) */}
-          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 md:p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider block">
-                  Pre-Scoped Milestones / Delivery Roadmap <span className="text-gray-400 font-normal lowercase">(optional)</span>
-                </label>
                 <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                  Pre-define phases to guide applicants when proposing deliverables and payment schedules.
+                  How long this post accepts proposals before auto-closing.
                 </p>
               </div>
-
-              {setPreScopedMilestones && preScopedMilestones.length < 4 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const count = preScopedMilestones.length + 1;
-                    setPreScopedMilestones([
-                      ...preScopedMilestones,
-                      {
-                        title: count === 1 ? "Phase 1: Initial Rough Cut / Assembly" : `Phase ${count}: Color Grade & Final Polish`,
-                        budget_percentage: 50,
-                        duration_hours: 24,
-                      },
-                    ]);
-                  }}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition shrink-0"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Add Phase
-                </button>
-              )}
             </div>
 
-            {preScopedMilestones.length === 0 ? (
-              <p className="text-xs text-gray-500 dark:text-zinc-500 italic">
-                No pre-defined milestones. Applicants will propose their own milestone roadmap. Click &ldquo;Add Phase&rdquo; if you have specific phased delivery expectations.
-              </p>
-            ) : (
-              <div className="space-y-2.5">
-                {preScopedMilestones.map((m, idx) => (
-                  <div
-                    key={idx}
-                    className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02]"
+            {/* Presets Grid: Rush, Urgent, Quick, Standard, Extended */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
+              {[
+                { name: "Rush", time: "12 Hours", days: "Same-day", hours: 12 },
+                { name: "Urgent", time: "24 Hours", days: "1 Day", hours: 24 },
+                { name: "Quick", time: "3 Days", days: "72 Hours", hours: 72 },
+                { name: "Standard", time: "7 Days", days: "1 Week", hours: 168 },
+                { name: "Extended", time: "14 Days", days: "2 Weeks", hours: 336 },
+              ].map((preset) => {
+                const isSelected = applicationWindowHours === preset.hours;
+                return (
+                  <button
+                    key={preset.name}
+                    type="button"
+                    onClick={() => {
+                      setApplicationWindowHours?.(preset.hours);
+                      setIsUrgent?.(preset.hours <= 24);
+                      const target = new Date(Date.now() + preset.hours * 60 * 60 * 1000);
+                      setDeadline(target.toISOString().split("T")[0]);
+                      if (!minTimeline && !maxTimeline) {
+                        if (preset.hours <= 12) {
+                          setMinTimeline("1");
+                          setMaxTimeline("2");
+                        } else if (preset.hours <= 24) {
+                          setMinTimeline("1");
+                          setMaxTimeline("3");
+                        } else if (preset.hours <= 72) {
+                          setMinTimeline("2");
+                          setMaxTimeline("4");
+                        } else if (preset.hours <= 168) {
+                          setMinTimeline("3");
+                          setMaxTimeline("5");
+                        } else {
+                          setMinTimeline("7");
+                          setMaxTimeline("14");
+                        }
+                        setErrors((prev) => {
+                          const { minTimeline: _, maxTimeline: __, ...rest } = prev;
+                          return rest;
+                        });
+                      }
+                    }}
+                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-between gap-1.5 ${
+                      isSelected
+                        ? "bg-blue-50/90 dark:bg-blue-500/15 border-blue-600 dark:border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
+                        : "bg-white dark:bg-dark-base/40 border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20"
+                    }`}
                   >
-                    <span className="flex items-center justify-center px-2 py-1 rounded-lg bg-gray-200 dark:bg-white/10 text-[10px] font-bold text-gray-700 dark:text-zinc-300 shrink-0">
-                      Phase {idx + 1}
+                    <span className={`text-[11px] font-bold tracking-wide uppercase ${
+                      isSelected ? "text-blue-700 dark:text-blue-300" : "text-gray-500 dark:text-zinc-400"
+                    }`}>
+                      {preset.name}
                     </span>
-                    <input
-                      type="text"
-                      placeholder="e.g., Rough Cut & Audio Sync"
-                      value={m.title}
-                      onChange={(e) => {
-                        const updated = [...preScopedMilestones];
-                        updated[idx].title = e.target.value;
-                        setPreScopedMilestones(updated);
-                      }}
-                      className="flex-1 rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-dark-base/60 px-3.5 py-2 text-xs font-medium text-gray-900 dark:text-white outline-none focus:border-blue-500"
-                    />
-                    <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                      <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-zinc-400 shrink-0">
-                        <span>Allocation:</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={100}
-                          value={m.budget_percentage}
-                          onChange={(e) => {
-                            const updated = [...preScopedMilestones];
-                            updated[idx].budget_percentage = Math.max(1, Math.min(100, parseInt(e.target.value) || 0));
-                            setPreScopedMilestones(updated);
-                          }}
-                          className="w-16 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-dark-base/60 px-2 py-1.5 text-center text-xs font-bold text-gray-900 dark:text-white outline-none focus:border-blue-500"
-                        />
-                        <span>%</span>
-                      </div>
-                      {setPreScopedMilestones && (
-                        <button
-                          type="button"
-                          onClick={() => setPreScopedMilestones(preScopedMilestones.filter((_, i) => i !== idx))}
-                          className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"
-                          title="Remove Phase"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                    <span className={`text-sm font-black whitespace-nowrap ${
+                      isSelected ? "text-blue-700 dark:text-blue-200" : "text-gray-900 dark:text-white"
+                    }`}>
+                      {preset.time}
+                    </span>
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
+                      isSelected
+                        ? "bg-blue-600 text-white font-bold"
+                        : "bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400"
+                    }`}>
+                      {preset.days}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Clean Gray Closing Indicator (No icon) */}
+            <div className="rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 px-4 py-3 text-xs text-gray-600 dark:text-zinc-400">
+              Intake closes: <strong className="text-gray-900 dark:text-zinc-200">{new Date(Date.now() + applicationWindowHours * 60 * 60 * 1000).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong> &bull; You will get 50% of the credits used on posting refunded if no one sends a proposal.
+            </div>
           </div>
 
+          {/* Step 3: Set Timeline (Project Working Turnaround (Upon Hire)) */}
+          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 md:p-6 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">3</div>
+                  <h3 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
+                    Set Timeline (Project Working Turnaround (Upon Hire)) <span className="text-red-500">*</span>
+                  </h3>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                  How many days the hired freelancer has to deliver work once the contract starts and escrow is funded.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {isFixedBudget ? (
+                <div className="space-y-1.5 max-w-sm">
+                  <label className="text-[11px] font-bold text-gray-800 dark:text-zinc-200 uppercase tracking-wider block">
+                    Target Turnaround (Days) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 3 Days"
+                    min="1"
+                    value={maxTimeline}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setMaxTimeline(val);
+                      setMinTimeline(val);
+                      setErrors((prev) => {
+                        const { maxTimeline: _, minTimeline: __, ...r } = prev;
+                        return r;
+                      });
+                    }}
+                    className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
+                      isTimelineExceedingDeadline
+                        ? "border-amber-500 ring-2 ring-amber-500/20"
+                        : errors.maxTimeline || errors.minTimeline
+                        ? "border-red-500 ring-2 ring-red-500/20"
+                        : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    }`}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <label className="text-[11px] font-bold text-gray-800 dark:text-zinc-200 uppercase tracking-wider block">
+                      Estimated Turnaround Range (Days) <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleAutoFitTurnaround}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 text-[11px] font-bold transition cursor-pointer shadow-xs active:scale-95"
+                      title="Automatically calculate min and max turnaround days to fit within your application window and deadline, leaving a safe buffer period."
+                    >
+                      <RefreshCw className="h-3 w-3 text-blue-500" />
+                      <span>Auto-Adjust with Buffer</span>
+                    </button>
+                  </div>
+
+                  {/* 3 Clickable Presets stretched cleanly across */}
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {[
+                      { label: "Rush", range: "1 – 2 Days", min: "1", max: "2" },
+                      { label: "Standard", range: "3 – 5 Days", min: "3", max: "5" },
+                      { label: "Polished", range: "7 – 10 Days", min: "7", max: "10" },
+                    ].map((preset) => {
+                      const isActive = minTimeline === preset.min && maxTimeline === preset.max;
+                      return (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => {
+                            setMinTimeline(preset.min);
+                            setMaxTimeline(preset.max);
+                            setErrors((prev) => {
+                              const { minTimeline: _, maxTimeline: __, ...rest } = prev;
+                              return rest;
+                            });
+                          }}
+                          className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                            isActive
+                              ? "bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-500/20"
+                              : "bg-white dark:bg-white/5 hover:bg-gray-50 dark:hover:bg-white/10 text-gray-700 dark:text-zinc-300 border-gray-200 dark:border-white/10"
+                          }`}
+                        >
+                          <Clock className={`w-3.5 h-3.5 shrink-0 ${isActive ? "text-white" : "text-gray-500 dark:text-zinc-400"}`} />
+                          <span>{preset.label}</span>
+                          <span className={`text-[10px] font-normal ${isActive ? "text-blue-100" : "text-gray-400 dark:text-zinc-500"}`}>
+                            ({preset.range})
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="relative">
+                      <input
+                        type="number"
+                        placeholder="Min Days (e.g. 1)"
+                        min="1"
+                        value={minTimeline}
+                        onChange={(e) => {
+                          setMinTimeline(e.target.value);
+                          setErrors((prev) => {
+                            const { minTimeline: _, ...r } = prev;
+                            return r;
+                          });
+                        }}
+                        className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
+                          errors.minTimeline
+                            ? "border-red-500 ring-2 ring-red-500/20"
+                            : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        }`}
+                      />
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        placeholder="Max Days (e.g. 3)"
+                        min="1"
+                        value={maxTimeline}
+                        onChange={(e) => {
+                          setMaxTimeline(e.target.value);
+                          setErrors((prev) => {
+                            const { maxTimeline: _, ...r } = prev;
+                            return r;
+                          });
+                        }}
+                        className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 shadow-sm px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 ${
+                          isTimelineExceedingDeadline
+                            ? "border-amber-500 ring-2 ring-amber-500/20"
+                            : errors.maxTimeline
+                            ? "border-red-500 ring-2 ring-red-500/20"
+                            : "border-gray-300 dark:border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Optional Hard Calendar Completion Cutoff */}
+              <div className="border-t border-gray-100 dark:border-white/5 pt-3 space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={hasHardDeadline}
+                    onChange={(e) => setHasHardDeadline?.(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div className="text-left">
+                    <span className="text-xs font-bold text-gray-900 dark:text-white group-hover:text-blue-500 transition">
+                      This project has a strict calendar completion cutoff (optional)
+                    </span>
+                    <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+                      Use this only if your project has a fixed real-world event date or broadcast screening deadline.
+                    </p>
+                  </div>
+                </label>
+
+                {hasHardDeadline && (
+                  <div className="pl-7 pt-1 max-w-md space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        min={minCutoffDateString}
+                        value={hardDeadline}
+                        onChange={(e) => setHardDeadline?.(e.target.value)}
+                        className={`w-full rounded-xl border bg-white dark:bg-dark-base/60 px-4 py-2.5 text-xs font-semibold text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${
+                          isCutoffBeforeIntake
+                            ? "border-red-500 ring-2 ring-red-500/20"
+                            : isTimelineExceedingDeadline
+                            ? "border-amber-500 ring-2 ring-amber-500/20"
+                            : "border-gray-300 dark:border-white/10"
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAutoAdjustCutoff}
+                        className={`shrink-0 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isCutoffBeforeIntake || isTimelineExceedingDeadline
+                            ? "bg-blue-600 hover:bg-blue-500 text-white shadow-sm ring-2 ring-blue-500/20"
+                            : "bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15 text-gray-700 dark:text-zinc-200"
+                        }`}
+                        title="Automatically adjust date to fit both Application Window and Turnaround"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Auto-Adjust</span>
+                      </button>
+                    </div>
+                    {isCutoffBeforeIntake ? (
+                      <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-red-600 dark:text-red-400">
+                        <span>⚠️ Cutoff (${hardDeadline}) is too early for intake + turnaround.</span>
+                        <button
+                          type="button"
+                          onClick={handleAutoAdjustCutoff}
+                          className="underline hover:text-red-700 dark:hover:text-red-300 font-bold shrink-0 cursor-pointer"
+                        >
+                          Auto-Fix Date
+                        </button>
+                      </div>
+                    ) : isTimelineExceedingDeadline ? (
+                      <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                        <span>Turnaround exceeds hard calendar cutoff.</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleAutoFitTurnaround}
+                            className="underline hover:text-amber-700 dark:hover:text-amber-300 font-bold shrink-0 cursor-pointer"
+                          >
+                            Auto-Fit Turnaround
+                          </button>
+                          <span>•</span>
+                          <button
+                            type="button"
+                            onClick={handleAutoAdjustCutoff}
+                            className="underline hover:text-amber-700 dark:hover:text-amber-300 font-bold shrink-0 cursor-pointer"
+                          >
+                            Extend Cutoff Date
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* RIGHT COLUMN: Sticky Studio Sidebar (Skills, Positions, Live Summary Preview) */}
         <div className="lg:col-span-5 xl:col-span-4 space-y-6 lg:sticky lg:top-6">
           
-          {/* Card 1: Required Skills */}
+          {/* Step 4: Required Skills */}
           <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 space-y-3">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">4</div>
+                <label className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider block">
+                  Required Skills <span className="text-red-500">*</span>
+                </label>
+              </div>
+              <span className={`text-xs font-semibold ${skills.length >= 3 ? "text-emerald-600 dark:text-emerald-400" : "text-gray-500 dark:text-zinc-400"}`}>
+                {skills.length}/6 Added {skills.length >= 3 ? "✓" : "(Min 3 req.)"}
+              </span>
+            </div>
             <SkillsAutocomplete
               skills={skills}
               setSkills={setSkills}
               error={errors.skills}
               maxSkills={6}
+              hideHeader={true}
+              jobTitle={title}
+              jobDescription={description}
+              jobCategory={category}
             />
           </div>
 
@@ -849,7 +1055,105 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
                 </span>
               </div>
 
+              {/* Visual Project Lifecycle Bar (Progress Line with Legend) */}
+              <div className="pt-3 border-t border-gray-200 dark:border-white/10 space-y-2.5">
+                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                  <span>Project Schedule Map</span>
+                  <span
+                    className="text-red-500 dark:text-red-400 font-bold flex items-center gap-1"
+                    style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                  >
+                    <span>DEADLINE</span>
+                    {hasHardDeadline && hardDeadline ? (
+                      <span className="text-red-600 dark:text-red-400 font-extrabold">
+                        ({hardDeadline})
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 font-normal capitalize">
+                        (Flexible)
+                      </span>
+                    )}
+                  </span>
+                </div>
+
+                {/* The Sleek Segmented Bar with Buffer */}
+                <div className="h-3.5 w-full rounded-full overflow-hidden flex bg-gray-200 dark:bg-zinc-800 shadow-inner">
+                  {/* Segment 1: Application Window (Gray) */}
+                  <div
+                    style={{ width: `${timelineProgressInfo.appPercent}%` }}
+                    className="bg-gray-400 dark:bg-zinc-500 border-r border-white/60 dark:border-zinc-800 transition-all duration-300"
+                    title={`Application Window: ${timelineProgressInfo.appLabel}`}
+                  />
+
+                  {/* Segment 2: Working Turnaround (Light Blue / Sky) */}
+                  <div
+                    style={{ width: `${timelineProgressInfo.turnPercent}%` }}
+                    className={`bg-sky-400 dark:bg-sky-500 transition-all duration-300 ${
+                      timelineProgressInfo.bufferPercent > 0 || (hasHardDeadline && hardDeadline) ? "border-r border-white/60 dark:border-zinc-800" : ""
+                    }`}
+                    title={`Working Turnaround: ${timelineProgressInfo.turnLabel}`}
+                  />
+
+                  {/* Segment 3: Empty Buffer Time before Deadline */}
+                  {timelineProgressInfo.bufferPercent > 0 && (
+                    <div
+                      style={{ width: `${timelineProgressInfo.bufferPercent}%` }}
+                      className="bg-zinc-200/70 dark:bg-zinc-700/40 bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(0,0,0,0.06)_4px,rgba(0,0,0,0.06)_8px)] dark:bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(255,255,255,0.06)_4px,rgba(255,255,255,0.06)_8px)] transition-all duration-300"
+                      title={`Buffer before Deadline: ${timelineProgressInfo.bufferLabel}`}
+                    />
+                  )}
+
+                  {/* Terminal Point: Deadline */}
+                  {hasHardDeadline && hardDeadline && (
+                    <div
+                      className="w-2 h-full bg-red-500 shrink-0"
+                      title={`Final Cutoff Deadline: ${hardDeadline}`}
+                    />
+                  )}
+                </div>
+
+                {/* Legend Below the Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] pt-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-gray-400 dark:bg-zinc-500 shrink-0" />
+                    <span className="text-gray-600 dark:text-zinc-400 font-medium">Application</span>
+                    <span className="text-gray-900 dark:text-zinc-200 font-bold">({timelineProgressInfo.appLabel})</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-sky-400 dark:bg-sky-500 shrink-0" />
+                    <span className="text-gray-600 dark:text-zinc-400 font-medium">Timeline</span>
+                    <span className="text-sky-600 dark:text-sky-400 font-bold">({timelineProgressInfo.turnLabel})</span>
+                  </div>
+
+                  {timelineProgressInfo.bufferPercent > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full border border-dashed border-zinc-400 dark:border-zinc-500 bg-zinc-200/80 dark:bg-zinc-700/60 shrink-0" />
+                      <span className="text-gray-500 dark:text-zinc-400 font-medium">Buffer</span>
+                      <span className="text-zinc-700 dark:text-zinc-300 font-bold">({timelineProgressInfo.bufferLabel})</span>
+                    </div>
+                  )}
+
+                  {/* Deadline as last part */}
+                  <div
+                    className="flex items-center gap-1.5 font-semibold text-red-500 dark:text-red-400"
+                    style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0 ring-2 ring-red-500/20" />
+                    <span>Deadline</span>
+                    <span className="font-bold text-red-600 dark:text-red-400">
+                      {hasHardDeadline && hardDeadline ? `(${hardDeadline})` : "(Flexible)"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
             </div>
+          </div>
+
+          {/* Steps helper banner (Positioned below Step 2 Overview) */}
+          <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] p-3.5 text-xs text-gray-500 dark:text-zinc-400 leading-relaxed">
+            Follow the numbered steps <strong className="text-gray-700 dark:text-zinc-300">[1] to [4]</strong> to configure your project budget, intake window, turnaround, and skills.
           </div>
 
         </div>

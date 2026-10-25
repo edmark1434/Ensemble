@@ -63,6 +63,10 @@ const JobFullPage: React.FC = () => {
   const [isMilestonesOpen, setIsMilestonesOpen] = useState(true);
   const [isScoreOpen, setIsScoreOpen] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(false);
+  const [reloadTrigger, setReloadTrigger] = useState(0);
+  const [isExtending, setIsExtending] = useState(false);
+  const [isExpiring, setIsExpiring] = useState(false);
+  const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
 
   const getTimeAgo = (date: Date) => {
     try {
@@ -170,7 +174,13 @@ const JobFullPage: React.FC = () => {
             screeningQuestions: Array.isArray(j.screening_questions) ? j.screening_questions : [],
             shortlistedCount: parseInt(j.shortlisted_count) || 0,
             clientHireRate: typeof j.client_hire_rate === "number" ? j.client_hire_rate : (parseInt(j.client_hire_rate) || 100),
-            clientLastActive: j.client_last_active ? getTimeAgo(new Date(j.client_last_active)) : undefined
+            clientLastActive: j.client_last_active ? getTimeAgo(new Date(j.client_last_active)) : undefined,
+            applicationDeadline: j.application_deadline,
+            isUrgent: Boolean(j.is_urgent),
+            hardDeadline: j.hard_deadline,
+            freeExtensionCount: parseInt(j.free_extension_count, 10) || 0,
+            applicationExtendedAt: j.application_extended_at,
+            postingFeeCredits: parseInt(j.posting_fee_credits, 10) || 50
           };
 
           setJob(mappedJob);
@@ -186,7 +196,50 @@ const JobFullPage: React.FC = () => {
     };
 
     fetchJobDetails();
-  }, [id]);
+  }, [id, reloadTrigger]);
+
+  const handleExtendWindow = async () => {
+    if (!job) return;
+    setIsExtending(true);
+    setActionSuccessMsg(null);
+    try {
+      const res = await api.post(`/api/jobs/${job.id}/extend-window`, { additionalDays: 3 });
+      if (res.data?.success) {
+        setActionSuccessMsg(res.data.message || "Application window extended by 3 days for free!");
+        setReloadTrigger((prev) => prev + 1);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.error || "Failed to extend application window");
+    } finally {
+      setIsExtending(false);
+    }
+  };
+
+  const handleExpireNow = async () => {
+    if (!job) return;
+    if (!window.confirm("Are you sure you want to close and expire this job now? You will receive a 50-credit refund.")) return;
+    setIsExpiring(true);
+    setActionSuccessMsg(null);
+    try {
+      const res = await api.post(`/api/jobs/${job.id}/expire-now`);
+      if (res.data?.success) {
+        setActionSuccessMsg(res.data.message || "Job expired and 50 credits refunded to your wallet.");
+        setReloadTrigger((prev) => prev + 1);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.error || "Failed to expire job");
+    } finally {
+      setIsExpiring(false);
+    }
+  };
+
+  const nowTime = new Date().getTime();
+  const appDeadlineTime = job?.applicationDeadline ? new Date(job.applicationDeadline).getTime() : null;
+  const isWindowExpired = Boolean(
+    job?.status?.toLowerCase() === "expired" ||
+    (appDeadlineTime && appDeadlineTime <= nowTime)
+  );
+  const hoursRemaining = appDeadlineTime ? Math.max(0, Math.round((appDeadlineTime - nowTime) / (1000 * 60 * 60))) : null;
 
   const isTeam = Boolean(
     job?.is_team ||
@@ -483,6 +536,68 @@ const JobFullPage: React.FC = () => {
                   ) : null}
                 </div>
               </div>
+
+              {/* Action Success Alert */}
+              {actionSuccessMsg && (
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 dark:bg-emerald-500/5 p-4 flex items-center justify-between text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <span>{actionSuccessMsg}</span>
+                  </div>
+                  <button onClick={() => setActionSuccessMsg(null)} className="text-emerald-600 hover:text-emerald-800 dark:hover:text-emerald-200">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Expired Job Notice */}
+              {job.status?.toLowerCase() === "expired" && (
+                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/40 p-4 flex items-center justify-between gap-3 text-xs text-zinc-700 dark:text-zinc-300">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <CheckCircle2 className="h-4 w-4 text-zinc-500 shrink-0" />
+                    <span>This job post has expired.</span>
+                  </div>
+                  <span className="text-zinc-500 dark:text-zinc-400">
+                    {job.isOwnPost ? "Posting fee was refunded to your wallet." : "Proposal intake has closed."}
+                  </span>
+                </div>
+              )}
+
+              {/* Pre-Expiry Prompt Banner for Job Owner when 0 applicants */}
+              {(job.isManageablePost || job.isOwnPost) && (job.applicantsCount || 0) === 0 && (job.status === "Open" || job.status === "Active") && (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/5 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 font-bold text-amber-700 dark:text-amber-300 text-sm">
+                      <Sparkles className="h-4 w-4 shrink-0 text-amber-500" />
+                      <span>Application Window Status</span>
+                      {hoursRemaining !== null && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-200 font-semibold">
+                          {hoursRemaining > 0 ? `${hoursRemaining}h remaining` : "Intake window ending"}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-700 dark:text-zinc-300 leading-relaxed max-w-xl">
+                      No applicants yet. Would you like to extend your application window for free, or let it expire and receive a 50-credit refund?
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                    <button
+                      disabled={isExtending || isExpiring}
+                      onClick={handleExtendWindow}
+                      className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isExtending ? "Extending..." : "Extend Window (+3 Days Free)"}
+                    </button>
+                    <button
+                      disabled={isExtending || isExpiring}
+                      onClick={handleExpireNow}
+                      className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isExpiring ? "Processing..." : "Expire & Refund 50 Cr"}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Main Thumbnail Banner with Overlays */}
               <div
@@ -995,6 +1110,10 @@ const JobFullPage: React.FC = () => {
                             You have applied for a milestone role on this team project.
                           </span>
                         )}
+                      </div>
+                    ) : isWindowExpired ? (
+                      <div className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/60 py-3.5 text-center text-xs font-bold text-zinc-500 dark:text-zinc-400 select-none">
+                        Application Window Closed
                       </div>
                     ) : (
                       <div className="flex flex-col gap-1.5">

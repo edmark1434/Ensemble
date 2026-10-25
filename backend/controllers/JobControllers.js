@@ -414,6 +414,43 @@ async function reportJobController(req, res) {
     }
 }
 
+async function extendApplicationWindowController(req, res) {
+    try {
+        const { jobId } = req.params;
+        const { durationHours } = req.body;
+        const accountId = req.user?.account_id || req.user?.accountId || req.session?.account_id || req.session?.accountId;
+        if (!accountId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+        const actorIds = await getAuthorizedActorAccountIds(accountId);
+        const updated = await JobServices.extendApplicationWindowServices(jobId, actorIds, durationHours);
+        res.status(200).json({ success: true, message: 'Application window extended successfully.', data: updated });
+    } catch (err) {
+        console.error('Error in extendApplicationWindowController:', err);
+        sendControllerError(res, err);
+    }
+}
+
+async function expireJobImmediatelyController(req, res) {
+    try {
+        const { jobId } = req.params;
+        const accountId = req.user?.account_id || req.user?.accountId || req.session?.account_id || req.session?.accountId;
+        if (!accountId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+        const actorIds = await getAuthorizedActorAccountIds(accountId);
+        const result = await JobServices.expireJobImmediatelyServices(jobId, actorIds);
+        res.status(200).json({
+            success: true,
+            message: result.refundedAmount > 0 
+                ? `Job closed. ${result.refundedAmount} Credits refunded to your wallet.` 
+                : 'Job closed successfully.',
+            data: result
+        });
+    } catch (err) {
+        console.error('Error in expireJobImmediatelyController:', err);
+        sendControllerError(res, err);
+    }
+}
+
 module.exports = {
     getActiveJobsByClientController,
     createJobInvitationController,
@@ -431,4 +468,6 @@ module.exports = {
     toggleJobSaveController,
     deleteJobController,
     reportJobController,
+    extendApplicationWindowController,
+    expireJobImmediatelyController,
 };
