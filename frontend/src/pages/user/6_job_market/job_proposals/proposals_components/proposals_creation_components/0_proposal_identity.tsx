@@ -68,10 +68,11 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
           if (raw !== undefined && raw !== null && !isNaN(Number(raw))) {
             const val = Number(raw);
             setWalletBalance(val);
-            if (user) {
+            const curUser = useGlobalState.getState().user;
+            if (curUser && curUser.wallet?.balance_credits !== val) {
               useGlobalState.getState().setUser({
-                ...user,
-                wallet: { ...(user.wallet || {}), balance_credits: val },
+                ...curUser,
+                wallet: { ...(curUser.wallet || {}), balance_credits: val },
               });
             }
           }
@@ -82,17 +83,18 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
     fetchWallet();
     window.addEventListener("focus", fetchWallet);
     return () => window.removeEventListener("focus", fetchWallet);
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     const handleBalance = ({ balance_credits }: { balance_credits: number }) => {
       const val = Number(balance_credits);
       if (Number.isFinite(val)) {
         setWalletBalance(val);
-        if (user) {
+        const curUser = useGlobalState.getState().user;
+        if (curUser && curUser.wallet?.balance_credits !== val) {
           useGlobalState.getState().setUser({
-            ...user,
-            wallet: { ...(user.wallet || {}), balance_credits: val },
+            ...curUser,
+            wallet: { ...(curUser.wallet || {}), balance_credits: val },
           });
         }
       }
@@ -101,7 +103,7 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
     return () => {
       socket.off("wallet:balance_updated", handleBalance);
     };
-  }, [user]);
+  }, []);
 
   // User details & safe avatar hydration
   const [userProfileAvatar, setUserProfileAvatar] = useState<string | undefined>(
@@ -113,6 +115,7 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
 
   const userName = user?.display_name || user?.name || user?.username || "You";
   const userHandle = user?.handle || user?.username || "freelancer";
+  const accountId = user?.account_id || user?.accountId || user?.id;
 
   useEffect(() => {
     const raw = user?.avatar_preset_url || user?.avatar_url || user?.profile_photo || user?.avatar;
@@ -122,8 +125,7 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
     if ((user as any)?.banner_preset) {
       setUserBannerPreset((user as any).banner_preset);
     }
-    const accountId = user?.account_id || user?.accountId || user?.id;
-    if (accountId) {
+    if (accountId && (!raw || (user as any)?.banner_preset === undefined)) {
       api.get(`/api/accounts/profile/${accountId}`)
         .then((res) => {
           const data = res.data?.data || res.data?.profile || res.data || {};
@@ -137,7 +139,7 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
         })
         .catch(() => {});
     }
-  }, [user]);
+  }, [accountId]);
 
   const userAvatarUrl = constructAvatarUrl(userProfileAvatar, userName);
 
@@ -491,27 +493,22 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
       </div>
 
       {/* Upfront Proposal Submission Fee Disclosure (Step 1 Notice) */}
-      <div className="p-3.5 sm:p-4 rounded-xl border border-blue-200/80 dark:border-blue-900/50 bg-blue-50/60 dark:bg-blue-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-        <div className="flex items-start gap-3 min-w-0">
-          <div className="h-9 w-9 rounded-lg bg-blue-100 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-800/60 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 text-amber-500">
-            <CreditIcon className="h-5 w-5" />
+      <div className="p-3.5 sm:p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
+              Proposal Submission Cost
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-zinc-200/80 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300/70 dark:border-zinc-700 shadow-2xs">
+              <CreditIcon className="h-3 w-3 text-amber-500" /> 10 Credits
+            </span>
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
-                Proposal Submission Cost
-              </span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-600 text-white shadow-2xs">
-                <CreditIcon className="h-3 w-3 text-amber-300" /> 10 Credits
-              </span>
-            </div>
-            <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1 leading-relaxed">
-              Submitting a proposal requires <strong className="text-zinc-900 dark:text-zinc-200 font-semibold">10 Credits</strong>, charged upon final review and confirmation in <span className="font-semibold text-blue-600 dark:text-blue-400">Step 5 (Review & Send)</span>. No credits are charged while drafting.
-            </p>
-          </div>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+            10 Credits charged upon final submission in Step 5. Drafting is free.
+          </p>
         </div>
 
-        <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1 shrink-0 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-blue-200/60 dark:border-blue-900/40">
+        <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1 shrink-0 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-zinc-200/60 dark:border-zinc-800/80">
           <div className="flex items-center gap-1.5 text-xs">
             <span className="text-zinc-500 dark:text-zinc-400">Your Wallet:</span>
             <span className="font-bold text-zinc-900 dark:text-white inline-flex items-center gap-1">
@@ -750,13 +747,13 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
                           e.stopPropagation();
                         }
                       }}
-                      className="space-y-2 pt-1"
+                      className="space-y-2.5 pt-1"
                     >
                       <div className="flex items-center gap-2 flex-wrap">
                         <button
                           type="button"
                           onClick={handleOpenTeamModal}
-                          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 transition-all shadow-2xs active:scale-[0.98] cursor-pointer"
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white hover:bg-zinc-50 dark:bg-zinc-800 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 transition-all shadow-2xs active:scale-[0.98] cursor-pointer"
                         >
                           <Repeat className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
                           <span>Switch Team</span>
@@ -765,18 +762,21 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
                         <button
                           type="button"
                           onClick={handleOpenMembersModal}
-                          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white transition-all shadow-2xs active:scale-[0.98] cursor-pointer"
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white transition-all shadow-2xs active:scale-[0.98] cursor-pointer"
                         >
                           <Users className="w-3.5 h-3.5" />
                           <span>Select Members</span>
-                          <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-white/20 dark:bg-zinc-900/15">
+                          <span className="ml-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-white/20 dark:bg-zinc-900/15">
                             {effectiveIncludedMembers.length}
                           </span>
                         </button>
                       </div>
 
-                        {/* Selected members displayed as pills */}
-                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      {/* Line separating action buttons from the member displays */}
+                      <div className="border-t border-zinc-200/80 dark:border-zinc-800/80" />
+
+                      {/* Selected members displayed as pills */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                           {effectiveIncludedMembers.map((m: any, i: number) => {
                             const mId = String(m.account_id || "");
                             const isOwnerLeader = m.role === "Owner";
@@ -863,23 +863,14 @@ export const ProposalIdentityStep: React.FC<ProposalIdentityProps> = ({
         >
           Cancel & Exit
         </button>
-        <div className="w-full sm:w-auto flex flex-col sm:flex-row items-center gap-3">
-          <span className="text-[11px] text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
-            <span>Fee:</span>
-            <span className="font-semibold text-zinc-700 dark:text-zinc-300 inline-flex items-center gap-1">
-              <CreditIcon className="h-3.5 w-3.5 text-amber-500" /> 10 Credits
-            </span>
-            <span className="text-zinc-400 text-[10px]">(charged at final Step 5 review)</span>
-          </span>
-          <button
-            type="button"
-            onClick={onNext}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 py-3 px-8 rounded-full bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white transition cursor-pointer shadow-md shadow-blue-500/20"
-          >
-            <span>Proceed to Pitch & Pricing</span>
-            <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onNext}
+          className="w-full sm:w-auto flex items-center justify-center gap-2 py-3 px-8 rounded-full bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white transition cursor-pointer shadow-md shadow-blue-500/20"
+        >
+          <span>Proceed to Pitch & Pricing</span>
+          <ArrowRight className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Modal: Team Member Selection Popup */}

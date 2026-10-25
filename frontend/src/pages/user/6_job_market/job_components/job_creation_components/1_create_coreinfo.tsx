@@ -1134,30 +1134,25 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
           </div>
 
           {/* Upfront 50 Credits Publication Fee Notice (Below Posting Guidelines) */}
-          <div className="p-4 rounded-2xl border border-blue-200/80 dark:border-blue-900/50 bg-blue-50/60 dark:bg-blue-950/20 space-y-3 shadow-2xs">
-            <div className="flex items-start gap-2.5">
-              <div className="h-8 w-8 rounded-xl bg-blue-100 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-800/60 flex items-center justify-center shrink-0 text-amber-500 mt-0.5">
-                <CreditIcon className="h-4 w-4" />
+          <div className="p-3.5 sm:p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/40 space-y-2.5 shadow-2xs">
+            <div className="min-w-0">
+              <div className="flex items-center justify-between gap-1 flex-wrap">
+                <span className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
+                  Job Publication Cost
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-zinc-200/80 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300/70 dark:border-zinc-700 shadow-2xs">
+                  <CreditIcon className="h-2.5 w-2.5 text-amber-500" /> 50 Credits
+                </span>
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-1 flex-wrap">
-                  <span className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
-                    Job Publication Cost
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-600 text-white shadow-2xs">
-                    <CreditIcon className="h-2.5 w-2.5 text-amber-300" /> 50 Credits
-                  </span>
-                </div>
-                <p className="text-[11px] text-gray-600 dark:text-zinc-400 mt-1 leading-relaxed">
-                  Publishing a job requires <strong className="text-gray-900 dark:text-zinc-200 font-semibold">50 Credits</strong>, charged upon final review and confirmation in <span className="font-semibold text-blue-600 dark:text-blue-400">Step 4 (Review & Post)</span>. No credits are charged while drafting.
-                </p>
-              </div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                50 Credits charged upon final review in Step 4. Drafting is free.
+              </p>
             </div>
 
-            <div className="pt-2.5 border-t border-blue-200/60 dark:border-blue-900/40 flex items-center justify-between text-xs">
+            <div className="pt-2.5 border-t border-zinc-200/60 dark:border-zinc-800/80 flex items-center justify-between text-xs">
               <div className="flex items-center gap-1.5">
-                <span className="text-gray-500 dark:text-zinc-400 text-[11px]">Your Wallet:</span>
-                <span className="font-bold text-gray-900 dark:text-white inline-flex items-center gap-1 text-xs">
+                <span className="text-zinc-500 dark:text-zinc-400 text-[11px]">Your Wallet:</span>
+                <span className="font-bold text-zinc-900 dark:text-white inline-flex items-center gap-1 text-xs">
                   <CreditIcon className="h-3 w-3 text-amber-500" />
                   {walletBalance !== null ? `${walletBalance.toLocaleString()} Cr` : "..."}
                 </span>
