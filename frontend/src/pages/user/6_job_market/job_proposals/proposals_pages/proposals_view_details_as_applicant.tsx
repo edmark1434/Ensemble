@@ -1112,8 +1112,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                         </span>
                       </div>
 
-                      <div className="p-3.5 rounded-xl bg-zinc-50/80 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 max-h-56 overflow-y-auto text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                        {proposal.tosContent || "Standard platform delivery and revision terms apply."}
+                      <div className="p-3.5 rounded-xl bg-zinc-50/80 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 max-h-56 overflow-y-auto text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                        <JobRichText content={proposal.tosContent || "*Standard platform delivery and revision terms apply.*"} />
                       </div>
                     </div>
 

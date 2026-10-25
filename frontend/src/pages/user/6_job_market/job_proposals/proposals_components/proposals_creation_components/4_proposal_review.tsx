@@ -34,6 +34,7 @@ import type { Milestone } from "./3_proposal_milestones";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { SlideCommit } from "@/components/ui/SlideCommit";
 import FloatingCreditsPill from "@/components/ui/FloatingCreditsPill";
+import { JobRichText } from "../../../job_components/JobRichText";
 import useGlobalState from "@/lib/global_state";
 import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
 import { resolveBannerPreset, bannerPresetUrl } from "@/lib/profileBanners";
@@ -236,25 +237,24 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isCheckoutModalOpen, isSubmitting]);
 
+  const accountId = user?.account_id || user?.accountId || user?.id;
+
   useEffect(() => {
     const raw = user?.avatar_preset_url || user?.avatar_url || user?.profile_photo || user?.avatar;
     if (raw) {
       setProfileAvatar(constructAvatarUrl(raw, user?.display_name || user?.username));
-    } else {
-      const accountId = user?.account_id || user?.accountId || user?.id;
-      if (accountId) {
-        api.get(`/api/accounts/profile/${accountId}`)
-          .then((res) => {
-            const data = res.data?.data || res.data?.profile || res.data || {};
-            const fetched = data.avatar_preset_url || data.avatar_url;
-            if (fetched) {
-              setProfileAvatar(constructAvatarUrl(fetched, user?.display_name || user?.username));
-            }
-          })
-          .catch(() => {});
-      }
+    } else if (accountId) {
+      api.get(`/api/accounts/profile/${accountId}`)
+        .then((res) => {
+          const data = res.data?.data || res.data?.profile || res.data || {};
+          const fetched = data.avatar_preset_url || data.avatar_url;
+          if (fetched) {
+            setProfileAvatar(constructAvatarUrl(fetched, user?.display_name || user?.username));
+          }
+        })
+        .catch(() => {});
     }
-  }, [user]);
+  }, [accountId, user?.avatar_preset_url, user?.avatar_url, user?.profile_photo, user?.avatar, user?.display_name, user?.username]);
 
   useEffect(() => {
     let mounted = true;
@@ -710,8 +710,8 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
                 <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider block">
                   Cover Letter Pitch
                 </span>
-                <div className="p-4 sm:p-5 rounded-2xl bg-zinc-50/70 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 text-xs sm:text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed shadow-2xs">
-                  {coverLetter || "No cover letter provided."}
+                <div className="p-4 sm:p-5 rounded-2xl bg-zinc-50/70 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 text-xs sm:text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed shadow-2xs">
+                  <JobRichText content={coverLetter || "*No cover letter provided.*"} />
                 </div>
               </div>
 
@@ -806,8 +806,8 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
                       </span>
                     </div>
 
-                    <div className="p-3.5 rounded-xl bg-zinc-50/80 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 max-h-56 overflow-y-auto text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                      {tosContent || "Standard platform delivery and revision terms apply."}
+                    <div className="p-3.5 rounded-xl bg-zinc-50/80 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 max-h-56 overflow-y-auto text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                      <JobRichText content={tosContent || "*Standard platform delivery and revision terms apply.*"} />
                     </div>
                   </div>
 
